@@ -1,0 +1,458 @@
+'use client';
+import { createContext, useContext, useEffect, useState } from 'react';
+
+type Language = 'sv' | 'en';
+
+const sv = {
+  common: {
+    back: 'Tillbaka',
+    continue: 'Fortsätt',
+    confirm: 'Bekräfta',
+    cancel: 'Avbryt',
+    skip: 'Hoppa över',
+    processing: 'Behandlar…',
+    loading: 'Laddar…',
+    currency: 'kr',
+    done: 'Klart',
+    yes: 'Ja',
+    no: 'Nej',
+    callStaff: 'Hämta personal',
+    staffCalled: 'Personal är på väg',
+    stillThere: 'Är du kvar?',
+    stillThereDesc: 'Tryck var som helst för att fortsätta, annars börjar vi om.',
+    imHere: 'Jag är kvar',
+  },
+  progress: {
+    booking: 'Bokning',
+    safety: 'Säkerhet',
+    extras: 'Tillägg',
+    payment: 'Betalning',
+    done: 'Klar',
+  },
+  idle: {
+    tap: 'Tryck för att börja',
+    line1: 'Välkommen till',
+    line2: 'JumpYard',
+  },
+  start: {
+    eyebrowKiosk: 'Kiosk',
+    eyebrowPark: 'Park-QR',
+    eyebrowSms: 'SMS-länk',
+    title: 'Välkommen!',
+    subtitle: 'Samma incheckning oavsett hur du kom hit.',
+    cta: 'Starta',
+  },
+  choice: {
+    title: 'Vad vill du göra?',
+    haveBooking: 'Jag har en bokning',
+    haveBookingDesc: 'Skanna QR eller skriv koden',
+    buyTickets: 'Köp biljetter',
+    buyTicketsDesc: 'På plats, nästa lediga tid',
+  },
+  lookup: {
+    title: 'Hitta din bokning',
+    description: 'Skanna QR-koden eller skriv in din bokningsnummer.',
+    placeholder: 'Bokningsnummer',
+    cta: 'Sök',
+    notFound: 'Vi hittade ingen bokning med det numret.',
+    tryAgain: 'Kontrollera numret eller hämta personal.',
+    scanning: 'Skannar…',
+  },
+  buy: {
+    selectTicket: 'Välj biljett',
+    howMany: 'Hur många?',
+    howManyJumpers: 'Antal hoppare',
+    howManyFamilies: 'Antal familjer (4 hoppare vardera)',
+    total: 'Totalt',
+    product1h: '1 timmes hopp',
+    product2h: '2 timmars hopp',
+    productFamily: 'Familjepaket',
+    productFamilyNote: '4 hoppare',
+    contactTitle: 'Din kontakt',
+    contactDesc: 'Vi skickar bekräftelse, SMS innan start och påminnelse om förlängning. E-post eller telefon krävs.',
+    emailLabel: 'E-post',
+    emailPlaceholder: 'gäst@exempel.se',
+    phoneLabel: 'Telefon',
+    phonePlaceholder: '+46 70 123 45 67',
+    creating: 'Skapar bokning…',
+    confirmCreate: 'Bekräfta & fortsätt',
+  },
+  booking: {
+    ref: 'Bokning',
+    today: 'Idag',
+    date: 'Datum',
+    time: 'Tid',
+    duration: 'Längd',
+    guest: 'Gäst',
+    jumpers: 'Hoppare',
+    addons: 'Tillägg',
+    none: 'Inga',
+    paidInFull: 'Betald',
+    notPaid: 'Obetald',
+    title: 'Din bokning',
+    subtitle: 'Ser det rätt ut? Då kör vi.',
+    cta: 'Ja, starta incheckning',
+  },
+  safetyVideo: {
+    title: 'Säkerhetsvideo',
+    description: 'Titta på videon innan du kan gå vidare.',
+    play: 'Spela upp',
+    playing: 'Videon spelas…',
+    watchFull: 'Titta hela videon',
+    done: 'Klart, fortsätt',
+  },
+  safetyAttest: {
+    title: 'Bekräfta säkerhet',
+    description: 'Tryck för att bekräfta.',
+    attestStatement: 'Jag intygar att jag och medföljande i bokningen har förstått och bekräftat säkerhetsreglerna.',
+    cta: 'Jag förstår, fortsätt',
+  },
+  addons: {
+    title: 'Tillägg',
+    description: 'Välj till extra, hoppa över det du inte vill ha.',
+    alreadyInBooking: 'Ingår redan',
+    total: 'Tillägg totalt',
+    perJumper: 'per hoppare',
+    each: 'st',
+    perPerson: 'per person',
+    products: {
+      skyriderLabel: 'SkyRider',
+      skyriderDesc: 'Linbane-upplevelsen. Kräver min 100 cm.',
+      connectedLabel: 'Connected',
+      connectedDesc: 'Spåra hopp, tävla på topplistor, få highlight-klipp.',
+      coffeeLabel: 'Kaffe',
+      coffeeDesc: 'Kaffe åt de vuxna medan barnen hoppar.',
+      extraPersonLabel: 'Extra person',
+      extraPersonDesc: 'Lägg till en till hoppare.',
+      lockLabel: 'Hänglås',
+      lockDesc: 'Hänglås till skåpen.',
+      socksLabel: 'Strumpor',
+      socksDesc: 'Hoppstrumpor, obligatoriska.',
+    },
+  },
+  skyrider: {
+    title: 'SkyRider höjdkontroll',
+    description: 'En vuxen måste intyga att barnet är minst 100 cm långt.',
+    confirmCheckbox: 'Jag intygar att barnet är minst 100 cm och får åka SkyRider.',
+    removeSkyRider: 'Ta bort SkyRider',
+  },
+  connected: {
+    title: 'Connected-profiler',
+    description: 'Skapa profiler, personalen parkopplar banden.',
+    profile: 'Profil',
+    namePlaceholder: 'Namn',
+    confirm: 'Bekräfta profiler',
+  },
+  payment: {
+    title: 'Betalning',
+    description: 'Håll kortet mot terminalen när du är redo.',
+    booking: 'Bokning',
+    items: 'Vad du betalar för',
+    total: 'Totalt',
+    pay: 'Betala',
+  },
+  confirm: {
+    title: 'Du är incheckad!',
+    subtitle: 'Din bokning är klar. Gå till entrén.',
+    pickupCode: 'Din kod',
+    staffHandout: 'Till personalen',
+    wristbands: 'Armband',
+    connectedBands: 'Connected-band',
+    complete: 'Klart & nästa gäst',
+    viewReceipt: 'Visa kvitto',
+    showStaffNote: 'Visa personalen',
+  },
+  print: {
+    title: 'Klart, gå till banan!',
+    subtitle: 'Ditt kvitto skrivs ut.',
+    printing: 'Skriver ut…',
+  },
+  present: {
+    eyebrow: 'Visa vid entrén',
+    title: 'Redo för parken',
+    backupLabel: 'Backupkod',
+    instruction: 'Visa QR-koden eller backupkoden till personalen för att få armband.',
+    startOver: 'Börja om',
+  },
+  extend: {
+    loading: 'Laddar förlängning…',
+    view: {
+      title: 'Förläng din session',
+      subtitle: '+30 minuter extra hopptid.',
+      currentEnd: 'Nuvarande sluttid',
+      newEnd: 'Ny sluttid',
+      price: 'Pris',
+      cta: 'Betala',
+    },
+    pay: {
+      title: 'Betala förlängning',
+      subtitle: '+30 min för',
+      swish: 'Swish',
+      card: 'Kort',
+    },
+    qr: {
+      eyebrow: 'Bandbyte',
+      title: '+30 minuter bekräftat',
+      newEndPrefix: 'Ny sluttid:',
+      nextStepLabel: 'Nästa steg',
+      nextStepText: 'Gå till kassan eller personalen för att få ett nytt band med uppdaterad sluttid.',
+    },
+    error: {
+      title: 'Vi kunde inte ladda förlängningen',
+      expired: 'Länken har gått ut. Hämta personal.',
+      already: 'Den här bokningen är redan förlängd.',
+      generic: 'Något gick fel. Hämta personal.',
+    },
+  },
+};
+
+const en: typeof sv = {
+  common: {
+    back: 'Back',
+    continue: 'Continue',
+    confirm: 'Confirm',
+    cancel: 'Cancel',
+    skip: 'Skip',
+    processing: 'Processing…',
+    loading: 'Loading…',
+    currency: 'kr',
+    done: 'Done',
+    yes: 'Yes',
+    no: 'No',
+    callStaff: 'Call staff',
+    staffCalled: 'Staff is on the way',
+    stillThere: 'Are you still there?',
+    stillThereDesc: 'Tap anywhere to continue, otherwise we restart.',
+    imHere: "I'm here",
+  },
+  progress: {
+    booking: 'Booking',
+    safety: 'Safety',
+    extras: 'Extras',
+    payment: 'Payment',
+    done: 'Done',
+  },
+  idle: {
+    tap: 'Tap to start',
+    line1: 'Welcome to',
+    line2: 'JumpYard',
+  },
+  start: {
+    eyebrowKiosk: 'Kiosk',
+    eyebrowPark: 'Park QR',
+    eyebrowSms: 'SMS Link',
+    title: 'Welcome!',
+    subtitle: 'Same check-in whichever way you arrived.',
+    cta: 'Start',
+  },
+  choice: {
+    title: 'What would you like to do?',
+    haveBooking: 'I have a booking',
+    haveBookingDesc: 'Scan QR or enter your code',
+    buyTickets: 'Buy tickets',
+    buyTicketsDesc: 'On-site, next available slot',
+  },
+  lookup: {
+    title: 'Find your booking',
+    description: 'Scan the QR code or enter your booking number.',
+    placeholder: 'Booking number',
+    cta: 'Search',
+    notFound: "We couldn't find a booking with that number.",
+    tryAgain: 'Check the number or call staff.',
+    scanning: 'Scanning…',
+  },
+  buy: {
+    selectTicket: 'Select ticket',
+    howMany: 'How many?',
+    howManyJumpers: 'Number of jumpers',
+    howManyFamilies: 'Number of families (4 jumpers each)',
+    total: 'Total',
+    product1h: '1 hour jump',
+    product2h: '2 hour jump',
+    productFamily: 'Family package',
+    productFamilyNote: '4 jumpers',
+    contactTitle: 'Your contact',
+    contactDesc: 'We send confirmation, a reminder SMS before start and extension notices. Email or phone is required.',
+    emailLabel: 'Email',
+    emailPlaceholder: 'guest@example.com',
+    phoneLabel: 'Phone',
+    phonePlaceholder: '+46 70 123 45 67',
+    creating: 'Creating booking…',
+    confirmCreate: 'Confirm & continue',
+  },
+  booking: {
+    ref: 'Booking',
+    today: 'Today',
+    date: 'Date',
+    time: 'Time',
+    duration: 'Duration',
+    guest: 'Guest',
+    jumpers: 'Jumpers',
+    addons: 'Add-ons',
+    none: 'None',
+    paidInFull: 'Paid',
+    notPaid: 'Unpaid',
+    title: 'Your booking',
+    subtitle: "Looks right? Let's go.",
+    cta: 'Yes, start check-in',
+  },
+  safetyVideo: {
+    title: 'Safety video',
+    description: 'Watch the video before you can continue.',
+    play: 'Play',
+    playing: 'Video playing…',
+    watchFull: 'Watch the full video',
+    done: 'Done, continue',
+  },
+  safetyAttest: {
+    title: 'Confirm safety',
+    description: 'Tap to confirm.',
+    attestStatement: 'I confirm that I and all members of this booking have understood and acknowledged the safety rules.',
+    cta: 'I understand, continue',
+  },
+  addons: {
+    title: 'Add-ons',
+    description: "Pick extras, skip anything you don't want.",
+    alreadyInBooking: 'Already included',
+    total: 'Add-ons total',
+    perJumper: 'per jumper',
+    each: 'each',
+    perPerson: 'per person',
+    products: {
+      skyriderLabel: 'SkyRider',
+      skyriderDesc: 'Zip-line experience. Requires min 100 cm.',
+      connectedLabel: 'Connected',
+      connectedDesc: 'Track jumps, leaderboards, highlight reel.',
+      coffeeLabel: 'Coffee',
+      coffeeDesc: 'Coffee for the grown-ups while the kids jump.',
+      extraPersonLabel: 'Extra person',
+      extraPersonDesc: 'Add another jumper to this booking.',
+      lockLabel: 'Padlock',
+      lockDesc: 'Padlock for the lockers.',
+      socksLabel: 'Socks',
+      socksDesc: 'Jump socks, required.',
+    },
+  },
+  skyrider: {
+    title: 'SkyRider height check',
+    description: 'An adult must confirm the child is at least 100 cm tall.',
+    confirmCheckbox: 'I confirm the child is at least 100 cm and allowed to ride SkyRider.',
+    removeSkyRider: 'Remove SkyRider',
+  },
+  connected: {
+    title: 'Connected profiles',
+    description: 'Create profiles, staff will pair wristbands.',
+    profile: 'Profile',
+    namePlaceholder: 'Name',
+    confirm: 'Confirm profiles',
+  },
+  payment: {
+    title: 'Payment',
+    description: 'Tap your card on the terminal when ready.',
+    booking: 'Booking',
+    items: "What you're paying for",
+    total: 'Total',
+    pay: 'Pay',
+  },
+  confirm: {
+    title: "You're checked in!",
+    subtitle: 'Your booking is ready. Head to the entrance.',
+    pickupCode: 'Your code',
+    staffHandout: 'For staff',
+    wristbands: 'Wristbands',
+    connectedBands: 'Connected bands',
+    complete: 'Done & next guest',
+    viewReceipt: 'View receipt',
+    showStaffNote: 'Show staff',
+  },
+  print: {
+    title: 'Done, head to the park!',
+    subtitle: 'Your receipt is printing.',
+    printing: 'Printing…',
+  },
+  present: {
+    eyebrow: 'Show at entrance',
+    title: 'Ready for the park',
+    backupLabel: 'Backup code',
+    instruction: 'Show the QR code or backup code to staff to get your wristbands.',
+    startOver: 'Start over',
+  },
+  extend: {
+    loading: 'Loading extension…',
+    view: {
+      title: 'Extend your session',
+      subtitle: '+30 minutes of extra jump time.',
+      currentEnd: 'Current end',
+      newEnd: 'New end',
+      price: 'Price',
+      cta: 'Pay',
+    },
+    pay: {
+      title: 'Extension payment',
+      subtitle: '+30 min for',
+      swish: 'Swish',
+      card: 'Card',
+    },
+    qr: {
+      eyebrow: 'Band swap',
+      title: '+30 minutes confirmed',
+      newEndPrefix: 'New end:',
+      nextStepLabel: 'Next step',
+      nextStepText: 'Go to the cashier or staff to get a new wristband with the updated end time.',
+    },
+    error: {
+      title: "We couldn't load the extension",
+      expired: 'This link has expired. Please call staff.',
+      already: 'This booking has already been extended.',
+      generic: 'Something went wrong. Please call staff.',
+    },
+  },
+};
+
+export type Translations = typeof sv;
+const translations: Record<Language, Translations> = { sv, en };
+
+interface LanguageContextValue {
+  lang: Language;
+  t: Translations;
+  toggleLang: () => void;
+  setLang: (l: Language) => void;
+}
+
+const LanguageContext = createContext<LanguageContextValue>({
+  lang: 'sv',
+  t: sv,
+  toggleLang: () => {},
+  setLang: () => {},
+});
+
+const STORAGE_KEY = 'jy.lang';
+
+export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  const [lang, setLangState] = useState<Language>('sv');
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY) as Language | null;
+      if (stored === 'sv' || stored === 'en') setLangState(stored);
+    } catch {}
+  }, []);
+
+  const setLang = (l: Language) => {
+    setLangState(l);
+    try {
+      localStorage.setItem(STORAGE_KEY, l);
+    } catch {}
+  };
+  const toggleLang = () => setLang(lang === 'sv' ? 'en' : 'sv');
+
+  return (
+    <LanguageContext.Provider value={{ lang, t: translations[lang], toggleLang, setLang }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+}
+
+export function useTranslation() {
+  return useContext(LanguageContext);
+}
