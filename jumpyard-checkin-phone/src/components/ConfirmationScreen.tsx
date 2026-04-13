@@ -111,12 +111,19 @@ export const ConfirmationScreen = ({ booking, jumperCount, selectedAddons, onDon
                     </div>
                 )}
 
-                <button
-                    onClick={onDone}
-                    className="w-full bg-primary hover:bg-white hover:text-primary hover:border-primary border border-transparent text-white font-black italic uppercase text-lg py-4 rounded-xl transition-all"
-                >
-                    {t.confirm.done}
-                </button>
+                <div className="flex flex-col items-center gap-3 mt-1">
+                    <img
+                        src="/jumpyard_logo_splash.png"
+                        alt=""
+                        className="w-8 h-8 object-contain opacity-60"
+                    />
+                    <button
+                        onClick={onDone}
+                        className="text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider transition-colors"
+                    >
+                        {t.confirm.done}
+                    </button>
+                </div>
             </div>
         </motion.div>
     );

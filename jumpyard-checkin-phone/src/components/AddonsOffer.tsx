@@ -112,7 +112,8 @@ export const AddonsOffer = ({ guestCount, existingAddons, onContinue }: AddonsOf
         >
             <div className="text-center">
                 <h1 className="text-xl font-black italic uppercase text-foreground">{t.addons.title}</h1>
-                <p className="text-muted text-xs mt-0.5 mb-3">{t.addons.description}</p>
+                <p className="text-muted text-xs mt-0.5">{t.addons.description}</p>
+                <p className="text-muted text-[10px] mb-3">{CATALOG.length} {t.addons.scrollHint}</p>
             </div>
 
             {existingAddons.length > 0 && (
@@ -132,7 +133,7 @@ export const AddonsOffer = ({ guestCount, existingAddons, onContinue }: AddonsOf
             )}
 
             <div className="flex-1 overflow-y-auto -mx-1 px-1">
-                <div className="w-full flex flex-col gap-2">
+                <div className="w-full flex flex-col gap-1.5">
                     {CATALOG.map(entry => {
                         const Icon = entry.Icon;
                         const value = qty[entry.id];
@@ -143,7 +144,7 @@ export const AddonsOffer = ({ guestCount, existingAddons, onContinue }: AddonsOf
                         return (
                             <div
                                 key={entry.id}
-                                className={`w-full border rounded-xl p-3 shadow-sm ${
+                                className={`w-full border rounded-xl p-2.5 shadow-sm ${
                                     isHighlighted
                                         ? 'bg-primary/5 border-primary/30'
                                         : 'bg-surface border-border'
@@ -153,16 +154,13 @@ export const AddonsOffer = ({ guestCount, existingAddons, onContinue }: AddonsOf
                                     <div className="flex items-center gap-2.5 flex-1 min-w-0">
                                         <Icon className={`flex-shrink-0 ${isHighlighted ? 'text-primary' : 'text-muted'}`} size={18} />
                                         <div className="min-w-0">
-                                            <div className="flex items-center gap-1.5">
-                                                <p className="text-foreground font-bold italic text-sm truncate">{entry.label}</p>
-                                                {entry.id === 'connected' && (
-                                                    <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] font-bold italic uppercase tracking-wide whitespace-nowrap">{t.addons.connectedValueProp}</span>
-                                                )}
-                                            </div>
+                                            <p className="text-foreground font-bold italic text-sm">{entry.label}</p>
                                             <p className="text-muted text-[11px]">
                                                 {entry.price} {t.common.currency} · {entry.unit}
                                             </p>
-                                            <p className="text-muted text-[11px] leading-tight">{entry.description}</p>
+                                            {entry.id === 'connected' && (
+                                                <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] font-bold italic uppercase tracking-wide">{t.addons.connectedValueProp}</span>
+                                            )}
                                             {locked > 0 && (
                                                 <span className="text-[10px] text-success font-bold italic">{t.addons.alreadyInBooking} ({locked})</span>
                                             )}

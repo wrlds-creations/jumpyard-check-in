@@ -166,10 +166,10 @@ function CheckInFlow() {
                             className="flex flex-col items-center justify-center text-foreground w-full"
                             style={{ minHeight: 'calc(100dvh - 60px)' }}
                         >
-                            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-                            <p className="text-xl font-bold uppercase italic tracking-widest">{t.common.loading}</p>
-                            <p className="text-muted mt-2">
-                                {t.lookup.scanning} {token ?? 'MOCK123'}
+                            <img src="/logo.png" alt="JumpYard" className="w-40 mb-6" />
+                            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3"></div>
+                            <p className="text-muted text-sm">
+                                {t.common.loading}
                             </p>
                         </motion.div>
                     )}

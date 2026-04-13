@@ -65,7 +65,7 @@ export const SafetyAttest = ({ onComplete }: SafetyAttestProps) => {
             </div>
 
             {allChecked && (
-                <p className="text-muted text-xs text-center italic mb-2">{t.safetyAttest.finalAttest}</p>
+                <p className="text-muted text-xs text-center mb-2">{t.safetyAttest.finalAttest}</p>
             )}
 
             <button

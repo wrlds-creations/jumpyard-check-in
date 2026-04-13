@@ -111,7 +111,7 @@ const sv = {
       noFlips: 'Inga volter utan instruktör.',
       removeJewelry: 'Ta av smycken, glasögon och lösa föremål.',
     },
-    finalAttest: 'Jag intygar att samtliga i min bokning har tagit del av reglerna.',
+    finalAttest: 'Jag intygar att samtliga i min bokning har tagit del av reglerna och förstått dem.',
     cta: 'Jag förstår, fortsätt',
   },
   addons: {
@@ -123,6 +123,7 @@ const sv = {
     each: 'st',
     perPerson: 'per person',
     connectedValueProp: 'Mest valt tillägg',
+    scrollHint: 'tillägg att välja mellan — scrolla ner',
     products: {
       skyriderLabel: 'SkyRider',
       skyriderDesc: 'Linbane-upplevelsen. Kräver min 100 cm.',
@@ -326,7 +327,7 @@ const en: typeof sv = {
       noFlips: 'No flips without an instructor.',
       removeJewelry: 'Remove jewelry, glasses, and loose items.',
     },
-    finalAttest: 'I confirm that everyone in my booking has read the rules.',
+    finalAttest: 'I confirm that everyone in my booking has read and understood the rules.',
     cta: 'I understand, continue',
   },
   addons: {
@@ -338,6 +339,7 @@ const en: typeof sv = {
     each: 'each',
     perPerson: 'per person',
     connectedValueProp: 'Most chosen add-on',
+    scrollHint: 'add-ons to choose from — scroll down',
     products: {
       skyriderLabel: 'SkyRider',
       skyriderDesc: 'Zip-line experience. Requires min 100 cm.',
