@@ -40,9 +40,11 @@ export const SafetyVideo = ({ onComplete }: SafetyVideoProps) => {
             exit={{ opacity: 0, y: -20 }}
         >
             <div className="flex flex-col items-center">
-                <ShieldCheck className="text-primary mb-1" size={28} />
-                <h1 className="text-xl font-black italic uppercase text-foreground mb-0.5">{t.safetyVideo.title}</h1>
-                <p className="text-muted text-xs mb-3">{t.safetyVideo.description}</p>
+                <div className="flex items-center gap-2 mb-0.5">
+                    <ShieldCheck className="text-primary" size={22} />
+                    <h1 className="text-xl font-black italic uppercase text-foreground">{t.safetyVideo.title}</h1>
+                </div>
+                <p className="text-muted text-xs mb-2">{t.safetyVideo.description}</p>
             </div>
 
             <div className="flex-1 flex items-center justify-center">

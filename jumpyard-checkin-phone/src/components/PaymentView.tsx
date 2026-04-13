@@ -34,8 +34,10 @@ export const PaymentView = ({ bookingId, total, items, onPaid }: PaymentViewProp
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <CreditCard className="text-primary mb-1" size={32} />
-            <h1 className="text-xl font-black italic uppercase text-foreground mb-0.5">{t.payment.title}</h1>
+            <div className="flex items-center gap-2 mb-0.5">
+                <CreditCard className="text-primary" size={22} />
+                <h1 className="text-xl font-black italic uppercase text-foreground">{t.payment.title}</h1>
+            </div>
             <p className="text-muted text-xs mb-4 text-center">{t.payment.description}</p>
 
             <div className="w-full bg-surface border border-border shadow-sm text-foreground rounded-xl p-4 mb-4">

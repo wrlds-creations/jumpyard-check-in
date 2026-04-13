@@ -32,8 +32,10 @@ export const SafetyAttest = ({ onComplete }: SafetyAttestProps) => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <ShieldCheck className="text-primary mb-1" size={28} />
-            <h1 className="text-xl font-black italic uppercase text-foreground mb-0.5">{t.safetyAttest.title}</h1>
+            <div className="flex items-center gap-2 mb-0.5">
+                <ShieldCheck className="text-primary" size={22} />
+                <h1 className="text-xl font-black italic uppercase text-foreground">{t.safetyAttest.title}</h1>
+            </div>
             <p className="text-muted text-xs mb-3 text-center">{t.safetyAttest.description}</p>
 
             <div className="w-full flex flex-col gap-2 mb-4">
