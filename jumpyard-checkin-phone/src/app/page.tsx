@@ -55,15 +55,15 @@ function ProgressBar({ state }: { state: FlowState }) {
                                     i < current
                                         ? 'bg-primary text-white'
                                         : i === current
-                                        ? 'bg-primary text-white scale-110 shadow-[0_0_10px_rgba(227,24,55,0.7)]'
-                                        : 'bg-zinc-800 text-zinc-600'
+                                        ? 'bg-primary text-white scale-110'
+                                        : 'bg-surface-strong text-muted'
                                 }`}
                             >
                                 {i < current ? '✓' : i + 1}
                             </div>
                             <span
                                 className={`text-[10px] font-bold italic uppercase tracking-wide mt-1 transition-colors ${
-                                    i <= current ? 'text-white' : 'text-zinc-600'
+                                    i <= current ? 'text-foreground' : 'text-muted'
                                 }`}
                             >
                                 {label}
@@ -72,7 +72,7 @@ function ProgressBar({ state }: { state: FlowState }) {
                         {i < labels.length - 1 && (
                             <div
                                 className={`h-0.5 flex-1 mx-1 mb-4 transition-all duration-500 ${
-                                    i < current ? 'bg-primary' : 'bg-zinc-800'
+                                    i < current ? 'bg-primary' : 'bg-surface-strong'
                                 }`}
                             />
                         )}
@@ -122,17 +122,17 @@ function CheckInFlow() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             key="mobile"
-                            className="flex flex-col items-center justify-center text-white relative"
+                            className="flex flex-col items-center justify-center text-foreground relative w-full h-full"
                         >
                             <button
                                 onClick={toggleLang}
-                                className="absolute top-0 right-0 px-2.5 py-1 rounded-full bg-zinc-900/80 border border-zinc-700 text-white font-bold italic uppercase text-[10px] tracking-widest hover:border-primary transition-colors"
+                                className="absolute top-0 right-0 px-2.5 py-1 rounded-full bg-surface border border-border text-foreground font-bold italic uppercase text-[10px] tracking-widest hover:border-primary transition-colors cursor-pointer"
                             >
                                 {lang === 'sv' ? 'EN' : 'SV'}
                             </button>
                             <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
                             <p className="text-xl font-bold uppercase italic tracking-widest">{t.common.loading}</p>
-                            <p className="text-zinc-500 mt-2">
+                            <p className="text-muted mt-2">
                                 {t.lookup.scanning} {token ?? 'MOCK123'}
                             </p>
                         </motion.div>
@@ -216,7 +216,7 @@ function CheckInFlow() {
                             key="confirm"
                             booking={ctx.booking}
                             upsellCount={ctx.connectedProfiles.length}
-                            socksCount={0}
+                            socksCount={ctx.selectedAddons.find(a => a.id === 'socks')?.qty ?? 0}
                             players={ctx.connectedProfiles.map(p => ({
                                 id: p.id,
                                 name: p.name,
@@ -243,13 +243,10 @@ function CheckInFlow() {
 export default function Home() {
     return (
         <LanguageProvider>
-            <main className="flex min-h-screen flex-col items-center justify-start pt-3 p-3 overflow-hidden relative text-white bg-black selection:bg-primary selection:text-white">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-black to-black z-0" />
-                <div className="absolute inset-0 bg-grid-white/[0.02] bg-[length:50px_50px] pointer-events-none" />
-
+            <main className="flex min-h-screen flex-col items-center justify-start pt-3 p-3 overflow-hidden relative text-foreground bg-background selection:bg-primary selection:text-white">
                 <Suspense
                     fallback={
-                        <div className="text-white z-10 flex flex-col justify-center items-center h-full">
+                        <div className="text-foreground z-10 flex flex-col justify-center items-center h-full w-full">
                             <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
                         </div>
                     }
