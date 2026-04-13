@@ -45,9 +45,9 @@ const sv = {
   choice: {
     title: 'Vad vill du göra?',
     haveBooking: 'Jag har en bokning',
-    haveBookingDesc: 'Skanna QR eller skriv koden',
-    buyTickets: 'Köp biljetter',
-    buyTicketsDesc: 'På plats, nästa lediga tid',
+    haveBookingDesc: 'Hitta din bokning med bokningskod',
+    buyTickets: 'Köp bokning',
+    buyTicketsDesc: 'Köp biljett och fortsätt till check-in',
   },
   lookup: {
     title: 'Hitta din bokning',
@@ -261,9 +261,9 @@ const en: typeof sv = {
   choice: {
     title: 'What would you like to do?',
     haveBooking: 'I have a booking',
-    haveBookingDesc: 'Scan QR or enter your code',
-    buyTickets: 'Buy tickets',
-    buyTicketsDesc: 'On-site, next available slot',
+    haveBookingDesc: 'Find your booking with booking code',
+    buyTickets: 'Buy booking',
+    buyTicketsDesc: 'Buy a ticket and continue to check-in',
   },
   lookup: {
     title: 'Find your booking',
