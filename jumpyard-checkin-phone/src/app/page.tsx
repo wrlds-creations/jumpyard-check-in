@@ -156,7 +156,7 @@ function CheckInFlow() {
                     )}
                 </div>
                 {state !== 'APP_MOBILE' && (
-                    <img src="/jumpyard_logo_splash.png" alt="" className="w-5 h-5 object-contain opacity-40" />
+                    <img src="/jumpyard_logo_splash.png" alt="" className="w-7 h-7 object-contain opacity-70" />
                 )}
             </div>
 
