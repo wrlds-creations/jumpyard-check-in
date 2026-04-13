@@ -13,9 +13,13 @@ import { ConnectedProfiles } from '@/components/ConnectedProfiles';
 import { PaymentView } from '@/components/PaymentView';
 import { ConfirmationScreen } from '@/components/ConfirmationScreen';
 import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
-import { initialContext, initialState, nextState } from '@/flow/machine';
+import { detectChannel, initialContext, initialState, nextState } from '@/flow/machine';
+import type { Branch } from '@/flow/machine';
 import { validateToken } from '@/flow/mockClient';
 import type { ConnectedProfile, FlowContext, FlowState } from '@/flow/types';
+import { ParkChoice } from '@/components/ParkChoice';
+import { BookingLookup } from '@/components/BookingLookup';
+import { BuyTickets } from '@/components/BuyTickets';
 
 // Visual progress bar groups safety-video + safety-attest into one step,
 // and collapses connected/skyrider into the extras column.
@@ -39,6 +43,9 @@ function getStepIndex(state: FlowState): number {
 
 function getBackState(state: FlowState, ctx: FlowContext): FlowState | null {
     switch (state) {
+        case 'KIOSK_LOOKUP': return 'KIOSK_CHOICE';
+        case 'KIOSK_BUY': return null; // BuyTickets handles its own internal back
+        case 'APP_BOOKING': return ctx.channel === 'park-qr' ? 'KIOSK_CHOICE' : null;
         case 'APP_SAFETY_VIDEO': return 'APP_BOOKING';
         case 'APP_SAFETY_ATTEST': return 'APP_SAFETY_VIDEO';
         case 'APP_ADDONS': return 'APP_SAFETY_ATTEST';
@@ -51,7 +58,7 @@ function getBackState(state: FlowState, ctx: FlowContext): FlowState | null {
 
 function ProgressBar({ state }: { state: FlowState }) {
     const { t } = useTranslation();
-    if (state === 'APP_MOBILE') return null;
+    if (state === 'APP_MOBILE' || state === 'KIOSK_CHOICE' || state === 'KIOSK_LOOKUP' || state === 'KIOSK_BUY') return null;
 
     const labels = [t.progress.booking, t.progress.safety, t.progress.extras, t.progress.payment, t.progress.done];
     const current = getStepIndex(state);
@@ -107,8 +114,13 @@ function CheckInFlow() {
     const token = searchParams.get('token') ?? searchParams.get('bookingRef');
     const { t } = useTranslation();
 
-    const [state, setState] = useState<FlowState>(() => initialState('sms'));
-    const [ctx, setCtx] = useState<FlowContext>(() => ({ ...initialContext('sms'), token }));
+    const params = new URLSearchParams(searchParams.toString());
+    const channel = detectChannel(params);
+    // Phone app is never used as actual kiosk — treat bare URL as park-qr
+    const effectiveChannel = channel === 'kiosk' ? 'park-qr' as const : channel;
+
+    const [state, setState] = useState<FlowState>(() => initialState(effectiveChannel));
+    const [ctx, setCtx] = useState<FlowContext>(() => ({ ...initialContext(effectiveChannel), token }));
 
     const scrollToTop = () => {
         window.scrollTo(0, 0);
@@ -116,10 +128,10 @@ function CheckInFlow() {
         document.body.scrollTop = 0;
     };
 
-    const advance = (patch: Partial<FlowContext> = {}) => {
+    const advance = (patch: Partial<FlowContext> = {}, branch: Branch = null) => {
         const newCtx = { ...ctx, ...patch };
         setCtx(newCtx);
-        setState(nextState(state, newCtx, null));
+        setState(nextState(state, newCtx, branch));
         scrollToTop();
     };
 
@@ -177,6 +189,36 @@ function CheckInFlow() {
                                 {t.common.loading}
                             </p>
                         </motion.div>
+                    )}
+
+                    {state === 'KIOSK_CHOICE' && (
+                        <ParkChoice
+                            key="park-choice"
+                            onSelect={choice => advance({}, choice === 'BOOKING' ? 'booking' : 'buy')}
+                        />
+                    )}
+
+                    {state === 'KIOSK_LOOKUP' && (
+                        <BookingLookup
+                            key="park-lookup"
+                            onSuccess={booking => advance({ booking, existingAddons: booking.existingAddons ?? [] })}
+                            onBack={() => { setState('KIOSK_CHOICE'); scrollToTop(); }}
+                        />
+                    )}
+
+                    {state === 'KIOSK_BUY' && (
+                        <BuyTickets
+                            key="park-buy"
+                            onComplete={(booking, contact) =>
+                                advance({
+                                    booking,
+                                    existingAddons: booking.existingAddons ?? [],
+                                    guestContactEmail: contact.email,
+                                    guestContactPhone: contact.phone,
+                                })
+                            }
+                            onBack={() => { setState('KIOSK_CHOICE'); scrollToTop(); }}
+                        />
                     )}
 
                     {state === 'APP_BOOKING' && ctx.booking && (

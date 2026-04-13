@@ -29,6 +29,7 @@ export function initialContext(channel: Channel): FlowContext {
 
 export function initialState(channel: Channel): FlowState {
   if (channel === 'sms') return 'APP_MOBILE';
+  if (channel === 'park-qr') return 'KIOSK_CHOICE';
   return 'IDLE';
 }
 
