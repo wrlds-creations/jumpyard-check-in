@@ -1,7 +1,7 @@
 'use client';
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Check, Clock, Mail, Phone, Ticket, Users } from 'lucide-react';
+import { ArrowLeft, Check, Clock, Mail, Ticket, Users } from 'lucide-react';
 import { buyWalkIn } from '@/flow/mockClient';
 import type { Booking } from '@/flow/types';
 import { useTranslation } from '@/context/LanguageContext';
@@ -66,7 +66,6 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
     const [quantity, setQuantity] = useState(1);
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
     const [email, setEmail] = useState('');
-    const [phone, setPhone] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
     const slots = useMemo(() => generateSlots(), []);
@@ -81,23 +80,25 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
     const goToTimeslot = () => { setSelectedTime(null); setStep('TIMESLOT'); };
     const goToContact = () => setStep('CONTACT');
 
-    const contactValid = email.includes('@') || phone.replace(/\D/g, '').length >= 6;
+    const contactValid = email.includes('@');
 
-    const handleConfirm = async () => {
-        if (!selectedProduct || !contactValid) return;
+    const doConfirm = async (skipContact: boolean) => {
+        if (!selectedProduct) return;
+        if (!skipContact && !contactValid) return;
         setSubmitting(true);
         try {
             const jumpers = selectedProduct.jumpersPerUnit * quantity;
             const total = selectedProduct.unitPrice * quantity;
+            const contactEmail = skipContact ? null : (email || null);
             const booking = await buyWalkIn(
                 jumpers,
-                email || null,
-                phone || null,
+                contactEmail,
+                null,
                 { id: selectedProduct.id, label: selectedProduct.label, type: selectedProduct.type, durationMinutes: selectedProduct.durationMinutes }
             );
             onComplete(
                 booking,
-                { email: email || null, phone: phone || null },
+                { email: contactEmail, phone: null },
                 { id: selectedProduct.id, label: selectedProduct.label, type: selectedProduct.type, durationMinutes: selectedProduct.durationMinutes, unitPrice: selectedProduct.unitPrice, quantity, total }
             );
         } finally {
@@ -167,8 +168,10 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="bg-surface border border-border p-5 rounded-2xl text-center"
+                    className="w-full flex items-center justify-center"
+                    style={{ minHeight: 'calc(100dvh - 160px)' }}
                 >
+                <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
                     <div className="bg-white border border-border rounded-xl px-3 py-2 mb-4 inline-flex items-center gap-2">
                         <Ticket size={14} className="text-primary" />
                         <span className="text-sm font-bold italic text-foreground">{selectedProduct.label}</span>
@@ -216,6 +219,7 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                     >
                         {t.common.continue} <Check size={18} />
                     </button>
+                </div>
                 </motion.div>
             )}
 
@@ -276,46 +280,42 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="bg-surface border border-border p-5 rounded-2xl"
+                    className="w-full flex flex-col items-center justify-center"
+                    style={{ minHeight: 'calc(100dvh - 160px)' }}
                 >
-                    <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">{t.buy.contactTitle}</h2>
-                    <p className="text-muted text-xs mb-1 text-center">{t.buy.contactDesc}</p>
-                    <p className="text-muted/60 text-[10px] mb-4 text-center">{t.buy.contactHint}</p>
+                    <div className="w-full bg-surface border border-border p-5 rounded-2xl">
+                        <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">{t.buy.contactTitle}</h2>
+                        <p className="text-muted text-xs mb-5 text-center">{t.buy.contactDesc}</p>
 
-                    <label className="block mb-3">
-                        <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
-                            <Mail size={11} /> {t.buy.emailLabel}
-                        </span>
-                        <input
-                            type="email"
-                            value={email}
-                            onChange={e => setEmail(e.target.value)}
-                            placeholder={t.buy.emailPlaceholder}
-                            autoComplete="email"
-                            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
-                        />
-                    </label>
+                        <label className="block mb-5">
+                            <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
+                                <Mail size={11} /> {t.buy.emailLabel}
+                            </span>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={e => setEmail(e.target.value)}
+                                placeholder={t.buy.emailPlaceholder}
+                                autoComplete="email"
+                                className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
+                            />
+                        </label>
 
-                    <label className="block mb-5">
-                        <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
-                            <Phone size={11} /> {t.buy.phoneLabel}
-                        </span>
-                        <input
-                            type="tel"
-                            value={phone}
-                            onChange={e => setPhone(e.target.value)}
-                            placeholder={t.buy.phonePlaceholder}
-                            autoComplete="tel"
-                            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
-                        />
-                    </label>
+                        <button
+                            onClick={() => doConfirm(false)}
+                            disabled={!contactValid || submitting}
+                            className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                        >
+                            {submitting ? t.buy.creating : t.buy.confirmCreate} {!submitting && <Check size={18} />}
+                        </button>
+                    </div>
 
                     <button
-                        onClick={handleConfirm}
-                        disabled={!contactValid || submitting}
-                        className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                        onClick={() => doConfirm(true)}
+                        disabled={submitting}
+                        className="mt-4 text-muted/50 hover:text-muted text-xs font-medium transition-colors"
                     >
-                        {submitting ? t.buy.creating : t.buy.confirmCreate} {!submitting && <Check size={18} />}
+                        {t.buy.skipContact}
                     </button>
                 </motion.div>
             )}
