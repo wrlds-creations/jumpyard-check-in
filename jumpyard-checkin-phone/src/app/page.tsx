@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
+import { ArrowLeft } from 'lucide-react';
 import { BookingSummary } from '@/components/BookingSummary';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { SafetyAttest } from '@/components/SafetyAttest';
@@ -11,7 +12,6 @@ import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { ConnectedProfiles } from '@/components/ConnectedProfiles';
 import { PaymentView } from '@/components/PaymentView';
 import { ConfirmationScreen } from '@/components/ConfirmationScreen';
-import { PresentCode } from '@/components/PresentCode';
 import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import { initialContext, initialState, nextState } from '@/flow/machine';
 import { validateToken } from '@/flow/mockClient';
@@ -37,46 +37,65 @@ function getStepIndex(state: FlowState): number {
     return idx === -1 ? 0 : idx;
 }
 
+function getBackState(state: FlowState, ctx: FlowContext): FlowState | null {
+    switch (state) {
+        case 'APP_SAFETY_VIDEO': return 'APP_BOOKING';
+        case 'APP_SAFETY_ATTEST': return 'APP_SAFETY_VIDEO';
+        case 'APP_ADDONS': return 'APP_SAFETY_ATTEST';
+        case 'APP_SKYRIDER_ATTEST': return 'APP_ADDONS';
+        case 'APP_CONNECTED': return ctx.skyriderSelected ? 'APP_SKYRIDER_ATTEST' : 'APP_ADDONS';
+        case 'APP_PAYMENT': return ctx.connectedSelected ? 'APP_CONNECTED' : ctx.skyriderSelected ? 'APP_SKYRIDER_ATTEST' : 'APP_ADDONS';
+        default: return null;
+    }
+}
+
 function ProgressBar({ state }: { state: FlowState }) {
     const { t } = useTranslation();
     if (state === 'APP_MOBILE') return null;
 
     const labels = [t.progress.booking, t.progress.safety, t.progress.extras, t.progress.payment, t.progress.done];
     const current = getStepIndex(state);
+    const pct = labels.length > 1 ? (current / (labels.length - 1)) * 100 : 0;
 
     return (
-        <div className="w-full max-w-lg mb-2 px-2">
-            <div className="flex gap-1 items-center">
-                {labels.map((label, i) => (
-                    <div key={i} className="flex items-center flex-1">
-                        <div className="flex flex-col items-center flex-1">
-                            <div
-                                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black italic transition-all duration-300 ${
-                                    i < current
-                                        ? 'bg-primary text-white'
-                                        : i === current
-                                        ? 'bg-primary text-white scale-110 shadow-[0_0_10px_rgba(227,24,55,0.7)]'
-                                        : 'bg-zinc-800 text-zinc-600'
-                                }`}
-                            >
-                                {i < current ? '✓' : i + 1}
-                            </div>
-                            <span
-                                className={`text-[10px] font-bold italic uppercase tracking-wide mt-1 transition-colors ${
-                                    i <= current ? 'text-white' : 'text-zinc-600'
-                                }`}
-                            >
-                                {label}
-                            </span>
-                        </div>
-                        {i < labels.length - 1 && (
-                            <div
-                                className={`h-0.5 flex-1 mx-1 mb-4 transition-all duration-500 ${
-                                    i < current ? 'bg-primary' : 'bg-zinc-800'
-                                }`}
-                            />
-                        )}
+        <div className="w-full max-w-md mx-auto mb-3 px-4">
+            {/* Track + circles */}
+            <div className="relative flex items-center justify-between" style={{ height: 28 }}>
+                {/* Grey baseline — spans between first and last circle centers */}
+                <div className="absolute top-1/2 left-[14px] right-[14px] h-0.5 -translate-y-1/2 bg-surface-strong" />
+                {/* Active overlay */}
+                <div
+                    className="absolute top-1/2 left-[14px] h-0.5 -translate-y-1/2 bg-primary transition-all duration-500"
+                    style={{ width: `calc(${pct}% - ${pct > 0 ? 28 * pct / 100 : 0}px)` }}
+                />
+                {/* Circles */}
+                {labels.map((_, i) => (
+                    <div
+                        key={i}
+                        className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center text-xs font-black italic transition-all duration-300 ${
+                            i < current
+                                ? 'bg-primary text-white'
+                                : i === current
+                                ? 'bg-primary text-white ring-4 ring-primary/20'
+                                : 'bg-surface-strong text-muted'
+                        }`}
+                    >
+                        {i < current ? '✓' : i + 1}
                     </div>
+                ))}
+            </div>
+            {/* Labels row — separate so they don't affect circle/line alignment */}
+            <div className="flex justify-between mt-1">
+                {labels.map((label, i) => (
+                    <span
+                        key={i}
+                        className={`text-[9px] font-bold italic uppercase tracking-wider text-center transition-colors ${
+                            i <= current ? 'text-foreground' : 'text-muted'
+                        }`}
+                        style={{ width: 28 }}
+                    >
+                        {label}
+                    </span>
                 ))}
             </div>
         </div>
@@ -86,16 +105,27 @@ function ProgressBar({ state }: { state: FlowState }) {
 function CheckInFlow() {
     const searchParams = useSearchParams();
     const token = searchParams.get('token') ?? searchParams.get('bookingRef');
-    const { t, lang, toggleLang } = useTranslation();
+    const { t } = useTranslation();
 
     const [state, setState] = useState<FlowState>(() => initialState('sms'));
     const [ctx, setCtx] = useState<FlowContext>(() => ({ ...initialContext('sms'), token }));
+
+    const scrollToTop = () => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+    };
 
     const advance = (patch: Partial<FlowContext> = {}) => {
         const newCtx = { ...ctx, ...patch };
         setCtx(newCtx);
         setState(nextState(state, newCtx, null));
+        scrollToTop();
     };
+
+    useEffect(() => {
+        scrollToTop();
+    }, [state]);
 
     useEffect(() => {
         if (state !== 'APP_MOBILE') return;
@@ -114,6 +144,22 @@ function CheckInFlow() {
         <div className="z-10 w-full max-w-lg flex flex-col items-center">
             <ProgressBar state={state} />
 
+            <div className="w-full max-w-md px-4 h-8 flex items-center justify-between">
+                <div>
+                    {getBackState(state, ctx) && (
+                        <button
+                            onClick={() => { setState(getBackState(state, ctx)!); scrollToTop(); }}
+                            className="flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
+                        >
+                            <ArrowLeft size={14} /> {t.common.back}
+                        </button>
+                    )}
+                </div>
+                {state !== 'APP_MOBILE' && (
+                    <img src="/jumpyard_logo_splash.png" alt="" className="w-5 h-5 object-contain opacity-40" />
+                )}
+            </div>
+
             <div className="w-full flex items-center justify-center relative">
                 <AnimatePresence mode="wait">
                     {state === 'APP_MOBILE' && (
@@ -122,18 +168,13 @@ function CheckInFlow() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             key="mobile"
-                            className="flex flex-col items-center justify-center text-white relative"
+                            className="flex flex-col items-center justify-center text-foreground w-full"
+                            style={{ minHeight: 'calc(100dvh - 60px)' }}
                         >
-                            <button
-                                onClick={toggleLang}
-                                className="absolute top-0 right-0 px-2.5 py-1 rounded-full bg-zinc-900/80 border border-zinc-700 text-white font-bold italic uppercase text-[10px] tracking-widest hover:border-primary transition-colors"
-                            >
-                                {lang === 'sv' ? 'EN' : 'SV'}
-                            </button>
-                            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-                            <p className="text-xl font-bold uppercase italic tracking-widest">{t.common.loading}</p>
-                            <p className="text-zinc-500 mt-2">
-                                {t.lookup.scanning} {token ?? 'MOCK123'}
+                            <img src="/logo.png" alt="JumpYard" className="w-40 mb-6" />
+                            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3"></div>
+                            <p className="text-muted text-sm">
+                                {t.common.loading}
                             </p>
                         </motion.div>
                     )}
@@ -146,7 +187,6 @@ function CheckInFlow() {
                         <SafetyVideo
                             key="safety-video"
                             onComplete={seenAt => advance({ safetyVideoSeenAt: seenAt })}
-                            onBack={() => setState('APP_BOOKING')}
                         />
                     )}
 
@@ -154,7 +194,6 @@ function CheckInFlow() {
                         <SafetyAttest
                             key="safety-attest"
                             onComplete={attestedAt => advance({ safetyAttestedAt: attestedAt })}
-                            onBack={() => setState('APP_SAFETY_VIDEO')}
                         />
                     )}
 
@@ -172,7 +211,6 @@ function CheckInFlow() {
                                     paymentTotal: addonsTotal,
                                 })
                             }
-                            onBack={() => setState('APP_SAFETY_ATTEST')}
                         />
                     )}
 
@@ -180,7 +218,6 @@ function CheckInFlow() {
                         <SkyRiderAttest
                             key="skyrider"
                             onComplete={() => advance({ skyriderHeightConfirmed: true })}
-                            onBack={() => setState('APP_ADDONS')}
                         />
                     )}
 
@@ -189,7 +226,6 @@ function CheckInFlow() {
                             key="connected"
                             count={ctx.selectedAddons.find(a => a.id === 'connected')?.qty ?? 1}
                             onContinue={(profiles: ConnectedProfile[]) => advance({ connectedProfiles: profiles })}
-                            onBack={() => setState(ctx.skyriderSelected ? 'APP_SKYRIDER_ATTEST' : 'APP_ADDONS')}
                         />
                     )}
 
@@ -198,39 +234,17 @@ function CheckInFlow() {
                             key="payment"
                             bookingId={ctx.booking.id}
                             total={ctx.paymentTotal}
+                            items={ctx.selectedAddons}
                             onPaid={() => advance({ paymentCompleted: true })}
-                            onBack={() =>
-                                setState(
-                                    ctx.connectedSelected
-                                        ? 'APP_CONNECTED'
-                                        : ctx.skyriderSelected
-                                        ? 'APP_SKYRIDER_ATTEST'
-                                        : 'APP_ADDONS'
-                                )
-                            }
                         />
                     )}
 
-                    {state === 'APP_CONFIRM' && ctx.booking && (
+                    {(state === 'APP_CONFIRM' || state === 'APP_PRESENT') && ctx.booking && (
                         <ConfirmationScreen
                             key="confirm"
                             booking={ctx.booking}
-                            upsellCount={ctx.connectedProfiles.length}
-                            socksCount={0}
-                            players={ctx.connectedProfiles.map(p => ({
-                                id: p.id,
-                                name: p.name,
-                                photo: null,
-                            }))}
-                            isMobile={true}
-                            onReset={() => advance()}
-                        />
-                    )}
-
-                    {state === 'APP_PRESENT' && ctx.booking && (
-                        <PresentCode
-                            key="present"
-                            bookingId={ctx.booking.id}
+                            jumperCount={ctx.booking.jumpers}
+                            selectedAddons={ctx.selectedAddons}
                             onDone={() => window.location.reload()}
                         />
                     )}
@@ -243,13 +257,10 @@ function CheckInFlow() {
 export default function Home() {
     return (
         <LanguageProvider>
-            <main className="flex min-h-screen flex-col items-center justify-start pt-3 p-3 overflow-hidden relative text-white bg-black selection:bg-primary selection:text-white">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-black to-black z-0" />
-                <div className="absolute inset-0 bg-grid-white/[0.02] bg-[length:50px_50px] pointer-events-none" />
-
+            <main className="flex min-h-screen flex-col items-center justify-start pt-3 p-3 overflow-hidden relative text-foreground bg-background selection:bg-primary selection:text-white">
                 <Suspense
                     fallback={
-                        <div className="text-white z-10 flex flex-col justify-center items-center h-full">
+                        <div className="text-foreground z-10 flex flex-col justify-center items-center h-full w-full">
                             <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
                         </div>
                     }

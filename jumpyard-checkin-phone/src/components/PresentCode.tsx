@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { QrCode } from 'lucide-react';
 import { commitCheckin } from '@/flow/mockClient';
+import { useTranslation } from '@/context/LanguageContext';
 
 interface PresentCodeProps {
     bookingId: string;
@@ -10,6 +11,7 @@ interface PresentCodeProps {
 }
 
 export const PresentCode = ({ bookingId, onDone }: PresentCodeProps) => {
+    const { t } = useTranslation();
     const [qrPayload, setQrPayload] = useState<string>('');
     const [shortCode, setShortCode] = useState<string>('');
 
@@ -27,34 +29,34 @@ export const PresentCode = ({ bookingId, onDone }: PresentCodeProps) => {
 
     return (
         <motion.div
-            className="w-full max-w-md mx-auto flex flex-col items-center text-center px-4 py-3"
+            className="w-full max-w-md mx-auto flex flex-col items-center text-center px-4 py-3 text-foreground"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
         >
-            <p className="text-[11px] text-zinc-400 uppercase tracking-[0.4em] font-bold italic mb-1">Show this at the entrance</p>
-            <h1 className="text-2xl font-black italic uppercase text-white mb-4">Ready For Park</h1>
+            <p className="text-[11px] text-muted uppercase tracking-[0.4em] font-bold italic mb-1">{t.present.eyebrow}</p>
+            <h1 className="text-2xl font-black italic uppercase text-foreground mb-4">{t.present.title}</h1>
 
-            <div className="bg-white p-8 rounded-2xl mb-4 shadow-[0_0_60px_rgba(255,255,255,0.15)]">
+            <div className="bg-white p-8 rounded-2xl mb-4 border border-border shadow-sm">
                 <QrCode size={160} className="text-black" />
-                <p className="text-[10px] text-zinc-500 font-mono mt-2 break-all max-w-[160px]">
+                <p className="text-[10px] text-muted font-mono mt-2 break-all max-w-[160px]">
                     {qrPayload || '…'}
                 </p>
             </div>
 
-            <div className="bg-zinc-900 border border-primary/50 rounded-xl px-8 py-3 mb-4">
-                <p className="text-[11px] text-zinc-400 uppercase tracking-[0.3em] font-bold italic mb-1">Backup code</p>
+            <div className="bg-surface border border-border rounded-xl px-8 py-3 mb-4">
+                <p className="text-[11px] text-muted uppercase tracking-[0.3em] font-bold italic mb-1">{t.present.backupLabel}</p>
                 <p className="text-3xl font-black tracking-[0.3em] text-primary font-mono">
                     {shortCode || '----'}
                 </p>
             </div>
 
-            <p className="text-zinc-500 mb-4 text-sm">Show the QR code or backup code to staff for band pairing.</p>
+            <p className="text-muted mb-4 text-sm">{t.present.instruction}</p>
 
             <button
                 onClick={onDone}
-                className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold italic uppercase px-8 py-3 rounded-xl transition-all"
+                className="bg-surface-strong hover:bg-border text-foreground font-bold italic uppercase px-8 py-3 rounded-xl transition-all border border-transparent hover:border-border"
             >
-                Start Over
+                {t.present.startOver}
             </button>
         </motion.div>
     );

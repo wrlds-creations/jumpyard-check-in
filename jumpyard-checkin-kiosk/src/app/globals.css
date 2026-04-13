@@ -1,26 +1,27 @@
 @import "tailwindcss";
 
 :root {
-  --background: #000000;
-  /* Pure Black for high contrast */
-  --foreground: #FFFFFF;
-  /* White */
+  --background: #FFFFFF;
+  --foreground: #1C1C1E;
+  --surface: #F4F4F5;
+  --surface-strong: #E4E4E7;
+  --border: #E4E4E7;
+  --muted: #71717A;
   --primary: #E31837;
-  /* JumpYard Red */
   --success: #10B981;
-  --secondary: #1C1C1E;
-  /* Dark Gray for cards */
-  --accent: #E31837;
-  /* reusing red as accent */
+  --warning: #F59E0B;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
   --color-primary: var(--primary);
   --color-success: var(--success);
-  --color-secondary: var(--secondary);
-  --color-accent: var(--accent);
+  --color-warning: var(--warning);
   --font-sans: var(--font-space-grotesk), sans-serif;
 }
 
@@ -29,7 +30,6 @@ body {
   color: var(--foreground);
 }
 
-/* Custom Utilities for JumpYard Vibe */
 .text-jy-red {
   color: var(--primary);
 }
