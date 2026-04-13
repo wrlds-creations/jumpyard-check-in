@@ -21,6 +21,7 @@ export async function validateToken(token: string): Promise<Booking> {
     durationMinutes: 60,
     existingAddons: [
       { id: 'lock', label: 'Hänglås', price: 40, qty: 1 },
+      { id: 'socks', label: 'Strumpor', price: 40, qty: 3 },
     ],
   };
 }

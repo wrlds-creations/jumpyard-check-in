@@ -105,19 +105,26 @@ function ProgressBar({ state }: { state: FlowState }) {
 function CheckInFlow() {
     const searchParams = useSearchParams();
     const token = searchParams.get('token') ?? searchParams.get('bookingRef');
-    const { t, lang, toggleLang } = useTranslation();
+    const { t } = useTranslation();
 
     const [state, setState] = useState<FlowState>(() => initialState('sms'));
     const [ctx, setCtx] = useState<FlowContext>(() => ({ ...initialContext('sms'), token }));
+
+    const scrollToTop = () => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+    };
 
     const advance = (patch: Partial<FlowContext> = {}) => {
         const newCtx = { ...ctx, ...patch };
         setCtx(newCtx);
         setState(nextState(state, newCtx, null));
+        scrollToTop();
     };
 
     useEffect(() => {
-        window.scrollTo(0, 0);
+        scrollToTop();
     }, [state]);
 
     useEffect(() => {
@@ -140,7 +147,7 @@ function CheckInFlow() {
             <div className="w-full max-w-md px-4 h-8 flex items-center">
                 {getBackState(state, ctx) && (
                     <button
-                        onClick={() => setState(getBackState(state, ctx)!)}
+                        onClick={() => { setState(getBackState(state, ctx)!); scrollToTop(); }}
                         className="flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
                     >
                         <ArrowLeft size={14} /> {t.common.back}
@@ -156,14 +163,9 @@ function CheckInFlow() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             key="mobile"
-                            className="flex flex-col items-center justify-center text-foreground relative w-full h-full"
+                            className="flex flex-col items-center justify-center text-foreground w-full"
+                            style={{ minHeight: 'calc(100dvh - 60px)' }}
                         >
-                            <button
-                                onClick={toggleLang}
-                                className="absolute top-0 right-0 px-2.5 py-1 rounded-full bg-surface border border-border text-foreground font-bold italic uppercase text-[10px] tracking-widest hover:border-primary transition-colors cursor-pointer"
-                            >
-                                {lang === 'sv' ? 'EN' : 'SV'}
-                            </button>
                             <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
                             <p className="text-xl font-bold uppercase italic tracking-widest">{t.common.loading}</p>
                             <p className="text-muted mt-2">

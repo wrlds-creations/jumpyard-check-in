@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Play, ShieldCheck } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
@@ -8,29 +8,28 @@ interface SafetyVideoProps {
     onComplete: (seenAt: string) => void;
 }
 
-const MOCK_VIDEO_SECONDS = 6;
-
 export const SafetyVideo = ({ onComplete }: SafetyVideoProps) => {
     const { t } = useTranslation();
+    const videoRef = useRef<HTMLVideoElement>(null);
     const [playing, setPlaying] = useState(false);
-    const [elapsed, setElapsed] = useState(0);
+    const [done, setDone] = useState(false);
+    const [progress, setProgress] = useState(0);
 
-    useEffect(() => {
-        if (!playing) return;
-        const interval = setInterval(() => {
-            setElapsed(e => {
-                if (e + 1 >= MOCK_VIDEO_SECONDS) {
-                    clearInterval(interval);
-                    return MOCK_VIDEO_SECONDS;
-                }
-                return e + 1;
-            });
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [playing]);
+    const handlePlay = () => {
+        setPlaying(true);
+        videoRef.current?.play();
+    };
 
-    const done = elapsed >= MOCK_VIDEO_SECONDS;
-    const progress = Math.min(100, (elapsed / MOCK_VIDEO_SECONDS) * 100);
+    const handleTimeUpdate = () => {
+        const v = videoRef.current;
+        if (!v || !v.duration) return;
+        setProgress((v.currentTime / v.duration) * 100);
+    };
+
+    const handleEnded = () => {
+        setDone(true);
+        setProgress(100);
+    };
 
     return (
         <motion.div
@@ -43,39 +42,34 @@ export const SafetyVideo = ({ onComplete }: SafetyVideoProps) => {
             <h1 className="text-xl font-black italic uppercase text-foreground mb-0.5">{t.safetyVideo.title}</h1>
             <p className="text-muted text-xs mb-3">{t.safetyVideo.description}</p>
 
-            <div className="w-full max-w-[280px] mx-auto aspect-[9/16] bg-surface-strong border border-border shadow-sm rounded-2xl flex flex-col items-center justify-center mb-4 relative overflow-hidden">
-                {/* Poster frame overlay */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    {!playing ? (
-                        <>
-                            <ShieldCheck className="text-muted/30 mb-3" size={64} />
-                            <p className="text-foreground font-bold italic text-sm mb-1">{t.safetyVideo.title}</p>
-                            <p className="text-muted text-[11px] mb-4">~{MOCK_VIDEO_SECONDS} sek</p>
-                            <button
-                                onClick={() => setPlaying(true)}
-                                className="w-14 h-14 rounded-full bg-primary hover:bg-surface text-white hover:text-primary hover:border-primary border border-transparent flex items-center justify-center transition-all shadow-md"
-                            >
-                                <Play size={28} className="ml-0.5" />
-                            </button>
-                        </>
-                    ) : (
-                        <>
-                            <ShieldCheck className="text-primary/20 mb-2" size={48} />
-                            <p className="text-muted text-xs uppercase tracking-wider mb-1">{t.safetyVideo.playing}</p>
-                            <div className="w-24 h-1.5 rounded-full bg-surface overflow-hidden">
-                                <div
-                                    className="h-full bg-primary rounded-full transition-all duration-1000"
-                                    style={{ width: `${progress}%` }}
-                                />
-                            </div>
-                            <p className="text-foreground text-sm font-bold italic mt-2">
-                                {MOCK_VIDEO_SECONDS - elapsed}s
-                            </p>
-                        </>
-                    )}
-                </div>
+            <div className="w-full max-w-[280px] mx-auto aspect-[9/16] bg-black border border-border shadow-sm rounded-2xl relative overflow-hidden mb-4">
+                <video
+                    ref={videoRef}
+                    src="/safety-video.mp4"
+                    playsInline
+                    preload="metadata"
+                    onTimeUpdate={handleTimeUpdate}
+                    onEnded={handleEnded}
+                    className="absolute inset-0 w-full h-full object-cover"
+                />
+
+                {/* Play overlay — shown before playing */}
+                {!playing && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 z-10">
+                        <button
+                            onClick={handlePlay}
+                            className="w-16 h-16 rounded-full bg-primary hover:bg-surface text-white hover:text-primary hover:border-primary border border-transparent flex items-center justify-center transition-all shadow-md"
+                        >
+                            <Play size={32} className="ml-0.5" />
+                        </button>
+                    </div>
+                )}
+
                 {/* Bottom progress bar */}
-                <div className="absolute bottom-0 left-0 h-1 bg-primary transition-all" style={{ width: `${progress}%` }} />
+                <div
+                    className="absolute bottom-0 left-0 h-1 bg-primary z-20 transition-all"
+                    style={{ width: `${progress}%` }}
+                />
             </div>
 
             <button
