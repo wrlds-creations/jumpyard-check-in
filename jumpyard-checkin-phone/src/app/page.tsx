@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense, Fragment } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
@@ -12,7 +12,6 @@ import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { ConnectedProfiles } from '@/components/ConnectedProfiles';
 import { PaymentView } from '@/components/PaymentView';
 import { ConfirmationScreen } from '@/components/ConfirmationScreen';
-import { PresentCode } from '@/components/PresentCode';
 import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import { initialContext, initialState, nextState } from '@/flow/machine';
 import { validateToken } from '@/flow/mockClient';
@@ -56,40 +55,47 @@ function ProgressBar({ state }: { state: FlowState }) {
 
     const labels = [t.progress.booking, t.progress.safety, t.progress.extras, t.progress.payment, t.progress.done];
     const current = getStepIndex(state);
+    const pct = labels.length > 1 ? (current / (labels.length - 1)) * 100 : 0;
 
     return (
         <div className="w-full max-w-md mx-auto mb-3 px-4">
-            <div className="flex items-center">
+            {/* Track + circles */}
+            <div className="relative flex items-center justify-between" style={{ height: 28 }}>
+                {/* Grey baseline — spans between first and last circle centers */}
+                <div className="absolute top-1/2 left-[14px] right-[14px] h-0.5 -translate-y-1/2 bg-surface-strong" />
+                {/* Active overlay */}
+                <div
+                    className="absolute top-1/2 left-[14px] h-0.5 -translate-y-1/2 bg-primary transition-all duration-500"
+                    style={{ width: `calc(${pct}% - ${pct > 0 ? 28 * pct / 100 : 0}px)` }}
+                />
+                {/* Circles */}
+                {labels.map((_, i) => (
+                    <div
+                        key={i}
+                        className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center text-xs font-black italic transition-all duration-300 ${
+                            i < current
+                                ? 'bg-primary text-white'
+                                : i === current
+                                ? 'bg-primary text-white ring-4 ring-primary/20'
+                                : 'bg-surface-strong text-muted'
+                        }`}
+                    >
+                        {i < current ? '✓' : i + 1}
+                    </div>
+                ))}
+            </div>
+            {/* Labels row — separate so they don't affect circle/line alignment */}
+            <div className="flex justify-between mt-1">
                 {labels.map((label, i) => (
-                    <Fragment key={i}>
-                        <div className="flex flex-col items-center">
-                            <div
-                                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black italic transition-all duration-300 ${
-                                    i < current
-                                        ? 'bg-primary text-white'
-                                        : i === current
-                                        ? 'bg-primary text-white ring-4 ring-primary/20'
-                                        : 'bg-surface-strong text-muted'
-                                }`}
-                            >
-                                {i < current ? '✓' : i + 1}
-                            </div>
-                            <span
-                                className={`text-[9px] font-bold italic uppercase tracking-wider mt-1 whitespace-nowrap transition-colors ${
-                                    i <= current ? 'text-foreground' : 'text-muted'
-                                }`}
-                            >
-                                {label}
-                            </span>
-                        </div>
-                        {i < labels.length - 1 && (
-                            <div
-                                className={`flex-1 h-0.5 mx-1 -mt-4 transition-all duration-500 ${
-                                    i < current ? 'bg-primary' : 'bg-surface-strong'
-                                }`}
-                            />
-                        )}
-                    </Fragment>
+                    <span
+                        key={i}
+                        className={`text-[9px] font-bold italic uppercase tracking-wider text-center transition-colors ${
+                            i <= current ? 'text-foreground' : 'text-muted'
+                        }`}
+                        style={{ width: 28 }}
+                    >
+                        {label}
+                    </span>
                 ))}
             </div>
         </div>
@@ -111,6 +117,10 @@ function CheckInFlow() {
     };
 
     useEffect(() => {
+        window.scrollTo(0, 0);
+    }, [state]);
+
+    useEffect(() => {
         if (state !== 'APP_MOBILE') return;
         let alive = true;
         validateToken(token ?? 'MOCK123').then(booking => {
@@ -127,16 +137,16 @@ function CheckInFlow() {
         <div className="z-10 w-full max-w-lg flex flex-col items-center">
             <ProgressBar state={state} />
 
-            {getBackState(state, ctx) && (
-                <div className="w-full max-w-md px-4 mb-1">
+            <div className="w-full max-w-md px-4 h-8 flex items-center">
+                {getBackState(state, ctx) && (
                     <button
                         onClick={() => setState(getBackState(state, ctx)!)}
                         className="flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
                     >
                         <ArrowLeft size={14} /> {t.common.back}
                     </button>
-                </div>
-            )}
+                )}
+            </div>
 
             <div className="w-full flex items-center justify-center relative">
                 <AnimatePresence mode="wait">
@@ -222,26 +232,12 @@ function CheckInFlow() {
                         />
                     )}
 
-                    {state === 'APP_CONFIRM' && ctx.booking && (
+                    {(state === 'APP_CONFIRM' || state === 'APP_PRESENT') && ctx.booking && (
                         <ConfirmationScreen
                             key="confirm"
                             booking={ctx.booking}
-                            upsellCount={ctx.connectedProfiles.length}
-                            socksCount={ctx.selectedAddons.find(a => a.id === 'socks')?.qty ?? 0}
-                            players={ctx.connectedProfiles.map(p => ({
-                                id: p.id,
-                                name: p.name,
-                                photo: null,
-                            }))}
-                            isMobile={true}
-                            onReset={() => advance()}
-                        />
-                    )}
-
-                    {state === 'APP_PRESENT' && ctx.booking && (
-                        <PresentCode
-                            key="present"
-                            bookingId={ctx.booking.id}
+                            jumperCount={ctx.booking.jumpers}
+                            selectedAddons={ctx.selectedAddons}
                             onDone={() => window.location.reload()}
                         />
                     )}

@@ -11,9 +11,7 @@ interface BookingSummaryProps {
 export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => {
     const { t } = useTranslation();
 
-    const addonLabels = booking?.existingAddons?.length
-        ? booking.existingAddons.map((a: any) => `${a.label} x${a.qty}`).join(', ')
-        : t.booking.none;
+    const existingAddons: { label: string; qty: number }[] = booking?.existingAddons ?? [];
 
     const timeDisplay = booking?.endTime
         ? `${booking.time}–${booking.endTime}`
@@ -53,8 +51,18 @@ export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => 
                     </div>
                     <div className="bg-white p-2.5 rounded-xl border border-border col-span-2 shadow-sm">
                         <ShoppingBag className="text-muted mb-0.5" size={14} />
-                        <p className="text-foreground font-bold italic text-sm">{addonLabels}</p>
-                        <p className="text-muted text-[10px] uppercase">{t.booking.addons}</p>
+                        {existingAddons.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                                {existingAddons.map((a, i) => (
+                                    <span key={i} className="px-2 py-0.5 rounded-full bg-surface border border-border text-foreground text-xs font-bold italic">
+                                        {a.label} x{a.qty}
+                                    </span>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-foreground font-bold italic text-sm">{t.booking.none}</p>
+                        )}
+                        <p className="text-muted text-[10px] uppercase mt-1">{t.booking.addons}</p>
                     </div>
                 </div>
 

@@ -153,14 +153,16 @@ export const AddonsOffer = ({ guestCount, existingAddons, onContinue }: AddonsOf
                                     <div className="flex items-center gap-2.5 flex-1 min-w-0">
                                         <Icon className={`flex-shrink-0 ${isHighlighted ? 'text-primary' : 'text-muted'}`} size={18} />
                                         <div className="min-w-0">
-                                            <p className="text-foreground font-bold italic text-sm truncate">{entry.label}</p>
+                                            <div className="flex items-center gap-1.5">
+                                                <p className="text-foreground font-bold italic text-sm truncate">{entry.label}</p>
+                                                {entry.id === 'connected' && (
+                                                    <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] font-bold italic uppercase tracking-wide whitespace-nowrap">{t.addons.connectedValueProp}</span>
+                                                )}
+                                            </div>
                                             <p className="text-muted text-[11px]">
                                                 {entry.price} {t.common.currency} · {entry.unit}
                                             </p>
                                             <p className="text-muted text-[11px] leading-tight">{entry.description}</p>
-                                            {entry.id === 'connected' && (
-                                                <p className="text-primary text-[10px] font-bold italic mt-0.5">{t.addons.connectedValueProp}</p>
-                                            )}
                                             {locked > 0 && (
                                                 <span className="text-[10px] text-success font-bold italic">{t.addons.alreadyInBooking} ({locked})</span>
                                             )}

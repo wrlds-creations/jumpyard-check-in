@@ -49,8 +49,7 @@ export const ConnectedProfiles = ({ count, onContinue }: ConnectedProfilesProps)
                             value={p.name}
                             onChange={e => update(idx, { name: e.target.value })}
                             placeholder={t.connected.namePlaceholder}
-                            className="w-full bg-white border border-border text-foreground text-sm py-2.5 px-3 rounded-lg outline-none focus:border-primary transition-colors mb-2"
-                            autoFocus={idx === 0}
+                            className="w-full bg-white border border-border text-foreground text-base py-2.5 px-3 rounded-lg outline-none focus:border-primary transition-colors mb-2"
                         />
 
                         <div className="flex items-center gap-1.5">

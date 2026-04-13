@@ -64,6 +64,10 @@ export const SafetyAttest = ({ onComplete }: SafetyAttestProps) => {
                 })}
             </div>
 
+            {allChecked && (
+                <p className="text-muted text-xs text-center italic mb-2">{t.safetyAttest.finalAttest}</p>
+            )}
+
             <button
                 onClick={() => onComplete(new Date().toISOString())}
                 disabled={!allChecked}

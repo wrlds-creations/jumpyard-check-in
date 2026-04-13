@@ -111,6 +111,7 @@ const sv = {
       noFlips: 'Inga volter utan instruktör.',
       removeJewelry: 'Ta av smycken, glasögon och lösa föremål.',
     },
+    finalAttest: 'Jag intygar att samtliga i min bokning har tagit del av reglerna.',
     cta: 'Jag förstår, fortsätt',
   },
   addons: {
@@ -121,7 +122,7 @@ const sv = {
     perJumper: 'per hoppare',
     each: 'st',
     perPerson: 'per person',
-    connectedValueProp: 'Populärast! Statistik, topplistor & highlights.',
+    connectedValueProp: 'Mest valt tillägg',
     products: {
       skyriderLabel: 'SkyRider',
       skyriderDesc: 'Linbane-upplevelsen. Kräver min 100 cm.',
@@ -138,9 +139,9 @@ const sv = {
     },
   },
   skyrider: {
-    title: 'SkyRider höjdkontroll',
-    description: 'En vuxen måste intyga att barnet är minst 100 cm långt.',
-    confirmCheckbox: 'Jag intygar att barnet är minst 100 cm och får åka SkyRider.',
+    title: 'SkyRider höjdkrav',
+    description: 'Alla som åker SkyRider måste vara minst 100 cm långa.',
+    confirmCheckbox: 'Jag bekräftar att SkyRider-biljetterna endast används av personer som är minst 100 cm långa.',
     removeSkyRider: 'Ta bort SkyRider',
   },
   connected: {
@@ -162,15 +163,15 @@ const sv = {
   },
   confirm: {
     title: 'Du är incheckad!',
-    subtitle: 'Din bokning är klar. Gå till entrén.',
+    subtitle: 'Visa koden nedan vid entrén för att få dina grejer.',
     pickupCode: 'Din kod',
-    staffHandout: 'Till personalen',
+    backupLabel: 'Backupkod',
+    staffHandout: 'Att hämta ut hos personalen',
+    otherAddons: 'Övriga tillägg i bokningen',
     wristbands: 'Armband',
     connectedBands: 'Connected-band',
     complete: 'Klart & nästa gäst',
-    viewReceipt: 'Visa kvitto',
-    showEntryCode: 'Visa entrékod',
-    nextStepHint: 'Visa koden på din skärm vid entrén för att få armband.',
+    done: 'Börja om',
     showStaffNote: 'Visa personalen',
   },
   print: {
@@ -325,6 +326,7 @@ const en: typeof sv = {
       noFlips: 'No flips without an instructor.',
       removeJewelry: 'Remove jewelry, glasses, and loose items.',
     },
+    finalAttest: 'I confirm that everyone in my booking has read the rules.',
     cta: 'I understand, continue',
   },
   addons: {
@@ -335,7 +337,7 @@ const en: typeof sv = {
     perJumper: 'per jumper',
     each: 'each',
     perPerson: 'per person',
-    connectedValueProp: 'Most popular! Stats, leaderboards & highlights.',
+    connectedValueProp: 'Most chosen add-on',
     products: {
       skyriderLabel: 'SkyRider',
       skyriderDesc: 'Zip-line experience. Requires min 100 cm.',
@@ -352,9 +354,9 @@ const en: typeof sv = {
     },
   },
   skyrider: {
-    title: 'SkyRider height check',
-    description: 'An adult must confirm the child is at least 100 cm tall.',
-    confirmCheckbox: 'I confirm the child is at least 100 cm and allowed to ride SkyRider.',
+    title: 'SkyRider height requirement',
+    description: 'Everyone riding SkyRider must be at least 100 cm tall.',
+    confirmCheckbox: 'I confirm that SkyRider tickets will only be used by persons who are at least 100 cm tall.',
     removeSkyRider: 'Remove SkyRider',
   },
   connected: {
@@ -376,15 +378,15 @@ const en: typeof sv = {
   },
   confirm: {
     title: "You're checked in!",
-    subtitle: 'Your booking is ready. Head to the entrance.',
+    subtitle: 'Show the code below at the entrance to get your gear.',
     pickupCode: 'Your code',
-    staffHandout: 'For staff',
+    backupLabel: 'Backup code',
+    staffHandout: 'Pick up from staff',
+    otherAddons: 'Other add-ons on your booking',
     wristbands: 'Wristbands',
     connectedBands: 'Connected bands',
     complete: 'Done & next guest',
-    viewReceipt: 'View receipt',
-    showEntryCode: 'Show entry code',
-    nextStepHint: 'Show the code on your screen at the entrance to get wristbands.',
+    done: 'Start over',
     showStaffNote: 'Show staff',
   },
   print: {

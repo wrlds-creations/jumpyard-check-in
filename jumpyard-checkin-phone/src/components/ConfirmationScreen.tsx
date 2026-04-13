@@ -1,26 +1,51 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, QrCode, Package, AlertCircle } from 'lucide-react';
+import { CheckCircle, QrCode, Package, ShoppingBag } from 'lucide-react';
+import { commitCheckin } from '@/flow/mockClient';
 import { useTranslation } from '@/context/LanguageContext';
-
-interface Player {
-    id: number;
-    name: string;
-    photo: string | null;
-}
+import type { Addon } from '@/flow/types';
 
 interface ConfirmationScreenProps {
     booking: any;
-    upsellCount: number;
-    socksCount?: number;
-    players: Player[];
-    isMobile: boolean;
-    onReset: () => void;
+    jumperCount: number;
+    selectedAddons: Addon[];
+    onDone: () => void;
 }
 
-export const ConfirmationScreen = ({ booking, upsellCount, socksCount = 0, players, isMobile, onReset }: ConfirmationScreenProps) => {
+// Physical items that staff hand out
+const HANDOUT_IDS = new Set(['socks', 'connected', 'lock']);
+// Non-physical / experience addons
+const EXPERIENCE_IDS = new Set(['skyrider', 'coffee', 'extra_person']);
+
+export const ConfirmationScreen = ({ booking, jumperCount, selectedAddons, onDone }: ConfirmationScreenProps) => {
     const { t } = useTranslation();
-    const pickupCode = booking?.id ? booking.id.toString().substring(0, 4).toUpperCase() : 'A1B2';
+    const [qrPayload, setQrPayload] = useState('');
+    const [shortCode, setShortCode] = useState('');
+
+    useEffect(() => {
+        let alive = true;
+        if (booking?.id) {
+            commitCheckin(booking.id).then(result => {
+                if (!alive) return;
+                setQrPayload(result.qrPayload);
+                setShortCode(result.shortCode);
+            });
+        }
+        return () => { alive = false; };
+    }, [booking?.id]);
+
+    const handoutItems: { label: string; qty: number }[] = [
+        { label: t.confirm.wristbands, qty: jumperCount },
+    ];
+    for (const addon of selectedAddons) {
+        if (HANDOUT_IDS.has(addon.id)) {
+            const label = addon.id === 'connected' ? t.confirm.connectedBands : addon.label;
+            handoutItems.push({ label, qty: addon.qty });
+        }
+    }
+
+    const experienceItems = selectedAddons.filter(a => EXPERIENCE_IDS.has(a.id));
 
     return (
         <motion.div
@@ -38,45 +63,59 @@ export const ConfirmationScreen = ({ booking, upsellCount, socksCount = 0, playe
                     <div className="mt-4 bg-white p-4 rounded-xl border border-border shadow-sm flex flex-col items-center">
                         <QrCode className="text-foreground mb-2" size={100} />
                         <p className="text-[11px] text-muted uppercase tracking-widest mb-0.5">{t.confirm.pickupCode}</p>
-                        <p className="text-2xl font-black tracking-widest text-primary">{pickupCode}</p>
+                        <p className="text-2xl font-black tracking-widest text-primary">
+                            {shortCode || '----'}
+                        </p>
+                        <p className="text-[10px] text-muted font-mono mt-1 break-all max-w-[160px]">
+                            {qrPayload || '…'}
+                        </p>
                     </div>
+
+                    {shortCode && (
+                        <div className="mt-3 bg-surface-strong border border-border rounded-lg px-4 py-2">
+                            <p className="text-[10px] text-muted uppercase tracking-widest mb-0.5">{t.confirm.backupLabel}</p>
+                            <p className="text-xl font-black tracking-[0.3em] text-primary font-mono">{shortCode}</p>
+                        </div>
+                    )}
                 </div>
 
-                <div className="bg-surface-strong rounded-xl p-3 text-left border border-border mb-4">
+                <div className="bg-surface-strong rounded-xl p-3 text-left border border-border mb-3">
                     <div className="flex items-center gap-2 mb-2">
                         <Package className="text-primary" size={18} />
                         <h2 className="text-sm font-bold italic uppercase text-foreground">{t.confirm.staffHandout}</h2>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2">
-                        <div className="bg-white p-2.5 rounded-lg border border-border shadow-sm text-center">
-                            <p className="text-muted uppercase text-[10px] font-bold mb-0.5">{t.confirm.wristbands}</p>
-                            <p className="text-2xl font-black text-foreground">{booking?.jumpers || 1}</p>
-                        </div>
-
-                        <div className={`p-2.5 rounded-lg border shadow-sm text-center ${socksCount > 0 ? 'bg-primary/5 border-primary/30' : 'bg-white border-border'}`}>
-                            <p className="text-muted uppercase text-[10px] font-bold mb-0.5">{t.addons.products.socksLabel}</p>
-                            <p className={`text-2xl font-black ${socksCount > 0 ? 'text-primary' : 'text-muted'}`}>
-                                {socksCount}
-                            </p>
-                        </div>
-
-                        <div className={`p-2.5 rounded-lg border shadow-sm text-center ${upsellCount > 0 ? 'bg-primary/5 border-primary/30' : 'bg-white border-border'}`}>
-                            <p className="text-muted uppercase text-[10px] font-bold mb-0.5">{t.confirm.connectedBands}</p>
-                            <p className={`text-2xl font-black ${upsellCount > 0 ? 'text-primary' : 'text-muted'}`}>
-                                {upsellCount}
-                            </p>
-                        </div>
+                    <div className="flex flex-col gap-1.5">
+                        {handoutItems.map((item, i) => (
+                            <div key={i} className="flex justify-between items-center bg-white px-3 py-2 rounded-lg border border-border shadow-sm">
+                                <span className="text-foreground text-sm font-bold italic">{item.label}</span>
+                                <span className="text-xl font-black text-primary">{item.qty}</span>
+                            </div>
+                        ))}
                     </div>
                 </div>
 
-                <p className="text-muted text-xs text-center mb-3">{t.confirm.nextStepHint}</p>
+                {experienceItems.length > 0 && (
+                    <div className="bg-surface-strong rounded-xl p-3 text-left border border-border mb-3">
+                        <div className="flex items-center gap-2 mb-2">
+                            <ShoppingBag className="text-muted" size={16} />
+                            <h2 className="text-xs font-bold italic uppercase text-muted">{t.confirm.otherAddons}</h2>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            {experienceItems.map(item => (
+                                <div key={item.id} className="flex justify-between items-center px-3 py-1.5">
+                                    <span className="text-foreground text-sm">{item.label} x{item.qty}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <button
-                    onClick={onReset}
+                    onClick={onDone}
                     className="w-full bg-primary hover:bg-white hover:text-primary hover:border-primary border border-transparent text-white font-black italic uppercase text-lg py-4 rounded-xl transition-all"
                 >
-                    {isMobile ? t.confirm.showEntryCode : t.confirm.complete}
+                    {t.confirm.done}
                 </button>
             </div>
         </motion.div>
