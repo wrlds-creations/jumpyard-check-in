@@ -33,21 +33,21 @@ export const PaymentView = ({ bookingId, total, onPaid, onBack }: PaymentViewPro
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <button onClick={onBack} disabled={processing} className="self-start flex items-center gap-1 text-zinc-500 hover:text-white text-xs font-bold italic uppercase tracking-wider mb-3 disabled:opacity-40">
+            <button onClick={onBack} disabled={processing} className="self-start flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider mb-3 disabled:opacity-40">
                 <ArrowLeft size={14} /> {t.common.back}
             </button>
 
             <CreditCard className="text-primary mb-1" size={32} />
-            <h1 className="text-xl font-black italic uppercase text-white mb-0.5">{t.payment.title}</h1>
-            <p className="text-zinc-500 text-xs mb-4 text-center">{t.payment.description}</p>
+            <h1 className="text-xl font-black italic uppercase text-foreground mb-0.5">{t.payment.title}</h1>
+            <p className="text-muted text-xs mb-4 text-center">{t.payment.description}</p>
 
-            <div className="w-full bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 mb-4">
-                <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-3">
-                    <p className="text-zinc-500 uppercase text-xs font-bold italic">{t.payment.booking}</p>
-                    <p className="text-white font-mono tracking-wider">{bookingId}</p>
+            <div className="w-full bg-surface border border-border shadow-sm text-foreground rounded-xl p-4 mb-4">
+                <div className="flex justify-between items-center border-b border-border pb-3 mb-3">
+                    <p className="text-muted uppercase text-xs font-bold italic">{t.payment.booking}</p>
+                    <p className="text-foreground font-mono tracking-wider">{bookingId}</p>
                 </div>
                 <div className="flex justify-between items-center">
-                    <p className="text-zinc-500 uppercase text-xs font-bold italic">{t.payment.total}</p>
+                    <p className="text-muted uppercase text-xs font-bold italic">{t.payment.total}</p>
                     <p className="text-4xl font-black italic text-primary">{total} {t.common.currency}</p>
                 </div>
             </div>
@@ -55,7 +55,7 @@ export const PaymentView = ({ bookingId, total, onPaid, onBack }: PaymentViewPro
             <button
                 onClick={handlePay}
                 disabled={processing}
-                className="w-full bg-primary hover:bg-white hover:text-black text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all disabled:opacity-60 flex items-center justify-center gap-3"
+                className="w-full bg-primary hover:bg-surface hover:text-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all border border-transparent hover:border-primary disabled:opacity-60 flex items-center justify-center gap-3 shadow-sm"
             >
                 {processing ? (
                     <>

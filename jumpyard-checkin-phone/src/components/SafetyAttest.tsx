@@ -20,29 +20,29 @@ export const SafetyAttest = ({ onComplete, onBack }: SafetyAttestProps) => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <button onClick={onBack} className="self-start flex items-center gap-1 text-zinc-500 hover:text-white text-xs font-bold italic uppercase tracking-wider mb-3">
+            <button onClick={onBack} className="self-start flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider mb-3">
                 <ArrowLeft size={14} /> {t.common.back}
             </button>
 
             <ShieldCheck className="text-primary mb-1" size={28} />
-            <h1 className="text-xl font-black italic uppercase text-white mb-3">{t.safetyAttest.title}</h1>
+            <h1 className="text-xl font-black italic uppercase text-foreground mb-3">{t.safetyAttest.title}</h1>
 
             <button
                 onClick={() => setConfirmed(c => !c)}
-                className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-3 mb-4 ${
+                className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-3 mb-4 shadow-sm ${
                     confirmed
-                        ? 'bg-primary/20 border-primary'
-                        : 'bg-zinc-900 border-zinc-700 hover:border-zinc-500'
+                        ? 'bg-primary/5 border-primary'
+                        : 'bg-surface border-border hover:border-primary'
                 }`}
             >
-                <CheckCircle2 className={`flex-shrink-0 ${confirmed ? 'text-primary' : 'text-zinc-600'}`} size={24} />
-                <p className="text-white font-bold italic text-sm">{t.safetyAttest.attestStatement}</p>
+                <CheckCircle2 className={`flex-shrink-0 ${confirmed ? 'text-primary' : 'text-muted'}`} size={24} />
+                <p className="text-foreground font-bold italic text-sm">{t.safetyAttest.attestStatement}</p>
             </button>
 
             <button
                 onClick={() => onComplete(new Date().toISOString())}
                 disabled={!confirmed}
-                className="w-full bg-primary hover:bg-white hover:text-black text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all disabled:opacity-40"
+                className="w-full bg-primary hover:bg-surface hover:text-primary hover:border-primary border border-transparent text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all disabled:opacity-40 shadow-sm"
             >
                 {t.safetyAttest.cta}
             </button>

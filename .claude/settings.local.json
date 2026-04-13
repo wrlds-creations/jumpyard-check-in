@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(for dir:*)",
+      "Bash(do echo:*)",
+      "Read(//c/Users/lovea/Desktop/dev/AntigravityTemplate/$dir/**)",
+      "Bash(done)",
+      "Bash(mkdir -p /c/Users/lovea/Desktop/dev/AntigravityTemplate/skills/pptx/references && mv /c/Users/lovea/Desktop/dev/AntigravityTemplate/skills/pptx/html2pptx.md /c/Users/lovea/Desktop/dev/AntigravityTemplate/skills/pptx/references/html2pptx.md && mv /c/Users/lovea/Desktop/dev/AntigravityTemplate/skills/pptx/ooxml.md /c/Users/lovea/Desktop/dev/AntigravityTemplate/skills/pptx/references/ooxml.md)",
+      "WebFetch(domain:wrlds.com)",
+      "WebSearch",
+      "WebFetch(domain:www.linkedin.com)",
+      "WebFetch(domain:www.crunchbase.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ]
+  }
+}

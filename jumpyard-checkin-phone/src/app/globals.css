@@ -1,26 +1,27 @@
 @import "tailwindcss";
 
 :root {
-  --background: #000000;
-  /* Pure Black for high contrast */
-  --foreground: #FFFFFF;
-  /* White */
-  --primary: #E31837;
-  /* JumpYard Red */
-  --success: #10B981;
-  --secondary: #1C1C1E;
-  /* Dark Gray for cards */
-  --accent: #E31837;
-  /* reusing red as accent */
+  --background: #FFFFFF; /* Pure White background */
+  --foreground: #1C1C1E; /* Dark text for readability */
+  --surface: #F4F4F5; /* Light gray card background */
+  --surface-strong: #E4E4E7; /* Secondary panels */
+  --border: #E4E4E7; /* Light neutral border */
+  --muted: #71717A; /* Helper text (darker for contrast on white) */
+  --primary: #E31837; /* JumpYard Red */
+  --success: #10B981; /* Green status */
+  --warning: #F59E0B; /* Orange warning */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
   --color-primary: var(--primary);
   --color-success: var(--success);
-  --color-secondary: var(--secondary);
-  --color-accent: var(--accent);
+  --color-warning: var(--warning);
   --font-sans: var(--font-space-grotesk), sans-serif;
 }
 

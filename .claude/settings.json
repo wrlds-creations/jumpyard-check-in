@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp -r jumpyard-kiosk jumpyard-checkin-kiosk)",
+      "Bash(cp -r jumpyard-kiosk jumpyard-checkin-phone)",
+      "WebFetch(domain:github.com)",
+      "Bash(mkdir -p /tmp/jy-processes)",
+      "Read(//tmp/**)",
+      "Bash(curl -sL \"https://raw.githubusercontent.com/wrlds-creations/jumpyard-processes/master/editor/src/data/pilotFlow.ts\" -o pilotFlow.ts)",
+      "Read(//tmp/jy-processes/**)",
+      "Read(//c/tmp/jy-processes/**)",
+      "Bash(cygpath -w /tmp/jy-processes/pilotFlow.ts)",
+      "Bash(node -e \"const {pilotNodes, pilotEdges} = require\\('./.tmp-pilotFlow.ts'.replace\\('.ts','.js'\\)\\);\")",
+      "Bash(node -e ':*)",
+      "Bash(wc -l jumpyard-checkin-kiosk/src/components/*.tsx jumpyard-checkin-phone/src/components/*.tsx)",
+      "Read(//c/Users/lovea/.claude/plans/**)",
+      "Bash(cp jumpyard-checkin-kiosk/src/components/StartScreen.tsx jumpyard-checkin-phone/src/components/StartScreen.tsx)",
+      "Bash(cp jumpyard-checkin-kiosk/src/components/AddonsOffer.tsx jumpyard-checkin-phone/src/components/AddonsOffer.tsx)",
+      "Bash(cp jumpyard-checkin-kiosk/src/components/ConnectedProfiles.tsx jumpyard-checkin-phone/src/components/ConnectedProfiles.tsx)",
+      "Bash(cp jumpyard-checkin-kiosk/src/components/PaymentView.tsx jumpyard-checkin-phone/src/components/PaymentView.tsx)",
+      "Bash(cp jumpyard-checkin-kiosk/src/components/PresentCode.tsx jumpyard-checkin-phone/src/components/PresentCode.tsx)",
+      "Bash(npx tsc:*)",
+      "Bash(npx next:*)",
+      "Bash(npx eslint:*)",
+      "Bash(echo \"kiosk exit=$?\")",
+      "Read(//tmp/jy-processes-fresh/editor/src/data/**)",
+      "Read(//c/tmp/jy-processes-fresh/editor/src/data/**)",
+      "Read(//c/tmp/**)",
+      "Bash(git -C /tmp/jy-fresh/jumpyard-processes log --oneline -5)",
+      "Bash(xargs grep:*)",
+      "Bash(cat jumpyard-checkin-kiosk/tailwind.config.*)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(ipconfig)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Read(//c/Users/lovea/AppData/Local/Temp/claude/c--Users-lovea-Desktop-dev-Jumpyard-Next-lunar-disk/8e3e5dd2-fc86-4d8b-97bc-bd3beb9f0790/tasks/**)",
+      "Read(//c/Users/lovea/Desktop/dev/Jumpyard_Next//**)",
+      "Bash(cmd.exe /c \"rename \\\\\"C:\\\\Users\\\\lovea\\\\Desktop\\\\dev\\\\Jumpyard_Next\\\\lunar-disk\\\\\" jumpyard-check-in\")",
+      "Bash(git init:*)",
+      "Bash(git remote:*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\lovea\\Desktop\\dev\\Jumpyard_Next\\lunar-disk\\infrastructure",
+      "\\tmp\\jy-processes",
+      "c:\\Users\\lovea\\Desktop\\dev\\Jumpyard_Next\\lunar-disk\\jumpyard-checkin-kiosk\\src\\flow",
+      "\\tmp\\jy-fresh\\jumpyard-processes\\editor\\src\\data",
+      "C:\\Users\\lovea\\Desktop\\dev\\Jumpyard_Next"
+    ]
+  }
+}
