@@ -12,12 +12,13 @@ export const ParkChoice = ({ onSelect }: ParkChoiceProps) => {
 
     return (
         <motion.div
-            className="w-full max-w-md mx-auto flex flex-col items-center px-4"
+            className="w-full max-w-md mx-auto flex flex-col items-center justify-center px-4"
+            style={{ minHeight: 'calc(100dvh - 60px)' }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <img src="/jumpyard_logo_splash.png" alt="JumpYard" className="w-16 h-16 object-contain mb-6 opacity-80" />
+            <img src="/logo.png" alt="JumpYard" className="w-36 mb-8" />
 
             <h1 className="text-xl font-black italic uppercase text-foreground mb-6 text-center">
                 {t.choice.title}

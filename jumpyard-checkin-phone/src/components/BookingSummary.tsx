@@ -1,6 +1,6 @@
 'use client';
 import { motion } from 'framer-motion';
-import { Users, ShoppingBag, CheckCircle, Clock } from 'lucide-react';
+import { Users, ShoppingBag, CheckCircle, Clock, Ticket } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 
 interface BookingSummaryProps {
@@ -65,6 +65,14 @@ export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => 
                         <p className="text-muted text-[10px] uppercase mt-1">{t.booking.addons}</p>
                     </div>
                 </div>
+
+                {booking?.productLabel && (
+                    <div className="bg-white p-2.5 rounded-xl border border-border shadow-sm mb-3">
+                        <Ticket className="text-primary mb-0.5" size={14} />
+                        <p className="text-foreground font-bold italic text-sm">{booking.productLabel}</p>
+                        <p className="text-muted text-[10px] uppercase">{t.booking.product}</p>
+                    </div>
+                )}
 
                 <div className="flex items-center gap-2.5 bg-success/10 p-2.5 rounded-xl border border-success/30 mb-3">
                     <CheckCircle className="text-success flex-shrink-0" size={16} />
