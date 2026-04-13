@@ -56,7 +56,7 @@ export const PresentCode = ({ bookingId, onDone }: PresentCodeProps) => {
                 onClick={onDone}
                 className="bg-surface-strong hover:bg-border text-foreground font-bold italic uppercase px-8 py-3 rounded-xl transition-all border border-transparent hover:border-border"
             >
-                {t.common.done}
+                {t.present.startOver}
             </button>
         </motion.div>
     );

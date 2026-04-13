@@ -1,6 +1,6 @@
 'use client';
 import { motion } from 'framer-motion';
-import { Calendar, Users, ShoppingBag, CheckCircle, Clock } from 'lucide-react';
+import { Users, ShoppingBag, CheckCircle, Clock } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 
 interface BookingSummaryProps {
@@ -35,16 +35,10 @@ export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => 
             {guestDisplay && (
                 <p className="text-base font-bold italic text-foreground opacity-90 mt-0.5">{guestDisplay}</p>
             )}
-            <p className="text-muted text-xs mt-1 mb-3">{t.booking.subtitle}</p>
+            <p className="text-muted text-xs mt-1 mb-1">{t.booking.subtitle}</p>
+            <p className="text-muted text-[11px] mb-3 text-center">{t.booking.timeHint}</p>
 
-            <button
-                onClick={onContinue}
-                className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm mb-4"
-            >
-                {t.booking.cta}
-            </button>
-
-            <div className="bg-surface border border-border w-full rounded-2xl p-4 text-left shadow-sm">
+            <div className="bg-surface border border-border w-full rounded-2xl p-4 text-left shadow-sm mb-4">
                 <div className="grid grid-cols-2 gap-2 mb-3">
                     <div className="bg-white p-2.5 rounded-xl border border-border shadow-sm">
                         <Clock className="text-muted mb-0.5" size={14} />
@@ -77,6 +71,13 @@ export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => 
                     <p className="text-muted font-black italic tracking-wider text-sm">{booking?.id || 'TEST1234'}</p>
                 </div>
             </div>
+
+            <button
+                onClick={onContinue}
+                className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm"
+            >
+                {t.booking.cta}
+            </button>
         </motion.div>
     );
 };

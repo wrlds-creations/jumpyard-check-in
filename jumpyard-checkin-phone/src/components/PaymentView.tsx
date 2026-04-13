@@ -1,18 +1,19 @@
 'use client';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, CreditCard } from 'lucide-react';
+import { CreditCard } from 'lucide-react';
 import { submitPayment } from '@/flow/mockClient';
 import { useTranslation } from '@/context/LanguageContext';
+import type { Addon } from '@/flow/types';
 
 interface PaymentViewProps {
     bookingId: string;
     total: number;
+    items: Addon[];
     onPaid: () => void;
-    onBack: () => void;
 }
 
-export const PaymentView = ({ bookingId, total, onPaid, onBack }: PaymentViewProps) => {
+export const PaymentView = ({ bookingId, total, items, onPaid }: PaymentViewProps) => {
     const { t } = useTranslation();
     const [processing, setProcessing] = useState(false);
 
@@ -33,10 +34,6 @@ export const PaymentView = ({ bookingId, total, onPaid, onBack }: PaymentViewPro
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <button onClick={onBack} disabled={processing} className="self-start flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider mb-3 disabled:opacity-40">
-                <ArrowLeft size={14} /> {t.common.back}
-            </button>
-
             <CreditCard className="text-primary mb-1" size={32} />
             <h1 className="text-xl font-black italic uppercase text-foreground mb-0.5">{t.payment.title}</h1>
             <p className="text-muted text-xs mb-4 text-center">{t.payment.description}</p>
@@ -46,6 +43,19 @@ export const PaymentView = ({ bookingId, total, onPaid, onBack }: PaymentViewPro
                     <p className="text-muted uppercase text-xs font-bold italic">{t.payment.booking}</p>
                     <p className="text-foreground font-mono tracking-wider">{bookingId}</p>
                 </div>
+
+                {items.length > 0 && (
+                    <div className="border-b border-border pb-3 mb-3">
+                        <p className="text-muted uppercase text-xs font-bold italic mb-2">{t.payment.items}</p>
+                        {items.map(item => (
+                            <div key={item.id} className="flex justify-between items-center py-1">
+                                <span className="text-foreground text-sm">{item.label} x{item.qty}</span>
+                                <span className="text-foreground text-sm font-bold">{item.price * item.qty} {t.common.currency}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 <div className="flex justify-between items-center">
                     <p className="text-muted uppercase text-xs font-bold italic">{t.payment.total}</p>
                     <p className="text-4xl font-black italic text-primary">{total} {t.common.currency}</p>
@@ -66,6 +76,8 @@ export const PaymentView = ({ bookingId, total, onPaid, onBack }: PaymentViewPro
                     `${t.payment.pay} ${total} ${t.common.currency}`
                 )}
             </button>
+
+            <p className="text-muted text-[11px] text-center mt-2">{t.payment.afterPaymentHint}</p>
         </motion.div>
     );
 };

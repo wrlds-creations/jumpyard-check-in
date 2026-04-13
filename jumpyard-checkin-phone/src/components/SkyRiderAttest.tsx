@@ -1,15 +1,14 @@
 'use client';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Ruler } from 'lucide-react';
+import { Ruler } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 
 interface SkyRiderAttestProps {
     onComplete: () => void;
-    onBack: () => void;
 }
 
-export const SkyRiderAttest = ({ onComplete, onBack }: SkyRiderAttestProps) => {
+export const SkyRiderAttest = ({ onComplete }: SkyRiderAttestProps) => {
     const { t } = useTranslation();
     const [confirmed, setConfirmed] = useState(false);
 
@@ -20,10 +19,6 @@ export const SkyRiderAttest = ({ onComplete, onBack }: SkyRiderAttestProps) => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <button onClick={onBack} className="self-start flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider mb-3">
-                <ArrowLeft size={14} /> {t.common.back}
-            </button>
-
             <Ruler className="text-primary mb-1" size={32} />
             <h1 className="text-xl font-black italic uppercase text-foreground mb-0.5">{t.skyrider.title}</h1>
             <p className="text-muted text-xs mb-4 max-w-sm">{t.skyrider.description}</p>

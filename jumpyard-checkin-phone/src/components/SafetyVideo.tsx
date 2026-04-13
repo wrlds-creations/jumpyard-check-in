@@ -1,17 +1,16 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Play, ShieldCheck } from 'lucide-react';
+import { Play, ShieldCheck } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 
 interface SafetyVideoProps {
     onComplete: (seenAt: string) => void;
-    onBack: () => void;
 }
 
 const MOCK_VIDEO_SECONDS = 6;
 
-export const SafetyVideo = ({ onComplete, onBack }: SafetyVideoProps) => {
+export const SafetyVideo = ({ onComplete }: SafetyVideoProps) => {
     const { t } = useTranslation();
     const [playing, setPlaying] = useState(false);
     const [elapsed, setElapsed] = useState(0);
@@ -40,10 +39,6 @@ export const SafetyVideo = ({ onComplete, onBack }: SafetyVideoProps) => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <button onClick={onBack} className="self-start flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider mb-3">
-                <ArrowLeft size={14} /> {t.common.back}
-            </button>
-
             <ShieldCheck className="text-primary mb-1" size={28} />
             <h1 className="text-xl font-black italic uppercase text-foreground mb-0.5">{t.safetyVideo.title}</h1>
             <p className="text-muted text-xs mb-3">{t.safetyVideo.description}</p>

@@ -92,6 +92,7 @@ const sv = {
     title: 'Din bokning',
     subtitle: 'Ser det rätt ut? Då kör vi.',
     cta: 'Ja, starta incheckning',
+    timeHint: 'Tar ca 1–2 min. Nästa steg: säkerhetsvideo.',
   },
   safetyVideo: {
     title: 'Säkerhetsvideo',
@@ -102,9 +103,14 @@ const sv = {
     done: 'Klart, fortsätt',
   },
   safetyAttest: {
-    title: 'Bekräfta säkerhet',
-    description: 'Tryck för att bekräfta.',
-    attestStatement: 'Jag intygar att jag och medföljande i bokningen har förstått och bekräftat säkerhetsreglerna.',
+    title: 'Säkerhetsregler',
+    description: 'Bekräfta varje regel innan du fortsätter.',
+    rules: {
+      onePerTrampoline: 'En person per studsmatta åt gången.',
+      followStaff: 'Följ alltid personalens instruktioner.',
+      noFlips: 'Inga volter utan instruktör.',
+      removeJewelry: 'Ta av smycken, glasögon och lösa föremål.',
+    },
     cta: 'Jag förstår, fortsätt',
   },
   addons: {
@@ -115,6 +121,7 @@ const sv = {
     perJumper: 'per hoppare',
     each: 'st',
     perPerson: 'per person',
+    connectedValueProp: 'Populärast! Statistik, topplistor & highlights.',
     products: {
       skyriderLabel: 'SkyRider',
       skyriderDesc: 'Linbane-upplevelsen. Kräver min 100 cm.',
@@ -138,9 +145,10 @@ const sv = {
   },
   connected: {
     title: 'Connected-profiler',
-    description: 'Skapa profiler, personalen parkopplar banden.',
+    description: 'Varje Connected-band kopplas till en profil. Skriv namn så personalen vet vem som får vilket band.',
     profile: 'Profil',
     namePlaceholder: 'Namn',
+    avatar: 'Ikon',
     confirm: 'Bekräfta profiler',
   },
   payment: {
@@ -150,6 +158,7 @@ const sv = {
     items: 'Vad du betalar för',
     total: 'Totalt',
     pay: 'Betala',
+    afterPaymentHint: 'Efter betalning får du en kod att visa vid entrén.',
   },
   confirm: {
     title: 'Du är incheckad!',
@@ -160,6 +169,8 @@ const sv = {
     connectedBands: 'Connected-band',
     complete: 'Klart & nästa gäst',
     viewReceipt: 'Visa kvitto',
+    showEntryCode: 'Visa entrékod',
+    nextStepHint: 'Visa koden på din skärm vid entrén för att få armband.',
     showStaffNote: 'Visa personalen',
   },
   print: {
@@ -295,6 +306,7 @@ const en: typeof sv = {
     title: 'Your booking',
     subtitle: "Looks right? Let's go.",
     cta: 'Yes, start check-in',
+    timeHint: 'Takes about 1–2 min. Next: safety video.',
   },
   safetyVideo: {
     title: 'Safety video',
@@ -305,9 +317,14 @@ const en: typeof sv = {
     done: 'Done, continue',
   },
   safetyAttest: {
-    title: 'Confirm safety',
-    description: 'Tap to confirm.',
-    attestStatement: 'I confirm that I and all members of this booking have understood and acknowledged the safety rules.',
+    title: 'Safety rules',
+    description: 'Confirm each rule before continuing.',
+    rules: {
+      onePerTrampoline: 'One person per trampoline at a time.',
+      followStaff: 'Always follow staff instructions.',
+      noFlips: 'No flips without an instructor.',
+      removeJewelry: 'Remove jewelry, glasses, and loose items.',
+    },
     cta: 'I understand, continue',
   },
   addons: {
@@ -318,6 +335,7 @@ const en: typeof sv = {
     perJumper: 'per jumper',
     each: 'each',
     perPerson: 'per person',
+    connectedValueProp: 'Most popular! Stats, leaderboards & highlights.',
     products: {
       skyriderLabel: 'SkyRider',
       skyriderDesc: 'Zip-line experience. Requires min 100 cm.',
@@ -341,9 +359,10 @@ const en: typeof sv = {
   },
   connected: {
     title: 'Connected profiles',
-    description: 'Create profiles, staff will pair wristbands.',
+    description: 'Each Connected band is linked to a profile. Enter names so staff know who gets which band.',
     profile: 'Profile',
     namePlaceholder: 'Name',
+    avatar: 'Icon',
     confirm: 'Confirm profiles',
   },
   payment: {
@@ -353,6 +372,7 @@ const en: typeof sv = {
     items: "What you're paying for",
     total: 'Total',
     pay: 'Pay',
+    afterPaymentHint: 'After payment you will get a code to show at the entrance.',
   },
   confirm: {
     title: "You're checked in!",
@@ -363,6 +383,8 @@ const en: typeof sv = {
     connectedBands: 'Connected bands',
     complete: 'Done & next guest',
     viewReceipt: 'View receipt',
+    showEntryCode: 'Show entry code',
+    nextStepHint: 'Show the code on your screen at the entrance to get wristbands.',
     showStaffNote: 'Show staff',
   },
   print: {

@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Coffee, Footprints, Lock, Minus, Plus, UserPlus, Wind, Zap } from 'lucide-react';
+import { Coffee, Footprints, Lock, Minus, Plus, UserPlus, Wind, Zap } from 'lucide-react';
 import type { Addon, AddonId } from '@/flow/types';
 import { useTranslation } from '@/context/LanguageContext';
 
@@ -14,7 +14,6 @@ interface AddonsOfferProps {
         skyriderSelected: boolean;
         connectedSelected: boolean;
     }) => void;
-    onBack: () => void;
 }
 
 interface CatalogEntry {
@@ -50,7 +49,7 @@ function Counter({ value, onChange, max, min = 0 }: { value: number; onChange: (
     );
 }
 
-export const AddonsOffer = ({ guestCount, existingAddons, onContinue, onBack }: AddonsOfferProps) => {
+export const AddonsOffer = ({ guestCount, existingAddons, onContinue }: AddonsOfferProps) => {
     const { t } = useTranslation();
     const CATALOG: CatalogEntry[] = [
         { id: 'skyrider', label: t.addons.products.skyriderLabel, price: 45, unit: t.addons.perJumper, description: t.addons.products.skyriderDesc, mode: 'counter', maxPerGuest: 1, Icon: Wind },
@@ -105,17 +104,16 @@ export const AddonsOffer = ({ guestCount, existingAddons, onContinue, onBack }: 
 
     return (
         <motion.div
-            className="w-full max-w-md mx-auto flex flex-col items-center px-4 py-3"
+            className="w-full max-w-md mx-auto flex flex-col px-4 py-3"
+            style={{ maxHeight: 'calc(100dvh - 120px)' }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <button onClick={onBack} className="self-start flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider mb-2">
-                <ArrowLeft size={14} /> {t.common.back}
-            </button>
-
-            <h1 className="text-xl font-black italic uppercase text-foreground">{t.addons.title}</h1>
-            <p className="text-muted text-xs mt-0.5 mb-3 text-center">{t.addons.description}</p>
+            <div className="text-center">
+                <h1 className="text-xl font-black italic uppercase text-foreground">{t.addons.title}</h1>
+                <p className="text-muted text-xs mt-0.5 mb-3">{t.addons.description}</p>
+            </div>
 
             {existingAddons.length > 0 && (
                 <div className="w-full mb-2">
@@ -133,52 +131,62 @@ export const AddonsOffer = ({ guestCount, existingAddons, onContinue, onBack }: 
                 </div>
             )}
 
-            <div className="w-full flex flex-col gap-2 mb-3">
-                {CATALOG.map(entry => {
-                    const Icon = entry.Icon;
-                    const value = qty[entry.id];
-                    const max = Math.max(1, guestCount * entry.maxPerGuest);
-                    const locked = minQty[entry.id];
-                    const isHighlighted = entry.id === 'connected' || entry.id === 'skyrider';
+            <div className="flex-1 overflow-y-auto -mx-1 px-1">
+                <div className="w-full flex flex-col gap-2">
+                    {CATALOG.map(entry => {
+                        const Icon = entry.Icon;
+                        const value = qty[entry.id];
+                        const max = Math.max(1, guestCount * entry.maxPerGuest);
+                        const locked = minQty[entry.id];
+                        const isHighlighted = entry.id === 'connected' || entry.id === 'skyrider';
 
-                    return (
-                        <div
-                            key={entry.id}
-                            className={`w-full border rounded-xl p-3 shadow-sm ${
-                                isHighlighted
-                                    ? 'bg-primary/5 border-primary/30'
-                                    : 'bg-surface border-border'
-                            }`}
-                        >
-                            <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                                    <Icon className={`flex-shrink-0 ${isHighlighted ? 'text-primary' : 'text-muted'}`} size={18} />
-                                    <div className="min-w-0">
-                                        <p className="text-foreground font-bold italic text-sm truncate">{entry.label}</p>
-                                        <p className="text-muted text-[11px]">
-                                            {entry.price} {t.common.currency} · {entry.unit}
-                                        </p>
-                                        <p className="text-muted text-[11px] leading-tight">{entry.description}</p>
+                        return (
+                            <div
+                                key={entry.id}
+                                className={`w-full border rounded-xl p-3 shadow-sm ${
+                                    isHighlighted
+                                        ? 'bg-primary/5 border-primary/30'
+                                        : 'bg-surface border-border'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                        <Icon className={`flex-shrink-0 ${isHighlighted ? 'text-primary' : 'text-muted'}`} size={18} />
+                                        <div className="min-w-0">
+                                            <p className="text-foreground font-bold italic text-sm truncate">{entry.label}</p>
+                                            <p className="text-muted text-[11px]">
+                                                {entry.price} {t.common.currency} · {entry.unit}
+                                            </p>
+                                            <p className="text-muted text-[11px] leading-tight">{entry.description}</p>
+                                            {entry.id === 'connected' && (
+                                                <p className="text-primary text-[10px] font-bold italic mt-0.5">{t.addons.connectedValueProp}</p>
+                                            )}
+                                            {locked > 0 && (
+                                                <span className="text-[10px] text-success font-bold italic">{t.addons.alreadyInBooking} ({locked})</span>
+                                            )}
+                                        </div>
                                     </div>
+                                    <Counter value={value} onChange={n => setOne(entry.id, n)} max={max} min={locked} />
                                 </div>
-                                <Counter value={value} onChange={n => setOne(entry.id, n)} max={max} min={locked} />
                             </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
+                </div>
             </div>
 
-            <div className="w-full flex items-center justify-between bg-surface-strong border border-border rounded-xl px-4 py-2.5 mb-3">
-                <p className="text-muted uppercase text-xs font-bold italic tracking-wider">{t.addons.total}</p>
-                <p className="text-2xl font-black italic text-primary">{addonsTotal} {t.common.currency}</p>
-            </div>
+            <div className="pt-3 border-t border-border mt-3">
+                <div className="w-full flex items-center justify-between bg-surface-strong border border-border rounded-xl px-4 py-2.5 mb-3">
+                    <p className="text-muted uppercase text-xs font-bold italic tracking-wider">{t.addons.total}</p>
+                    <p className="text-2xl font-black italic text-primary">{addonsTotal} {t.common.currency}</p>
+                </div>
 
-            <button
-                onClick={handleContinue}
-                className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm"
-            >
-                {t.common.continue}
-            </button>
+                <button
+                    onClick={handleContinue}
+                    className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm"
+                >
+                    {t.common.continue}
+                </button>
+            </div>
         </motion.div>
     );
 };

@@ -70,11 +70,13 @@ export const ConfirmationScreen = ({ booking, upsellCount, socksCount = 0, playe
                     </div>
                 </div>
 
+                <p className="text-muted text-xs text-center mb-3">{t.confirm.nextStepHint}</p>
+
                 <button
                     onClick={onReset}
                     className="w-full bg-primary hover:bg-white hover:text-primary hover:border-primary border border-transparent text-white font-black italic uppercase text-lg py-4 rounded-xl transition-all"
                 >
-                    {isMobile ? t.confirm.viewReceipt : t.confirm.complete}
+                    {isMobile ? t.confirm.showEntryCode : t.confirm.complete}
                 </button>
             </div>
         </motion.div>

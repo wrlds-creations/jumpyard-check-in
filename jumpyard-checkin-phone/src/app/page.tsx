@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, Fragment } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
+import { ArrowLeft } from 'lucide-react';
 import { BookingSummary } from '@/components/BookingSummary';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { SafetyAttest } from '@/components/SafetyAttest';
@@ -37,6 +38,18 @@ function getStepIndex(state: FlowState): number {
     return idx === -1 ? 0 : idx;
 }
 
+function getBackState(state: FlowState, ctx: FlowContext): FlowState | null {
+    switch (state) {
+        case 'APP_SAFETY_VIDEO': return 'APP_BOOKING';
+        case 'APP_SAFETY_ATTEST': return 'APP_SAFETY_VIDEO';
+        case 'APP_ADDONS': return 'APP_SAFETY_ATTEST';
+        case 'APP_SKYRIDER_ATTEST': return 'APP_ADDONS';
+        case 'APP_CONNECTED': return ctx.skyriderSelected ? 'APP_SKYRIDER_ATTEST' : 'APP_ADDONS';
+        case 'APP_PAYMENT': return ctx.connectedSelected ? 'APP_CONNECTED' : ctx.skyriderSelected ? 'APP_SKYRIDER_ATTEST' : 'APP_ADDONS';
+        default: return null;
+    }
+}
+
 function ProgressBar({ state }: { state: FlowState }) {
     const { t } = useTranslation();
     if (state === 'APP_MOBILE') return null;
@@ -45,24 +58,24 @@ function ProgressBar({ state }: { state: FlowState }) {
     const current = getStepIndex(state);
 
     return (
-        <div className="w-full max-w-lg mb-2 px-2">
-            <div className="flex gap-1 items-center">
+        <div className="w-full max-w-md mx-auto mb-3 px-4">
+            <div className="flex items-center">
                 {labels.map((label, i) => (
-                    <div key={i} className="flex items-center flex-1">
-                        <div className="flex flex-col items-center flex-1">
+                    <Fragment key={i}>
+                        <div className="flex flex-col items-center">
                             <div
-                                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black italic transition-all duration-300 ${
+                                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black italic transition-all duration-300 ${
                                     i < current
                                         ? 'bg-primary text-white'
                                         : i === current
-                                        ? 'bg-primary text-white scale-110'
+                                        ? 'bg-primary text-white ring-4 ring-primary/20'
                                         : 'bg-surface-strong text-muted'
                                 }`}
                             >
                                 {i < current ? '✓' : i + 1}
                             </div>
                             <span
-                                className={`text-[10px] font-bold italic uppercase tracking-wide mt-1 transition-colors ${
+                                className={`text-[9px] font-bold italic uppercase tracking-wider mt-1 whitespace-nowrap transition-colors ${
                                     i <= current ? 'text-foreground' : 'text-muted'
                                 }`}
                             >
@@ -71,12 +84,12 @@ function ProgressBar({ state }: { state: FlowState }) {
                         </div>
                         {i < labels.length - 1 && (
                             <div
-                                className={`h-0.5 flex-1 mx-1 mb-4 transition-all duration-500 ${
+                                className={`flex-1 h-0.5 mx-1 -mt-4 transition-all duration-500 ${
                                     i < current ? 'bg-primary' : 'bg-surface-strong'
                                 }`}
                             />
                         )}
-                    </div>
+                    </Fragment>
                 ))}
             </div>
         </div>
@@ -114,6 +127,17 @@ function CheckInFlow() {
         <div className="z-10 w-full max-w-lg flex flex-col items-center">
             <ProgressBar state={state} />
 
+            {getBackState(state, ctx) && (
+                <div className="w-full max-w-md px-4 mb-1">
+                    <button
+                        onClick={() => setState(getBackState(state, ctx)!)}
+                        className="flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
+                    >
+                        <ArrowLeft size={14} /> {t.common.back}
+                    </button>
+                </div>
+            )}
+
             <div className="w-full flex items-center justify-center relative">
                 <AnimatePresence mode="wait">
                     {state === 'APP_MOBILE' && (
@@ -146,7 +170,6 @@ function CheckInFlow() {
                         <SafetyVideo
                             key="safety-video"
                             onComplete={seenAt => advance({ safetyVideoSeenAt: seenAt })}
-                            onBack={() => setState('APP_BOOKING')}
                         />
                     )}
 
@@ -154,7 +177,6 @@ function CheckInFlow() {
                         <SafetyAttest
                             key="safety-attest"
                             onComplete={attestedAt => advance({ safetyAttestedAt: attestedAt })}
-                            onBack={() => setState('APP_SAFETY_VIDEO')}
                         />
                     )}
 
@@ -172,7 +194,6 @@ function CheckInFlow() {
                                     paymentTotal: addonsTotal,
                                 })
                             }
-                            onBack={() => setState('APP_SAFETY_ATTEST')}
                         />
                     )}
 
@@ -180,7 +201,6 @@ function CheckInFlow() {
                         <SkyRiderAttest
                             key="skyrider"
                             onComplete={() => advance({ skyriderHeightConfirmed: true })}
-                            onBack={() => setState('APP_ADDONS')}
                         />
                     )}
 
@@ -189,7 +209,6 @@ function CheckInFlow() {
                             key="connected"
                             count={ctx.selectedAddons.find(a => a.id === 'connected')?.qty ?? 1}
                             onContinue={(profiles: ConnectedProfile[]) => advance({ connectedProfiles: profiles })}
-                            onBack={() => setState(ctx.skyriderSelected ? 'APP_SKYRIDER_ATTEST' : 'APP_ADDONS')}
                         />
                     )}
 
@@ -198,16 +217,8 @@ function CheckInFlow() {
                             key="payment"
                             bookingId={ctx.booking.id}
                             total={ctx.paymentTotal}
+                            items={ctx.selectedAddons}
                             onPaid={() => advance({ paymentCompleted: true })}
-                            onBack={() =>
-                                setState(
-                                    ctx.connectedSelected
-                                        ? 'APP_CONNECTED'
-                                        : ctx.skyriderSelected
-                                        ? 'APP_SKYRIDER_ATTEST'
-                                        : 'APP_ADDONS'
-                                )
-                            }
                         />
                     )}
 
