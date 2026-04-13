@@ -34,7 +34,8 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
 
     return (
         <motion.div
-            className="w-full max-w-md mx-auto px-4"
+            className="w-full max-w-md mx-auto flex flex-col justify-center px-4"
+            style={{ minHeight: 'calc(100dvh - 120px)' }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}

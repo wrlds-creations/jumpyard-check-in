@@ -44,25 +44,33 @@ export async function lookupBooking(code: string): Promise<Booking> {
   };
 }
 
-// TODO: POST /api/cloud/walkin { sessionSlotId, jumpers, contactEmail, contactPhone }
+// TODO: POST /api/cloud/walkin { sessionSlotId, jumpers, contactEmail, contactPhone, product }
 export async function buyWalkIn(
   jumpers: number,
   contactEmail: string | null,
-  contactPhone: string | null
+  contactPhone: string | null,
+  product: { id: string; label: string; type: 'entry' | 'family'; durationMinutes: number }
 ): Promise<Booking> {
   await delay(1000);
   void contactEmail;
   void contactPhone;
+  const now = new Date();
+  const startH = now.getHours() + 1;
+  const startTime = `${String(startH).padStart(2, '0')}:00`;
+  const endMin = startH * 60 + product.durationMinutes;
+  const endTime = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
   return {
     id: 'WALKIN_' + Math.floor(Math.random() * 9000 + 1000),
     jumpers,
-    time: '15:00',
-    endTime: '16:00',
-    durationMinutes: 60,
+    time: startTime,
+    endTime,
+    durationMinutes: product.durationMinutes,
     date: 'Today',
     products: 0,
     paid: false,
     existingAddons: [],
+    productLabel: product.label,
+    productType: product.type,
   };
 }
 

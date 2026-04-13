@@ -47,6 +47,8 @@ export interface Booking {
   guestName?: string;
   lastName?: string;
   existingAddons?: Addon[];
+  productLabel?: string;
+  productType?: 'entry' | 'family';
 }
 
 export interface ConnectedProfile {
@@ -78,4 +80,12 @@ export interface FlowContext {
 
   guestContactEmail: string | null;
   guestContactPhone: string | null;
+
+  baseProductId: string | null;
+  baseProductLabel: string | null;
+  baseProductType: 'entry' | 'family' | null;
+  baseDurationMinutes: number;
+  baseUnitPrice: number;
+  baseQuantity: number;
+  baseTotal: number;
 }

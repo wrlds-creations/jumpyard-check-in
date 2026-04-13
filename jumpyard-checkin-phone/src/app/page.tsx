@@ -167,7 +167,7 @@ function CheckInFlow() {
                         </button>
                     )}
                 </div>
-                {state !== 'APP_MOBILE' && (
+                {state !== 'APP_MOBILE' && state !== 'KIOSK_CHOICE' && (
                     <img src="/jumpyard_logo_splash.png" alt="" className="w-7 h-7 object-contain opacity-70" />
                 )}
             </div>
@@ -209,12 +209,19 @@ function CheckInFlow() {
                     {state === 'KIOSK_BUY' && (
                         <BuyTickets
                             key="park-buy"
-                            onComplete={(booking, contact) =>
+                            onComplete={(booking, contact, product) =>
                                 advance({
                                     booking,
                                     existingAddons: booking.existingAddons ?? [],
                                     guestContactEmail: contact.email,
                                     guestContactPhone: contact.phone,
+                                    baseProductId: product.id,
+                                    baseProductLabel: product.label,
+                                    baseProductType: product.type,
+                                    baseDurationMinutes: product.durationMinutes,
+                                    baseUnitPrice: product.unitPrice,
+                                    baseQuantity: product.quantity,
+                                    baseTotal: product.total,
                                 })
                             }
                             onBack={() => { setState('KIOSK_CHOICE'); scrollToTop(); }}
@@ -250,7 +257,7 @@ function CheckInFlow() {
                                     addonsTotal,
                                     skyriderSelected,
                                     connectedSelected,
-                                    paymentTotal: addonsTotal,
+                                    paymentTotal: (ctx.baseTotal || 0) + addonsTotal,
                                 })
                             }
                         />
@@ -277,6 +284,12 @@ function CheckInFlow() {
                             bookingId={ctx.booking.id}
                             total={ctx.paymentTotal}
                             items={ctx.selectedAddons}
+                            baseProduct={ctx.baseTotal > 0 ? {
+                                label: ctx.baseProductLabel!,
+                                quantity: ctx.baseQuantity,
+                                unitPrice: ctx.baseUnitPrice,
+                                total: ctx.baseTotal,
+                            } : null}
                             onPaid={() => advance({ paymentCompleted: true })}
                         />
                     )}

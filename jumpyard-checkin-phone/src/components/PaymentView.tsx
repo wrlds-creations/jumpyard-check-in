@@ -10,10 +10,11 @@ interface PaymentViewProps {
     bookingId: string;
     total: number;
     items: Addon[];
+    baseProduct: { label: string; quantity: number; unitPrice: number; total: number } | null;
     onPaid: () => void;
 }
 
-export const PaymentView = ({ bookingId, total, items, onPaid }: PaymentViewProps) => {
+export const PaymentView = ({ bookingId, total, items, baseProduct, onPaid }: PaymentViewProps) => {
     const { t } = useTranslation();
     const [processing, setProcessing] = useState(false);
 
@@ -46,9 +47,21 @@ export const PaymentView = ({ bookingId, total, items, onPaid }: PaymentViewProp
                     <p className="text-foreground font-mono tracking-wider">{bookingId}</p>
                 </div>
 
+                {baseProduct && (
+                    <div className="border-b border-border pb-3 mb-3">
+                        <p className="text-muted uppercase text-xs font-bold italic mb-2">{t.payment.baseProduct}</p>
+                        <div className="flex justify-between items-center py-1">
+                            <span className="text-foreground text-sm">
+                                {baseProduct.label} {baseProduct.quantity > 1 && `x${baseProduct.quantity}`}
+                            </span>
+                            <span className="text-foreground text-sm font-bold">{baseProduct.total} {t.common.currency}</span>
+                        </div>
+                    </div>
+                )}
+
                 {items.length > 0 && (
                     <div className="border-b border-border pb-3 mb-3">
-                        <p className="text-muted uppercase text-xs font-bold italic mb-2">{t.payment.items}</p>
+                        <p className="text-muted uppercase text-xs font-bold italic mb-2">{t.payment.addonsLabel}</p>
                         {items.map(item => (
                             <div key={item.id} className="flex justify-between items-center py-1">
                                 <span className="text-foreground text-sm">{item.label} x{item.qty}</span>

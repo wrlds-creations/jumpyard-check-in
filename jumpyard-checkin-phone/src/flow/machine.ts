@@ -24,6 +24,14 @@ export function initialContext(channel: Channel): FlowContext {
 
     guestContactEmail: null,
     guestContactPhone: null,
+
+    baseProductId: null,
+    baseProductLabel: null,
+    baseProductType: null,
+    baseDurationMinutes: 0,
+    baseUnitPrice: 0,
+    baseQuantity: 0,
+    baseTotal: 0,
   };
 }
 
