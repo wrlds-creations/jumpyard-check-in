@@ -18,7 +18,7 @@ export const ParkChoice = ({ onSelect }: ParkChoiceProps) => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <img src="/logo.png" alt="JumpYard" className="w-36 mb-8" />
+            <img src="/jumpyard_logo.png" alt="JumpYard" className="w-36 mb-8" />
 
             <h1 className="text-xl font-black italic uppercase text-foreground mb-6 text-center">
                 {t.choice.title}
