@@ -23,7 +23,7 @@ export const IdleScreen = ({ onStart }: { onStart: () => void }) => {
                 className="mb-8 relative p-10 bg-white/5 rounded-full border border-white/10 backdrop-blur-sm"
             >        {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                    src="/logo.png"
+                    src="/jumpyard_logo.png"
                     alt="JumpYard Logo"
                     className="w-72 h-auto drop-shadow-2xl"
                 />
