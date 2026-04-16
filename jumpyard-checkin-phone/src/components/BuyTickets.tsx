@@ -33,7 +33,7 @@ type Step = 'PRODUCT' | 'QUANTITY' | 'TIMESLOT' | 'CONTACT';
 
 function generateSlots(): TimeSlot[] {
     const now = new Date();
-    const startMin = Math.ceil((now.getHours() * 60 + now.getMinutes()) / 30) * 30 + 30;
+    const startMin = Math.ceil((now.getHours() * 60 + now.getMinutes()) / 30) * 30;
     const slots: TimeSlot[] = [];
     for (let m = startMin; m <= startMin + 120 && slots.length < 5; m += 30) {
         const h = Math.floor(m / 60);

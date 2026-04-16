@@ -1,6 +1,6 @@
 'use client';
 import { motion } from 'framer-motion';
-import { Users, ShoppingBag, CheckCircle, Clock, Ticket } from 'lucide-react';
+import { Users, ShoppingBag, CheckCircle, CreditCard, Clock, Ticket } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 
 interface BookingSummaryProps {
@@ -74,10 +74,19 @@ export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => 
                     </div>
                 )}
 
-                <div className="flex items-center gap-2.5 bg-success/10 p-2.5 rounded-xl border border-success/30 mb-3">
-                    <CheckCircle className="text-success flex-shrink-0" size={16} />
+                <div className={`flex items-center gap-2.5 p-2.5 rounded-xl border mb-3 ${
+                    booking?.paid
+                        ? 'bg-success/10 border-success/30'
+                        : 'bg-amber-50 border-amber-200'
+                }`}>
+                    {booking?.paid
+                        ? <CheckCircle className="text-success flex-shrink-0" size={16} />
+                        : <CreditCard className="text-amber-600 flex-shrink-0" size={16} />
+                    }
                     <div>
-                        <p className="text-success font-bold italic uppercase text-[11px]">{t.payment.title}</p>
+                        <p className={`font-bold italic uppercase text-[11px] ${booking?.paid ? 'text-success' : 'text-amber-600'}`}>
+                            {t.payment.title}
+                        </p>
                         <p className="text-foreground text-sm italic">{booking?.paid ? t.booking.paidInFull : t.booking.notPaid}</p>
                     </div>
                 </div>
