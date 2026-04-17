@@ -23,11 +23,12 @@ import { BuyTickets } from '@/components/BuyTickets';
 
 // Visual progress bar groups safety-video + safety-attest into one step,
 // and collapses connected/skyrider into the extras column.
+// Safety comes AFTER payment in the new flow (midcheck 2026-04-16).
 const STEP_ORDER: FlowState[] = [
     'APP_BOOKING',
-    'APP_SAFETY_VIDEO',
     'APP_ADDONS',
     'APP_PAYMENT',
+    'APP_SAFETY_VIDEO',
     'APP_CONFIRM',
     'APP_PRESENT',
 ];
@@ -36,9 +37,15 @@ function getStepIndex(state: FlowState): number {
     if (state === 'APP_SAFETY_ATTEST') return STEP_ORDER.indexOf('APP_SAFETY_VIDEO');
     if (state === 'APP_SKYRIDER_ATTEST' || state === 'APP_CONNECTED')
         return STEP_ORDER.indexOf('APP_ADDONS');
-    if (state === 'APP_PRESENT') return STEP_ORDER.indexOf('APP_CONFIRM') + 1;
+    if (state === 'APP_PRESENT') return STEP_ORDER.indexOf('APP_CONFIRM');
     const idx = STEP_ORDER.indexOf(state);
     return idx === -1 ? 0 : idx;
+}
+
+function prePaymentBack(ctx: FlowContext): FlowState {
+    if (ctx.connectedSelected) return 'APP_CONNECTED';
+    if (ctx.skyriderSelected) return 'APP_SKYRIDER_ATTEST';
+    return 'APP_ADDONS';
 }
 
 function getBackState(state: FlowState, ctx: FlowContext): FlowState | null {
@@ -46,12 +53,12 @@ function getBackState(state: FlowState, ctx: FlowContext): FlowState | null {
         case 'KIOSK_LOOKUP': return 'KIOSK_CHOICE';
         case 'KIOSK_BUY': return null; // BuyTickets handles its own internal back
         case 'APP_BOOKING': return ctx.channel === 'park-qr' ? 'KIOSK_CHOICE' : null;
-        case 'APP_SAFETY_VIDEO': return 'APP_BOOKING';
-        case 'APP_SAFETY_ATTEST': return 'APP_SAFETY_VIDEO';
-        case 'APP_ADDONS': return 'APP_SAFETY_ATTEST';
+        case 'APP_ADDONS': return 'APP_BOOKING';
         case 'APP_SKYRIDER_ATTEST': return 'APP_ADDONS';
         case 'APP_CONNECTED': return ctx.skyriderSelected ? 'APP_SKYRIDER_ATTEST' : 'APP_ADDONS';
-        case 'APP_PAYMENT': return ctx.connectedSelected ? 'APP_CONNECTED' : ctx.skyriderSelected ? 'APP_SKYRIDER_ATTEST' : 'APP_ADDONS';
+        case 'APP_PAYMENT': return prePaymentBack(ctx);
+        case 'APP_SAFETY_VIDEO': return ctx.paymentTotal > 0 ? 'APP_PAYMENT' : prePaymentBack(ctx);
+        case 'APP_SAFETY_ATTEST': return 'APP_SAFETY_VIDEO';
         default: return null;
     }
 }
@@ -60,7 +67,7 @@ function ProgressBar({ state }: { state: FlowState }) {
     const { t } = useTranslation();
     if (state === 'APP_MOBILE' || state === 'KIOSK_CHOICE' || state === 'KIOSK_LOOKUP' || state === 'KIOSK_BUY') return null;
 
-    const labels = [t.progress.booking, t.progress.safety, t.progress.extras, t.progress.payment, t.progress.done];
+    const labels = [t.progress.booking, t.progress.extras, t.progress.payment, t.progress.safety, t.progress.done];
     const current = getStepIndex(state);
     const pct = labels.length > 1 ? (current / (labels.length - 1)) * 100 : 0;
 
