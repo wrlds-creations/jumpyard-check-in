@@ -26,8 +26,6 @@ interface BuyTicketsProps {
 
 type Step = 'TIMESLOT' | 'PRODUCT' | 'QUANTITY' | 'CONTACT';
 
-const DURATIONS = [60, 90, 120] as const;
-
 function generateSlots(): string[] {
     const now = new Date();
     const startMin = Math.ceil((now.getHours() * 60 + now.getMinutes()) / 30) * 30;
@@ -132,9 +130,8 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
     };
 
     const renderProductCard = (product: ProductInfo) => {
-        const available = slotCapacity
-            ? slotCapacity.availableProducts.includes(product.id)
-            : true;
+        const seats = slotCapacity ? slotCapacity.remainingSeats[product.id] : undefined;
+        const available = seats === undefined ? true : seats > 0;
         return (
             <button
                 key={product.id}
@@ -146,13 +143,15 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                         : 'bg-surface-strong border-border opacity-50 cursor-not-allowed'
                 }`}
             >
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                     <p className={`text-sm font-black italic uppercase ${available ? 'text-foreground' : 'text-muted'}`}>
                         {product.label}
                     </p>
-                    {!available && (
-                        <p className="text-[10px] font-bold italic text-muted/70 uppercase tracking-wider mt-0.5">
-                            {t.buy.spotsFull}
+                    {seats !== undefined && (
+                        <p className={`text-[10px] font-bold italic uppercase tracking-wider mt-0.5 ${
+                            available ? 'text-muted' : 'text-muted/70'
+                        }`}>
+                            {available ? `${seats} ${t.buy.spotsLeft}` : t.buy.spotsFull}
                         </p>
                     )}
                 </div>
@@ -198,7 +197,7 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                                     key={time}
                                     onClick={() => anyAvailable && handleTimeSelect(time)}
                                     disabled={!anyAvailable}
-                                    className={`w-full p-3.5 rounded-xl text-left transition-all ${
+                                    className={`w-full p-3.5 rounded-xl text-left flex items-center justify-between transition-all ${
                                         isSelected
                                             ? 'bg-primary text-white border-2 border-primary'
                                             : anyAvailable
@@ -206,67 +205,17 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                                             : 'bg-surface-strong border border-border opacity-50 cursor-not-allowed'
                                     }`}
                                 >
-                                    <div className="flex items-center gap-3 mb-2">
+                                    <div className="flex items-center gap-3">
                                         <Clock size={16} className={isSelected ? 'text-white' : 'text-muted'} />
                                         <span className={`text-lg font-black italic ${isSelected ? 'text-white' : 'text-foreground'}`}>
                                             {time}
                                         </span>
-                                        {!loaded && (
-                                            <span className={`text-[10px] font-bold italic ml-auto ${isSelected ? 'text-white/70' : 'text-muted/60'}`}>
-                                                …
-                                            </span>
-                                        )}
-                                        {loaded && !anyAvailable && (
-                                            <span className={`text-[10px] font-bold italic uppercase tracking-wider ml-auto ${isSelected ? 'text-white/70' : 'text-muted'}`}>
-                                                {t.buy.spotsFull}
-                                            </span>
-                                        )}
                                     </div>
-
-                                    {loaded && anyAvailable && (
-                                        <div className="flex flex-col gap-1 text-[10px]">
-                                            <div className="flex items-center gap-1.5">
-                                                <span className={`w-12 font-bold italic uppercase tracking-wider ${isSelected ? 'text-white/60' : 'text-muted'}`}>
-                                                    {t.buy.sectionEntry}
-                                                </span>
-                                                {DURATIONS.map(d => {
-                                                    const seats = cap.remainingSeats[`E${d}` as ProductId];
-                                                    return (
-                                                        <span
-                                                            key={d}
-                                                            className={`px-1.5 py-0.5 rounded font-bold italic ${
-                                                                seats > 0
-                                                                    ? isSelected ? 'bg-white/15 text-white' : 'bg-primary/10 text-primary'
-                                                                    : isSelected ? 'bg-white/5 text-white/40 line-through' : 'bg-muted/10 text-muted/60 line-through'
-                                                            }`}
-                                                        >
-                                                            {d}·{seats > 0 ? seats : t.buy.spotsFull}
-                                                        </span>
-                                                    );
-                                                })}
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <span className={`w-12 font-bold italic uppercase tracking-wider ${isSelected ? 'text-white/60' : 'text-muted'}`}>
-                                                    {t.buy.sectionFamily}
-                                                </span>
-                                                {DURATIONS.map(d => {
-                                                    const seats = cap.remainingSeats[`F${d}` as ProductId];
-                                                    return (
-                                                        <span
-                                                            key={d}
-                                                            className={`px-1.5 py-0.5 rounded font-bold italic ${
-                                                                seats > 0
-                                                                    ? isSelected ? 'bg-white/15 text-white' : 'bg-primary/10 text-primary'
-                                                                    : isSelected ? 'bg-white/5 text-white/40 line-through' : 'bg-muted/10 text-muted/60 line-through'
-                                                            }`}
-                                                        >
-                                                            {d}·{seats > 0 ? seats : t.buy.spotsFull}
-                                                        </span>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
+                                    {loaded && !anyAvailable ? (
+                                        <span className={`text-[10px] font-bold italic uppercase tracking-wider ${isSelected ? 'text-white/70' : 'text-muted'}`}>
+                                            {t.buy.spotsFull}
+                                        </span>
+                                    ) : null}
                                 </button>
                             );
                         })}
