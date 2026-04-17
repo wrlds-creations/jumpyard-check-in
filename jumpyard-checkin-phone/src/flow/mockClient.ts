@@ -44,25 +44,68 @@ export async function lookupBooking(code: string): Promise<Booking> {
   };
 }
 
-// TODO: POST /api/cloud/walkin { sessionSlotId, jumpers, contactEmail, contactPhone, product }
+// ----- Capacity lookup (mock) -----
+// Mirrors planned GET /api/cloud/capacity?slots=HH:MM,HH:MM
+// Returns which products still have capacity at each slot. Deterministic per
+// (slot, productId) so the same UI state is reproducible between renders.
+
+export type ProductId = 'E60' | 'E90' | 'E120' | 'F60' | 'F90' | 'F120';
+
+export interface SlotCapacity {
+  time: string;                               // "HH:MM"
+  availableProducts: ProductId[];             // products with > 0 seats
+  remainingSeats: Record<ProductId, number>;  // seats per product (0 = full)
+}
+
+const ALL_PRODUCTS: readonly ProductId[] = ['E60', 'E90', 'E120', 'F60', 'F90', 'F120'] as const;
+
+// Simple string hash for deterministic pseudo-random per (slot, product) pair.
+function hash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = (h * 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
+// TODO: GET /api/cloud/capacity?slots={csv}
+export async function getCapacityForSlots(slots: string[]): Promise<SlotCapacity[]> {
+  await delay(250);
+  return slots.map(time => {
+    const remainingSeats = {} as Record<ProductId, number>;
+    const availableProducts: ProductId[] = [];
+    for (const pid of ALL_PRODUCTS) {
+      const h = hash(time + '|' + pid);
+      // Family products (F*) are more likely to be sold out than entry tickets.
+      const soldOut = pid.startsWith('F') ? (h % 3 === 0) : (h % 5 === 0);
+      const seats = soldOut ? 0 : 4 + (h % 12);
+      remainingSeats[pid] = seats;
+      if (seats > 0) availableProducts.push(pid);
+    }
+    return { time, availableProducts, remainingSeats };
+  });
+}
+
+// TODO: POST /api/cloud/walkin { sessionSlotId, jumpers, contactEmail, contactPhone, product, selectedTime }
 export async function buyWalkIn(
   jumpers: number,
   contactEmail: string | null,
   contactPhone: string | null,
-  product: { id: string; label: string; type: 'entry' | 'family'; durationMinutes: number }
+  product: { id: string; label: string; type: 'entry' | 'family'; durationMinutes: number },
+  selectedTime: string
 ): Promise<Booking> {
   await delay(1000);
   void contactEmail;
   void contactPhone;
-  const now = new Date();
-  const startH = now.getHours() + 1;
-  const startTime = `${String(startH).padStart(2, '0')}:00`;
-  const endMin = startH * 60 + product.durationMinutes;
+  const [h, m] = selectedTime.split(':').map(Number);
+  const startMin = h * 60 + m;
+  const endMin = startMin + product.durationMinutes;
   const endTime = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
   return {
     id: 'WALKIN_' + Math.floor(Math.random() * 9000 + 1000),
     jumpers,
-    time: startTime,
+    time: selectedTime,
     endTime,
     durationMinutes: product.durationMinutes,
     date: 'Today',
