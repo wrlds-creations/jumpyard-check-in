@@ -46,8 +46,8 @@ const sv = {
     title: 'Vad vill du göra?',
     haveBooking: 'Jag har en bokning',
     haveBookingDesc: 'Hitta din bokning med bokningskod',
-    buyTickets: 'Köp bokning',
-    buyTicketsDesc: 'Köp biljett och fortsätt till check-in',
+    buyTickets: 'Köp entré',
+    buyTicketsDesc: 'Köp entré och fortsätt till check-in',
   },
   lookup: {
     title: 'Hitta din bokning',
@@ -281,8 +281,8 @@ const en: typeof sv = {
     title: 'What would you like to do?',
     haveBooking: 'I have a booking',
     haveBookingDesc: 'Find your booking with booking code',
-    buyTickets: 'Buy booking',
-    buyTicketsDesc: 'Buy a ticket and continue to check-in',
+    buyTickets: 'Buy entry',
+    buyTicketsDesc: 'Buy entry and continue to check-in',
   },
   lookup: {
     title: 'Find your booking',

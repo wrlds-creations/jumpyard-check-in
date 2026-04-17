@@ -44,15 +44,18 @@ export function initialState(channel: Channel): FlowState {
 // Branching from KIOSK_CHOICE is event-driven (guest picks BOOKING vs BUY).
 export type Branch = 'booking' | 'buy' | null;
 
-// Gate after addons/skyrider/connected: pick the next terminal state based on
-// payment requirement. Used by multiple upstream states so it lives here.
-function afterConnectedGate(ctx: FlowContext): FlowState {
-  return ctx.paymentTotal > 0 ? 'APP_PAYMENT' : 'APP_CONFIRM';
+// Gate after addons/skyrider/connected: pick the next step.
+// New ordering: addons group → [payment if needed] → safety (video + attest) → confirm.
+// Safety moved to the end per Jumpyard midcheck decision (2026-04-16): payment feels
+// "final" for guests, so the QR code should be gated behind safety acknowledgement
+// as the last step, like check-in on an airline ticket.
+function afterAddonsGroupGate(ctx: FlowContext): FlowState {
+  return ctx.paymentTotal > 0 ? 'APP_PAYMENT' : 'APP_SAFETY_VIDEO';
 }
 
 function afterSkyriderGate(ctx: FlowContext): FlowState {
   if (ctx.connectedSelected) return 'APP_CONNECTED';
-  return afterConnectedGate(ctx);
+  return afterAddonsGroupGate(ctx);
 }
 
 export function nextState(
@@ -81,12 +84,6 @@ export function nextState(
       return 'APP_BOOKING';
 
     case 'APP_BOOKING':
-      return 'APP_SAFETY_VIDEO';
-
-    case 'APP_SAFETY_VIDEO':
-      return 'APP_SAFETY_ATTEST';
-
-    case 'APP_SAFETY_ATTEST':
       return 'APP_ADDONS';
 
     case 'APP_ADDONS':
@@ -97,9 +94,15 @@ export function nextState(
       return afterSkyriderGate(ctx);
 
     case 'APP_CONNECTED':
-      return afterConnectedGate(ctx);
+      return afterAddonsGroupGate(ctx);
 
     case 'APP_PAYMENT':
+      return 'APP_SAFETY_VIDEO';
+
+    case 'APP_SAFETY_VIDEO':
+      return 'APP_SAFETY_ATTEST';
+
+    case 'APP_SAFETY_ATTEST':
       return 'APP_CONFIRM';
 
     case 'APP_CONFIRM':
