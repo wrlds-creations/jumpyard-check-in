@@ -259,7 +259,10 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                 </>
             )}
 
-            {step === 'QUANTITY' && selectedProduct && (
+            {step === 'QUANTITY' && selectedProduct && (() => {
+                const maxQty = slotCapacity?.remainingSeats[selectedProduct.id];
+                const canIncrement = maxQty === undefined || quantity < maxQty;
+                return (
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -285,21 +288,31 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                     )}
                     {selectedProduct.type === 'entry' && <div className="mb-4" />}
 
-                    <div className="flex items-center justify-center gap-6 mb-5">
+                    <div className="flex items-center justify-center gap-6 mb-2">
                         <button
                             onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                            className="w-12 h-12 rounded-full bg-surface-strong border border-border flex items-center justify-center text-foreground text-xl font-bold transition-colors"
+                            disabled={quantity <= 1}
+                            className="w-12 h-12 rounded-full bg-surface-strong border border-border flex items-center justify-center text-foreground text-xl font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             -
                         </button>
                         <span className="text-4xl font-black italic text-foreground w-16 text-center">{quantity}</span>
                         <button
-                            onClick={() => setQuantity(quantity + 1)}
-                            className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center text-xl font-bold transition-colors"
+                            onClick={() => canIncrement && setQuantity(quantity + 1)}
+                            disabled={!canIncrement}
+                            className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center text-xl font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             +
                         </button>
                     </div>
+                    {maxQty !== undefined && (
+                        <p className="text-[10px] text-muted uppercase font-bold italic tracking-wider mb-5">
+                            {quantity >= maxQty
+                                ? `${t.buy.maxReached} · ${maxQty} ${t.buy.spotsLeft}`
+                                : `${maxQty} ${t.buy.spotsLeft}`}
+                        </p>
+                    )}
+                    {maxQty === undefined && <div className="mb-5" />}
 
                     <div className="bg-white border border-border p-3 rounded-xl mb-5 flex justify-between items-center px-4">
                         <span className="text-muted text-sm font-bold italic uppercase">{t.buy.total}</span>
@@ -316,7 +329,8 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                     </button>
                 </div>
                 </motion.div>
-            )}
+                );
+            })()}
 
             {step === 'CONTACT' && selectedProduct && (
                 <motion.div
