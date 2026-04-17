@@ -15,11 +15,6 @@ interface ProductInfo {
     jumpersPerUnit: number;
 }
 
-interface TimeSlot {
-    time: string;
-    spotsLeft: number;
-}
-
 interface BuyTicketsProps {
     onComplete: (
         booking: Booking,
@@ -31,17 +26,16 @@ interface BuyTicketsProps {
 
 type Step = 'TIMESLOT' | 'PRODUCT' | 'QUANTITY' | 'CONTACT';
 
-function generateSlots(): TimeSlot[] {
+const DURATIONS = [60, 90, 120] as const;
+
+function generateSlots(): string[] {
     const now = new Date();
     const startMin = Math.ceil((now.getHours() * 60 + now.getMinutes()) / 30) * 30;
-    const slots: TimeSlot[] = [];
+    const slots: string[] = [];
     for (let m = startMin; m <= startMin + 120 && slots.length < 5; m += 30) {
         const h = Math.floor(m / 60);
         if (h >= 22) break;
-        slots.push({
-            time: `${String(h).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`,
-            spotsLeft: 140 + Math.floor(Math.random() * 26),
-        });
+        slots.push(`${String(h).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
     }
     return slots;
 }
@@ -67,19 +61,25 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
     const [email, setEmail] = useState('');
     const [submitting, setSubmitting] = useState(false);
-    const [slotCapacity, setSlotCapacity] = useState<SlotCapacity | null>(null);
+    const [capacities, setCapacities] = useState<Record<string, SlotCapacity>>({});
 
     const slots = useMemo(() => generateSlots(), []);
 
-    // Fetch capacity when a timeslot is picked so PRODUCT step can filter.
+    // Fetch capacity for ALL slots on mount — per-product capacity needs to
+    // render inline on the TIMESLOT step so guests can compare durations
+    // across times before they commit.
     useEffect(() => {
-        if (!selectedTime) { setSlotCapacity(null); return; }
         let active = true;
-        getCapacityForSlots([selectedTime]).then(results => {
-            if (active) setSlotCapacity(results[0] ?? null);
+        getCapacityForSlots(slots).then(results => {
+            if (!active) return;
+            const map: Record<string, SlotCapacity> = {};
+            for (const r of results) map[r.time] = r;
+            setCapacities(map);
         });
         return () => { active = false; };
-    }, [selectedTime]);
+    }, [slots]);
+
+    const slotCapacity = selectedTime ? capacities[selectedTime] ?? null : null;
 
     const handleTimeSelect = (time: string) => {
         // Changing time resets downstream picks so product capacity reflects the new slot.
@@ -188,33 +188,85 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                     <p className="text-muted text-xs mb-4 text-center">{t.buy.selectTimeDesc}</p>
 
                     <div className="flex flex-col gap-2 mb-5">
-                        {slots.map(slot => {
-                            const available = slot.spotsLeft > 0;
-                            const isSelected = selectedTime === slot.time;
+                        {slots.map(time => {
+                            const cap = capacities[time];
+                            const loaded = !!cap;
+                            const anyAvailable = !loaded || cap.availableProducts.length > 0;
+                            const isSelected = selectedTime === time;
                             return (
                                 <button
-                                    key={slot.time}
-                                    onClick={() => available && handleTimeSelect(slot.time)}
-                                    disabled={!available}
-                                    className={`w-full p-3.5 rounded-xl text-left flex items-center justify-between transition-all ${
+                                    key={time}
+                                    onClick={() => anyAvailable && handleTimeSelect(time)}
+                                    disabled={!anyAvailable}
+                                    className={`w-full p-3.5 rounded-xl text-left transition-all ${
                                         isSelected
                                             ? 'bg-primary text-white border-2 border-primary'
-                                            : available
+                                            : anyAvailable
                                             ? 'bg-white border border-border active:scale-[0.98]'
                                             : 'bg-surface-strong border border-border opacity-50 cursor-not-allowed'
                                     }`}
                                 >
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-3 mb-2">
                                         <Clock size={16} className={isSelected ? 'text-white' : 'text-muted'} />
                                         <span className={`text-lg font-black italic ${isSelected ? 'text-white' : 'text-foreground'}`}>
-                                            {slot.time}
+                                            {time}
                                         </span>
+                                        {!loaded && (
+                                            <span className={`text-[10px] font-bold italic ml-auto ${isSelected ? 'text-white/70' : 'text-muted/60'}`}>
+                                                …
+                                            </span>
+                                        )}
+                                        {loaded && !anyAvailable && (
+                                            <span className={`text-[10px] font-bold italic uppercase tracking-wider ml-auto ${isSelected ? 'text-white/70' : 'text-muted'}`}>
+                                                {t.buy.spotsFull}
+                                            </span>
+                                        )}
                                     </div>
-                                    <span className={`text-xs font-bold italic ${
-                                        isSelected ? 'text-white/70' : available ? 'text-muted' : 'text-muted/50'
-                                    }`}>
-                                        {available ? `${slot.spotsLeft} ${t.buy.spotsLeft}` : t.buy.spotsFull}
-                                    </span>
+
+                                    {loaded && anyAvailable && (
+                                        <div className="flex flex-col gap-1 text-[10px]">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className={`w-12 font-bold italic uppercase tracking-wider ${isSelected ? 'text-white/60' : 'text-muted'}`}>
+                                                    {t.buy.sectionEntry}
+                                                </span>
+                                                {DURATIONS.map(d => {
+                                                    const seats = cap.remainingSeats[`E${d}` as ProductId];
+                                                    return (
+                                                        <span
+                                                            key={d}
+                                                            className={`px-1.5 py-0.5 rounded font-bold italic ${
+                                                                seats > 0
+                                                                    ? isSelected ? 'bg-white/15 text-white' : 'bg-primary/10 text-primary'
+                                                                    : isSelected ? 'bg-white/5 text-white/40 line-through' : 'bg-muted/10 text-muted/60 line-through'
+                                                            }`}
+                                                        >
+                                                            {d}·{seats > 0 ? seats : t.buy.spotsFull}
+                                                        </span>
+                                                    );
+                                                })}
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className={`w-12 font-bold italic uppercase tracking-wider ${isSelected ? 'text-white/60' : 'text-muted'}`}>
+                                                    {t.buy.sectionFamily}
+                                                </span>
+                                                {DURATIONS.map(d => {
+                                                    const seats = cap.remainingSeats[`F${d}` as ProductId];
+                                                    return (
+                                                        <span
+                                                            key={d}
+                                                            className={`px-1.5 py-0.5 rounded font-bold italic ${
+                                                                seats > 0
+                                                                    ? isSelected ? 'bg-white/15 text-white' : 'bg-primary/10 text-primary'
+                                                                    : isSelected ? 'bg-white/5 text-white/40 line-through' : 'bg-muted/10 text-muted/60 line-through'
+                                                            }`}
+                                                        >
+                                                            {d}·{seats > 0 ? seats : t.buy.spotsFull}
+                                                        </span>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
                                 </button>
                             );
                         })}
