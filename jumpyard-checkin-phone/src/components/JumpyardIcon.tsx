@@ -37,7 +37,7 @@ interface JumpyardIconProps {
 
 export const JumpyardIcon = ({ name, alt = '', className = 'w-8 h-8' }: JumpyardIconProps) => (
     <img
-        src={`/jumpyard-next-icons/${name}.svg`}
+        src={`/jumpyard-next-icons/${name}.png`}
         alt={alt}
         aria-hidden={alt ? undefined : true}
         draggable={false}
