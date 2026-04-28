@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { QrCode } from 'lucide-react';
 import { commitCheckin } from '@/flow/mockClient';
 import { useTranslation } from '@/context/LanguageContext';
+import { JumpyardIcon } from '@/components/JumpyardIcon';
 
 interface PresentCodeProps {
     bookingId: string;
@@ -37,7 +37,7 @@ export const PresentCode = ({ bookingId, onDone }: PresentCodeProps) => {
             <h1 className="text-2xl font-black italic uppercase text-foreground mb-4">{t.present.title}</h1>
 
             <div className="bg-white p-8 rounded-2xl mb-4 border border-border shadow-sm">
-                <QrCode size={160} className="text-black" />
+                <JumpyardIcon name="scan-frame" className="w-40 h-40" />
                 <p className="text-[10px] text-muted font-mono mt-2 break-all max-w-[160px]">
                     {qrPayload || '…'}
                 </p>

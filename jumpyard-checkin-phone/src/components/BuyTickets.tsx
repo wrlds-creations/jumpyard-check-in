@@ -1,10 +1,11 @@
 'use client';
 import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Check, Clock, Mail, Ticket, Users } from 'lucide-react';
+import { ArrowLeft, Check } from 'lucide-react';
 import { buyWalkIn, getCapacityForSlots, type ProductId, type SlotCapacity } from '@/flow/mockClient';
 import type { Booking } from '@/flow/types';
 import { useTranslation } from '@/context/LanguageContext';
+import { JumpyardIcon } from '@/components/JumpyardIcon';
 
 interface ProductInfo {
     id: ProductId;
@@ -143,6 +144,7 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                         : 'bg-surface-strong border-border opacity-50 cursor-not-allowed'
                 }`}
             >
+                <JumpyardIcon name="admission-ticket" className="w-9 h-9 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                     <p className={`text-sm font-black italic uppercase ${available ? 'text-foreground' : 'text-muted'}`}>
                         {product.label}
@@ -206,7 +208,9 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                                     }`}
                                 >
                                     <div className="flex items-center gap-3">
-                                        <Clock size={16} className={isSelected ? 'text-white' : 'text-muted'} />
+                                        <span className={isSelected ? 'rounded-md bg-white' : ''}>
+                                            <JumpyardIcon name="time" className="w-7 h-7" />
+                                        </span>
                                         <span className={`text-lg font-black italic ${isSelected ? 'text-white' : 'text-foreground'}`}>
                                             {time}
                                         </span>
@@ -238,7 +242,7 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                     </h2>
                     {selectedTime && (
                         <p className="text-muted text-xs mb-4 text-center flex items-center justify-center gap-1.5">
-                            <Clock size={12} /> {selectedTime}
+                            <JumpyardIcon name="time" className="w-5 h-5" /> {selectedTime}
                         </p>
                     )}
                     {!selectedTime && <div className="mb-4" />}
@@ -271,7 +275,7 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                 >
                 <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
                     <div className="bg-white border border-border rounded-xl px-3 py-2 mb-4 inline-flex items-center gap-2">
-                        <Ticket size={14} className="text-primary" />
+                        <JumpyardIcon name="admission-ticket" className="w-6 h-6" />
                         <span className="text-sm font-bold italic text-foreground">{selectedProduct.label}</span>
                         {selectedProduct.type === 'family' && (
                             <span className="text-[10px] text-muted">· {t.buy.familyNote}</span>
@@ -283,7 +287,7 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
                     </h2>
                     {selectedProduct.type === 'family' && (
                         <p className="text-muted text-xs mb-4 flex items-center justify-center gap-1">
-                            <Users size={12} /> {t.buy.familyNote}
+                            <JumpyardIcon name="group" className="w-5 h-5" /> {t.buy.familyNote}
                         </p>
                     )}
                     {selectedProduct.type === 'entry' && <div className="mb-4" />}
@@ -345,7 +349,7 @@ export const BuyTickets = ({ onComplete, onBack }: BuyTicketsProps) => {
 
                         <label className="block mb-5">
                             <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
-                                <Mail size={11} /> {t.buy.emailLabel}
+                                <JumpyardIcon name="email-confirmed" className="w-5 h-5" /> {t.buy.emailLabel}
                             </span>
                             <input
                                 type="email"

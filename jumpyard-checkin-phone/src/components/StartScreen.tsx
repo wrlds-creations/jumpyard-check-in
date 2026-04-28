@@ -1,7 +1,7 @@
 'use client';
 import { motion } from 'framer-motion';
-import { Smartphone, QrCode, Monitor } from 'lucide-react';
 import type { Channel } from '@/flow/types';
+import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 
 interface StartScreenProps {
     channel: Channel;
@@ -10,7 +10,7 @@ interface StartScreenProps {
 
 export const StartScreen = ({ channel, onContinue }: StartScreenProps) => {
     const label = channel === 'park-qr' ? 'Park QR' : channel === 'sms' ? 'SMS Link' : 'Kiosk';
-    const Icon = channel === 'park-qr' ? QrCode : channel === 'sms' ? Smartphone : Monitor;
+    const icon: JumpyardIconName = channel === 'park-qr' ? 'scan-frame' : channel === 'sms' ? 'booking-card' : 'booking-confirmed';
 
     return (
         <motion.div
@@ -20,7 +20,7 @@ export const StartScreen = ({ channel, onContinue }: StartScreenProps) => {
             exit={{ opacity: 0, y: -30 }}
         >
             <div className="mb-10 p-10 bg-white/5 rounded-full border border-white/10 backdrop-blur-sm">
-                <Icon size={120} className="text-primary" />
+                <JumpyardIcon name={icon} className="w-32 h-32" />
             </div>
 
             <p className="text-sm text-zinc-400 uppercase tracking-[0.5em] font-bold mb-3">{label} Entry</p>

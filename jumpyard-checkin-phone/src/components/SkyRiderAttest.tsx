@@ -1,8 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Ruler } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
+import { JumpyardIcon } from '@/components/JumpyardIcon';
 
 interface SkyRiderAttestProps {
     onComplete: () => void;
@@ -19,7 +19,7 @@ export const SkyRiderAttest = ({ onComplete }: SkyRiderAttestProps) => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <Ruler className="text-primary mb-1" size={32} />
+            <JumpyardIcon name="zipline" className="w-16 h-16 mb-1" />
             <h1 className="text-xl font-black italic uppercase text-foreground mb-0.5">{t.skyrider.title}</h1>
             <p className="text-muted text-xs mb-4 max-w-sm">{t.skyrider.description}</p>
 

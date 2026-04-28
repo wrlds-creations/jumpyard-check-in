@@ -1,16 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import {
-    ShieldCheck,
-    AlertTriangle,
-    Ban,
-    Footprints,
-    Gauge,
-    Target,
-    Users,
-} from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
+import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 
 interface SafetyAttestProps {
     onComplete: (attestedAt: string) => void;
@@ -29,12 +21,12 @@ type SafetyRuleKey = (typeof SAFETY_RULE_KEYS)[number];
 
 const ALL_KEYS = [AGE_KEY, ...SAFETY_RULE_KEYS] as const;
 
-const SAFETY_RULE_ICONS: Record<SafetyRuleKey, typeof AlertTriangle> = {
-    onePerTrampoline: AlertTriangle,
-    avoidEdgePadding: Ban,
-    landOnBackOrBottom: Target,
-    tricksWithinAbility: Gauge,
-    noRunning: Footprints,
+const SAFETY_RULE_ICONS: Record<SafetyRuleKey, JumpyardIconName> = {
+    onePerTrampoline: 'trampoline-jump',
+    avoidEdgePadding: 'no-edge-bounce',
+    landOnBackOrBottom: 'foam-pit-landing',
+    tricksWithinAbility: 'safe-tricks',
+    noRunning: 'no-running',
 };
 
 const AGE_BULLETS = ['adultInArea35', 'adultInVenue610', 'canJumpAlone11'] as const;
@@ -56,7 +48,7 @@ export const SafetyAttest = ({ onComplete }: SafetyAttestProps) => {
             exit={{ opacity: 0, y: -20 }}
         >
             <div className="flex items-center gap-2 mb-0.5">
-                <ShieldCheck className="text-primary" size={22} />
+                <JumpyardIcon name="safety-check" className="w-8 h-8" />
                 <h1 className="text-xl font-black italic uppercase text-foreground">{t.safetyAttest.title}</h1>
             </div>
             <p className="text-muted text-xs mb-3 text-center">{t.safetyAttest.description}</p>
@@ -78,10 +70,7 @@ export const SafetyAttest = ({ onComplete }: SafetyAttestProps) => {
                     >
                         {ageChecked && <span className="text-white text-xs font-black">✓</span>}
                     </div>
-                    <Users
-                        size={16}
-                        className={`mt-0.5 flex-shrink-0 ${ageChecked ? 'text-primary' : 'text-muted'}`}
-                    />
+                    <JumpyardIcon name="age-limit" className={`mt-0.5 w-7 h-7 flex-shrink-0 ${ageChecked ? '' : 'opacity-55'}`} />
                     <div className="flex flex-col gap-1.5 min-w-0">
                         <p className="text-foreground text-sm font-bold italic">
                             {t.safetyAttest.ageRulesTitle}
@@ -104,7 +93,7 @@ export const SafetyAttest = ({ onComplete }: SafetyAttestProps) => {
 
                 {/* Safety rules — one checkbox per rule */}
                 {SAFETY_RULE_KEYS.map(key => {
-                    const Icon = SAFETY_RULE_ICONS[key];
+                    const icon = SAFETY_RULE_ICONS[key];
                     const isChecked = !!checked[key];
                     return (
                         <button
@@ -123,7 +112,7 @@ export const SafetyAttest = ({ onComplete }: SafetyAttestProps) => {
                             >
                                 {isChecked && <span className="text-white text-xs font-black">✓</span>}
                             </div>
-                            <Icon size={16} className={`flex-shrink-0 ${isChecked ? 'text-primary' : 'text-muted'}`} />
+                            <JumpyardIcon name={icon} className={`w-7 h-7 flex-shrink-0 ${isChecked ? '' : 'opacity-55'}`} />
                             <p className="text-foreground text-sm font-bold italic">{t.safetyAttest.rules[key]}</p>
                         </button>
                     );

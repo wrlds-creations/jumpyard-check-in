@@ -1,7 +1,7 @@
 'use client';
 import { motion } from 'framer-motion';
-import { CalendarCheck, ShoppingBag } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
+import { JumpyardIcon } from '@/components/JumpyardIcon';
 
 interface ParkChoiceProps {
     onSelect: (choice: 'BOOKING' | 'BUY') => void;
@@ -29,8 +29,8 @@ export const ParkChoice = ({ onSelect }: ParkChoiceProps) => {
                     onClick={() => onSelect('BOOKING')}
                     className="w-full bg-primary text-white p-5 rounded-2xl text-left flex items-start gap-4 transition-all active:scale-[0.98]"
                 >
-                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <CalendarCheck size={22} />
+                    <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+                        <JumpyardIcon name="booking-confirmed" className="w-10 h-10" />
                     </div>
                     <div>
                         <h2 className="text-lg font-black italic uppercase leading-tight">
@@ -46,8 +46,8 @@ export const ParkChoice = ({ onSelect }: ParkChoiceProps) => {
                     onClick={() => onSelect('BUY')}
                     className="w-full bg-surface border border-border text-foreground p-5 rounded-2xl text-left flex items-start gap-4 transition-all active:scale-[0.98]"
                 >
-                    <div className="w-10 h-10 rounded-xl bg-surface-strong flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <ShoppingBag size={22} className="text-muted" />
+                    <div className="w-12 h-12 rounded-xl bg-white border border-border flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+                        <JumpyardIcon name="admission-ticket" className="w-10 h-10" />
                     </div>
                     <div>
                         <h2 className="text-lg font-black italic uppercase leading-tight">

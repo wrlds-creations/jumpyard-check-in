@@ -1,9 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { CreditCard } from 'lucide-react';
 import { submitPayment } from '@/flow/mockClient';
 import { useTranslation } from '@/context/LanguageContext';
+import { JumpyardIcon } from '@/components/JumpyardIcon';
 import type { Addon } from '@/flow/types';
 
 interface PaymentViewProps {
@@ -36,7 +36,7 @@ export const PaymentView = ({ bookingId, total, items, baseProduct, onPaid }: Pa
             exit={{ opacity: 0, y: -20 }}
         >
             <div className="flex items-center gap-2 mb-0.5">
-                <CreditCard className="text-primary" size={22} />
+                <JumpyardIcon name="payment-card" className="w-8 h-8" />
                 <h1 className="text-xl font-black italic uppercase text-foreground">{t.payment.title}</h1>
             </div>
             <p className="text-muted text-xs mb-4 text-center">{t.payment.description}</p>

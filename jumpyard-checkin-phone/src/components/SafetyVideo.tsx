@@ -1,8 +1,9 @@
 'use client';
 import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Play, ShieldCheck } from 'lucide-react';
+import { Play } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
+import { JumpyardIcon } from '@/components/JumpyardIcon';
 
 interface SafetyVideoProps {
     onComplete: (seenAt: string) => void;
@@ -41,7 +42,7 @@ export const SafetyVideo = ({ onComplete }: SafetyVideoProps) => {
         >
             <div className="flex flex-col items-center">
                 <div className="flex items-center gap-2 mb-0.5">
-                    <ShieldCheck className="text-primary" size={22} />
+                    <JumpyardIcon name="safety-check" className="w-8 h-8" />
                     <h1 className="text-xl font-black italic uppercase text-foreground">{t.safetyVideo.title}</h1>
                 </div>
                 <p className="text-muted text-xs mb-2">{t.safetyVideo.description}</p>

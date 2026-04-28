@@ -1,7 +1,8 @@
 'use client';
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, Printer } from 'lucide-react';
+import { Printer } from 'lucide-react';
+import { JumpyardIcon } from '@/components/JumpyardIcon';
 
 export const SuccessPrint = ({ onReset }: { onReset: () => void }) => {
 
@@ -24,10 +25,10 @@ export const SuccessPrint = ({ onReset }: { onReset: () => void }) => {
                 className="text-success mb-8 relative"
             >
                 <div className="absolute inset-0 bg-success/30 blur-3xl rounded-full" />
-                <CheckCircle size={150} className="relative z-10" />
+                <JumpyardIcon name="success-check" className="relative z-10 w-36 h-36" />
             </motion.div>
 
-            <h2 className="text-6xl font-bold text-white mb-4">You're In!</h2>
+            <h2 className="text-6xl font-bold text-white mb-4">You&apos;re In!</h2>
             <p className="text-2xl text-slate-300 mb-12">
                 Go beat Mount Everest! Tracking is enabled.
             </p>

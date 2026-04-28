@@ -20,6 +20,7 @@ import type { ConnectedProfile, FlowContext, FlowState } from '@/flow/types';
 import { ParkChoice } from '@/components/ParkChoice';
 import { BookingLookup } from '@/components/BookingLookup';
 import { BuyTickets } from '@/components/BuyTickets';
+import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 
 // Visual progress bar groups safety-video + safety-attest into one step,
 // and collapses connected/skyrider into the extras column.
@@ -31,6 +32,14 @@ const STEP_ORDER: FlowState[] = [
     'APP_SAFETY_VIDEO',
     'APP_CONFIRM',
     'APP_PRESENT',
+];
+
+const STEP_ICONS: JumpyardIconName[] = [
+    'booking-card',
+    'addons-bag',
+    'payment-card',
+    'safety-check',
+    'success-check',
 ];
 
 function getStepIndex(state: FlowState): number {
@@ -74,27 +83,27 @@ function ProgressBar({ state }: { state: FlowState }) {
     return (
         <div className="w-full max-w-md mx-auto mb-3 px-4">
             {/* Track + circles */}
-            <div className="relative flex items-center justify-between" style={{ height: 28 }}>
+            <div className="relative flex items-center justify-between" style={{ height: 32 }}>
                 {/* Grey baseline — spans between first and last circle centers */}
-                <div className="absolute top-1/2 left-[14px] right-[14px] h-0.5 -translate-y-1/2 bg-surface-strong" />
+                <div className="absolute top-1/2 left-[16px] right-[16px] h-0.5 -translate-y-1/2 bg-surface-strong" />
                 {/* Active overlay */}
                 <div
-                    className="absolute top-1/2 left-[14px] h-0.5 -translate-y-1/2 bg-primary transition-all duration-500"
-                    style={{ width: `calc(${pct}% - ${pct > 0 ? 28 * pct / 100 : 0}px)` }}
+                    className="absolute top-1/2 left-[16px] h-0.5 -translate-y-1/2 bg-primary transition-all duration-500"
+                    style={{ width: `calc(${pct}% - ${pct > 0 ? 32 * pct / 100 : 0}px)` }}
                 />
                 {/* Circles */}
                 {labels.map((_, i) => (
                     <div
                         key={i}
-                        className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center text-xs font-black italic transition-all duration-300 ${
+                        className={`relative z-10 w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300 ${
                             i < current
-                                ? 'bg-primary text-white'
+                                ? 'bg-white border-primary shadow-sm'
                                 : i === current
-                                ? 'bg-primary text-white ring-4 ring-primary/20'
-                                : 'bg-surface-strong text-muted'
+                                ? 'bg-white border-primary shadow-sm ring-4 ring-primary/15'
+                                : 'bg-surface border-border opacity-45'
                         }`}
                     >
-                        {i < current ? '✓' : i + 1}
+                        <JumpyardIcon name={STEP_ICONS[i]} className="w-6 h-6" />
                     </div>
                 ))}
             </div>
@@ -302,7 +311,6 @@ function CheckInFlow() {
                             booking={ctx.booking}
                             jumperCount={ctx.booking.jumpers}
                             selectedAddons={ctx.selectedAddons}
-                            onDone={() => window.location.reload()}
                         />
                     )}
                 </AnimatePresence>

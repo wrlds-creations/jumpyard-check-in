@@ -1,10 +1,11 @@
 'use client';
 import { motion } from 'framer-motion';
-import { Users, ShoppingBag, CheckCircle, CreditCard, Clock, Ticket } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
+import { JumpyardIcon } from '@/components/JumpyardIcon';
+import type { Booking } from '@/flow/types';
 
 interface BookingSummaryProps {
-    booking: any;
+    booking: Booking;
     onContinue: () => void;
 }
 
@@ -39,18 +40,18 @@ export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => 
             <div className="bg-surface border border-border w-full rounded-2xl p-4 text-left shadow-sm mb-4">
                 <div className="grid grid-cols-2 gap-2 mb-3">
                     <div className="bg-white p-2.5 rounded-xl border border-border shadow-sm">
-                        <Clock className="text-muted mb-0.5" size={14} />
+                        <JumpyardIcon name="time" className="w-6 h-6 mb-0.5" />
                         <p className="text-foreground font-bold italic text-sm">{timeDisplay}</p>
                         {durationDisplay && <p className="text-primary text-[11px] font-bold italic">{durationDisplay}</p>}
                         <p className="text-muted text-[10px] uppercase">{t.booking.time}</p>
                     </div>
                     <div className="bg-white p-2.5 rounded-xl border border-border shadow-sm">
-                        <Users className="text-muted mb-0.5" size={14} />
+                        <JumpyardIcon name="group" className="w-6 h-6 mb-0.5" />
                         <p className="text-foreground font-bold italic text-lg">{booking?.jumpers || 1}</p>
                         <p className="text-muted text-[10px] uppercase">{t.booking.jumpers}</p>
                     </div>
                     <div className="bg-white p-2.5 rounded-xl border border-border col-span-2 shadow-sm">
-                        <ShoppingBag className="text-muted mb-0.5" size={14} />
+                        <JumpyardIcon name="addons-bag" className="w-6 h-6 mb-0.5" />
                         {existingAddons.length > 0 ? (
                             <div className="flex flex-wrap gap-1 mt-0.5">
                                 {existingAddons.map((a, i) => (
@@ -68,7 +69,7 @@ export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => 
 
                 {booking?.productLabel && (
                     <div className="bg-white p-2.5 rounded-xl border border-border shadow-sm mb-3">
-                        <Ticket className="text-primary mb-0.5" size={14} />
+                        <JumpyardIcon name="admission-ticket" className="w-6 h-6 mb-0.5" />
                         <p className="text-foreground font-bold italic text-sm">{booking.productLabel}</p>
                         <p className="text-muted text-[10px] uppercase">{t.booking.product}</p>
                     </div>
@@ -80,8 +81,8 @@ export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => 
                         : 'bg-amber-50 border-amber-200'
                 }`}>
                     {booking?.paid
-                        ? <CheckCircle className="text-success flex-shrink-0" size={16} />
-                        : <CreditCard className="text-amber-600 flex-shrink-0" size={16} />
+                        ? <JumpyardIcon name="success-check" className="w-8 h-8 flex-shrink-0" />
+                        : <JumpyardIcon name="payment-card" className="w-8 h-8 flex-shrink-0" />
                     }
                     <div>
                         <p className={`font-bold italic uppercase text-[11px] ${booking?.paid ? 'text-success' : 'text-amber-600'}`}>

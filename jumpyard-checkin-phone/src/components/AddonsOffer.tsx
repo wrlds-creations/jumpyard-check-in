@@ -1,9 +1,10 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Coffee, Footprints, Lock, Minus, Plus, UserPlus, Wind, Zap } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import type { Addon, AddonId } from '@/flow/types';
 import { useTranslation } from '@/context/LanguageContext';
+import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 
 interface AddonsOfferProps {
     guestCount: number;
@@ -24,7 +25,7 @@ interface CatalogEntry {
     description: string;
     mode: 'counter';
     maxPerGuest: number;
-    Icon: typeof Zap;
+    icon: JumpyardIconName;
 }
 
 function Counter({ value, onChange, max, min = 0 }: { value: number; onChange: (n: number) => void; max: number; min?: number }) {
@@ -52,12 +53,12 @@ function Counter({ value, onChange, max, min = 0 }: { value: number; onChange: (
 export const AddonsOffer = ({ guestCount, existingAddons, onContinue }: AddonsOfferProps) => {
     const { t } = useTranslation();
     const CATALOG: CatalogEntry[] = [
-        { id: 'skyrider', label: t.addons.products.skyriderLabel, price: 45, unit: t.addons.perJumper, description: t.addons.products.skyriderDesc, mode: 'counter', maxPerGuest: 1, Icon: Wind },
-        { id: 'connected', label: t.addons.products.connectedLabel, price: 40, unit: t.addons.perJumper, description: t.addons.products.connectedDesc, mode: 'counter', maxPerGuest: 1, Icon: Zap },
-        { id: 'socks', label: t.addons.products.socksLabel, price: 40, unit: t.addons.each, description: t.addons.products.socksDesc, mode: 'counter', maxPerGuest: 4, Icon: Footprints },
-        { id: 'coffee', label: t.addons.products.coffeeLabel, price: 35, unit: t.addons.each, description: t.addons.products.coffeeDesc, mode: 'counter', maxPerGuest: 4, Icon: Coffee },
-        { id: 'extra_person', label: t.addons.products.extraPersonLabel, price: 179, unit: t.addons.perPerson, description: t.addons.products.extraPersonDesc, mode: 'counter', maxPerGuest: 4, Icon: UserPlus },
-        { id: 'lock', label: t.addons.products.lockLabel, price: 40, unit: t.addons.each, description: t.addons.products.lockDesc, mode: 'counter', maxPerGuest: 1, Icon: Lock },
+        { id: 'skyrider', label: t.addons.products.skyriderLabel, price: 45, unit: t.addons.perJumper, description: t.addons.products.skyriderDesc, mode: 'counter', maxPerGuest: 1, icon: 'zipline' },
+        { id: 'connected', label: t.addons.products.connectedLabel, price: 40, unit: t.addons.perJumper, description: t.addons.products.connectedDesc, mode: 'counter', maxPerGuest: 1, icon: 'connected-band' },
+        { id: 'socks', label: t.addons.products.socksLabel, price: 40, unit: t.addons.each, description: t.addons.products.socksDesc, mode: 'counter', maxPerGuest: 4, icon: 'grip-socks' },
+        { id: 'coffee', label: t.addons.products.coffeeLabel, price: 35, unit: t.addons.each, description: t.addons.products.coffeeDesc, mode: 'counter', maxPerGuest: 4, icon: 'drink-cup' },
+        { id: 'extra_person', label: t.addons.products.extraPersonLabel, price: 179, unit: t.addons.perPerson, description: t.addons.products.extraPersonDesc, mode: 'counter', maxPerGuest: 4, icon: 'add-guest' },
+        { id: 'lock', label: t.addons.products.lockLabel, price: 40, unit: t.addons.each, description: t.addons.products.lockDesc, mode: 'counter', maxPerGuest: 1, icon: 'padlock' },
     ];
 
     const minQty = useMemo(() => {
@@ -135,7 +136,6 @@ export const AddonsOffer = ({ guestCount, existingAddons, onContinue }: AddonsOf
             <div className="flex-1 overflow-y-auto -mx-1 px-1">
                 <div className="w-full flex flex-col gap-1.5">
                     {CATALOG.map(entry => {
-                        const Icon = entry.Icon;
                         const value = qty[entry.id];
                         const max = Math.max(1, guestCount * entry.maxPerGuest);
                         const locked = minQty[entry.id];
@@ -152,7 +152,7 @@ export const AddonsOffer = ({ guestCount, existingAddons, onContinue }: AddonsOf
                             >
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                                        <Icon className={`flex-shrink-0 ${isHighlighted ? 'text-primary' : 'text-muted'}`} size={18} />
+                                        <JumpyardIcon name={entry.icon} className="w-8 h-8 flex-shrink-0" />
                                         <div className="min-w-0">
                                             <p className="text-foreground font-bold italic text-sm">{entry.label}</p>
                                             <p className="text-muted text-[11px]">

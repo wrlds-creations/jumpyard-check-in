@@ -1,9 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search } from 'lucide-react';
 import { lookupBooking } from '@/flow/mockClient';
 import { useTranslation } from '@/context/LanguageContext';
+import { JumpyardIcon } from '@/components/JumpyardIcon';
 import type { Booking } from '@/flow/types';
 
 interface BookingLookupProps {
@@ -40,6 +40,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
+            <JumpyardIcon name="scan-frame" className="w-16 h-16 mx-auto mb-2" />
             <h1 className="text-xl font-black italic uppercase text-foreground mb-1 text-center">
                 {t.lookup.title}
             </h1>
@@ -82,7 +83,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
                     </span>
                 ) : (
                     <>
-                        <Search size={18} />
+                        <JumpyardIcon name="booking-card" className="w-6 h-6 bg-white rounded-md" />
                         {t.lookup.cta}
                     </>
                 )}
