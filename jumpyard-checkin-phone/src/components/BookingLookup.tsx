@@ -40,7 +40,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <JumpyardIcon name="scan-frame" className="w-16 h-16 mx-auto mb-2" />
+            <JumpyardIcon name="visit-calendar" className="w-16 h-16 mx-auto mb-2" />
             <h1 className="text-xl font-black italic uppercase text-foreground mb-1 text-center">
                 {t.lookup.title}
             </h1>
@@ -82,10 +82,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
                         {t.common.processing}
                     </span>
                 ) : (
-                    <>
-                        <JumpyardIcon name="booking-card" className="w-6 h-6 bg-white rounded-md" />
-                        {t.lookup.cta}
-                    </>
+                    t.lookup.cta
                 )}
             </button>
         </motion.div>

@@ -25,6 +25,7 @@ export type JumpyardIconName =
     | 'success-check'
     | 'time'
     | 'trampoline-jump'
+    | 'visit-calendar'
     | 'visitor-wristband'
     | 'warning'
     | 'zipline';
