@@ -41,6 +41,6 @@ export const JumpyardIcon = ({ name, alt = '', className = 'w-8 h-8' }: Jumpyard
         alt={alt}
         aria-hidden={alt ? undefined : true}
         draggable={false}
-        className={`object-contain ${className}`}
+        className={`object-contain origin-center scale-125 ${className}`}
     />
 );
