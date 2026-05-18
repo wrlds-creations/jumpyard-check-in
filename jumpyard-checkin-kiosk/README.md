@@ -1,33 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# JumpYard Check-in Kiosk
 
-## Getting Started
+In-park kiosk flow for JumpYard Next check-in.
 
-First, run the development server:
+## Scope
+
+- Start and idle screens
+- Booking check
+- Ticket purchase flow
+- Booking summary
+- Safety video and attestations
+- SkyRider attestation
+- Add-ons and payment handoff
+- Code presentation
+- Success and print/handoff guidance
+
+The current app uses local mock flow data in `src/flow/mockClient.ts`. Replace that adapter with real JumpYard/JY Cloud integrations when contracts are confirmed.
+
+## Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Validation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run build
+```
 
-## Learn More
+## Deployment
 
-To learn more about Next.js, take a look at the following resources:
+The kiosk deployment target is still `TBD` in the root project context. The existing Dockerfile expects a standalone Next.js output, but `next.config.ts` currently uses the default config. Resolve that mismatch before relying on Docker builds.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Notes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Shared project context lives in the repository root.
+- Do not add real credentials to this app.
+- Static media lives in `public/`.
 
 ## Deploy on Vercel
 

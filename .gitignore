@@ -7,4 +7,4 @@ node_modules
 *.tsbuildinfo
 next-env.d.ts
 npm-debug.log*
-.claude\nskills\nAGENTS.md
+.claude/
