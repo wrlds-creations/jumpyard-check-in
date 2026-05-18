@@ -2,103 +2,104 @@
 
 ## Ticket ID
 
-T0000
+T0001
 
 ## Goal
 
-Set up the repository source-of-truth documents for the WRLDS Codex workflow.
+Create a safe Roller Playground environment guard and Roller client skeleton without making real API calls.
 
 ## Dependencies
 
-None.
+- T0000 completed.
+- No Roller API credentials required yet.
 
 ## Allowed Areas
 
-- `AGENTS.md`
+- `CODEX_TASK.md`
 - `PROJECT_CONTEXT.md`
 - `DECISIONS.md`
-- `CODEX_TASK.md`
 - `REPO_CURRENT_STATE.md`
 - `FOLLOWUPS.md`
-- `AWS_RESOURCES.md`
 - `TEST_PLAN.md`
+- `.env.example`
+- `package.json`
+- Existing config/server/lib/api folders only if needed for the Roller skeleton
+- New Roller-related files only if they fit the existing repo structure
 
 ## Do Not Touch
 
-- App source code
-- UI files
-- Package dependencies
-- Build configuration
-- Deployment configuration
-- Roller integration code
+- UI design
+- Existing check-in app flow
+- Assets
+- Deliverables
+- Payment logic
+- Redeem logic
 - AWS resources
+- Production credentials
+- Any unrelated refactor
 
 ## Requirements
 
-1. Create any missing source-of-truth files:
-   - `AGENTS.md`
-   - `PROJECT_CONTEXT.md`
-   - `DECISIONS.md`
-   - `CODEX_TASK.md`
-   - `REPO_CURRENT_STATE.md`
-   - `FOLLOWUPS.md`
-   - `AWS_RESOURCES.md`
-   - `TEST_PLAN.md`
-2. Update `AGENTS.md` with Codex working rules:
-   - Work on one ticket only.
-   - Do not broaden scope.
-   - Do not implement future features.
-   - Do not refactor unrelated code.
-   - Do not commit unless explicitly requested.
-   - Do not push to main.
-   - Put out-of-scope findings in `FOLLOWUPS.md`.
-   - Update `REPO_CURRENT_STATE.md` after the ticket.
-3. Update `PROJECT_CONTEXT.md` with:
-   - Project name: JumpYard Next.
-   - Sprint 1 focus: connect the existing check-in app to Roller Playground through a server-side layer.
-   - Target architecture: check-in app -> JumpYard Cloud/server API -> Roller API.
-   - Roller is source of truth for bookings.
-   - JumpYard Cloud/server API owns pilot state such as safety status, handoff code and session status.
-   - Frontend must not call Roller directly in the real architecture.
-4. Add this decision to `DECISIONS.md`:
-   - `D0001`: Frontend must not call Roller directly in production architecture.
-5. Initialize `REPO_CURRENT_STATE.md` with:
-   - Current status: source-of-truth setup in progress.
-   - Completed tickets: none.
-   - Current ticket: T0000.
-   - Known validation commands: list existing commands if obvious, otherwise write "Unknown".
-   - Recommended next ticket: T0001 Roller Playground connectivity spike.
-6. Initialize `FOLLOWUPS.md` with an empty section for future findings.
-7. Initialize `AWS_RESOURCES.md` with:
-   - No AWS resources created yet.
-8. Initialize `TEST_PLAN.md` with placeholder sections:
-   - Automated validation
-   - Manual validation
-   - Roller Playground validation
-   - Staff handoff validation
+1. Add `.env.example` entries for Roller Playground config:
+   - `ROLLER_ENV=playground`
+   - `ROLLER_BASE_URL=`
+   - `ROLLER_CLIENT_ID=`
+   - `ROLLER_CLIENT_SECRET=`
+2. Add a Roller environment validation helper that:
+   - Requires `ROLLER_ENV` to be `playground`
+   - Requires `ROLLER_BASE_URL` to clearly point to a playground environment
+   - Fails fast if the URL looks like production/live
+   - Never logs secrets
+3. Add a minimal Roller client skeleton:
+   - Reads config from env
+   - Exposes a placeholder client/config object
+   - Does not call Roller yet
+   - Does not require real credentials to run basic validation
+4. Add a validation command if it fits the repo conventions, for example:
+   - `npm run roller:env:check`
+5. Update `DECISIONS.md` with:
+   - `D0002`: Roller integration must fail closed unless configured for Playground.
+6. Update `REPO_CURRENT_STATE.md` with:
+   - T0001 in progress/completed status
+   - New script or validation command
+   - Next recommended ticket: `T0002 Roller Playground credential smoke test`
+7. Update `TEST_PLAN.md` with:
+   - Env validation test
+   - Production URL rejection test
+   - Missing credentials behavior
 
 ## Non-Goals
 
-- Do not implement Roller API calls.
-- Do not create backend endpoints.
-- Do not create AWS resources.
-- Do not modify app functionality.
-- Do not add payment logic.
-- Do not add redeem logic.
+- Do not connect to Roller.
+- Do not create bookings.
+- Do not read bookings.
+- Do not implement payment.
+- Do not implement redeem.
+- Do not create AWS infrastructure.
+- Do not change app UI.
 
 ## Acceptance Criteria
 
-- All source-of-truth files exist.
-- `AGENTS.md` clearly explains how Codex should work.
-- `PROJECT_CONTEXT.md` clearly states Sprint 1 scope and target architecture.
-- `DECISIONS.md` contains `D0001`.
-- `REPO_CURRENT_STATE.md` recommends `T0001` as the next ticket.
-- No app code was changed.
+- Repo has documented Roller Playground env variables.
+- Validation passes with safe Playground-looking config.
+- Validation fails with production/live-looking URL.
+- No secrets are committed.
+- `npm run validate` passes.
+- Any added Roller-specific validation command passes.
 
 ## Manual Verification
 
-Open each source-of-truth file and confirm a new Codex session can understand the project without chat history.
+Run the Roller env check with:
+
+1. Missing env values
+2. Playground-looking base URL
+3. Production-looking base URL
+
+Confirm production-looking config is rejected.
 
 ## Automated Validation
 
-Run markdown formatting or linting only if the repo already has such commands. Otherwise state that no automated validation was available for this docs-only ticket.
+Run:
+
+- `npm run validate`
+- Any new Roller env validation command

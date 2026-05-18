@@ -7,6 +7,7 @@ This file is the source of truth for meaningful project decisions. Add entries w
 | ID | Date | Decision | Rationale | Impact | Revisit Trigger |
 |---|---|---|---|---|---|
 | `D0001` | 2026-05-18 | Frontend must not call Roller directly in production architecture. | Roller credentials must not be exposed in frontend. A server-side layer is needed for logging, retries, error handling, and controlled fallbacks. JumpYard Cloud/server API will own pilot operational state. | Production architecture uses `check-in app -> JumpYard Cloud/server API -> Roller API`. Frontend work must target server-owned contracts rather than Roller directly. | Revisit only if Roller provides a credential-safe frontend integration model and WRLDS explicitly approves an architecture change. |
+| `D0002` | 2026-05-18 | Roller integration must fail closed unless configured for Playground. | Sprint 1 starts against Roller Playground only. The integration should reject missing environment config, non-playground environments, and production/live-looking URLs before any Roller client can be used. | Roller validation blocks unsafe config early and keeps production credentials or endpoints out of local/dev validation. | Revisit when production Roller integration is explicitly scoped and approved. |
 
 ## Active Constraints
 
@@ -14,6 +15,7 @@ This file is the source of truth for meaningful project decisions. Add entries w
 |---|---|---|---|
 | Roller is the source of truth for bookings. | Sprint 1 project context | Booking validation must reconcile with Roller. | Revisit if JumpYard chooses another booking system. |
 | JumpYard Cloud/server API owns pilot operational state. | Sprint 1 project context | Safety status, handoff code, and session status should not be owned by the frontend. | Revisit after pilot state model is finalized. |
+| Roller config must be Playground-only for Sprint 1. | D0002 | Roller client creation fails unless `ROLLER_ENV=playground` and base URL is clearly Playground. | Revisit when production Roller integration is approved. |
 | Work one scoped ticket at a time. | WRLDS Codex workflow | Prevents implementation scope from expanding into future tickets. | Revisit only if workflow changes. |
 
 ## Deferred Decisions

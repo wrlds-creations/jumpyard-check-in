@@ -26,6 +26,7 @@ check-in app -> JumpYard Cloud/server API -> Roller API
 - The frontend must not call Roller directly in the real architecture.
 - Roller credentials must stay server-side.
 - Server-side integration should provide controlled logging, retries, error handling, and fallbacks.
+- Roller integration must fail closed unless it is explicitly configured for Playground.
 
 ## Current Repository Shape
 
@@ -49,6 +50,14 @@ check-in app -> JumpYard Cloud/server API -> Roller API
 - Session status: JumpYard Cloud/server API.
 - Payment, redemption, and additional operational state: `TBD`
 
+## Roller Playground Configuration
+
+- `ROLLER_ENV` must be `playground`.
+- `ROLLER_BASE_URL` must clearly point to a Playground environment.
+- Production/live-looking Roller URLs must be rejected before any client is created.
+- `ROLLER_CLIENT_ID` and `ROLLER_CLIENT_SECRET` are optional for basic environment validation during T0001.
+- Roller secrets must never be logged or committed.
+
 ## Non-Goals For Current Ticket
 
 - Do not implement Roller API calls.
@@ -62,6 +71,6 @@ check-in app -> JumpYard Cloud/server API -> Roller API
 
 | Question | Why It Matters | Owner | Status |
 |---|---|---|---|
-| What exact Roller Playground credentials and API scopes are available? | Needed for T0001 connectivity spike. | `TBD` | `Open` |
+| What exact Roller Playground credentials and API scopes are available? | Needed for T0002 credential smoke test. | `TBD` | `Open` |
 | Where will the JumpYard Cloud/server API run during Sprint 1? | Determines local/server architecture and deployment path. | `TBD` | `Open` |
 | Which booking lookup fields should the check-in app use first? | Defines the first Roller integration contract. | `TBD` | `Open` |

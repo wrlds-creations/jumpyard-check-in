@@ -5,16 +5,17 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-18
-- Current branch: `codex/t0000-source-of-truth`
-- Current status: Source-of-truth setup in progress.
-- Current ticket: `T0000`
-- Completed tickets: None.
-- Recommended next ticket: `T0001 Roller Playground connectivity spike`
+- Current branch: `codex/t0001-roller-env-guard`
+- Current status: T0001 Roller Playground environment guard completed.
+- Current ticket: `T0001`
+- Completed tickets: `T0000`
+- Recommended next ticket: `T0002 Roller Playground credential smoke test`
 
 ## Current Structure
 
 ```text
 .
+|-- .env.example
 |-- AGENTS.md
 |-- PROJECT_CONTEXT.md
 |-- DECISIONS.md
@@ -23,6 +24,9 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |-- FOLLOWUPS.md
 |-- AWS_RESOURCES.md
 |-- TEST_PLAN.md
+|-- scripts/
+|   |-- check-roller-env.js
+|   `-- roller-client.js
 |-- jumpyard-checkin-phone/
 |-- jumpyard-checkin-kiosk/
 `-- jumpyard-checkin-admin/
@@ -32,38 +36,42 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 | Command | Purpose | Notes |
 |---|---|---|
-| `npm run validate` | Validate root WRLDS workflow files and skills. | Exists at repository root. |
-| `cd jumpyard-checkin-phone && npm run lint` | Lint phone app. | Existing app command; not required for T0000 docs-only ticket. |
-| `cd jumpyard-checkin-phone && npm run build` | Build phone app. | Existing app command; not required for T0000 docs-only ticket. |
-| `cd jumpyard-checkin-kiosk && npm run lint` | Lint kiosk app. | Existing app command; not required for T0000 docs-only ticket. |
-| `cd jumpyard-checkin-kiosk && npm run build` | Build kiosk app. | Existing app command; not required for T0000 docs-only ticket. |
-| `cd jumpyard-checkin-admin && npm run lint` | Lint admin app. | Existing app command; not required for T0000 docs-only ticket. |
-| `cd jumpyard-checkin-admin && npm run build` | Build admin app. | Existing app command; not required for T0000 docs-only ticket. |
+| `npm run validate` | Validate root WRLDS workflow files and skills. | Existing repository command. |
+| `npm run roller:env:check` | Validate Roller env guard against current environment variables. | Requires `ROLLER_ENV=playground` and a Playground-looking `ROLLER_BASE_URL`; client credentials are optional for basic validation. |
+| `cd jumpyard-checkin-phone && npm run lint` | Lint phone app. | Existing app command; not required for T0001 unless app code changes. |
+| `cd jumpyard-checkin-phone && npm run build` | Build phone app. | Existing app command; not required for T0001 unless app code changes. |
+| `cd jumpyard-checkin-kiosk && npm run lint` | Lint kiosk app. | Existing app command; not required for T0001 unless app code changes. |
+| `cd jumpyard-checkin-kiosk && npm run build` | Build kiosk app. | Existing app command; not required for T0001 unless app code changes. |
+| `cd jumpyard-checkin-admin && npm run lint` | Lint admin app. | Existing app command; not required for T0001 unless app code changes. |
+| `cd jumpyard-checkin-admin && npm run build` | Build admin app. | Existing app command; not required for T0001 unless app code changes. |
 
 ## Completed Tickets
 
-None.
+| Ticket | Summary | Completed On | Notes |
+|---|---|---|---|
+| `T0000` | Set up source-of-truth docs for WRLDS Codex workflow. | 2026-05-18 | Committed as `5655fb1`. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0000` | Set up the repository source-of-truth documents for the WRLDS Codex workflow. | In progress | Docs-only ticket. Do not modify app functionality. |
+| `T0001` | Create a safe Roller Playground environment guard and Roller client skeleton without making real API calls. | Completed | No Roller API calls, bookings, payments, redeem logic, UI changes, or AWS resources. |
 
 ## Validation Status
 
 - Automated validation: `npm run validate` passed on 2026-05-18.
+- Roller env validation: Missing env failed as expected, Playground-looking config passed without credentials, production/live-looking URL failed as expected.
 - Manual validation: Pending project-owner review.
-- App lint/build: Not required for T0000 docs-only ticket.
+- App lint/build: Not required for T0001 because app code is not changed.
 
 ## Known Issues Summary
 
-- Roller Playground connectivity has not been implemented.
+- Roller Playground credential smoke test has not been implemented.
 - JumpYard Cloud/server API contract has not been defined.
 - Staff handoff/redeem flow integration has not been implemented.
 
 ## Open Questions
 
-- What server-side runtime should host the Sprint 1 JumpYard Cloud/server API?
+- What exact Roller Playground credential scopes are available for T0002?
 - Which Roller Playground endpoint should be used first for booking lookup?
 - Which fields should define the first staff handoff code contract?
