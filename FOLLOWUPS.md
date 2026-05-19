@@ -10,11 +10,13 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-009` | `T0003` | Roller clarification | Confirm which tenders work in the new add-on booking checkout flow: gift card, membership code, and multi-visit value. | High | `TBD` | Open |
 | `FU-010` | `T0003` | Product configuration | Identify which add-ons must be reconfigured from stock/add-on products to ticket/session products if JumpYard wants API-driven redemption and webhook counting. | High | `TBD` | Open |
 | `FU-011` | `T0003` | Roller clarification | Confirm the exact `POST /redemptions` response shape for full success, partial success, already redeemed, and invalid ticket cases. | Medium | `TBD` | Open |
-| `FU-012` | `T0003` | AWS setup | Confirm AWS account, region, environment name, owner, data classification, exportability, and cost center before creating JumpYard Cloud resources. | High | `TBD` | Open |
+| `FU-012` | `T0003` | AWS setup | Confirm AWS account, region, environment name, owner, data classification, exportability, and cost center before deploying JumpYard Cloud resources. | High | `TBD` | Open |
 | `FU-013` | `T0003` | Architecture validation | Load-test or simulate Roller one-call-per-second throttling before pilot traffic. | Medium | `TBD` | Open |
 | `FU-014` | `T0003` | Roller clarification | Confirm the preferred availability-display pattern for core jump-entry products and durations before implementing new booking UI logic. | Medium | `TBD` | Open |
 | `FU-015` | `T0003` | Data ingestion | Confirm Roller Data API endpoint, credentials, date range, and payload shape for the daily morning booking seed. | High | `TBD` | Open |
 | `FU-016` | `T0003` | Test data | Build a Playground-only internal seed tool that creates deterministic fake bookings for lookup, payment-required, wrong-date, redeemed, SkyRider, and add-product scenarios. | High | `TBD` | Open |
+| `FU-017` | `T0004` | AWS setup | Replace the example CDK config with a confirmed dev deployment config after AWS account, region, owner, data classification, exportability, and cost center are approved. | High | `TBD` | Open |
+| `FU-018` | `T0004` | Dependency security | Monitor `aws-cdk-lib` for a release that removes the bundled vulnerable `brace-expansion` dependency reported by `npm --prefix infra audit`; `npm audit fix` cannot currently repair it automatically. | Medium | `TBD` | Open |
 
 ## Resolved Followups
 

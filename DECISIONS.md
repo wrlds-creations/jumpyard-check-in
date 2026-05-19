@@ -16,6 +16,7 @@ This file is the source of truth for meaningful project decisions. Add entries w
 | `D0008` | 2026-05-19 | JumpYard Cloud should store minimal operational state and Roller ids, not full Roller-owned data. | Roller remains source of truth for bookings, products, payments, and ticket redemption. JumpYard needs audit, handoff, idempotency, and short-lived normalized state without unnecessary PII. | Aurora PostgreSQL should hold Roller snapshot tables, operational state, check-in attempts, handoff sessions, idempotency records, product cache metadata, webhook events, and event logs. | Revisit when compliance or reporting requirements require longer retention or richer local data. |
 | `D0009` | 2026-05-19 | JumpYard Cloud should maintain a local booking index from daily Data API seed, booking webhooks, and live REST confirmation. | Morning seed reduces peak-time dependency on live Roller calls, webhooks keep same-day changes fresh, and live lookup confirms check-in-critical state. Roller still remains source of truth. | Future implementation should add a BookingIndex and BookingSeedRun model, webhook idempotency, and reconciliation logic before relying on the phone flow at pilot scale. | Revisit if Roller Data API or webhook access is unavailable for the pilot. |
 | `D0010` | 2026-05-19 | Playground test bookings should be created by an internal seed tool, not by a public demo button in the phone check-in flow. | Test-data creation needs fake names/products/statuses without polluting guest UX or normal production flows. A protected server-side seed tool can encode Roller-required booking fields once and stay Playground-only. | Future implementation should add a Playground-only seed script or protected admin action that creates deterministic fake bookings through JumpYard Cloud. | Revisit if Roller provides a better native Playground fixture/reset mechanism. |
+| `D0011` | 2026-05-19 | JumpYard Cloud infrastructure should start as a deploy-blocked AWS CDK TypeScript foundation. | The project needs a scalable AWS shape before endpoint implementation, but real AWS creation must wait until account, region, owner, data classification, exportability, and cost metadata are confirmed. | T0004 adds CDK definitions and local synth validation only. Deploys remain blocked until WRLDS metadata and AWS account preflight are completed. | Revisit when first dev deploy metadata is confirmed. |
 
 ## Active Constraints
 
@@ -29,12 +30,13 @@ This file is the source of truth for meaningful project decisions. Add entries w
 | JumpYard Cloud is the server-side integration boundary. | D0004 | Phone app work should target JumpYard Cloud contracts rather than Roller contracts. | Revisit only if architecture changes. |
 | Check-in is ticket-level redemption. | D0006 | Redeem flows must resolve and operate on ticket ids. | Revisit if Roller API changes. |
 | Booking index is operational cache, not source of truth. | D0009 | Seed/webhook data can speed up lookup, but live Roller state still governs check-in writes. | Revisit if data ownership changes. |
+| CDK foundation is not a deploy approval. | D0011 | `infra/` may synthesize CloudFormation locally, but `cdk deploy` must not run until AWS metadata and account preflight are confirmed. | Revisit after first dev deploy approval. |
 
 ## Deferred Decisions
 
 | Decision | Why Deferred | Needed By | Owner |
 |---|---|---|---|
-| AWS account/region/environment metadata for first JumpYard Cloud deploy | T0003 proposes AWS target resources but does not create them. | Before T0004 AWS foundation. | `TBD` |
+| AWS account/region/environment metadata for first JumpYard Cloud deploy | T0004 defines deploy-blocked IaC only; real deploy still needs confirmed AWS metadata. | Before first `cdk deploy`. | `TBD` |
 | Add-on booking linking shape | T0003 selects a separate linked add-on booking for the pilot, but exact internal link fields and any Roller external reference/comment usage still need implementation detail. | Before add-product implementation. | `TBD` |
 | Multi-visit remaining-value model | Roller response says public REST lacks a clean live remaining-uses read path today. | Before multi-visit guest flow. | `TBD` |
 | Data API seed endpoint and payload shape | T0003 documents daily seed strategy, but exact Data API export details are not yet implemented. | Before booking index ingestion implementation. | `TBD` |

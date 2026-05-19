@@ -442,7 +442,7 @@ Rules:
 
 Recommended next tickets:
 
-1. `T0004 JumpYard Cloud AWS foundation`: CDK skeleton, tags, API Gateway, Lambda, Secrets Manager placeholders, Aurora PostgreSQL, S3 raw payload bucket, SQS/EventBridge queueing, no Roller writes.
+1. `T0004 JumpYard Cloud AWS foundation`: deploy-blocked CDK skeleton, tags, API Gateway, Lambda placeholders, Secrets Manager placeholders, SSM config, Aurora PostgreSQL, S3 raw payload bucket, SQS/EventBridge queueing, no Roller writes. Completed locally; not deployed.
 2. `T0005 Booking index ingestion contract`: define daily Data API seed, booking webhook processing, and live lookup reconciliation in implementation-ready detail.
 3. `T0006 Playground test booking seed tool`: create deterministic fake Playground bookings through JumpYard Cloud/server-side scripts.
 4. `T0007 Booking lookup endpoint`: implement `POST /v1/check-in/lookup` against Roller Playground.

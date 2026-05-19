@@ -8,6 +8,8 @@
     "validate:template": "node scripts/validate-template.js",
     "validate:skills": "node scripts/validate-skills.js",
     "validate:aws": "node scripts/validate-aws-tags.js",
+    "infra:check": "npm --prefix infra run check",
+    "infra:synth": "npm --prefix infra run synth:example",
     "roller:env:check": "node scripts/check-roller-env.js",
     "roller:smoke": "node scripts/roller-smoke.js"
   }

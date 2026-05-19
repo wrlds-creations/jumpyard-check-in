@@ -52,6 +52,17 @@ npm run validate
 
 The root validation scripts use Node.js built-ins and do not install dependencies.
 
+JumpYard Cloud infrastructure validation:
+
+```bash
+npm install
+npm --prefix infra install
+npm run infra:check
+npm run infra:synth
+```
+
+The `infra/` CDK app is synth-only until AWS account metadata and WRLDS tags are confirmed. Do not run `cdk deploy` from the example config.
+
 ## Deployment Notes
 
 - `jumpyard-checkin-phone` is configured for static export with unoptimized images.

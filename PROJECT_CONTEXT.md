@@ -21,6 +21,8 @@ check-in app -> JumpYard Cloud/server API -> Roller API
 
 The current Sprint 1 API and data contract is documented in `JUMPYARD_CLOUD_CONTRACT.md`.
 
+The first deploy-blocked AWS foundation is defined as a CDK TypeScript app in `infra/`. It is Infrastructure as Code only; no AWS resources have been created yet.
+
 ## Architecture Principles
 
 - Roller is the source of truth for bookings.
@@ -35,6 +37,7 @@ The current Sprint 1 API and data contract is documented in `JUMPYARD_CLOUD_CONT
 - `jumpyard-checkin-phone/`: guest-facing phone check-in web app.
 - `jumpyard-checkin-kiosk/`: in-park kiosk check-in web app.
 - `jumpyard-checkin-admin/`: staff PWA for redemption and handoff workflows.
+- `infra/`: AWS CDK foundation for JumpYard Cloud, currently synth-only and not deployed.
 
 ## Delivery Workflow
 
@@ -51,6 +54,7 @@ The current Sprint 1 API and data contract is documented in `JUMPYARD_CLOUD_CONT
 - React
 - Tailwind CSS
 - npm per app directory
+- AWS CDK TypeScript for JumpYard Cloud infrastructure
 
 ## Current Data Ownership Model
 
@@ -99,20 +103,20 @@ The current Sprint 1 API and data contract is documented in `JUMPYARD_CLOUD_CONT
 
 ## Non-Goals For Current Ticket
 
-- Do not implement new API endpoints.
+- Do not implement API business logic.
 - Do not create, update, or redeem Roller bookings.
-- Do not create backend endpoints.
 - Do not create AWS resources.
 - Do not modify app functionality.
 - Do not add payment logic.
 - Do not add redeem logic.
+- Do not deploy AWS infrastructure.
 
 ## Open Questions
 
 | Question | Why It Matters | Owner | Status |
 |---|---|---|---|
 | Which Roller Playground write scopes are enabled for create booking, draft booking, payment, and redemption? | Needed before T0004+ write spikes. | `TBD` | `Open` |
-| What AWS account, region, environment name, owner, data classification, exportability, and cost center should be used for the first JumpYard Cloud deploy? | Required before AWS resources can be created. | `TBD` | `Open` |
+| What AWS account, region, environment name, owner, data classification, exportability, and cost center should be used for the first JumpYard Cloud deploy? | Required before AWS resources can be deployed. | `TBD` | `Open` |
 | What is the best field or internal model for linking an original booking to a separate add-on booking? | Required for add-product implementation. | `TBD` | `Open` |
 | Which products need reconfiguration from stock/add-on to ticket/session products for API-driven redemption? | Stock/add-on products are excluded from Roller ticket redemption webhook/API flow. | `TBD` | `Open` |
 | Which Roller Data API endpoint and date range should power the daily morning booking seed? | Required before booking index ingestion implementation. | `TBD` | `Open` |
