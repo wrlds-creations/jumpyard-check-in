@@ -19,6 +19,8 @@ The target architecture is:
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
+The current Sprint 1 API and data contract is documented in `JUMPYARD_CLOUD_CONTRACT.md`.
+
 ## Architecture Principles
 
 - Roller is the source of truth for bookings.
@@ -53,10 +55,24 @@ check-in app -> JumpYard Cloud/server API -> Roller API
 ## Current Data Ownership Model
 
 - Booking data: Roller.
-- Safety status: JumpYard Cloud/server API.
-- Handoff code: JumpYard Cloud/server API.
-- Session status: JumpYard Cloud/server API.
-- Payment, redemption, and additional operational state: `TBD`
+- Product catalog, availability, payment state, booking status, and ticket redemption state: Roller.
+- Safety status, handoff code, staff handoff status, idempotency, and internal audit trail: JumpYard Cloud/server API.
+- Short-lived normalized booking snapshots may be stored by JumpYard Cloud for UX, audit, and retry support, but Roller remains the source of truth.
+- JumpYard Cloud should store Roller ids and minimal operational data, not full raw Roller payloads or unnecessary PII.
+
+## Phone-First Flow Targets
+
+- `F1`: create a new booking through JumpYard Cloud using Roller draft/cost/payment patterns.
+- `F2`: create a booking and check in by resolving Roller ticket ids and redeeming tickets server-side.
+- `F3`: check in an existing booking and add products by creating a separate linked add-on booking, then linking original booking and add-on booking inside JumpYard Cloud.
+
+## Booking Index Strategy
+
+- JumpYard Cloud should use a daily Roller Data API seed each morning to preload the operational booking index.
+- Roller booking webhooks should update same-day booking changes after the seed.
+- Live Roller REST lookup should still confirm check-in-critical state before writes such as redemption.
+- The booking index is an operational cache/index, not the source of truth.
+- Playground test bookings should be created by a protected internal seed tool or admin-only action, not by a public demo button in the phone check-in flow.
 
 ## Roller Playground Configuration
 
@@ -73,9 +89,18 @@ check-in app -> JumpYard Cloud/server API -> Roller API
 - The default read endpoint path is `/products`; override with `ROLLER_SMOKE_PATH` only if Roller confirms a different harmless read path.
 - The script reports status and response shape only; it does not print credentials, access tokens, or full Roller response payloads.
 
+## Confirmed Roller Playground Facts
+
+- `GET /products` returned 96 products in Playground on 2026-05-19.
+- `GET /bookings/5001370` returned HTTP 200 in Playground and accepted the booking reference as the path id.
+- `GET /bookings?date=2026-05-19` returned one booking in Playground on 2026-05-19.
+- Known Playground booking for lookup testing: booking reference `5001370`, unique id `dbba266d-0951-4706-9adf-6c9d05edffbf`.
+- Known Playground ticket from that booking: `5001370-21265504`.
+
 ## Non-Goals For Current Ticket
 
-- Do not implement Roller API calls.
+- Do not implement new API endpoints.
+- Do not create, update, or redeem Roller bookings.
 - Do not create backend endpoints.
 - Do not create AWS resources.
 - Do not modify app functionality.
@@ -86,7 +111,8 @@ check-in app -> JumpYard Cloud/server API -> Roller API
 
 | Question | Why It Matters | Owner | Status |
 |---|---|---|---|
-| What exact Roller Playground credentials and API scopes are available? | Needed for T0002 credential smoke test. | `TBD` | `Open` |
-| Where will the JumpYard Cloud/server API run during Sprint 1? | Determines local/server architecture and deployment path. | `TBD` | `Open` |
-| Which booking lookup fields should the check-in app use first? | Defines the first Roller integration contract. | `TBD` | `Open` |
-| What is the confirmed safest Roller read endpoint for smoke tests? | The script defaults to `/products`, but Roller endpoint shape should be confirmed from authenticated docs. | `TBD` | `Open` |
+| Which Roller Playground write scopes are enabled for create booking, draft booking, payment, and redemption? | Needed before T0004+ write spikes. | `TBD` | `Open` |
+| What AWS account, region, environment name, owner, data classification, exportability, and cost center should be used for the first JumpYard Cloud deploy? | Required before AWS resources can be created. | `TBD` | `Open` |
+| What is the best field or internal model for linking an original booking to a separate add-on booking? | Required for add-product implementation. | `TBD` | `Open` |
+| Which products need reconfiguration from stock/add-on to ticket/session products for API-driven redemption? | Stock/add-on products are excluded from Roller ticket redemption webhook/API flow. | `TBD` | `Open` |
+| Which Roller Data API endpoint and date range should power the daily morning booking seed? | Required before booking index ingestion implementation. | `TBD` | `Open` |
