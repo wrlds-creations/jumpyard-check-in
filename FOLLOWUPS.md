@@ -17,6 +17,11 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-016` | `T0003` | Test data | Build a Playground-only internal seed tool that creates deterministic fake bookings for lookup, payment-required, wrong-date, redeemed, SkyRider, and add-product scenarios. | High | `TBD` | Open |
 | `FU-017` | `T0004` | AWS setup | Replace the example CDK config with a confirmed dev deployment config after AWS account, region, owner, data classification, exportability, and cost center are approved. | High | `TBD` | Open |
 | `FU-018` | `T0004` | Dependency security | Monitor `aws-cdk-lib` for a release that removes the bundled vulnerable `brace-expansion` dependency reported by `npm --prefix infra audit`; `npm audit fix` cannot currently repair it automatically. | Medium | `TBD` | Open |
+| `FU-019` | `T0005` | Data ingestion | Confirm exact Data API query parameters, paging, credentials, and date-window support for Get bookings, Get tickets, Get payments, and Get customers in Playground. | High | `TBD` | Open |
+| `FU-020` | `T0005` | Webhook security | Confirm Roller webhook event id, signature/verification method, retry behavior, and event names before exposing webhook intake beyond dev. | High | `TBD` | Open |
+| `FU-021` | `T0005` | Data retention | Confirm retention period for normalized booking snapshots, event logs, sync runs, and any approved raw payload storage. | Medium | `TBD` | Open |
+| `FU-022` | `T0005` | Ingestion freshness | Confirm operational freshness thresholds for lookup display, SMS readiness, and mandatory live refresh before redeem. | Medium | `TBD` | Open |
+| `FU-023` | `T0005` | AWS setup | Collect confirmed WRLDS deploy metadata for T0006: AWS account, region, environment, owner, data classification, exportability, and cost center. | High | `TBD` | Open |
 
 ## Resolved Followups
 

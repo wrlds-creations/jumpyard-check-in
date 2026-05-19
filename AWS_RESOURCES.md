@@ -10,6 +10,8 @@ T0003 proposes the target JumpYard Cloud architecture only. These resources are 
 
 T0004 adds a CDK TypeScript foundation in `infra/`, but it has not been deployed. The CDK app can synthesize CloudFormation locally and must not be deployed until AWS account metadata and WRLDS tags are confirmed.
 
+T0005 defines the booking index ingestion contract only. It does not create, deploy, import, or change AWS resources.
+
 ## Resource Inventory
 
 | Resource Name | AWS Service | Environment | Region | Managed By | Notes |
