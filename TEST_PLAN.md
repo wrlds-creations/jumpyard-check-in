@@ -43,6 +43,7 @@ Use this file to define validation for the current project or milestone.
 | AWS target | Proposed AWS resources are listed without creating resources. | Documented | AWS metadata still required before T0004. |
 | Booking index strategy | Daily Data API seed, booking webhook updates, and live REST confirmation are documented as separate responsibilities. | Documented | Implementation pending. |
 | Playground test data | Test bookings are created by protected internal tooling, not public phone UI. | Documented | Implementation pending. |
+| Booking index ingestion contract | Daily seed, webhook intake/enrichment, and live REST reconciliation are documented separately. | Documented | See `BOOKING_INDEX_INGESTION_CONTRACT.md`. |
 
 ## AWS Foundation Validation
 
@@ -52,6 +53,17 @@ Use this file to define validation for the current project or milestone.
 | CDK example synth | `npm run infra:synth` produces a template using `infra/config/dev.example.json`. | Passed | Example config is not approved for deploy. |
 | Placeholder handlers | Lambda inline code returns `501` and does not call Roller. | Passed | Source uses inline placeholder code only. |
 | No AWS creation | No `cdk deploy` is run and `AWS_RESOURCES.md` keeps inventory empty. | Passed | Required for T0004. |
+
+## Booking Index Ingestion Validation
+
+| Test | Expected Result | Status | Notes |
+|---|---|---|---|
+| Daily seed contract review | Get bookings, Get tickets, Get payments, and Get customers are identified as the expected source set. | Documented | T0005 contract only. |
+| Webhook contract review | Booking webhook is treated as a same-day signal with dedupe, normalized event state, and enrichment rules. | Documented | T0005 contract only. |
+| Live refresh contract review | `GET /bookings/{id}` remains authoritative before check-in-critical writes. | Documented | T0005 contract only. |
+| Attendance separation | Get attendance is excluded from expected-guest seed and reserved for actual arrival/redeem reconciliation. | Documented | T0005 contract only. |
+| PII/raw payload review | Raw payload storage is deferred and normalized storage is preferred. | Documented | T0005 contract only. |
+| Roadmap review | T0006 deploys AWS dev before schema, seed tooling, lookup endpoint, daily seed, and webhook implementation. | Documented | No AWS deploy in T0005. |
 
 ## Staff Handoff Validation
 

@@ -23,6 +23,8 @@ The current Sprint 1 API and data contract is documented in `JUMPYARD_CLOUD_CONT
 
 The first deploy-blocked AWS foundation is defined as a CDK TypeScript app in `infra/`. It is Infrastructure as Code only; no AWS resources have been created yet.
 
+The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
+
 ## Architecture Principles
 
 - Roller is the source of truth for bookings.
@@ -77,6 +79,24 @@ The first deploy-blocked AWS foundation is defined as a CDK TypeScript app in `i
 - Live Roller REST lookup should still confirm check-in-critical state before writes such as redemption.
 - The booking index is an operational cache/index, not the source of truth.
 - Playground test bookings should be created by a protected internal seed tool or admin-only action, not by a public demo button in the phone check-in flow.
+- Daily seed should use Get bookings, Get tickets, Get payments, and Get customers as the expected source set.
+- Get attendance is for actual arrival/redeem reconciliation, not for seeding expected guests.
+- Webhook payloads may be sufficient when configured with booking detail and payments, but JumpYard Cloud should enrich from live booking detail when data is incomplete, suspicious, stale, or check-in-critical.
+
+## Confirmed Implementation Roadmap
+
+After T0005 is merged, the next tickets should proceed in this order:
+
+| Ticket | Goal | Why This Order |
+|---|---|---|
+| `T0006 AWS dev deploy` | Deploy the CDK foundation to a real AWS dev environment after WRLDS metadata is confirmed. | Gives the project a real server/API/database environment before backend logic is built. |
+| `T0007 Aurora schema/migrations` | Create the ingestion and operational tables in Aurora. | Backend endpoints and jobs need durable tables before they can store state. |
+| `T0008 Playground test booking seed tool` | Create deterministic Roller Playground test bookings through protected server-side tooling. | Reliable test scenarios are needed before validating lookup and check-in flows. |
+| `T0009 Booking lookup endpoint` | Implement `POST /v1/check-in/lookup` against Roller Playground and local index shape. | First real JumpYard Cloud API behavior for the phone flow. |
+| `T0010 Daily seed job` | Implement the Roller Data API seed into Aurora. | Fills the booking index automatically for operating days. |
+| `T0011 Booking webhook intake` | Implement webhook intake, idempotency, and enrichment. | Keeps the booking index fresh after the morning seed. |
+
+Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
 ## Roller Playground Configuration
 
@@ -120,3 +140,4 @@ The first deploy-blocked AWS foundation is defined as a CDK TypeScript app in `i
 | What is the best field or internal model for linking an original booking to a separate add-on booking? | Required for add-product implementation. | `TBD` | `Open` |
 | Which products need reconfiguration from stock/add-on to ticket/session products for API-driven redemption? | Stock/add-on products are excluded from Roller ticket redemption webhook/API flow. | `TBD` | `Open` |
 | Which Roller Data API endpoint and date range should power the daily morning booking seed? | Required before booking index ingestion implementation. | `TBD` | `Open` |
+| Which webhook event id, signature, and payload fields does Roller provide in Playground and production? | Required before exposing webhook intake beyond local/dev testing. | `TBD` | `Open` |

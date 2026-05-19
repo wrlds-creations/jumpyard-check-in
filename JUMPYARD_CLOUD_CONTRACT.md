@@ -51,6 +51,8 @@ T0003 defines contracts for three target flows:
 
 ## Booking Data Ingestion Strategy
 
+Implementation-ready ingestion detail is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
+
 JumpYard Cloud should not depend only on live lookups at check-in time. The scalable pattern is:
 
 ```text
@@ -443,12 +445,13 @@ Rules:
 Recommended next tickets:
 
 1. `T0004 JumpYard Cloud AWS foundation`: deploy-blocked CDK skeleton, tags, API Gateway, Lambda placeholders, Secrets Manager placeholders, SSM config, Aurora PostgreSQL, S3 raw payload bucket, SQS/EventBridge queueing, no Roller writes. Completed locally; not deployed.
-2. `T0005 Booking index ingestion contract`: define daily Data API seed, booking webhook processing, and live lookup reconciliation in implementation-ready detail.
-3. `T0006 Playground test booking seed tool`: create deterministic fake Playground bookings through JumpYard Cloud/server-side scripts.
-4. `T0007 Booking lookup endpoint`: implement `POST /v1/check-in/lookup` against Roller Playground.
-5. `T0008 New booking draft spike`: implement quote/draft for one safe Playground product.
-6. `T0009 Redeem spike`: implement ticket-level redemption in Playground behind explicit guard.
-7. `T0010 Existing booking add-product spike`: implement separate linked add-on booking creation in Playground and link it to the original booking in JumpYard Cloud.
+2. `T0005 Booking index ingestion contract`: define daily Data API seed, booking webhook processing, and live lookup reconciliation in implementation-ready detail. Completed locally; not implemented.
+3. `T0006 AWS dev deploy`: confirm WRLDS metadata and deploy the CDK foundation to a real AWS dev environment.
+4. `T0007 Aurora schema/migrations`: add Aurora migrations for ingestion and operational tables.
+5. `T0008 Playground test booking seed tool`: create deterministic fake Playground bookings through protected server-side tooling.
+6. `T0009 Booking lookup endpoint`: implement `POST /v1/check-in/lookup` against Roller Playground and the local index shape.
+7. `T0010 Daily seed job`: implement the Roller Data API seed into Aurora.
+8. `T0011 Booking webhook intake`: implement webhook intake, idempotency, and enrichment.
 
 ## Open Contract Questions
 

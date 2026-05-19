@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-19
-- Current branch: `codex/t0004-aws-foundation`
-- Current status: T0004 JumpYard Cloud AWS foundation completed locally.
-- Current ticket: `T0004`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`
-- Recommended next ticket: `T0005 Booking index ingestion contract`
+- Current branch: `codex/t0005-booking-index-ingestion-contract`
+- Current status: T0005 booking index ingestion contract completed locally.
+- Current ticket: `T0005`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`
+- Recommended next ticket: `T0006 AWS dev deploy`
 
 ## Current Structure
 
@@ -21,6 +21,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |-- DECISIONS.md
 |-- CODEX_TASK.md
 |-- JUMPYARD_CLOUD_CONTRACT.md
+|-- BOOKING_INDEX_INGESTION_CONTRACT.md
 |-- REPO_CURRENT_STATE.md
 |-- FOLLOWUPS.md
 |-- AWS_RESOURCES.md
@@ -69,24 +70,36 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0001` | Added Roller Playground env guard and client skeleton. | 2026-05-18 | Committed as `2bfde41`. |
 | `T0002` | Added Roller Playground credential smoke test and branch workflow docs. | 2026-05-19 | Merged to `main` through PR #6 as merge commit `155c655`. |
 | `T0003` | Defined JumpYard Cloud contract, data ownership, Roller endpoint map, Aurora data model, and proposed AWS target architecture. | 2026-05-19 | Merged to `main` through PR #7 as merge commit `b99cbfb`. |
+| `T0004` | Added deploy-blocked JumpYard Cloud AWS CDK foundation. | 2026-05-19 | Merged to `main` through PR #8 as merge commit `bb9c660`. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0004` | Create the deploy-blocked JumpYard Cloud AWS foundation as CDK TypeScript IaC. | Completed locally | Adds `infra/` CDK app and validation only. No AWS resources deployed, no app code changed, and no Roller write logic added. |
+| `T0005` | Define daily seed, booking webhook intake/enrichment, live REST reconciliation, and the post-T0005 implementation roadmap. | Completed locally | Docs-only contract. No app code, package dependencies, AWS resources, Roller calls, or deployment config changed. |
+
+## Confirmed Next Tickets
+
+| Ticket | Goal | Notes |
+|---|---|---|
+| `T0006` | AWS dev deploy | Confirm WRLDS metadata and deploy the CDK foundation to a real dev environment. |
+| `T0007` | Aurora schema/migrations | Create ingestion and operational tables/indexes in Aurora. |
+| `T0008` | Playground test booking seed tool | Create deterministic fake bookings in Roller Playground through protected server-side tooling. |
+| `T0009` | Booking lookup endpoint | Implement `POST /v1/check-in/lookup` against Roller Playground and local index shape. |
+| `T0010` | Daily seed job | Implement Data API seed into Aurora. |
+| `T0011` | Booking webhook intake | Implement webhook intake, idempotency, and enrichment. |
 
 ## Validation Status
 
 - Automated root validation: `npm run validate` passed on 2026-05-19.
-- Infra validation: `npm run infra:check` passed on 2026-05-19.
-- Infra synth: `npm run infra:synth` passed on 2026-05-19 using `infra/config/dev.example.json`.
+- Infra validation: `npm run infra:check` passed during T0004.
+- Infra synth: `npm run infra:synth` passed during T0004 using `infra/config/dev.example.json`.
 - Metadata guard: missing `-c config=...` fails as expected before synth.
 - Infra dependency audit: `npm --prefix infra audit` reports one moderate bundled `brace-expansion` issue inside `aws-cdk-lib`; `npm audit fix` cannot repair it automatically.
 - Roller env validation: `npm run roller:env:check` passed with local `.env` during T0002.
 - Roller smoke validation: `npm run roller:smoke` passed with local `.env`; `/products` returned HTTP 200 and 96 products on 2026-05-19.
 - Booking lookup validation: read-only `GET /bookings/5001370` returned HTTP 200 with booking reference `5001370`, unique id `dbba266d-0951-4706-9adf-6c9d05edffbf`, status `PendingPayment`, amount owing `260`, and ticket `5001370-21265504`.
-- App lint/build: Not required for T0004 because app code is not changed.
+- App lint/build: Not required for T0005 because app code is not changed.
 
 ## Known Issues Summary
 
@@ -94,6 +107,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - First deploy still requires confirmed AWS account, region, environment, owner, data classification, exportability, and cost center.
 - JumpYard Cloud/server API business logic has not been implemented.
 - Booking index ingestion from Roller Data API and booking webhooks has not been implemented.
+- Exact Roller Data API query params, paging, credentials, and date-window support are still open.
+- Webhook event id, signature/verification method, retry behavior, and event names are still open.
 - Playground fake booking seed tooling has not been implemented.
 - Staff handoff/redeem flow integration has not been implemented.
 - Roller `POST /redemptions` has not been tested yet.
@@ -106,4 +121,5 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - What is the exact JumpYard Cloud link model between original booking and separate add-on booking?
 - Which tenders work in the new add-on booking checkout flow: gift card, membership code, and multi-visit value?
 - Which products must be configured as ticket/session products to support API-driven redemption and webhook-based counters?
-- Which Roller Data API endpoint, credentials, date range, and payload shape should power the daily morning booking seed?
+- Which exact Roller Data API query params, paging model, credentials, and date range should power the daily morning booking seed?
+- Which webhook event id, signature/verification method, retry behavior, and event names does Roller provide in Playground and production?
