@@ -1,0 +1,22 @@
+{
+  "name": "jumpyard-cloud-infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AWS CDK foundation for JumpYard Cloud.",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "synth": "cdk synth",
+    "synth:example": "cdk synth -c config=./config/dev.example.json",
+    "check": "npm run build && npm run synth:example"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.175.1",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "aws-cdk": "^2.175.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}
