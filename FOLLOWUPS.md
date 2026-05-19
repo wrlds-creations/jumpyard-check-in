@@ -6,10 +6,19 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 
 | ID | Source Ticket | Type | Description | Priority | Owner | Status |
 |---|---|---|---|---|---|---|
+| `FU-008` | `T0003` | Add-product architecture | Define exact link model between original Roller booking and separate add-on Roller booking in JumpYard Cloud. | High | `TBD` | Open |
+| `FU-009` | `T0003` | Roller clarification | Confirm which tenders work in the new add-on booking checkout flow: gift card, membership code, and multi-visit value. | High | `TBD` | Open |
+| `FU-010` | `T0003` | Product configuration | Identify which add-ons must be reconfigured from stock/add-on products to ticket/session products if JumpYard wants API-driven redemption and webhook counting. | High | `TBD` | Open |
+| `FU-011` | `T0003` | Roller clarification | Confirm the exact `POST /redemptions` response shape for full success, partial success, already redeemed, and invalid ticket cases. | Medium | `TBD` | Open |
+| `FU-012` | `T0003` | AWS setup | Confirm AWS account, region, environment name, owner, data classification, exportability, and cost center before creating JumpYard Cloud resources. | High | `TBD` | Open |
+| `FU-013` | `T0003` | Architecture validation | Load-test or simulate Roller one-call-per-second throttling before pilot traffic. | Medium | `TBD` | Open |
+| `FU-014` | `T0003` | Roller clarification | Confirm the preferred availability-display pattern for core jump-entry products and durations before implementing new booking UI logic. | Medium | `TBD` | Open |
+| `FU-015` | `T0003` | Data ingestion | Confirm Roller Data API endpoint, credentials, date range, and payload shape for the daily morning booking seed. | High | `TBD` | Open |
+| `FU-016` | `T0003` | Test data | Build a Playground-only internal seed tool that creates deterministic fake bookings for lookup, payment-required, wrong-date, redeemed, SkyRider, and add-product scenarios. | High | `TBD` | Open |
 
 ## Resolved Followups
 
 | ID | Resolved In | Resolution | Date |
 |---|---|---|---|
-| `FU-006` | `T0002` | Confirmed `/products` is usable as the harmless read-only smoke endpoint for current Playground credentials; `npm run roller:smoke` returned HTTP 200 with an empty JSON array summary. | 2026-05-18 |
+| `FU-006` | `T0002` | Confirmed `/products` is usable as the harmless read-only smoke endpoint for current Playground credentials; `npm run roller:smoke` returned HTTP 200, and later Playground sync returned 96 products. | 2026-05-18 |
 | `FU-007` | `T0002` | Confirmed ROLLER's documented Playground base URL is `https://api.play.roller.app`; guard now accepts `play` and `playground` markers while still blocking live/prod markers. | 2026-05-18 |
