@@ -4,29 +4,31 @@ This file is the source of truth for meaningful project decisions. Add entries w
 
 ## Decision Log
 
-| Date | Decision | Rationale | Decided By | Impact | Revisit Trigger |
+| ID | Date | Decision | Rationale | Impact | Revisit Trigger |
 |---|---|---|---|---|---|
-| 2026-05-18 | Adopt the WRLDS Codex workflow in this repository. | The project needs durable context, scoped tickets, decision tracking, followups, and local skills before continued implementation. | Love / WRLDS | Adds root workflow docs, validation scripts, local skills, and PR checklist without replacing app code. | Revisit if the workflow slows delivery or important project facts move outside repo files. |
-| 2026-05-18 | Keep the existing three-app Next.js repository structure. | Check-in already has working phone, kiosk, and admin apps; the template is an operating model, not an app-code replacement. | Love / WRLDS | App directories remain separate with per-app package manifests and validation commands. | Revisit if shared code or deployment requirements justify a workspace refactor. |
+| `D0001` | 2026-05-18 | Frontend must not call Roller directly in production architecture. | Roller credentials must not be exposed in frontend. A server-side layer is needed for logging, retries, error handling, and controlled fallbacks. JumpYard Cloud/server API will own pilot operational state. | Production architecture uses `check-in app -> JumpYard Cloud/server API -> Roller API`. Frontend work must target server-owned contracts rather than Roller directly. | Revisit only if Roller provides a credential-safe frontend integration model and WRLDS explicitly approves an architecture change. |
+| `D0002` | 2026-05-18 | Roller integration must fail closed unless configured for Playground. | Sprint 1 starts against Roller Playground only. The integration should reject missing environment config, non-playground environments, and production/live-looking URLs before any Roller client can be used. | Roller validation blocks unsafe config early and keeps production credentials or endpoints out of local/dev validation. | Revisit when production Roller integration is explicitly scoped and approved. |
+| `D0003` | 2026-05-19 | Each ticket should use a dedicated `codex/` branch and `main` should change only through a review/merge step. | Ticket branches keep scope clear, make commits reviewable, and reduce the risk of mixing unrelated local changes into project history. A local commit should not be treated as a `main` update. | Codex creates or switches to a ticket branch before ticket work, stages only ticket files, commits only when explicitly requested, and never pushes directly to `main`. | Revisit only if the WRLDS workflow or repository release process changes. |
 
 ## Active Constraints
 
 | Constraint | Source | Impact | Revisit Trigger |
 |---|---|---|---|
-| Work should happen in feature branches and not be pushed directly to `main`. | WRLDS Codex workflow | Keeps changes reviewable and reduces accidental production-impacting changes. | Revisit only if repository governance changes. |
-| Do not commit unless explicitly asked. | WRLDS Codex workflow | Keeps the human owner in control of commit boundaries. | Revisit only if automation policy changes. |
-| Unknown project facts stay `TBD` until confirmed. | WRLDS Codex workflow | Prevents chat assumptions from becoming source-of-truth. | Revisit when facts are confirmed by project owner or implementation. |
+| Roller is the source of truth for bookings. | Sprint 1 project context | Booking validation must reconcile with Roller. | Revisit if JumpYard chooses another booking system. |
+| JumpYard Cloud/server API owns pilot operational state. | Sprint 1 project context | Safety status, handoff code, and session status should not be owned by the frontend. | Revisit after pilot state model is finalized. |
+| Roller config must be Playground-only for Sprint 1. | D0002 | Roller client creation fails unless `ROLLER_ENV=playground` and base URL is clearly Playground. | Revisit when production Roller integration is approved. |
+| Work one scoped ticket at a time. | WRLDS Codex workflow | Prevents implementation scope from expanding into future tickets. | Revisit only if workflow changes. |
+| Use one dedicated branch per ticket. | D0003 | Keeps ticket changes isolated from `main` and from unrelated local user changes. | Revisit only if workflow changes. |
 
 ## Deferred Decisions
 
 | Decision | Why Deferred | Needed By | Owner |
 |---|---|---|---|
-| Production deployment model for phone and kiosk | Current repo has mixed Docker/static export signals and no documented deployment target. | Before production deployment work. | `TBD` |
-| Real JumpYard/JY Cloud integration contracts | Current flows use mock/local adapters. | Before replacing mock clients. | `TBD` |
-| Staff admin authentication | Admin app currently documents mock API usage; auth is not confirmed. | Before production staff rollout. | `TBD` |
+| Server-side runtime and hosting for Sprint 1 | T0000 is docs-only and does not allow backend or deployment changes. | Before backend endpoint implementation. | `TBD` |
+| Roller booking lookup contract | T0001 will spike Roller Playground connectivity first. | T0001 | `TBD` |
 
 ## Reversed Decisions
 
-| Date | Reversed Decision | Replacement Decision | Rationale | Decided By |
+| ID | Date | Reversed Decision | Replacement Decision | Rationale |
 |---|---|---|---|---|
 | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` |

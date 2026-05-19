@@ -1,179 +1,92 @@
 # Project Context
 
-This file is the living project memory for Codex and WRLDS. Confirmed facts belong here. Unknowns remain `TBD`; do not replace them with assumptions from chat history.
+This file is the living project memory for JumpYard Next. Confirmed facts belong here. Unknowns remain `TBD`.
 
 ## Project Identity
 
-- Project name: `JumpYard Check-in`
+- Project name: `JumpYard Next`
 - Repository: `wrlds-creations/jumpyard-check-in`
-- Client-facing name: `JumpYard Next Check-in`
-- Internal codename: `JumpYard Check-in`
-- Project type: `Web app suite`
-- Current phase: `Prototype / MVP validation`
+- Current application: Existing JumpYard check-in app suite.
+- Current phase: `Sprint 1`
 
-## Client And Billing Metadata
+## Sprint 1 Focus
 
-- Client: `JumpYard`
-- Billing entity: `TBD`
-- Cost center: `JumpYard`
-- WRLDS owner: `TBD`
-- Client owner: `TBD`
-- Commercial model: `TBD`
+Sprint 1 focuses on connecting the existing check-in app to Roller Playground through a server-side layer.
 
-## Business Objective
+The target architecture is:
 
-- Primary objective: Support faster JumpYard guest check-in across phone, kiosk, and staff redemption workflows.
-- Success metrics: `TBD`
-- Business risks: Integration with real JumpYard/JY Cloud systems, device/browser reliability in parks, and operational handoff accuracy.
+```text
+check-in app -> JumpYard Cloud/server API -> Roller API
+```
 
-## Users And Roles
+## Architecture Principles
 
-- Primary users: JumpYard guests using phone or kiosk check-in.
-- Admin users: JumpYard staff redeeming completed check-ins and handing out physical items.
-- Internal WRLDS users: Product and engineering team members building and validating the flow.
-- External stakeholders: JumpYard product and operations stakeholders.
-- Role permissions summary: Guest flows are unauthenticated in the current prototype; staff admin auth is `TBD`.
+- Roller is the source of truth for bookings.
+- JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, and session status.
+- The frontend must not call Roller directly in the real architecture.
+- Roller credentials must stay server-side.
+- Server-side integration should provide controlled logging, retries, error handling, and fallbacks.
+- Roller integration must fail closed unless it is explicitly configured for Playground.
 
-## Scope
+## Current Repository Shape
 
-- In scope: Phone check-in app, kiosk check-in app, staff admin redemption PWA, mock flow clients, static assets, and local validation workflow.
-- Current milestone scope: MVP/prototype UX and flow validation.
-- Future scope: Real booking, payment, wristband, Connected band, and JY Cloud integrations.
+- `jumpyard-checkin-phone/`: guest-facing phone check-in web app.
+- `jumpyard-checkin-kiosk/`: in-park kiosk check-in web app.
+- `jumpyard-checkin-admin/`: staff PWA for redemption and handoff workflows.
 
-## Non-Goals
+## Delivery Workflow
 
-- Explicit non-goals: Native mobile apps, React Native, BLE firmware, and production AWS infrastructure unless added through a scoped ticket.
-- Out-of-scope platforms or workflows: `TBD`
+- Work proceeds one ticket at a time.
+- Each ticket should use a dedicated `codex/` branch.
+- Local commits are made only when explicitly requested and belong to the current ticket branch.
+- `main` is updated through a review/merge step, not by direct commits or direct pushes.
+- Ticket commits should include only files that belong to the current ticket.
 
-## Product Requirements
+## Known Stack
 
-- Core user flows: Booking lookup, buy tickets, booking summary, safety video, safety attestations, SkyRider attestation, add-ons, payment, QR/code presentation, success/print handoff, extension flow, and staff redemption.
-- Required screens or surfaces: Phone app, kiosk app, admin app.
-- Performance requirements: `TBD`
-- Offline requirements: `TBD`
-- Accessibility requirements: `TBD`
+- TypeScript
+- Next.js
+- React
+- Tailwind CSS
+- npm per app directory
 
-## Technical Stack
+## Current Data Ownership Model
 
-- Languages: TypeScript, TSX, CSS.
-- Frameworks: Next.js 16, React 19, Tailwind CSS 4.
-- Package manager: npm with per-app `package-lock.json` files.
-- Runtime versions: Node.js 20 is used in existing Dockerfiles; local required version is `TBD`.
-- Architecture notes: Three separate Next.js apps in one repository, each with its own package manifest and build scripts.
+- Booking data: Roller.
+- Safety status: JumpYard Cloud/server API.
+- Handoff code: JumpYard Cloud/server API.
+- Session status: JumpYard Cloud/server API.
+- Payment, redemption, and additional operational state: `TBD`
 
-## Frontend
+## Roller Playground Configuration
 
-- Frontend type: Next.js App Router web apps.
-- Platforms: Browser-based phone, kiosk, and staff/admin surfaces.
-- UI system: Custom JumpYard-branded components using Tailwind CSS, framer-motion, and lucide-react.
-- Navigation model: Flow-state driven screens in `src/flow` and `src/components` for phone/kiosk; single admin surface for staff redemption.
-- Design source: Existing in-repo implementation and JumpYard brand assets; external design source is `TBD`.
+- `ROLLER_ENV` must be `playground`.
+- `ROLLER_BASE_URL` must clearly point to a Playground environment. ROLLER's documented Playground base URL is `https://api.play.roller.app`.
+- Production/live-looking Roller URLs must be rejected before any client is created.
+- `ROLLER_CLIENT_ID` and `ROLLER_CLIENT_SECRET` are optional for basic environment validation during T0001.
+- Roller secrets must never be logged or committed.
 
-## Backend
+## Roller Smoke Test
 
-- Backend type: Mock/local adapters in the current repo.
-- API style: `TBD`
-- Services: `src/flow/mockClient.ts` for phone/kiosk and `src/lib/adminApi.ts` for admin.
-- Background jobs: `TBD`
-- Local development approach: Run the relevant Next.js app with `npm run dev` from its app directory.
+- `npm run roller:smoke` loads local `.env` values and reuses the Playground environment guard.
+- The smoke test obtains a short-lived OAuth token through the server-side Roller client and then makes one read-only smoke request.
+- The default read endpoint path is `/products`; override with `ROLLER_SMOKE_PATH` only if Roller confirms a different harmless read path.
+- The script reports status and response shape only; it does not print credentials, access tokens, or full Roller response payloads.
 
-## AWS Account And Environments
+## Non-Goals For Current Ticket
 
-- AWS account owner: `TBD`
-- AWS account ID: `TBD`
-- Regions: `TBD`
-- Environments: `local`, with `development`, `staging`, and `production` still `TBD`
-- Deployment model: Admin app currently documents Cloudflare Pages; phone/kiosk deployment model is `TBD`.
-- Required WRLDS tags: See `AWS_RESOURCES.md` and `references/aws-tagging-standard.md`.
-
-## Data Model
-
-- Main entities: Booking, guest/profile, add-on, waiver/safety attestation, payment handoff, redemption/handout item.
-- Data ownership: `TBD`
-- Data retention: `TBD`
-- Data import/export requirements: `TBD`
-
-## Auth And Permissions
-
-- Auth provider: `TBD`
-- Sign-in methods: `TBD`
-- Roles: Guest and staff/admin.
-- Permission boundaries: Staff redemption permissions are `TBD`.
-- Account lifecycle: `TBD`
-
-## Hardware And Sensors
-
-- Hardware involved: Kiosk devices and staff scanning device/browser are expected; exact hardware is `TBD`.
-- Sensor protocols: QR/barcode scanning for admin uses `@zxing/browser`.
-- BLE requirements: Not applicable unless later scoped.
-- Firmware assumptions: Not applicable.
-- Calibration requirements: Not applicable.
-
-## External Integrations
-
-- APIs: Real JumpYard/JY Cloud booking, payment, and redemption APIs are `TBD`.
-- Webhooks: `TBD`
-- Third-party services: Cloudflare tunnel is available for phone/admin dev scripts; Cloudflare Pages is documented for admin.
-- Credentials and secret handling: No secrets should be committed; real credential handling is `TBD`.
-
-## Analytics And Tracking
-
-- Analytics tools: `TBD`
-- Events to track: `TBD`
-- Privacy constraints: `TBD`
-- Reporting requirements: `TBD`
-
-## Commands
-
-Run commands from each app directory.
-
-| Area | Install | Development | Test | Lint | Build | Deploy |
-|---|---|---|---|---|---|---|
-| Phone | `npm install` | `npm run dev` | `TBD` | `npm run lint` | `npm run build` | `TBD` |
-| Kiosk | `npm install` | `npm run dev` | `TBD` | `npm run lint` | `npm run build` | `TBD` |
-| Admin | `npm install` | `npm run dev` | `TBD` | `npm run lint` | `npm run build` | Cloudflare Pages, details `TBD` |
-| Root workflow | No install required | Not applicable | `TBD` | Not applicable | Not applicable | Not applicable |
-
-## Environments
-
-- Local: Per-app Next.js dev servers.
-- Development: `TBD`
-- Staging: `TBD`
-- Production: `TBD`
-
-## Definition Of Done
-
-- Functional criteria: Ticket acceptance criteria pass for the relevant app flow.
-- Review criteria: Small, reviewable diff; unrelated work recorded in `FOLLOWUPS.md`.
-- Validation criteria: Relevant lint/build/manual checks run or explicitly marked not run.
-- Documentation criteria: Update project context, decisions, repo state, AWS resources, or followups when facts change.
-
-## Testing Requirements
-
-- Automated tests: No dedicated test suite is currently documented.
-- Manual tests: Verify affected phone, kiosk, or admin flow in browser.
-- Device or browser coverage: Phone viewport, kiosk viewport, and staff/admin browser coverage are `TBD`.
-- Infrastructure validation: Use `npm run validate` for workflow files; AWS validation is required before AWS work.
-
-## Security And Privacy
-
-- Data classification: Expected `confidential` once real customer/booking data is integrated; currently `TBD`.
-- Secrets handling: Do not commit secrets; use environment-specific secret handling when integrations are added.
-- PII or sensitive data: Booking and guest data may include PII when real integrations are added.
-- Compliance considerations: `TBD`
-
-## Cost And Billing Considerations
-
-- Cost constraints: `TBD`
-- Expected AWS cost drivers: `TBD`
-- Budget alerts: `TBD`
-- Exportability requirements: `TBD`
+- Do not implement Roller API calls.
+- Do not create backend endpoints.
+- Do not create AWS resources.
+- Do not modify app functionality.
+- Do not add payment logic.
+- Do not add redeem logic.
 
 ## Open Questions
 
 | Question | Why It Matters | Owner | Status |
 |---|---|---|---|
-| What are the production deployment targets for phone and kiosk? | Affects build config, Docker/static export strategy, and CI/CD. | `TBD` | `Open` |
-| Which real JumpYard/JY Cloud APIs replace the mock clients? | Determines data contracts, auth, error handling, and test strategy. | `TBD` | `Open` |
-| What staff authentication model is required for admin redemption? | Affects security, permissions, and deployment readiness. | `TBD` | `Open` |
-| Which browsers/devices must be supported in parks? | Affects kiosk/phone QA and UI constraints. | `TBD` | `Open` |
+| What exact Roller Playground credentials and API scopes are available? | Needed for T0002 credential smoke test. | `TBD` | `Open` |
+| Where will the JumpYard Cloud/server API run during Sprint 1? | Determines local/server architecture and deployment path. | `TBD` | `Open` |
+| Which booking lookup fields should the check-in app use first? | Defines the first Roller integration contract. | `TBD` | `Open` |
+| What is the confirmed safest Roller read endpoint for smoke tests? | The script defaults to `/products`, but Roller endpoint shape should be confirmed from authenticated docs. | `TBD` | `Open` |

@@ -1,18 +1,15 @@
 # Followups
 
-Use this file for known issues, deferred improvements, and out-of-scope findings. Codex should add items here instead of fixing unrelated work during a scoped ticket.
+Use this file for out-of-scope findings, deferred improvements, and future tickets. Codex should add findings here instead of widening the current ticket.
 
 ## Open Followups
 
 | ID | Source Ticket | Type | Description | Priority | Owner | Status |
 |---|---|---|---|---|---|---|
-| `FU-002` | `workflow-adoption` | Deployment | Resolve Docker/static export mismatch for phone and kiosk before relying on Docker builds. | High | `TBD` | `Open` |
-| `FU-003` | `workflow-adoption` | Integration | Document real JumpYard/JY Cloud API contracts that replace mock clients. | High | `TBD` | `Open` |
-| `FU-004` | `workflow-adoption` | Security | Confirm staff admin authentication and authorization requirements. | High | `TBD` | `Open` |
-| `FU-005` | `workflow-adoption` | CI | Decide which lint/build commands should run in PR validation for all three apps. | Medium | `TBD` | `Open` |
 
 ## Resolved Followups
 
 | ID | Resolved In | Resolution | Date |
 |---|---|---|---|
-| `FU-001` | `workflow-adoption` | Replaced phone and kiosk create-next-app READMEs with project-specific setup, build, deployment, and verification notes. | 2026-05-18 |
+| `FU-006` | `T0002` | Confirmed `/products` is usable as the harmless read-only smoke endpoint for current Playground credentials; `npm run roller:smoke` returned HTTP 200 with an empty JSON array summary. | 2026-05-18 |
+| `FU-007` | `T0002` | Confirmed ROLLER's documented Playground base URL is `https://api.play.roller.app`; guard now accepts `play` and `playground` markers while still blocking live/prod markers. | 2026-05-18 |

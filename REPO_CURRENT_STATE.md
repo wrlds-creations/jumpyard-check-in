@@ -5,97 +5,76 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-18
-- Current branch: `main` in the local workspace at the time the workflow files were added.
-- Current phase: Prototype / MVP validation.
-- Last completed ticket: Adopt WRLDS Codex workflow files.
-- Next recommended ticket: Decide and document deployment strategy for phone and kiosk.
-
-## Completed Tickets
-
-| Ticket | Summary | Completed On | Notes |
-|---|---|---|---|
-| `workflow-adoption` | Added WRLDS Codex workflow files, validation scripts, relevant local skills, root project documentation, and project-specific phone/kiosk READMEs. | 2026-05-18 | App behavior intentionally unchanged. |
+- Current branch: `codex/t0002-roller-smoke`
+- Current status: T0002 Roller credential smoke test completed.
+- Current ticket: `T0002`
+- Completed tickets: `T0000`, `T0001`
+- Recommended next ticket: `T0003 Booking lookup endpoint`
 
 ## Current Structure
 
 ```text
 .
-|-- jumpyard-checkin-phone/
-|   |-- src/app/
-|   |-- src/components/
-|   |-- src/context/
-|   |-- src/flow/
-|   |-- public/
-|   |-- package.json
-|   `-- next.config.ts
-|-- jumpyard-checkin-kiosk/
-|   |-- src/app/
-|   |-- src/components/
-|   |-- src/context/
-|   |-- src/flow/
-|   |-- public/
-|   |-- package.json
-|   `-- next.config.ts
-|-- jumpyard-checkin-admin/
-|   |-- src/app/
-|   |-- src/lib/
-|   |-- public/
-|   |-- package.json
-|   `-- next.config.ts
-|-- skills/
-|-- references/
-|-- scripts/
-|-- .github/
+|-- .env.example
 |-- AGENTS.md
 |-- PROJECT_CONTEXT.md
 |-- DECISIONS.md
 |-- CODEX_TASK.md
 |-- REPO_CURRENT_STATE.md
 |-- FOLLOWUPS.md
+|-- AWS_RESOURCES.md
 |-- TEST_PLAN.md
-`-- AWS_RESOURCES.md
+|-- scripts/
+|   |-- check-roller-env.js
+|   |-- roller-client.js
+|   `-- roller-smoke.js
+|-- jumpyard-checkin-phone/
+|-- jumpyard-checkin-kiosk/
+`-- jumpyard-checkin-admin/
 ```
 
-## Dependencies
+## Known Validation Commands
 
-| Dependency | Purpose | Notes |
+| Command | Purpose | Notes |
 |---|---|---|
-| `next` | App framework | Phone/kiosk use `16.0.8`; admin uses `^16.2.4`. |
-| `react`, `react-dom` | UI runtime | All apps use React `19.2.1`. |
-| `tailwindcss`, `@tailwindcss/postcss` | Styling | All apps use Tailwind CSS 4. |
-| `framer-motion` | UI animation | Used in all apps. |
-| `lucide-react` | Icons | Used in all apps. |
-| `@zxing/browser` | Browser scanning | Admin app only. |
-| `concurrently` | Dev tunnel helper | Phone and admin app dev scripts. |
+| `npm run validate` | Validate root WRLDS workflow files and skills. | Existing repository command. |
+| `npm run roller:env:check` | Validate Roller env guard against current environment variables. | Requires `ROLLER_ENV=playground` and a Playground-looking `ROLLER_BASE_URL`; client credentials are optional. |
+| `npm run roller:smoke` | Verify local Roller Playground credentials with an OAuth token request and one read-only smoke request. | Loads local `.env`; does not print secrets or full responses. |
+| `cd jumpyard-checkin-phone && npm run lint` | Lint phone app. | Existing app command; not required for T0002 unless app code changes. |
+| `cd jumpyard-checkin-phone && npm run build` | Build phone app. | Existing app command; not required for T0002 unless app code changes. |
+| `cd jumpyard-checkin-kiosk && npm run lint` | Lint kiosk app. | Existing app command; not required for T0002 unless app code changes. |
+| `cd jumpyard-checkin-kiosk && npm run build` | Build kiosk app. | Existing app command; not required for T0002 unless app code changes. |
+| `cd jumpyard-checkin-admin && npm run lint` | Lint admin app. | Existing app command; not required for T0002 unless app code changes. |
+| `cd jumpyard-checkin-admin && npm run build` | Build admin app. | Existing app command; not required for T0002 unless app code changes. |
 
-## Scripts And Commands
+## Completed Tickets
 
-| Command | Purpose | Last Known Result |
-|---|---|---|
-| `npm run validate` | Validate root WRLDS workflow files and skills. | Passed on 2026-05-18. |
-| `cd jumpyard-checkin-phone && npm run lint` | Lint phone app. | Not run for workflow adoption. |
-| `cd jumpyard-checkin-phone && npm run build` | Build/export phone app. | Not run for workflow adoption. |
-| `cd jumpyard-checkin-kiosk && npm run lint` | Lint kiosk app. | Not run for workflow adoption. |
-| `cd jumpyard-checkin-kiosk && npm run build` | Build kiosk app. | Not run for workflow adoption. |
-| `cd jumpyard-checkin-admin && npm run lint` | Lint admin app. | Not run for workflow adoption. |
-| `cd jumpyard-checkin-admin && npm run build` | Build/export admin app. | Not run for workflow adoption. |
+| Ticket | Summary | Completed On | Notes |
+|---|---|---|---|
+| `T0000` | Set up source-of-truth docs for WRLDS Codex workflow. | 2026-05-18 | Committed as `5655fb1`. |
+| `T0001` | Added Roller Playground env guard and client skeleton. | 2026-05-18 | Committed as `2bfde41`. |
+
+## Current Ticket
+
+| Ticket | Goal | Status | Notes |
+|---|---|---|---|
+| `T0002` | Verify local Roller Playground credentials through a safe read-only smoke test. | Completed | Env guard passes and `npm run roller:smoke` returns HTTP 200 from read-only `/products` with no secrets printed. |
 
 ## Validation Status
 
-- Build: Not run for app directories during workflow adoption.
-- Tests: No dedicated test suite documented.
-- Lint: Not run for app directories during workflow adoption.
-- Root workflow validation: Passed on 2026-05-18 with `npm run validate`.
-- Manual verification: Not performed for app UI during workflow adoption.
+- Automated validation: `npm run validate` passed on 2026-05-18.
+- Roller env validation: `npm run roller:env:check` passed with local `.env`.
+- Roller smoke validation: `npm run roller:smoke` passed with local `.env`; `/products` returned HTTP 200 and an empty JSON array summary.
+- App lint/build: Not required for T0002 because app code is not changed.
 
 ## Known Issues Summary
 
-- Phone and kiosk Dockerfiles expect `.next/standalone`, but phone uses static export and kiosk does not currently set `output: "standalone"`.
-- Real JumpYard/JY Cloud integration contracts are not documented.
-- Staff admin authentication requirements are not documented.
+- The Roller smoke test currently reports zero products from `/products`; T0003 should define the booking lookup endpoint and expected data contract.
+- JumpYard Cloud/server API contract has not been defined.
+- Staff handoff/redeem flow integration has not been implemented.
 
 ## Open Questions
 
-- What deployment target should phone and kiosk use?
-- Should this repo become an npm workspace, or remain three independent app directories?
-- Which app validation commands should PRs run by default?
+- What exact Roller Playground credential scopes are available for T0002?
+- Is `/products` the confirmed safest read-only smoke endpoint for this Roller account?
+- Which fields should define the first booking lookup and staff handoff contracts?
