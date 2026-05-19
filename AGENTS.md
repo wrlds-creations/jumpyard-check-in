@@ -24,6 +24,17 @@ This repository uses the WRLDS Codex workflow. Treat the source-of-truth files i
 - Do not commit unless explicitly asked.
 - Do not push directly to `main`.
 
+## Branch And Commit Workflow
+
+- Use one dedicated branch per ticket unless the user explicitly says otherwise.
+- Name ticket branches with the `codex/` prefix, for example `codex/t0003-booking-lookup-contract`.
+- Create each ticket branch from the current approved base, preferably `main` or the latest merged ticket branch.
+- A commit saves changes only to the current branch; it does not update `main` by itself.
+- Stage and commit only files that belong to the current ticket.
+- Leave unrelated local assets, deliverables, and user changes unstaged unless the ticket explicitly includes them.
+- Push ticket branches to GitHub only when explicitly requested.
+- Bring work into `main` through a review/merge step, not by committing or pushing directly to `main`.
+
 ## Project Direction
 
 - Sprint 1 focuses on connecting the existing check-in app to Roller Playground through a server-side layer.

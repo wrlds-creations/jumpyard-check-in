@@ -8,6 +8,7 @@
     "validate:template": "node scripts/validate-template.js",
     "validate:skills": "node scripts/validate-skills.js",
     "validate:aws": "node scripts/validate-aws-tags.js",
-    "roller:env:check": "node scripts/check-roller-env.js"
+    "roller:env:check": "node scripts/check-roller-env.js",
+    "roller:smoke": "node scripts/roller-smoke.js"
   }
 }

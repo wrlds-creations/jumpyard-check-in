@@ -2,9 +2,12 @@
 const {
   RollerConfigError,
   createRollerClient,
+  loadLocalEnv,
   readRollerConfig,
   validateRollerEnvironment,
 } = require('./roller-client');
+
+loadLocalEnv();
 
 const config = readRollerConfig();
 const validation = validateRollerEnvironment(config);
