@@ -296,10 +296,18 @@ Booking webhooks are the same-day change signal. They should catch bookings crea
 
 Roller response v2 indicates that a correctly configured booking webhook can contain booking-level data equivalent to Get Detail of a Booking, and payment records can be included when configured with payments included.
 
+T0015 implements the first deployed dev intake endpoint:
+
+```text
+POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/roller/webhooks/bookings
+```
+
+It stores only normalized event metadata and a payload hash in Aurora. It does not call Roller, mutate booking snapshots, register webhooks, or store raw payloads.
+
 ### Intake Steps
 
 1. Receive webhook at JumpYard Cloud.
-2. Validate the request using the best Roller-supported verification method.
+2. Validate the request using the best Roller-supported verification method. T0015 uses a dev-only shared token until the official production auth header/signature is confirmed.
 3. Compute an idempotency key:
    - Prefer Roller webhook event id if provided.
    - Otherwise use a stable hash of event type, booking identifier, payload hash, and received timestamp bucket.
@@ -338,6 +346,27 @@ Enrichment reads:
 |---|---|
 | `GET /bookings/{uniqueId or bookingReference}` | Authoritative booking state after webhook when needed. |
 | Get customer/guest detail | Only when customer contact is missing and needed for SMS/readiness. |
+
+### T0015 Intake Findings
+
+Roller webhook documentation added during T0015 confirms:
+
+| Finding | Impact |
+|---|---|
+| Booking webhook events are `Created`, `Updated`, and `Cancelled`. | Intake should accept these event names and also tolerate route-level fallback names while Playground payload shape is confirmed. |
+| Webhooks are delivered by HTTP `POST` to a secure HTTPS endpoint. | Dev endpoint is API Gateway HTTPS and accepts only `POST`. |
+| Endpoint should store or queue quickly, ideally under 1 second and within 10 seconds. | T0015 performs only token verification, JSON parsing, idempotent metadata insert, and event-log insert in the request path. |
+| Roller does not guarantee event ordering. | Future enrichment must compare timestamps/freshness and must not assume create arrives before update/redemption. |
+| Roller retries on `500`, `503`, and `504`. | T0015 returns HTTP `500` only for server/config/database failures that should be retried. |
+| Receiving webhook events does not count toward the API call limit. | Webhook intake can reduce same-day polling pressure once registered. |
+
+T0015 deployed smoke result:
+
+| Case | Result |
+|---|---|
+| Missing token | HTTP `200`, `ignored_unauthorized`, no persistence. |
+| First authorized event | HTTP `200`, `accepted`, inserted `roller_webhook_events` row. |
+| Duplicate authorized event | HTTP `200`, `duplicate`, no duplicate row. |
 
 ### Webhook Failure Rules
 
@@ -513,11 +542,13 @@ Minimum metrics/events:
 Recommended next implementation steps after T0014:
 
 1. `T0015 Booking webhook intake`
-   - Implement webhook intake, idempotency, and enrichment queue.
+   - Implement safe dev webhook intake and idempotency. Completed in T0015.
 2. `T0016 Lookup Aurora-first`
    - Use Aurora first for display, then live REST refresh when missing, stale, or check-in-critical.
 3. `T0017 Phone lookup display from Aurora`
    - Let the phone flow consume Aurora display data once Aurora-first lookup is in place.
+4. `T0018 Webhook enrichment and registration`
+   - Register the Playground booking webhook and process received events into booking snapshot updates outside the request path.
 
 ## Open Questions
 
@@ -525,8 +556,9 @@ Recommended next implementation steps after T0014:
 |---|---|---|
 | Exact Data API query params/date filters for Get tickets, Get payments, and Get customers. | Related source ingestion. | Resolved for T0014 seed window; all three endpoints accepted `startDate`, `endDate`, `pageNumber`, and `pageSize`. |
 | Whether Playground exposes Data API credentials/scopes separately from REST API credentials. | Data API implementation. | Resolved for `/data/bookingitems`; current Playground credentials work. |
-| Exact webhook event id/signature/verification mechanism. | Webhook production safety. | Open |
-| Exact webhook event names and payload fields for created, updated, paid, and cancelled bookings. | Idempotency and normalization. | Open |
+| Exact webhook production auth header/signature/verification mechanism. | Webhook production safety. | Open |
+| Exact webhook event id field and nested payload fields in Playground deliveries. | Idempotency and normalization. | Open |
+| Whether to enable IP allowlisting for Roller EMEA webhook source IPs. | Production hardening. | Open |
 | Whether booking webhook payload with payments is sufficient in all same-day cases or still needs detail refresh for safety. | Webhook enrichment strategy. | Partly confirmed |
 | Which customer/guest endpoint should be used when contact data is missing in a late booking. | SMS readiness. | Open |
 | Operational retention period for normalized booking snapshot, event log, and sync runs. | Data retention and cost. | Open |

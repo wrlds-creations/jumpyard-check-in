@@ -28,6 +28,7 @@ interface HandlerResources {
   readonly eventBus: events.EventBus;
   readonly rollerEnvParameter: ssm.StringParameter;
   readonly rollerBaseUrlParameter: ssm.StringParameter;
+  readonly webhookDevTokenSecret: secretsmanager.Secret;
 }
 
 export class JumpYardCloudStack extends Stack {
@@ -99,6 +100,16 @@ export class JumpYardCloudStack extends Stack {
       parameterName: `/${config.resourcePrefix}/roller/base-url`,
       stringValue: config.roller.baseUrl,
       description: 'Roller Playground API base URL for JumpYard Cloud.',
+    });
+
+    const webhookDevTokenSecret = new secretsmanager.Secret(this, 'WebhookDevTokenSecret', {
+      secretName: `/${config.resourcePrefix}/webhooks/dev-token`,
+      description: 'Development-only shared token for accepting Roller Playground webhooks.',
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ purpose: 'roller-playground-webhook' }),
+        generateStringKey: 'token',
+        excludePunctuation: true,
+      },
     });
 
     const rawPayloadBucket = new s3.Bucket(this, 'RawPayloadBucket', {
@@ -213,6 +224,7 @@ export class JumpYardCloudStack extends Stack {
       eventBus,
       rollerEnvParameter,
       rollerBaseUrlParameter,
+      webhookDevTokenSecret,
     };
 
     const lookupHandler = this.createHandler('LookupHandler', 'lookup', handlerResources, {
@@ -220,7 +232,9 @@ export class JumpYardCloudStack extends Stack {
     });
     const bookingHandler = this.createHandler('BookingHandler', 'booking', handlerResources);
     const redeemHandler = this.createHandler('RedeemHandler', 'redeem', handlerResources);
-    const webhookHandler = this.createHandler('WebhookHandler', 'webhook', handlerResources);
+    const webhookHandler = this.createHandler('WebhookHandler', 'webhook', handlerResources, {
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'webhook')),
+    });
 
     this.addRoute(api, lookupHandler, 'POST /v1/check-in/lookup');
     this.addRoute(api, redeemHandler, 'POST /v1/check-in/redeem');
@@ -262,6 +276,22 @@ export class JumpYardCloudStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
+    const environment: Record<string, string> = {
+      JUMPYARD_HANDLER: handlerName,
+      ROLLER_CREDENTIALS_SECRET_ARN: resources.rollerCredentialsSecret.secretArn,
+      ROLLER_ENV_PARAMETER_NAME: resources.rollerEnvParameter.parameterName,
+      ROLLER_BASE_URL_PARAMETER_NAME: resources.rollerBaseUrlParameter.parameterName,
+      DATABASE_CLUSTER_ARN: resources.databaseClusterArn,
+      DATABASE_SECRET_ARN: resources.databaseSecret.secretArn,
+      RAW_PAYLOAD_BUCKET_NAME: resources.rawPayloadBucket.bucketName,
+      ROLLER_OPERATIONS_QUEUE_URL: resources.rollerOperationsQueue.queueUrl,
+      EVENT_BUS_NAME: resources.eventBus.eventBusName,
+    };
+
+    if (handlerName === 'webhook') {
+      environment.WEBHOOK_DEV_TOKEN_SECRET_ARN = resources.webhookDevTokenSecret.secretArn;
+    }
+
     const fn = new lambda.Function(this, id, {
       functionName,
       architecture: lambda.Architecture.ARM_64,
@@ -280,17 +310,7 @@ exports.handler = async () => ({
   })
 });
 `),
-      environment: {
-        JUMPYARD_HANDLER: handlerName,
-        ROLLER_CREDENTIALS_SECRET_ARN: resources.rollerCredentialsSecret.secretArn,
-        ROLLER_ENV_PARAMETER_NAME: resources.rollerEnvParameter.parameterName,
-        ROLLER_BASE_URL_PARAMETER_NAME: resources.rollerBaseUrlParameter.parameterName,
-        DATABASE_CLUSTER_ARN: resources.databaseClusterArn,
-        DATABASE_SECRET_ARN: resources.databaseSecret.secretArn,
-        RAW_PAYLOAD_BUCKET_NAME: resources.rawPayloadBucket.bucketName,
-        ROLLER_OPERATIONS_QUEUE_URL: resources.rollerOperationsQueue.queueUrl,
-        EVENT_BUS_NAME: resources.eventBus.eventBusName,
-      },
+      environment,
     });
 
     resources.rollerCredentialsSecret.grantRead(fn);
@@ -300,6 +320,9 @@ exports.handler = async () => ({
     resources.eventBus.grantPutEventsTo(fn);
     resources.rollerEnvParameter.grantRead(fn);
     resources.rollerBaseUrlParameter.grantRead(fn);
+    if (handlerName === 'webhook') {
+      resources.webhookDevTokenSecret.grantRead(fn);
+    }
 
     fn.addToRolePolicy(
       new iam.PolicyStatement({
