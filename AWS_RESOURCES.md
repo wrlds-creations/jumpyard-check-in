@@ -4,9 +4,9 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-JumpYard Check-in dev AWS foundation is deployed.
+JumpYard Check-in dev AWS foundation is deployed, and the first dev Aurora schema migration has been applied.
 
-T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`.
+T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
 T0006 deploy notes:
 
@@ -15,6 +15,16 @@ T0006 deploy notes:
 - Successful deploy uses Aurora PostgreSQL `16.13`.
 - Post-deploy `cdk diff` shows no differences.
 - Placeholder API smoke returned HTTP `501` as expected.
+
+T0007 migration notes:
+
+- Migration runner: `infra/scripts/run-migrations.ts`
+- Migration command: `npm --prefix infra run migrate:dev`
+- Status command: `npm --prefix infra run migrate:dev:status`
+- Applied migration: `0001 initial schema`
+- Aurora schema: `jumpyard`
+- Verified tables: 15
+- Verified indexes: 62
 
 Confirmed T0006 dev target:
 
@@ -42,7 +52,7 @@ Confirmed T0006 dev target:
 | `/aws/lambda/jumpyard-check-in-dev-stack-booking` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-redeem` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-webhook` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
-| `jumpyard-check-in-dev-aurora` | Aurora PostgreSQL Serverless v2 | `dev` | `eu-north-1` | `cdk` | Engine `aurora-postgresql 16.13`, database `jumpyard_cloud`, encrypted, deletion protection enabled, Data API enabled. |
+| `jumpyard-check-in-dev-aurora` | Aurora PostgreSQL Serverless v2 | `dev` | `eu-north-1` | `cdk` plus SQL migrations | Engine `aurora-postgresql 16.13`, database `jumpyard_cloud`, encrypted, deletion protection enabled, Data API enabled, schema `jumpyard` created by T0007. |
 | `jumpyard-check-in-dev-aurora-writer` | RDS DB instance | `dev` | `eu-north-1` | `cdk` | Serverless writer instance. |
 | `jumpyard-check-in-dev-aurora-subnets` | RDS DB subnet group | `dev` | `eu-north-1` | `cdk` | Uses isolated subnets. |
 | `/jumpyard-check-in-dev/aurora/admin` | Secrets Manager | `dev` | `eu-north-1` | `cdk` | Generated Aurora admin credentials. |
@@ -58,6 +68,28 @@ Confirmed T0006 dev target:
 | `subnet-07bc326946413a10a` | EC2 subnet | `dev` | `eu-north-1b` | `cdk` | Isolated subnet B. |
 | `sg-0bd327f3b974b3d73` | EC2 security group | `dev` | `eu-north-1` | `cdk` | Aurora boundary security group. |
 | `jumpyard-check-in-dev-sta-*ServiceRole*` | IAM | `dev` | `eu-north-1` | `cdk` | Lambda execution roles and scoped inline policies for Secrets Manager, SSM, RDS Data API, S3, SQS, EventBridge, and CloudWatch metrics. |
+
+## Aurora Schema Inventory
+
+T0007 created schema `jumpyard` in database `jumpyard_cloud`.
+
+| Table | Purpose |
+|---|---|
+| `schema_migrations` | Tracks applied SQL migrations. |
+| `roller_bookings` | Latest normalized Roller booking snapshot from seed, webhook enrichment, or live refresh. |
+| `roller_booking_items` | Normalized booking item/product rows. |
+| `roller_booking_tickets` | Ticket ids and redeem readiness context. |
+| `roller_booking_payments` | Payment rows or summaries needed for check-in/payment decisions. |
+| `guest_profiles` | Minimal hashed/masked guest contact state for SMS/readiness and late enrichment. |
+| `checkin_tokens` | SMS/link/open token state. |
+| `checkin_attempts` | Check-in and redeem attempt audit. |
+| `handoff_sessions` | Staff handoff, safety, and band-pairing state. |
+| `booking_links` | Internal links between original bookings and separate add-on bookings. |
+| `idempotency_records` | Write protection for booking, payment, redeem, and add-on operations. |
+| `product_catalog_cache` | Product cache metadata and normalized summary. |
+| `roller_webhook_events` | Idempotent booking webhook intake and enrichment state. |
+| `booking_seed_runs` | Daily seed run tracking. |
+| `event_log` | Append-only business and observability events. |
 
 ## Proposed Target Resources
 

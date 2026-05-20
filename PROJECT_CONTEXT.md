@@ -23,6 +23,8 @@ The current Sprint 1 API and data contract is documented in `JUMPYARD_CLOUD_CONT
 
 The first AWS foundation is defined as a CDK TypeScript app in `infra/`. T0006 deployed the confirmed dev config in `infra/config/dev.json`.
 
+T0007 added Aurora schema migrations in `infra/migrations/` and a dev migration runner in `infra/scripts/run-migrations.ts`. The first migration created the `jumpyard` schema in dev Aurora.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -85,11 +87,10 @@ The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_C
 
 ## Confirmed Implementation Roadmap
 
-After T0006 is deployed, the next tickets should proceed in this order:
+After T0007, the next tickets should proceed in this order:
 
 | Ticket | Goal | Why This Order |
 |---|---|---|
-| `T0007 Aurora schema/migrations` | Create the ingestion and operational tables in Aurora. | Backend endpoints and jobs need durable tables before they can store state. |
 | `T0008 Playground test booking seed tool` | Create deterministic Roller Playground test bookings through protected server-side tooling. | Reliable test scenarios are needed before validating lookup and check-in flows. |
 | `T0009 Booking lookup endpoint` | Implement `POST /v1/check-in/lookup` against Roller Playground and local index shape. | First real JumpYard Cloud API behavior for the phone flow. |
 | `T0010 Daily seed job` | Implement the Roller Data API seed into Aurora. | Fills the booking index automatically for operating days. |
@@ -107,6 +108,9 @@ Deterministic Playground test bookings means fixed, repeatable test scenarios ra
 - Stack: `jumpyard-check-in-dev-stack`
 - API endpoint: `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`
 - Aurora PostgreSQL engine: `aurora-postgresql 16.13`
+- Aurora database: `jumpyard_cloud`
+- Aurora schema: `jumpyard`
+- Aurora migration command: `npm --prefix infra run migrate:dev`
 - `WRLDS:Client`: `JumpYard`
 - `WRLDS:Project`: `jumpyard-check-in`
 - `WRLDS:Owner`: `love`
