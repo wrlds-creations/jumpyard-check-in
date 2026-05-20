@@ -7,6 +7,9 @@
     "build": "tsc --noEmit",
     "synth": "cdk synth",
     "synth:example": "cdk synth -c config=./config/dev.example.json",
+    "synth:dev": "cdk synth -c config=./config/dev.json",
+    "diff:dev": "cdk diff -c config=./config/dev.json --profile wrlds-dev",
+    "deploy:dev": "cdk deploy -c config=./config/dev.json --profile wrlds-dev --require-approval never",
     "check": "npm run build && npm run synth:example"
   },
   "dependencies": {
