@@ -2,39 +2,43 @@
 
 ## Ticket ID
 
-T0011
+T0012
 
 ## Goal
 
-Verify Roller Data API access and lock the booking-index sync strategy before building Aurora ingestion.
+Import Roller Data API `/data/bookingitems` records into the existing dev Aurora booking index tables.
 
 ## Dependencies
 
-- T0010 completed, pushed, and merged to `main`.
-- Local Roller Playground credentials exist in `.env`.
+- T0011 completed, pushed, and merged to `main`.
+- Dev Aurora schema from T0007 exists.
+- Roller Data API `/data/bookingitems` access works in Playground.
+- Local Roller credentials exist in `.env`.
+- AWS SSO/profile `wrlds-dev` can access account `376129878018`, region `eu-north-1`.
 - Do not commit `.env`.
-- User supplied Roller Data API docs for overview, environments, rate limits, and `GET /data/bookingitems`.
 
 ## Current Status
 
-Completed locally on branch `codex/t0011-data-api-smoke`.
+Completed locally and applied to dev Aurora on branch `codex/t0012-bookingitems-aurora-import`.
 
 Validation result:
 
-- `node --check scripts/roller-data-api-smoke.js`: passed
-- `npm run roller:data:smoke`: passed
-- `npm run roller:data:smoke -- --start-date 2026-05-20 --end-date 2026-05-21`: passed
-- Production URL rejection with `ROLLER_BASE_URL=https://api.roller.app`: passed
+- `npm --prefix infra run build`: passed
+- `npm --prefix infra run import:bookingitems:dev -- --start-date 2026-05-20 --end-date 2026-05-21`: passed dry-run
+- `npm --prefix infra run import:bookingitems:dev:apply -- --start-date 2026-05-20 --end-date 2026-05-21`: failed closed without write confirmation
+- AWS identity preflight: account `376129878018`
+- AWS region preflight: `eu-north-1`
+- guarded apply with `ROLLER_IMPORT_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_BOOKINGITEMS`: passed
+- idempotency re-run against the same window: passed
 
-Data API smoke result:
+Import result:
 
-- Endpoint: `GET /data/bookingitems`
 - Modified-date window: `2026-05-20 -> 2026-05-21`
-- Response shape: `currentPage`, `totalPages`, `totalItems`, `itemsPerPage`, `items`
-- Records returned: `9`
-- Seed booking references found: `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, `5032215`
-- Booking dates returned: `2026-05-21`, `2026-05-22`
-- No secrets, access tokens, customer names, emails, or phone numbers printed
+- Data API records read: `9`
+- `jumpyard.roller_bookings` matched after apply: `6`
+- `jumpyard.roller_booking_items` matched after apply: `9`
+- `jumpyard.booking_seed_runs` latest import status: `succeeded`
+- Seed booking references visible in Aurora: `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, `5032215`
 
 ## Allowed Areas
 
@@ -44,11 +48,11 @@ Data API smoke result:
 - `REPO_CURRENT_STATE.md`
 - `FOLLOWUPS.md`
 - `TEST_PLAN.md`
+- `AWS_RESOURCES.md`
 - `BOOKING_INDEX_INGESTION_CONTRACT.md`
 - `.env.example`
-- `package.json`
-- `scripts/roller-data-api-smoke.js`
-- Existing Roller helper scripts only if needed for reuse
+- `infra/package.json`
+- `infra/scripts/`
 
 ## Do Not Touch
 
@@ -60,72 +64,76 @@ Data API smoke result:
 - Payment implementation
 - Redeem implementation
 - Booking creation implementation
-- AWS infrastructure
+- AWS infrastructure resources
 - Production config
 - Production credentials
 - `.env`
 
 ## Requirements
 
-1. Add a local-only Roller Data API smoke command:
-   - `npm run roller:data:smoke`
-2. The smoke test must:
-   - Read Roller config from environment variables/local `.env`.
-   - Reuse the Playground environment guard from earlier tickets.
-   - Fail if `ROLLER_ENV` is not `playground`.
-   - Fail if `ROLLER_BASE_URL` does not point to Playground.
-   - Never print `ROLLER_CLIENT_SECRET`, access tokens, customer names, emails, or phone numbers.
-   - Request `GET /data/bookingitems` with `startDate`, `endDate`, `pageNumber`, and `pageSize`.
-   - Print only safe response shape, counts, date ranges, and known seed booking-reference matches.
-3. Confirm whether the current Playground credentials can access the Data API.
-4. Lock the booking-index sync strategy:
-   - Initial backfill into Aurora.
-   - Daily modified-date incremental sync.
-   - Same-day webhook updates.
-   - REST live refresh before check-in-critical decisions.
-5. Update source-of-truth docs with:
-   - Data API access result.
-   - Data API modified-date behavior.
-   - Validation commands.
-   - Recommended next ticket.
+1. Add a dev import command for `/data/bookingitems`.
+2. The importer must:
+   - Load local Roller `.env` values without printing secrets.
+   - Reuse the Playground-only guard.
+   - Read `startDate`, `endDate`, `pageNumber`, and `pageSize`.
+   - Fetch paginated Data API records.
+   - Normalize booking-level data into `jumpyard.roller_bookings`.
+   - Normalize booking item rows into `jumpyard.roller_booking_items`.
+   - Track the run in `jumpyard.booking_seed_runs`.
+   - Be idempotent for the same records.
+   - Avoid storing raw Roller payloads by default.
+   - Avoid printing customer names, emails, phone numbers, booking notes, access tokens, or secrets.
+3. The write command must fail closed unless an explicit write-confirmation environment variable is set.
+4. Use only the existing dev Aurora database and schema. Do not create or deploy AWS resources.
+5. Run the importer against the T0008 seed modified-date window.
+6. Verify Aurora contains imported rows for the known seed booking references.
+7. Update source-of-truth docs with:
+   - command names
+   - validation result
+   - query examples for AWS Query Editor
+   - recommended next ticket
 
 ## Non-Goals
 
-- Do not write Data API data to Aurora yet.
-- Do not create or change AWS resources.
-- Do not implement cron/EventBridge scheduling.
+- Do not import `/data/tickets` yet.
+- Do not import `/data/bookingpayments` yet.
+- Do not import `/data/giftcards` yet.
+- Do not change lookup to use Aurora first yet.
 - Do not implement webhook intake.
-- Do not change the phone app.
+- Do not schedule the job.
+- Do not create or deploy AWS resources.
 - Do not call Roller Live/production.
 - Do not make Roller write calls.
-- Do not commit secrets.
 
 ## Acceptance Criteria
 
-- `npm run roller:data:smoke` exists.
-- Data API smoke is Playground-only and safe by default.
-- The command confirms either:
-  - Data API access works for current Playground credentials, or
-  - Data API access is unavailable and the required follow-up is documented.
-- Sync strategy is documented as backfill + daily modified-date sync + webhooks + REST live refresh.
+- `npm --prefix infra run import:bookingitems:dev` dry-runs safely.
+- `npm --prefix infra run import:bookingitems:dev:apply` writes only when `ROLLER_IMPORT_ALLOW_WRITE` is set to the approved confirmation value.
+- Aurora `jumpyard.roller_bookings` contains T0008 seed booking references after apply.
+- Aurora `jumpyard.roller_booking_items` contains the imported booking item rows after apply.
+- `jumpyard.booking_seed_runs` records the import run.
 - `npm run validate` passes.
-- No app, asset, deliverable, AWS resource, production config, or `.env` files are changed.
+- `npm --prefix infra run build` passes.
+- No app, asset, deliverable, production config, `.env`, or AWS resource files are changed beyond docs/inventory.
 
 ## Manual Verification
 
-Run:
+After apply, use AWS Query Editor against database `jumpyard_cloud`:
 
-```powershell
-npm run roller:data:smoke
+```sql
+select booking_reference, booking_status, payment_status, booking_date, total_cents
+from jumpyard.roller_bookings
+where booking_reference in ('5032210','5032211','5032212','5032213','5032214','5032215')
+order by booking_reference;
 ```
 
-Optional explicit window for T0008 seed bookings:
-
-```powershell
-npm run roller:data:smoke -- --start-date 2026-05-20 --end-date 2026-05-21
+```sql
+select b.booking_reference, i.booking_item_id, i.product_id, i.quantity, i.booking_date, i.start_time, i.end_time
+from jumpyard.roller_booking_items i
+join jumpyard.roller_bookings b on b.roller_unique_id = i.roller_unique_id
+where b.booking_reference in ('5032210','5032211','5032212','5032213','5032214','5032215')
+order by b.booking_reference, i.booking_item_id;
 ```
-
-Confirm no secrets, access tokens, customer names, emails, or phone numbers are printed.
 
 ## Automated Validation
 
@@ -133,4 +141,7 @@ Run:
 
 - `node --check scripts/roller-data-api-smoke.js`
 - `npm run roller:data:smoke`
+- `npm --prefix infra run build`
+- `npm --prefix infra run import:bookingitems:dev`
+- `npm --prefix infra run import:bookingitems:dev:apply` with explicit write confirmation
 - `npm run validate`

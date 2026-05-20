@@ -34,6 +34,18 @@ T0009 lookup deploy notes:
 - Roller writes: none.
 - Post-deploy diff: no differences.
 
+T0012 dev data import notes:
+
+- AWS resources created or changed: none.
+- Existing Aurora Data API was used to write normalized Roller Data API `/data/bookingitems` snapshots.
+- Import command: `npm --prefix infra run import:bookingitems:dev:apply`
+- Modified-date window: `2026-05-20 -> 2026-05-21`
+- Imported rows matched after apply:
+  - `jumpyard.roller_bookings`: 6 seed bookings
+  - `jumpyard.roller_booking_items`: 9 booking items
+  - `jumpyard.booking_seed_runs`: latest run `succeeded`
+- Raw Roller payloads, customer names, emails, phone numbers, booking notes, secrets, and tokens were not printed or intentionally stored.
+
 Confirmed T0006 dev target:
 
 | Field | Value |
