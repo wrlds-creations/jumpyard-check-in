@@ -2,33 +2,29 @@
 
 ## Ticket ID
 
-T0007
+T0008
 
 ## Goal
 
-Create the first Aurora PostgreSQL schema and migration runner for JumpYard Cloud ingestion and operational state.
+Create a protected Roller Playground seed tool for deterministic test bookings.
 
 ## Dependencies
 
-- T0006 completed, pushed, and merged to `main`.
-- JumpYard Cloud dev foundation exists in AWS account `376129878018`, region `eu-north-1`.
-- `skills/aws-project-infrastructure/` must be followed for AWS governance.
+- T0007 completed, pushed, and merged to `main`.
+- Local Roller Playground credentials exist in `.env`.
+- Do not commit `.env`.
+- Roller write calls are allowed only against Playground through the guarded seed tool.
 
 ## Current Status
 
-Completed locally and applied to the approved dev Aurora cluster on 2026-05-20.
+Completed.
 
-Applied migration result:
+Seed apply result:
 
-- Branch: `codex/t0007-aurora-schema-migrations`
-- Migration command: `npm --prefix infra run migrate:dev`
-- Migration status command: `npm --prefix infra run migrate:dev:status`
-- Applied migration: `0001 initial schema`
-- Target cluster: `arn:aws:rds:eu-north-1:376129878018:cluster:jumpyard-check-in-dev-aurora`
-- Database: `jumpyard_cloud`
-- Schema: `jumpyard`
-- Verified tables: 15
-- Verified indexes: 62
+- Created Playground booking references `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, and `5032215`.
+- Read-only readback confirmed HTTP 200 for all six references.
+- Booking `5032210` is `Paid` with amount owing `0`.
+- The remaining seed bookings are `PendingPayment`.
 
 ## Allowed Areas
 
@@ -37,13 +33,11 @@ Applied migration result:
 - `DECISIONS.md`
 - `REPO_CURRENT_STATE.md`
 - `FOLLOWUPS.md`
-- `AWS_RESOURCES.md`
 - `TEST_PLAN.md`
-- `infra/package.json`
-- `infra/package-lock.json`
-- `infra/tsconfig.json`
-- `infra/migrations/`
-- `infra/scripts/`
+- `.env.example`
+- `package.json`
+- Existing Roller helper/client scripts under `scripts/`
+- New Roller seed-tool script under `scripts/`
 
 ## Do Not Touch
 
@@ -51,82 +45,85 @@ Applied migration result:
 - UI files
 - Assets
 - Deliverables
-- Roller write integration code
-- Payment logic
-- Redeem logic
+- Payment implementation
+- Redeem implementation
+- AWS resources
+- Production config
 - Production credentials
 - `.env`
-- Staging or production AWS resources
 
 ## Requirements
 
-1. Add a migration runner for the approved T0006 dev Aurora cluster.
-2. Add an initial SQL migration for the `jumpyard` schema.
-3. Create the ingestion and operational tables from the T0003/T0005 contracts:
-   - `roller_bookings`
-   - `roller_booking_items`
-   - `roller_booking_tickets`
-   - `roller_booking_payments`
-   - `guest_profiles`
-   - `checkin_tokens`
-   - `checkin_attempts`
-   - `handoff_sessions`
-   - `booking_links`
-   - `idempotency_records`
-   - `product_catalog_cache`
-   - `roller_webhook_events`
-   - `booking_seed_runs`
-   - `event_log`
-4. Add `schema_migrations` tracking.
-5. Add lookup, seed, webhook, idempotency, audit, and operational indexes needed by upcoming tickets.
-6. Keep stored PII minimal by using hashes/masked fields where contact data is needed.
-7. Run AWS preflight before applying the migration:
-   - `aws sts get-caller-identity --profile wrlds-dev`
-   - `aws configure get region --profile wrlds-dev`
-8. Apply the migration only to the approved dev target.
-9. Update source-of-truth docs with migration commands and deployed schema state.
+1. Add a local seed command, for example:
+   - `npm run roller:seed:playground`
+   - optional guarded apply helper: `npm run roller:seed:playground:apply`
+2. The seed tool must:
+   - Load local Roller config from environment variables.
+   - Reuse the T0001/T0002 Playground guard.
+   - Fail if `ROLLER_ENV` is not `playground`.
+   - Fail if `ROLLER_BASE_URL` does not point to Playground.
+   - Fail closed if the URL looks production/live.
+   - Never print `ROLLER_CLIENT_SECRET`, access tokens, or payment JWTs.
+3. The tool must read Roller products first and map configured scenario products to Roller child/variation product IDs, because Roller create booking payloads require variation IDs.
+4. The tool must create deterministic fake booking payloads for known scenarios:
+   - paid-ready lookup
+   - pending-payment lookup
+   - wrong-date lookup
+   - SkyRider/add-on lookup
+   - original booking for linked add-on flow
+   - separate linked add-on booking
+5. The tool must be safe by default:
+   - dry-run by default
+   - no Roller booking writes unless `--apply` is passed
+   - `--apply` must also require `ROLLER_SEED_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_BOOKINGS`
+6. The default write endpoint may be `POST /bookings` for real Playground lookup bookings.
+   - `POST /bookings/draft` may be supported for draft-only checks.
+   - Live/production endpoints must remain blocked.
+7. If Roller rejects generated bookings because a capacity reservation or additional endpoint is required:
+   - Do not guess dangerously.
+   - Keep the guarded script structure.
+   - Add a clear note in `FOLLOWUPS.md`.
+8. Update source-of-truth docs with:
+   - seed command
+   - selected safety rules
+   - validation results
+   - recommended next ticket: `T0009 Booking lookup endpoint`
 
 ## Non-Goals
 
-- Do not implement API business logic.
-- Do not connect phone/kiosk/admin apps to AWS.
-- Do not implement daily seed logic.
-- Do not implement webhook logic.
-- Do not create Playground fake bookings.
-- Do not call Roller writes.
-- Do not create, update, redeem, or pay Roller bookings.
-- Do not create staging or production AWS resources.
-- Do not add production credentials.
+- Do not modify the phone, kiosk, or admin UI.
+- Do not create a public demo button.
+- Do not write to Roller Live/production.
+- Do not implement payment processing.
+- Do not implement redemption/check-in.
+- Do not implement booking lookup API behavior.
+- Do not create or change AWS resources.
+- Do not store seed results in Aurora yet.
 
 ## Acceptance Criteria
 
-- Migration runner exists and does not log secrets.
-- Initial SQL migration is idempotent.
-- Dev Aurora has the `jumpyard` schema and the expected operational tables.
-- `schema_migrations` records `0001 initial schema`.
+- `npm run roller:seed:playground` performs a safe dry-run and prints the planned scenarios.
+- Dry-run resolves known Playground products to child/variation IDs.
+- Production/live-looking Roller URL is rejected before auth/write.
+- `--apply` is blocked unless the explicit write confirmation env var is set.
+- No secrets, access tokens, payment JWTs, or raw sensitive payloads are printed.
 - `npm run validate` passes.
-- `npm run infra:check` passes.
-- No app code, UI, assets, deliverables, Roller write logic, `.env`, or production config is changed.
+- No app code, UI files, assets, deliverables, AWS resources, or `.env` are changed.
 
 ## Manual Verification
 
-After migration, confirm in AWS/Aurora:
+Run:
 
-- Database `jumpyard_cloud` exists.
-- Schema `jumpyard` exists.
-- `schema_migrations` contains `0001`.
-- The expected ingestion and operational tables exist.
-- No Roller credentials or production secrets are committed.
+- `npm run roller:seed:playground`
+- `npm run roller:seed:playground:apply` without `ROLLER_SEED_ALLOW_WRITE`
+- a production/live-looking URL rejection check
+- optionally, `ROLLER_SEED_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_BOOKINGS npm run roller:seed:playground:apply`
+
+Confirm any written bookings exist only in Roller Playground.
 
 ## Automated Validation
 
 Run:
 
-- `npm --prefix infra run build`
-- `aws sts get-caller-identity --profile wrlds-dev`
-- `aws configure get region --profile wrlds-dev`
-- `npm --prefix infra run migrate:dev:status`
-- `npm --prefix infra run migrate:dev`
-- direct Aurora Data API table/index verification
 - `npm run validate`
-- `npm run infra:check`
+- `npm run roller:seed:playground`

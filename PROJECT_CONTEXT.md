@@ -25,6 +25,8 @@ The first AWS foundation is defined as a CDK TypeScript app in `infra/`. T0006 d
 
 T0007 added Aurora schema migrations in `infra/migrations/` and a dev migration runner in `infra/scripts/run-migrations.ts`. The first migration created the `jumpyard` schema in dev Aurora.
 
+T0008 adds a protected local Roller Playground seed tool for deterministic fake bookings. The tool is dry-run by default and can only write bookings when Playground config passes and an explicit write-confirmation environment variable is set.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -98,6 +100,8 @@ After T0007, the next tickets should proceed in this order:
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
+T0008 uses `npm run roller:seed:playground` as the local seed command. It reads Roller products first, maps seed scenarios to child/variation product IDs, and defaults to dry-run. Writes require `--apply` plus `ROLLER_SEED_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_BOOKINGS`.
+
 ## AWS Dev Target
 
 - AWS account id: `376129878018`
@@ -139,6 +143,15 @@ Deterministic Playground test bookings means fixed, repeatable test scenarios ra
 ## Confirmed Roller Playground Facts
 
 - `GET /products` returned 96 products in Playground on 2026-05-19.
+- `GET /products` returned 96 top-level products and 491 flattened products/variations in Playground on 2026-05-20.
+- T0008 dry-run resolved seed payload product IDs to child/variation IDs, including `1765836` for `Entré 120 min`, `1765445` for `JumpSocks`, `1765443` for `SkyRider`, and `1765441` for `Hänglås`.
+- T0008 created six deterministic Playground bookings on 2026-05-20:
+  - `5032210`: paid-ready, status `Paid`, amount owing `0`, total `610`.
+  - `5032211`: pending-payment, status `PendingPayment`, amount owing `260`.
+  - `5032212`: wrong-date, status `PendingPayment`, amount owing `260`.
+  - `5032213`: SkyRider/add-on, status `PendingPayment`, amount owing `300`.
+  - `5032214`: original booking for linked add-on flow, status `PendingPayment`, amount owing `260`.
+  - `5032215`: separate linked add-on booking, status `PendingPayment`, amount owing `92`.
 - `GET /bookings/5001370` returned HTTP 200 in Playground and accepted the booking reference as the path id.
 - `GET /bookings?date=2026-05-19` returned one booking in Playground on 2026-05-19.
 - Known Playground booking for lookup testing: booking reference `5001370`, unique id `dbba266d-0951-4706-9adf-6c9d05edffbf`.
@@ -146,13 +159,15 @@ Deterministic Playground test bookings means fixed, repeatable test scenarios ra
 
 ## Non-Goals For Current Ticket
 
-- Do not implement API business logic.
-- Do not create, update, or redeem Roller bookings.
+- Do not implement API business logic beyond the local T0008 seed tool.
+- Do not write to Roller Live/production.
+- Do not redeem Roller tickets.
 - Do not create staging or production AWS resources.
 - Do not modify app functionality.
 - Do not add payment logic.
 - Do not add redeem logic.
 - Do not deploy AWS infrastructure outside the approved T0006 dev foundation.
+- Do not add a public demo button to the phone check-in UI.
 
 ## Open Questions
 
