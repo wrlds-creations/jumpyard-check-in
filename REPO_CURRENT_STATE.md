@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-20
-- Current branch: `codex/t0010-phone-lookup-wiring`
-- Current status: T0010 phone lookup wiring completed locally; ready for commit/review.
-- Current ticket: `T0010` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`
-- Recommended next ticket: `T0011 Daily seed job`
+- Current branch: `codex/t0011-data-api-smoke`
+- Current status: T0011 Data API smoke completed locally; ready for review.
+- Current ticket: `T0011` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`
+- Recommended next ticket: `T0012 Data API bookingitems Aurora import`
 
 ## Current Structure
 
@@ -29,6 +29,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |-- scripts/
 |   |-- check-roller-env.js
 |   |-- roller-client.js
+|   |-- roller-data-api-smoke.js
 |   |-- roller-seed-playground.js
 |   `-- roller-smoke.js
 |-- infra/
@@ -65,6 +66,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm --prefix infra audit` | Audit infra dependencies. | Currently reports one moderate bundled `brace-expansion` issue inside `aws-cdk-lib`; automatic fix unavailable. |
 | `npm run roller:env:check` | Validate Roller env guard against current environment variables. | Requires `ROLLER_ENV=playground` and a Playground-looking `ROLLER_BASE_URL`; client credentials are optional. |
 | `npm run roller:smoke` | Verify local Roller Playground credentials with an OAuth token request and one read-only smoke request. | Loads local `.env`; does not print secrets or full Roller responses. |
+| `npm run roller:data:smoke` | Verify local Roller Data API `/data/bookingitems` access and safe response shape. | Loads local `.env`; uses modified-date window defaults and does not print secrets, tokens, customer names, emails, or phone numbers. |
 | `npm run roller:seed:playground` | Plan deterministic Roller Playground seed bookings. | Dry-run by default; no booking writes. |
 | `npm run roller:seed:playground:apply` | Create deterministic Roller Playground seed bookings. | Writes only when `ROLLER_SEED_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_BOOKINGS` is set and the Playground guard passes. |
 | Read-only `GET /bookings/{bookingReference}` | Verify known Playground booking lookup behavior. | Run through the existing Roller client helper; do not print secrets or raw PII. |
@@ -90,19 +92,22 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0008` | Added protected Roller Playground seed tooling and created deterministic test bookings. | 2026-05-20 | Created Playground booking references `5032210` through `5032215`. |
 | `T0009` | Implemented and deployed server-side booking lookup endpoint. | 2026-05-20 | Dev `POST /v1/check-in/lookup` now calls Roller Playground `GET /bookings/{identifier}` and returns normalized JumpYard lookup response. |
 | `T0010` | Wired phone booking lookup step to JumpYard Cloud. | 2026-05-20 | Phone UI calls dev `POST /v1/check-in/lookup`, shows ready and unpaid found bookings in summary, blocks check-in for unpaid bookings, and shows stop states for wrong-date, non-redeemable, not-found, and service failures. |
+| `T0011` | Added Data API smoke test and locked backfill/incremental sync strategy. | 2026-05-20 | `GET /data/bookingitems` works in Playground and returned 9 rows for the T0008 seed modified-date window. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0010` | Wire the phone check-in lookup step to JumpYard Cloud. | Completed locally | Local phone dev server is running at `http://127.0.0.1:3000`; commit/review still pending. |
+| `T0011` | Verify Data API access and lock sync strategy. | Completed locally | `npm run roller:data:smoke` passes against Playground; commit/review still pending. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0011` | Daily seed job | Implement Data API seed into Aurora. |
-| `T0012` | Booking webhook intake | Implement webhook intake, idempotency, and enrichment. |
+| `T0012` | Data API bookingitems Aurora import | Upsert `/data/bookingitems` records into Aurora with sync-run tracking. |
+| `T0013` | Related Data API sources | Add tickets, payments, and customers after endpoint docs/access are confirmed. |
+| `T0014` | Booking webhook intake | Implement webhook intake, idempotency, and enrichment. |
+| `T0015` | Lookup Aurora-first | Use Aurora for display lookup, with REST refresh when missing, stale, or check-in-critical. |
 
 ## Validation Status
 
@@ -153,6 +158,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0010 CORS preflight: `OPTIONS /v1/check-in/lookup` returned HTTP `204` with `access-control-allow-origin: *`.
 - T0010 local dev server: `http://127.0.0.1:3000` returned HTTP `200`.
 - T0010 headless browser automation: not run because Playwright is not installed in `jumpyard-checkin-phone`.
+- T0011 script syntax: `node --check scripts/roller-data-api-smoke.js` passed.
+- T0011 Data API smoke: `npm run roller:data:smoke` passed with local `.env`; `/data/bookingitems` returned 9 records for modified-date window `2026-05-20 -> 2026-05-21`.
+- T0011 Data API seed reference check: Data API response included seed booking references `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, and `5032215`.
+- T0011 Data API response shape: first page returned object keys `currentPage`, `totalPages`, `totalItems`, `itemsPerPage`, and `items`.
+- T0011 production URL rejection: `ROLLER_BASE_URL=https://api.roller.app` was rejected before Data API calls.
 
 ## Known Issues Summary
 
@@ -162,7 +172,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Phone app booking lookup now calls JumpYard Cloud for the first check-in step. Payment, redeem, and booking creation UI behavior are still pending.
 - Aurora schema exists in dev, but no application code writes to it yet.
 - Booking index ingestion from Roller Data API and booking webhooks has not been implemented.
-- Exact Roller Data API query params, paging, credentials, and date-window support are still open.
+- Roller Data API `/data/bookingitems` access, query params, paging shape, and modified-date behavior are confirmed in Playground; tickets, payments, and customers Data API endpoints are still open.
 - Webhook event id, signature/verification method, retry behavior, and event names are still open.
 - Already-redeemed Playground seed data is deferred until redemption is implemented and safely tested.
 - Staff handoff/redeem flow integration has not been implemented.
@@ -175,5 +185,5 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - What is the exact JumpYard Cloud link model between original booking and separate add-on booking?
 - Which tenders work in the new add-on booking checkout flow: gift card, membership code, and multi-visit value?
 - Which products must be configured as ticket/session products to support API-driven redemption and webhook-based counters?
-- Which exact Roller Data API query params, paging model, credentials, and date range should power the daily morning booking seed?
+- Which exact Roller Data API endpoints, query params, and payloads should power tickets, payments, and customers ingestion?
 - Which webhook event id, signature/verification method, retry behavior, and event names does Roller provide in Playground and production?

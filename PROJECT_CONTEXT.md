@@ -82,12 +82,14 @@ The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_C
 
 ## Booking Index Strategy
 
-- JumpYard Cloud should use a daily Roller Data API seed each morning to preload the operational booking index.
-- Roller booking webhooks should update same-day booking changes after the seed.
+- JumpYard Cloud should use an initial Roller Data API backfill to create the first Aurora booking index baseline.
+- JumpYard Cloud should then run a daily Roller Data API modified-date sync to upsert new and changed records.
+- Roller booking webhooks should update same-day booking changes after the latest sync.
 - Live Roller REST lookup should still confirm check-in-critical state before writes such as redemption.
 - The booking index is an operational cache/index, not the source of truth.
 - Playground test bookings should be created by a protected internal seed tool or admin-only action, not by a public demo button in the phone check-in flow.
-- Daily seed should use Get bookings, Get tickets, Get payments, and Get customers as the expected source set.
+- Data API `startDate`/`endDate` windows are based on record modified date, while returned `bookingDate` is used for local visit-date filtering.
+- Data API sync should use Get bookings, Get tickets, Get payments, and Get customers as the expected source set.
 - Get attendance is for actual arrival/redeem reconciliation, not for seeding expected guests.
 - Webhook payloads may be sufficient when configured with booking detail and payments, but JumpYard Cloud should enrich from live booking detail when data is incomplete, suspicious, stale, or check-in-critical.
 
@@ -100,8 +102,10 @@ After T0007, the next tickets should proceed in this order:
 | `T0008 Playground test booking seed tool` | Create deterministic Roller Playground test bookings through protected server-side tooling. | Reliable test scenarios are needed before validating lookup and check-in flows. |
 | `T0009 Booking lookup endpoint` | Implement `POST /v1/check-in/lookup` against Roller Playground and local index shape. | First real JumpYard Cloud API behavior for the phone flow. |
 | `T0010 Phone UI lookup wiring` | Connect the phone check-in lookup step to JumpYard Cloud `POST /v1/check-in/lookup`. | Completed locally; lets the first mobile flow step use the deployed server-side Roller lookup. |
-| `T0011 Daily seed job` | Implement the Roller Data API seed into Aurora. | Fills the booking index automatically for operating days. |
-| `T0012 Booking webhook intake` | Implement webhook intake, idempotency, and enrichment. | Keeps the booking index fresh after the morning seed. |
+| `T0011 Data API access smoke` | Verify Roller Data API access and lock modified-date sync strategy. | Prevents building Aurora ingestion against the wrong Data API mental model. |
+| `T0012 Data API bookingitems import` | Upsert `/data/bookingitems` records into Aurora. | Starts the local booking index with confirmed Data API payload shape. |
+| `T0013 Related Data API sources` | Add tickets, payments, and customers once endpoint docs/access are confirmed. | Completes payment/contact/ticket context for lookup and SMS. |
+| `T0014 Booking webhook intake` | Implement webhook intake, idempotency, and enrichment. | Keeps the booking index fresh after sync/backfill. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -170,6 +174,13 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
   - `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL`
   - `NEXT_PUBLIC_JUMPYARD_LOOKUP_EXPECTED_DATE`
 - T0010 local demo default expected date is `2026-05-21` to match deterministic Playground seed bookings.
+- T0011 confirmed current Playground credentials can access Roller Data API `GET /data/bookingitems`.
+- T0011 `npm run roller:data:smoke` for modified-date window `2026-05-20 -> 2026-05-21` returned:
+  - response shape: `currentPage`, `totalPages`, `totalItems`, `itemsPerPage`, `items`
+  - records returned: `9`
+  - seed booking references found: `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, `5032215`
+  - returned booking dates: `2026-05-21`, `2026-05-22`
+  - modified date range: `2026-05-20T09:05:03Z -> 2026-05-20T09:05:05Z`
 
 ## Non-Goals For Current Ticket
 
@@ -191,5 +202,5 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
 | Which Roller Playground write scopes are enabled for create booking, draft booking, payment, and redemption? | Needed before T0004+ write spikes. | `TBD` | `Open` |
 | What is the best field or internal model for linking an original booking to a separate add-on booking? | Required for add-product implementation. | `TBD` | `Open` |
 | Which products need reconfiguration from stock/add-on to ticket/session products for API-driven redemption? | Stock/add-on products are excluded from Roller ticket redemption webhook/API flow. | `TBD` | `Open` |
-| Which Roller Data API endpoint and date range should power the daily morning booking seed? | Required before booking index ingestion implementation. | `TBD` | `Open` |
+| Which Roller Data API endpoints and date ranges should power tickets, payments, and customers ingestion? | Required after bookingitems ingestion. | `TBD` | `Open` |
 | Which webhook event id, signature, and payload fields does Roller provide in Playground and production? | Required before exposing webhook intake beyond local/dev testing. | `TBD` | `Open` |

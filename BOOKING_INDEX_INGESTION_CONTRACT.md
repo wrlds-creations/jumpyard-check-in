@@ -20,7 +20,8 @@ T0005 is a contract ticket only. It does not implement jobs, webhooks, database 
 JumpYard Cloud should keep an operational booking index with three ingestion paths:
 
 ```text
-05:00 daily seed -> Aurora booking snapshot
+Initial Data API backfill -> Aurora booking snapshot baseline
+Daily Data API modified-date sync -> incremental Aurora upserts
 Roller booking webhook -> same-day change signal
 Live REST lookup -> authoritative refresh before critical actions
 ```
@@ -94,25 +95,33 @@ Rules:
 - Payment and ticket status from Roller must overwrite local stale status when newer.
 - JumpYard-owned fields must not be overwritten by Roller seed data.
 
-## Daily Seed Contract
+## Data API Backfill And Daily Sync Contract
 
 ### Purpose
 
-The daily seed builds the local baseline before the park opens.
+The initial backfill builds the local Aurora baseline. The daily sync then keeps it current by importing Roller records modified since the previous sync.
 
-Default cadence:
+ROLLER Data API `startDate` and `endDate` are modified-date windows. They are not a direct query for all visits on a given `bookingDate`. Returned `bookingDate` values are used by JumpYard Cloud for local visit-date filtering after records have been imported.
 
-```text
-05:00 Europe/Stockholm daily
-```
-
-Initial date window:
+Default daily cadence:
 
 ```text
-today + configurable near-future window
+01:00-07:00 Europe/Stockholm daily, outside business hours
 ```
 
-The exact date range remains configurable because SMS timing, birthday-party preparation, and venue opening hours may require tomorrow or near-future bookings. The implementation should start conservative and expand only when a use case requires it.
+Initial backfill window:
+
+```text
+TBD approved historical/future window, for example 12 months back plus relevant future bookings
+```
+
+Daily incremental window:
+
+```text
+previous successful sync modified-date window -> current sync end
+```
+
+The exact backfill range remains configurable because operational needs, API limits, and data retention policy must be approved before large imports.
 
 ### Roller Inputs
 
@@ -120,7 +129,7 @@ The editor flow and Roller response material identify these Data API endpoints a
 
 | Endpoint | Purpose | T0005 Confidence |
 |---|---|---|
-| Get bookings | Booking baseline and lookup keys. | Confirmed pattern, exact query params TBD. |
+| Get bookings / `/data/bookingitems` | Booking item baseline and lookup keys. | Confirmed in T0011 with `startDate`, `endDate`, `pageNumber`, `pageSize`. |
 | Get tickets | Ticket ids, ticket holder context, membership status, redeem readiness context. | Confirmed pattern, exact query params TBD. |
 | Get payments | Payment ledger/status context for check-in and support. | Confirmed pattern, exact query params TBD. |
 | Get customers | Customer/contact cache for SMS readiness. | Confirmed pattern, exact query params TBD. |
@@ -147,7 +156,30 @@ Required fields:
 | `upsert_counts` | Rows inserted/updated/skipped. |
 | `error_summary` | Safe, non-secret error summary. |
 
-The seed job must be idempotent for the same environment, venue, and date range.
+The backfill/sync job must be idempotent for the same environment, venue, endpoint, and modified-date range.
+
+### T0011 Data API Findings
+
+`npm run roller:data:smoke` confirmed Playground access to `GET /data/bookingitems` using current local credentials.
+
+Observed modified-date window:
+
+```text
+2026-05-20 -> 2026-05-21
+```
+
+Observed safe response summary:
+
+| Field | Value |
+|---|---|
+| Response shape | Object with `currentPage`, `totalPages`, `totalItems`, `itemsPerPage`, `items` |
+| Pages fetched | `1` |
+| Records returned | `9` |
+| Seed booking references found | `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, `5032215` |
+| Booking dates returned | `2026-05-21`, `2026-05-22` |
+| Modified date range | `2026-05-20T09:05:03Z -> 2026-05-20T09:05:05Z` |
+
+Safe sample fields included `bookingReference`, `bookingUniqueId`, `bookingItemId`, `productId`, `bookingCustomerId`, `sessionStart`, `sessionEnd`, `bookingName`, `bookingNotes`, `bookingFeeAmount`, `bookingTotal`, `bookingPosNotes`, `bookingDate`, `bookingEndDate`, `bookingStatus`, `bookingLocation`, `quantity`, `groupSize`, `createdDate`, and `bookingCreatedDate`.
 
 ### Seed Upsert Targets
 
@@ -391,33 +423,25 @@ Minimum metrics/events:
 
 ## Implementation Sequence
 
-Recommended next implementation steps after T0005:
+Recommended next implementation steps after T0011:
 
-1. `T0006 AWS dev deploy`
-   - Confirm WRLDS metadata and AWS account/region.
-   - Deploy the CDK foundation to a real dev environment.
-   - Keep Lambdas as placeholders and avoid Roller writes.
-2. `T0007 Aurora schema/migrations`
-   - Create the ingestion and operational tables in Aurora.
-   - Add indexes required by lookup, seed, webhook, and audit flows.
-3. `T0008 Playground test booking seed tool`
-   - Create deterministic Playground bookings through server-side tooling.
-   - Keep it Playground-only.
-   - Use fixed test scenarios, not random data.
-4. `T0009 Booking lookup endpoint`
-   - Implement `POST /v1/check-in/lookup`.
-   - Use local index shape first when available, then Roller live lookup.
-5. `T0010 Daily seed job`
-   - Implement Data API seed into Aurora.
-6. `T0011 Booking webhook intake`
+1. `T0012 Data API bookingitems import`
+   - Upsert `GET /data/bookingitems` rows into Aurora.
+   - Track sync run status, counts, modified-date window, and safe error summaries.
+   - Do not import raw payloads unless retention is approved.
+2. `T0013 Related Data API sources`
+   - Add Data API tickets, payments, and customers after endpoint docs and access are confirmed.
+3. `T0014 Booking webhook intake`
    - Implement webhook intake, idempotency, and enrichment queue.
+4. `T0015 Lookup Aurora-first`
+   - Use Aurora first for display, then live REST refresh when missing, stale, or check-in-critical.
 
 ## Open Questions
 
 | Question | Needed For | Status |
 |---|---|---|
-| Exact Data API query params/date filters for Get bookings, Get tickets, Get payments, and Get customers. | Daily seed implementation. | Open |
-| Whether Playground exposes Data API credentials/scopes separately from REST API credentials. | T0009 seed job. | Open |
+| Exact Data API query params/date filters for Get tickets, Get payments, and Get customers. | Related source ingestion. | Open |
+| Whether Playground exposes Data API credentials/scopes separately from REST API credentials. | Data API implementation. | Resolved for `/data/bookingitems`; current Playground credentials work. |
 | Exact webhook event id/signature/verification mechanism. | Webhook production safety. | Open |
 | Exact webhook event names and payload fields for created, updated, paid, and cancelled bookings. | Idempotency and normalization. | Open |
 | Whether booking webhook payload with payments is sufficient in all same-day cases or still needs detail refresh for safety. | Webhook enrichment strategy. | Partly confirmed |

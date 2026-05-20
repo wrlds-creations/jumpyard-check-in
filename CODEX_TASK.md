@@ -2,36 +2,39 @@
 
 ## Ticket ID
 
-T0010
+T0011
 
 ## Goal
 
-Wire the phone check-in booking lookup step to the deployed JumpYard Cloud lookup API.
+Verify Roller Data API access and lock the booking-index sync strategy before building Aurora ingestion.
 
 ## Dependencies
 
-- T0009 completed, pushed, and merged to `main`.
-- Dev JumpYard Cloud endpoint exists:
-  - `POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/lookup`
-- Roller Playground seed bookings exist:
-  - `5032210`: paid-ready
-  - `5032211`: pending payment
-  - `5032212`: wrong date
-  - `5032213`: SkyRider/add-on
-  - `5032214`: original booking for linked add-on flow
-  - `5032215`: separate add-on booking
+- T0010 completed, pushed, and merged to `main`.
+- Local Roller Playground credentials exist in `.env`.
+- Do not commit `.env`.
+- User supplied Roller Data API docs for overview, environments, rate limits, and `GET /data/bookingitems`.
 
 ## Current Status
 
-Completed locally on branch `codex/t0010-phone-lookup-wiring`.
+Completed locally on branch `codex/t0011-data-api-smoke`.
 
 Validation result:
 
-- `npm run validate`: passed
-- `cd jumpyard-checkin-phone && npm run lint`: passed with four pre-existing `<img>` warnings
-- `cd jumpyard-checkin-phone && npm run build`: passed
-- CORS preflight to `POST /v1/check-in/lookup`: passed
-- Local phone dev server: `http://127.0.0.1:3000` returned HTTP `200`
+- `node --check scripts/roller-data-api-smoke.js`: passed
+- `npm run roller:data:smoke`: passed
+- `npm run roller:data:smoke -- --start-date 2026-05-20 --end-date 2026-05-21`: passed
+- Production URL rejection with `ROLLER_BASE_URL=https://api.roller.app`: passed
+
+Data API smoke result:
+
+- Endpoint: `GET /data/bookingitems`
+- Modified-date window: `2026-05-20 -> 2026-05-21`
+- Response shape: `currentPage`, `totalPages`, `totalItems`, `itemsPerPage`, `items`
+- Records returned: `9`
+- Seed booking references found: `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, `5032215`
+- Booking dates returned: `2026-05-21`, `2026-05-22`
+- No secrets, access tokens, customer names, emails, or phone numbers printed
 
 ## Allowed Areas
 
@@ -41,15 +44,15 @@ Validation result:
 - `REPO_CURRENT_STATE.md`
 - `FOLLOWUPS.md`
 - `TEST_PLAN.md`
+- `BOOKING_INDEX_INGESTION_CONTRACT.md`
 - `.env.example`
-- `jumpyard-checkin-phone/README.md`
-- `jumpyard-checkin-phone/src/flow/`
-- `jumpyard-checkin-phone/src/components/BookingLookup.tsx`
-- `jumpyard-checkin-phone/src/components/BookingSummary.tsx`
-- `jumpyard-checkin-phone/src/context/LanguageContext.tsx`
+- `package.json`
+- `scripts/roller-data-api-smoke.js`
+- Existing Roller helper scripts only if needed for reuse
 
 ## Do Not Touch
 
+- Phone UI
 - Kiosk UI
 - Admin UI
 - Assets
@@ -64,62 +67,70 @@ Validation result:
 
 ## Requirements
 
-1. Replace the phone lookup mock call with a JumpYard Cloud client adapter.
-2. The phone app must call only JumpYard Cloud, never Roller directly.
-3. The lookup client must:
-   - POST to `/v1/check-in/lookup`
-   - Send the booking identifier and expected operating date
-   - Never include Roller credentials or secrets
-   - Map the normalized cloud response into the existing phone `Booking` model
-4. The phone UI must:
-   - Continue to booking summary when eligibility is `ready`
-   - Continue to booking summary when eligibility is `payment_required`, with unpaid status and the check-in CTA blocked
-   - Show a clear stop state for `wrong_date`
-   - Show a clear stop state for `no_redeemable_tickets`
-   - Keep the existing not-found behavior for missing bookings
-5. Add public, non-secret env documentation for:
-   - `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL`
-   - `NEXT_PUBLIC_JUMPYARD_LOOKUP_EXPECTED_DATE`
-6. Update source-of-truth docs with validation results and the next recommended ticket.
+1. Add a local-only Roller Data API smoke command:
+   - `npm run roller:data:smoke`
+2. The smoke test must:
+   - Read Roller config from environment variables/local `.env`.
+   - Reuse the Playground environment guard from earlier tickets.
+   - Fail if `ROLLER_ENV` is not `playground`.
+   - Fail if `ROLLER_BASE_URL` does not point to Playground.
+   - Never print `ROLLER_CLIENT_SECRET`, access tokens, customer names, emails, or phone numbers.
+   - Request `GET /data/bookingitems` with `startDate`, `endDate`, `pageNumber`, and `pageSize`.
+   - Print only safe response shape, counts, date ranges, and known seed booking-reference matches.
+3. Confirm whether the current Playground credentials can access the Data API.
+4. Lock the booking-index sync strategy:
+   - Initial backfill into Aurora.
+   - Daily modified-date incremental sync.
+   - Same-day webhook updates.
+   - REST live refresh before check-in-critical decisions.
+5. Update source-of-truth docs with:
+   - Data API access result.
+   - Data API modified-date behavior.
+   - Validation commands.
+   - Recommended next ticket.
 
 ## Non-Goals
 
-- Do not implement payment.
-- Do not implement redeem/check-in writes.
-- Do not implement booking creation.
-- Do not write lookup results to Aurora.
-- Do not implement daily seed ingestion.
+- Do not write Data API data to Aurora yet.
+- Do not create or change AWS resources.
+- Do not implement cron/EventBridge scheduling.
 - Do not implement webhook intake.
-- Do not create, update, or delete AWS resources.
-- Do not add Roller credentials to the frontend.
+- Do not change the phone app.
+- Do not call Roller Live/production.
+- Do not make Roller write calls.
+- Do not commit secrets.
 
 ## Acceptance Criteria
 
-- Phone lookup for `5032210` reaches booking summary using JumpYard Cloud.
-- Phone lookup for `5032211` reaches booking summary, shows `Obetald` with payment icon, and cannot start check-in.
-- Phone lookup for `5032212` shows wrong-date stop state when expected date is `2026-05-21`.
-- Unknown booking reference shows not-found state.
-- No frontend code calls Roller directly.
-- No secrets are committed.
+- `npm run roller:data:smoke` exists.
+- Data API smoke is Playground-only and safe by default.
+- The command confirms either:
+  - Data API access works for current Playground credentials, or
+  - Data API access is unavailable and the required follow-up is documented.
+- Sync strategy is documented as backfill + daily modified-date sync + webhooks + REST live refresh.
 - `npm run validate` passes.
-- `cd jumpyard-checkin-phone && npm run lint` passes.
-- `cd jumpyard-checkin-phone && npm run build` passes.
+- No app, asset, deliverable, AWS resource, production config, or `.env` files are changed.
 
 ## Manual Verification
 
-Run the phone app and test booking references:
+Run:
 
-- `5032210`
-- `5032211`
-- `5032212`
-- `999999999`
+```powershell
+npm run roller:data:smoke
+```
 
-Confirm the app remains inside the phone flow and calls JumpYard Cloud only.
+Optional explicit window for T0008 seed bookings:
+
+```powershell
+npm run roller:data:smoke -- --start-date 2026-05-20 --end-date 2026-05-21
+```
+
+Confirm no secrets, access tokens, customer names, emails, or phone numbers are printed.
 
 ## Automated Validation
 
 Run:
 
+- `node --check scripts/roller-data-api-smoke.js`
+- `npm run roller:data:smoke`
 - `npm run validate`
-- `cd jumpyard-checkin-phone && npm run lint`
-- `cd jumpyard-checkin-phone && npm run build`
