@@ -20,6 +20,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-022` | `T0005` | Ingestion freshness | Confirm operational freshness thresholds for lookup display, SMS readiness, and mandatory live refresh before redeem. | Medium | `TBD` | Open |
 | `FU-026` | `T0008` | Test data | Add an already-redeemed Playground seed scenario after `POST /redemptions` is implemented and safely tested. | Medium | `TBD` | Open |
 | `FU-027` | `T0010` | Phone operating date | Replace the T0008 demo expected-date default with a venue operating-date source before pilot/production. | High | `TBD` | Open |
+| `FU-028` | `T0013` | Contact data | Define exact email and phone fields, masking/hashing, retention, and source endpoint before importing guest contact data into Aurora. | High | `TBD` | Open |
 
 ## Resolved Followups
 

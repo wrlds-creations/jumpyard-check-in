@@ -4,7 +4,7 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-JumpYard Check-in dev AWS foundation is deployed, the first dev Aurora schema migration has been applied, and the dev lookup endpoint now performs server-side Roller Playground booking lookup.
+JumpYard Check-in dev AWS foundation is deployed, the first dev Aurora schema migration has been applied, the dev lookup endpoint now performs server-side Roller Playground booking lookup, and dev Aurora contains bookingitems plus product catalog cache data.
 
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
@@ -44,6 +44,16 @@ T0012 dev data import notes:
   - `jumpyard.roller_bookings`: 6 seed bookings
   - `jumpyard.roller_booking_items`: 9 booking items
   - `jumpyard.booking_seed_runs`: latest run `succeeded`
+- Raw Roller payloads, customer names, emails, phone numbers, booking notes, secrets, and tokens were not printed or intentionally stored.
+
+T0013 dev product cache notes:
+
+- AWS resources created or changed: none.
+- Existing Aurora Data API was used to write normalized Roller REST `/products` cache rows and enrich existing booking item rows.
+- Import command: `npm --prefix infra run import:products:dev:apply`
+- Imported rows matched after apply:
+  - `jumpyard.product_catalog_cache`: 491 product/variation rows
+  - `jumpyard.roller_booking_items`: 9 existing booking item rows enriched with product names
 - Raw Roller payloads, customer names, emails, phone numbers, booking notes, secrets, and tokens were not printed or intentionally stored.
 
 Confirmed T0006 dev target:
@@ -106,7 +116,7 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`.
 | `handoff_sessions` | Staff handoff, safety, and band-pairing state. |
 | `booking_links` | Internal links between original bookings and separate add-on bookings. |
 | `idempotency_records` | Write protection for booking, payment, redeem, and add-on operations. |
-| `product_catalog_cache` | Product cache metadata and normalized summary. |
+| `product_catalog_cache` | Product cache metadata and normalized summary from Roller REST `/products`; T0013 stores one row per product/variation cache key. |
 | `roller_webhook_events` | Idempotent booking webhook intake and enrichment state. |
 | `booking_seed_runs` | Daily seed run tracking. |
 | `event_log` | Append-only business and observability events. |
