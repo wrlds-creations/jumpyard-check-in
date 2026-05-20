@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-20
-- Current branch: `codex/t0007-aurora-schema-migrations`
-- Current status: T0007 Aurora schema/migrations completed locally and applied to the approved dev Aurora cluster.
-- Current ticket: `T0007`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`
-- Recommended next ticket: `T0008 Playground test booking seed tool`
+- Current branch: `main`
+- Current status: T0008 Playground seed tooling completed.
+- Current ticket: `T0008` completed; ready for `T0009`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`
+- Recommended next ticket: `T0009 Booking lookup endpoint`
 
 ## Current Structure
 
@@ -29,6 +29,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |-- scripts/
 |   |-- check-roller-env.js
 |   |-- roller-client.js
+|   |-- roller-seed-playground.js
 |   `-- roller-smoke.js
 |-- infra/
 |   |-- bin/jumpyard-cloud.ts
@@ -62,6 +63,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm --prefix infra audit` | Audit infra dependencies. | Currently reports one moderate bundled `brace-expansion` issue inside `aws-cdk-lib`; automatic fix unavailable. |
 | `npm run roller:env:check` | Validate Roller env guard against current environment variables. | Requires `ROLLER_ENV=playground` and a Playground-looking `ROLLER_BASE_URL`; client credentials are optional. |
 | `npm run roller:smoke` | Verify local Roller Playground credentials with an OAuth token request and one read-only smoke request. | Loads local `.env`; does not print secrets or full Roller responses. |
+| `npm run roller:seed:playground` | Plan deterministic Roller Playground seed bookings. | Dry-run by default; no booking writes. |
+| `npm run roller:seed:playground:apply` | Create deterministic Roller Playground seed bookings. | Writes only when `ROLLER_SEED_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_BOOKINGS` is set and the Playground guard passes. |
 | Read-only `GET /bookings/{bookingReference}` | Verify known Playground booking lookup behavior. | Run through the existing Roller client helper; do not print secrets or raw PII. |
 | `cd jumpyard-checkin-phone && npm run lint` | Lint phone app. | Existing app command; not required unless app code changes. |
 | `cd jumpyard-checkin-phone && npm run build` | Build phone app. | Existing app command; not required unless app code changes. |
@@ -81,26 +84,26 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0004` | Added deploy-blocked JumpYard Cloud AWS CDK foundation. | 2026-05-19 | Merged to `main` through PR #8 as merge commit `bb9c660`. |
 | `T0005` | Defined booking index ingestion contract and post-T0005 roadmap. | 2026-05-19 | Merged to `main` through PR #9 as merge commit `7ea23e9`. |
 | `T0006` | Deployed the JumpYard Cloud AWS dev foundation. | 2026-05-19 | Merged to `main` through PR #10 as merge commit `799e6d9`. Stack `jumpyard-check-in-dev-stack`, API `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`, Aurora PostgreSQL `16.13`. |
-| `T0007` | Added Aurora SQL migrations, migration runner, and initial ingestion/operational schema. | 2026-05-20 | Applied `0001 initial schema` to dev Aurora; pending commit/merge. |
+| `T0007` | Added Aurora SQL migrations, migration runner, and initial ingestion/operational schema. | 2026-05-20 | Merged to `main` through PR #11 as merge commit `69e5a6b`; applied `0001 initial schema` to dev Aurora. |
+| `T0008` | Added protected Roller Playground seed tooling and created deterministic test bookings. | 2026-05-20 | Created Playground booking references `5032210` through `5032215`. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0007` | Create Aurora schema/migrations for ingestion and operational state. | Completed locally | `jumpyard` schema has 15 tables and 62 indexes in dev Aurora; pending commit/merge. |
+| `T0008` | Create protected Roller Playground seed tool for deterministic fake bookings. | Completed | Created Playground booking references `5032210` through `5032215`. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0008` | Playground test booking seed tool | Create deterministic fake bookings in Roller Playground through protected server-side tooling. |
 | `T0009` | Booking lookup endpoint | Implement `POST /v1/check-in/lookup` against Roller Playground and local index shape. |
 | `T0010` | Daily seed job | Implement Data API seed into Aurora. |
 | `T0011` | Booking webhook intake | Implement webhook intake, idempotency, and enrichment. |
 
 ## Validation Status
 
-- Automated root validation: `npm run validate` passed during T0007 on 2026-05-20.
+- Automated root validation: `npm run validate` passed during T0008 on 2026-05-20.
 - Infra validation: `npm run infra:check` passed during T0007 on 2026-05-20.
 - Infra synth: `npm run infra:synth` passed during T0004 using `infra/config/dev.example.json`.
 - Metadata guard: missing `-c config=...` fails as expected before synth.
@@ -128,7 +131,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Roller env validation: `npm run roller:env:check` passed with local `.env` during T0002.
 - Roller smoke validation: `npm run roller:smoke` passed with local `.env`; `/products` returned HTTP 200 and 96 products on 2026-05-19.
 - Booking lookup validation: read-only `GET /bookings/5001370` returned HTTP 200 with booking reference `5001370`, unique id `dbba266d-0951-4706-9adf-6c9d05edffbf`, status `PendingPayment`, amount owing `260`, and ticket `5001370-21265504`.
-- App lint/build: Not required for T0005 because app code is not changed.
+- T0008 seed dry-run: `npm run roller:seed:playground` passed on 2026-05-20, resolved 6 scenarios, and selected child/variation product IDs for `Entré 120 min`, `JumpSocks`, `SkyRider`, `Hänglås`, and coffee/tea.
+- T0008 apply guard: `npm run roller:seed:playground:apply` without `ROLLER_SEED_ALLOW_WRITE` failed closed before writes.
+- T0008 production URL rejection: `ROLLER_BASE_URL=https://api.roller.app` was rejected before auth/write.
+- T0008 Playground seed apply: guarded apply created booking references `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, and `5032215` in Playground on 2026-05-20.
+- T0008 seed readback: read-only `GET /bookings/{bookingReference}` returned HTTP 200 for all six new references. `5032210` is `Paid` with amount owing `0`; the others are `PendingPayment`.
+- App lint/build: Not required for T0008 because app code is not changed.
 
 ## Known Issues Summary
 
@@ -139,7 +147,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Booking index ingestion from Roller Data API and booking webhooks has not been implemented.
 - Exact Roller Data API query params, paging, credentials, and date-window support are still open.
 - Webhook event id, signature/verification method, retry behavior, and event names are still open.
-- Playground fake booking seed tooling has not been implemented.
+- Already-redeemed Playground seed data is deferred until redemption is implemented and safely tested.
 - Staff handoff/redeem flow integration has not been implemented.
 - Roller `POST /redemptions` has not been tested yet.
 - Existing-booking add-product linked-booking flow has not been tested yet.
