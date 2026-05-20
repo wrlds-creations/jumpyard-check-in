@@ -15,12 +15,13 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-015` | `T0003` | Data ingestion | Confirm Roller Data API endpoint, credentials, date range, and payload shape for the daily morning booking seed. | High | `TBD` | Open |
 | `FU-018` | `T0004` | Dependency security | Evaluate the `aws-cdk-lib` bundled `brace-expansion` audit warning and any available `npm audit fix` path in a dedicated dependency ticket. | Medium | `TBD` | Open |
 | `FU-019` | `T0005` | Data ingestion | Confirm exact Data API query parameters, paging, credentials, and date-window support for Get tickets, Get payments, and Get customers in Playground. Bookingitems/Get bookings was confirmed in T0011. | High | `TBD` | Open |
-| `FU-020` | `T0005` | Webhook security | Confirm Roller webhook event id, signature/verification method, retry behavior, and event names before exposing webhook intake beyond dev. | High | `TBD` | Open |
+| `FU-020` | `T0005` | Webhook security | Confirm Roller production webhook auth header/signature, event id field, payload shape, and whether to use EMEA IP allowlisting before exposing webhook intake beyond dev. Retry behavior and booking event names were documented in T0015. | High | `TBD` | Open |
 | `FU-021` | `T0005` | Data retention | Confirm retention period for normalized booking snapshots, event logs, sync runs, and any approved raw payload storage. | Medium | `TBD` | Open |
 | `FU-022` | `T0005` | Ingestion freshness | Confirm operational freshness thresholds for lookup display, SMS readiness, and mandatory live refresh before redeem. | Medium | `TBD` | Open |
 | `FU-026` | `T0008` | Test data | Add an already-redeemed Playground seed scenario after `POST /redemptions` is implemented and safely tested. | Medium | `TBD` | Open |
 | `FU-027` | `T0010` | Phone operating date | Replace the T0008 demo expected-date default with a venue operating-date source before pilot/production. | High | `TBD` | Open |
 | `FU-029` | `T0014` | Gift cards | Add `/data/giftcards` ingestion when gift card payment/check-in flows are explicitly scoped. | Medium | `TBD` | Open |
+| `FU-030` | `T0015` | Webhook registration | Register the Roller Playground booking webhook against the dev endpoint and confirm the real delivery headers/body before production hardening. | High | `TBD` | Open |
 
 ## Resolved Followups
 

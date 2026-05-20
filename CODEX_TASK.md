@@ -2,47 +2,45 @@
 
 ## Ticket ID
 
-T0014
+T0015
 
 ## Goal
 
-Import related Roller Data API sources into dev Aurora: tickets, booking payments, and customer contact data.
+Implement a safe dev Roller booking webhook intake endpoint in JumpYard Cloud.
 
 ## Dependencies
 
-- T0013 completed, pushed, and merged to `main`.
-- Dev Aurora schema exists and T0012/T0013 data is present.
-- Roller Data API `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access works in Playground.
-- Local Roller credentials exist in `.env`.
-- AWS SSO/profile `wrlds-dev` can access account `376129878018`, region `eu-north-1`.
-- Do not commit `.env`.
+- T0014 completed, pushed, and merged to `main`.
+- Dev AWS foundation exists in account `376129878018`, region `eu-north-1`.
+- Aurora migrations through `0002` are applied.
+- Roller webhook documentation confirms booking webhook events `Created`, `Updated`, and `Cancelled`, retry behavior, response handling, and fast-acknowledgement expectations.
 
 ## Current Status
 
-Completed locally and applied to dev Aurora on branch `codex/t0014-related-data-api-sources`.
+Completed locally and deployed to dev on branch `codex/t0015-booking-webhook-intake`.
 
 Validation result:
 
-- `npm --prefix infra run build`: passed
-- `npm --prefix infra run migrate:dev:status`: `0001` applied, `0002` pending before apply
-- `npm --prefix infra run migrate:dev`: applied `0002 related data sources`
-- `npm --prefix infra run migrate:dev:status`: `0001` and `0002` applied after apply
-- `npm --prefix infra run import:related-data:dev -- --start-date 2026-05-20 --end-date 2026-05-21`: passed dry-run
-- `npm --prefix infra run import:related-data:dev:apply -- --start-date 2026-05-20 --end-date 2026-05-21`: failed closed without write confirmation
+- `node --check infra/lambda/webhook/index.js`: passed
+- Local webhook handler smoke: unauthorized and invalid JSON return HTTP `200`; missing database config returns HTTP `500`
 - AWS identity preflight: account `376129878018`
 - AWS region preflight: `eu-north-1`
-- guarded apply with `ROLLER_RELATED_IMPORT_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_RELATED_DATA`: passed
-- guarded apply re-run against the same window: passed
+- `npm --prefix infra run build`: passed
+- `npm --prefix infra run synth:dev`: passed
+- `npm --prefix infra run diff:dev`: expected webhook Lambda and dev-token secret changes before deploy
+- `npm --prefix infra run deploy:dev`: passed; stack was already in sync and reported no changes
+- Post-deploy `npm --prefix infra run diff:dev`: no differences
+- Deployed webhook smoke:
+  - unauthorized request returned HTTP `200` with `ignored_unauthorized`
+  - authorized first request returned HTTP `200` with `accepted`
+  - authorized duplicate request returned HTTP `200` with `duplicate`
+- Aurora verification: `jumpyard.roller_webhook_events` contains event `t0015-smoke-booking-created-5032210` with status `received`
 
-Import result:
+Deployed endpoint:
 
-- Modified-date window: `2026-05-20 -> 2026-05-21`
-- `/data/tickets` records read: `6`
-- `/data/bookingpayments` records read: `0`
-- `/data/customers` records read: `6`
-- `jumpyard.roller_booking_tickets` rows matched after apply: `6`
-- `jumpyard.roller_booking_payments` rows matched after apply: `0`
-- `jumpyard.guest_profiles` rows matched after apply: `6`
+```text
+POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/roller/webhooks/bookings
+```
 
 ## Allowed Areas
 
@@ -54,9 +52,8 @@ Import result:
 - `TEST_PLAN.md`
 - `AWS_RESOURCES.md`
 - `BOOKING_INDEX_INGESTION_CONTRACT.md`
-- `infra/package.json`
-- `infra/scripts/`
-- `infra/migrations/`
+- `infra/lib/jumpyard-cloud-stack.ts`
+- `infra/lambda/webhook/`
 
 ## Do Not Touch
 
@@ -68,105 +65,78 @@ Import result:
 - Payment implementation
 - Redeem implementation
 - Booking creation implementation
-- AWS infrastructure resources
 - Production config
 - Production credentials
 - `.env`
 
 ## Requirements
 
-1. Confirm Roller Data API access for:
-   - `/data/tickets`
-   - `/data/bookingpayments`
-   - `/data/customers`
-2. Add a dev import command for related Data API sources.
-3. The importer must:
-   - Load local Roller `.env` values without printing secrets.
-   - Reuse the Playground-only guard.
-   - Read `startDate`, `endDate`, `pageNumber`, and `pageSize`.
-   - Fetch paginated Data API records.
-   - Upsert ticket rows into `jumpyard.roller_booking_tickets`.
-   - Upsert payment rows into `jumpyard.roller_booking_payments`.
-   - Upsert structured customer contact rows into `jumpyard.guest_profiles`.
-   - Store email and phone as explicit structured fields plus masked/hash fields.
-   - Avoid storing customer names, addresses, raw payloads, booking notes, access tokens, or secrets.
-   - Be idempotent for repeated runs.
-4. The write command must fail closed unless an explicit write-confirmation environment variable is set.
-5. Use only the existing dev Aurora database and schema migration flow. Do not create or deploy AWS resources.
-6. Verify Aurora contains imported rows for tickets and customer contact data.
-7. Update source-of-truth docs with:
-   - command names
-   - migration result
-   - validation result
-   - query examples for AWS Query Editor
-   - recommended next ticket
+1. Replace the webhook placeholder with a real Lambda handler for:
+   - `POST /v1/roller/webhooks/bookings`
+   - `POST /v1/roller/webhooks/redemptions`
+2. Add a dev-only webhook token stored in AWS Secrets Manager.
+3. The handler must:
+   - Accept only HTTP `POST`.
+   - Parse JSON without logging raw payloads or secrets.
+   - Require the dev token in a supported auth header until Roller production webhook verification is confirmed.
+   - Return HTTP `200` quickly for accepted, duplicate, unauthorized, invalid JSON, and oversized requests.
+   - Return HTTP `500` only for server-side config/database failures that should trigger Roller retry behavior.
+   - Compute an idempotency key from a Roller event id when available, otherwise from a stable route/body hash.
+   - Store only normalized event metadata and payload hash in `jumpyard.roller_webhook_events`.
+   - Append a safe event in `jumpyard.event_log` for newly received events.
+4. Deploy to the approved dev stack only after AWS account and region preflight.
+5. Do not register a Roller webhook yet.
+6. Do not implement webhook enrichment, booking snapshot updates, payment logic, or redemption logic yet.
 
 ## Non-Goals
 
-- Do not import gift cards yet.
-- Do not change lookup to use Aurora first yet.
-- Do not implement webhook intake.
-- Do not schedule the job.
-- Do not create or deploy AWS resources.
-- Do not call Roller Live/production.
-- Do not make Roller write calls.
+- Do not call Roller from the webhook handler.
+- Do not create, update, cancel, or redeem bookings.
+- Do not store raw webhook payloads.
+- Do not expose a production webhook endpoint.
+- Do not add IP allowlisting yet.
+- Do not implement scheduled imports.
 - Do not change app UI.
-- Do not implement SMS sending.
-- Do not implement payment handling.
-- Do not implement redemption.
 
 ## Acceptance Criteria
 
-- Data API endpoint smoke checks pass for tickets, booking payments, and customers.
-- `0002 related data sources` migration applies to dev Aurora.
-- `npm --prefix infra run import:related-data:dev` dry-runs safely.
-- `npm --prefix infra run import:related-data:dev:apply` writes only when `ROLLER_RELATED_IMPORT_ALLOW_WRITE` is set to the approved confirmation value.
-- Aurora `jumpyard.roller_booking_tickets` contains imported ticket rows after apply.
-- Aurora `jumpyard.guest_profiles` contains structured email/phone contact rows after apply.
-- Payment import handles `0` records as a valid empty result.
-- `npm run validate` passes.
-- `npm --prefix infra run build` passes.
-- No app, asset, deliverable, production config, `.env`, or AWS resource files are changed.
+- Webhook Lambda is deployed for the dev webhook routes.
+- Dev webhook token secret exists in AWS Secrets Manager.
+- Unauthorized webhooks are acknowledged with HTTP `200` and not persisted.
+- Authorized first delivery is acknowledged with HTTP `200` and persisted.
+- Authorized duplicate delivery is acknowledged with HTTP `200` and not duplicated.
+- Server-side configuration or database failures return HTTP `500`.
+- Aurora `jumpyard.roller_webhook_events` has the smoke event row.
+- No app, asset, deliverable, production config, `.env`, payment, redeem, or booking-creation code was changed.
 
 ## Manual Verification
 
-After apply, use AWS Query Editor against database `jumpyard_cloud`:
+Use AWS Query Editor against database `jumpyard_cloud`:
 
 ```sql
-select 'tickets' as table_name, count(*)::text as row_count
-from jumpyard.roller_booking_tickets
-union all
-select 'payments', count(*)::text
-from jumpyard.roller_booking_payments
-union all
-select 'guest_profiles', count(*)::text
-from jumpyard.guest_profiles;
+select event_id_or_hash, event_type, booking_reference, roller_unique_id, status
+from jumpyard.roller_webhook_events
+where event_id_or_hash = 't0015-smoke-booking-created-5032210';
 ```
 
-```sql
-select b.booking_reference, t.ticket_id, t.product_id, t.booking_date
-from jumpyard.roller_booking_tickets t
-join jumpyard.roller_bookings b on b.roller_unique_id = t.roller_unique_id
-order by b.booking_reference, t.ticket_id;
-```
+Expected row:
 
-```sql
-select roller_customer_id, email_masked, contact_number_masked, sms_ready
-from jumpyard.guest_profiles
-order by roller_customer_id;
+```text
+t0015-smoke-booking-created-5032210 | Created | 5032210 | t0015-smoke-booking-created-5032210-unique | received
 ```
 
 ## Automated Validation
 
 Run:
 
-- `node scripts/roller-data-api-smoke.js --path /data/tickets --start-date 2026-05-20 --end-date 2026-05-21`
-- `node scripts/roller-data-api-smoke.js --path /data/bookingpayments --start-date 2026-05-20 --end-date 2026-05-21`
-- `node scripts/roller-data-api-smoke.js --path /data/customers --start-date 2026-05-20 --end-date 2026-05-21`
+- `node --check infra/lambda/webhook/index.js`
 - `npm --prefix infra run build`
-- `npm --prefix infra run migrate:dev:status`
-- `npm --prefix infra run migrate:dev`
-- `npm --prefix infra run import:related-data:dev`
-- `npm --prefix infra run import:related-data:dev:apply` without confirmation
-- `npm --prefix infra run import:related-data:dev:apply` with explicit write confirmation
+- `npm --prefix infra run synth:dev`
+- `npm --prefix infra run diff:dev`
+- `npm --prefix infra run deploy:dev`
+- Post-deploy `npm --prefix infra run diff:dev`
+- Deployed unauthorized webhook smoke
+- Deployed authorized webhook smoke
+- Deployed duplicate webhook smoke
+- Aurora Data API verification query
 - `npm run validate`
