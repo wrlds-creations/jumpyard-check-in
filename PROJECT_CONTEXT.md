@@ -31,6 +31,8 @@ T0009 replaced the dev `POST /v1/check-in/lookup` placeholder with a deployed se
 
 T0010 wires the phone app booking lookup step to the deployed JumpYard Cloud lookup API. The phone app calls JumpYard Cloud only, maps `ready` responses to the existing booking summary with active check-in CTA, maps `payment_required` responses to the existing booking summary with `Obetald` and blocked check-in CTA, and stops the flow for wrong-date, non-redeemable, not-found, and service-failure states.
 
+T0012 added a dev Aurora importer for Roller Data API `/data/bookingitems`. It upserts normalized booking rows into `jumpyard.roller_bookings`, booking item rows into `jumpyard.roller_booking_items`, and run state into `jumpyard.booking_seed_runs` without storing raw Roller payloads.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -103,7 +105,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0009 Booking lookup endpoint` | Implement `POST /v1/check-in/lookup` against Roller Playground and local index shape. | First real JumpYard Cloud API behavior for the phone flow. |
 | `T0010 Phone UI lookup wiring` | Connect the phone check-in lookup step to JumpYard Cloud `POST /v1/check-in/lookup`. | Completed locally; lets the first mobile flow step use the deployed server-side Roller lookup. |
 | `T0011 Data API access smoke` | Verify Roller Data API access and lock modified-date sync strategy. | Prevents building Aurora ingestion against the wrong Data API mental model. |
-| `T0012 Data API bookingitems import` | Upsert `/data/bookingitems` records into Aurora. | Starts the local booking index with confirmed Data API payload shape. |
+| `T0012 Data API bookingitems import` | Upsert `/data/bookingitems` records into Aurora. | Completed locally against dev; starts the local booking index with confirmed Data API payload shape. |
 | `T0013 Related Data API sources` | Add tickets, payments, and customers once endpoint docs/access are confirmed. | Completes payment/contact/ticket context for lookup and SMS. |
 | `T0014 Booking webhook intake` | Implement webhook intake, idempotency, and enrichment. | Keeps the booking index fresh after sync/backfill. |
 
@@ -181,6 +183,11 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
   - seed booking references found: `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, `5032215`
   - returned booking dates: `2026-05-21`, `2026-05-22`
   - modified date range: `2026-05-20T09:05:03Z -> 2026-05-20T09:05:05Z`
+- T0012 imported the same modified-date window into dev Aurora:
+  - `jumpyard.roller_bookings`: 6 seed booking rows matched
+  - `jumpyard.roller_booking_items`: 9 seed booking item rows matched
+  - latest `jumpyard.booking_seed_runs` status: `succeeded`
+  - imported booking references: `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, `5032215`
 
 ## Non-Goals For Current Ticket
 

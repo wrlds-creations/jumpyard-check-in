@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-20
-- Current branch: `codex/t0011-data-api-smoke`
-- Current status: T0011 Data API smoke completed locally; ready for review.
-- Current ticket: `T0011` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`
-- Recommended next ticket: `T0012 Data API bookingitems Aurora import`
+- Current branch: `codex/t0012-bookingitems-aurora-import`
+- Current status: T0012 bookingitems Aurora import completed locally and applied to dev.
+- Current ticket: `T0012` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`
+- Recommended next ticket: `T0013 Related Data API sources`
 
 ## Current Structure
 
@@ -38,6 +38,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- config/dev.example.json
 |   |-- lambda/lookup/index.js
 |   |-- lib/config.ts
+|   |-- scripts/import-bookingitems.ts
 |   |-- lib/jumpyard-cloud-stack.ts
 |   |-- migrations/0001_initial_schema.sql
 |   |-- scripts/run-migrations.ts
@@ -63,6 +64,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm --prefix infra run deploy:dev` | Deploy the approved dev foundation. | Run only after account `376129878018` and region `eu-north-1` are verified. |
 | `npm --prefix infra run migrate:dev:status` | Show applied/pending Aurora migrations for dev. | Uses Aurora Data API and the `/jumpyard-check-in-dev/aurora/admin` secret; does not print secrets. |
 | `npm --prefix infra run migrate:dev` | Apply pending Aurora migrations to dev. | Run only after AWS account `376129878018` and region `eu-north-1` are verified. |
+| `npm --prefix infra run import:bookingitems:dev` | Dry-run Roller Data API `/data/bookingitems` normalization for dev Aurora import. | Reads local `.env`, calls Roller Playground, and performs no Aurora writes. |
+| `npm --prefix infra run import:bookingitems:dev:apply` | Apply Roller Data API `/data/bookingitems` import into dev Aurora. | Requires `ROLLER_IMPORT_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_BOOKINGITEMS`; verify AWS account and region first. |
 | `npm --prefix infra audit` | Audit infra dependencies. | Currently reports one moderate bundled `brace-expansion` issue inside `aws-cdk-lib`; automatic fix unavailable. |
 | `npm run roller:env:check` | Validate Roller env guard against current environment variables. | Requires `ROLLER_ENV=playground` and a Playground-looking `ROLLER_BASE_URL`; client credentials are optional. |
 | `npm run roller:smoke` | Verify local Roller Playground credentials with an OAuth token request and one read-only smoke request. | Loads local `.env`; does not print secrets or full Roller responses. |
@@ -93,18 +96,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0009` | Implemented and deployed server-side booking lookup endpoint. | 2026-05-20 | Dev `POST /v1/check-in/lookup` now calls Roller Playground `GET /bookings/{identifier}` and returns normalized JumpYard lookup response. |
 | `T0010` | Wired phone booking lookup step to JumpYard Cloud. | 2026-05-20 | Phone UI calls dev `POST /v1/check-in/lookup`, shows ready and unpaid found bookings in summary, blocks check-in for unpaid bookings, and shows stop states for wrong-date, non-redeemable, not-found, and service failures. |
 | `T0011` | Added Data API smoke test and locked backfill/incremental sync strategy. | 2026-05-20 | `GET /data/bookingitems` works in Playground and returned 9 rows for the T0008 seed modified-date window. |
+| `T0012` | Imported Roller Data API bookingitems into dev Aurora. | 2026-05-20 | Upserted 6 seed bookings and 9 booking item rows into dev Aurora, with run tracking in `booking_seed_runs`. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0011` | Verify Data API access and lock sync strategy. | Completed locally | `npm run roller:data:smoke` passes against Playground; commit/review still pending. |
+| `T0012` | Import `/data/bookingitems` into dev Aurora. | Completed locally and applied to dev | Commit/review still pending. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0012` | Data API bookingitems Aurora import | Upsert `/data/bookingitems` records into Aurora with sync-run tracking. |
 | `T0013` | Related Data API sources | Add tickets, payments, and customers after endpoint docs/access are confirmed. |
 | `T0014` | Booking webhook intake | Implement webhook intake, idempotency, and enrichment. |
 | `T0015` | Lookup Aurora-first | Use Aurora for display lookup, with REST refresh when missing, stale, or check-in-critical. |
@@ -163,6 +166,15 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0011 Data API seed reference check: Data API response included seed booking references `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, and `5032215`.
 - T0011 Data API response shape: first page returned object keys `currentPage`, `totalPages`, `totalItems`, `itemsPerPage`, and `items`.
 - T0011 production URL rejection: `ROLLER_BASE_URL=https://api.roller.app` was rejected before Data API calls.
+- T0012 infra build: `npm --prefix infra run build` passed.
+- T0012 dry-run: `npm --prefix infra run import:bookingitems:dev -- --start-date 2026-05-20 --end-date 2026-05-21` returned 9 records, 6 bookings, 9 booking items, and 0 skipped records without Aurora writes.
+- T0012 write guard: `npm --prefix infra run import:bookingitems:dev:apply -- --start-date 2026-05-20 --end-date 2026-05-21` failed closed without `ROLLER_IMPORT_ALLOW_WRITE`.
+- T0012 AWS identity preflight: `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`.
+- T0012 AWS region preflight: `aws configure get region --profile wrlds-dev` returned `eu-north-1`.
+- T0012 dev apply: guarded apply upserted 6 bookings and 9 booking items into Aurora.
+- T0012 idempotency check: re-running guarded apply against the same window still matched 6 bookings and 9 booking items.
+- T0012 Aurora verification: direct Data API query returned booking references `5032210` through `5032215` in `jumpyard.roller_bookings`.
+- T0012 seed run verification: latest `jumpyard.booking_seed_runs` row for the import has status `succeeded` and counts 9 source records, 6 booking upserts, and 9 booking item upserts.
 
 ## Known Issues Summary
 
@@ -170,8 +182,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Roller credentials secret in AWS has been populated for dev and was used by T0009 lookup smoke tests.
 - JumpYard Cloud lookup API business logic has been implemented for live Roller detail lookup. Other API business logic is still pending.
 - Phone app booking lookup now calls JumpYard Cloud for the first check-in step. Payment, redeem, and booking creation UI behavior are still pending.
-- Aurora schema exists in dev, but no application code writes to it yet.
-- Booking index ingestion from Roller Data API and booking webhooks has not been implemented.
+- Aurora schema exists in dev, and T0012 writes normalized `/data/bookingitems` snapshots into `roller_bookings` and `roller_booking_items`.
+- Booking index ingestion has started with Data API bookingitems. Tickets, payments, customers, and webhooks have not been implemented.
 - Roller Data API `/data/bookingitems` access, query params, paging shape, and modified-date behavior are confirmed in Playground; tickets, payments, and customers Data API endpoints are still open.
 - Webhook event id, signature/verification method, retry behavior, and event names are still open.
 - Already-redeemed Playground seed data is deferred until redemption is implemented and safely tested.

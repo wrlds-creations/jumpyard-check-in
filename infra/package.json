@@ -12,6 +12,8 @@
     "deploy:dev": "cdk deploy -c config=./config/dev.json --profile wrlds-dev --require-approval never",
     "migrate:dev": "ts-node --prefer-ts-exts scripts/run-migrations.ts --config ./config/dev.json --profile wrlds-dev",
     "migrate:dev:status": "ts-node --prefer-ts-exts scripts/run-migrations.ts --config ./config/dev.json --profile wrlds-dev --status",
+    "import:bookingitems:dev": "ts-node --prefer-ts-exts scripts/import-bookingitems.ts --config ./config/dev.json --profile wrlds-dev",
+    "import:bookingitems:dev:apply": "ts-node --prefer-ts-exts scripts/import-bookingitems.ts --config ./config/dev.json --profile wrlds-dev --apply",
     "check": "npm run build && npm run synth:example"
   },
   "dependencies": {

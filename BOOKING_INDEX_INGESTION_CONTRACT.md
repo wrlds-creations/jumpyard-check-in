@@ -181,6 +181,33 @@ Observed safe response summary:
 
 Safe sample fields included `bookingReference`, `bookingUniqueId`, `bookingItemId`, `productId`, `bookingCustomerId`, `sessionStart`, `sessionEnd`, `bookingName`, `bookingNotes`, `bookingFeeAmount`, `bookingTotal`, `bookingPosNotes`, `bookingDate`, `bookingEndDate`, `bookingStatus`, `bookingLocation`, `quantity`, `groupSize`, `createdDate`, and `bookingCreatedDate`.
 
+### T0012 Bookingitems Import Findings
+
+T0012 added a dev importer:
+
+```text
+npm --prefix infra run import:bookingitems:dev
+npm --prefix infra run import:bookingitems:dev:apply
+```
+
+The dry-run command fetches and normalizes records without AWS writes. The apply command writes only when:
+
+```text
+ROLLER_IMPORT_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_BOOKINGITEMS
+```
+
+Applied import result for modified-date window `2026-05-20 -> 2026-05-21`:
+
+| Target | Result |
+|---|---|
+| Data API records read | `9` |
+| `jumpyard.roller_bookings` matched after import | `6` |
+| `jumpyard.roller_booking_items` matched after import | `9` |
+| Skipped records | `0` |
+| Latest seed run status | `succeeded` |
+
+The importer stores normalized operational fields and safe summaries only. It does not print or store raw Roller payloads, customer names, emails, phone numbers, or booking notes.
+
 ### Seed Upsert Targets
 
 | Target | Source | Required Behavior |
@@ -425,15 +452,11 @@ Minimum metrics/events:
 
 Recommended next implementation steps after T0011:
 
-1. `T0012 Data API bookingitems import`
-   - Upsert `GET /data/bookingitems` rows into Aurora.
-   - Track sync run status, counts, modified-date window, and safe error summaries.
-   - Do not import raw payloads unless retention is approved.
-2. `T0013 Related Data API sources`
+1. `T0013 Related Data API sources`
    - Add Data API tickets, payments, and customers after endpoint docs and access are confirmed.
-3. `T0014 Booking webhook intake`
+2. `T0014 Booking webhook intake`
    - Implement webhook intake, idempotency, and enrichment queue.
-4. `T0015 Lookup Aurora-first`
+3. `T0015 Lookup Aurora-first`
    - Use Aurora first for display, then live REST refresh when missing, stale, or check-in-critical.
 
 ## Open Questions
