@@ -6,10 +6,10 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 - Date: 2026-05-20
 - Current branch: `main`
-- Current status: T0008 Playground seed tooling completed.
-- Current ticket: `T0008` completed; ready for `T0009`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`
-- Recommended next ticket: `T0009 Booking lookup endpoint`
+- Current status: T0009 booking lookup endpoint completed and deployed to dev.
+- Current ticket: `T0009` completed; ready for `T0010`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`
+- Recommended next ticket: `T0010 Phone UI lookup wiring`
 
 ## Current Structure
 
@@ -35,6 +35,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- bin/jumpyard-cloud.ts
 |   |-- config/dev.json
 |   |-- config/dev.example.json
+|   |-- lambda/lookup/index.js
 |   |-- lib/config.ts
 |   |-- lib/jumpyard-cloud-stack.ts
 |   |-- migrations/0001_initial_schema.sql
@@ -86,20 +87,21 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0006` | Deployed the JumpYard Cloud AWS dev foundation. | 2026-05-19 | Merged to `main` through PR #10 as merge commit `799e6d9`. Stack `jumpyard-check-in-dev-stack`, API `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`, Aurora PostgreSQL `16.13`. |
 | `T0007` | Added Aurora SQL migrations, migration runner, and initial ingestion/operational schema. | 2026-05-20 | Merged to `main` through PR #11 as merge commit `69e5a6b`; applied `0001 initial schema` to dev Aurora. |
 | `T0008` | Added protected Roller Playground seed tooling and created deterministic test bookings. | 2026-05-20 | Created Playground booking references `5032210` through `5032215`. |
+| `T0009` | Implemented and deployed server-side booking lookup endpoint. | 2026-05-20 | Dev `POST /v1/check-in/lookup` now calls Roller Playground `GET /bookings/{identifier}` and returns normalized JumpYard lookup response. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0008` | Create protected Roller Playground seed tool for deterministic fake bookings. | Completed | Created Playground booking references `5032210` through `5032215`. |
+| `T0009` | Implement `POST /v1/check-in/lookup` against Roller Playground. | Completed and deployed to dev | Dev lookup endpoint returns normalized Roller Playground booking responses. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0009` | Booking lookup endpoint | Implement `POST /v1/check-in/lookup` against Roller Playground and local index shape. |
-| `T0010` | Daily seed job | Implement Data API seed into Aurora. |
-| `T0011` | Booking webhook intake | Implement webhook intake, idempotency, and enrichment. |
+| `T0010` | Phone UI lookup wiring | Connect the phone check-in lookup step to JumpYard Cloud `POST /v1/check-in/lookup`. |
+| `T0011` | Daily seed job | Implement Data API seed into Aurora. |
+| `T0012` | Booking webhook intake | Implement webhook intake, idempotency, and enrichment. |
 
 ## Validation Status
 
@@ -136,13 +138,21 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0008 production URL rejection: `ROLLER_BASE_URL=https://api.roller.app` was rejected before auth/write.
 - T0008 Playground seed apply: guarded apply created booking references `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, and `5032215` in Playground on 2026-05-20.
 - T0008 seed readback: read-only `GET /bookings/{bookingReference}` returned HTTP 200 for all six new references. `5032210` is `Paid` with amount owing `0`; the others are `PendingPayment`.
-- App lint/build: Not required for T0008 because app code is not changed.
+- T0009 local handler smoke: paid, pending, wrong-date, and not-found lookup cases returned expected normalized responses using AWS Secrets Manager/SSM plus Roller Playground.
+- T0009 AWS identity preflight: `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`.
+- T0009 AWS region preflight: `aws configure get region --profile wrlds-dev` returned `eu-north-1`.
+- T0009 pre-deploy diff: `npm --prefix infra run diff:dev` showed only the approved lookup Lambda code change.
+- T0009 deploy: `npm --prefix infra run deploy:dev` updated `jumpyard-check-in-dev-stack-lookup` successfully.
+- T0009 deployed smoke: `POST /v1/check-in/lookup` returned `ready` for `5032210`, `payment_required` for `5032211`, `wrong_date` for `5032212` with expected date `2026-05-21`, and `not_found` for `999999999`.
+- T0009 post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
+- T0009 validation: `npm run validate` and `npm --prefix infra run check` passed.
+- App lint/build: Not required for T0009 because app code is not changed.
 
 ## Known Issues Summary
 
-- AWS dev foundation is deployed, but all API handlers are placeholders and return `501`.
-- Roller credentials secret in AWS is still a placeholder and must be set before real Roller calls.
-- JumpYard Cloud/server API business logic has not been implemented.
+- AWS dev foundation is deployed. Lookup handler is implemented; booking, redeem, and webhook handlers are still placeholders and return `501`.
+- Roller credentials secret in AWS has been populated for dev and was used by T0009 lookup smoke tests.
+- JumpYard Cloud lookup API business logic has been implemented for live Roller detail lookup. Other API business logic is still pending.
 - Aurora schema exists in dev, but no application code writes to it yet.
 - Booking index ingestion from Roller Data API and booking webhooks has not been implemented.
 - Exact Roller Data API query params, paging, credentials, and date-window support are still open.
