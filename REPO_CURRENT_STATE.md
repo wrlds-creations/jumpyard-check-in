@@ -4,12 +4,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Snapshot
 
-- Date: 2026-05-19
-- Current branch: `codex/t0006-aws-dev-deploy`
-- Current status: T0006 AWS dev deploy completed in account `376129878018`, region `eu-north-1`.
-- Current ticket: `T0006`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`
-- Recommended next ticket: `T0007 Aurora schema/migrations`
+- Date: 2026-05-20
+- Current branch: `codex/t0007-aurora-schema-migrations`
+- Current status: T0007 Aurora schema/migrations completed locally and applied to the approved dev Aurora cluster.
+- Current ticket: `T0007`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`
+- Recommended next ticket: `T0008 Playground test booking seed tool`
 
 ## Current Structure
 
@@ -36,6 +36,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- config/dev.example.json
 |   |-- lib/config.ts
 |   |-- lib/jumpyard-cloud-stack.ts
+|   |-- migrations/0001_initial_schema.sql
+|   |-- scripts/run-migrations.ts
 |   |-- cdk.json
 |   |-- package.json
 |   |-- package-lock.json
@@ -55,6 +57,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm --prefix infra run synth:dev` | Synthesize the confirmed T0006 dev stack. | Uses `infra/config/dev.json`. |
 | `npm --prefix infra run diff:dev` | Review AWS dev changes before deploy. | Must show only approved T0004 foundation resources. |
 | `npm --prefix infra run deploy:dev` | Deploy the approved dev foundation. | Run only after account `376129878018` and region `eu-north-1` are verified. |
+| `npm --prefix infra run migrate:dev:status` | Show applied/pending Aurora migrations for dev. | Uses Aurora Data API and the `/jumpyard-check-in-dev/aurora/admin` secret; does not print secrets. |
+| `npm --prefix infra run migrate:dev` | Apply pending Aurora migrations to dev. | Run only after AWS account `376129878018` and region `eu-north-1` are verified. |
 | `npm --prefix infra audit` | Audit infra dependencies. | Currently reports one moderate bundled `brace-expansion` issue inside `aws-cdk-lib`; automatic fix unavailable. |
 | `npm run roller:env:check` | Validate Roller env guard against current environment variables. | Requires `ROLLER_ENV=playground` and a Playground-looking `ROLLER_BASE_URL`; client credentials are optional. |
 | `npm run roller:smoke` | Verify local Roller Playground credentials with an OAuth token request and one read-only smoke request. | Loads local `.env`; does not print secrets or full Roller responses. |
@@ -76,19 +80,19 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0003` | Defined JumpYard Cloud contract, data ownership, Roller endpoint map, Aurora data model, and proposed AWS target architecture. | 2026-05-19 | Merged to `main` through PR #7 as merge commit `b99cbfb`. |
 | `T0004` | Added deploy-blocked JumpYard Cloud AWS CDK foundation. | 2026-05-19 | Merged to `main` through PR #8 as merge commit `bb9c660`. |
 | `T0005` | Defined booking index ingestion contract and post-T0005 roadmap. | 2026-05-19 | Merged to `main` through PR #9 as merge commit `7ea23e9`. |
-| `T0006` | Deployed the JumpYard Cloud AWS dev foundation. | 2026-05-19 | Stack `jumpyard-check-in-dev-stack`, API `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`, Aurora PostgreSQL `16.13`. Pending commit/merge. |
+| `T0006` | Deployed the JumpYard Cloud AWS dev foundation. | 2026-05-19 | Merged to `main` through PR #10 as merge commit `799e6d9`. Stack `jumpyard-check-in-dev-stack`, API `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`, Aurora PostgreSQL `16.13`. |
+| `T0007` | Added Aurora SQL migrations, migration runner, and initial ingestion/operational schema. | 2026-05-20 | Applied `0001 initial schema` to dev Aurora; pending commit/merge. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0006` | Deploy the JumpYard Cloud CDK foundation to a real AWS dev environment. | Completed | Dev stack is deployed and post-deploy diff shows no differences. |
+| `T0007` | Create Aurora schema/migrations for ingestion and operational state. | Completed locally | `jumpyard` schema has 15 tables and 62 indexes in dev Aurora; pending commit/merge. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0007` | Aurora schema/migrations | Create ingestion and operational tables/indexes in Aurora. |
 | `T0008` | Playground test booking seed tool | Create deterministic fake bookings in Roller Playground through protected server-side tooling. |
 | `T0009` | Booking lookup endpoint | Implement `POST /v1/check-in/lookup` against Roller Playground and local index shape. |
 | `T0010` | Daily seed job | Implement Data API seed into Aurora. |
@@ -96,8 +100,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Validation Status
 
-- Automated root validation: `npm run validate` passed during T0005 on 2026-05-19.
-- Infra validation: `npm run infra:check` passed during T0004.
+- Automated root validation: `npm run validate` passed during T0007 on 2026-05-20.
+- Infra validation: `npm run infra:check` passed during T0007 on 2026-05-20.
 - Infra synth: `npm run infra:synth` passed during T0004 using `infra/config/dev.example.json`.
 - Metadata guard: missing `-c config=...` fails as expected before synth.
 - AWS CLI preflight: `aws --version` passed on 2026-05-19.
@@ -113,7 +117,14 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Final dev deploy: `npm --prefix infra run deploy:dev` passed after changing Aurora PostgreSQL to `16.13`.
 - Post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
 - Placeholder API smoke: `POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/lookup` returned HTTP `501`.
-- Infra dependency audit: `npm --prefix infra audit` reports one moderate bundled `brace-expansion` issue inside `aws-cdk-lib`; `npm audit fix` cannot repair it automatically.
+- T0007 AWS identity preflight: `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018` on 2026-05-20 after SSO login refresh.
+- T0007 AWS region preflight: `aws configure get region --profile wrlds-dev` returned `eu-north-1`.
+- Aurora migration status before apply: `npm --prefix infra run migrate:dev:status` showed `0001 initial schema: pending`.
+- Aurora migration apply: `npm --prefix infra run migrate:dev` applied `0001 initial schema`.
+- Aurora migration status after apply: `npm --prefix infra run migrate:dev:status` showed `0001 initial schema: applied`.
+- Aurora migration idempotency: re-running `npm --prefix infra run migrate:dev` skipped the already-applied `0001 initial schema`.
+- Aurora Data API verification: `jumpyard` schema contains 15 tables and 62 indexes.
+- Infra dependency audit: `npm --prefix infra audit` reports one moderate bundled `brace-expansion` issue inside `aws-cdk-lib`; no dependency fix was applied in T0007.
 - Roller env validation: `npm run roller:env:check` passed with local `.env` during T0002.
 - Roller smoke validation: `npm run roller:smoke` passed with local `.env`; `/products` returned HTTP 200 and 96 products on 2026-05-19.
 - Booking lookup validation: read-only `GET /bookings/5001370` returned HTTP 200 with booking reference `5001370`, unique id `dbba266d-0951-4706-9adf-6c9d05edffbf`, status `PendingPayment`, amount owing `260`, and ticket `5001370-21265504`.
@@ -124,6 +135,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - AWS dev foundation is deployed, but all API handlers are placeholders and return `501`.
 - Roller credentials secret in AWS is still a placeholder and must be set before real Roller calls.
 - JumpYard Cloud/server API business logic has not been implemented.
+- Aurora schema exists in dev, but no application code writes to it yet.
 - Booking index ingestion from Roller Data API and booking webhooks has not been implemented.
 - Exact Roller Data API query params, paging, credentials, and date-window support are still open.
 - Webhook event id, signature/verification method, retry behavior, and event names are still open.
@@ -131,7 +143,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Staff handoff/redeem flow integration has not been implemented.
 - Roller `POST /redemptions` has not been tested yet.
 - Existing-booking add-product linked-booking flow has not been tested yet.
-- `aws-cdk-lib` currently carries a moderate bundled dependency audit warning.
+- `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
 ## Open Questions
 

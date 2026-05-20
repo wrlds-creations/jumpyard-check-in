@@ -10,9 +10,14 @@
     "synth:dev": "cdk synth -c config=./config/dev.json",
     "diff:dev": "cdk diff -c config=./config/dev.json --profile wrlds-dev",
     "deploy:dev": "cdk deploy -c config=./config/dev.json --profile wrlds-dev --require-approval never",
+    "migrate:dev": "ts-node --prefer-ts-exts scripts/run-migrations.ts --config ./config/dev.json --profile wrlds-dev",
+    "migrate:dev:status": "ts-node --prefer-ts-exts scripts/run-migrations.ts --config ./config/dev.json --profile wrlds-dev --status",
     "check": "npm run build && npm run synth:example"
   },
   "dependencies": {
+    "@aws-sdk/client-rds-data": "^3.1050.0",
+    "@aws-sdk/client-secrets-manager": "^3.1050.0",
+    "@aws-sdk/credential-providers": "^3.1050.0",
     "aws-cdk-lib": "^2.175.1",
     "constructs": "^10.4.2"
   },
