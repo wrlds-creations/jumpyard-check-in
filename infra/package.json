@@ -16,6 +16,8 @@
     "import:bookingitems:dev:apply": "ts-node --prefer-ts-exts scripts/import-bookingitems.ts --config ./config/dev.json --profile wrlds-dev --apply",
     "import:products:dev": "ts-node --prefer-ts-exts scripts/import-products.ts --config ./config/dev.json --profile wrlds-dev",
     "import:products:dev:apply": "ts-node --prefer-ts-exts scripts/import-products.ts --config ./config/dev.json --profile wrlds-dev --apply",
+    "import:related-data:dev": "ts-node --prefer-ts-exts scripts/import-related-data.ts --config ./config/dev.json --profile wrlds-dev",
+    "import:related-data:dev:apply": "ts-node --prefer-ts-exts scripts/import-related-data.ts --config ./config/dev.json --profile wrlds-dev --apply",
     "check": "npm run build && npm run synth:example"
   },
   "dependencies": {

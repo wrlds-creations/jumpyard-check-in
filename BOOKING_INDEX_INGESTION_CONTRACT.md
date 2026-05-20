@@ -234,15 +234,49 @@ Applied import result:
 
 The importer stores normalized product catalog summaries only. It enriches booking item rows from product IDs and avoids booking free-text fields for product display.
 
+### T0014 Related Data API Import Findings
+
+T0014 added a dev migration and importer:
+
+```text
+npm --prefix infra run migrate:dev
+npm --prefix infra run import:related-data:dev
+npm --prefix infra run import:related-data:dev:apply
+```
+
+The import reads Roller Data API endpoints:
+
+| Endpoint | Purpose | T0014 seed-window result |
+|---|---|---|
+| `/data/tickets` | Ticket ids for future ticket-level redemption. | `6` records |
+| `/data/bookingpayments` | Payment rows for reconciliation. | `0` records |
+| `/data/customers` | Structured customer contact data for SMS/check-in readiness. | `6` records |
+
+The apply command writes only when:
+
+```text
+ROLLER_RELATED_IMPORT_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_RELATED_DATA
+```
+
+Applied import result for modified-date window `2026-05-20 -> 2026-05-21`:
+
+| Target | Result |
+|---|---|
+| `jumpyard.roller_booking_tickets` matched after import | `6` |
+| `jumpyard.roller_booking_payments` matched after import | `0` |
+| `jumpyard.guest_profiles` matched after import | `6` |
+
+Email and phone are stored as explicit structured fields with hash/masked companion fields. Customer names, addresses, booking notes, raw payloads, secrets, and tokens are not printed or intentionally stored in T0014.
+
 ### Seed Upsert Targets
 
 | Target | Source | Required Behavior |
 |---|---|---|
 | `roller_bookings` | Get bookings plus booking detail where available. | Upsert by `roller_unique_id`; keep `booking_reference` unique where present. |
 | `roller_booking_items` | Get bookings / Get tickets. | Upsert by `booking_item_id` where available; otherwise deterministic hash from booking + product + session. |
-| `roller_booking_tickets` | Get tickets. | Upsert by `ticket_id`. |
-| `roller_booking_payments` | Get payments. | Upsert by `booking_payment_id` or payment transaction key. |
-| `guest_profiles` | Get customers. | Upsert minimal customer/contact state needed for SMS and lookup. |
+| `roller_booking_tickets` | `/data/tickets`. | Upsert by `ticket_id` and link to existing booking/item rows where possible. |
+| `roller_booking_payments` | `/data/bookingpayments`. | Upsert by `booking_payment_id` or deterministic payment transaction key. Empty pages are valid. |
+| `guest_profiles` | `/data/customers`. | Upsert structured email/phone contact data with masked/hash fields and safe context only. |
 | `product_catalog_cache` | Roller REST `/products`. | Keep cached product names/types for display and normalization, then enrich `roller_booking_items` by `product_id`. |
 | `event_log` | Seed job itself. | Append run started, completed, partial, failed events. |
 
@@ -476,20 +510,20 @@ Minimum metrics/events:
 
 ## Implementation Sequence
 
-Recommended next implementation steps after T0013:
+Recommended next implementation steps after T0014:
 
-1. `T0014 Related Data API sources`
-   - Add Data API tickets, payments, and customer/contact data after endpoint docs and access are confirmed.
-2. `T0015 Booking webhook intake`
+1. `T0015 Booking webhook intake`
    - Implement webhook intake, idempotency, and enrichment queue.
-3. `T0016 Lookup Aurora-first`
+2. `T0016 Lookup Aurora-first`
    - Use Aurora first for display, then live REST refresh when missing, stale, or check-in-critical.
+3. `T0017 Phone lookup display from Aurora`
+   - Let the phone flow consume Aurora display data once Aurora-first lookup is in place.
 
 ## Open Questions
 
 | Question | Needed For | Status |
 |---|---|---|
-| Exact Data API query params/date filters for Get tickets, Get payments, and Get customers. | Related source ingestion. | Open |
+| Exact Data API query params/date filters for Get tickets, Get payments, and Get customers. | Related source ingestion. | Resolved for T0014 seed window; all three endpoints accepted `startDate`, `endDate`, `pageNumber`, and `pageSize`. |
 | Whether Playground exposes Data API credentials/scopes separately from REST API credentials. | Data API implementation. | Resolved for `/data/bookingitems`; current Playground credentials work. |
 | Exact webhook event id/signature/verification mechanism. | Webhook production safety. | Open |
 | Exact webhook event names and payload fields for created, updated, paid, and cancelled bookings. | Idempotency and normalization. | Open |

@@ -196,7 +196,7 @@ function readMigrationFiles(): MigrationFile[] {
 
   return files.map((fileName) => {
     const filePath = path.join(migrationsDir, fileName);
-    const sql = readFileSync(filePath, "utf8");
+    const sql = readFileSync(filePath, "utf8").replace(/\r\n/g, "\n");
     const [versionPart] = fileName.split("_");
     const name = fileName
       .replace(/^\d+_/, "")

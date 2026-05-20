@@ -2,43 +2,47 @@
 
 ## Ticket ID
 
-T0013
+T0014
 
 ## Goal
 
-Cache Roller Playground product catalog data in dev Aurora and enrich existing booking item rows with product names.
+Import related Roller Data API sources into dev Aurora: tickets, booking payments, and customer contact data.
 
 ## Dependencies
 
-- T0012 completed, pushed, and merged to `main`.
-- Dev Aurora schema from T0007 exists.
-- T0012 imported `/data/bookingitems` rows into `jumpyard.roller_booking_items`.
-- Roller REST `/products` access works in Playground.
+- T0013 completed, pushed, and merged to `main`.
+- Dev Aurora schema exists and T0012/T0013 data is present.
+- Roller Data API `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access works in Playground.
 - Local Roller credentials exist in `.env`.
 - AWS SSO/profile `wrlds-dev` can access account `376129878018`, region `eu-north-1`.
 - Do not commit `.env`.
 
 ## Current Status
 
-Completed locally and applied to dev Aurora on branch `codex/t0013-product-catalog-cache`.
+Completed locally and applied to dev Aurora on branch `codex/t0014-related-data-api-sources`.
 
 Validation result:
 
 - `npm --prefix infra run build`: passed
-- `npm --prefix infra run import:products:dev`: passed dry-run
-- `npm --prefix infra run import:products:dev:apply`: failed closed without write confirmation
+- `npm --prefix infra run migrate:dev:status`: `0001` applied, `0002` pending before apply
+- `npm --prefix infra run migrate:dev`: applied `0002 related data sources`
+- `npm --prefix infra run migrate:dev:status`: `0001` and `0002` applied after apply
+- `npm --prefix infra run import:related-data:dev -- --start-date 2026-05-20 --end-date 2026-05-21`: passed dry-run
+- `npm --prefix infra run import:related-data:dev:apply -- --start-date 2026-05-20 --end-date 2026-05-21`: failed closed without write confirmation
 - AWS identity preflight: account `376129878018`
 - AWS region preflight: `eu-north-1`
-- guarded apply with `ROLLER_PRODUCT_IMPORT_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_PRODUCTS`: passed
+- guarded apply with `ROLLER_RELATED_IMPORT_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_RELATED_DATA`: passed
+- guarded apply re-run against the same window: passed
 
 Import result:
 
-- Roller endpoint: `GET /products`
-- Top-level products read: `96`
-- Flattened product/variation rows cached: `491`
-- `jumpyard.product_catalog_cache` rows matched after apply: `491`
-- `jumpyard.roller_booking_items` rows enriched with product names: `9`
-- Seed booking item product names now include `Biljetter (260 kr)`, `Antal`, `SkyRider 1 åk`, `Hänglås`, and `Islatte`.
+- Modified-date window: `2026-05-20 -> 2026-05-21`
+- `/data/tickets` records read: `6`
+- `/data/bookingpayments` records read: `0`
+- `/data/customers` records read: `6`
+- `jumpyard.roller_booking_tickets` rows matched after apply: `6`
+- `jumpyard.roller_booking_payments` rows matched after apply: `0`
+- `jumpyard.guest_profiles` rows matched after apply: `6`
 
 ## Allowed Areas
 
@@ -52,6 +56,7 @@ Import result:
 - `BOOKING_INDEX_INGESTION_CONTRACT.md`
 - `infra/package.json`
 - `infra/scripts/`
+- `infra/migrations/`
 
 ## Do Not Touch
 
@@ -70,31 +75,35 @@ Import result:
 
 ## Requirements
 
-1. Add a dev import command for Roller REST `/products`.
-2. The importer must:
+1. Confirm Roller Data API access for:
+   - `/data/tickets`
+   - `/data/bookingpayments`
+   - `/data/customers`
+2. Add a dev import command for related Data API sources.
+3. The importer must:
    - Load local Roller `.env` values without printing secrets.
    - Reuse the Playground-only guard.
-   - Read the Roller product catalog through a safe read-only API call.
-   - Flatten top-level products and child/variation products.
-   - Upsert normalized product rows into `jumpyard.product_catalog_cache`.
-   - Enrich existing `jumpyard.roller_booking_items` rows with `product_name`, `parent_product_name`, and `parent_product_id`.
+   - Read `startDate`, `endDate`, `pageNumber`, and `pageSize`.
+   - Fetch paginated Data API records.
+   - Upsert ticket rows into `jumpyard.roller_booking_tickets`.
+   - Upsert payment rows into `jumpyard.roller_booking_payments`.
+   - Upsert structured customer contact rows into `jumpyard.guest_profiles`.
+   - Store email and phone as explicit structured fields plus masked/hash fields.
+   - Avoid storing customer names, addresses, raw payloads, booking notes, access tokens, or secrets.
    - Be idempotent for repeated runs.
-   - Avoid storing raw Roller payloads by default.
-   - Avoid printing customer names, emails, phone numbers, booking notes, access tokens, or secrets.
-3. The write command must fail closed unless an explicit write-confirmation environment variable is set.
-4. Use only the existing dev Aurora database and schema. Do not create or deploy AWS resources.
-5. Verify existing T0012 seed booking item rows now show product names.
-6. Update source-of-truth docs with:
+4. The write command must fail closed unless an explicit write-confirmation environment variable is set.
+5. Use only the existing dev Aurora database and schema migration flow. Do not create or deploy AWS resources.
+6. Verify Aurora contains imported rows for tickets and customer contact data.
+7. Update source-of-truth docs with:
    - command names
+   - migration result
    - validation result
    - query examples for AWS Query Editor
    - recommended next ticket
 
 ## Non-Goals
 
-- Do not import `/data/tickets` yet.
-- Do not import `/data/bookingpayments` yet.
-- Do not import guest/customer email or phone yet.
+- Do not import gift cards yet.
 - Do not change lookup to use Aurora first yet.
 - Do not implement webhook intake.
 - Do not schedule the job.
@@ -102,13 +111,19 @@ Import result:
 - Do not call Roller Live/production.
 - Do not make Roller write calls.
 - Do not change app UI.
+- Do not implement SMS sending.
+- Do not implement payment handling.
+- Do not implement redemption.
 
 ## Acceptance Criteria
 
-- `npm --prefix infra run import:products:dev` dry-runs safely.
-- `npm --prefix infra run import:products:dev:apply` writes only when `ROLLER_PRODUCT_IMPORT_ALLOW_WRITE` is set to the approved confirmation value.
-- Aurora `jumpyard.product_catalog_cache` contains cached product rows after apply.
-- Aurora `jumpyard.roller_booking_items` contains product names for the T0012 seed rows after apply.
+- Data API endpoint smoke checks pass for tickets, booking payments, and customers.
+- `0002 related data sources` migration applies to dev Aurora.
+- `npm --prefix infra run import:related-data:dev` dry-runs safely.
+- `npm --prefix infra run import:related-data:dev:apply` writes only when `ROLLER_RELATED_IMPORT_ALLOW_WRITE` is set to the approved confirmation value.
+- Aurora `jumpyard.roller_booking_tickets` contains imported ticket rows after apply.
+- Aurora `jumpyard.guest_profiles` contains structured email/phone contact rows after apply.
+- Payment import handles `0` records as a valid empty result.
 - `npm run validate` passes.
 - `npm --prefix infra run build` passes.
 - No app, asset, deliverable, production config, `.env`, or AWS resource files are changed.
@@ -118,26 +133,40 @@ Import result:
 After apply, use AWS Query Editor against database `jumpyard_cloud`:
 
 ```sql
-select count(*) as product_cache_rows
-from jumpyard.product_catalog_cache
-where roller_env = 'playground'
-  and venue_id = 'jumpyard-check-in-dev';
+select 'tickets' as table_name, count(*)::text as row_count
+from jumpyard.roller_booking_tickets
+union all
+select 'payments', count(*)::text
+from jumpyard.roller_booking_payments
+union all
+select 'guest_profiles', count(*)::text
+from jumpyard.guest_profiles;
 ```
 
 ```sql
-select b.booking_reference, i.product_id, i.product_name, i.parent_product_name, i.quantity
-from jumpyard.roller_booking_items i
-join jumpyard.roller_bookings b on b.roller_unique_id = i.roller_unique_id
-where b.booking_reference in ('5032210','5032211','5032212','5032213','5032214','5032215')
-order by b.booking_reference, i.booking_item_id;
+select b.booking_reference, t.ticket_id, t.product_id, t.booking_date
+from jumpyard.roller_booking_tickets t
+join jumpyard.roller_bookings b on b.roller_unique_id = t.roller_unique_id
+order by b.booking_reference, t.ticket_id;
+```
+
+```sql
+select roller_customer_id, email_masked, contact_number_masked, sms_ready
+from jumpyard.guest_profiles
+order by roller_customer_id;
 ```
 
 ## Automated Validation
 
 Run:
 
+- `node scripts/roller-data-api-smoke.js --path /data/tickets --start-date 2026-05-20 --end-date 2026-05-21`
+- `node scripts/roller-data-api-smoke.js --path /data/bookingpayments --start-date 2026-05-20 --end-date 2026-05-21`
+- `node scripts/roller-data-api-smoke.js --path /data/customers --start-date 2026-05-20 --end-date 2026-05-21`
 - `npm --prefix infra run build`
-- `npm --prefix infra run import:products:dev`
-- `npm --prefix infra run import:products:dev:apply` without confirmation
-- `npm --prefix infra run import:products:dev:apply` with explicit write confirmation
+- `npm --prefix infra run migrate:dev:status`
+- `npm --prefix infra run migrate:dev`
+- `npm --prefix infra run import:related-data:dev`
+- `npm --prefix infra run import:related-data:dev:apply` without confirmation
+- `npm --prefix infra run import:related-data:dev:apply` with explicit write confirmation
 - `npm run validate`
