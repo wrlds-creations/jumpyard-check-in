@@ -14,7 +14,7 @@ Guest-facing phone flow for JumpYard Next check-in.
 - Success and handout guidance
 - Extension flow at `/extend`
 
-The current app uses local mock flow data in `src/flow/mockClient.ts`. Replace that adapter with real JumpYard/JY Cloud integrations when contracts are confirmed.
+The booking lookup step uses `src/flow/cloudClient.ts` and calls JumpYard Cloud server-side lookup. SMS token validation still uses local mock flow data in `src/flow/mockClient.ts`.
 
 ## Development
 
@@ -24,6 +24,13 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+Optional local lookup overrides:
+
+```bash
+NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com
+NEXT_PUBLIC_JUMPYARD_LOOKUP_EXPECTED_DATE=2026-05-21
+```
 
 For external device testing:
 

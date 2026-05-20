@@ -29,6 +29,8 @@ T0008 adds a protected local Roller Playground seed tool for deterministic fake 
 
 T0009 replaced the dev `POST /v1/check-in/lookup` placeholder with a deployed server-side Roller Playground lookup Lambda. The endpoint reads Roller credentials from Secrets Manager, env/base URL from SSM Parameter Store, calls `GET /bookings/{identifier}`, enriches product names from `/products`, and returns a normalized JumpYard response.
 
+T0010 wires the phone app booking lookup step to the deployed JumpYard Cloud lookup API. The phone app calls JumpYard Cloud only, maps `ready` responses to the existing booking summary with active check-in CTA, maps `payment_required` responses to the existing booking summary with `Obetald` and blocked check-in CTA, and stops the flow for wrong-date, non-redeemable, not-found, and service-failure states.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -97,7 +99,7 @@ After T0007, the next tickets should proceed in this order:
 |---|---|---|
 | `T0008 Playground test booking seed tool` | Create deterministic Roller Playground test bookings through protected server-side tooling. | Reliable test scenarios are needed before validating lookup and check-in flows. |
 | `T0009 Booking lookup endpoint` | Implement `POST /v1/check-in/lookup` against Roller Playground and local index shape. | First real JumpYard Cloud API behavior for the phone flow. |
-| `T0010 Phone UI lookup wiring` | Connect the phone check-in lookup step to JumpYard Cloud `POST /v1/check-in/lookup`. | Lets the first mobile flow step use the deployed server-side Roller lookup. |
+| `T0010 Phone UI lookup wiring` | Connect the phone check-in lookup step to JumpYard Cloud `POST /v1/check-in/lookup`. | Completed locally; lets the first mobile flow step use the deployed server-side Roller lookup. |
 | `T0011 Daily seed job` | Implement the Roller Data API seed into Aurora. | Fills the booking index automatically for operating days. |
 | `T0012 Booking webhook intake` | Implement webhook intake, idempotency, and enrichment. | Keeps the booking index fresh after the morning seed. |
 
@@ -164,10 +166,13 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
   - `5032211`: `found`, `payment_required`, `canCheckIn=false`.
   - `5032212` with expected date `2026-05-21`: `found`, `wrong_date`, `canCheckIn=false`.
   - `999999999`: `not_found`, HTTP `404`.
+- T0010 phone lookup uses public, non-secret config:
+  - `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL`
+  - `NEXT_PUBLIC_JUMPYARD_LOOKUP_EXPECTED_DATE`
+- T0010 local demo default expected date is `2026-05-21` to match deterministic Playground seed bookings.
 
 ## Non-Goals For Current Ticket
 
-- Do not connect the phone UI yet.
 - Do not use the Aurora booking index before the daily seed exists.
 - Do not write lookup results to Aurora yet.
 - Do not implement daily seed ingestion.

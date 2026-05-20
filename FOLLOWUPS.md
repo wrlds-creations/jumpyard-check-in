@@ -18,8 +18,8 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-020` | `T0005` | Webhook security | Confirm Roller webhook event id, signature/verification method, retry behavior, and event names before exposing webhook intake beyond dev. | High | `TBD` | Open |
 | `FU-021` | `T0005` | Data retention | Confirm retention period for normalized booking snapshots, event logs, sync runs, and any approved raw payload storage. | Medium | `TBD` | Open |
 | `FU-022` | `T0005` | Ingestion freshness | Confirm operational freshness thresholds for lookup display, SMS readiness, and mandatory live refresh before redeem. | Medium | `TBD` | Open |
-| `FU-025` | `T0006` | AWS secrets | Set real Roller Playground credentials into AWS Secrets Manager secret `/jumpyard-check-in-dev/roller/credentials` before any deployed Lambda makes Roller calls. | High | `love` | Open |
 | `FU-026` | `T0008` | Test data | Add an already-redeemed Playground seed scenario after `POST /redemptions` is implemented and safely tested. | Medium | `TBD` | Open |
+| `FU-027` | `T0010` | Phone operating date | Replace the T0008 demo expected-date default with a venue operating-date source before pilot/production. | High | `TBD` | Open |
 
 ## Resolved Followups
 
@@ -32,3 +32,4 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-017` | `T0006` | Added confirmed non-secret dev deployment config at `infra/config/dev.json`. | 2026-05-19 |
 | `FU-023` | `T0006` | Confirmed T0006 WRLDS deploy metadata and wrote it to source-of-truth docs. | 2026-05-19 |
 | `FU-024` | `T0006` | AWS SSO login succeeded for profile `wrlds-dev`; `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`, and region `eu-north-1` is configured. | 2026-05-19 |
+| `FU-025` | `T0009` | Real Roller Playground credentials were stored in AWS Secrets Manager secret `/jumpyard-check-in-dev/roller/credentials` and used successfully by the deployed lookup Lambda. | 2026-05-20 |
