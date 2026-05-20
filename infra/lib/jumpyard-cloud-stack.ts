@@ -143,7 +143,7 @@ export class JumpYardCloudStack extends Stack {
       deletionProtection: true,
       enableHttpEndpoint: true,
       engine: 'aurora-postgresql',
-      engineVersion: '16.3',
+      engineVersion: '16.13',
       masterUsername: 'jumpyard_admin',
       masterUserPassword: databaseSecret.secretValueFromJson('password').toString(),
       serverlessV2ScalingConfiguration: {

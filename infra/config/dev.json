@@ -1,0 +1,21 @@
+{
+  "awsAccount": "376129878018",
+  "awsRegion": "eu-north-1",
+  "resourcePrefix": "jumpyard-check-in-dev",
+  "roller": {
+    "environment": "playground",
+    "baseUrl": "https://api.play.roller.app"
+  },
+  "tags": {
+    "WRLDS:Client": "JumpYard",
+    "WRLDS:Project": "jumpyard-check-in",
+    "WRLDS:Environment": "dev",
+    "WRLDS:Owner": "love",
+    "WRLDS:Repository": "wrlds-creations/jumpyard-check-in",
+    "WRLDS:ManagedBy": "cdk",
+    "WRLDS:DataClassification": "internal",
+    "WRLDS:Exportable": "true",
+    "WRLDS:CostCenter": "unassigned",
+    "WRLDS:CreatedBy": "love"
+  }
+}
