@@ -11,6 +11,7 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
+import * as path from 'path';
 import { JumpYardCloudConfig } from './config';
 
 interface JumpYardCloudStackProps extends StackProps {
@@ -214,7 +215,9 @@ export class JumpYardCloudStack extends Stack {
       rollerBaseUrlParameter,
     };
 
-    const lookupHandler = this.createHandler('LookupHandler', 'lookup', handlerResources);
+    const lookupHandler = this.createHandler('LookupHandler', 'lookup', handlerResources, {
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'lookup')),
+    });
     const bookingHandler = this.createHandler('BookingHandler', 'booking', handlerResources);
     const redeemHandler = this.createHandler('RedeemHandler', 'redeem', handlerResources);
     const webhookHandler = this.createHandler('WebhookHandler', 'webhook', handlerResources);
@@ -245,7 +248,12 @@ export class JumpYardCloudStack extends Stack {
     });
   }
 
-  private createHandler(id: string, handlerName: string, resources: HandlerResources): lambda.Function {
+  private createHandler(
+    id: string,
+    handlerName: string,
+    resources: HandlerResources,
+    options: { readonly code?: lambda.Code } = {},
+  ): lambda.Function {
     const functionName = `${this.stackName}-${handlerName}`;
 
     const logGroup = new logs.LogGroup(this, `${id}LogGroup`, {
@@ -261,7 +269,7 @@ export class JumpYardCloudStack extends Stack {
       handler: 'index.handler',
       timeout: Duration.seconds(10),
       memorySize: 256,
-      code: lambda.Code.fromInline(`
+      code: options.code ?? lambda.Code.fromInline(`
 exports.handler = async () => ({
   statusCode: 501,
   headers: { 'content-type': 'application/json' },

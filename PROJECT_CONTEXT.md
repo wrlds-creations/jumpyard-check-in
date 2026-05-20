@@ -27,6 +27,8 @@ T0007 added Aurora schema migrations in `infra/migrations/` and a dev migration 
 
 T0008 adds a protected local Roller Playground seed tool for deterministic fake bookings. The tool is dry-run by default and can only write bookings when Playground config passes and an explicit write-confirmation environment variable is set.
 
+T0009 replaced the dev `POST /v1/check-in/lookup` placeholder with a deployed server-side Roller Playground lookup Lambda. The endpoint reads Roller credentials from Secrets Manager, env/base URL from SSM Parameter Store, calls `GET /bookings/{identifier}`, enriches product names from `/products`, and returns a normalized JumpYard response.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -95,8 +97,9 @@ After T0007, the next tickets should proceed in this order:
 |---|---|---|
 | `T0008 Playground test booking seed tool` | Create deterministic Roller Playground test bookings through protected server-side tooling. | Reliable test scenarios are needed before validating lookup and check-in flows. |
 | `T0009 Booking lookup endpoint` | Implement `POST /v1/check-in/lookup` against Roller Playground and local index shape. | First real JumpYard Cloud API behavior for the phone flow. |
-| `T0010 Daily seed job` | Implement the Roller Data API seed into Aurora. | Fills the booking index automatically for operating days. |
-| `T0011 Booking webhook intake` | Implement webhook intake, idempotency, and enrichment. | Keeps the booking index fresh after the morning seed. |
+| `T0010 Phone UI lookup wiring` | Connect the phone check-in lookup step to JumpYard Cloud `POST /v1/check-in/lookup`. | Lets the first mobile flow step use the deployed server-side Roller lookup. |
+| `T0011 Daily seed job` | Implement the Roller Data API seed into Aurora. | Fills the booking index automatically for operating days. |
+| `T0012 Booking webhook intake` | Implement webhook intake, idempotency, and enrichment. | Keeps the booking index fresh after the morning seed. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -156,17 +159,24 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
 - `GET /bookings?date=2026-05-19` returned one booking in Playground on 2026-05-19.
 - Known Playground booking for lookup testing: booking reference `5001370`, unique id `dbba266d-0951-4706-9adf-6c9d05edffbf`.
 - Known Playground ticket from that booking: `5001370-21265504`.
+- Dev `POST /v1/check-in/lookup` was deployed in T0009 and returned:
+  - `5032210`: `found`, `ready`, `canCheckIn=true`.
+  - `5032211`: `found`, `payment_required`, `canCheckIn=false`.
+  - `5032212` with expected date `2026-05-21`: `found`, `wrong_date`, `canCheckIn=false`.
+  - `999999999`: `not_found`, HTTP `404`.
 
 ## Non-Goals For Current Ticket
 
-- Do not implement API business logic beyond the local T0008 seed tool.
+- Do not connect the phone UI yet.
+- Do not use the Aurora booking index before the daily seed exists.
+- Do not write lookup results to Aurora yet.
+- Do not implement daily seed ingestion.
+- Do not implement webhook intake.
 - Do not write to Roller Live/production.
 - Do not redeem Roller tickets.
 - Do not create staging or production AWS resources.
-- Do not modify app functionality.
 - Do not add payment logic.
 - Do not add redeem logic.
-- Do not deploy AWS infrastructure outside the approved T0006 dev foundation.
 - Do not add a public demo button to the phone check-in UI.
 
 ## Open Questions
