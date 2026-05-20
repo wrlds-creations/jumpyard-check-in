@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-20
-- Current branch: `codex/t0012-bookingitems-aurora-import`
-- Current status: T0012 bookingitems Aurora import completed locally and applied to dev.
-- Current ticket: `T0012` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`
-- Recommended next ticket: `T0013 Related Data API sources`
+- Current branch: `codex/t0013-product-catalog-cache`
+- Current status: T0013 product catalog cache completed locally and applied to dev.
+- Current ticket: `T0013` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`
+- Recommended next ticket: `T0014 Related Data API sources`
 
 ## Current Structure
 
@@ -39,6 +39,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- lambda/lookup/index.js
 |   |-- lib/config.ts
 |   |-- scripts/import-bookingitems.ts
+|   |-- scripts/import-products.ts
 |   |-- lib/jumpyard-cloud-stack.ts
 |   |-- migrations/0001_initial_schema.sql
 |   |-- scripts/run-migrations.ts
@@ -66,6 +67,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm --prefix infra run migrate:dev` | Apply pending Aurora migrations to dev. | Run only after AWS account `376129878018` and region `eu-north-1` are verified. |
 | `npm --prefix infra run import:bookingitems:dev` | Dry-run Roller Data API `/data/bookingitems` normalization for dev Aurora import. | Reads local `.env`, calls Roller Playground, and performs no Aurora writes. |
 | `npm --prefix infra run import:bookingitems:dev:apply` | Apply Roller Data API `/data/bookingitems` import into dev Aurora. | Requires `ROLLER_IMPORT_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_BOOKINGITEMS`; verify AWS account and region first. |
+| `npm --prefix infra run import:products:dev` | Dry-run Roller REST `/products` normalization for dev Aurora product cache import. | Reads local `.env`, calls Roller Playground, and performs no Aurora writes. |
+| `npm --prefix infra run import:products:dev:apply` | Apply Roller product cache import and booking item enrichment into dev Aurora. | Requires `ROLLER_PRODUCT_IMPORT_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_PRODUCTS`; verify AWS account and region first. |
 | `npm --prefix infra audit` | Audit infra dependencies. | Currently reports one moderate bundled `brace-expansion` issue inside `aws-cdk-lib`; automatic fix unavailable. |
 | `npm run roller:env:check` | Validate Roller env guard against current environment variables. | Requires `ROLLER_ENV=playground` and a Playground-looking `ROLLER_BASE_URL`; client credentials are optional. |
 | `npm run roller:smoke` | Verify local Roller Playground credentials with an OAuth token request and one read-only smoke request. | Loads local `.env`; does not print secrets or full Roller responses. |
@@ -97,20 +100,21 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0010` | Wired phone booking lookup step to JumpYard Cloud. | 2026-05-20 | Phone UI calls dev `POST /v1/check-in/lookup`, shows ready and unpaid found bookings in summary, blocks check-in for unpaid bookings, and shows stop states for wrong-date, non-redeemable, not-found, and service failures. |
 | `T0011` | Added Data API smoke test and locked backfill/incremental sync strategy. | 2026-05-20 | `GET /data/bookingitems` works in Playground and returned 9 rows for the T0008 seed modified-date window. |
 | `T0012` | Imported Roller Data API bookingitems into dev Aurora. | 2026-05-20 | Upserted 6 seed bookings and 9 booking item rows into dev Aurora, with run tracking in `booking_seed_runs`. |
+| `T0013` | Cached Roller product catalog rows and enriched booking item product names in dev Aurora. | 2026-05-20 | Cached 491 product/variation rows and enriched 9 seed booking item rows. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0012` | Import `/data/bookingitems` into dev Aurora. | Completed locally and applied to dev | Commit/review still pending. |
+| `T0013` | Cache Roller product catalog and enrich booking item product names. | Completed locally and applied to dev | Commit/review still pending. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0013` | Related Data API sources | Add tickets, payments, and customers after endpoint docs/access are confirmed. |
-| `T0014` | Booking webhook intake | Implement webhook intake, idempotency, and enrichment. |
-| `T0015` | Lookup Aurora-first | Use Aurora for display lookup, with REST refresh when missing, stale, or check-in-critical. |
+| `T0014` | Related Data API sources | Add tickets, payments, and customer/contact data after endpoint docs/access are confirmed. |
+| `T0015` | Booking webhook intake | Implement webhook intake, idempotency, and enrichment. |
+| `T0016` | Lookup Aurora-first | Use Aurora for display lookup, with REST refresh when missing, stale, or check-in-critical. |
 
 ## Validation Status
 
@@ -175,6 +179,13 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0012 idempotency check: re-running guarded apply against the same window still matched 6 bookings and 9 booking items.
 - T0012 Aurora verification: direct Data API query returned booking references `5032210` through `5032215` in `jumpyard.roller_bookings`.
 - T0012 seed run verification: latest `jumpyard.booking_seed_runs` row for the import has status `succeeded` and counts 9 source records, 6 booking upserts, and 9 booking item upserts.
+- T0013 infra build: `npm --prefix infra run build` passed.
+- T0013 dry-run: `npm --prefix infra run import:products:dev` returned 96 top-level products and 491 flattened product/variation rows without Aurora writes.
+- T0013 write guard: `npm --prefix infra run import:products:dev:apply` failed closed without `ROLLER_PRODUCT_IMPORT_ALLOW_WRITE`.
+- T0013 AWS identity preflight: `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`.
+- T0013 AWS region preflight: `aws configure get region --profile wrlds-dev` returned `eu-north-1`.
+- T0013 dev apply: guarded apply matched 491 `jumpyard.product_catalog_cache` rows and 9 `jumpyard.roller_booking_items` rows with product names.
+- T0013 Aurora verification: seed booking item product names now include `Biljetter (260 kr)`, `Antal`, `SkyRider 1 åk`, `Hänglås`, and `Islatte`.
 
 ## Known Issues Summary
 
@@ -182,8 +193,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Roller credentials secret in AWS has been populated for dev and was used by T0009 lookup smoke tests.
 - JumpYard Cloud lookup API business logic has been implemented for live Roller detail lookup. Other API business logic is still pending.
 - Phone app booking lookup now calls JumpYard Cloud for the first check-in step. Payment, redeem, and booking creation UI behavior are still pending.
-- Aurora schema exists in dev, and T0012 writes normalized `/data/bookingitems` snapshots into `roller_bookings` and `roller_booking_items`.
-- Booking index ingestion has started with Data API bookingitems. Tickets, payments, customers, and webhooks have not been implemented.
+- Aurora schema exists in dev. T0012 writes normalized `/data/bookingitems` snapshots into `roller_bookings` and `roller_booking_items`, and T0013 enriches booking item product names from `product_catalog_cache`.
+- Booking index ingestion has started with Data API bookingitems plus REST product catalog cache. Tickets, payments, customers/contact data, and webhooks have not been implemented.
 - Roller Data API `/data/bookingitems` access, query params, paging shape, and modified-date behavior are confirmed in Playground; tickets, payments, and customers Data API endpoints are still open.
 - Webhook event id, signature/verification method, retry behavior, and event names are still open.
 - Already-redeemed Playground seed data is deferred until redemption is implemented and safely tested.

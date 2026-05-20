@@ -33,6 +33,8 @@ T0010 wires the phone app booking lookup step to the deployed JumpYard Cloud loo
 
 T0012 added a dev Aurora importer for Roller Data API `/data/bookingitems`. It upserts normalized booking rows into `jumpyard.roller_bookings`, booking item rows into `jumpyard.roller_booking_items`, and run state into `jumpyard.booking_seed_runs` without storing raw Roller payloads.
 
+T0013 added a dev Aurora importer for Roller REST `/products`. It caches normalized product rows in `jumpyard.product_catalog_cache` and enriches existing `jumpyard.roller_booking_items` rows with product names and parent product names.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -75,6 +77,8 @@ The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_C
 - Safety status, handoff code, staff handoff status, idempotency, and internal audit trail: JumpYard Cloud/server API.
 - Short-lived normalized booking snapshots may be stored by JumpYard Cloud for UX, audit, and retry support, but Roller remains the source of truth.
 - JumpYard Cloud should store Roller ids and minimal operational data, not full raw Roller payloads or unnecessary PII.
+- Product catalog names/types may be cached because they are needed for display and normalization and are not guest PII.
+- Guest email and phone may be stored in a later scoped ticket as explicit structured contact fields when needed for check-in/SMS flows; free-text notes and booking comments remain deferred.
 
 ## Phone-First Flow Targets
 
@@ -106,8 +110,9 @@ After T0007, the next tickets should proceed in this order:
 | `T0010 Phone UI lookup wiring` | Connect the phone check-in lookup step to JumpYard Cloud `POST /v1/check-in/lookup`. | Completed locally; lets the first mobile flow step use the deployed server-side Roller lookup. |
 | `T0011 Data API access smoke` | Verify Roller Data API access and lock modified-date sync strategy. | Prevents building Aurora ingestion against the wrong Data API mental model. |
 | `T0012 Data API bookingitems import` | Upsert `/data/bookingitems` records into Aurora. | Completed locally against dev; starts the local booking index with confirmed Data API payload shape. |
-| `T0013 Related Data API sources` | Add tickets, payments, and customers once endpoint docs/access are confirmed. | Completes payment/contact/ticket context for lookup and SMS. |
-| `T0014 Booking webhook intake` | Implement webhook intake, idempotency, and enrichment. | Keeps the booking index fresh after sync/backfill. |
+| `T0013 Product catalog cache` | Cache Roller products and enrich booking item product names in Aurora. | Lets the booking index show human-readable products instead of only Roller product IDs. |
+| `T0014 Related Data API sources` | Add tickets, payments, and customer/contact data once endpoint docs/access are confirmed. | Completes payment/contact/ticket context for lookup, SMS, and redemption. |
+| `T0015 Booking webhook intake` | Implement webhook intake, idempotency, and enrichment. | Keeps the booking index fresh after sync/backfill. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -188,6 +193,10 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
   - `jumpyard.roller_booking_items`: 9 seed booking item rows matched
   - latest `jumpyard.booking_seed_runs` status: `succeeded`
   - imported booking references: `5032210`, `5032211`, `5032212`, `5032213`, `5032214`, `5032215`
+- T0013 imported Roller product catalog data into dev Aurora:
+  - `jumpyard.product_catalog_cache`: 491 product/variation rows matched
+  - `jumpyard.roller_booking_items`: 9 seed booking item rows enriched with product names
+  - sample enriched product names: `Biljetter (260 kr)`, `Antal`, `SkyRider 1 åk`, `Hänglås`, `Islatte`
 
 ## Non-Goals For Current Ticket
 
@@ -195,6 +204,7 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
 - Do not write lookup results to Aurora yet.
 - Do not implement daily seed ingestion.
 - Do not implement webhook intake.
+- Do not import guest email or phone until a dedicated contact-data ticket scopes the fields, masking, retention, and use case.
 - Do not write to Roller Live/production.
 - Do not redeem Roller tickets.
 - Do not create staging or production AWS resources.

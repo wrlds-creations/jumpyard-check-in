@@ -208,6 +208,32 @@ Applied import result for modified-date window `2026-05-20 -> 2026-05-21`:
 
 The importer stores normalized operational fields and safe summaries only. It does not print or store raw Roller payloads, customer names, emails, phone numbers, or booking notes.
 
+### T0013 Product Catalog Import Findings
+
+T0013 added a dev product cache importer:
+
+```text
+npm --prefix infra run import:products:dev
+npm --prefix infra run import:products:dev:apply
+```
+
+The dry-run command reads Roller REST `/products`, flattens top-level products and child/variation products, and performs no Aurora writes. The apply command writes only when:
+
+```text
+ROLLER_PRODUCT_IMPORT_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_PRODUCTS
+```
+
+Applied import result:
+
+| Target | Result |
+|---|---|
+| Roller top-level products read | `96` |
+| Flattened product/variation rows | `491` |
+| `jumpyard.product_catalog_cache` matched after import | `491` |
+| `jumpyard.roller_booking_items` rows enriched with names | `9` |
+
+The importer stores normalized product catalog summaries only. It enriches booking item rows from product IDs and avoids booking free-text fields for product display.
+
 ### Seed Upsert Targets
 
 | Target | Source | Required Behavior |
@@ -217,7 +243,7 @@ The importer stores normalized operational fields and safe summaries only. It do
 | `roller_booking_tickets` | Get tickets. | Upsert by `ticket_id`. |
 | `roller_booking_payments` | Get payments. | Upsert by `booking_payment_id` or payment transaction key. |
 | `guest_profiles` | Get customers. | Upsert minimal customer/contact state needed for SMS and lookup. |
-| `product_catalog_cache` | Existing product smoke/read endpoint, later product seed. | Keep cached product names/types for display and normalization. |
+| `product_catalog_cache` | Roller REST `/products`. | Keep cached product names/types for display and normalization, then enrich `roller_booking_items` by `product_id`. |
 | `event_log` | Seed job itself. | Append run started, completed, partial, failed events. |
 
 ### Seed Failure Rules
@@ -450,13 +476,13 @@ Minimum metrics/events:
 
 ## Implementation Sequence
 
-Recommended next implementation steps after T0011:
+Recommended next implementation steps after T0013:
 
-1. `T0013 Related Data API sources`
-   - Add Data API tickets, payments, and customers after endpoint docs and access are confirmed.
-2. `T0014 Booking webhook intake`
+1. `T0014 Related Data API sources`
+   - Add Data API tickets, payments, and customer/contact data after endpoint docs and access are confirmed.
+2. `T0015 Booking webhook intake`
    - Implement webhook intake, idempotency, and enrichment queue.
-3. `T0015 Lookup Aurora-first`
+3. `T0016 Lookup Aurora-first`
    - Use Aurora first for display, then live REST refresh when missing, stale, or check-in-critical.
 
 ## Open Questions
