@@ -4,7 +4,7 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-JumpYard Check-in dev AWS foundation is deployed, the first dev Aurora schema migration has been applied, the dev lookup endpoint now performs server-side Roller Playground booking lookup, and dev Aurora contains bookingitems plus product catalog cache data.
+JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0002` have been applied, the dev lookup endpoint now performs server-side Roller Playground booking lookup, and dev Aurora contains bookingitems, product catalog cache data, tickets, and customer contact data.
 
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
@@ -56,6 +56,20 @@ T0013 dev product cache notes:
   - `jumpyard.roller_booking_items`: 9 existing booking item rows enriched with product names
 - Raw Roller payloads, customer names, emails, phone numbers, booking notes, secrets, and tokens were not printed or intentionally stored.
 
+T0014 related Data API import notes:
+
+- AWS resources created or changed: none.
+- Existing Aurora Data API was used to apply migration `0002 related data sources`.
+- Migration runner fix: migration checksums now normalize CRLF to LF before hashing so Windows line endings do not produce false checksum mismatches.
+- Existing Aurora Data API was used to write normalized Roller Data API tickets, payments, and customers.
+- Import command: `npm --prefix infra run import:related-data:dev:apply`
+- Modified-date window: `2026-05-20 -> 2026-05-21`
+- Imported rows matched after apply:
+  - `jumpyard.roller_booking_tickets`: 6 ticket rows
+  - `jumpyard.roller_booking_payments`: 0 payment rows
+  - `jumpyard.guest_profiles`: 6 customer contact rows
+- Email and phone are stored as explicit structured fields with hash/masked companion fields. Customer names, addresses, raw Roller payloads, booking notes, secrets, and tokens were not printed or intentionally stored.
+
 Confirmed T0006 dev target:
 
 | Field | Value |
@@ -105,12 +119,12 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`.
 
 | Table | Purpose |
 |---|---|
-| `schema_migrations` | Tracks applied SQL migrations. |
+| `schema_migrations` | Tracks applied SQL migrations. Applied through `0002 related data sources`. |
 | `roller_bookings` | Latest normalized Roller booking snapshot from seed, webhook enrichment, or live refresh. |
 | `roller_booking_items` | Normalized booking item/product rows. |
-| `roller_booking_tickets` | Ticket ids and redeem readiness context. |
-| `roller_booking_payments` | Payment rows or summaries needed for check-in/payment decisions. |
-| `guest_profiles` | Minimal hashed/masked guest contact state for SMS/readiness and late enrichment. |
+| `roller_booking_tickets` | Ticket ids and redeem readiness context from `/data/tickets`. |
+| `roller_booking_payments` | Payment rows or summaries needed for check-in/payment decisions from `/data/bookingpayments`. |
+| `guest_profiles` | Structured guest email/phone contact state plus masked/hash values for SMS/readiness and late enrichment. |
 | `checkin_tokens` | SMS/link/open token state. |
 | `checkin_attempts` | Check-in and redeem attempt audit. |
 | `handoff_sessions` | Staff handoff, safety, and band-pairing state. |

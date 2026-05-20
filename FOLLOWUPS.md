@@ -20,7 +20,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-022` | `T0005` | Ingestion freshness | Confirm operational freshness thresholds for lookup display, SMS readiness, and mandatory live refresh before redeem. | Medium | `TBD` | Open |
 | `FU-026` | `T0008` | Test data | Add an already-redeemed Playground seed scenario after `POST /redemptions` is implemented and safely tested. | Medium | `TBD` | Open |
 | `FU-027` | `T0010` | Phone operating date | Replace the T0008 demo expected-date default with a venue operating-date source before pilot/production. | High | `TBD` | Open |
-| `FU-028` | `T0013` | Contact data | Define exact email and phone fields, masking/hashing, retention, and source endpoint before importing guest contact data into Aurora. | High | `TBD` | Open |
+| `FU-029` | `T0014` | Gift cards | Add `/data/giftcards` ingestion when gift card payment/check-in flows are explicitly scoped. | Medium | `TBD` | Open |
 
 ## Resolved Followups
 
@@ -34,3 +34,4 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-023` | `T0006` | Confirmed T0006 WRLDS deploy metadata and wrote it to source-of-truth docs. | 2026-05-19 |
 | `FU-024` | `T0006` | AWS SSO login succeeded for profile `wrlds-dev`; `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`, and region `eu-north-1` is configured. | 2026-05-19 |
 | `FU-025` | `T0009` | Real Roller Playground credentials were stored in AWS Secrets Manager secret `/jumpyard-check-in-dev/roller/credentials` and used successfully by the deployed lookup Lambda. | 2026-05-20 |
+| `FU-028` | `T0014` | Added structured email and phone fields to `jumpyard.guest_profiles`; T0014 imports `/data/customers` into full structured fields plus masked/hash values, while excluding names, addresses, notes, and raw payloads. | 2026-05-20 |
