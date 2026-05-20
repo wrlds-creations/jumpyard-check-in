@@ -14,7 +14,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-014` | `T0003` | Roller clarification | Confirm the preferred availability-display pattern for core jump-entry products and durations before implementing new booking UI logic. | Medium | `TBD` | Open |
 | `FU-015` | `T0003` | Data ingestion | Confirm Roller Data API endpoint, credentials, date range, and payload shape for the daily morning booking seed. | High | `TBD` | Open |
 | `FU-018` | `T0004` | Dependency security | Evaluate the `aws-cdk-lib` bundled `brace-expansion` audit warning and any available `npm audit fix` path in a dedicated dependency ticket. | Medium | `TBD` | Open |
-| `FU-019` | `T0005` | Data ingestion | Confirm exact Data API query parameters, paging, credentials, and date-window support for Get bookings, Get tickets, Get payments, and Get customers in Playground. | High | `TBD` | Open |
+| `FU-019` | `T0005` | Data ingestion | Confirm exact Data API query parameters, paging, credentials, and date-window support for Get tickets, Get payments, and Get customers in Playground. Bookingitems/Get bookings was confirmed in T0011. | High | `TBD` | Open |
 | `FU-020` | `T0005` | Webhook security | Confirm Roller webhook event id, signature/verification method, retry behavior, and event names before exposing webhook intake beyond dev. | High | `TBD` | Open |
 | `FU-021` | `T0005` | Data retention | Confirm retention period for normalized booking snapshots, event logs, sync runs, and any approved raw payload storage. | Medium | `TBD` | Open |
 | `FU-022` | `T0005` | Ingestion freshness | Confirm operational freshness thresholds for lookup display, SMS readiness, and mandatory live refresh before redeem. | Medium | `TBD` | Open |

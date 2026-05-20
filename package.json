@@ -12,6 +12,7 @@
     "infra:synth": "npm --prefix infra run synth:example",
     "roller:env:check": "node scripts/check-roller-env.js",
     "roller:smoke": "node scripts/roller-smoke.js",
+    "roller:data:smoke": "node scripts/roller-data-api-smoke.js",
     "roller:seed:playground": "node scripts/roller-seed-playground.js",
     "roller:seed:playground:apply": "node scripts/roller-seed-playground.js --apply"
   }
