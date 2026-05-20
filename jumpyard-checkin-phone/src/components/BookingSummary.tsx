@@ -13,6 +13,7 @@ export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => 
     const { t } = useTranslation();
 
     const existingAddons: { label: string; qty: number }[] = booking?.existingAddons ?? [];
+    const canStartCheckIn = Boolean(booking?.paid);
 
     const timeDisplay = booking?.endTime
         ? `${booking.time}–${booking.endTime}`
@@ -100,10 +101,14 @@ export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => 
 
             <button
                 onClick={onContinue}
-                className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm"
+                disabled={!canStartCheckIn}
+                className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm disabled:bg-surface-strong disabled:text-muted disabled:border-border disabled:cursor-not-allowed"
             >
-                {t.booking.cta}
+                {canStartCheckIn ? t.booking.cta : t.booking.paymentRequiredCta}
             </button>
+            {!canStartCheckIn && (
+                <p className="text-muted text-[11px] text-center mt-2">{t.booking.paymentRequiredHint}</p>
+            )}
         </motion.div>
     );
 };

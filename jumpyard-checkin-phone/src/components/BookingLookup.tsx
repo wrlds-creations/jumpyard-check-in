@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { lookupBooking } from '@/flow/mockClient';
+import { CloudLookupError, lookupBooking, type LookupIssue } from '@/flow/cloudClient';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon } from '@/components/JumpyardIcon';
 import type { Booking } from '@/flow/types';
@@ -15,18 +15,18 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
     const { t } = useTranslation();
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(false);
+    const [error, setError] = useState<LookupIssue | null>(null);
 
     const handleSearch = async () => {
         if (!code.trim()) return;
         setLoading(true);
-        setError(false);
+        setError(null);
 
         try {
             const booking = await lookupBooking(code.trim());
             onSuccess(booking);
-        } catch {
-            setError(true);
+        } catch (lookupError) {
+            setError(lookupError instanceof CloudLookupError ? lookupError.reason : 'lookup_failed');
         } finally {
             setLoading(false);
         }
@@ -66,8 +66,8 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
                     animate={{ opacity: 1, height: 'auto' }}
                     className="mb-4 bg-red-50 border border-red-200 p-3 rounded-xl"
                 >
-                    <p className="text-sm text-red-700 font-medium">{t.lookup.notFound}</p>
-                    <p className="text-xs text-red-500 mt-0.5">{t.lookup.tryAgain}</p>
+                    <p className="text-sm text-red-700 font-medium">{getLookupErrorTitle(error, t)}</p>
+                    <p className="text-xs text-red-500 mt-0.5">{getLookupErrorDescription(error, t)}</p>
                 </motion.div>
             )}
 
@@ -88,3 +88,20 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
         </motion.div>
     );
 };
+
+function getLookupErrorTitle(error: LookupIssue, t: ReturnType<typeof useTranslation>['t']) {
+    if (error === 'payment_required') return t.lookup.paymentRequired;
+    if (error === 'wrong_date') return t.lookup.wrongDate;
+    if (error === 'no_redeemable_tickets') return t.lookup.noRedeemableTickets;
+    if (error === 'network_error') return t.lookup.serviceUnavailable;
+    if (error === 'not_found') return t.lookup.notFound;
+    return t.lookup.lookupFailed;
+}
+
+function getLookupErrorDescription(error: LookupIssue, t: ReturnType<typeof useTranslation>['t']) {
+    if (error === 'payment_required') return t.lookup.paymentRequiredDesc;
+    if (error === 'wrong_date') return t.lookup.wrongDateDesc;
+    if (error === 'no_redeemable_tickets') return t.lookup.noRedeemableTicketsDesc;
+    if (error === 'network_error') return t.lookup.serviceUnavailableDesc;
+    return t.lookup.tryAgain;
+}
