@@ -231,7 +231,9 @@ export class JumpYardCloudStack extends Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'lookup')),
     });
     const bookingHandler = this.createHandler('BookingHandler', 'booking', handlerResources);
-    const redeemHandler = this.createHandler('RedeemHandler', 'redeem', handlerResources);
+    const redeemHandler = this.createHandler('RedeemHandler', 'redeem', handlerResources, {
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'redeem')),
+    });
     const webhookHandler = this.createHandler('WebhookHandler', 'webhook', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'webhook')),
     });
@@ -290,6 +292,10 @@ export class JumpYardCloudStack extends Stack {
 
     if (handlerName === 'webhook') {
       environment.WEBHOOK_DEV_TOKEN_SECRET_ARN = resources.webhookDevTokenSecret.secretArn;
+    }
+
+    if (handlerName === 'redeem') {
+      environment.ENABLE_ROLLER_REDEEM_WRITES = 'false';
     }
 
     const fn = new lambda.Function(this, id, {

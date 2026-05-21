@@ -2,30 +2,42 @@
 
 ## Ticket ID
 
-T0019
+T0020
 
 ## Goal
 
-Polish and verify the phone lookup path for webhook-created Aurora bookings, without changing payment or redeem behavior.
+Add the first safe server-owned redeem endpoint shape for the phone check-in flow without enabling public Roller redemption writes.
 
 ## Dependencies
 
-- T0018 completed, pushed, and merged to `main`.
-- Roller Playground booking webhook is registered against the dev endpoint.
-- Dev `POST /v1/check-in/lookup` uses Aurora first and returns source/freshness metadata.
-- Test booking `5032444` exists in Playground/Aurora from a real Roller webhook.
+- T0019 completed, pushed, and merged to `main`.
+- Dev API already exposes placeholder route `POST /v1/check-in/redeem`.
+- Dev Aurora contains fresh lookup/webhook booking snapshots and ticket ids.
+- Roller `POST /redemptions` request shape is confirmed:
+  - body has `tickets[]`
+  - each ticket has required `ticketId`
+  - optional `redemptionDate`
+  - optional `redemptionDevice`
+  - max 10 ticket redemptions per call
+  - ticket ids must be unique per call
 
 ## Current Status
 
-Completed locally on branch `codex/t0019-phone-lookup-polish`.
+Completed locally and deployed to dev on branch `codex/t0020-redeem-spike`.
 
 Validation result:
 
 - `npm run validate`: passed.
-- `cd jumpyard-checkin-phone && npm run lint`: passed with four pre-existing `<img>` warnings.
-- `cd jumpyard-checkin-phone && npm run build`: passed.
-- Dev API lookup for `5032444`: returned `found`, `payment_required`, `source.system=jumpyard_cloud`, `freshnessStatus=fresh`.
-- Browser lookup at `http://localhost:3000`: booking `5032444` opens the booking summary, shows `Obetald`, keeps the check-in CTA disabled, and exposes stable non-visible metadata for source/freshness verification.
+- `node --check infra/lambda/redeem/index.js`: passed.
+- local request-shape smoke tests: passed.
+- `npm --prefix infra run build`: passed.
+- `npm --prefix infra run synth:dev`: passed.
+- AWS preflight: account `376129878018`, region `eu-north-1`.
+- `npm --prefix infra run diff:dev`: showed only the approved redeem Lambda code/env change before deploy.
+- `npm --prefix infra run deploy:dev`: passed.
+- post-deploy `npm --prefix infra run diff:dev`: no differences.
+- deployed endpoint smoke tests: passed.
+- Aurora audit verification: planned/blocked/write-disabled attempts were written without Roller redemption writes.
 
 ## Allowed Areas
 
@@ -34,100 +46,95 @@ Validation result:
 - `DECISIONS.md`
 - `REPO_CURRENT_STATE.md`
 - `FOLLOWUPS.md`
+- `AWS_RESOURCES.md`
 - `TEST_PLAN.md`
-- `jumpyard-checkin-phone/README.md`
-- `jumpyard-checkin-phone/src/flow/cloudClient.ts`
-- `jumpyard-checkin-phone/src/flow/types.ts`
-- `jumpyard-checkin-phone/src/components/BookingLookup.tsx`
-- `jumpyard-checkin-phone/src/components/BookingSummary.tsx`
+- `infra/lib/jumpyard-cloud-stack.ts`
+- `infra/lambda/redeem/index.js`
 
 ## Do Not Touch
 
+- Phone UI
 - Kiosk UI
 - Admin UI
 - Assets
 - Deliverables
-- Infra deploy code
-- AWS resources
-- Payment implementation
-- Redeem implementation
 - Booking creation implementation
+- Payment implementation
+- Add-product implementation
 - Production config
 - Production credentials
 - `.env`
 
 ## Requirements
 
-1. Keep the phone app calling JumpYard Cloud only.
-2. Preserve the current unpaid-booking behavior:
-   - show the booking summary
-   - show `Obetald`
-   - keep the start-check-in CTA disabled
-3. Carry lookup `source` metadata from JumpYard Cloud into the phone booking model.
-4. Add stable test hooks for lookup input, submit, and booking summary verification.
-5. Do not show internal source/freshness labels to guests by default.
-6. Replace the hardcoded demo expected-date fallback with today's venue date in `Europe/Stockholm`, while still allowing `NEXT_PUBLIC_JUMPYARD_LOOKUP_EXPECTED_DATE` override.
-7. Verify manually created Playground booking `5032444` can be found from the phone flow through Aurora.
+1. Replace the dev redeem placeholder with a real Lambda asset.
+2. Keep the endpoint server-owned:
+   - phone app must not call Roller directly
+   - Roller credentials stay in AWS only
+3. Validate request shape:
+   - require booking identifier
+   - require idempotency key
+   - reject duplicate ticket ids
+   - reject more than 10 ticket ids
+4. Resolve the booking and ticket ids from Aurora.
+5. Return a safe redeem plan for eligible bookings without writing to Roller by default.
+6. Block unsafe cases before any Roller write:
+   - unpaid booking
+   - cancelled/deleted/draft booking
+   - stale local booking snapshot
+   - wrong expected date
+   - unknown ticket id
+   - already locally marked redeemed ticket
+   - no ticket ids
+7. Persist safe check-in attempt audit rows in Aurora.
+8. Persist safe event-log rows for planned or blocked redeem attempts.
+9. Include the Roller `POST /redemptions` client code behind a disabled environment guard for future controlled testing.
+10. Do not enable real Roller redemption writes in the deployed dev endpoint during this ticket.
 
 ## Non-Goals
 
-- Do not implement redeem.
-- Do not implement payment.
-- Do not allow unpaid bookings to proceed into check-in.
-- Do not change add-on behavior.
-- Do not create or modify AWS resources.
-- Do not write to Roller.
-- Do not change app visual design beyond testability and lookup polish.
+- Do not wire the phone UI to redeem.
+- Do not redeem real Playground tickets through the deployed public endpoint.
+- Do not create payment logic.
+- Do not create booking logic.
+- Do not implement add-product logic.
+- Do not create staging or production resources.
+- Do not change Roller Live/production.
+- Do not add staff handoff UI.
 
 ## Acceptance Criteria
 
-- Booking `5032444` can be entered in the phone lookup flow.
-- The phone flow shows the booking summary using JumpYard Cloud/Aurora data.
-- The booking summary keeps unpaid check-in blocked.
-- The booking summary exposes non-visible metadata confirming `source.system=jumpyard_cloud` and `freshnessStatus=fresh`.
-- Phone lint and build pass.
-- Root validation passes.
-- No assets, deliverables, payment, redeem, AWS resource, production config, or `.env` files are changed.
+- `POST /v1/check-in/redeem` no longer returns the T0004 placeholder.
+- The endpoint can return a `planned` response for an eligible paid booking using local Aurora ticket ids.
+- The endpoint blocks unpaid bookings before Roller writes.
+- The endpoint rejects invalid request shapes before database or Roller work.
+- Real Roller redemption writes are disabled in deployed dev config.
+- No phone UI, assets, deliverables, payment, booking creation, add-product, production config, or `.env` files are changed.
+- Root validation and infra validation pass.
 
 ## Manual Verification
 
-Open:
+After deploy, call the dev endpoint:
 
 ```text
-http://localhost:3000
+POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/redeem
 ```
 
-Then:
+Expected safe cases:
 
-1. Select `Jag har en bokning`.
-2. Enter booking reference `5032444`.
-3. Press `Sök`.
-4. Confirm the booking summary opens.
-5. Confirm the summary shows:
-   - time `12:00-13:00` or equivalent rendered range
-   - `1` jumper
-   - product `Entré 60 min`
-   - payment state `Obetald`
-   - booking reference `5032444`
-   - disabled CTA `Betalning krävs`
-
-The browser automation also verified booking summary metadata:
-
-```json
-{
-  "bookingReference": "5032444",
-  "sourceSystem": "jumpyard_cloud",
-  "freshness": "fresh",
-  "refreshedFromRoller": "false",
-  "paymentStatus": "PendingPayment",
-  "amountOwing": "200"
-}
-```
+1. Missing idempotency key returns `invalid_request`.
+2. Paid booking `5032210` returns `planned` with selected ticket ids and no Roller write.
+3. Unpaid booking `5032211` returns `blocked` with reason `payment_required`.
+4. `confirmRedeem=true` returns `blocked` with `redeem_write_disabled` while the deployed guard is disabled.
 
 ## Automated Validation
 
 Run:
 
 - `npm run validate`
-- `cd jumpyard-checkin-phone && npm run lint`
-- `cd jumpyard-checkin-phone && npm run build`
+- `node --check infra/lambda/redeem/index.js`
+- `npm --prefix infra run build`
+- `npm --prefix infra run synth:dev`
+- `npm --prefix infra run diff:dev`
+- `npm --prefix infra run deploy:dev`
+- post-deploy redeem endpoint smoke tests
