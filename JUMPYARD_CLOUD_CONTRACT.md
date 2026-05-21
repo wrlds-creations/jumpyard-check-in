@@ -363,16 +363,21 @@ Rules:
 
 Staff/admin-confirmed endpoint that performs final redemption for a check-in session.
 
+Implemented in T0027 for dev.
+
 Rules:
 
-- Requires staff/admin auth or another trusted server-side confirmation model.
+- Requires the temporary dev redeem token until staff/admin auth exists.
 - Resolves the session to booking and ticket ids server-side.
+- Requires the session to be `ready_for_staff` with `handoff_status='ready_for_staff'`.
+- Requires completed safety status for the first implementation.
 - Performs the T0021 final live Roller refresh before write.
 - Re-runs eligibility against the refreshed data.
 - Uses idempotency to prevent duplicate redemption attempts.
 - Calls Roller `POST /redemptions` only after all checks pass.
 - Updates `checkin_attempts`, ticket local state, handoff/session state, and event log.
 - This replaces any direct phone call to the protected T0021 dev redeem path.
+- The temporary dev code must be manually entered for dev testing and must not be stored in source, browser env, localStorage, or sessionStorage.
 
 ### `POST /v1/check-in/redeem`
 
@@ -585,14 +590,14 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0025`. The next recommended ticket is `T0026 Staff/admin handoff list/detail`, which should show staff the sessions that the phone flow has marked ready for handoff.
+Current implementation has progressed through `T0027`. The next recommended ticket is `T0028 QR/handoff lookup polish`, which should improve how staff locates sessions now that the first redeem path exists.
 
 Near-term sequence:
 
-1. `T0025 Phone ready-for-staff handoff wiring`: completed locally; the phone app marks the existing session `ready_for_staff` after safety attestation and shows the server-owned handoff code.
-2. `T0026 Staff/admin handoff list/detail`: show sessions with `handoff_status='ready_for_staff'` to staff.
-3. `T0027 Staff-confirmed redeem from session`: redeem selected tickets only after staff/server confirmation and final Roller refresh.
-4. `T0028 QR/handoff code polish`: improve how staff locates the ready session, including QR/handoff-code handling if needed.
+1. `T0026 Staff/admin handoff list/detail`: completed locally and deployed to dev; staff can inspect ready handoffs.
+2. `T0027 Staff-confirmed redeem from session`: completed locally; staff can confirm redeem from a server-owned session after final Roller refresh.
+3. `T0028 QR/handoff code polish`: improve how staff locates the ready session, including QR/handoff-code handling if needed.
+4. `T0029 Staff auth plan/implementation`: replace the temporary dev redeem code with the selected staff/admin authentication model.
 
 ## Open Contract Questions
 

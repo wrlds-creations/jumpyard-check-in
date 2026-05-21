@@ -25,6 +25,10 @@ exports.handler = async (event) => {
   let correlationId = getHeader(event, 'x-correlation-id') || createCorrelationId();
 
   try {
+    if (isStaffSessionRedeemRoute(event)) {
+      return handleStaffSessionRedeem(event, correlationId);
+    }
+
     const request = parseRequest(event);
     correlationId = request.correlationId || correlationId;
 
@@ -286,6 +290,116 @@ exports.handler = async (event) => {
   }
 };
 
+async function handleStaffSessionRedeem(event, correlationId) {
+  const body = parseOptionalJsonBody(event);
+  correlationId = stringOrNull(body.correlationId) || correlationId;
+
+  const request = normalizeStaffSessionRedeemRequest(event, body);
+  const requestError = validateStaffSessionRedeemRequest(request);
+  if (requestError) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: requestError,
+    });
+  }
+
+  const auth = await verifyRedeemDevToken(event);
+  if (!auth.ok) {
+    return jsonResponse(403, correlationId, {
+      status: 'forbidden',
+      error: {
+        code: auth.code,
+        message: 'Staff-confirmed redeem requires the JumpYard dev redeem token until staff auth exists.',
+      },
+    });
+  }
+
+  const session = await getStaffRedeemSession(request.checkinSessionId);
+  if (!session) {
+    return jsonResponse(404, correlationId, {
+      status: 'not_found',
+      error: {
+        code: 'session_not_found',
+        message: 'No JumpYard Cloud check-in session was found for the supplied id.',
+      },
+    });
+  }
+
+  const sessionDecision = evaluateStaffRedeemSession(session);
+  if (!sessionDecision.canRedeem) {
+    await writeEventLog({
+      booking: session,
+      correlationId,
+      eventType: 'checkin.staff_redeem_blocked',
+      payload: {
+        checkinSessionId: session.checkinSessionId,
+        reason: sessionDecision.reason,
+        ticketCount: session.selectedTicketIds.length,
+      },
+      summary: `Staff redeem blocked: ${sessionDecision.reason}`,
+    });
+
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: sessionDecision.reason,
+        message: sessionDecision.message,
+      },
+      session: buildStaffRedeemSessionResponse(session),
+    });
+  }
+
+  const redeemEvent = {
+    ...event,
+    body: JSON.stringify({
+      bookingReference: session.bookingReference,
+      confirmRedeem: true,
+      correlationId,
+      expectedDate: session.visitDate,
+      idempotencyKey: request.idempotencyKey,
+      redemptionDate: request.redemptionDate,
+      redemptionDevice: request.redemptionDevice,
+      rollerUniqueId: session.rollerUniqueId,
+      ticketIds: session.selectedTicketIds,
+    }),
+    pathParameters: {},
+    rawPath: '/v1/check-in/redeem',
+    routeKey: 'POST /v1/check-in/redeem',
+  };
+
+  const redeemResponse = await exports.handler(redeemEvent);
+  const redeemBody = parseJsonOrNull(redeemResponse.body) ?? {};
+
+  if (redeemResponse.statusCode === 200 && redeemBody.status === 'redeemed') {
+    const completedSession = await markStaffSessionRedeemed({
+      checkinSessionId: session.checkinSessionId,
+      redeemedTicketIds: redeemBody.redeemedTicketIds ?? session.selectedTicketIds,
+    });
+    await writeEventLog({
+      booking: completedSession,
+      correlationId,
+      eventType: 'checkin.staff_redeem_completed',
+      payload: {
+        checkinSessionId: completedSession.checkinSessionId,
+        ticketCount: completedSession.selectedTicketIds.length,
+      },
+      summary: 'Staff-confirmed check-in session redeemed.',
+    });
+
+    return jsonResponse(200, correlationId, {
+      status: 'redeemed',
+      redeemedTicketIds: redeemBody.redeemedTicketIds ?? session.selectedTicketIds,
+      roller: redeemBody.roller,
+      session: buildStaffRedeemSessionResponse(completedSession),
+    });
+  }
+
+  return jsonResponse(redeemResponse.statusCode ?? 500, correlationId, {
+    ...redeemBody,
+    session: buildStaffRedeemSessionResponse(session),
+  });
+}
+
 function parseRequest(event) {
   if (!event || !event.body) return {};
 
@@ -352,6 +466,226 @@ function validateRequest(request) {
   }
 
   return null;
+}
+
+function parseOptionalJsonBody(event) {
+  if (!event || !event.body) return {};
+
+  let body = event.body;
+  if (event.isBase64Encoded) {
+    body = Buffer.from(body, 'base64').toString('utf8');
+  }
+
+  try {
+    return JSON.parse(body);
+  } catch {
+    const error = new Error('Request body must be valid JSON.');
+    error.code = 'invalid_json';
+    throw error;
+  }
+}
+
+function normalizeStaffSessionRedeemRequest(event, body) {
+  return {
+    checkinSessionId:
+      stringOrNull(event?.pathParameters?.checkinSessionId) ||
+      extractStaffRedeemSessionIdFromPath(event?.rawPath) ||
+      stringOrNull(body.checkinSessionId),
+    confirmRedeem: body.confirmRedeem === true,
+    idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
+    redemptionDate: stringOrNull(body.redemptionDate),
+    redemptionDevice: stringOrNull(body.redemptionDevice),
+  };
+}
+
+function validateStaffSessionRedeemRequest(request) {
+  if (!request.checkinSessionId) {
+    return {
+      code: 'session_id_required',
+      message: 'checkinSessionId is required.',
+    };
+  }
+
+  if (!request.idempotencyKey) {
+    return {
+      code: 'idempotency_key_required',
+      message: 'idempotencyKey or x-idempotency-key is required.',
+    };
+  }
+
+  if (!request.confirmRedeem) {
+    return {
+      code: 'confirm_redeem_required',
+      message: 'confirmRedeem=true is required for staff-confirmed redeem.',
+    };
+  }
+
+  return null;
+}
+
+async function getStaffRedeemSession(checkinSessionId) {
+  const result = await executeStatement(
+    `SELECT
+       cs.checkin_session_id,
+       cs.roller_unique_id,
+       cs.booking_reference,
+       cs.visit_date::text AS visit_date,
+       cs.status,
+       cs.safety_status,
+       cs.handoff_code,
+       cs.handoff_status,
+       cs.selected_ticket_ids::text AS selected_ticket_ids,
+       cs.expires_at::text AS expires_at,
+       cs.ready_for_staff_at::text AS ready_for_staff_at,
+       cs.completed_at::text AS completed_at,
+       cs.updated_at::text AS updated_at
+     FROM jumpyard.checkin_sessions AS cs
+     WHERE cs.checkin_session_id = :checkinSessionId
+     LIMIT 1`,
+    [stringParameter('checkinSessionId', checkinSessionId)],
+  );
+
+  return mapStaffRedeemSessionRow(firstMappedRow(result));
+}
+
+function evaluateStaffRedeemSession(session) {
+  if (isExpired(session.expiresAt)) {
+    return {
+      canRedeem: false,
+      reason: 'session_expired',
+      message: 'The check-in session has expired and cannot be redeemed.',
+    };
+  }
+
+  if (session.status === 'redeemed' || session.handoffStatus === 'completed') {
+    return {
+      canRedeem: false,
+      reason: 'session_already_completed',
+      message: 'The check-in session is already completed.',
+    };
+  }
+
+  if (session.status !== 'ready_for_staff' || session.handoffStatus !== 'ready_for_staff') {
+    return {
+      canRedeem: false,
+      reason: 'session_not_ready_for_staff',
+      message: 'The check-in session is not ready for staff confirmation.',
+    };
+  }
+
+  if (session.safetyStatus !== 'completed') {
+    return {
+      canRedeem: false,
+      reason: 'safety_not_completed',
+      message: 'The safety step must be completed before staff-confirmed redeem.',
+    };
+  }
+
+  if (!session.bookingReference || !session.rollerUniqueId) {
+    return {
+      canRedeem: false,
+      reason: 'session_missing_booking_context',
+      message: 'The check-in session is missing booking context.',
+    };
+  }
+
+  if (session.selectedTicketIds.length === 0) {
+    return {
+      canRedeem: false,
+      reason: 'no_redeemable_tickets',
+      message: 'The check-in session has no selected tickets to redeem.',
+    };
+  }
+
+  if (session.selectedTicketIds.length > MAX_REDEEM_TICKETS) {
+    return {
+      canRedeem: false,
+      reason: 'too_many_tickets',
+      message: `Roller accepts at most ${MAX_REDEEM_TICKETS} ticket redemptions per call.`,
+    };
+  }
+
+  return {
+    canRedeem: true,
+    reason: 'ready',
+    message: null,
+  };
+}
+
+async function markStaffSessionRedeemed({ checkinSessionId, redeemedTicketIds }) {
+  const result = await executeStatement(
+    `UPDATE jumpyard.checkin_sessions
+     SET
+       status = 'redeemed',
+       handoff_status = 'completed',
+       completed_at = COALESCE(completed_at, now()),
+       updated_at = now(),
+       session_summary = session_summary || CAST(:sessionSummary AS jsonb)
+     WHERE checkin_session_id = :checkinSessionId
+     RETURNING
+       checkin_session_id,
+       roller_unique_id,
+       booking_reference,
+       visit_date::text AS visit_date,
+       status,
+       safety_status,
+       handoff_code,
+       handoff_status,
+       selected_ticket_ids::text AS selected_ticket_ids,
+       expires_at::text AS expires_at,
+       ready_for_staff_at::text AS ready_for_staff_at,
+       completed_at::text AS completed_at,
+       updated_at::text AS updated_at`,
+    [
+      stringParameter('checkinSessionId', checkinSessionId),
+      stringParameter(
+        'sessionSummary',
+        JSON.stringify({
+          redeemedBy: 'staff_session_redeem_api',
+          redeemedTicketCount: Array.isArray(redeemedTicketIds) ? redeemedTicketIds.length : 0,
+        }),
+      ),
+    ],
+  );
+
+  return mapStaffRedeemSessionRow(firstMappedRow(result));
+}
+
+function mapStaffRedeemSessionRow(row) {
+  if (!row) return null;
+
+  return {
+    bookingReference: stringOrNull(row.booking_reference),
+    checkinSessionId: stringOrNull(row.checkin_session_id),
+    completedAt: stringOrNull(row.completed_at),
+    expiresAt: stringOrNull(row.expires_at),
+    handoffCode: stringOrNull(row.handoff_code),
+    handoffStatus: stringOrNull(row.handoff_status),
+    readyForStaffAt: stringOrNull(row.ready_for_staff_at),
+    rollerUniqueId: stringOrNull(row.roller_unique_id),
+    safetyStatus: stringOrNull(row.safety_status),
+    selectedTicketIds: parseJsonArray(row.selected_ticket_ids).map(stringOrNull).filter(Boolean),
+    status: stringOrNull(row.status),
+    updatedAt: stringOrNull(row.updated_at),
+    visitDate: stringOrNull(row.visit_date),
+  };
+}
+
+function buildStaffRedeemSessionResponse(session) {
+  if (!session) return null;
+
+  return {
+    bookingReference: session.bookingReference,
+    checkinSessionId: session.checkinSessionId,
+    completedAt: session.completedAt,
+    handoffCode: session.handoffCode,
+    handoffStatus: session.handoffStatus,
+    rollerUniqueId: session.rollerUniqueId,
+    safetyStatus: session.safetyStatus,
+    selectedTicketIds: session.selectedTicketIds,
+    status: session.status,
+    visitDate: session.visitDate,
+  };
 }
 
 async function getRedeemContext(identifier) {
@@ -1279,6 +1613,21 @@ function buildRollerUrl(baseUrl, endpointPath) {
   return new URL(`${basePath}${endpointPath}`, parsedBaseUrl.origin);
 }
 
+function isStaffSessionRedeemRoute(event) {
+  const routeKey = event?.routeKey;
+  const rawPath = event?.rawPath ?? '';
+  return (
+    routeKey === 'POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem' ||
+    (event?.requestContext?.http?.method === 'POST' &&
+      /^\/v1\/staff\/check-in\/sessions\/[^/]+\/redeem$/.test(rawPath))
+  );
+}
+
+function extractStaffRedeemSessionIdFromPath(rawPath) {
+  const match = String(rawPath ?? '').match(/^\/v1\/staff\/check-in\/sessions\/([^/]+)\/redeem$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function executeStatement(sql, parameters = []) {
   const resourceArn = process.env.DATABASE_CLUSTER_ARN;
   const secretArn = process.env.DATABASE_SECRET_ARN;
@@ -1384,6 +1733,11 @@ function isTombstoned(status) {
   return normalized === 'cancelled' || normalized === 'deleted';
 }
 
+function isExpired(expiresAt) {
+  if (!expiresAt) return false;
+  return Date.parse(expiresAt) <= Date.now();
+}
+
 function parseJsonArray(value) {
   if (!value) return [];
   if (Array.isArray(value)) return value;
@@ -1467,6 +1821,7 @@ function jsonResponse(statusCode, correlationId, payload) {
   return {
     statusCode,
     headers: {
+      'access-control-allow-origin': '*',
       'content-type': 'application/json',
       'x-correlation-id': correlationId,
     },
