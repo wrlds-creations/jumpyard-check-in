@@ -1,7 +1,7 @@
-import type { Addon, AddonId, Booking } from '@/flow/types';
+import type { Addon, AddonId, Booking, LookupSource } from '@/flow/types';
 
 const DEFAULT_CLOUD_API_BASE_URL = 'https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com';
-const DEFAULT_EXPECTED_DATE = '2026-05-21';
+const VENUE_TIME_ZONE = 'Europe/Stockholm';
 
 export type LookupIssue =
   | 'not_found'
@@ -35,6 +35,15 @@ interface CloudLookupResponse {
     code?: string;
     message?: string;
   };
+  source?: CloudLookupSource;
+}
+
+interface CloudLookupSource {
+  system: string;
+  environment?: string | null;
+  lookupPath?: string | null;
+  freshnessStatus?: string | null;
+  refreshedFromRoller?: boolean;
 }
 
 interface CloudBooking {
@@ -94,7 +103,7 @@ export async function lookupBooking(code: string): Promise<Booking> {
   }
 
   if (body.eligibility.reason === 'payment_required') {
-    return toBooking(body.booking, body.eligibility.reason);
+    return toBooking(body.booking, body.eligibility.reason, body.source);
   }
 
   if (!body.eligibility.canCheckIn || body.eligibility.reason !== 'ready') {
@@ -102,7 +111,7 @@ export async function lookupBooking(code: string): Promise<Booking> {
     throw new CloudLookupError(reason, 'Booking is not ready for check-in.', response.status);
   }
 
-  return toBooking(body.booking, body.eligibility.reason);
+  return toBooking(body.booking, body.eligibility.reason, body.source);
 }
 
 function getApiBaseUrl() {
@@ -111,7 +120,16 @@ function getApiBaseUrl() {
 }
 
 function getExpectedDate() {
-  return process.env.NEXT_PUBLIC_JUMPYARD_LOOKUP_EXPECTED_DATE || DEFAULT_EXPECTED_DATE;
+  return process.env.NEXT_PUBLIC_JUMPYARD_LOOKUP_EXPECTED_DATE || getVenueToday();
+}
+
+function getVenueToday() {
+  return new Intl.DateTimeFormat('sv-SE', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: VENUE_TIME_ZONE,
+    year: 'numeric',
+  }).format(new Date());
 }
 
 function inferIdentifierType(identifier: string) {
@@ -145,7 +163,7 @@ function createLookupError(body: CloudLookupResponse | null, httpStatus?: number
   return new CloudLookupError('lookup_failed', body?.error?.message ?? 'JumpYard Cloud lookup failed.', httpStatus);
 }
 
-function toBooking(booking: CloudBooking, reason: string): Booking {
+function toBooking(booking: CloudBooking, reason: string, source?: CloudLookupSource): Booking {
   const primaryItems = getPrimaryItems(booking.items);
   const sessionItem = primaryItems[0] ?? booking.items[0] ?? null;
   const existingAddons = getExistingAddons(booking.items);
@@ -153,15 +171,30 @@ function toBooking(booking: CloudBooking, reason: string): Booking {
   return {
     id: booking.bookingReference ?? booking.rollerUniqueId ?? '',
     jumpers: getJumperCount(primaryItems, booking.items),
-    time: sessionItem?.startTime ?? '',
-    endTime: sessionItem?.endTime ?? undefined,
+    time: formatClockTime(sessionItem?.startTime) ?? '',
+    endTime: formatClockTime(sessionItem?.endTime) ?? undefined,
     durationMinutes: getDurationMinutes(sessionItem?.startTime, sessionItem?.endTime),
     date: sessionItem?.bookingDate ?? undefined,
     products: booking.items.length,
     paid: reason === 'ready' || Number(booking.amountOwing ?? 0) === 0,
+    paymentStatus: booking.paymentStatus ?? booking.status,
+    amountOwing: booking.amountOwing,
     existingAddons,
     productLabel: getProductLabel(sessionItem),
     productType: 'entry',
+    lookupSource: normalizeLookupSource(source),
+  };
+}
+
+function normalizeLookupSource(source?: CloudLookupSource): LookupSource | undefined {
+  if (!source?.system) return undefined;
+
+  return {
+    system: source.system,
+    environment: source.environment ?? null,
+    lookupPath: source.lookupPath ?? null,
+    freshnessStatus: source.freshnessStatus ?? null,
+    refreshedFromRoller: Boolean(source.refreshedFromRoller),
   };
 }
 
@@ -231,6 +264,13 @@ function inferAddonId(item: CloudBookingItem): AddonId {
 function getProductLabel(item: CloudBookingItem | null) {
   if (!item) return undefined;
   return item.parentProductName ?? item.productName ?? undefined;
+}
+
+function formatClockTime(value?: string | null) {
+  const match = value?.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return value ?? undefined;
+
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
 }
 
 function getDurationMinutes(startTime?: string | null, endTime?: string | null) {

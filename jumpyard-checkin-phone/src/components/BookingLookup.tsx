@@ -50,6 +50,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
 
             <div className="mb-4">
                 <input
+                    data-testid="booking-lookup-input"
                     type="text"
                     value={code}
                     onChange={e => setCode(e.target.value.toUpperCase())}
@@ -72,6 +73,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
             )}
 
             <button
+                data-testid="booking-lookup-submit"
                 onClick={handleSearch}
                 disabled={loading || !code.trim()}
                 className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"

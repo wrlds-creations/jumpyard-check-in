@@ -32,6 +32,8 @@ NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://m0uo5g4mde.execute-api.eu-north-
 NEXT_PUBLIC_JUMPYARD_LOOKUP_EXPECTED_DATE=2026-05-21
 ```
 
+When `NEXT_PUBLIC_JUMPYARD_LOOKUP_EXPECTED_DATE` is omitted, the phone app uses today's date in `Europe/Stockholm` for the lookup request. The explicit override remains useful for fixed Playground scenarios.
+
 For external device testing:
 
 ```bash
