@@ -2,57 +2,46 @@
 
 ## Ticket ID
 
-T0021
+T0022
 
 ## Goal
 
-Enable controlled Roller Playground ticket redemption through JumpYard Cloud with dev-only auth and a final live Roller refresh before any write.
+Lock the phone-to-staff redeem handoff design so the phone flow can progress toward real check-in completion without exposing dev/prod redeem power to the frontend.
 
 ## Dependencies
 
-- T0020 completed, pushed, and merged to `main`.
-- Dev `POST /v1/check-in/redeem` already resolves local Aurora booking/ticket snapshots and audits attempts.
-- Roller `POST /redemptions` request shape is confirmed.
-- Dev AWS target remains account `376129878018`, region `eu-north-1`.
+- T0021 completed, pushed, and merged to `main`.
+- Dev `POST /v1/check-in/redeem` can safely plan redemptions and can execute controlled Playground redemption only with a dev token.
+- T0021 confirmed Roller redemption consumes ticket state, so production phone UI wiring must be designed before exposing any check-in completion action.
 
 ## Current Status
 
-Completed locally and deployed to dev on branch `codex/t0021-controlled-redeem-execution`.
+Completed locally on branch `codex/t0022-phone-staff-redeem-handoff-design`.
 
 Validation result:
 
 - `npm run validate`: passed.
-- `node --check infra/lambda/redeem/index.js`: passed.
-- `npm --prefix infra run build`: passed.
-- `npm --prefix infra run synth:dev`: passed.
-- AWS preflight: account `376129878018`, region `eu-north-1`.
-- `npm --prefix infra run diff:dev`: showed the approved redeem dev-token secret, CORS header, redeem Lambda asset/env change, and scoped Secrets Manager permission before deploy.
-- `npm --prefix infra run deploy:dev`: passed.
-- Follow-up `npm --prefix infra run diff:dev`: showed only the redeem Lambda asset update after removing the invalid default `redemptionDevice`.
-- Follow-up `npm --prefix infra run deploy:dev`: passed.
-- Final post-deploy `npm --prefix infra run diff:dev`: no differences.
-- Controlled redeem smoke: booking `5032454` returned `redeemed` through Roller Playground.
-- Aurora verification: ticket `5032454-21397335` is locally marked `redeemed`, and `jumpyard.checkin_attempts` contains `redeemed` plus follow-up `already_redeemed` rows.
 
 ## Allowed Areas
 
 - `CODEX_TASK.md`
 - `PROJECT_CONTEXT.md`
 - `DECISIONS.md`
+- `JUMPYARD_CLOUD_CONTRACT.md`
 - `REPO_CURRENT_STATE.md`
 - `FOLLOWUPS.md`
-- `AWS_RESOURCES.md`
 - `TEST_PLAN.md`
-- `infra/lib/jumpyard-cloud-stack.ts`
-- `infra/lambda/redeem/index.js`
 
 ## Do Not Touch
 
-- Phone UI
+- Phone UI implementation
 - Kiosk UI
 - Admin UI
 - Assets
 - Deliverables
+- Lambda implementation
+- CDK/AWS resources
+- Database migrations
 - Booking creation implementation
 - Payment implementation
 - Add-product implementation
@@ -62,65 +51,54 @@ Validation result:
 
 ## Requirements
 
-1. Keep default redeem planning behavior intact for `confirmRedeem=false`.
-2. Require a separate dev-only redeem token for `confirmRedeem=true`.
-3. Store the redeem token in AWS Secrets Manager, not in code or `.env`.
-4. Keep Roller config guarded to Playground only.
-5. Before any Roller redemption write:
-   - authenticate the confirmed redeem request
-   - refresh the booking from Roller REST `GET /bookings/{identifier}`
-   - upsert the refreshed booking/item/ticket snapshot into Aurora
-   - re-run redeem eligibility against the refreshed Aurora context
-6. Enable real Roller redemption writes only for the protected dev path.
-7. Persist audit rows for successful, blocked, rejected, and unauthorized-safe outcomes where appropriate.
-8. Run one controlled Playground redeem smoke against a dedicated paid test booking, not against the normal `5032210` lookup fixture if avoidable.
-9. Confirm already-redeemed local state is visible in Aurora after the controlled redeem.
+1. Document that the guest phone app must not directly execute Roller redemption.
+2. Document that the dev-only redeem token from T0021 is for controlled backend testing only and must never be placed in frontend config.
+3. Define the intended pilot handoff shape:
+   - phone lookup displays booking state from JumpYard Cloud
+   - phone starts or resumes a server-owned check-in session
+   - JumpYard Cloud owns session state, safety status, handoff status, idempotency, and audit
+   - staff/admin or a server-trusted confirmation step performs final redeem
+   - final redeem still performs live Roller refresh before `POST /redemptions`
+4. Define proposed future API responsibilities without implementing them.
+5. Define the expected Aurora ownership model for session/handoff state without creating migrations in this ticket.
+6. Add a decision that phone UI must not hold redeem secrets or directly redeem tickets.
+7. Update current-state and test-plan docs with the T0022 scope and the next recommended implementation ticket.
 
 ## Non-Goals
 
-- Do not wire the phone UI to redeem.
-- Do not create staff/admin redeem UI.
-- Do not create payment logic.
-- Do not create booking logic.
-- Do not implement add-product logic.
-- Do not create staging or production resources.
-- Do not write to Roller Live/production.
-- Do not expose this as a production-ready public redemption path.
+- Do not wire phone UI to redeem.
+- Do not add staff/admin UI.
+- Do not create session endpoints.
+- Do not create new database tables.
+- Do not deploy AWS changes.
+- Do not call Roller.
+- Do not redeem additional tickets.
+- Do not add payment logic.
+- Do not add booking creation logic.
 
 ## Acceptance Criteria
 
-- `confirmRedeem=true` without the dev token is blocked before Roller writes.
-- `confirmRedeem=true` with the dev token performs final Roller REST refresh before `POST /redemptions`.
-- A controlled Playground redeem smoke succeeds for a dedicated paid booking.
-- Aurora `jumpyard.checkin_attempts` records the successful redeem attempt.
-- Aurora `jumpyard.roller_booking_tickets` marks the redeemed ticket(s) locally after success.
-- Root validation and infra validation pass.
-- Dev CDK diff/deploy are reviewed and documented.
-- No UI, assets, deliverables, production config, production credentials, or `.env` files are changed.
+- Source-of-truth docs clearly state that the phone app cannot directly execute Roller redemption.
+- The recommended pilot flow is clear: phone starts a JumpYard Cloud session, staff/server confirmation executes final redeem.
+- The contract identifies future server endpoints and state ownership without implementing them.
+- `DECISIONS.md` contains the new handoff/redeem boundary decision.
+- `REPO_CURRENT_STATE.md` recommends the next implementation ticket.
+- No app code, infra code, AWS resources, migrations, assets, deliverables, credentials, or `.env` files are changed.
 
 ## Manual Verification
 
-After deploy, call the dev endpoint:
+Review:
 
-```text
-POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/redeem
-```
+- `PROJECT_CONTEXT.md`
+- `DECISIONS.md`
+- `JUMPYARD_CLOUD_CONTRACT.md`
+- `REPO_CURRENT_STATE.md`
+- `TEST_PLAN.md`
 
-Expected controlled cases:
-
-1. `confirmRedeem=true` without `x-jumpyard-redeem-token` returns HTTP `403`.
-2. `confirmRedeem=false` still returns a safe `planned` response.
-3. A dedicated paid Playground booking with valid dev token returns `redeemed`.
-4. Reusing the same ticket after success is blocked locally as `already_redeemed`.
+Confirm a new Codex session can understand why phone lookup and phone start-check-in are separate from final Roller redemption.
 
 ## Automated Validation
 
 Run:
 
 - `npm run validate`
-- `node --check infra/lambda/redeem/index.js`
-- `npm --prefix infra run build`
-- `npm --prefix infra run synth:dev`
-- `npm --prefix infra run diff:dev`
-- `npm --prefix infra run deploy:dev`
-- post-deploy controlled redeem endpoint smoke tests

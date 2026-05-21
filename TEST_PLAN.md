@@ -222,3 +222,12 @@ Use this file to define validation for the current project or milestone.
 | Final live refresh | Confirmed redeem refreshes `GET /bookings/{identifier}` and upserts Aurora before write. | Passed | Aurora `roller_bookings.source_last_updated_by='roller_redeem_final_refresh'` for booking `5032454`. |
 | Controlled Playground redeem | Dedicated paid Playground booking returns `redeemed`. | Passed | Booking `5032454` redeemed ticket `5032454-21397335` through Roller Playground. |
 | Local already-redeemed block | Reusing the redeemed ticket is blocked as `already_redeemed`. | Passed | Follow-up request returned HTTP `409`; ticket row has `redeem_status_last_seen='redeemed'`. |
+
+## T0022 Handoff Design Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Phone secret boundary | Docs state that phone UI must not hold Roller credentials, Roller tokens, or the T0021 dev redeem token. | Documented | See `PROJECT_CONTEXT.md`, `DECISIONS.md`, and `JUMPYARD_CLOUD_CONTRACT.md`. |
+| Session handoff boundary | Docs state that phone can start/resume a JumpYard Cloud check-in session, while final redeem is staff/server-confirmed. | Documented | No implementation or AWS change in T0022. |
+| Final redeem safety | Docs preserve T0021 final live Roller refresh, eligibility re-check, idempotency, and audit before any `POST /redemptions`. | Documented | Future T0023 should implement session skeleton without phone-direct redeem. |
+| No code/resource changes | T0022 changes only source-of-truth docs and contract files. | Passed | T0022 modified docs/contract files only; older local asset changes remain outside the ticket. |
