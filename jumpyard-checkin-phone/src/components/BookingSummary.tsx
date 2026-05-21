@@ -27,6 +27,13 @@ export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => 
 
     return (
         <motion.div
+            data-testid="booking-summary"
+            data-booking-reference={booking.id}
+            data-lookup-source-system={booking.lookupSource?.system ?? ''}
+            data-lookup-source-freshness={booking.lookupSource?.freshnessStatus ?? ''}
+            data-lookup-refreshed-from-roller={String(Boolean(booking.lookupSource?.refreshedFromRoller))}
+            data-payment-status={booking.paymentStatus ?? ''}
+            data-amount-owing={booking.amountOwing ?? ''}
             className="w-full max-w-md mx-auto flex flex-col items-center justify-center px-4 py-3 text-center"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

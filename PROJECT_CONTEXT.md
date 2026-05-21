@@ -45,6 +45,8 @@ T0017 changed the dev booking webhook Lambda from metadata-only intake to bookin
 
 T0018 registered the real Roller Playground booking webhook against the deployed dev endpoint. Roller webhook id `238` posts booking `Created`, `Updated`, and `Cancelled` events to JumpYard Cloud, includes tickets, sends the dev token in header `x-roller-apikey`, and real created-booking delivery has been confirmed through Aurora status `processed`.
 
+T0019 polished the phone lookup path for webhook-created Aurora bookings. The phone app now carries JumpYard Cloud source/freshness metadata into the booking model for non-visible verification, uses stable test hooks for lookup testing, keeps internal source labels hidden from guests, and defaults lookup expected date to today's date in `Europe/Stockholm` when no explicit override is set.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -126,7 +128,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0016 Aurora-first lookup` | Use Aurora for lookup display, then refresh from Roller when missing or unsafe. | Completed locally and deployed to dev; lets phone lookup stop depending on a live Roller read for every normal display lookup. |
 | `T0017 Booking webhook enrichment` | Refresh Roller booking detail from webhook events and update Aurora snapshots. | Completed locally and deployed to dev; turns same-day webhook signals into fresh booking snapshots once Roller delivery is registered. |
 | `T0018 Roller Playground webhook registration` | Register the Playground booking webhook against the dev endpoint and confirm real delivery headers/body. | Completed locally and deployed to dev; real Roller deliveries now update Aurora through webhook enrichment. |
-| `T0019 Phone lookup display/source polish` | Decide whether to expose source/freshness/debug status in phone/admin UX. | Optional UI polish now that Aurora-first lookup and webhook freshness are working. |
+| `T0019 Phone lookup display/source polish` | Decide whether to expose source/freshness/debug status in phone/admin UX. | Completed locally; source/freshness metadata is available for verification but remains hidden from guests by default. |
+| `T0020 Redeem spike/server endpoint` | Test Roller `POST /redemptions` safely in Playground and add the first server-owned redeem endpoint shape. | Next major proof point after lookup/webhook freshness. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -194,7 +197,7 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
 - T0010 phone lookup uses public, non-secret config:
   - `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL`
   - `NEXT_PUBLIC_JUMPYARD_LOOKUP_EXPECTED_DATE`
-- T0010 local demo default expected date is `2026-05-21` to match deterministic Playground seed bookings.
+- T0019 changed the phone lookup default expected date to today's date in `Europe/Stockholm` when no explicit `NEXT_PUBLIC_JUMPYARD_LOOKUP_EXPECTED_DATE` override is set.
 - T0011 confirmed current Playground credentials can access Roller Data API `GET /data/bookingitems`.
 - T0011 `npm run roller:data:smoke` for modified-date window `2026-05-20 -> 2026-05-21` returned:
   - response shape: `currentPage`, `totalPages`, `totalItems`, `itemsPerPage`, `items`
@@ -241,6 +244,9 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
   - include `tickets=true`
   - real Roller delivery uses header `x-roller-apikey`
   - real created-booking event for booking `5032443` reached AWS, enriched through Roller REST, and wrote `status=processed` in `jumpyard.roller_webhook_events`
+- T0019 verified phone lookup for manually created Playground booking `5032444`:
+  - dev API returned `found`, `payment_required`, source `jumpyard_cloud`, and freshness `fresh`
+  - browser flow opened the booking summary, showed `Obetald`, kept `Betalning krävs` disabled, and confirmed metadata `sourceSystem=jumpyard_cloud`, `freshness=fresh`
 
 ## Non-Goals For Current Ticket
 

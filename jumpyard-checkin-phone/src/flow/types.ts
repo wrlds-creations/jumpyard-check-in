@@ -35,6 +35,14 @@ export interface Addon {
   qty: number;
 }
 
+export interface LookupSource {
+  system: string;
+  environment?: string | null;
+  lookupPath?: string | null;
+  freshnessStatus?: string | null;
+  refreshedFromRoller?: boolean;
+}
+
 export interface Booking {
   id: string;
   jumpers: number;
@@ -44,11 +52,14 @@ export interface Booking {
   date?: string;
   products: number;
   paid: boolean;
+  paymentStatus?: string | null;
+  amountOwing?: number | null;
   guestName?: string;
   lastName?: string;
   existingAddons?: Addon[];
   productLabel?: string;
   productType?: 'entry' | 'family';
+  lookupSource?: LookupSource;
 }
 
 export interface ConnectedProfile {
