@@ -23,6 +23,8 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-029` | `T0014` | Gift cards | Add `/data/giftcards` ingestion when gift card payment/check-in flows are explicitly scoped. | Medium | `TBD` | Open |
 | `FU-031` | `T0016` | Lookup fallback | Add supported `GET /bookings` search fallback for cases where direct `GET /bookings/{identifier}` cannot resolve an imprecise guest input. | Medium | `TBD` | Open |
 | `FU-032` | `T0017` | Webhook scaling | Move webhook enrichment off the request path to SQS/EventBridge before production if latency, retries, or traffic volume require faster acknowledgement. | Medium | `TBD` | Open |
+| `FU-033` | `T0020` | Redeem execution | Add endpoint auth/session protection and final live Roller refresh before enabling real Roller `POST /redemptions` writes from JumpYard Cloud. | High | `T0021` | Open |
+| `FU-034` | `T0020` | Redeem test data | Create a dedicated paid Playground booking for controlled redeem smoke so normal lookup fixtures are not consumed accidentally. | Medium | `T0021` | Open |
 
 ## Resolved Followups
 

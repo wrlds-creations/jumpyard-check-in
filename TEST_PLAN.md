@@ -153,7 +153,7 @@ Use this file to define validation for the current project or milestone.
 |---|---|---|---|
 | CDK metadata guard | Missing `-c config=...` fails with a helpful message. | Passed | Verified on 2026-05-19. |
 | CDK example synth | `npm run infra:synth` produces a template using `infra/config/dev.example.json`. | Passed | Example config is not approved for deploy. |
-| Placeholder handlers | Unimplemented Lambda inline code returns `501` and does not call Roller. | Passed | Booking and redeem handlers still use placeholder code. Lookup was implemented in T0009; webhook intake was implemented in T0015. |
+| Placeholder handlers | Unimplemented Lambda inline code returns `501` and does not call Roller. | Passed | Booking handlers still use placeholder code. Lookup, webhook, and safe redeem planning are implemented. |
 | No AWS creation | No `cdk deploy` is run and `AWS_RESOURCES.md` keeps inventory empty. | Passed | Required for T0004 only; T0006 intentionally deployed dev. |
 
 ## Booking Index Ingestion Validation
@@ -201,3 +201,14 @@ Use this file to define validation for the current project or milestone.
 | Test | Expected Result | Status | Notes |
 |---|---|---|---|
 | Staff handoff flow | Staff can use a server-owned handoff code/session status. | Not started | Future ticket; no redeem logic in `T0003`. |
+
+## T0020 Redeem Planning Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Missing idempotency key | `POST /v1/check-in/redeem` returns HTTP `400` with `idempotency_key_required`. | Passed | Deployed endpoint returned HTTP `400` before Aurora or Roller work. |
+| Duplicate ticket ids | Endpoint returns HTTP `400` with `duplicate_ticket_ids`. | Passed | Local request-shape smoke mirrors Roller uniqueness rule. |
+| More than 10 tickets | Endpoint returns HTTP `400` with `too_many_tickets`. | Passed | Local request-shape smoke mirrors Roller max 10 rule. |
+| Paid ready booking | Endpoint returns `planned` with ticket ids and writes check-in attempt/event audit rows. | Passed | Booking `5032210` returned `planned` with 4 tickets; Aurora attempt row status `planned`. |
+| Unpaid booking | Endpoint returns HTTP `409` with `payment_required`. | Passed | Booking `5032211` returned `blocked`; Aurora attempt row status `blocked`. |
+| Confirm redeem while write guard disabled | Endpoint returns HTTP `409` with `redeem_write_disabled`. | Passed | Booking `5032210` with `confirmRedeem=true` returned `blocked`; Aurora attempt row status `write_disabled`. |

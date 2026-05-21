@@ -47,6 +47,8 @@ T0018 registered the real Roller Playground booking webhook against the deployed
 
 T0019 polished the phone lookup path for webhook-created Aurora bookings. The phone app now carries JumpYard Cloud source/freshness metadata into the booking model for non-visible verification, uses stable test hooks for lookup testing, keeps internal source labels hidden from guests, and defaults lookup expected date to today's date in `Europe/Stockholm` when no explicit override is set.
 
+T0020 adds the first safe server-owned redeem endpoint shape. The dev `POST /v1/check-in/redeem` Lambda resolves bookings and ticket ids from Aurora, validates Roller `POST /redemptions` constraints, writes safe check-in attempt/event audit rows, and returns a redeem plan while real Roller redemption writes remain disabled in deployed dev config.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -129,7 +131,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0017 Booking webhook enrichment` | Refresh Roller booking detail from webhook events and update Aurora snapshots. | Completed locally and deployed to dev; turns same-day webhook signals into fresh booking snapshots once Roller delivery is registered. |
 | `T0018 Roller Playground webhook registration` | Register the Playground booking webhook against the dev endpoint and confirm real delivery headers/body. | Completed locally and deployed to dev; real Roller deliveries now update Aurora through webhook enrichment. |
 | `T0019 Phone lookup display/source polish` | Decide whether to expose source/freshness/debug status in phone/admin UX. | Completed locally; source/freshness metadata is available for verification but remains hidden from guests by default. |
-| `T0020 Redeem spike/server endpoint` | Test Roller `POST /redemptions` safely in Playground and add the first server-owned redeem endpoint shape. | Next major proof point after lookup/webhook freshness. |
+| `T0020 Redeem spike/server endpoint` | Add a safe server-owned redeem planning endpoint and keep Roller redemption writes disabled until controlled execution is scoped. | Completed locally and deployed to dev; next step is controlled redeem execution with auth/session and final refresh rules. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -248,16 +250,24 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
   - dev API returned `found`, `payment_required`, source `jumpyard_cloud`, and freshness `fresh`
   - browser flow opened the booking summary, showed `Obetald`, kept `Betalning krävs` disabled, and confirmed metadata `sourceSystem=jumpyard_cloud`, `freshness=fresh`
 
+T0020 confirmed Roller `POST /redemptions` request rules:
+
+- request body uses `tickets[]`
+- each ticket requires `ticketId`
+- `redemptionDate` is optional
+- `redemptionDevice` identifies the device name
+- one call accepts at most 10 unique ticket ids
+
 ## Non-Goals For Current Ticket
 
 - Do not use Aurora lookup data as final authority before future write-critical actions such as redeem or add-on booking creation.
 - Do not implement daily seed ingestion.
 - Do not rely on automatic Roller webhook delivery in production until production auth, IP allowlisting, and environment registration are explicitly scoped.
 - Do not write to Roller Live/production.
-- Do not redeem Roller tickets.
+- Do not enable Roller redemption writes from the deployed public dev endpoint.
 - Do not create staging or production AWS resources.
 - Do not add payment logic.
-- Do not add redeem logic.
+- Do not wire phone UI to redeem.
 - Do not add a public demo button to the phone check-in UI.
 
 ## Open Questions

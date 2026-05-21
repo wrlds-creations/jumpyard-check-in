@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-21
-- Current branch: `codex/t0019-phone-lookup-polish`
-- Current status: T0019 phone lookup polish completed locally.
-- Current ticket: `T0019` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`
-- Recommended next ticket: `T0020 Redeem spike/server endpoint`
+- Current branch: `codex/t0020-redeem-spike`
+- Current status: T0020 redeem spike/server endpoint completed locally and deployed to dev.
+- Current ticket: `T0020` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`
+- Recommended next ticket: `T0021 Controlled Playground redeem execution`
 
 ## Current Structure
 
@@ -37,6 +37,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- config/dev.json
 |   |-- config/dev.example.json
 |   |-- lambda/lookup/index.js
+|   |-- lambda/redeem/index.js
 |   |-- lambda/webhook/index.js
 |   |-- lib/config.ts
 |   |-- scripts/import-bookingitems.ts
@@ -115,18 +116,20 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0017` | Implemented booking webhook enrichment. | 2026-05-21 | Dev webhook now refreshes Roller booking detail, upserts Aurora booking/item/ticket snapshots, and marks webhook events `processed` after enrichment. |
 | `T0018` | Registered the real Roller Playground booking webhook. | 2026-05-21 | Roller webhook id `238` posts to dev JumpYard Cloud; real created-booking delivery for `5032443` reached AWS and was enriched into Aurora with status `processed`. |
 | `T0019` | Polished and verified phone lookup for webhook-created Aurora bookings. | 2026-05-21 | Booking `5032444` opens in the phone summary from `jumpyard_cloud`, remains blocked as unpaid, and carries source/freshness metadata for non-visible verification. |
+| `T0020` | Added safe server-owned redeem planning endpoint. | 2026-05-21 | Dev `POST /v1/check-in/redeem` resolves Aurora tickets, writes planned/blocked audit rows, and keeps Roller redemption writes disabled. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0019` | Polish phone lookup and verify webhook-created Aurora bookings. | Completed locally | Commit/review still pending. |
+| `T0020` | Redeem spike/server endpoint. | Completed locally and deployed to dev | `POST /v1/check-in/redeem` now returns safe plans/blocks and cannot redeem Roller tickets while `ENABLE_ROLLER_REDEEM_WRITES=false`. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0020` | Redeem spike/server endpoint | Test Roller `POST /redemptions` safely in Playground and add the first server-owned redeem endpoint shape. |
+| `T0020` | Redeem spike/server endpoint | Add safe server-side redeem planning/audit and keep Roller writes disabled. |
+| `T0021` | Controlled Playground redeem execution | Add auth/session protection and a final live refresh before enabling one real Playground redeem smoke. |
 
 ## Validation Status
 
@@ -256,10 +259,20 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0019 API lookup verification: `POST /v1/check-in/lookup` for `5032444` returned `found`, `payment_required`, `source.system=jumpyard_cloud`, and `freshnessStatus=fresh`.
 - T0019 browser verification: `http://localhost:3000` found `5032444`, opened booking summary, showed `Obetald`, disabled `Betalning krävs`, and exposed metadata `sourceSystem=jumpyard_cloud`, `freshness=fresh`.
 - T0019 validation: `npm run validate`, `cd jumpyard-checkin-phone && npm run lint`, and `cd jumpyard-checkin-phone && npm run build` passed. Lint still reports the four pre-existing `<img>` warnings.
+- T0020 redeem Lambda syntax: `node --check infra/lambda/redeem/index.js` passed.
+- T0020 local request-shape smoke: invalid JSON, missing idempotency key, duplicate ticket ids, and more than 10 ticket ids returned expected stable errors before database or Roller work.
+- T0020 validation: `npm run validate`, `npm --prefix infra run build`, and `npm --prefix infra run synth:dev` passed.
+- T0020 AWS identity preflight: `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`.
+- T0020 AWS region preflight: `aws configure get region --profile wrlds-dev` returned `eu-north-1`.
+- T0020 pre-deploy diff: `npm --prefix infra run diff:dev` showed only the approved redeem Lambda asset and `ENABLE_ROLLER_REDEEM_WRITES=false` environment change.
+- T0020 deploy: `npm --prefix infra run deploy:dev` updated `jumpyard-check-in-dev-stack-redeem`.
+- T0020 deployed smoke: missing idempotency returned HTTP `400`; booking `5032210` returned `planned` with 4 tickets; unpaid booking `5032211` returned `payment_required`; `confirmRedeem=true` returned `redeem_write_disabled`.
+- T0020 Aurora audit verification: direct Data API query showed `planned`, `blocked`, and `write_disabled` rows in `jumpyard.checkin_attempts` for the smoke requests.
+- T0020 post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
 
 ## Known Issues Summary
 
-- AWS dev foundation is deployed. Lookup and webhook handlers are implemented; booking and redeem handlers are still placeholders and return `501`.
+- AWS dev foundation is deployed. Lookup, webhook, and safe redeem-planning handlers are implemented; booking handlers are still placeholders and return `501`.
 - Roller credentials secret in AWS has been populated for dev and was used by T0009 lookup smoke tests.
 - JumpYard Cloud lookup API now uses Aurora first and refreshes from Roller when local data is missing or unsafe. Other API business logic is still pending.
 - Phone app booking lookup now calls JumpYard Cloud for the first check-in step, carries non-visible lookup source/freshness metadata, uses today's Stockholm date by default, and still blocks unpaid bookings. Payment, redeem, and booking creation UI behavior are still pending.
@@ -269,7 +282,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Webhook retry behavior, response handling, booking event names, Playground auth header `x-roller-apikey`, and dev webhook registration are confirmed. Exact production auth/signature and IP allowlisting choice remain open.
 - Already-redeemed Playground seed data is deferred until redemption is implemented and safely tested.
 - Staff handoff/redeem flow integration has not been implemented.
-- Roller `POST /redemptions` has not been tested yet.
+- Roller `POST /redemptions` client code exists behind a disabled guard, but no real Roller redemption write has been executed yet.
 - Existing-booking add-product linked-booking flow has not been tested yet.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
