@@ -65,6 +65,8 @@ T0027 adds and deploys staff-confirmed redeem from a server-owned check-in sessi
 
 T0028 improves the phone-to-staff QR handoff. The phone confirmation screen keeps the server-owned payload `JY_HANDOFF:<handoffCode>:<checkinSessionId>` as the QR value, renders it with the proven `qrcode` library, shows only the scannable QR plus short code to guests, and keeps the payload in test/debug attributes. The admin app can scan QR codes with the existing browser QR library, paste a full QR payload, type a short handoff code, and open the exact session when the payload includes `checkinSessionId`. This is a frontend-only polish ticket and does not change AWS, Roller, or redeem logic.
 
+T0029 improves phone-side session resume behavior without changing AWS or Roller logic. After a successful paid lookup, the phone app asks JumpYard Cloud to start or resume the server-owned session. When JumpYard Cloud returns a resumed `ready_for_staff` session, the phone app opens the final QR confirmation screen directly from search instead of showing booking summary or restarting add-ons/safety. When the session is completed/redeemed or the session start call reports `already_redeemed`, the phone app shows an already checked-in state instead of treating the booking as a fresh check-in.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -176,7 +178,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0026 Staff/admin handoff list/detail` | Show sessions waiting for staff and let staff inspect booking/session state. | Completed locally; gives staff a read-only surface for the server-owned handoff before final redeem. |
 | `T0027 Staff-confirmed redeem from session` | Redeem selected tickets from the server-owned session after staff confirmation and final Roller refresh. | Completed and deployed to dev; completes the first end-to-end existing-booking check-in write path in dev. |
 | `T0028 QR/handoff lookup polish` | Improve how staff finds handoff sessions by QR payload or short code. | Completed locally; phone QR uses the server-owned handoff payload, and admin can scan/paste/open the exact session. |
-| `T0029 Phone session resume` | If lookup finds an existing active session, resume the correct phone state instead of restarting the whole flow. | Fixes repeated testing and real guest reloads; `ready_for_staff` should jump back to QR, and completed sessions should show already checked in. |
+| `T0029 Phone session resume` | If lookup finds an existing active session, resume the correct phone state instead of restarting the whole flow. | Completed locally; paid lookup now starts/resumes the session, `ready_for_staff` resumes directly from search to QR, completed/redeemed resumes to an already checked-in state, and guest-in-progress continues normally. |
 | `T0030 New booking/payment discovery spike` | Confirm the exact Roller Playground path for draft booking, payment token, test/fake card, and whether payment can stay inside the PWA without a hosted payment-link detour. | Prevents building the wrong checkout model; hosted payment links should remain fallback unless in-app payment is confirmed impossible. |
 | `T0031 Server-side booking quote/draft` | Add JumpYard Cloud endpoints for new-booking quote and draft creation against Roller Playground, without phone UI payment yet. | Keeps Roller credentials/server rules in JumpYard Cloud and gives a safe backend contract for the create-booking flow. |
 | `T0032 Phone create-booking + fake payment` | Wire phone UI to create a booking and complete a Playground/test payment if Roller supports in-app payment. | Target first full new-booking flow: pick product/time, create draft, pay/test-pay without leaving the app, then continue toward check-in. |
@@ -376,6 +378,14 @@ T0028 confirmed QR/handoff lookup behavior:
 - full QR payload opens the exact session detail by `checkinSessionId`
 - short handoff code selects a matching active waiting-list session
 - browser camera scanning uses the existing admin `@zxing/browser` dependency and stops after success or close
+
+T0029 confirmed phone session resume behavior:
+
+- successful paid lookup starts/resumes the JumpYard Cloud session so active resume states can route before the booking summary
+- `ready_for_staff` session resumes route directly to `APP_CONFIRM` from search
+- completed/redeemed sessions or `already_redeemed` start responses route to `APP_PRESENT` with an already checked-in state
+- guest-in-progress sessions still route through the normal add-ons/safety flow
+- no Roller calls, redeem tokens, admin code, backend code, or AWS resources changed
 
 ## Non-Goals For Current Ticket
 

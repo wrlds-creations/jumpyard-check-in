@@ -17,7 +17,7 @@ import { detectChannel, initialContext, initialState, nextState } from '@/flow/m
 import type { Branch } from '@/flow/machine';
 import { validateToken } from '@/flow/mockClient';
 import { CloudSessionError, markSessionReadyForStaff, startCheckInSession, type SessionIssue } from '@/flow/cloudClient';
-import type { ConnectedProfile, FlowContext, FlowState } from '@/flow/types';
+import type { Booking, CheckInSession, ConnectedProfile, FlowContext, FlowState } from '@/flow/types';
 import { ParkChoice } from '@/components/ParkChoice';
 import { BookingLookup } from '@/components/BookingLookup';
 import { BuyTickets } from '@/components/BuyTickets';
@@ -142,6 +142,7 @@ function CheckInFlow() {
     const [sessionStartError, setSessionStartError] = useState<SessionIssue | null>(null);
     const [isMarkingReadyForStaff, setIsMarkingReadyForStaff] = useState(false);
     const [readyForStaffError, setReadyForStaffError] = useState<SessionIssue | null>(null);
+    const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
 
     const scrollToTop = () => {
         window.scrollTo(0, 0);
@@ -156,15 +157,83 @@ function CheckInFlow() {
         scrollToTop();
     };
 
+    const routeFromSessionResume = (
+        checkinSession: CheckInSession,
+        patch: Partial<FlowContext> = {},
+        fallback: 'advance' | 'booking-summary' = 'advance'
+    ) => {
+        const resumeState = getResumeState(checkinSession);
+        const nextCtx = { ...ctx, ...patch, checkinSession };
+
+        if (!resumeState) {
+            setAlreadyCheckedIn(false);
+            if (fallback === 'booking-summary') {
+                setCtx(nextCtx);
+                setState('APP_BOOKING');
+                scrollToTop();
+                return;
+            }
+
+            advance({ ...patch, checkinSession });
+            return;
+        }
+
+        setAlreadyCheckedIn(isCompletedSession(checkinSession));
+        setCtx(nextCtx);
+        setState(resumeState);
+        scrollToTop();
+    };
+
+    const routeAlreadyCheckedIn = (patch: Partial<FlowContext> = {}) => {
+        setAlreadyCheckedIn(true);
+        setCtx({ ...ctx, ...patch, checkinSession: null });
+        setState('APP_PRESENT');
+        scrollToTop();
+    };
+
+    const handleExistingBookingFound = async (booking: Booking) => {
+        const bookingPatch = { booking, checkinSession: null, existingAddons: booking.existingAddons ?? [] };
+
+        setAlreadyCheckedIn(false);
+        setSessionStartError(null);
+
+        if (!booking.paid) {
+            advance(bookingPatch);
+            return;
+        }
+
+        try {
+            const checkinSession = await startCheckInSession(booking);
+            routeFromSessionResume(checkinSession, bookingPatch, 'booking-summary');
+        } catch (error) {
+            if (error instanceof CloudSessionError && error.reason === 'already_redeemed') {
+                routeAlreadyCheckedIn(bookingPatch);
+                return;
+            }
+
+            advance(bookingPatch);
+        }
+    };
+
     const startExistingBookingCheckIn = async () => {
         if (!ctx.booking || isStartingSession) return;
+
+        if (ctx.checkinSession) {
+            routeFromSessionResume(ctx.checkinSession);
+            return;
+        }
 
         setIsStartingSession(true);
         setSessionStartError(null);
         try {
             const checkinSession = await startCheckInSession(ctx.booking);
-            advance({ checkinSession });
+            routeFromSessionResume(checkinSession);
         } catch (error) {
+            if (error instanceof CloudSessionError && error.reason === 'already_redeemed') {
+                routeAlreadyCheckedIn();
+                return;
+            }
+
             setSessionStartError(error instanceof CloudSessionError ? error.reason : 'session_failed');
             scrollToTop();
         } finally {
@@ -201,6 +270,7 @@ function CheckInFlow() {
         let alive = true;
         validateToken(token ?? 'MOCK123').then(booking => {
             if (!alive) return;
+            setAlreadyCheckedIn(false);
             advance({ booking, checkinSession: null, existingAddons: booking.existingAddons ?? [] });
         });
         return () => {
@@ -217,6 +287,7 @@ function CheckInFlow() {
             data-checkin-session-status={ctx.checkinSession?.status ?? ''}
             data-handoff-status={ctx.checkinSession?.handoffStatus ?? ''}
             data-handoff-code={ctx.checkinSession?.handoffCode ?? ''}
+            data-already-checked-in={String(alreadyCheckedIn)}
         >
             <ProgressBar state={state} />
 
@@ -260,7 +331,9 @@ function CheckInFlow() {
                     {state === 'KIOSK_LOOKUP' && (
                         <BookingLookup
                             key="park-lookup"
-                            onSuccess={booking => advance({ booking, checkinSession: null, existingAddons: booking.existingAddons ?? [] })}
+                            onSuccess={booking => {
+                                void handleExistingBookingFound(booking);
+                            }}
                             onBack={() => { setState('KIOSK_CHOICE'); scrollToTop(); }}
                         />
                     )}
@@ -268,7 +341,8 @@ function CheckInFlow() {
                     {state === 'KIOSK_BUY' && (
                         <BuyTickets
                             key="park-buy"
-                            onComplete={(booking, contact, product) =>
+                            onComplete={(booking, contact, product) => {
+                                setAlreadyCheckedIn(false);
                                 advance({
                                     booking,
                                     checkinSession: null,
@@ -282,8 +356,8 @@ function CheckInFlow() {
                                     baseUnitPrice: product.unitPrice,
                                     baseQuantity: product.quantity,
                                     baseTotal: product.total,
-                                })
-                            }
+                                });
+                            }}
                             onBack={() => { setState('KIOSK_CHOICE'); scrollToTop(); }}
                         />
                     )}
@@ -369,12 +443,33 @@ function CheckInFlow() {
                             checkinSession={ctx.checkinSession}
                             jumperCount={ctx.booking.jumpers}
                             selectedAddons={ctx.selectedAddons}
+                            alreadyCheckedIn={alreadyCheckedIn}
                         />
                     )}
                 </AnimatePresence>
             </div>
         </div>
     );
+}
+
+function getResumeState(session: CheckInSession): FlowState | null {
+    if (isCompletedSession(session)) return 'APP_PRESENT';
+    if (isReadyForStaffSession(session)) return 'APP_CONFIRM';
+    return null;
+}
+
+function isReadyForStaffSession(session: CheckInSession) {
+    const status = `${session.status ?? ''}`.toLowerCase();
+    const handoffStatus = `${session.handoffStatus ?? ''}`.toLowerCase();
+
+    return status === 'ready_for_staff' || handoffStatus === 'ready_for_staff';
+}
+
+function isCompletedSession(session: CheckInSession) {
+    const status = `${session.status ?? ''}`.toLowerCase();
+    const handoffStatus = `${session.handoffStatus ?? ''}`.toLowerCase();
+
+    return status === 'redeemed' || status === 'completed' || handoffStatus === 'completed';
 }
 
 export default function Home() {

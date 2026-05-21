@@ -49,6 +49,7 @@ export interface CheckInSession {
   handoffStatus?: string | null;
   handoffCode?: string | null;
   safetyStatus?: string | null;
+  completedAt?: string | null;
   expiresAt?: string | null;
 }
 

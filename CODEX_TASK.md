@@ -1,15 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0028
+T0029
 
 ## Goal
-Improve the phone-to-staff handoff by making the guest QR payload usable in the staff/admin app.
+Resume an existing phone check-in session instead of restarting the guest flow.
 
 ## Dependencies
-- T0027 completed and merged.
-- Phone app already receives a server-owned `handoffCode` and `checkinSessionId`.
-- Admin app already lists and opens ready-for-staff sessions.
+- T0028 completed and merged.
+- Phone app already starts or resumes JumpYard Cloud check-in sessions.
+- Phone confirmation screen already renders the server-owned handoff QR.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,11 +19,11 @@ Improve the phone-to-staff handoff by making the guest QR payload usable in the 
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - JUMPYARD_CLOUD_CONTRACT.md
+- `jumpyard-checkin-phone/src/app/page.tsx`
 - `jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx`
-- `jumpyard-checkin-phone/src/components/QrCode.tsx`
-- `jumpyard-checkin-phone/package.json`
-- `jumpyard-checkin-phone/package-lock.json`
-- `jumpyard-checkin-admin/src/app/page.tsx`
+- `jumpyard-checkin-phone/src/context/LanguageContext.tsx`
+- `jumpyard-checkin-phone/src/flow/cloudClient.ts`
+- `jumpyard-checkin-phone/src/flow/types.ts`
 
 ## Do not touch
 - AWS infrastructure
@@ -33,70 +33,69 @@ Improve the phone-to-staff handoff by making the guest QR payload usable in the 
 - Redeem business logic
 - Booking creation/add-product logic
 - Payment logic
-- Kiosk flow
+- Kiosk app
+- Admin app
 - Production credentials
 - Live Roller config
 - Unrelated assets or deliverables
 
 ## Requirements
 
-1. Keep the phone final confirmation QR based on the server-owned payload:
-   - `JY_HANDOFF:<handoffCode>:<checkinSessionId>`
+1. When the phone app looks up a paid booking, start/resume the JumpYard Cloud session so active resume states can be detected before the booking summary.
 
-2. Polish the phone confirmation QR display:
-   - Show the scannable QR and short handoff code.
-   - Keep the full payload available for test/debug attributes.
-   - Use a proven QR generator so external QR scanners can decode the payload.
-   - Do not expose Roller secrets or redeem tokens.
-   - Do not call Roller or redeem tickets.
+2. When JumpYard Cloud returns `ready_for_staff`:
+   - Skip the add-ons/safety flow.
+   - Show the final confirmation screen immediately after search.
+   - Preserve the server-owned handoff code and QR payload.
 
-3. Add staff/admin handoff lookup improvements:
-   - Allow staff to scan the phone QR with the device camera.
-   - Allow staff to paste the full QR payload manually.
-   - Allow staff to type the short handoff code and select it from the active waiting list.
-   - Open the exact server-owned session when the QR payload contains `checkinSessionId`.
-   - Stop camera scanning after a successful scan or when the scanner is closed.
-   - Show a helpful error when a scanned/pasted value cannot be understood.
+3. When the session is already completed/redeemed or JumpYard Cloud reports `already_redeemed`:
+   - Do not restart the check-in flow.
+   - Show an "already checked in" completion state.
+   - Do not show a redeem QR or staff handoff action as if the booking still needs check-in.
 
-4. Update source-of-truth docs with:
-   - T0028 status.
-   - QR/handoff payload behavior.
+4. When the session is still `guest_in_progress`:
+   - Continue the normal guest flow from the booking summary.
+   - Do not skip required guest-side steps.
+
+5. Keep all Roller and redeem authority server-side:
+   - Do not call Roller from the phone app.
+   - Do not expose redeem tokens or staff secrets.
+   - Do not change backend write behavior.
+
+6. Update source-of-truth docs with:
+   - T0029 status.
+   - Resume behavior.
    - Validation results.
    - Recommended next ticket.
 
 ## Non-goals
-- Do not add production staff authentication.
-- Do not change the temporary dev redeem code flow.
-- Do not create or change AWS resources.
+- Do not implement SMS token restore.
+- Do not implement booking creation.
+- Do not implement payment.
+- Do not implement staff authentication.
+- Do not deploy AWS changes.
 - Do not change Roller webhook registration.
-- Do not add a new backend endpoint.
-- Do not implement booking creation, add-products, or payment.
-- Do not add QR signing or short-lived QR tokens yet.
+- Do not change final redeem behavior.
 
 ## Acceptance criteria
-- Phone final screen shows a QR derived from the server-owned handoff payload.
-- Admin app can open a session by full QR payload.
-- Admin app can scan QR codes using the existing browser QR library.
-- Admin app can still search by short handoff code or booking reference.
+- Ready-for-staff resumed sessions open directly from phone lookup on the QR confirmation screen.
+- Already-redeemed/completed bookings show an already checked-in state.
+- Guest-in-progress sessions still follow the normal flow.
 - `npm run validate` passes.
 - Phone lint/build pass.
-- Admin lint/build pass.
-- No AWS, Roller, or redeem handler changes are made.
+- No AWS, Roller, admin, or redeem handler changes are made.
 
 ## Manual verification
-1. Complete the phone flow until the confirmation screen shows a handoff code and QR.
-2. Confirm the QR card has payload `JY_HANDOFF:<handoffCode>:<checkinSessionId>`.
-3. Open the staff/admin app.
-4. Paste the full payload into the search field and click `Öppna`.
-5. Confirm the matching session detail opens.
-6. Click `Skanna QR`.
-7. Confirm the scanner opens and can be closed cleanly.
-8. If a camera is available, scan the phone QR and confirm the matching session detail opens.
+1. Find a booking with an active `ready_for_staff` session.
+2. Open the phone app and look up that booking.
+3. Confirm the phone jumps directly to the QR confirmation screen after search.
+4. Find or use a booking whose selected tickets are already redeemed.
+5. Open the phone app and look up that booking.
+6. Confirm the phone shows the already checked-in state without restarting the flow.
+7. Confirm a normal paid booking without a ready handoff still continues through the normal guest flow.
 
 ## Automated validation
 Run:
 - `npm run validate`
 - `npm --prefix jumpyard-checkin-phone run lint`
 - `npm --prefix jumpyard-checkin-phone run build`
-- `npm --prefix jumpyard-checkin-admin run lint`
-- `npm --prefix jumpyard-checkin-admin run build`

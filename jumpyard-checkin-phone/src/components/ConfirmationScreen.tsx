@@ -10,6 +10,7 @@ interface ConfirmationScreenProps {
     checkinSession: CheckInSession | null;
     jumperCount: number;
     selectedAddons: Addon[];
+    alreadyCheckedIn?: boolean;
 }
 
 // Physical items that staff hand out
@@ -29,8 +30,15 @@ const EXPERIENCE_ICONS: Partial<Record<Addon['id'], JumpyardIconName>> = {
     extra_person: 'add-guest',
 };
 
-export const ConfirmationScreen = ({ booking, checkinSession, jumperCount, selectedAddons }: ConfirmationScreenProps) => {
+export const ConfirmationScreen = ({
+    booking,
+    checkinSession,
+    jumperCount,
+    selectedAddons,
+    alreadyCheckedIn = false,
+}: ConfirmationScreenProps) => {
     const { t } = useTranslation();
+    const completed = alreadyCheckedIn || isCompletedSession(checkinSession);
     const handoffCode = checkinSession?.handoffCode ?? '';
     const qrPayload = handoffCode
         ? `JY_HANDOFF:${handoffCode}:${checkinSession?.checkinSessionId ?? booking.id}`
@@ -57,27 +65,43 @@ export const ConfirmationScreen = ({ booking, checkinSession, jumperCount, selec
             data-checkin-session-id={checkinSession?.checkinSessionId ?? ''}
             data-handoff-code={handoffCode}
             data-handoff-status={checkinSession?.handoffStatus ?? ''}
+            data-already-checked-in={String(completed)}
         >
             <div className="bg-surface p-5 rounded-2xl border border-border w-full shadow-sm text-foreground">
 
                 <div className="flex flex-col items-center mb-4 border-b border-border pb-4">
                     <JumpyardIcon name="success-check" className="w-20 h-20 mb-2" />
-                    <h1 className="text-2xl font-black italic uppercase text-foreground mb-0.5">{t.confirm.title}</h1>
-                    <p className="text-muted text-sm">{t.confirm.subtitle}</p>
+                    <h1 className="text-2xl font-black italic uppercase text-foreground mb-0.5">
+                        {completed ? t.confirm.alreadyCheckedInTitle : t.confirm.title}
+                    </h1>
+                    <p className="text-muted text-sm">
+                        {completed ? t.confirm.alreadyCheckedInSubtitle : t.confirm.subtitle}
+                    </p>
 
-                    <div
-                        className="mt-4 bg-white p-4 rounded-xl border border-border shadow-sm flex flex-col items-center"
-                        data-testid="handoff-qr-card"
-                        data-qr-payload={qrPayload}
-                    >
-                        <QrCode value={qrPayload} className="w-36 h-36 mb-2" testId="handoff-qr-code" />
-                        <p className="text-[11px] text-muted uppercase tracking-widest mb-0.5">{t.confirm.pickupCode}</p>
-                        <p className="text-2xl font-black tracking-widest text-primary">
-                            {handoffCode || '----'}
-                        </p>
-                    </div>
+                    {completed ? (
+                        <div
+                            className="mt-4 bg-success/10 p-4 rounded-xl border border-success/30 shadow-sm flex flex-col items-center"
+                            data-testid="already-checked-in-card"
+                        >
+                            <p className="text-[11px] text-muted uppercase tracking-widest mb-0.5">{t.booking.ref}</p>
+                            <p className="text-2xl font-black tracking-widest text-success">{booking.id}</p>
+                            <p className="text-xs text-foreground mt-2">{t.confirm.alreadyCheckedInHelp}</p>
+                        </div>
+                    ) : (
+                        <div
+                            className="mt-4 bg-white p-4 rounded-xl border border-border shadow-sm flex flex-col items-center"
+                            data-testid="handoff-qr-card"
+                            data-qr-payload={qrPayload}
+                        >
+                            <QrCode value={qrPayload} className="w-36 h-36 mb-2" testId="handoff-qr-code" />
+                            <p className="text-[11px] text-muted uppercase tracking-widest mb-0.5">{t.confirm.pickupCode}</p>
+                            <p className="text-2xl font-black tracking-widest text-primary">
+                                {handoffCode || '----'}
+                            </p>
+                        </div>
+                    )}
 
-                    {handoffCode && (
+                    {!completed && handoffCode && (
                         <div className="mt-3 bg-surface-strong border border-border rounded-lg px-4 py-2">
                             <p className="text-[10px] text-muted uppercase tracking-widest mb-0.5">{t.confirm.backupLabel}</p>
                             <p className="text-xl font-black tracking-[0.3em] text-primary font-mono">{handoffCode}</p>
@@ -85,26 +109,28 @@ export const ConfirmationScreen = ({ booking, checkinSession, jumperCount, selec
                     )}
                 </div>
 
-                <div className="bg-surface-strong rounded-xl p-3 text-left border border-border mb-3">
-                    <div className="flex items-center gap-2 mb-2">
-                        <JumpyardIcon name="visitor-wristband" className="w-7 h-7" />
-                        <h2 className="text-sm font-bold italic uppercase text-foreground">{t.confirm.staffHandout}</h2>
-                    </div>
+                {!completed && (
+                    <div className="bg-surface-strong rounded-xl p-3 text-left border border-border mb-3">
+                        <div className="flex items-center gap-2 mb-2">
+                            <JumpyardIcon name="visitor-wristband" className="w-7 h-7" />
+                            <h2 className="text-sm font-bold italic uppercase text-foreground">{t.confirm.staffHandout}</h2>
+                        </div>
 
-                    <div className="flex flex-col gap-1.5">
-                        {handoutItems.map((item, i) => (
-                            <div key={i} className="flex justify-between items-center gap-3 bg-white px-3 py-2 rounded-lg border border-border shadow-sm">
-                                <div className="flex items-center gap-2 min-w-0">
-                                    <JumpyardIcon name={item.icon} className="w-8 h-8 flex-shrink-0" />
-                                    <span className="text-foreground text-sm font-bold italic truncate">{item.label}</span>
+                        <div className="flex flex-col gap-1.5">
+                            {handoutItems.map((item, i) => (
+                                <div key={i} className="flex justify-between items-center gap-3 bg-white px-3 py-2 rounded-lg border border-border shadow-sm">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <JumpyardIcon name={item.icon} className="w-8 h-8 flex-shrink-0" />
+                                        <span className="text-foreground text-sm font-bold italic truncate">{item.label}</span>
+                                    </div>
+                                    <span className="text-xl font-black text-primary">{item.qty}</span>
                                 </div>
-                                <span className="text-xl font-black text-primary">{item.qty}</span>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
-                </div>
+                )}
 
-                {experienceItems.length > 0 && (
+                {!completed && experienceItems.length > 0 && (
                     <div className="bg-surface-strong rounded-xl p-3 text-left border border-border mb-3">
                         <div className="flex items-center gap-2 mb-2">
                             <JumpyardIcon name="addons-bag" className="w-6 h-6" />
@@ -124,3 +150,14 @@ export const ConfirmationScreen = ({ booking, checkinSession, jumperCount, selec
         </motion.div>
     );
 };
+
+function isCompletedSession(session: CheckInSession | null) {
+    const status = `${session?.status ?? ''}`.toLowerCase();
+    const handoffStatus = `${session?.handoffStatus ?? ''}`.toLowerCase();
+
+    return (
+        status === 'redeemed' ||
+        status === 'completed' ||
+        handoffStatus === 'completed'
+    );
+}

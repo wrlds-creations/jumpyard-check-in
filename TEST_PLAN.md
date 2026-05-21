@@ -318,3 +318,14 @@ Use this file to define validation for the current project or milestone.
 | Admin paste payload | Staff can paste a full `JY_HANDOFF` payload and open the exact session detail by `checkinSessionId`. | Passed | Manual paste path shares the same parser as scanner results. |
 | Admin short code | Staff can type a short `JY####` handoff code and select a matching active waiting-list session. | Passed | Short code lookup stays local to the loaded active list. |
 | Admin camera scanner | Staff can open a camera QR scanner, and scanning stops after success or close. | Pending camera device | Code uses existing `@zxing/browser`; real scanning requires camera permission on the staff device. |
+
+## T0029 Phone Session Resume Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Ready-for-staff resume | Searching for a booking with a resumed `ready_for_staff` session opens the QR confirmation screen directly. | Passed | Browser verification with booking `5032469` resumed fresh session `jycs_mpfm485d_f3717834` directly from search and opened `APP_CONFIRM` with handoff code `JY1721`. |
+| Already redeemed resume | Starting check-in for a completed/redeemed booking shows already checked in. | Passed | Browser verification with redeemed booking `5032454` routed to `APP_PRESENT`, showed `Redan incheckad`, and set `data-already-checked-in=true`. |
+| Guest-in-progress resume | Searching for a new/guest-in-progress paid booking keeps the booking summary and then continues the normal guest flow. | Pending browser verification | Paid lookup may start/store the session, but no skip is applied unless the session is ready/completed. |
+| Root validation | Source-of-truth docs and AWS tags validate after T0029. | Passed | `npm run validate` passed on 2026-05-21. |
+| Phone lint | Phone app lint passes after resume routing. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the pre-existing `<img>` warnings. |
+| Phone build | Phone app builds after resume routing. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed. |
