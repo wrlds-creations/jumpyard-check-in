@@ -308,3 +308,13 @@ Use this file to define validation for the current project or milestone.
 | Staff route final refresh | Confirmed route reuses T0021 final Roller refresh before write. | Passed | Dedicated smoke booking `5032473` was redeemed through the deployed staff route, which delegates to the T0021 redeem path. |
 | Staff route success | Successful route marks selected tickets redeemed and session completed. | Passed | Detail API returned `status='redeemed'`, `handoffStatus='completed'`, `completedAt`, and 1 redeemed ticket for `jycs_mpfhz4jp_a4770adb`. |
 | Admin UI action | Admin detail shows a protected `Slutför` action and does not persist the temporary code. | Passed | Browser verification showed `JY7166`, a password input placeholder `Tillfällig dev-kod`, and `Slutför`; no token is stored in source or browser storage by the app code. |
+
+## T0028 QR Handoff Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Phone QR payload | Confirmation QR uses `JY_HANDOFF:<handoffCode>:<checkinSessionId>`. | Passed | Phone QR component renders with the `qrcode` library and exposes `data-qr-value`; the card exposes `data-qr-payload` for verification. |
+| Phone guest display | Guest sees the scannable QR plus short handoff code, not the full technical payload. | Passed | Full payload is no longer visible as text on the confirmation card. |
+| Admin paste payload | Staff can paste a full `JY_HANDOFF` payload and open the exact session detail by `checkinSessionId`. | Passed | Manual paste path shares the same parser as scanner results. |
+| Admin short code | Staff can type a short `JY####` handoff code and select a matching active waiting-list session. | Passed | Short code lookup stays local to the loaded active list. |
+| Admin camera scanner | Staff can open a camera QR scanner, and scanning stops after success or close. | Pending camera device | Code uses existing `@zxing/browser`; real scanning requires camera permission on the staff device. |

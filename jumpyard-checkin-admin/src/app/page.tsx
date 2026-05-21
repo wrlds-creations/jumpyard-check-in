@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import type { IScannerControls } from "@zxing/browser";
 import {
   AlertTriangle,
   CalendarDays,
+  Camera,
   CheckCircle2,
   Clock3,
   Hash,
@@ -14,7 +16,9 @@ import {
   RefreshCcw,
   Search,
   ShieldCheck,
+  ScanLine,
   TicketCheck,
+  X,
 } from "lucide-react";
 import {
   getStaffSession,
@@ -28,6 +32,13 @@ import {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type RedeemState = "idle" | "loading" | "success" | "error";
+type ScannerState = "idle" | "starting" | "scanning" | "error";
+
+interface ParsedHandoffPayload {
+  checkinSessionId: string | null;
+  handoffCode: string | null;
+  raw: string;
+}
 
 function formatClock(value?: string | null) {
   const match = value?.match(/^(\d{1,2}):(\d{2})/);
@@ -76,6 +87,47 @@ function searchableText(session: StaffSessionSummary) {
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+}
+
+function parseHandoffPayload(value: string): ParsedHandoffPayload | null {
+  const raw = value.trim();
+  if (!raw) return null;
+
+  const handoffMatch = raw.match(/^JY_HANDOFF:([^:]*):([^:\s]+)$/i);
+  if (handoffMatch) {
+    return {
+      checkinSessionId: handoffMatch[2] || null,
+      handoffCode: handoffMatch[1] || null,
+      raw,
+    };
+  }
+
+  const sessionMatch = raw.match(/^JY_SESSION:([^:\s]+)$/i);
+  if (sessionMatch) {
+    return {
+      checkinSessionId: sessionMatch[1],
+      handoffCode: null,
+      raw,
+    };
+  }
+
+  if (/^jycs_[a-z0-9_/-]+$/i.test(raw)) {
+    return {
+      checkinSessionId: raw,
+      handoffCode: null,
+      raw,
+    };
+  }
+
+  if (/^JY[0-9]{4,}$/i.test(raw)) {
+    return {
+      checkinSessionId: null,
+      handoffCode: raw.toUpperCase(),
+      raw,
+    };
+  }
+
+  return null;
 }
 
 function statusLabel(value?: string | null) {
@@ -379,9 +431,25 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [redeemMessage, setRedeemMessage] = useState("");
   const [redeemState, setRedeemState] = useState<RedeemState>("idle");
+  const [scannerMessage, setScannerMessage] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerState, setScannerState] = useState<ScannerState>("idle");
+  const [detailRequestId, setDetailRequestId] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<StaffSessionSummary[]>([]);
   const [state, setState] = useState<LoadState>("loading");
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const scannerHandledRef = useRef(false);
+  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const selectSession = useCallback((checkinSessionId: string) => {
+    setError("");
+    setRedeemMessage("");
+    setRedeemState("idle");
+    setSelectedId(checkinSessionId);
+    setDetailRequestId((current) => current + 1);
+    setDetailState("loading");
+  }, []);
 
   const refreshSessions = useCallback(async () => {
     setState("loading");
@@ -404,6 +472,39 @@ export default function Home() {
       setState("error");
     }
   }, [selectedId]);
+
+  const openHandoffPayload = useCallback(
+    (value: string) => {
+      const parsed = parseHandoffPayload(value);
+      if (!parsed) {
+        setError("Koden kÃ¤nns inte igen. Skanna QR-koden eller klistra in hela handoff-koden.");
+        return;
+      }
+
+      setScannerMessage("");
+
+      if (parsed.checkinSessionId) {
+        setQuery(parsed.handoffCode ?? parsed.checkinSessionId);
+        selectSession(parsed.checkinSessionId);
+        return;
+      }
+
+      const handoffCode = parsed.handoffCode?.toLowerCase();
+      const matchingSession = handoffCode
+        ? sessions.find((session) => session.handoffCode?.toLowerCase() === handoffCode)
+        : null;
+
+      if (matchingSession) {
+        setQuery(parsed.handoffCode ?? matchingSession.handoffCode ?? "");
+        selectSession(matchingSession.checkinSessionId);
+        return;
+      }
+
+      setQuery(parsed.handoffCode ?? parsed.raw);
+      setError("Handoff-koden finns inte i vÃ¤ntelistan. Tryck Uppdatera eller klistra in hela QR-payloaden.");
+    },
+    [selectSession, sessions]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -429,6 +530,64 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!scannerOpen) return;
+
+    let cancelled = false;
+    scannerHandledRef.current = false;
+
+    async function startScanner() {
+      try {
+        if (!scannerVideoRef.current) {
+          throw new Error("Scanner video saknas.");
+        }
+
+        const { BrowserQRCodeReader } = await import("@zxing/browser");
+        const codeReader = new BrowserQRCodeReader();
+        const controls = await codeReader.decodeFromVideoDevice(
+          undefined,
+          scannerVideoRef.current,
+          (result, _error, controls) => {
+            const text = result?.getText();
+            if (!text || scannerHandledRef.current) return;
+
+            scannerHandledRef.current = true;
+            controls.stop();
+            scannerControlsRef.current = null;
+            setScannerOpen(false);
+            setScannerState("idle");
+            openHandoffPayload(text);
+          }
+        );
+
+        if (cancelled) {
+          controls.stop();
+          return;
+        }
+
+        scannerControlsRef.current = controls;
+        setScannerState("scanning");
+      } catch (scanError) {
+        if (cancelled) return;
+        scannerControlsRef.current = null;
+        setScannerState("error");
+        setScannerMessage(
+          scanError instanceof Error
+            ? `Kameran kunde inte startas: ${scanError.message}`
+            : "Kameran kunde inte startas."
+        );
+      }
+    }
+
+    void startScanner();
+
+    return () => {
+      cancelled = true;
+      scannerControlsRef.current?.stop();
+      scannerControlsRef.current = null;
+    };
+  }, [openHandoffPayload, scannerOpen]);
+
+  useEffect(() => {
     if (!selectedId) return;
 
     let cancelled = false;
@@ -449,7 +608,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [selectedId]);
+  }, [detailRequestId, selectedId]);
 
   const handleRedeem = useCallback(
     async (devToken: string) => {
@@ -542,11 +701,72 @@ export default function Home() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Sök kod eller bokning"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") openHandoffPayload(query);
+                }}
+                placeholder="Sök, skanna eller klistra in QR"
                 className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold outline-none"
                 autoComplete="off"
               />
             </label>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => openHandoffPayload(query)}
+                disabled={!query.trim()}
+                data-testid="handoff-open-code"
+                className="flex min-h-11 items-center justify-center gap-2 border border-border bg-white px-3 text-xs font-black uppercase text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted"
+              >
+                <ScanLine size={17} />
+                Öppna
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (scannerOpen) {
+                    setScannerOpen(false);
+                    setScannerState("idle");
+                    return;
+                  }
+
+                  setScannerMessage("");
+                  setScannerState("starting");
+                  setScannerOpen(true);
+                }}
+                data-testid="handoff-scan-toggle"
+                className="flex min-h-11 items-center justify-center gap-2 bg-primary px-3 text-xs font-black uppercase text-white transition hover:bg-primary-dark"
+              >
+                {scannerOpen ? <X size={17} /> : <Camera size={17} />}
+                {scannerOpen ? "Stäng" : "Skanna QR"}
+              </button>
+            </div>
+
+            {scannerOpen && (
+              <div
+                data-testid="handoff-qr-scanner"
+                className="mt-3 overflow-hidden border border-border bg-surface"
+              >
+                <video
+                  ref={scannerVideoRef}
+                  className="h-56 w-full bg-black object-cover"
+                  muted
+                  playsInline
+                />
+                <div className="flex items-center justify-between gap-3 border-t border-border bg-white px-3 py-2">
+                  <p className="text-xs font-bold uppercase text-muted">
+                    {scannerState === "starting"
+                      ? "Startar kamera"
+                      : scannerState === "scanning"
+                        ? "Rikta kameran mot QR-koden"
+                        : scannerState === "error"
+                          ? scannerMessage
+                          : "QR-skanner"}
+                  </p>
+                  {scannerState === "starting" && <Loader2 className="shrink-0 animate-spin text-muted" size={16} />}
+                </div>
+              </div>
+            )}
           </div>
 
           {hasError && (
@@ -579,13 +799,7 @@ export default function Home() {
               <SessionRow
                 key={session.checkinSessionId}
                 isSelected={session.checkinSessionId === selectedId}
-                onSelect={() => {
-                  setError("");
-                  setRedeemMessage("");
-                  setRedeemState("idle");
-                  setSelectedId(session.checkinSessionId);
-                  setDetailState("loading");
-                }}
+                onSelect={() => selectSession(session.checkinSessionId)}
                 session={session}
               />
             ))}

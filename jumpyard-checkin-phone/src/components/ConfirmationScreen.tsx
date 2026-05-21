@@ -65,14 +65,15 @@ export const ConfirmationScreen = ({ booking, checkinSession, jumperCount, selec
                     <h1 className="text-2xl font-black italic uppercase text-foreground mb-0.5">{t.confirm.title}</h1>
                     <p className="text-muted text-sm">{t.confirm.subtitle}</p>
 
-                    <div className="mt-4 bg-white p-4 rounded-xl border border-border shadow-sm flex flex-col items-center">
-                        <QrCode value={qrPayload} className="w-36 h-36 mb-2" />
+                    <div
+                        className="mt-4 bg-white p-4 rounded-xl border border-border shadow-sm flex flex-col items-center"
+                        data-testid="handoff-qr-card"
+                        data-qr-payload={qrPayload}
+                    >
+                        <QrCode value={qrPayload} className="w-36 h-36 mb-2" testId="handoff-qr-code" />
                         <p className="text-[11px] text-muted uppercase tracking-widest mb-0.5">{t.confirm.pickupCode}</p>
                         <p className="text-2xl font-black tracking-widest text-primary">
                             {handoffCode || '----'}
-                        </p>
-                        <p className="text-[10px] text-muted font-mono mt-1 break-all max-w-[160px]">
-                            {qrPayload}
                         </p>
                     </div>
 

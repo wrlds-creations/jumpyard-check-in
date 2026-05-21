@@ -200,6 +200,25 @@ JumpYard Cloud owns:
 
 For the pilot, final redeem should be triggered by staff/admin or a trusted server-side confirmation step, not by a public phone-only button.
 
+### QR Handoff Payload
+
+Implemented in T0028 for the phone and staff/admin apps.
+
+The guest confirmation QR represents a JumpYard Cloud handoff pointer:
+
+```text
+JY_HANDOFF:<handoffCode>:<checkinSessionId>
+```
+
+Rules:
+
+- `handoffCode` is the short staff backup code shown to the guest.
+- `checkinSessionId` is the server-owned session id used by the admin app to open the exact session detail.
+- The payload must not include Roller credentials, Roller tokens, redeem tokens, customer contact data, or a direct redeem command.
+- Scanning or pasting the payload in the admin app opens the JumpYard Cloud session detail only.
+- Final redemption still goes through `POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem` and still requires staff confirmation plus the server-side final Roller refresh.
+- Production should revisit whether this payload should become a signed or short-lived token after staff/admin authentication is selected.
+
 ### `POST /v1/check-in/lookup`
 
 Looks up and normalizes an existing booking for the phone check-in flow.
@@ -485,7 +504,7 @@ Draft rules:
 - Either email or phone is required; name alone is not enough according to Roller response.
 - Draft creation holds capacity through Roller's draft timer.
 - If amount owing is zero, use `POST /bookings/draft/publish`.
-- Payment SDK/domain allow-listing is a separate implementation concern.
+- Payment implementation must first confirm how Roller's returned `paymentJwt` is used, which fake/test card numbers are supported in Playground, and whether the payment component can run inside the JumpYard PWA without a hosted payment-link detour.
 
 ### `POST /v1/bookings/{bookingReference}/add-products/quote`
 
@@ -590,19 +609,25 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0027`. The next recommended ticket is `T0028 QR/handoff lookup polish`, which should improve how staff locates sessions now that the first redeem path exists.
+Current implementation has progressed through `T0028`. The next recommended ticket is `T0029 Phone session resume`, followed by the new-booking/payment discovery path.
 
 Near-term sequence:
 
 1. `T0026 Staff/admin handoff list/detail`: completed locally and deployed to dev; staff can inspect ready handoffs.
 2. `T0027 Staff-confirmed redeem from session`: completed locally; staff can confirm redeem from a server-owned session after final Roller refresh.
-3. `T0028 QR/handoff code polish`: improve how staff locates the ready session, including QR/handoff-code handling if needed.
-4. `T0029 Staff auth plan/implementation`: replace the temporary dev redeem code with the selected staff/admin authentication model.
+3. `T0028 QR/handoff code polish`: completed locally; phone QR uses `JY_HANDOFF:<handoffCode>:<checkinSessionId>`, and admin can scan/paste the payload or search by short code.
+4. `T0029 Phone session resume`: restore the guest to the right phone state when a booking already has an active or completed JumpYard Cloud session.
+5. `T0030 New booking/payment discovery spike`: prove the exact Roller Playground draft/payment path, including `paymentJwt`, fake/test cards, and in-app PWA feasibility.
+6. `T0031 Server-side booking quote/draft`: expose JumpYard Cloud quote/draft endpoints for new bookings while keeping Roller credentials server-side.
+7. `T0032 Phone create-booking plus fake payment`: wire the phone app to create and test-pay a Playground booking if T0030 confirms in-app payment is supported.
+8. `T0033 Staff auth plan/implementation`: replace the temporary dev redeem code with the selected staff/admin authentication model.
+9. `T0034 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
 
 ## Open Contract Questions
 
 - What is the best Roller field or internal JumpYard field for marking an add-on booking as linked to an original booking?
 - Which tenders work in the new add-on booking checkout flow: gift card, membership code, multi-visit value?
+- Does Roller Playground support in-app payment from draft booking `paymentJwt`, and what fake/test card details and domain allow-listing are required?
 - What exact response shape should JumpYard expect from `POST /redemptions` for partial success/failure?
 - Which webhook event id should be used for idempotent webhook processing?
 - Which Data API export endpoint, credentials, and date range should JumpYard use for the morning booking seed?
