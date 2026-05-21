@@ -248,7 +248,9 @@ export class JumpYardCloudStack extends Stack {
     const lookupHandler = this.createHandler('LookupHandler', 'lookup', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'lookup')),
     });
-    const bookingHandler = this.createHandler('BookingHandler', 'booking', handlerResources);
+    const bookingHandler = this.createHandler('BookingHandler', 'booking', handlerResources, {
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'booking')),
+    });
     const redeemHandler = this.createHandler('RedeemHandler', 'redeem', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'redeem')),
     });

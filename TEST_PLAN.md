@@ -38,6 +38,15 @@ Use this file to define validation for the current project or milestone.
 | `npm run roller:payment:discover` | Confirm T0030 payment discovery dry-run path. | Passed | Loads local `.env`, validates Playground, reads products, selects product `1765836`, and creates no booking. |
 | `npm run roller:payment:discover:apply-draft` without confirmation | Confirm T0030 draft write fails closed unless explicitly confirmed. | Passed | Failed before creating a draft without `ROLLER_PAYMENT_DISCOVERY_ALLOW_WRITE`. |
 | Guarded T0030 draft apply | Confirm Roller Playground draft booking returns payment shape. | Passed | Direct guarded apply created draft unique id `bcb88005-ae64-4617-ba7a-b02b095a86c2`; response returned HTTP `201`, total `260`, amount owing `260`, and a present `paymentJwt` without printing the raw JWT. |
+| `node --check infra/lambda/booking/index.js` | Confirm T0031 booking Lambda JavaScript syntax. | Passed | Passed before deploy. |
+| Local T0031 invalid draft smoke | Confirm request validation runs before AWS/Roller work. | Passed | Missing idempotency key returned HTTP `400` with `idempotency_key_required`. |
+| `npm --prefix infra run build` | Confirm T0031 infra TypeScript compiles. | Passed | Passed before deploy. |
+| `npm --prefix infra run synth:dev` | Synthesize the T0031 dev stack. | Passed | Uses non-secret `infra/config/dev.json`. |
+| T0031 CDK diff | Confirm deploy scope. | Passed | Diff showed only `BookingHandler` Lambda code changing. CDK required temporary credentials exported from `wrlds-dev` because direct SSO profile resolution failed inside CDK. |
+| T0031 dev deploy | Deploy booking Lambda implementation. | Passed | CloudFormation updated `jumpyard-check-in-dev-stack-booking` successfully. |
+| T0031 deployed quote smoke | Confirm server-side quote works without creating booking. | Passed | `POST /v1/bookings/quote` returned HTTP `200`, total `260`, amount owing `260`, tax `14.72`, and `wroteBooking=false`. |
+| T0031 deployed draft smoke | Confirm server-side draft creation and payment-session response. | Passed | `POST /v1/bookings/draft` returned HTTP `201`, draft unique id `2c1abf4f-944c-4122-a4ff-da8440c46321`, total `260`, amount owing `260`, `jwtPresent=true`, `jwtPartCount=3`, and payment config available; raw JWT was not printed. |
+| T0031 post-deploy CDK diff | Confirm deployed stack matches local template. | Passed | CDK diff showed no differences after deploy. |
 | T0011 Data API production URL rejection | Confirm Data API smoke fails closed for live-looking Roller URL. | Passed | `ROLLER_BASE_URL=https://api.roller.app` was rejected before Data API calls. |
 | `npm --prefix infra run build` | Confirm T0012 TypeScript importer compiles. | Passed | Passed on 2026-05-20. |
 | T0012 bookingitems dry-run | Confirm Data API bookingitems importer normalizes records without Aurora writes. | Passed | Returned 9 records, 6 bookings, 9 booking items, and 0 skipped records. |
@@ -182,7 +191,7 @@ Use this file to define validation for the current project or milestone.
 |---|---|---|---|
 | CDK metadata guard | Missing `-c config=...` fails with a helpful message. | Passed | Verified on 2026-05-19. |
 | CDK example synth | `npm run infra:synth` produces a template using `infra/config/dev.example.json`. | Passed | Example config is not approved for deploy. |
-| Placeholder handlers | Unimplemented Lambda inline code returns `501` and does not call Roller. | Passed | Booking handlers still use placeholder code. Lookup, webhook, and safe redeem planning are implemented. |
+| Historical placeholder handlers | Unimplemented Lambda inline code returns `501` and does not call Roller. | Passed | Lookup, booking quote/draft, webhook, session, and redeem handlers are now implemented; existing-booking add-product booking routes remain deferred. |
 | No AWS creation | No `cdk deploy` is run and `AWS_RESOURCES.md` keeps inventory empty. | Passed | Required for T0004 only; T0006 intentionally deployed dev. |
 
 ## Booking Index Ingestion Validation
