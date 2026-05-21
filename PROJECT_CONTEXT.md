@@ -59,6 +59,8 @@ T0024 wires the phone app booking summary CTA to `POST /v1/check-in/sessions`. A
 
 T0025 wires the phone app safety attestation completion to `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff`. The phone flow stores the returned handoff status/code and shows the server-owned code on the final confirmation screen. This still does not call Roller or redeem tickets.
 
+T0026 adds the first staff/admin handoff list and detail surface. JumpYard Cloud exposes read-only dev endpoints for ready-for-staff sessions, and the admin app reads those endpoints to show handoff code, session state, booking status, payment status, booking items, and selected tickets without exposing guest contact PII. This still does not call Roller or redeem tickets.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -162,7 +164,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0023 Check-in session API skeleton` | Implement the server-owned check-in session/handoff endpoints without redeeming tickets from the phone UI. | Gives the phone flow a safe next step after lookup while keeping final Roller redemption behind staff/server confirmation. |
 | `T0024 Phone start-check-in session wiring` | Wire the phone app start-check-in CTA to `POST /v1/check-in/sessions`. | Completed; lets the guest flow create/resume a server-owned session while still keeping final Roller redemption out of the phone UI. |
 | `T0025 Phone ready-for-staff handoff wiring` | Call `ready-for-staff` from the phone flow after the required guest-side steps are complete. | Completed locally; the guest flow now ends with a server-owned staff handoff code and still does not redeem tickets. |
-| `T0026 Staff/admin handoff list/detail` | Show sessions waiting for staff and let staff inspect booking/session state. | Gives staff a surface for the server-owned handoff before final redeem. |
+| `T0026 Staff/admin handoff list/detail` | Show sessions waiting for staff and let staff inspect booking/session state. | Completed locally; gives staff a read-only surface for the server-owned handoff before final redeem. |
 | `T0027 Staff-confirmed redeem from session` | Redeem selected tickets from the server-owned session after staff confirmation and final Roller refresh. | Completes the first end-to-end existing-booking check-in write path. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
@@ -332,6 +334,14 @@ T0025 confirmed phone ready-for-staff behavior:
 - booking `5032210` reached `APP_CONFIRM` with session `jycs_mpfe3dum_7dc29b1b`
 - final screen showed handoff code `JY6085` and QR payload `JY_HANDOFF:JY6085:jycs_mpfe3dum_7dc29b1b`
 - no Roller API calls, Roller secrets, or redeem tokens were added to phone code
+
+T0026 confirmed staff handoff list/detail behavior:
+
+- dev endpoint `GET /v1/staff/check-in/sessions` lists active sessions with `handoff_status='ready_for_staff'`
+- dev endpoint `GET /v1/staff/check-in/sessions/{checkinSessionId}` returns booking summary, booking items, tickets, and selected-ticket markers
+- admin app reads JumpYard Cloud directly and shows handoff `JY6085` for booking `5032210`
+- staff handoff list/detail returns no guest email or phone
+- no Roller API calls, Roller writes, or redeem actions happen in staff list/detail
 
 ## Non-Goals For Current Ticket
 

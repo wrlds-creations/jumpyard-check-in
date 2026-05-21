@@ -219,7 +219,7 @@ export class JumpYardCloudStack extends Stack {
           'x-idempotency-key',
           'x-jumpyard-redeem-token',
         ],
-        allowMethods: ['OPTIONS', 'POST'],
+        allowMethods: ['GET', 'OPTIONS', 'POST'],
         allowOrigins: ['*'],
         maxAge: 300,
       },
@@ -262,6 +262,8 @@ export class JumpYardCloudStack extends Stack {
     this.addRoute(api, lookupHandler, 'POST /v1/check-in/lookup');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff');
+    this.addRoute(api, sessionHandler, 'GET /v1/staff/check-in/sessions');
+    this.addRoute(api, sessionHandler, 'GET /v1/staff/check-in/sessions/{checkinSessionId}');
     this.addRoute(api, redeemHandler, 'POST /v1/check-in/redeem');
     this.addRoute(api, bookingHandler, 'POST /v1/bookings/quote');
     this.addRoute(api, bookingHandler, 'POST /v1/bookings/draft');

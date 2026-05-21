@@ -27,7 +27,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-036` | `T0022` | Staff auth | Choose the staff/admin authentication model that will authorize final redeem in the pilot. | High | `TBD` | Open |
 | `FU-037` | `T0022` | Session expiry | Define TTL, resume behavior, and cleanup rules for check-in sessions and handoff codes. | Medium | `TBD` | Open |
 | `FU-038` | `T0022` | Safety gate | Confirm which guest-side safety/video/waiver states must be complete before staff/server-confirmed redeem. | High | `TBD` | Open |
-| `FU-039` | `T0023` | Staff/admin UI | Build staff/admin list/detail for `ready_for_staff` sessions after phone wiring exists. | High | `TBD` | Open |
+| `FU-039` | `T0023/T0026` | Staff/admin UI | Build staff/admin list/detail for `ready_for_staff` sessions after phone wiring exists. T0026 completed the first read-only list/detail; final redeem action remains separate. | High | `T0026` | Done |
 | `FU-040` | `T0024` | SMS/session resume | Replace the current mock SMS-token path with a real JumpYard Cloud token/session restore flow when SMS links are scoped. | High | `TBD` | Open |
 
 ## Resolved Followups

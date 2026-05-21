@@ -2,12 +2,12 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "JumpYard Check-in Utlämning",
-  description: "Personalapp för JumpYard check-in och utlämning",
+  title: "JumpYard Check-in Personalhandoff",
+  description: "Personalapp för JumpYard check-in och handoff",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "JY Utlämning",
+    title: "JY Handoff",
   },
 };
 

@@ -93,6 +93,13 @@ Use this file to define validation for the current project or milestone.
 | T0025 phone lint | Confirm phone app lint passes after ready-for-staff wiring. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the same four pre-existing `<img>` warnings. |
 | T0025 phone build | Confirm phone app build passes after ready-for-staff wiring. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed. |
 | T0025 browser flow | Confirm paid booking reaches server-owned handoff screen. | Passed | Booking `5032210` reached `APP_CONFIRM` with handoff status `ready_for_staff` and code `JY6085`. |
+| T0026 root validation | Confirm source-of-truth docs still validate after staff handoff wiring. | Passed | `npm run validate` passed on 2026-05-21. |
+| T0026 session Lambda syntax | Confirm staff list/detail code is syntactically valid. | Passed | `node --check infra/lambda/session/index.js` passed. |
+| T0026 infra build | Confirm CDK changes compile. | Passed | `npm --prefix infra run build` passed. |
+| T0026 dev synth | Confirm dev stack includes staff routes. | Passed | `npm --prefix infra run synth:dev` passed. |
+| T0026 admin lint | Confirm admin app lint passes after staff API wiring. | Passed | `npm --prefix jumpyard-checkin-admin run lint` passed. |
+| T0026 admin build | Confirm admin static export builds. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. |
+| T0026 staff API smoke | Confirm deployed list/detail reads ready sessions from Aurora. | Passed | Staff list/detail returned booking `5032210`, session `jycs_mpfe3dum_7dc29b1b`, handoff code `JY6085`, 2 booking items, and 4 selected tickets. |
 | `npm --prefix infra run migrate:dev:status` | Confirm pending/applied Aurora migrations for dev. | Passed | Showed `0001 initial schema: pending` before apply and `applied` after apply on 2026-05-20. |
 | `npm --prefix infra run migrate:dev` | Apply pending Aurora migrations to dev. | Passed | Applied `0001 initial schema` to the approved dev Aurora cluster on 2026-05-20. |
 | Aurora Data API schema query | Confirm expected `jumpyard` tables and indexes exist. | Passed | Verified 15 tables and 62 indexes in schema `jumpyard`. |
@@ -118,6 +125,7 @@ Use this file to define validation for the current project or milestone.
 | T0018 Query Editor review | Run the T0018 real webhook verification SQL in AWS Query Editor. | Pending | Expected: booking `5032443` is visible in `roller_webhook_events` with event type `Created` and status `processed`. |
 | T0019 phone manual lookup | Enter `5032444` in the phone lookup step. | Passed | Expected and observed: booking summary opens, shows `Obetald`, keeps check-in CTA disabled. |
 | T0025 phone handoff flow | Enter `5032210`, start check-in, complete safety, and confirm final screen. | Passed | Expected and observed: `APP_CONFIRM`, handoff status `ready_for_staff`, handoff code `JY6085`. |
+| T0026 admin handoff view | Open the staff/admin app and inspect ready session `JY6085`. | Passed | Local browser verification at `http://127.0.0.1:3002/` showed `JY6085`, booking `5032210`, products, and tickets. |
 
 ## Roller Playground Validation
 
@@ -209,7 +217,7 @@ Use this file to define validation for the current project or milestone.
 | Test | Expected Result | Status | Notes |
 |---|---|---|---|
 | Phone ready-for-staff handoff | Phone marks a server-owned session ready for staff after safety attestation. | Passed | T0025 stores handoff status/code in phone state and shows code `JY6085`; no Roller redeem occurs. |
-| Staff handoff list/detail | Staff can view sessions with `handoff_status='ready_for_staff'`. | Not started | Planned for T0026. |
+| Staff handoff list/detail | Staff can view sessions with `handoff_status='ready_for_staff'`. | Passed | T0026 added read-only dev staff endpoints and the admin app renders handoff `JY6085` without a redeem action. |
 
 ## T0020 Redeem Planning Validation
 
@@ -270,3 +278,13 @@ Use this file to define validation for the current project or milestone.
 | Handoff state storage | Phone flow stores returned session and handoff state. | Passed | Browser state attributes showed `status=ready_for_staff`, `handoffStatus=ready_for_staff`, and handoff code `JY6085`. |
 | Confirmation display | Final screen shows the server-owned code. | Passed | Screen displayed `JY6085` and QR payload `JY_HANDOFF:JY6085:jycs_mpfe3dum_7dc29b1b`. |
 | No frontend redeem | Phone ready-for-staff does not call Roller or redeem tickets. | Passed | T0025 added only public JumpYard Cloud session handoff calls. |
+
+## T0026 Staff Handoff List/Detail Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Staff list endpoint | `GET /v1/staff/check-in/sessions` returns ready sessions. | Passed | Returned one active ready session for booking `5032210` with handoff code `JY6085`. |
+| Staff detail endpoint | `GET /v1/staff/check-in/sessions/{checkinSessionId}` returns detail. | Passed | Returned booking summary, 2 product rows, 4 ticket rows, and selected-ticket markers for session `jycs_mpfe3dum_7dc29b1b`. |
+| No contact PII | Staff endpoints avoid guest email and phone. | Passed | Response includes booking/session/product/ticket summaries only. |
+| No Roller/redeem action | Staff list/detail is read-only. | Passed | T0026 endpoints only read Aurora; no Roller call or redeem route is called. |
+| Admin browser check | Admin UI renders the dev staff API result. | Passed | Browser verification showed `JY6085`, booking `5032210`, `Produkter`, and `Biljetter`. |
