@@ -67,6 +67,16 @@ export interface StaffSessionDetail extends StaffSessionSummary {
   tickets: StaffBookingTicket[];
 }
 
+export interface StaffRedeemResult {
+  redeemedTicketIds: string[];
+  roller?: {
+    statusCode?: number;
+  };
+  session: Partial<StaffSessionSummary> & {
+    checkinSessionId: string;
+  };
+}
+
 interface StaffListResponse {
   status: "found" | "not_found" | "invalid_request" | "internal_error";
   sessions?: StaffSessionSummary[];
@@ -79,6 +89,21 @@ interface StaffListResponse {
 interface StaffDetailResponse {
   status: "found" | "not_found" | "invalid_request" | "internal_error";
   session?: StaffSessionDetail;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+}
+
+interface StaffRedeemResponse {
+  status: "redeemed" | "blocked" | "forbidden" | "not_found" | "invalid_request" | "internal_error" | "roller_error";
+  redeemedTicketIds?: string[];
+  roller?: {
+    statusCode?: number;
+  };
+  session?: Partial<StaffSessionSummary> & {
+    checkinSessionId: string;
+  };
   error?: {
     code?: string;
     message?: string;
@@ -116,6 +141,44 @@ export async function getStaffSession(checkinSessionId: string): Promise<StaffSe
   }
 
   return body.session;
+}
+
+export async function redeemStaffSession({
+  checkinSessionId,
+  devToken,
+  idempotencyKey,
+}: {
+  checkinSessionId: string;
+  devToken: string;
+  idempotencyKey: string;
+}): Promise<StaffRedeemResult> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/v1/staff/check-in/sessions/${encodeURIComponent(checkinSessionId)}/redeem`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        "x-idempotency-key": idempotencyKey,
+        "x-jumpyard-redeem-token": devToken,
+      },
+      body: JSON.stringify({
+        confirmRedeem: true,
+        idempotencyKey,
+      }),
+    }
+  );
+  const body = await parseJson<StaffRedeemResponse>(response);
+
+  if (!response.ok || body.status !== "redeemed" || !body.session) {
+    throw new Error(body.error?.message ?? "JumpYard Cloud kunde inte slutföra incheckningen.");
+  }
+
+  return {
+    redeemedTicketIds: body.redeemedTicketIds ?? [],
+    roller: body.roller,
+    session: body.session,
+  };
 }
 
 function getApiBaseUrl() {

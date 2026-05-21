@@ -5,8 +5,10 @@ import Image from "next/image";
 import {
   AlertTriangle,
   CalendarDays,
+  CheckCircle2,
   Clock3,
   Hash,
+  KeyRound,
   Loader2,
   PackageCheck,
   RefreshCcw,
@@ -17,6 +19,7 @@ import {
 import {
   getStaffSession,
   listReadyStaffSessions,
+  redeemStaffSession,
   type StaffBookingItem,
   type StaffBookingTicket,
   type StaffSessionDetail,
@@ -24,6 +27,7 @@ import {
 } from "@/lib/adminApi";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
+type RedeemState = "idle" | "loading" | "success" | "error";
 
 function formatClock(value?: string | null) {
   const match = value?.match(/^(\d{1,2}):(\d{2})/);
@@ -83,7 +87,9 @@ function statusLabel(value?: string | null) {
     not_started: "Inte startad",
     paid: "Betald",
     ready_for_staff: "Redo",
+    redeemed: "Incheckad",
     requires_staff: "Kräver personal",
+    unredeemed: "Ej incheckad",
   };
 
   return labels[value] ?? value.replace(/_/g, " ");
@@ -199,7 +205,21 @@ function TicketRows({ tickets }: { tickets: StaffBookingTicket[] }) {
   );
 }
 
-function DetailPanel({ detail, loading }: { detail: StaffSessionDetail | null; loading: boolean }) {
+function DetailPanel({
+  detail,
+  loading,
+  onRedeem,
+  redeemMessage,
+  redeemState,
+}: {
+  detail: StaffSessionDetail | null;
+  loading: boolean;
+  onRedeem: (devToken: string) => void;
+  redeemMessage: string;
+  redeemState: RedeemState;
+}) {
+  const [redeemToken, setRedeemToken] = useState("");
+
   if (loading && !detail) {
     return (
       <section className="grid min-h-80 place-items-center border border-border bg-surface p-8">
@@ -222,6 +242,15 @@ function DetailPanel({ detail, loading }: { detail: StaffSessionDetail | null; l
       </section>
     );
   }
+
+  const isCompleted = detail.status === "redeemed" || detail.handoffStatus === "completed";
+  const canRedeem =
+    !isCompleted &&
+    detail.status === "ready_for_staff" &&
+    detail.handoffStatus === "ready_for_staff" &&
+    detail.safetyStatus === "completed" &&
+    redeemToken.trim().length > 0 &&
+    redeemState !== "loading";
 
   return (
     <section
@@ -271,6 +300,69 @@ function DetailPanel({ detail, loading }: { detail: StaffSessionDetail | null; l
         </section>
       </div>
 
+      <div
+        data-testid="staff-redeem-panel"
+        className="border-t border-border bg-white p-4"
+      >
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="mb-2 flex items-center gap-2">
+              <TicketCheck className="text-primary" size={20} />
+              <h3 className="text-base font-black uppercase text-foreground">Slutför check-in</h3>
+            </div>
+            <p className="text-sm font-semibold text-muted">
+              Servern gör sista Roller-kontrollen och redeemar valda biljetter.
+            </p>
+          </div>
+
+          {isCompleted ? (
+            <span className="inline-flex min-h-11 items-center gap-2 bg-success/10 px-4 text-sm font-black uppercase text-success">
+              <CheckCircle2 size={18} />
+              Incheckad
+            </span>
+          ) : (
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[360px] sm:flex-row">
+              <label className="flex min-h-11 flex-1 items-center gap-2 border border-border bg-white px-3 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
+                <KeyRound className="shrink-0 text-muted" size={18} />
+                <input
+                  value={redeemToken}
+                  onChange={(event) => setRedeemToken(event.target.value)}
+                  placeholder="Tillfällig dev-kod"
+                  type="password"
+                  data-testid="staff-redeem-token"
+                  className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold outline-none"
+                  autoComplete="off"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const token = redeemToken.trim();
+                  setRedeemToken("");
+                  onRedeem(token);
+                }}
+                disabled={!canRedeem}
+                data-testid="staff-redeem-button"
+                className="flex min-h-11 items-center justify-center gap-2 bg-primary px-4 text-sm font-black uppercase text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-surface-strong disabled:text-muted"
+              >
+                {redeemState === "loading" ? <Loader2 className="animate-spin" size={18} /> : <TicketCheck size={18} />}
+                Slutför
+              </button>
+            </div>
+          )}
+        </div>
+
+        {redeemMessage && (
+          <p
+            className={`mt-3 text-sm font-semibold ${
+              redeemState === "error" ? "text-danger" : "text-success"
+            }`}
+          >
+            {redeemMessage}
+          </p>
+        )}
+      </div>
+
       <div className="grid gap-3 border-t border-border bg-white p-4 text-sm font-semibold text-muted sm:grid-cols-3">
         <p>Betalning: {statusLabel(detail.booking.paymentStatus ?? detail.booking.bookingStatus)}</p>
         <p>Total: {formatMoney(detail.booking.totalCents)}</p>
@@ -285,6 +377,8 @@ export default function Home() {
   const [detailState, setDetailState] = useState<LoadState>("idle");
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [redeemMessage, setRedeemMessage] = useState("");
+  const [redeemState, setRedeemState] = useState<RedeemState>("idle");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<StaffSessionSummary[]>([]);
   const [state, setState] = useState<LoadState>("loading");
@@ -356,6 +450,50 @@ export default function Home() {
       cancelled = true;
     };
   }, [selectedId]);
+
+  const handleRedeem = useCallback(
+    async (devToken: string) => {
+      if (!detail || !devToken) return;
+
+      setError("");
+      setRedeemMessage("");
+      setRedeemState("loading");
+
+      try {
+        const result = await redeemStaffSession({
+          checkinSessionId: detail.checkinSessionId,
+          devToken,
+          idempotencyKey: `staff-redeem:${detail.checkinSessionId}:${crypto.randomUUID()}`,
+        });
+        const redeemedIds = new Set(result.redeemedTicketIds);
+
+        setDetail((current) => {
+          if (!current || current.checkinSessionId !== detail.checkinSessionId) return current;
+
+          return {
+            ...current,
+            completedAt: result.session.completedAt ?? current.completedAt,
+            handoffStatus: result.session.handoffStatus ?? "completed",
+            status: result.session.status ?? "redeemed",
+            tickets: current.tickets.map((ticket) =>
+              ticket.ticketId && redeemedIds.has(ticket.ticketId)
+                ? { ...ticket, redeemStatusLastSeen: "redeemed" }
+                : ticket
+            ),
+          };
+        });
+        setSessions((current) => current.filter((session) => session.checkinSessionId !== detail.checkinSessionId));
+        setRedeemMessage(`Incheckad: ${result.redeemedTicketIds.length} biljetter.`);
+        setRedeemState("success");
+      } catch (redeemError) {
+        setRedeemMessage(
+          redeemError instanceof Error ? redeemError.message : "Kunde inte slutföra incheckningen."
+        );
+        setRedeemState("error");
+      }
+    },
+    [detail]
+  );
 
   const filteredSessions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -443,6 +581,8 @@ export default function Home() {
                 isSelected={session.checkinSessionId === selectedId}
                 onSelect={() => {
                   setError("");
+                  setRedeemMessage("");
+                  setRedeemState("idle");
                   setSelectedId(session.checkinSessionId);
                   setDetailState("loading");
                 }}
@@ -452,7 +592,14 @@ export default function Home() {
           </div>
         </aside>
 
-        <DetailPanel detail={detail} loading={detailState === "loading"} />
+        <DetailPanel
+          key={detail?.checkinSessionId ?? "empty"}
+          detail={detail}
+          loading={detailState === "loading"}
+          onRedeem={handleRedeem}
+          redeemMessage={redeemMessage}
+          redeemState={redeemState}
+        />
       </div>
     </main>
   );

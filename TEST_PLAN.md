@@ -100,6 +100,14 @@ Use this file to define validation for the current project or milestone.
 | T0026 admin lint | Confirm admin app lint passes after staff API wiring. | Passed | `npm --prefix jumpyard-checkin-admin run lint` passed. |
 | T0026 admin build | Confirm admin static export builds. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. |
 | T0026 staff API smoke | Confirm deployed list/detail reads ready sessions from Aurora. | Passed | Staff list/detail returned booking `5032210`, session `jycs_mpfe3dum_7dc29b1b`, handoff code `JY6085`, 2 booking items, and 4 selected tickets. |
+| T0027 redeem Lambda syntax | Confirm staff redeem route code is syntactically valid. | Passed | `node --check infra/lambda/redeem/index.js` passed locally before deploy. |
+| T0027 admin lint | Confirm admin app lint passes after staff redeem action. | Passed | `npm --prefix jumpyard-checkin-admin run lint` passed locally. |
+| T0027 admin build | Confirm admin static export builds after staff redeem action. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed locally. |
+| T0027 infra build | Confirm CDK route change compiles. | Passed | `npm --prefix infra run build` passed locally. |
+| T0027 dev synth | Confirm dev stack includes staff redeem route. | Passed | `npm --prefix infra run synth:dev` passed and included `POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem`. |
+| T0027 dev deploy | Deploy the staff redeem route and Lambda code. | Passed | `npm --prefix infra run deploy:dev` updated the redeem Lambda and added the staff redeem API route. |
+| T0027 post-deploy diff | Confirm dev stack matches local T0027 template. | Passed | `npm --prefix infra run diff:dev` showed no differences after deploy. |
+| T0027 staff route guard smoke | Confirm staff redeem route rejects unsafe requests before DB/Roller work. | Passed | Local Lambda invocation returned `confirm_redeem_required` without confirmation and `redeem_token_required` without token. |
 | `npm --prefix infra run migrate:dev:status` | Confirm pending/applied Aurora migrations for dev. | Passed | Showed `0001 initial schema: pending` before apply and `applied` after apply on 2026-05-20. |
 | `npm --prefix infra run migrate:dev` | Apply pending Aurora migrations to dev. | Passed | Applied `0001 initial schema` to the approved dev Aurora cluster on 2026-05-20. |
 | Aurora Data API schema query | Confirm expected `jumpyard` tables and indexes exist. | Passed | Verified 15 tables and 62 indexes in schema `jumpyard`. |
@@ -126,6 +134,8 @@ Use this file to define validation for the current project or milestone.
 | T0019 phone manual lookup | Enter `5032444` in the phone lookup step. | Passed | Expected and observed: booking summary opens, shows `Obetald`, keeps check-in CTA disabled. |
 | T0025 phone handoff flow | Enter `5032210`, start check-in, complete safety, and confirm final screen. | Passed | Expected and observed: `APP_CONFIRM`, handoff status `ready_for_staff`, handoff code `JY6085`. |
 | T0026 admin handoff view | Open the staff/admin app and inspect ready session `JY6085`. | Passed | Local browser verification at `http://127.0.0.1:3002/` showed `JY6085`, booking `5032210`, products, and tickets. |
+| T0027 staff-confirmed redeem | Redeem a dedicated ready handoff through the new staff endpoint. | Passed | Booking `5032473`, session `jycs_mpfhz4jp_a4770adb`, handoff `JY3091` redeemed 1 ticket, marked session completed, and left the waiting list. |
+| T0027 admin ready action | Open the admin app and inspect a ready handoff with redeem controls. | Passed | Browser verification showed booking `5032474`, handoff `JY7166`, token input, and disabled `Slutför` button until a code is entered. |
 
 ## Roller Playground Validation
 
@@ -288,3 +298,13 @@ Use this file to define validation for the current project or milestone.
 | No contact PII | Staff endpoints avoid guest email and phone. | Passed | Response includes booking/session/product/ticket summaries only. |
 | No Roller/redeem action | Staff list/detail is read-only. | Passed | T0026 endpoints only read Aurora; no Roller call or redeem route is called. |
 | Admin browser check | Admin UI renders the dev staff API result. | Passed | Browser verification showed `JY6085`, booking `5032210`, `Produkter`, and `Biljetter`. |
+
+## T0027 Staff-Confirmed Redeem Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Staff route requires confirmation | Missing `confirmRedeem=true` is rejected. | Passed | Local Lambda invocation returned HTTP `400` with `confirm_redeem_required`. |
+| Staff route requires dev token | Confirmed request without token is rejected before DB/Roller work. | Passed | Local Lambda invocation returned HTTP `403` with `redeem_token_required`. |
+| Staff route final refresh | Confirmed route reuses T0021 final Roller refresh before write. | Passed | Dedicated smoke booking `5032473` was redeemed through the deployed staff route, which delegates to the T0021 redeem path. |
+| Staff route success | Successful route marks selected tickets redeemed and session completed. | Passed | Detail API returned `status='redeemed'`, `handoffStatus='completed'`, `completedAt`, and 1 redeemed ticket for `jycs_mpfhz4jp_a4770adb`. |
+| Admin UI action | Admin detail shows a protected `Slutför` action and does not persist the temporary code. | Passed | Browser verification showed `JY7166`, a password input placeholder `Tillfällig dev-kod`, and `Slutför`; no token is stored in source or browser storage by the app code. |

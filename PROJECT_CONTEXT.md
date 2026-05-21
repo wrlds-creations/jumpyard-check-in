@@ -61,6 +61,8 @@ T0025 wires the phone app safety attestation completion to `POST /v1/check-in/se
 
 T0026 adds the first staff/admin handoff list and detail surface. JumpYard Cloud exposes read-only dev endpoints for ready-for-staff sessions, and the admin app reads those endpoints to show handoff code, session state, booking status, payment status, booking items, and selected tickets without exposing guest contact PII. This still does not call Roller or redeem tickets.
 
+T0027 adds and deploys staff-confirmed redeem from a server-owned check-in session. JumpYard Cloud exposes a dev staff redeem route backed by the existing T0021 redeem Lambda: it requires a temporary dev redeem token until staff auth exists, resolves the session in Aurora, requires `ready_for_staff` state and completed safety, performs the final Roller REST refresh and eligibility re-check, calls Roller Playground `POST /redemptions`, marks local selected tickets redeemed, and marks the session `redeemed`/`completed`. The admin app can trigger this action from the selected handoff detail without storing the temporary code in source, browser env, localStorage, or sessionStorage.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -72,6 +74,7 @@ The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_C
 - Server-side integration should provide controlled logging, retries, error handling, and fallbacks.
 - Roller integration must fail closed unless it is explicitly configured for Playground.
 - Phone UI must not hold redeem tokens, Roller credentials, or final ticket-redemption authority.
+- Staff/admin redeem in dev requires a manually entered temporary confirmation code until a real staff authentication model is implemented.
 
 ## Current Repository Shape
 
@@ -165,7 +168,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0024 Phone start-check-in session wiring` | Wire the phone app start-check-in CTA to `POST /v1/check-in/sessions`. | Completed; lets the guest flow create/resume a server-owned session while still keeping final Roller redemption out of the phone UI. |
 | `T0025 Phone ready-for-staff handoff wiring` | Call `ready-for-staff` from the phone flow after the required guest-side steps are complete. | Completed locally; the guest flow now ends with a server-owned staff handoff code and still does not redeem tickets. |
 | `T0026 Staff/admin handoff list/detail` | Show sessions waiting for staff and let staff inspect booking/session state. | Completed locally; gives staff a read-only surface for the server-owned handoff before final redeem. |
-| `T0027 Staff-confirmed redeem from session` | Redeem selected tickets from the server-owned session after staff confirmation and final Roller refresh. | Completes the first end-to-end existing-booking check-in write path. |
+| `T0027 Staff-confirmed redeem from session` | Redeem selected tickets from the server-owned session after staff confirmation and final Roller refresh. | Completed and deployed to dev; completes the first end-to-end existing-booking check-in write path in dev. |
+| `T0028 QR/handoff lookup polish` | Improve how staff finds handoff sessions by QR payload or short code and decide the next admin/phone polish step. | Makes the staff flow easier to operate after the redeem path exists. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -342,6 +346,15 @@ T0026 confirmed staff handoff list/detail behavior:
 - admin app reads JumpYard Cloud directly and shows handoff `JY6085` for booking `5032210`
 - staff handoff list/detail returns no guest email or phone
 - no Roller API calls, Roller writes, or redeem actions happen in staff list/detail
+
+T0027 confirmed staff-confirmed redeem behavior:
+
+- dev endpoint `POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem` uses the existing redeem Lambda and T0021 final refresh path
+- the endpoint requires the dev redeem token until staff auth is implemented
+- a ready-for-staff session must have `safety_status='completed'`
+- successful redeem marks selected local tickets as `redeemed`
+- successful redeem marks the check-in session `status='redeemed'` and `handoff_status='completed'`
+- admin app sends the temporary code only in the redeem request and does not persist it in browser storage or source
 
 ## Non-Goals For Current Ticket
 
