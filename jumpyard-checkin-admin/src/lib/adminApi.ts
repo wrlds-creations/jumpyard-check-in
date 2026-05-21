@@ -1,314 +1,138 @@
-export type HandoutKind = "physical" | "experience";
+const DEFAULT_CLOUD_API_BASE_URL = "https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com";
 
-export interface HandoutItem {
-  id: string;
-  label: string;
-  qty: number;
-  kind: HandoutKind;
+export interface StaffBookingSummary {
+  amountOwingCents: number | null;
+  bookingDate: string | null;
+  bookingStatus: string | null;
+  endTime: string | null;
+  freshnessStatus: string | null;
+  paymentStatus: string | null;
+  startTime: string | null;
+  totalCents: number | null;
 }
 
-export interface AdminCheckin {
-  id: string;
-  bookingId: string;
-  shortCode: string;
-  guestName: string;
-  email: string;
-  jumpers: number;
-  time: string;
-  status: "ready";
-  redeemedAt: string | null;
-  handoutItems: HandoutItem[];
+export interface StaffSessionCounts {
+  bookingItems: number;
+  selectedTickets: number;
+  tickets: number;
 }
 
-type MockAddonId = "connected" | "socks" | "lock" | "skyrider" | "coffee";
-
-interface MockAddon {
-  id: MockAddonId;
-  label: string;
-  qty: number;
+export interface StaffSessionSummary {
+  booking: StaffBookingSummary;
+  bookingReference: string | null;
+  checkinSessionId: string;
+  completedAt: string | null;
+  counts: StaffSessionCounts;
+  createdAt: string | null;
+  expiresAt: string | null;
+  handoffCode: string | null;
+  handoffStatus: string | null;
+  isExpired: boolean;
+  readyForStaffAt: string | null;
+  rollerUniqueId: string | null;
+  safetyStatus: string | null;
+  selectedTicketIds: string[];
+  status: string | null;
+  updatedAt: string | null;
+  visitDate: string | null;
 }
 
-interface MockBooking {
-  bookingId: string;
-  shortCode: string;
-  guestName: string;
-  email: string;
-  jumpers: number;
-  time: string;
-  addons: MockAddon[];
+export interface StaffBookingItem {
+  bookingDate: string | null;
+  bookingItemId: string | null;
+  bookingItemKey: string | null;
+  endTime: string | null;
+  parentProductId: string | null;
+  parentProductName: string | null;
+  productId: string | null;
+  productName: string | null;
+  quantity: number;
+  startTime: string | null;
 }
 
-const PHYSICAL_ADDONS = new Set<MockAddonId>(["connected", "socks", "lock"]);
+export interface StaffBookingTicket {
+  bookingDate: string | null;
+  bookingItemId: string | null;
+  customTicketId: string | null;
+  expiryDate: string | null;
+  lastSeenFromRollerAt: string | null;
+  productId: string | null;
+  redeemStatusLastSeen: string | null;
+  selectedForCheckIn: boolean;
+  ticketId: string | null;
+}
 
-const MOCK_BOOKINGS: MockBooking[] = [
-  {
-    bookingId: "BOOK-A274",
-    shortCode: "A274",
-    guestName: "Sara Andersson",
-    email: "sara.andersson@example.com",
-    jumpers: 4,
-    time: "14:00-15:00",
-    addons: [
-      { id: "connected", label: "Connected band", qty: 2 },
-      { id: "socks", label: "Jump socks", qty: 4 },
-      { id: "skyrider", label: "SkyRider", qty: 1 },
-    ],
-  },
-  {
-    bookingId: "BOOK-L902",
-    shortCode: "L902",
-    guestName: "Leo Johansson",
-    email: "leo.johansson@example.com",
-    jumpers: 2,
-    time: "15:30-16:30",
-    addons: [
-      { id: "socks", label: "Jump socks", qty: 2 },
-      { id: "lock", label: "Padlock", qty: 1 },
-    ],
-  },
-  {
-    bookingId: "BOOK-C113",
-    shortCode: "C113",
-    guestName: "Nora Karlsson",
-    email: "nora.karlsson@example.com",
-    jumpers: 3,
-    time: "13:00-14:00",
-    addons: [
-      { id: "connected", label: "Connected band", qty: 3 },
-      { id: "socks", label: "Jump socks", qty: 3 },
-    ],
-  },
-  {
-    bookingId: "BOOK-L117",
-    shortCode: "L117",
-    guestName: "Lou Andersson",
-    email: "lou.andersson@example.com",
-    jumpers: 5,
-    time: "16:00-17:00",
-    addons: [
-      { id: "connected", label: "Connected band", qty: 5 },
-      { id: "socks", label: "Jump socks", qty: 5 },
-      { id: "lock", label: "Padlock", qty: 1 },
-    ],
-  },
-  {
-    bookingId: "BOOK-L442",
-    shortCode: "L442",
-    guestName: "Lisa Andersberg",
-    email: "lisa.andersberg@example.com",
-    jumpers: 3,
-    time: "12:30-13:30",
-    addons: [
-      { id: "socks", label: "Jump socks", qty: 3 },
-      { id: "skyrider", label: "SkyRider", qty: 2 },
-    ],
-  },
-  {
-    bookingId: "BOOK-K808",
-    shortCode: "K808",
-    guestName: "Klara Andreasson",
-    email: "klara.andreasson@example.com",
-    jumpers: 2,
-    time: "17:30-18:30",
-    addons: [
-      { id: "connected", label: "Connected band", qty: 1 },
-      { id: "socks", label: "Jump socks", qty: 2 },
-    ],
-  },
-  {
-    bookingId: "BOOK-A519",
-    shortCode: "A519",
-    guestName: "Amir Andersson",
-    email: "amir.andersson@example.com",
-    jumpers: 6,
-    time: "18:00-19:00",
-    addons: [
-      { id: "socks", label: "Jump socks", qty: 6 },
-      { id: "lock", label: "Padlock", qty: 2 },
-    ],
-  },
-  {
-    bookingId: "BOOK-E231",
-    shortCode: "E231",
-    guestName: "Ella Sandberg",
-    email: "ella.sandberg@example.com",
-    jumpers: 1,
-    time: "11:00-12:00",
-    addons: [
-      { id: "connected", label: "Connected band", qty: 1 },
-      { id: "socks", label: "Jump socks", qty: 1 },
-    ],
-  },
-];
+export interface StaffSessionDetail extends StaffSessionSummary {
+  items: StaffBookingItem[];
+  tickets: StaffBookingTicket[];
+}
 
-const generatedCheckins = new Map<string, AdminCheckin>();
+interface StaffListResponse {
+  status: "found" | "not_found" | "invalid_request" | "internal_error";
+  sessions?: StaffSessionSummary[];
+  error?: {
+    code?: string;
+    message?: string;
+  };
+}
 
-const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+interface StaffDetailResponse {
+  status: "found" | "not_found" | "invalid_request" | "internal_error";
+  session?: StaffSessionDetail;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+}
 
-function buildHandoutItems(booking: MockBooking): HandoutItem[] {
-  const items: HandoutItem[] = [
-    {
-      id: "wristbands",
-      label: "Wristbands",
-      qty: booking.jumpers,
-      kind: "physical",
+export async function listReadyStaffSessions(): Promise<StaffSessionSummary[]> {
+  const response = await fetch(`${getApiBaseUrl()}/v1/staff/check-in/sessions`, {
+    headers: {
+      accept: "application/json",
     },
-  ];
+  });
+  const body = await parseJson<StaffListResponse>(response);
 
-  for (const addon of booking.addons) {
-    items.push({
-      id: addon.id,
-      label: addon.label,
-      qty: addon.qty,
-      kind: PHYSICAL_ADDONS.has(addon.id) ? "physical" : "experience",
-    });
+  if (!response.ok || body.status !== "found") {
+    throw new Error(body.error?.message ?? "JumpYard Cloud kunde inte hamta personalhandovers.");
   }
 
-  return items;
+  return (body.sessions ?? []).filter((session) => Boolean(session.checkinSessionId));
 }
 
-function createCheckin(booking: MockBooking): AdminCheckin {
-  return {
-    id: `CHK-${booking.shortCode}`,
-    bookingId: booking.bookingId,
-    shortCode: booking.shortCode,
-    guestName: booking.guestName,
-    email: booking.email,
-    jumpers: booking.jumpers,
-    time: booking.time,
-    status: "ready",
-    redeemedAt: null,
-    handoutItems: buildHandoutItems(booking),
-  };
-}
-
-const seededCheckins = MOCK_BOOKINGS.map((booking) => createCheckin(booking));
-
-function cloneCheckin(checkin: AdminCheckin): AdminCheckin {
-  return {
-    ...checkin,
-    handoutItems: checkin.handoutItems.map((item) => ({ ...item })),
-  };
-}
-
-function hash(value: string): number {
-  let result = 2166136261;
-  for (let index = 0; index < value.length; index++) {
-    result ^= value.charCodeAt(index);
-    result = Math.imul(result, 16777619);
-  }
-  return result >>> 0;
-}
-
-function normalizeLookupInput(input: string): string {
-  const trimmed = input.trim();
-  const upper = trimmed.toUpperCase();
-
-  if (upper.startsWith("JY:")) {
-    const [, bookingId] = upper.split(":");
-    return bookingId?.trim() ?? "";
-  }
-
-  return upper.replace(/[^A-Z0-9-]/g, "");
-}
-
-function createFallbackCheckin(identifier: string): AdminCheckin {
-  const valueHash = hash(identifier);
-  const shortCode = identifier.slice(-4).padStart(4, "X");
-  const jumpers = 1 + (valueHash % 5);
-  const minute = valueHash % 2 === 0 ? "00" : "30";
-  const startHour = 12 + (valueHash % 7);
-  const endHour = startHour + 1;
-  const addons: MockAddon[] = [];
-
-  if (valueHash % 2 === 0) {
-    addons.push({ id: "socks", label: "Jump socks", qty: jumpers });
-  }
-
-  if (valueHash % 5 === 0) {
-    addons.push({ id: "connected", label: "Connected band", qty: Math.max(1, Math.floor(jumpers / 2)) });
-  }
-
-  if (valueHash % 7 === 0) {
-    addons.push({ id: "lock", label: "Padlock", qty: 1 });
-  }
-
-  const booking = {
-    bookingId: identifier.startsWith("BOOK-") ? identifier : `BOOK-${identifier}`,
-    shortCode,
-    guestName: `Guest ${shortCode}`,
-    email: `guest-${shortCode.toLowerCase()}@example.com`,
-    jumpers,
-    time: `${String(startHour).padStart(2, "0")}:${minute}-${String(endHour).padStart(2, "0")}:${minute}`,
-    addons,
-  };
-
-  return createCheckin(booking);
-}
-
-function allCheckins(): AdminCheckin[] {
-  return [...seededCheckins, ...generatedCheckins.values()];
-}
-
-function findCheckin(identifier: string): AdminCheckin | null {
-  const normalized = normalizeLookupInput(identifier);
-  if (!normalized) return null;
-
-  const exact = allCheckins().find(
-    (checkin) =>
-      checkin.id === normalized ||
-      checkin.bookingId === normalized ||
-      checkin.shortCode === normalized
+export async function getStaffSession(checkinSessionId: string): Promise<StaffSessionDetail> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/v1/staff/check-in/sessions/${encodeURIComponent(checkinSessionId)}`,
+    {
+      headers: {
+        accept: "application/json",
+      },
+    }
   );
+  const body = await parseJson<StaffDetailResponse>(response);
 
-  if (exact) return exact;
-
-  const fallback = createFallbackCheckin(normalized);
-  generatedCheckins.set(fallback.id, fallback);
-  return fallback;
-}
-
-function normalizeSearchInput(input: string): string {
-  return input.trim().toLowerCase();
-}
-
-export function searchCheckins(query: string): AdminCheckin[] {
-  const normalized = normalizeSearchInput(query);
-  if (normalized.length < 2) return [];
-
-  return allCheckins()
-    .filter((checkin) => {
-      const searchable = [
-        checkin.guestName,
-        checkin.email,
-        checkin.shortCode,
-        checkin.bookingId,
-      ].join(" ").toLowerCase();
-
-      return searchable.includes(normalized);
-    })
-    .slice(0, 8)
-    .map(cloneCheckin);
-}
-
-export async function lookupCheckin(codeOrQrPayload: string): Promise<AdminCheckin> {
-  await delay(350);
-
-  const checkin = findCheckin(codeOrQrPayload);
-  if (!checkin) {
-    throw new Error("Enter a check-in code.");
+  if (!response.ok || body.status !== "found" || !body.session) {
+    throw new Error(body.error?.message ?? "JumpYard Cloud kunde inte hamta handoff-detaljen.");
   }
 
-  return cloneCheckin(checkin);
+  return body.session;
 }
 
-export async function redeemCheckin(checkinId: string): Promise<AdminCheckin> {
-  await delay(500);
+function getApiBaseUrl() {
+  const configured = process.env.NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL || DEFAULT_CLOUD_API_BASE_URL;
+  return configured.replace(/\/+$/, "");
+}
 
-  const checkin = allCheckins().find((item) => item.id === checkinId);
-  if (!checkin) {
-    throw new Error("Check-in could not be found.");
+async function parseJson<T>(response: Response): Promise<T> {
+  const text = await response.text();
+
+  if (!text) {
+    throw new Error("JumpYard Cloud returnerade ett tomt svar.");
   }
 
-  return cloneCheckin(checkin);
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("JumpYard Cloud returnerade ett ogiltigt svar.");
+  }
 }

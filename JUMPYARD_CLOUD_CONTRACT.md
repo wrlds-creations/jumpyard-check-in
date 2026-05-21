@@ -328,6 +328,37 @@ Rules:
 - Does not redeem tickets.
 - Records an event-log row for audit.
 
+### `GET /v1/staff/check-in/sessions`
+
+Returns ready-for-staff sessions for the staff/admin surface.
+
+Implemented in T0026 for dev.
+
+Rules:
+
+- Read from Aurora only.
+- Return sessions with `handoff_status='ready_for_staff'` and `status='ready_for_staff'`.
+- Return booking reference, handoff code, visit date, safety status, selected ticket count, booking status, payment status, and summary counts.
+- Do not return guest email, phone, free-text names, addresses, or booking notes.
+- Do not call Roller.
+- Do not redeem tickets.
+- Do not mutate session state.
+
+### `GET /v1/staff/check-in/sessions/{checkinSessionId}`
+
+Returns detail for one ready-for-staff session.
+
+Implemented in T0026 for dev.
+
+Rules:
+
+- Read from Aurora only.
+- Return session state, booking summary, selected ticket ids, booking items, and ticket summaries.
+- Include product names and parent product names when present in the local product cache/imported item rows.
+- Mark which tickets are selected for the check-in session.
+- Do not expose contact PII.
+- Do not call Roller or redeem tickets.
+
 ### `POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem`
 
 Staff/admin-confirmed endpoint that performs final redemption for a check-in session.

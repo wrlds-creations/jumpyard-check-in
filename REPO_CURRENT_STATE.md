@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-21
-- Current branch: `codex/t0025-phone-ready-for-staff-handoff`
-- Current status: T0025 phone ready-for-staff handoff wiring completed locally.
-- Current ticket: `T0025` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`
-- Recommended next ticket: `T0026 Staff/admin handoff list/detail`
+- Current branch: `codex/t0026-staff-handoff-list-detail`
+- Current status: T0026 staff/admin handoff list/detail completed locally and deployed to dev.
+- Current ticket: `T0026` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`
+- Recommended next ticket: `T0027 Staff-confirmed redeem from session`
 
 ## Current Structure
 
@@ -129,19 +129,20 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0023` | Implemented server-owned check-in session API skeleton. | 2026-05-21 | Dev session API creates/resumes Aurora-backed sessions and marks sessions ready for staff without Roller calls or phone UI changes. |
 | `T0024` | Wired phone start-check-in CTA to JumpYard Cloud sessions. | 2026-05-21 | Paid booking `5032210` starts/resumes session before flow progress; unpaid booking `5032211` remains blocked with `Betalning krävs`. |
 | `T0025` | Wired phone safety completion to ready-for-staff handoff. | 2026-05-21 | Paid booking `5032210` reaches final screen with handoff status `ready_for_staff` and code `JY6085`; no Roller redeem is called. |
+| `T0026` | Added staff/admin handoff list/detail. | 2026-05-21 | Dev staff API lists/detail reads `ready_for_staff` sessions from Aurora; admin app shows handoff code `JY6085`, booking `5032210`, products, tickets, and status details without redeeming. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0025` | Phone ready-for-staff handoff wiring. | Completed locally | Safety attestation now calls `ready-for-staff`; handoff status/code are stored and shown on the final screen. |
+| `T0026` | Staff/admin handoff list/detail. | Completed locally and deployed to dev | Admin app reads dev staff endpoints and shows ready-for-staff session `JY6085` for booking `5032210`; no staff redeem action is wired. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0026` | Staff/admin handoff list/detail | Show `ready_for_staff` sessions to staff before final redeem is wired. |
 | `T0027` | Staff-confirmed redeem from session | Redeem selected tickets only after staff/server confirmation and final Roller refresh. |
+| `T0028` | QR/handoff lookup polish | Improve how staff finds handoff sessions by QR payload or short code if needed after T0026/T0027 testing. |
 
 ## Validation Status
 
@@ -308,6 +309,10 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0024 browser unpaid verification: booking `5032211` stayed on `APP_BOOKING`, showed disabled `Betalning krävs`, and had no session id.
 - T0025 validation: `npm run validate`, `npm --prefix jumpyard-checkin-phone run lint`, and `npm --prefix jumpyard-checkin-phone run build` passed. Lint still reports the four pre-existing `<img>` warnings.
 - T0025 browser ready-for-staff verification: booking `5032210` reached `APP_CONFIRM` with session `jycs_mpfe3dum_7dc29b1b`, session status `ready_for_staff`, handoff status `ready_for_staff`, and handoff code `JY6085`.
+- T0026 validation: `npm run validate`, `node --check infra/lambda/session/index.js`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, `npm --prefix jumpyard-checkin-admin run lint`, and `npm --prefix jumpyard-checkin-admin run build` passed.
+- T0026 AWS deploy: `npm --prefix infra run deploy:dev` added `GET /v1/staff/check-in/sessions` and `GET /v1/staff/check-in/sessions/{checkinSessionId}`; post-deploy `npm --prefix infra run diff:dev` showed no differences.
+- T0026 API smoke: staff list returned one active ready session for booking `5032210`, session `jycs_mpfe3dum_7dc29b1b`, handoff code `JY6085`, 2 booking items, 4 selected tickets, and 4 total tickets.
+- T0026 browser verification: local admin app at `http://127.0.0.1:3002/` rendered handoff code `JY6085`, booking `5032210`, product rows, and ticket rows from the dev JumpYard Cloud API.
 
 ## Known Issues Summary
 
@@ -320,7 +325,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Roller Data API `/data/bookingitems`, `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access, query params, paging shape, and modified-date behavior are confirmed in Playground for the T0008 seed window.
 - Webhook retry behavior, response handling, booking event names, Playground auth header `x-roller-apikey`, and dev webhook registration are confirmed. Exact production auth/signature and IP allowlisting choice remain open.
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
-- Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, and phone ready-for-staff wiring is complete from T0025. Staff/admin UI wiring has not started.
+- Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, and the first staff/admin handoff list/detail is complete from T0026. Staff-confirmed redeem is next.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
 - Existing-booking add-product linked-booking flow has not been tested yet.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
