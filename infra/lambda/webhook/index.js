@@ -4,7 +4,15 @@ const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 
 const DATABASE_NAME = 'jumpyard_cloud';
-const DEV_TOKEN_HEADERS = ['x-jumpyard-webhook-token', 'x-api-key', 'x-roller-api-key'];
+const DEV_TOKEN_HEADERS = [
+  'x-jumpyard-webhook-token',
+  'x-api-key',
+  'x-roller-api-key',
+  'x-roller-apikey',
+  'apikey',
+  'api-key',
+  'roller-api-key',
+];
 const MAX_BODY_BYTES = 256 * 1024;
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
@@ -28,6 +36,7 @@ exports.handler = async (event) => {
     const auth = await verifyWebhookToken(event);
 
     if (!auth.ok) {
+      logUnauthorizedWebhook(event, request, auth.code);
       return jsonResponse(200, correlationId, {
         status: 'ignored_unauthorized',
         error: {
@@ -140,10 +149,29 @@ function getWebhookAuthToken(event) {
 
   const authorization = getHeader(event, 'authorization');
   if (authorization) {
-    return authorization.replace(/^Bearer\s+/i, '').trim();
+    return authorization.replace(/^(Bearer|ApiKey|Token)\s+/i, '').trim();
   }
 
   return null;
+}
+
+function logUnauthorizedWebhook(event, request, code) {
+  const headerNames = Object.keys(event?.headers ?? {})
+    .map((header) => header.toLowerCase())
+    .sort();
+  const parsedBody = isRecord(request.parsedBody) ? request.parsedBody : {};
+
+  console.warn(
+    JSON.stringify({
+      bodyBytes: request.bodyBytes,
+      bodyTopLevelKeys: Object.keys(parsedBody).slice(0, 12),
+      code,
+      headerNames,
+      method: event?.requestContext?.http?.method ?? null,
+      path: event?.rawPath ?? null,
+      status: 'ignored_unauthorized',
+    }),
+  );
 }
 
 async function getWebhookToken() {
@@ -195,7 +223,7 @@ function safeEquals(left, right) {
 function normalizeWebhookEvent(event, request) {
   const parsedBody = isRecord(request.parsedBody) ? request.parsedBody : {};
   const routeEventType = inferRouteEventType(event);
-  const eventType = firstString(
+  const eventType = normalizeRollerWebhookEventType(firstString(
     [
       parsedBody.eventType,
       parsedBody.type,
@@ -205,7 +233,7 @@ function normalizeWebhookEvent(event, request) {
       routeEventType,
     ],
     routeEventType,
-  );
+  ));
   const explicitEventId = firstString([
     getHeader(event, 'x-roller-event-id'),
     getHeader(event, 'roller-event-id'),
@@ -240,6 +268,17 @@ function inferRouteEventType(event) {
   if (rawPath.includes('redemptions')) return 'roller.redemption';
   if (rawPath.includes('bookings')) return 'roller.booking';
   return 'roller.webhook';
+}
+
+function normalizeRollerWebhookEventType(value) {
+  const normalizedValue = String(value ?? '').trim();
+  const lowerValue = normalizedValue.toLowerCase();
+
+  if (lowerValue === '1' || lowerValue === 'created') return 'Created';
+  if (lowerValue === '2' || lowerValue === 'updated') return 'Updated';
+  if (lowerValue === '3' || lowerValue === 'cancelled' || lowerValue === 'canceled') return 'Cancelled';
+
+  return normalizedValue || 'roller.webhook';
 }
 
 function findNestedValues(value, keys, depth = 0) {

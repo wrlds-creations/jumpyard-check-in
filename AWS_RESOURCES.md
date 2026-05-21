@@ -4,7 +4,7 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0002` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev webhook endpoint records and enriches Roller webhook intake events, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, and webhook-enriched records.
+JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0002` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev webhook endpoint records and enriches Roller webhook intake events, the real Roller Playground booking webhook is registered, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, and webhook-enriched records.
 
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
@@ -96,6 +96,18 @@ T0017 booking webhook enrichment deploy notes:
 - Real Roller Playground webhook registration: not done in T0017.
 - Raw webhook payloads, raw Roller payloads, customer names, addresses, booking notes, secrets, and tokens are not printed or intentionally stored.
 
+T0018 Roller Playground webhook registration notes:
+
+- Changed AWS resource: `jumpyard-check-in-dev-stack-webhook`
+- External Roller config changed: Roller Playground webhook id `238`
+- Endpoint: `POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/roller/webhooks/bookings`
+- Registered events: `Created`, `Updated`, and `Cancelled`
+- Registered include: `tickets=true`
+- Confirmed delivery header: `x-roller-apikey`
+- Behavior: real Roller `Created` events now reach the dev Lambda, pass dev-token verification, refresh `GET /bookings/{identifier}`, upsert Aurora booking/item/ticket snapshots, and mark webhook events `processed`.
+- Verified real event: booking `5032443`, unique id `69ea56d8-969f-41a3-bda5-cb09ad8a67b2`, status `processed`.
+- Raw webhook payloads, raw Roller payloads, customer names, addresses, booking notes, secrets, and tokens are not printed or intentionally stored.
+
 Confirmed T0006 dev target:
 
 | Field | Value |
@@ -117,7 +129,8 @@ Confirmed T0006 dev target:
 | `jumpyard-check-in-dev-stack-lookup` | Lambda | `dev` | `eu-north-1` | `cdk` | T0016 lookup handler; reads Aurora first, refreshes from Roller Playground only when needed, and returns normalized phone-flow lookup response. |
 | `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | Placeholder booking handler; no Roller calls. |
 | `jumpyard-check-in-dev-stack-redeem` | Lambda | `dev` | `eu-north-1` | `cdk` | Placeholder redeem handler; no Roller calls. |
-| `jumpyard-check-in-dev-stack-webhook` | Lambda | `dev` | `eu-north-1` | `cdk` | T0017 webhook handler; validates a dev token, stores idempotent metadata, refreshes booking detail from Roller Playground, and upserts Aurora booking/item/ticket snapshots. |
+| `jumpyard-check-in-dev-stack-webhook` | Lambda | `dev` | `eu-north-1` | `cdk` | T0018 webhook handler; accepts Roller Playground `x-roller-apikey`, validates a dev token, stores idempotent metadata, refreshes booking detail from Roller Playground, and upserts Aurora booking/item/ticket snapshots. |
+| Roller Playground webhook `238` | Roller Webhooks API | `dev`/Playground | External | Roller | Posts booking `Created`, `Updated`, and `Cancelled` events with `tickets=true` to the dev JumpYard Cloud webhook endpoint. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-lookup` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-booking` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-redeem` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
@@ -158,7 +171,7 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`.
 | `booking_links` | Internal links between original bookings and separate add-on bookings. |
 | `idempotency_records` | Write protection for booking, payment, redeem, and add-on operations. |
 | `product_catalog_cache` | Product cache metadata and normalized summary from Roller REST `/products`; T0013 stores one row per product/variation cache key. |
-| `roller_webhook_events` | Idempotent booking webhook intake and enrichment state. T0017 updates event status, enrichment attempts, processed time, and safe error summaries. |
+| `roller_webhook_events` | Idempotent booking webhook intake and enrichment state. T0018 confirmed real Roller deliveries update event status, enrichment attempts, processed time, and safe error summaries. |
 | `booking_seed_runs` | Daily seed run tracking. |
 | `event_log` | Append-only business and observability events. |
 
