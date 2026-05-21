@@ -55,6 +55,8 @@ T0022 locks the phone/staff redeem handoff design. The phone app may start or re
 
 T0023 implements the server-owned check-in session API skeleton in dev. JumpYard Cloud now has a `jumpyard.checkin_sessions` Aurora table, a deployed session Lambda, `POST /v1/check-in/sessions`, and `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff`. The session API reads Aurora booking/ticket context, creates or resumes active sessions, blocks unsafe contexts, marks sessions ready for staff, and never calls Roller or redeems tickets.
 
+T0024 wires the phone app booking summary CTA to `POST /v1/check-in/sessions`. A paid ready booking now creates or resumes a JumpYard Cloud session before the phone flow leaves the booking summary. The phone flow stores the returned session id/status in local flow state, keeps unpaid bookings blocked, and still does not call Roller or expose redeem credentials.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -156,7 +158,10 @@ After T0007, the next tickets should proceed in this order:
 | `T0021 Controlled Playground redeem execution` | Protect confirmed dev redemption with a separate token, refresh live Roller state, then execute one controlled Playground redeem. | First real ticket-level check-in write, still dev-only and not wired to phone UI. |
 | `T0022 Phone/staff redeem handoff design` | Lock how the phone flow hands a ready booking to staff/server-owned final redeem. | Prevents exposing the T0021 dev token or future production redeem authority to the frontend. |
 | `T0023 Check-in session API skeleton` | Implement the server-owned check-in session/handoff endpoints without redeeming tickets from the phone UI. | Gives the phone flow a safe next step after lookup while keeping final Roller redemption behind staff/server confirmation. |
-| `T0024 Phone start-check-in session wiring` | Wire the phone app start-check-in CTA to `POST /v1/check-in/sessions`. | Lets the guest flow create/resume a server-owned session while still keeping final Roller redemption out of the phone UI. |
+| `T0024 Phone start-check-in session wiring` | Wire the phone app start-check-in CTA to `POST /v1/check-in/sessions`. | Completed locally; lets the guest flow create/resume a server-owned session while still keeping final Roller redemption out of the phone UI. |
+| `T0025 Phone ready-for-staff handoff wiring` | Call `ready-for-staff` from the phone flow after the required guest-side steps are complete. | Needed before staff/admin list work has real phone-created ready sessions to show. |
+| `T0026 Staff/admin handoff list/detail` | Show sessions waiting for staff and let staff inspect booking/session state. | Gives staff a surface for the server-owned handoff before final redeem. |
+| `T0027 Staff-confirmed redeem from session` | Redeem selected tickets from the server-owned session after staff confirmation and final Roller refresh. | Completes the first end-to-end existing-booking check-in write path. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -309,6 +314,14 @@ T0023 confirmed server-side session behavior:
 - booking `5032211` was blocked as `payment_required`
 - session `jycs_mpfe3dum_7dc29b1b` was marked `ready_for_staff` with handoff code `JY6085`
 - no Roller API calls or Roller writes happen in the session API
+
+T0024 confirmed phone session-start behavior:
+
+- phone endpoint client calls `POST /v1/check-in/sessions`
+- paid booking `5032210` resumes session `jycs_mpfe3dum_7dc29b1b` before leaving booking summary
+- phone flow stores `checkinSessionId` and session status in flow state
+- unpaid booking `5032211` remains blocked on the booking summary with disabled `Betalning krävs`
+- no Roller API calls, Roller secrets, or redeem tokens were added to phone code
 
 ## Non-Goals For Current Ticket
 

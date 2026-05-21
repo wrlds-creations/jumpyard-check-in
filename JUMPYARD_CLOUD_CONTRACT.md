@@ -305,6 +305,7 @@ Response:
 Session rules:
 
 - Create or resume one active operational session for the booking and visit date.
+- The phone app must call this endpoint before advancing from booking summary into the guest-side check-in flow.
 - Read booking/ticket context from Aurora only.
 - Store only server-owned state needed for the flow.
 - Do not redeem tickets from this endpoint.
@@ -553,14 +554,14 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0023`. The next recommended ticket is `T0024 Phone start-check-in session wiring`, which should connect the phone app start-check-in action to `POST /v1/check-in/sessions` without adding phone-side redeem authority.
+Current implementation has progressed through `T0024`. The next recommended ticket is `T0025 Phone ready-for-staff handoff wiring`, which should call the T0023 ready-for-staff endpoint after required guest-side steps are complete.
 
 Near-term sequence:
 
-1. `T0024 Phone start-check-in session wiring`: create/resume a JumpYard Cloud session from the phone booking summary.
-2. `T0025 Staff/admin handoff list/detail`: show sessions with `handoff_status='ready_for_staff'` to staff.
-3. `T0026 Staff-confirmed redeem from session`: redeem selected tickets only after staff/server confirmation and final Roller refresh.
-4. `T0027 QR/handoff code polish`: improve how staff locates the ready session, including QR/handoff-code handling if needed.
+1. `T0025 Phone ready-for-staff handoff wiring`: mark the existing session `ready_for_staff` when guest-side steps are complete.
+2. `T0026 Staff/admin handoff list/detail`: show sessions with `handoff_status='ready_for_staff'` to staff.
+3. `T0027 Staff-confirmed redeem from session`: redeem selected tickets only after staff/server confirmation and final Roller refresh.
+4. `T0028 QR/handoff code polish`: improve how staff locates the ready session, including QR/handoff-code handling if needed.
 
 ## Open Contract Questions
 

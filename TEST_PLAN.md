@@ -87,6 +87,8 @@ Use this file to define validation for the current project or milestone.
 | T0019 phone build | Confirm phone app build passes after lookup polish. | Passed | `cd jumpyard-checkin-phone && npm run build` passed. |
 | T0019 API lookup check | Confirm webhook-created booking can be found via Aurora-first lookup. | Passed | `5032444` returned `found`, `payment_required`, source `jumpyard_cloud`, freshness `fresh`. |
 | T0019 browser lookup check | Confirm local phone flow finds `5032444`. | Passed | Booking summary opened, showed `Obetald`, disabled `Betalning krävs`, and metadata confirmed `jumpyard_cloud` plus `fresh`. |
+| T0024 phone lint | Confirm phone app lint passes after session-start wiring. | Passed | Passed with the same four pre-existing `<img>` warnings. |
+| T0024 phone build | Confirm phone app build passes after session-start wiring. | Passed | `cd jumpyard-checkin-phone && npm run build` passed. |
 | `npm --prefix infra run migrate:dev:status` | Confirm pending/applied Aurora migrations for dev. | Passed | Showed `0001 initial schema: pending` before apply and `applied` after apply on 2026-05-20. |
 | `npm --prefix infra run migrate:dev` | Apply pending Aurora migrations to dev. | Passed | Applied `0001 initial schema` to the approved dev Aurora cluster on 2026-05-20. |
 | Aurora Data API schema query | Confirm expected `jumpyard` tables and indexes exist. | Passed | Verified 15 tables and 62 indexes in schema `jumpyard`. |
@@ -244,3 +246,12 @@ Use this file to define validation for the current project or milestone.
 | Unpaid booking block | Booking `5032211` is rejected before session progress. | Passed | Returned `payment_required`. |
 | Ready for staff | A started session can be marked ready for staff. | Passed | Session `jycs_mpfe3dum_7dc29b1b` received handoff code `JY6085`. |
 | No Roller write | Session endpoints do not call Roller or redeem tickets. | Passed | The Lambda only reads/writes Aurora and event-log/idempotency rows. |
+
+## T0024 Phone Session Start Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Paid booking start | Phone booking summary calls `POST /v1/check-in/sessions` before advancing. | Passed | Booking `5032210` advanced to add-ons only after session `jycs_mpfe3dum_7dc29b1b` was present. |
+| Session state storage | Phone flow stores returned session id/status. | Passed | Browser state attributes showed `checkinSessionId=jycs_mpfe3dum_7dc29b1b` and status `ready_for_staff` from the resumed dev smoke session. |
+| Unpaid booking block | Pending-payment booking cannot start phone session progress. | Passed | Booking `5032211` stayed on `APP_BOOKING`, CTA was disabled, and no session id was present. |
+| No frontend secrets | Phone code does not contain Roller credentials or redeem token usage. | Passed | T0024 added only public JumpYard Cloud session calls. |

@@ -5,6 +5,7 @@ export function initialContext(channel: Channel): FlowContext {
     channel,
     token: null,
     booking: null,
+    checkinSession: null,
 
     safetyVideoSeenAt: null,
     safetyAttestedAt: null,

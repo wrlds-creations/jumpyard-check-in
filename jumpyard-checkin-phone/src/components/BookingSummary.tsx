@@ -2,14 +2,17 @@
 import { motion } from 'framer-motion';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon } from '@/components/JumpyardIcon';
+import type { SessionIssue } from '@/flow/cloudClient';
 import type { Booking } from '@/flow/types';
 
 interface BookingSummaryProps {
     booking: Booking;
     onContinue: () => void;
+    isStartingSession?: boolean;
+    sessionStartError?: SessionIssue | null;
 }
 
-export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => {
+export const BookingSummary = ({ booking, onContinue, isStartingSession = false, sessionStartError = null }: BookingSummaryProps) => {
     const { t } = useTranslation();
 
     const existingAddons: { label: string; qty: number }[] = booking?.existingAddons ?? [];
@@ -107,15 +110,30 @@ export const BookingSummary = ({ booking, onContinue }: BookingSummaryProps) => 
             </div>
 
             <button
+                data-testid="booking-start-checkin"
+                data-session-start-state={isStartingSession ? 'starting' : sessionStartError ? 'error' : 'idle'}
                 onClick={onContinue}
-                disabled={!canStartCheckIn}
+                disabled={!canStartCheckIn || isStartingSession}
                 className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm disabled:bg-surface-strong disabled:text-muted disabled:border-border disabled:cursor-not-allowed"
             >
-                {canStartCheckIn ? t.booking.cta : t.booking.paymentRequiredCta}
+                {isStartingSession ? t.booking.startingSession : canStartCheckIn ? t.booking.cta : t.booking.paymentRequiredCta}
             </button>
+            {sessionStartError && (
+                <p data-testid="booking-start-error" className="text-amber-700 text-[11px] text-center mt-2">
+                    {getSessionStartErrorText(sessionStartError, t)}
+                </p>
+            )}
             {!canStartCheckIn && (
                 <p className="text-muted text-[11px] text-center mt-2">{t.booking.paymentRequiredHint}</p>
             )}
         </motion.div>
     );
 };
+
+function getSessionStartErrorText(error: SessionIssue, t: ReturnType<typeof useTranslation>['t']) {
+    if (error === 'payment_required') return t.booking.sessionPaymentRequired;
+    if (error === 'wrong_date') return t.booking.sessionWrongDate;
+    if (error === 'already_redeemed') return t.booking.sessionAlreadyRedeemed;
+    if (error === 'booking_not_fresh') return t.booking.sessionNotFresh;
+    return t.booking.sessionStartFailed;
+}

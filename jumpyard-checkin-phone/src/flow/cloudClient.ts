@@ -1,4 +1,4 @@
-import type { Addon, AddonId, Booking, LookupSource } from '@/flow/types';
+import type { Addon, AddonId, Booking, CheckInSession, LookupSource } from '@/flow/types';
 
 const DEFAULT_CLOUD_API_BASE_URL = 'https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com';
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
@@ -11,6 +11,17 @@ export type LookupIssue =
   | 'lookup_failed'
   | 'network_error';
 
+export type SessionIssue =
+  | 'not_found'
+  | 'payment_required'
+  | 'wrong_date'
+  | 'no_redeemable_tickets'
+  | 'already_redeemed'
+  | 'booking_not_active'
+  | 'booking_not_fresh'
+  | 'session_failed'
+  | 'network_error';
+
 export class CloudLookupError extends Error {
   readonly reason: LookupIssue;
   readonly httpStatus?: number;
@@ -18,6 +29,18 @@ export class CloudLookupError extends Error {
   constructor(reason: LookupIssue, message: string, httpStatus?: number) {
     super(message);
     this.name = 'CloudLookupError';
+    this.reason = reason;
+    this.httpStatus = httpStatus;
+  }
+}
+
+export class CloudSessionError extends Error {
+  readonly reason: SessionIssue;
+  readonly httpStatus?: number;
+
+  constructor(reason: SessionIssue, message: string, httpStatus?: number) {
+    super(message);
+    this.name = 'CloudSessionError';
     this.reason = reason;
     this.httpStatus = httpStatus;
   }
@@ -36,6 +59,30 @@ interface CloudLookupResponse {
     message?: string;
   };
   source?: CloudLookupSource;
+}
+
+interface CloudSessionResponse {
+  status:
+    | 'session_started'
+    | 'session_resumed'
+    | 'blocked'
+    | 'not_found'
+    | 'invalid_request'
+    | 'internal_error';
+  session?: CloudSession;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+}
+
+interface CloudSession {
+  checkinSessionId: string;
+  status: string;
+  handoffStatus?: string | null;
+  handoffCode?: string | null;
+  safetyStatus?: string | null;
+  expiresAt?: string | null;
 }
 
 interface CloudLookupSource {
@@ -114,6 +161,54 @@ export async function lookupBooking(code: string): Promise<Booking> {
   return toBooking(body.booking, body.eligibility.reason, body.source);
 }
 
+export async function startCheckInSession(booking: Booking): Promise<CheckInSession> {
+  const identifier = booking.rollerUniqueId ?? booking.id;
+  if (!identifier) {
+    throw new CloudSessionError('session_failed', 'Booking reference is required before starting a session.');
+  }
+
+  let response: Response;
+  let body: CloudSessionResponse | null = null;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/v1/check-in/sessions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        bookingReference: booking.id,
+        rollerUniqueId: booking.rollerUniqueId ?? undefined,
+        identifier,
+        expectedDate: booking.date ?? getExpectedDate(),
+        idempotencyKey: getSessionStartIdempotencyKey(booking),
+        correlationId: `phone_session_${Date.now().toString(36)}`,
+      }),
+    });
+    body = await parseSessionResponse(response);
+  } catch (error) {
+    if (error instanceof CloudSessionError) throw error;
+    throw new CloudSessionError('network_error', 'Could not reach JumpYard Cloud.');
+  }
+
+  if (!response.ok || !body?.session) {
+    throw createSessionError(body, response.status);
+  }
+
+  if (body.status !== 'session_started' && body.status !== 'session_resumed') {
+    throw createSessionError(body, response.status);
+  }
+
+  return {
+    checkinSessionId: body.session.checkinSessionId,
+    status: body.session.status,
+    handoffCode: body.session.handoffCode ?? null,
+    handoffStatus: body.session.handoffStatus ?? null,
+    safetyStatus: body.session.safetyStatus ?? null,
+    expiresAt: body.session.expiresAt ?? null,
+  };
+}
+
 function getApiBaseUrl() {
   const configured = process.env.NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL || DEFAULT_CLOUD_API_BASE_URL;
   return configured.replace(/\/+$/, '');
@@ -155,12 +250,47 @@ async function parseResponse(response: Response): Promise<CloudLookupResponse | 
   }
 }
 
+async function parseSessionResponse(response: Response): Promise<CloudSessionResponse | null> {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as CloudSessionResponse;
+  } catch {
+    throw new CloudSessionError('session_failed', 'JumpYard Cloud returned an invalid session response.', response.status);
+  }
+}
+
 function createLookupError(body: CloudLookupResponse | null, httpStatus?: number) {
   if (body?.status === 'not_found' || body?.error?.code === 'booking_not_found') {
     return new CloudLookupError('not_found', 'Booking was not found.', httpStatus);
   }
 
   return new CloudLookupError('lookup_failed', body?.error?.message ?? 'JumpYard Cloud lookup failed.', httpStatus);
+}
+
+function createSessionError(body: CloudSessionResponse | null, httpStatus?: number) {
+  if (body?.status === 'not_found' || body?.error?.code === 'booking_not_found') {
+    return new CloudSessionError('not_found', 'Booking was not found in JumpYard Cloud.', httpStatus);
+  }
+
+  const code = body?.error?.code;
+  if (isSessionIssue(code)) {
+    return new CloudSessionError(code, body?.error?.message ?? 'Check-in session could not start.', httpStatus);
+  }
+
+  return new CloudSessionError('session_failed', body?.error?.message ?? 'Check-in session could not start.', httpStatus);
+}
+
+function isSessionIssue(value?: string): value is SessionIssue {
+  return (
+    value === 'payment_required' ||
+    value === 'wrong_date' ||
+    value === 'no_redeemable_tickets' ||
+    value === 'already_redeemed' ||
+    value === 'booking_not_active' ||
+    value === 'booking_not_fresh'
+  );
 }
 
 function toBooking(booking: CloudBooking, reason: string, source?: CloudLookupSource): Booking {
@@ -170,13 +300,14 @@ function toBooking(booking: CloudBooking, reason: string, source?: CloudLookupSo
 
   return {
     id: booking.bookingReference ?? booking.rollerUniqueId ?? '',
+    rollerUniqueId: booking.rollerUniqueId,
     jumpers: getJumperCount(primaryItems, booking.items),
     time: formatClockTime(sessionItem?.startTime) ?? '',
     endTime: formatClockTime(sessionItem?.endTime) ?? undefined,
     durationMinutes: getDurationMinutes(sessionItem?.startTime, sessionItem?.endTime),
     date: sessionItem?.bookingDate ?? undefined,
     products: booking.items.length,
-    paid: reason === 'ready' || Number(booking.amountOwing ?? 0) === 0,
+    paid: isPaidBooking(reason, booking),
     paymentStatus: booking.paymentStatus ?? booking.status,
     amountOwing: booking.amountOwing,
     existingAddons,
@@ -184,6 +315,23 @@ function toBooking(booking: CloudBooking, reason: string, source?: CloudLookupSo
     productType: 'entry',
     lookupSource: normalizeLookupSource(source),
   };
+}
+
+function getSessionStartIdempotencyKey(booking: Booking) {
+  const bookingRef = booking.rollerUniqueId ?? booking.id;
+  const visitDate = booking.date ?? getExpectedDate();
+  return `phone-session-start:${bookingRef}:${visitDate}`;
+}
+
+function isPaidBooking(reason: string, booking: CloudBooking) {
+  if (reason === 'ready') return true;
+
+  const status = `${booking.paymentStatus ?? booking.status ?? ''}`.toLowerCase();
+  if (status.includes('pending') || status.includes('unpaid') || status.includes('partial')) return false;
+
+  if (booking.amountOwing !== null && booking.amountOwing > 0) return false;
+
+  return status === 'paid' || status === 'nopaymentrequired' || status === 'paidinfull';
 }
 
 function normalizeLookupSource(source?: CloudLookupSource): LookupSource | undefined {
