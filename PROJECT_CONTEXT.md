@@ -51,6 +51,8 @@ T0020 adds the first safe server-owned redeem endpoint shape. The dev `POST /v1/
 
 T0021 enables controlled Roller Playground redemption execution for dev only. Confirmed redeem requests require a separate dev-only redeem token, refresh the booking from Roller REST immediately before the write, upsert the refreshed snapshot into Aurora, re-run eligibility, and only then call Roller `POST /redemptions`. The first controlled Playground redemption succeeded for dedicated booking `5032454`.
 
+T0022 locks the phone/staff redeem handoff design. The phone app may start or resume a server-owned check-in session, but it must not hold redeem secrets or directly execute Roller redemption. Final ticket redemption remains a JumpYard Cloud action after staff/admin or another trusted server-side confirmation step, with the T0021 final Roller refresh still required before `POST /redemptions`.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -61,6 +63,7 @@ The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_C
 - Roller credentials must stay server-side.
 - Server-side integration should provide controlled logging, retries, error handling, and fallbacks.
 - Roller integration must fail closed unless it is explicitly configured for Playground.
+- Phone UI must not hold redeem tokens, Roller credentials, or final ticket-redemption authority.
 
 ## Current Repository Shape
 
@@ -95,12 +98,26 @@ The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_C
 - JumpYard Cloud should store Roller ids and minimal operational data, not full raw Roller payloads or unnecessary PII.
 - Product catalog names/types may be cached because they are needed for display and normalization and are not guest PII.
 - Guest email and phone may be stored as explicit structured contact fields for check-in/SMS readiness; free-text names, notes, addresses, and booking comments remain deferred.
+- Check-in session state, staff handoff state, safety status, final redeem confirmation, idempotency, and audit are JumpYard Cloud-owned operational data.
 
 ## Phone-First Flow Targets
 
 - `F1`: create a new booking through JumpYard Cloud using Roller draft/cost/payment patterns.
 - `F2`: create a booking and check in by resolving Roller ticket ids and redeeming tickets server-side.
 - `F3`: check in an existing booking and add products by creating a separate linked add-on booking, then linking original booking and add-on booking inside JumpYard Cloud.
+
+## Phone/Staff Redeem Handoff
+
+The pilot check-in completion path should separate guest phone progress from final Roller redemption:
+
+1. Phone lookup reads a normalized booking from JumpYard Cloud.
+2. Phone starts or resumes a JumpYard Cloud check-in session for that booking.
+3. JumpYard Cloud owns the session state, safety gate status, selected ticket scope, handoff code/status, idempotency, and audit rows.
+4. Staff/admin or another trusted server-side confirmation step authorizes final redeem.
+5. JumpYard Cloud refreshes the booking from Roller REST, re-checks eligibility, then calls `POST /redemptions`.
+6. Aurora stores the local attempt/result state, but Roller remains the source of truth for consumed ticket state.
+
+The T0021 dev redeem token is only for controlled backend testing. It must never be shipped through phone app environment variables, browser storage, source code, or public network calls.
 
 ## Booking Index Strategy
 
@@ -135,6 +152,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0019 Phone lookup display/source polish` | Decide whether to expose source/freshness/debug status in phone/admin UX. | Completed locally; source/freshness metadata is available for verification but remains hidden from guests by default. |
 | `T0020 Redeem spike/server endpoint` | Add a safe server-owned redeem planning endpoint and keep Roller redemption writes disabled until controlled execution is scoped. | Completed locally and deployed to dev; next step is controlled redeem execution with auth/session and final refresh rules. |
 | `T0021 Controlled Playground redeem execution` | Protect confirmed dev redemption with a separate token, refresh live Roller state, then execute one controlled Playground redeem. | First real ticket-level check-in write, still dev-only and not wired to phone UI. |
+| `T0022 Phone/staff redeem handoff design` | Lock how the phone flow hands a ready booking to staff/server-owned final redeem. | Prevents exposing the T0021 dev token or future production redeem authority to the frontend. |
+| `T0023 Check-in session API skeleton` | Implement the server-owned check-in session/handoff endpoints without redeeming tickets from the phone UI. | Gives the phone flow a safe next step after lookup while keeping final Roller redemption behind staff/server confirmation. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -272,6 +291,13 @@ T0021 confirmed controlled Roller Playground redemption behavior:
 - reusing the same booking/ticket is blocked locally as `already_redeemed`
 - a non-existent `redemptionDevice` causes Roller HTTP `409` with `Redemption device not found`, so JumpYard Cloud omits `redemptionDevice` unless a real Roller device name is configured
 
+T0022 locks the handoff boundary:
+
+- the phone app may start or resume a JumpYard Cloud check-in session
+- the phone app must not call the confirmed redeem path with a secret token
+- final redeem must be staff/admin-confirmed or server-trusted
+- the final redeem path still needs the T0021 live Roller refresh and eligibility re-check before writing to Roller
+
 ## Non-Goals For Current Ticket
 
 - Do not use Aurora lookup data as final authority before future write-critical actions such as redeem or add-on booking creation.
@@ -281,6 +307,7 @@ T0021 confirmed controlled Roller Playground redemption behavior:
 - Do not create staging or production AWS resources.
 - Do not add payment logic.
 - Do not wire phone UI to redeem.
+- Do not expose the T0021 dev redeem token to frontend code or browser config.
 - Do not add a public demo button to the phone check-in UI.
 
 ## Open Questions

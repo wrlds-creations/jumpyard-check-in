@@ -45,6 +45,7 @@ T0003 defines contracts for three target flows:
 | Product catalog | Roller | Cache with TTL | `/products` should be cached and used sparingly. |
 | Product/session availability | Roller | Last checked availability where useful | SkyRider needs availability before add. |
 | Safety status | JumpYard Cloud | Yes | Pilot operational state. |
+| Check-in session status | JumpYard Cloud | Yes | Server-owned guest progress through lookup, safety, add-ons, payment handoff, and staff confirmation. |
 | Handoff code/status | JumpYard Cloud | Yes | Used for staff handoff. |
 | Internal audit events | JumpYard Cloud | Yes | Correlation id, operation, outcome, timestamps. |
 | Roller credentials | AWS Secrets Manager | Secret reference only | Never expose to frontend or logs. |
@@ -169,6 +170,36 @@ Implementation rules:
 
 These are the first server-owned contracts that the phone app should target. Exact HTTP paths can change before implementation, but frontend must target JumpYard Cloud concepts, not Roller concepts.
 
+### Check-in Session and Staff Handoff Boundary
+
+T0022 separates phone progress from final Roller redemption.
+
+The guest phone app can:
+
+- lookup a booking through JumpYard Cloud
+- start or resume a JumpYard Cloud check-in session
+- complete guest-side steps such as safety, add-ons, and payment when those are implemented
+- show that staff help or staff confirmation is needed
+
+The guest phone app cannot:
+
+- hold `ROLLER_CLIENT_SECRET`, Roller tokens, the T0021 dev redeem token, or any future production redeem secret
+- call Roller directly
+- directly execute the final `POST /redemptions` write
+
+JumpYard Cloud owns:
+
+- `checkin_session_id`
+- session status
+- selected ticket scope
+- safety status
+- handoff code/status
+- idempotency keys
+- check-in attempts and event-log audit
+- final live Roller refresh before redeem
+
+For the pilot, final redeem should be triggered by staff/admin or a trusted server-side confirmation step, not by a public phone-only button.
+
 ### `POST /v1/check-in/lookup`
 
 Looks up and normalizes an existing booking for the phone check-in flow.
@@ -238,9 +269,75 @@ Lookup rules:
 - Do not return raw Roller payloads to the phone app.
 - Do not persist full PII unless a later ticket explicitly approves it.
 
+### `POST /v1/check-in/sessions`
+
+Starts or resumes a server-owned check-in session after a successful lookup.
+
+Request:
+
+```json
+{
+  "correlationId": "jy_...",
+  "bookingReference": "5001370",
+  "rollerUniqueId": "dbba266d-0951-4706-9adf-6c9d05edffbf",
+  "sourceLookupId": "optional-lookup-attempt-id",
+  "idempotencyKey": "client-or-server-generated-key"
+}
+```
+
+Response:
+
+```json
+{
+  "correlationId": "jy_...",
+  "status": "session_started",
+  "session": {
+    "checkinSessionId": "jy_session_...",
+    "status": "guest_in_progress",
+    "handoffStatus": "not_ready",
+    "expiresAt": "2026-05-21T12:15:00Z"
+  }
+}
+```
+
+Session rules:
+
+- Create or resume one active operational session for the booking and visit date.
+- Store only server-owned state needed for the flow.
+- Do not redeem tickets from this endpoint.
+- Do not expose dev/prod redeem secrets to the phone app.
+- Use idempotency so repeated taps do not create duplicate active sessions.
+- Route ambiguous, unpaid, wrong-date, or already-redeemed states to staff/status screens instead of forcing redemption.
+
+### `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff`
+
+Marks a guest-side session as ready for staff or server confirmation.
+
+Rules:
+
+- Used after guest-side steps are complete enough for pilot handoff.
+- Generates or refreshes a handoff code/status for staff/admin surfaces.
+- Does not call Roller.
+- Records an event-log row for audit.
+
+### `POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem`
+
+Staff/admin-confirmed endpoint that performs final redemption for a check-in session.
+
+Rules:
+
+- Requires staff/admin auth or another trusted server-side confirmation model.
+- Resolves the session to booking and ticket ids server-side.
+- Performs the T0021 final live Roller refresh before write.
+- Re-runs eligibility against the refreshed data.
+- Uses idempotency to prevent duplicate redemption attempts.
+- Calls Roller `POST /redemptions` only after all checks pass.
+- Updates `checkin_attempts`, ticket local state, handoff/session state, and event log.
+- This replaces any direct phone call to the protected T0021 dev redeem path.
+
 ### `POST /v1/check-in/redeem`
 
-Redeems selected tickets after lookup and validation.
+Redeems selected tickets after lookup and validation. After T0022 this is treated as an internal/staff-confirmed operation shape, not as a public guest-phone endpoint.
 
 Request:
 
@@ -271,10 +368,12 @@ Response:
 Redeem rules:
 
 - Require an idempotency key.
+- Require staff/admin auth, a trusted server confirmation, or the dev-only T0021 token when running controlled backend tests.
 - Re-fetch or verify booking state before write when the previous lookup is stale.
 - Do not redeem unpaid, wrong-date, already-invalid, or ambiguous partial groups in v1.
 - Route partial groups to staff unless a later ticket explicitly implements ticket selection.
 - Call Roller `POST /redemptions` only from JumpYard Cloud.
+- Never put the T0021 dev redeem token in browser env, browser storage, app source, or public phone network calls.
 - Log every attempt and result.
 
 ### `POST /v1/bookings/quote`
@@ -378,6 +477,7 @@ Rules:
 | `payment_required` | Booking exists but amount remains owing. | Route to payment or staff depending flow. |
 | `already_redeemed` | Tickets are already used or invalid. | Show staff handoff. |
 | `partial_group_not_supported` | Guest selected a partial group in v1. | Show staff handoff. |
+| `redeem_confirmation_required` | Guest-side session is ready but final redeem requires staff/server confirmation. | Show staff handoff or staff-ready state. |
 | `roller_rate_limited` | Roller API call could not run within rate limit. | Retry or show staff handoff. |
 | `roller_unavailable` | Roller API timeout/error. | Show staff handoff. |
 | `unsafe_environment` | Roller config is not Playground-safe in dev. | Block operation. |
@@ -412,6 +512,7 @@ Prefer a small operational model that stores Roller ids and JumpYard state rathe
 | `roller_booking_tickets` | Ticket ids and redeem readiness context. | `ticket_id`, `roller_unique_id`, `booking_item_id`, `ticket_holder_name`, `locations`, `membership_status`, `redeem_status_last_seen` | Match booking retention |
 | `roller_booking_payments` | Payment rows or payment summary needed for check-in/payment decisions. | `roller_unique_id`, `booking_payment_id`, `payment_method`, `total`, `created_date` | Match booking retention |
 | `guest_profiles` | Minimal local contact/profile state for SMS, connected profiles, and late booking enrichment. | `guest_profile_id`, `roller_customer_id`, `email`, `contact_number`, `sms_ready`, `latest_booking_context` | Minimize PII |
+| `checkin_sessions` | Server-owned guest check-in progress and final handoff context. | `checkin_session_id`, `roller_unique_id`, `booking_reference`, `visit_date`, `status`, `selected_ticket_ids`, `handoff_status`, `expires_at`, `created_at`, `updated_at` | Short operational retention |
 | `checkin_tokens` | SMS/link/open tokens. | `token_hash`, `roller_unique_id`, `channel`, `expires_at`, `sent_at`, `opened_at` | Short TTL |
 | `checkin_attempts` | Check-in/redeem attempt audit. | `correlation_id`, `roller_unique_id`, `booking_reference`, `selected_ticket_ids`, `status`, `error_code`, `created_at` | Audit retention TBD |
 | `handoff_sessions` | Staff handoff and connected band handoff state. | `handoff_code`, `roller_unique_id`, `safety_status`, `staff_status`, `band_pairing_status`, `created_at` | Short operational retention |
@@ -455,6 +556,8 @@ Recommended next tickets:
 6. `T0009 Booking lookup endpoint`: implement `POST /v1/check-in/lookup` against Roller Playground and the local index shape.
 7. `T0010 Daily seed job`: implement the Roller Data API seed into Aurora.
 8. `T0011 Booking webhook intake`: implement webhook intake, idempotency, and enrichment.
+9. `T0022 Phone/staff redeem handoff design`: lock the boundary between phone session progress and staff/server-confirmed final redeem.
+10. `T0023 Check-in session API skeleton`: add the server-owned session/handoff endpoints without exposing final redeem to the phone UI.
 
 ## Open Contract Questions
 

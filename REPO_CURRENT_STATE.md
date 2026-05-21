@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-21
-- Current branch: `codex/t0021-controlled-redeem-execution`
-- Current status: T0021 controlled Playground redeem execution completed locally and deployed to dev.
-- Current ticket: `T0021` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`
-- Recommended next ticket: `T0022 Phone/staff redeem handoff design`
+- Current branch: `codex/t0022-phone-staff-redeem-handoff-design`
+- Current status: T0022 phone/staff redeem handoff design completed locally; no app, infra, AWS, migration, credential, or Roller changes.
+- Current ticket: `T0022` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`
+- Recommended next ticket: `T0023 Check-in session API skeleton`
 
 ## Current Structure
 
@@ -118,18 +118,19 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0019` | Polished and verified phone lookup for webhook-created Aurora bookings. | 2026-05-21 | Booking `5032444` opens in the phone summary from `jumpyard_cloud`, remains blocked as unpaid, and carries source/freshness metadata for non-visible verification. |
 | `T0020` | Added safe server-owned redeem planning endpoint. | 2026-05-21 | Dev `POST /v1/check-in/redeem` resolves Aurora tickets, writes planned/blocked audit rows, and keeps Roller redemption writes disabled. |
 | `T0021` | Enabled controlled Playground redeem execution. | 2026-05-21 | Dev `POST /v1/check-in/redeem` requires a dev token for confirmed writes, refreshes Roller before write, and redeemed dedicated booking `5032454`. |
+| `T0022` | Locked phone/staff redeem handoff design. | 2026-05-21 | Phone may start/resume a JumpYard Cloud check-in session, but final Roller redemption must be staff/server-confirmed and never secret-powered from the frontend. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0021` | Controlled Playground redeem execution. | Completed locally and deployed to dev | Booking `5032454` redeemed through Roller Playground; ticket `5032454-21397335` is locally marked `redeemed`, and reuse is blocked as `already_redeemed`. |
+| `T0022` | Phone/staff redeem handoff design. | Completed locally | Docs-only contract update; no app, Lambda, CDK, migration, AWS, `.env`, or Roller writes. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0022` | Phone/staff redeem handoff design | Decide how the phone flow hands a ready booking into redeem/session completion without exposing dev-only controls. |
+| `T0023` | Check-in session API skeleton | Implement server-owned check-in session/handoff endpoints without exposing final Roller redemption to the phone UI. |
 
 ## Validation Status
 
@@ -280,6 +281,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0021 reuse smoke: a follow-up plan for booking `5032454` returned HTTP `409` with `already_redeemed`.
 - T0021 Aurora verification: direct Data API query showed `redeemed` and `already_redeemed` attempt rows, and `roller_booking_tickets.redeem_status_last_seen='redeemed'` for `5032454-21397335`.
 - T0021 post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
+- T0022 validation: `npm run validate` passed; no app code, infra code, AWS resources, migrations, credentials, `.env`, or Roller calls were changed.
 
 ## Known Issues Summary
 
@@ -292,7 +294,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Roller Data API `/data/bookingitems`, `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access, query params, paging shape, and modified-date behavior are confirmed in Playground for the T0008 seed window.
 - Webhook retry behavior, response handling, booking event names, Playground auth header `x-roller-apikey`, and dev webhook registration are confirmed. Exact production auth/signature and IP allowlisting choice remain open.
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
-- Staff handoff/redeem flow integration has not been implemented.
+- Staff handoff/redeem flow design is documented in T0022; session/handoff endpoint implementation has not been started.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
 - Existing-booking add-product linked-booking flow has not been tested yet.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
@@ -306,3 +308,4 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Should `/data/giftcards` be imported for gift card flows, and in which ticket?
 - Which exact production auth header/signature and optional IP allowlisting should Roller webhook intake use beyond the confirmed Playground `x-roller-apikey` header?
 - Which real Roller redemption device name should JumpYard Cloud send, if any, before production check-in?
+- Which staff/admin authentication model should authorize final redeem in the pilot?

@@ -24,6 +24,9 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-031` | `T0016` | Lookup fallback | Add supported `GET /bookings` search fallback for cases where direct `GET /bookings/{identifier}` cannot resolve an imprecise guest input. | Medium | `TBD` | Open |
 | `FU-032` | `T0017` | Webhook scaling | Move webhook enrichment off the request path to SQS/EventBridge before production if latency, retries, or traffic volume require faster acknowledgement. | Medium | `TBD` | Open |
 | `FU-035` | `T0021` | Redeem configuration | Decide whether JumpYard Cloud should send a configured Roller `redemptionDevice` name before production. Roller rejects non-existent device names, so T0021 omits it by default. | Medium | `TBD` | Open |
+| `FU-036` | `T0022` | Staff auth | Choose the staff/admin authentication model that will authorize final redeem in the pilot. | High | `TBD` | Open |
+| `FU-037` | `T0022` | Session expiry | Define TTL, resume behavior, and cleanup rules for check-in sessions and handoff codes. | Medium | `TBD` | Open |
+| `FU-038` | `T0022` | Safety gate | Confirm which guest-side safety/video/waiver states must be complete before staff/server-confirmed redeem. | High | `TBD` | Open |
 
 ## Resolved Followups
 
