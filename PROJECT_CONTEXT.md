@@ -39,6 +39,8 @@ T0014 added a dev Aurora migration and importer for related Roller Data API sour
 
 T0015 replaced the dev webhook placeholder with a safe Roller webhook intake Lambda. The dev endpoint acknowledges Roller-style deliveries quickly, deduplicates by event id or payload hash, stores normalized metadata in `jumpyard.roller_webhook_events`, writes safe event-log rows, and uses a dev-only webhook token stored in Secrets Manager until Roller production webhook verification is confirmed.
 
+T0016 changed `POST /v1/check-in/lookup` to use Aurora first. The lookup Lambda now reads `jumpyard.roller_bookings`, `jumpyard.roller_booking_items`, and `jumpyard.roller_booking_tickets` for fresh local records, refreshes from Roller REST only when the local record is missing or unsafe, and upserts refreshed booking/item/ticket data back into Aurora.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -117,7 +119,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0013 Product catalog cache` | Cache Roller products and enrich booking item product names in Aurora. | Lets the booking index show human-readable products instead of only Roller product IDs. |
 | `T0014 Related Data API sources` | Add tickets, payments, and customer/contact data once endpoint docs/access are confirmed. | Completed locally against dev Aurora; completes payment/contact/ticket context for lookup, SMS, and redemption. |
 | `T0015 Booking webhook intake` | Implement safe webhook intake and idempotency. | Completed locally and deployed to dev; provides the same-day change signal intake before enrichment/snapshot updates. |
-| `T0016 Aurora-first lookup` | Use Aurora for lookup display, then refresh from Roller when missing, stale, or check-in-critical. | Lets phone lookup stop depending on a live Roller read for every normal display lookup. |
+| `T0016 Aurora-first lookup` | Use Aurora for lookup display, then refresh from Roller when missing or unsafe. | Completed locally and deployed to dev; lets phone lookup stop depending on a live Roller read for every normal display lookup. |
 | `T0017 Phone lookup display from Aurora` | Let the phone app consume the Aurora-first lookup response. | Moves the mobile first step toward the real booking-index architecture. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
@@ -215,11 +217,17 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
   - authorized first delivery returns HTTP `200` with `accepted`
   - authorized duplicate delivery returns HTTP `200` with `duplicate`
   - Aurora row `t0015-smoke-booking-created-5032210` exists in `jumpyard.roller_webhook_events` with status `received`
+- T0016 deployed Aurora-first lookup:
+  - `5032210`: `found`, `ready`, source `jumpyard_cloud`, no Roller refresh
+  - `5032211`: `found`, `payment_required`, source `jumpyard_cloud`, no Roller refresh
+  - `5032212`: `found`, `wrong_date`, source `jumpyard_cloud`, no Roller refresh
+  - `5001370`: live-refreshed once from Roller, upserted into Aurora, and now reads from `jumpyard_cloud`
+  - `999999999`: `not_found`, HTTP `404`
+  - invalid JSON: `invalid_json`, HTTP `400`
 
 ## Non-Goals For Current Ticket
 
-- Do not use the Aurora booking index before the daily seed exists.
-- Do not write lookup results to Aurora yet.
+- Do not use Aurora lookup data as final authority before future write-critical actions such as redeem or add-on booking creation.
 - Do not implement daily seed ingestion.
 - Do not rely on webhook events for booking display until enrichment/snapshot updates are implemented.
 - Do not write to Roller Live/production.

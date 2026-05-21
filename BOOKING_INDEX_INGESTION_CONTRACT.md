@@ -494,6 +494,26 @@ Future `POST /v1/check-in/lookup` should:
 4. Upsert the refreshed normalized result.
 5. Return a normalized JumpYard response, not raw Roller payload.
 
+T0016 implements this for the dev lookup endpoint:
+
+| Case | Behavior |
+|---|---|
+| Fresh Aurora record | Returns `source.system=jumpyard_cloud` and does not call Roller. |
+| Missing Aurora record | Calls Roller `GET /bookings/{identifier}`, normalizes the response, upserts booking/items/tickets, and returns the refreshed result. |
+| Repeated lookup after live refresh | Returns the refreshed record from Aurora. |
+| Unknown booking | Returns stable HTTP `404` with `booking_not_found`. |
+| Invalid JSON | Returns stable HTTP `400` with `invalid_json`. |
+
+Observed T0016 dev smoke:
+
+| Identifier | Result |
+|---|---|
+| `5032210` | `ready`, source `jumpyard_cloud`, no Roller refresh. |
+| `5032211` | `payment_required`, source `jumpyard_cloud`, no Roller refresh. |
+| `5032212` | `wrong_date`, source `jumpyard_cloud`, no Roller refresh. |
+| `5001370` | Refreshed once from Roller, then returned from `jumpyard_cloud`. |
+| `999999999` | HTTP `404`, `booking_not_found`. |
+
 ### Redeem Endpoint
 
 Future `POST /v1/check-in/redeem` should:

@@ -1,11 +1,14 @@
 const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client-secrets-manager');
 const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
+const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 const crypto = require('crypto');
 
+const DATABASE_NAME = 'jumpyard_cloud';
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
 const PRODUCT_CACHE_TTL_MS = 15 * 60 * 1000;
 
+const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
 const ssmClient = new SSMClient({});
 
@@ -14,16 +17,36 @@ let cachedToken = null;
 let cachedProducts = null;
 
 exports.handler = async (event) => {
-  const request = parseRequest(event);
-  const correlationId = request.correlationId || createCorrelationId();
+  let correlationId = createCorrelationId();
 
   try {
+    const request = parseRequest(event);
+    correlationId = request.correlationId || correlationId;
+
     if (!request.identifier) {
       return jsonResponse(400, correlationId, {
         status: 'invalid_request',
         error: {
           code: 'identifier_required',
           message: 'identifier is required.',
+        },
+      });
+    }
+
+    const localResult = await getLocalBooking(request);
+    if (localResult.status === 'found' && shouldUseLocalBooking(localResult.booking)) {
+      const eligibility = evaluateEligibility(localResult.booking, request);
+
+      return jsonResponse(200, correlationId, {
+        status: 'found',
+        booking: localResult.booking,
+        eligibility,
+        source: {
+          system: 'jumpyard_cloud',
+          environment: localResult.metadata.rollerEnv,
+          lookupPath: localResult.metadata.lookupPath,
+          freshnessStatus: localResult.metadata.freshnessStatus,
+          refreshedFromRoller: false,
         },
       });
     }
@@ -54,6 +77,7 @@ exports.handler = async (event) => {
 
     const products = await getProductCatalogBestEffort(config, token);
     const booking = normalizeBooking(bookingResult.body, products);
+    await upsertLiveBooking(booking, config.env, request.venueId);
     const eligibility = evaluateEligibility(booking, request);
 
     return jsonResponse(200, correlationId, {
@@ -64,7 +88,9 @@ exports.handler = async (event) => {
         system: 'roller',
         environment: config.env,
         lookupPath: 'GET /bookings/{identifier}',
+        localLookupStatus: localResult.status,
         productCatalog: products.status,
+        refreshedFromRoller: true,
       },
     });
   } catch (error) {
@@ -120,6 +146,199 @@ function inferIdentifierType(identifier) {
 
 function createCorrelationId() {
   return `jy_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
+}
+
+async function getLocalBooking(request) {
+  const bookingRow = await findLocalBookingRow(request.identifier);
+  if (!bookingRow) {
+    return { status: 'missing', booking: null, metadata: { lookupPath: 'aurora:missing' } };
+  }
+
+  const items = await findLocalBookingItems(bookingRow.rollerUniqueId);
+  const booking = normalizeLocalBooking(bookingRow, items);
+
+  return {
+    status: bookingRow.freshnessStatus === 'fresh' ? 'found' : 'stale',
+    booking,
+    metadata: {
+      freshnessStatus: bookingRow.freshnessStatus,
+      lookupPath: bookingRow.lookupPath,
+      rollerEnv: bookingRow.rollerEnv,
+    },
+  };
+}
+
+async function findLocalBookingRow(identifier) {
+  const result = await executeStatement(
+    `SELECT
+       b.roller_unique_id,
+       b.booking_reference,
+       b.roller_env,
+       b.venue_id,
+       b.booking_status,
+       b.payment_status,
+       b.amount_owing_cents,
+       b.total_cents,
+       b.booking_date::text AS booking_date,
+       b.start_time::text AS start_time,
+       b.end_time::text AS end_time,
+       b.freshness_status,
+       b.is_tombstoned,
+       b.last_seen_from_roller_at::text AS last_seen_from_roller_at,
+       CASE
+         WHEN b.booking_reference = :identifier THEN 'aurora:booking_reference'
+         WHEN b.roller_unique_id = :identifier THEN 'aurora:roller_unique_id'
+         ELSE 'aurora:ticket_id'
+       END AS lookup_path
+     FROM jumpyard.roller_bookings AS b
+     WHERE b.booking_reference = :identifier
+        OR b.roller_unique_id = :identifier
+        OR EXISTS (
+          SELECT 1
+          FROM jumpyard.roller_booking_tickets AS t
+          WHERE t.roller_unique_id = b.roller_unique_id
+            AND t.ticket_id = :identifier
+        )
+     ORDER BY b.source_last_updated_at DESC
+     LIMIT 1`,
+    [stringParameter('identifier', identifier)],
+  );
+
+  const row = firstMappedRow(result);
+  if (!row) return null;
+
+  return {
+    amountOwingCents: numberOrNull(row.amount_owing_cents),
+    bookingDate: stringOrNull(row.booking_date),
+    bookingReference: stringOrNull(row.booking_reference),
+    bookingStatus: stringOrNull(row.booking_status),
+    endTime: stringOrNull(row.end_time),
+    freshnessStatus: stringOrNull(row.freshness_status) || 'stale',
+    isTombstoned: Boolean(row.is_tombstoned),
+    lastSeenFromRollerAt: stringOrNull(row.last_seen_from_roller_at),
+    lookupPath: stringOrNull(row.lookup_path) || 'aurora',
+    paymentStatus: stringOrNull(row.payment_status),
+    rollerEnv: stringOrNull(row.roller_env),
+    rollerUniqueId: stringOrNull(row.roller_unique_id),
+    startTime: stringOrNull(row.start_time),
+    totalCents: numberOrNull(row.total_cents),
+    venueId: stringOrNull(row.venue_id),
+  };
+}
+
+async function findLocalBookingItems(rollerUniqueId) {
+  const result = await executeStatement(
+    `SELECT
+       i.booking_item_key,
+       i.booking_item_id,
+       i.product_id,
+       i.parent_product_id,
+       i.product_name,
+       i.parent_product_name,
+       COALESCE(product.summary ->> 'productType', product.summary ->> 'productSubType', product.summary ->> 'parentType') AS product_type,
+       i.quantity,
+       i.booking_date::text AS booking_date,
+       i.start_time::text AS start_time,
+       i.end_time::text AS end_time,
+       COALESCE(
+         jsonb_agg(
+           jsonb_build_object(
+             'ticketId', t.ticket_id,
+             'name', null,
+             'ticketHolderName', t.ticket_holder_name_masked,
+             'locations', t.locations
+           )
+           ORDER BY t.ticket_id
+         ) FILTER (WHERE t.ticket_id IS NOT NULL),
+         '[]'::jsonb
+       )::text AS tickets_json
+     FROM jumpyard.roller_booking_items AS i
+     LEFT JOIN jumpyard.roller_bookings AS b
+       ON b.roller_unique_id = i.roller_unique_id
+     LEFT JOIN jumpyard.product_catalog_cache AS product
+       ON product.roller_env = b.roller_env
+      AND product.venue_id = b.venue_id
+      AND product.summary ->> 'id' = i.product_id
+     LEFT JOIN jumpyard.roller_booking_tickets AS t
+       ON t.roller_unique_id = i.roller_unique_id
+      AND (
+        t.booking_item_key = i.booking_item_key
+        OR (t.booking_item_id IS NOT NULL AND t.booking_item_id = i.booking_item_id)
+      )
+     WHERE i.roller_unique_id = :rollerUniqueId
+     GROUP BY
+       i.booking_item_key,
+       i.booking_item_id,
+       i.product_id,
+       i.parent_product_id,
+       i.product_name,
+       i.parent_product_name,
+       product.summary,
+       i.quantity,
+       i.booking_date,
+       i.start_time,
+       i.end_time
+     ORDER BY i.booking_date NULLS LAST, i.start_time NULLS LAST, i.product_name NULLS LAST`,
+    [stringParameter('rollerUniqueId', rollerUniqueId)],
+  );
+
+  return mappedRows(result).map((row) => ({
+    bookingItemId: stringOrNull(row.booking_item_id),
+    bookingItemKey: stringOrNull(row.booking_item_key),
+    productId: numberOrNull(row.product_id),
+    productName: stringOrNull(row.product_name),
+    parentProductId: numberOrNull(row.parent_product_id),
+    parentProductName: stringOrNull(row.parent_product_name),
+    productType: stringOrNull(row.product_type),
+    quantity: numberOrNull(row.quantity),
+    bookingDate: stringOrNull(row.booking_date),
+    startTime: stringOrNull(row.start_time),
+    endTime: stringOrNull(row.end_time),
+    tickets: parseJsonArray(row.tickets_json),
+  }));
+}
+
+function normalizeLocalBooking(bookingRow, items) {
+  return {
+    bookingReference: bookingRow.bookingReference,
+    rollerUniqueId: bookingRow.rollerUniqueId,
+    externalId: null,
+    status: bookingRow.bookingStatus,
+    paymentStatus: bookingRow.paymentStatus ?? bookingRow.bookingStatus,
+    isTombstoned: bookingRow.isTombstoned,
+    total: centsToCurrency(bookingRow.totalCents),
+    amountOwing: centsToCurrency(bookingRow.amountOwingCents),
+    createdDate: null,
+    customerId: null,
+    items: items.length > 0 ? items : [fallbackLocalItem(bookingRow)].filter(Boolean),
+  };
+}
+
+function fallbackLocalItem(bookingRow) {
+  if (!bookingRow.bookingDate && !bookingRow.startTime && !bookingRow.endTime) return null;
+
+  return {
+    bookingItemId: null,
+    productId: null,
+    productName: null,
+    parentProductId: null,
+    parentProductName: null,
+    productType: null,
+    quantity: null,
+    bookingDate: bookingRow.bookingDate,
+    startTime: bookingRow.startTime,
+    endTime: bookingRow.endTime,
+    tickets: [],
+  };
+}
+
+function shouldUseLocalBooking(booking) {
+  if (!booking || booking.isTombstoned) return false;
+
+  const paymentStatus = String(booking.paymentStatus ?? booking.status ?? '').trim();
+  if (!paymentStatus && booking.amountOwing === null) return false;
+
+  return true;
 }
 
 async function getRollerConfig() {
@@ -389,6 +608,249 @@ function normalizeBookingItem(item, productById) {
   };
 }
 
+async function upsertLiveBooking(booking, rollerEnv, venueId) {
+  if (!booking.rollerUniqueId || !booking.bookingReference) return;
+
+  const bookingDates = booking.items.map((item) => item.bookingDate).filter(Boolean);
+  const startTimes = booking.items.map((item) => item.startTime).filter(Boolean);
+  const endTimes = booking.items.map((item) => item.endTime).filter(Boolean);
+  const payloadHash = hashJson({
+    bookingReference: booking.bookingReference,
+    itemCount: booking.items.length,
+    paymentStatus: booking.paymentStatus,
+    source: 'roller_live_lookup',
+    status: booking.status,
+  });
+
+  await executeStatement(
+    `INSERT INTO jumpyard.roller_bookings (
+      roller_unique_id,
+      booking_reference,
+      roller_env,
+      venue_id,
+      booking_status,
+      payment_status,
+      amount_owing_cents,
+      total_cents,
+      booking_date,
+      start_time,
+      end_time,
+      source_last_updated_by,
+      source_last_updated_at,
+      roller_modified_at,
+      last_seen_from_roller_at,
+      freshness_status,
+      is_tombstoned,
+      payload_hash,
+      normalized_summary
+    )
+    VALUES (
+      :rollerUniqueId,
+      :bookingReference,
+      :rollerEnv,
+      :venueId,
+      :bookingStatus,
+      :paymentStatus,
+      :amountOwingCents,
+      :totalCents,
+      CAST(:bookingDate AS date),
+      CAST(:startTime AS time),
+      CAST(:endTime AS time),
+      'roller_live_lookup',
+      now(),
+      NULL,
+      now(),
+      'fresh',
+      :isTombstoned,
+      :payloadHash,
+      CAST(:normalizedSummary AS jsonb)
+    )
+    ON CONFLICT (roller_unique_id) DO UPDATE SET
+      booking_reference = EXCLUDED.booking_reference,
+      roller_env = EXCLUDED.roller_env,
+      venue_id = COALESCE(EXCLUDED.venue_id, jumpyard.roller_bookings.venue_id),
+      booking_status = EXCLUDED.booking_status,
+      payment_status = EXCLUDED.payment_status,
+      amount_owing_cents = EXCLUDED.amount_owing_cents,
+      total_cents = EXCLUDED.total_cents,
+      booking_date = EXCLUDED.booking_date,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      source_last_updated_by = EXCLUDED.source_last_updated_by,
+      source_last_updated_at = now(),
+      last_seen_from_roller_at = now(),
+      freshness_status = 'fresh',
+      is_tombstoned = EXCLUDED.is_tombstoned,
+      payload_hash = EXCLUDED.payload_hash,
+      normalized_summary = EXCLUDED.normalized_summary,
+      updated_at = now()`,
+    [
+      stringParameter('rollerUniqueId', booking.rollerUniqueId),
+      stringParameter('bookingReference', booking.bookingReference),
+      stringParameter('rollerEnv', rollerEnv),
+      stringParameter('venueId', venueId),
+      stringParameter('bookingStatus', booking.status),
+      stringParameter('paymentStatus', booking.paymentStatus),
+      intParameter('amountOwingCents', currencyToCents(booking.amountOwing)),
+      intParameter('totalCents', currencyToCents(booking.total)),
+      stringParameter('bookingDate', minOrNull(bookingDates)),
+      stringParameter('startTime', minOrNull(startTimes)),
+      stringParameter('endTime', maxOrNull(endTimes)),
+      { name: 'isTombstoned', value: { booleanValue: isTombstoned(booking.status) } },
+      stringParameter('payloadHash', payloadHash),
+      stringParameter(
+        'normalizedSummary',
+        JSON.stringify({
+          externalId: booking.externalId,
+          itemCount: booking.items.length,
+          source: 'roller_live_lookup',
+        }),
+      ),
+    ],
+  );
+
+  for (const item of booking.items) {
+    const bookingItemKey = await upsertLiveBookingItem(booking.rollerUniqueId, item);
+
+    for (const ticket of item.tickets ?? []) {
+      await upsertLiveTicket(booking.rollerUniqueId, bookingItemKey, item, ticket);
+    }
+  }
+}
+
+async function upsertLiveBookingItem(rollerUniqueId, item) {
+  const bookingItemKey = localBookingItemKey(rollerUniqueId, item);
+
+  await executeStatement(
+    `INSERT INTO jumpyard.roller_booking_items (
+      booking_item_key,
+      roller_unique_id,
+      booking_item_id,
+      product_id,
+      parent_product_id,
+      product_name,
+      parent_product_name,
+      quantity,
+      booking_date,
+      start_time,
+      end_time,
+      item_summary
+    )
+    VALUES (
+      :bookingItemKey,
+      :rollerUniqueId,
+      :bookingItemId,
+      :productId,
+      :parentProductId,
+      :productName,
+      :parentProductName,
+      :quantity,
+      CAST(:bookingDate AS date),
+      CAST(:startTime AS time),
+      CAST(:endTime AS time),
+      CAST(:itemSummary AS jsonb)
+    )
+    ON CONFLICT (booking_item_key) DO UPDATE SET
+      roller_unique_id = EXCLUDED.roller_unique_id,
+      booking_item_id = EXCLUDED.booking_item_id,
+      product_id = EXCLUDED.product_id,
+      parent_product_id = EXCLUDED.parent_product_id,
+      product_name = COALESCE(EXCLUDED.product_name, jumpyard.roller_booking_items.product_name),
+      parent_product_name = COALESCE(EXCLUDED.parent_product_name, jumpyard.roller_booking_items.parent_product_name),
+      quantity = EXCLUDED.quantity,
+      booking_date = EXCLUDED.booking_date,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      item_summary = EXCLUDED.item_summary,
+      updated_at = now()`,
+    [
+      stringParameter('bookingItemKey', bookingItemKey),
+      stringParameter('rollerUniqueId', rollerUniqueId),
+      stringParameter('bookingItemId', item.bookingItemId),
+      stringParameter('productId', item.productId),
+      stringParameter('parentProductId', item.parentProductId),
+      stringParameter('productName', item.productName),
+      stringParameter('parentProductName', item.parentProductName),
+      intParameter('quantity', item.quantity ?? 1),
+      stringParameter('bookingDate', item.bookingDate),
+      stringParameter('startTime', item.startTime),
+      stringParameter('endTime', item.endTime),
+      stringParameter(
+        'itemSummary',
+        JSON.stringify({
+          productType: item.productType,
+          source: 'roller_live_lookup',
+        }),
+      ),
+    ],
+  );
+
+  return bookingItemKey;
+}
+
+async function upsertLiveTicket(rollerUniqueId, bookingItemKey, item, ticket) {
+  if (!ticket.ticketId) return;
+
+  await executeStatement(
+    `INSERT INTO jumpyard.roller_booking_tickets (
+      ticket_id,
+      roller_unique_id,
+      booking_item_key,
+      booking_item_id,
+      ticket_holder_name_masked,
+      locations,
+      last_seen_from_roller_at,
+      product_id,
+      booking_date,
+      ticket_summary
+    )
+    VALUES (
+      :ticketId,
+      :rollerUniqueId,
+      :bookingItemKey,
+      :bookingItemId,
+      NULL,
+      CAST(:locations AS jsonb),
+      now(),
+      :productId,
+      CAST(:bookingDate AS date),
+      CAST(:ticketSummary AS jsonb)
+    )
+    ON CONFLICT (ticket_id) DO UPDATE SET
+      roller_unique_id = EXCLUDED.roller_unique_id,
+      booking_item_key = EXCLUDED.booking_item_key,
+      booking_item_id = EXCLUDED.booking_item_id,
+      locations = EXCLUDED.locations,
+      last_seen_from_roller_at = now(),
+      product_id = EXCLUDED.product_id,
+      booking_date = EXCLUDED.booking_date,
+      ticket_summary = EXCLUDED.ticket_summary,
+      updated_at = now()`,
+    [
+      stringParameter('ticketId', ticket.ticketId),
+      stringParameter('rollerUniqueId', rollerUniqueId),
+      stringParameter('bookingItemKey', bookingItemKey),
+      stringParameter('bookingItemId', item.bookingItemId),
+      stringParameter('locations', JSON.stringify(Array.isArray(ticket.locations) ? ticket.locations : [])),
+      stringParameter('productId', item.productId),
+      stringParameter('bookingDate', item.bookingDate),
+      stringParameter(
+        'ticketSummary',
+        JSON.stringify({
+          source: 'roller_live_lookup',
+        }),
+      ),
+    ],
+  );
+}
+
+function localBookingItemKey(rollerUniqueId, item) {
+  const keySource =
+    item.bookingItemId ||
+    `${rollerUniqueId}:${item.productId ?? 'unknown'}:${item.bookingDate ?? ''}:${item.startTime ?? ''}`;
+  return `bookingitem:${hashString(keySource)}`;
+}
+
 function evaluateEligibility(booking, request) {
   const allItems = booking.items ?? [];
   const dates = [...new Set(allItems.map((item) => item.bookingDate).filter(Boolean))];
@@ -441,6 +903,54 @@ function buildRollerUrl(baseUrl, endpointPath) {
   return new URL(`${basePath}${endpointPath}`, parsedBaseUrl.origin);
 }
 
+async function executeStatement(sql, parameters = []) {
+  const resourceArn = process.env.DATABASE_CLUSTER_ARN;
+  const secretArn = process.env.DATABASE_SECRET_ARN;
+
+  if (!resourceArn || !secretArn) {
+    const error = new Error('Database environment is not configured.');
+    error.code = 'database_config_error';
+    throw error;
+  }
+
+  return rdsClient.send(
+    new ExecuteStatementCommand({
+      database: DATABASE_NAME,
+      includeResultMetadata: true,
+      parameters,
+      resourceArn,
+      secretArn,
+      sql,
+    }),
+  );
+}
+
+function mappedRows(result) {
+  const columns = (result.columnMetadata ?? []).map((column) => column.name);
+  return (result.records ?? []).map((record) => {
+    const row = {};
+    for (let index = 0; index < record.length; index += 1) {
+      row[columns[index] ?? String(index)] = fieldToJsValue(record[index]);
+    }
+    return row;
+  });
+}
+
+function firstMappedRow(result) {
+  return mappedRows(result)[0] ?? null;
+}
+
+function fieldToJsValue(field) {
+  if (!field || field.isNull) return null;
+  if (field.stringValue !== undefined) return field.stringValue;
+  if (field.longValue !== undefined) return Number(field.longValue);
+  if (field.doubleValue !== undefined) return Number(field.doubleValue);
+  if (field.booleanValue !== undefined) return Boolean(field.booleanValue);
+  if (field.blobValue !== undefined) return field.blobValue;
+  if (field.arrayValue !== undefined) return field.arrayValue;
+  return null;
+}
+
 function stringOrNull(value) {
   if (value === undefined || value === null || value === '') return null;
   return String(value);
@@ -450,6 +960,64 @@ function numberOrNull(value) {
   if (value === undefined || value === null || value === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function stringParameter(name, value) {
+  return value === null || value === undefined
+    ? { name, value: { isNull: true } }
+    : { name, value: { stringValue: String(value) } };
+}
+
+function intParameter(name, value) {
+  return value === null || value === undefined || !Number.isFinite(Number(value))
+    ? { name, value: { isNull: true } }
+    : { name, value: { longValue: Number(value) } };
+}
+
+function centsToCurrency(cents) {
+  if (cents === null || cents === undefined) return null;
+  return Math.round(Number(cents)) / 100;
+}
+
+function currencyToCents(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : null;
+}
+
+function minOrNull(values) {
+  const sorted = values.filter(Boolean).sort();
+  return sorted[0] ?? null;
+}
+
+function maxOrNull(values) {
+  const sorted = values.filter(Boolean).sort();
+  return sorted[sorted.length - 1] ?? null;
+}
+
+function parseJsonArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+
+  try {
+    const parsed = JSON.parse(String(value));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function hashJson(value) {
+  return hashString(JSON.stringify(value));
+}
+
+function hashString(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+
+function isTombstoned(status) {
+  const normalized = String(status ?? '').toLowerCase();
+  return normalized === 'cancelled' || normalized === 'deleted';
 }
 
 function classifyError(error) {
@@ -468,6 +1036,15 @@ function classifyError(error) {
       status: 'config_error',
       code: 'lookup_config_error',
       message: 'JumpYard Cloud lookup configuration is incomplete or unsafe.',
+    };
+  }
+
+  if (error.code === 'database_config_error') {
+    return {
+      statusCode: 500,
+      status: 'config_error',
+      code: 'database_config_error',
+      message: 'JumpYard Cloud lookup database configuration is incomplete.',
     };
   }
 
