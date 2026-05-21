@@ -148,6 +148,8 @@ const sv = {
     },
     finalAttest: 'Jag intygar att samtliga i min bokning har tagit del av reglerna och förstått dem.',
     cta: 'Jag förstår, fortsätt',
+    readyForStaffProcessing: 'G\u00f6r redo f\u00f6r personal...',
+    readyForStaffFailed: 'Vi kunde inte g\u00f6ra incheckningen redo f\u00f6r personal. F\u00f6rs\u00f6k igen eller h\u00e4mta personal.',
   },
   addons: {
     title: 'Tillägg',
@@ -200,9 +202,9 @@ const sv = {
     addonsLabel: 'Tillägg',
   },
   confirm: {
-    title: 'Du är incheckad!',
-    subtitle: 'Visa koden nedan vid entrén för att få dina grejer.',
-    pickupCode: 'Din kod',
+    title: 'Redo f\u00f6r personal',
+    subtitle: 'Visa koden nedan vid entr\u00e9n. Personalen slutf\u00f6r incheckningen.',
+    pickupCode: 'Personalkod',
     backupLabel: 'Backupkod',
     staffHandout: 'Att hämta ut hos personalen',
     otherAddons: 'Övriga tillägg i bokningen',
@@ -401,6 +403,8 @@ const en: typeof sv = {
     },
     finalAttest: 'I confirm that everyone in my booking has read and understood the rules.',
     cta: 'I understand, continue',
+    readyForStaffProcessing: 'Getting staff handoff ready...',
+    readyForStaffFailed: 'We could not make this check-in ready for staff. Try again or call staff.',
   },
   addons: {
     title: 'Add-ons',
@@ -453,9 +457,9 @@ const en: typeof sv = {
     addonsLabel: 'Add-ons',
   },
   confirm: {
-    title: "You're checked in!",
-    subtitle: 'Show the code below at the entrance to get your gear.',
-    pickupCode: 'Your code',
+    title: 'Ready for staff',
+    subtitle: 'Show the code below at the entrance. Staff will complete check-in.',
+    pickupCode: 'Staff code',
     backupLabel: 'Backup code',
     staffHandout: 'Pick up from staff',
     otherAddons: 'Other add-ons on your booking',

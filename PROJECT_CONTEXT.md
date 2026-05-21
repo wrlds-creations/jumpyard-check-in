@@ -57,6 +57,8 @@ T0023 implements the server-owned check-in session API skeleton in dev. JumpYard
 
 T0024 wires the phone app booking summary CTA to `POST /v1/check-in/sessions`. A paid ready booking now creates or resumes a JumpYard Cloud session before the phone flow leaves the booking summary. The phone flow stores the returned session id/status in local flow state, keeps unpaid bookings blocked, and still does not call Roller or expose redeem credentials.
 
+T0025 wires the phone app safety attestation completion to `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff`. The phone flow stores the returned handoff status/code and shows the server-owned code on the final confirmation screen. This still does not call Roller or redeem tickets.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -158,8 +160,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0021 Controlled Playground redeem execution` | Protect confirmed dev redemption with a separate token, refresh live Roller state, then execute one controlled Playground redeem. | First real ticket-level check-in write, still dev-only and not wired to phone UI. |
 | `T0022 Phone/staff redeem handoff design` | Lock how the phone flow hands a ready booking to staff/server-owned final redeem. | Prevents exposing the T0021 dev token or future production redeem authority to the frontend. |
 | `T0023 Check-in session API skeleton` | Implement the server-owned check-in session/handoff endpoints without redeeming tickets from the phone UI. | Gives the phone flow a safe next step after lookup while keeping final Roller redemption behind staff/server confirmation. |
-| `T0024 Phone start-check-in session wiring` | Wire the phone app start-check-in CTA to `POST /v1/check-in/sessions`. | Completed locally; lets the guest flow create/resume a server-owned session while still keeping final Roller redemption out of the phone UI. |
-| `T0025 Phone ready-for-staff handoff wiring` | Call `ready-for-staff` from the phone flow after the required guest-side steps are complete. | Needed before staff/admin list work has real phone-created ready sessions to show. |
+| `T0024 Phone start-check-in session wiring` | Wire the phone app start-check-in CTA to `POST /v1/check-in/sessions`. | Completed; lets the guest flow create/resume a server-owned session while still keeping final Roller redemption out of the phone UI. |
+| `T0025 Phone ready-for-staff handoff wiring` | Call `ready-for-staff` from the phone flow after the required guest-side steps are complete. | Completed locally; the guest flow now ends with a server-owned staff handoff code and still does not redeem tickets. |
 | `T0026 Staff/admin handoff list/detail` | Show sessions waiting for staff and let staff inspect booking/session state. | Gives staff a surface for the server-owned handoff before final redeem. |
 | `T0027 Staff-confirmed redeem from session` | Redeem selected tickets from the server-owned session after staff confirmation and final Roller refresh. | Completes the first end-to-end existing-booking check-in write path. |
 
@@ -321,6 +323,14 @@ T0024 confirmed phone session-start behavior:
 - paid booking `5032210` resumes session `jycs_mpfe3dum_7dc29b1b` before leaving booking summary
 - phone flow stores `checkinSessionId` and session status in flow state
 - unpaid booking `5032211` remains blocked on the booking summary with disabled `Betalning krävs`
+- no Roller API calls, Roller secrets, or redeem tokens were added to phone code
+
+T0025 confirmed phone ready-for-staff behavior:
+
+- safety attestation completion calls `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff`
+- phone flow stores `handoffStatus` and `handoffCode` in flow state
+- booking `5032210` reached `APP_CONFIRM` with session `jycs_mpfe3dum_7dc29b1b`
+- final screen showed handoff code `JY6085` and QR payload `JY_HANDOFF:JY6085:jycs_mpfe3dum_7dc29b1b`
 - no Roller API calls, Roller secrets, or redeem tokens were added to phone code
 
 ## Non-Goals For Current Ticket

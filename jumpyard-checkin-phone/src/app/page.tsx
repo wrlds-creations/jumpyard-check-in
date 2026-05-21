@@ -16,7 +16,7 @@ import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import { detectChannel, initialContext, initialState, nextState } from '@/flow/machine';
 import type { Branch } from '@/flow/machine';
 import { validateToken } from '@/flow/mockClient';
-import { CloudSessionError, startCheckInSession, type SessionIssue } from '@/flow/cloudClient';
+import { CloudSessionError, markSessionReadyForStaff, startCheckInSession, type SessionIssue } from '@/flow/cloudClient';
 import type { ConnectedProfile, FlowContext, FlowState } from '@/flow/types';
 import { ParkChoice } from '@/components/ParkChoice';
 import { BookingLookup } from '@/components/BookingLookup';
@@ -140,6 +140,8 @@ function CheckInFlow() {
     const [ctx, setCtx] = useState<FlowContext>(() => ({ ...initialContext(effectiveChannel), token }));
     const [isStartingSession, setIsStartingSession] = useState(false);
     const [sessionStartError, setSessionStartError] = useState<SessionIssue | null>(null);
+    const [isMarkingReadyForStaff, setIsMarkingReadyForStaff] = useState(false);
+    const [readyForStaffError, setReadyForStaffError] = useState<SessionIssue | null>(null);
 
     const scrollToTop = () => {
         window.scrollTo(0, 0);
@@ -170,6 +172,26 @@ function CheckInFlow() {
         }
     };
 
+    const completeSafetyAndReadyForStaff = async (attestedAt: string) => {
+        if (isMarkingReadyForStaff) return;
+        if (!ctx.checkinSession) {
+            setReadyForStaffError('session_failed');
+            return;
+        }
+
+        setIsMarkingReadyForStaff(true);
+        setReadyForStaffError(null);
+        try {
+            const checkinSession = await markSessionReadyForStaff(ctx.checkinSession, 'completed');
+            advance({ safetyAttestedAt: attestedAt, checkinSession });
+        } catch (error) {
+            setReadyForStaffError(error instanceof CloudSessionError ? error.reason : 'session_failed');
+            scrollToTop();
+        } finally {
+            setIsMarkingReadyForStaff(false);
+        }
+    };
+
     useEffect(() => {
         scrollToTop();
     }, [state]);
@@ -193,6 +215,8 @@ function CheckInFlow() {
             data-flow-state={state}
             data-checkin-session-id={ctx.checkinSession?.checkinSessionId ?? ''}
             data-checkin-session-status={ctx.checkinSession?.status ?? ''}
+            data-handoff-status={ctx.checkinSession?.handoffStatus ?? ''}
+            data-handoff-code={ctx.checkinSession?.handoffCode ?? ''}
         >
             <ProgressBar state={state} />
 
@@ -284,7 +308,9 @@ function CheckInFlow() {
                     {state === 'APP_SAFETY_ATTEST' && (
                         <SafetyAttest
                             key="safety-attest"
-                            onComplete={attestedAt => advance({ safetyAttestedAt: attestedAt })}
+                            isSubmitting={isMarkingReadyForStaff}
+                            submitError={readyForStaffError}
+                            onComplete={completeSafetyAndReadyForStaff}
                         />
                     )}
 
@@ -340,6 +366,7 @@ function CheckInFlow() {
                         <ConfirmationScreen
                             key="confirm"
                             booking={ctx.booking}
+                            checkinSession={ctx.checkinSession}
                             jumperCount={ctx.booking.jumpers}
                             selectedAddons={ctx.selectedAddons}
                         />
