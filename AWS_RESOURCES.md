@@ -4,7 +4,7 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0003` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev webhook endpoint records and enriches Roller webhook intake events, the dev redeem endpoint plans/audits redemption, supports controlled Playground redemption behind a dev token, and exposes staff-confirmed session redeem, the dev session endpoint creates/resumes server-owned check-in sessions and exposes read-only staff handoff list/detail routes, the real Roller Playground booking webhook is registered, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, webhook-enriched records, session rows, and redeem attempt audit rows.
+JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0003` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev booking endpoint quotes and creates Roller Playground draft bookings server-side, the dev webhook endpoint records and enriches Roller webhook intake events, the dev redeem endpoint plans/audits redemption, supports controlled Playground redemption behind a dev token, and exposes staff-confirmed session redeem, the dev session endpoint creates/resumes server-owned check-in sessions and exposes read-only staff handoff list/detail routes, the real Roller Playground booking webhook is registered, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, webhook-enriched records, session rows, idempotency rows, event logs, and redeem attempt audit rows.
 
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
@@ -164,6 +164,17 @@ T0027 staff-confirmed redeem notes:
 - Roller writes: enabled only for the protected dev path and still Playground-guarded.
 - Token handling: admin users manually enter the temporary code for dev testing; it is not stored in source, browser env, localStorage, or sessionStorage.
 
+T0031 booking quote/draft endpoint notes:
+
+- Changed resource: `jumpyard-check-in-dev-stack-booking`
+- Endpoint: `POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/bookings/quote`
+- Endpoint: `POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/bookings/draft`
+- Behavior: quote validates item input, reads Roller config/credentials server-side, fails closed unless configured for Playground, calls Roller `POST /bookings/draft/costs`, writes a safe event log, and returns normalized costs without creating a booking.
+- Behavior: draft requires `confirmDraft=true` and an idempotency key, validates customer/items, calls Roller `POST /bookings/draft`, reads safe venue payment settings from `GET /venues/me`, writes idempotency and safe event-log rows, and returns draft/payment-session data for the future payment component.
+- Roller writes: only the draft endpoint creates a Playground draft booking after explicit confirmation and idempotency; quote creates no booking.
+- Payment JWT handling: raw `paymentJwt` is returned only in the API response for the future frontend payment component. It is not printed, logged, or persisted in Aurora.
+- Deployed smoke: quote returned total `260`, amount owing `260`; draft returned unique id `2c1abf4f-944c-4122-a4ff-da8440c46321`, total `260`, amount owing `260`, `jwtPresent=true`, and `paymentConfigAvailable=true`.
+
 Confirmed T0006 dev target:
 
 | Field | Value |
@@ -181,9 +192,9 @@ Confirmed T0006 dev target:
 | Resource Name | AWS Service | Environment | Region | Managed By | Notes |
 |---|---|---|---|---|---|
 | `jumpyard-check-in-dev-stack` | CloudFormation | `dev` | `eu-north-1` | `cdk` | `CREATE_COMPLETE`. |
-| `m0uo5g4mde` | API Gateway HTTP API | `dev` | `eu-north-1` | `cdk` | Endpoint `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`; lookup, session, staff handoff, webhook, and redeem routes are implemented; booking placeholder routes return `501`. |
+| `m0uo5g4mde` | API Gateway HTTP API | `dev` | `eu-north-1` | `cdk` | Endpoint `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`; lookup, booking quote/draft, session, staff handoff, webhook, and redeem routes are implemented; existing-booking add-product booking routes remain deferred. |
 | `jumpyard-check-in-dev-stack-lookup` | Lambda | `dev` | `eu-north-1` | `cdk` | T0016 lookup handler; reads Aurora first, refreshes from Roller Playground only when needed, and returns normalized phone-flow lookup response. |
-| `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | Placeholder booking handler; no Roller calls. |
+| `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | T0031 booking handler; quotes Roller Playground draft costs, creates confirmed Playground draft bookings behind idempotency, returns safe payment config and response-only `paymentJwt`, and writes safe audit rows. |
 | `jumpyard-check-in-dev-stack-redeem` | Lambda | `dev` | `eu-north-1` | `cdk` | T0027 redeem handler; plans/validates server-side redemption from Aurora, requires a dev token for confirmed writes, refreshes live Roller state before write, supports staff-confirmed session redeem, marks completed sessions, and records attempt audit. |
 | `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0026 session handler; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, and serves read-only staff handoff list/detail without Roller calls or Roller writes. |
 | `jumpyard-check-in-dev-stack-webhook` | Lambda | `dev` | `eu-north-1` | `cdk` | T0018 webhook handler; accepts Roller Playground `x-roller-apikey`, validates a dev token, stores idempotent metadata, refreshes booking detail from Roller Playground, and upserts Aurora booking/item/ticket snapshots. |
@@ -240,7 +251,7 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`.
 | Proposed Resource | AWS Service | Environment | Purpose | Status |
 |---|---|---|---|---|
 | JumpYard Cloud API | API Gateway HTTP API | `dev` first, then `staging`/`prod` TBD | Phone app entrypoint for server-owned contracts. | Deployed to `dev` |
-| JumpYard Cloud handlers | Lambda | `dev` first, then `staging`/`prod` TBD | Lookup, session, quote, draft booking, add-product, redeem, webhook handlers. | Lookup, session, webhook intake/enrichment, and redeem implemented in `dev`; booking handlers remain placeholders |
+| JumpYard Cloud handlers | Lambda | `dev` first, then `staging`/`prod` TBD | Lookup, session, quote, draft booking, add-product, redeem, webhook handlers. | Lookup, booking quote/draft, session, webhook intake/enrichment, and redeem implemented in `dev`; add-product booking remains deferred |
 | Roller credentials | Secrets Manager | Per environment | Store Roller client id and client secret server-side. | Deployed and populated in `dev` |
 | Roller non-secret config | SSM Parameter Store | Per environment | Store Roller environment and Playground base URL. | Deployed to `dev` |
 | JumpYard operational database | Aurora PostgreSQL Serverless v2 | Per environment | Roller snapshot, operational state, check-in attempts, idempotency, handoff state, webhook events, event log. | Deployed to `dev` |

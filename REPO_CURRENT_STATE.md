@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-21
-- Current branch: `codex/t0030-new-booking-payment-discovery`
-- Current status: T0030 new booking/payment discovery completed locally.
-- Current ticket: `T0030` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`
-- Recommended next ticket: `T0031 Server-side booking quote/draft`
+- Current branch: `codex/t0031-server-booking-quote-draft`
+- Current status: T0031 server-side booking quote/draft completed locally and deployed to dev.
+- Current ticket: `T0031` completed locally and deployed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`
+- Recommended next ticket: `T0032 Payment package proof-of-concept`
 
 ## Current Structure
 
@@ -37,6 +37,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- bin/jumpyard-cloud.ts
 |   |-- config/dev.json
 |   |-- config/dev.example.json
+|   |-- lambda/booking/index.js
 |   |-- lambda/lookup/index.js
 |   |-- lambda/redeem/index.js
 |   |-- lambda/session/index.js
@@ -74,8 +75,9 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm run infra:check` | Type-check and synthesize the deploy-blocked CDK foundation with example config. | Added in T0004; does not deploy or require AWS credentials. |
 | `npm run infra:synth` | Synthesize the JumpYard Cloud CDK stack with `infra/config/dev.example.json`. | Added in T0004; example config is not approved for deploy. |
 | `npm --prefix infra run synth:dev` | Synthesize the confirmed T0006 dev stack. | Uses `infra/config/dev.json`. |
-| `npm --prefix infra run diff:dev` | Review AWS dev changes before deploy. | Must show only approved T0004 foundation resources. |
+| `npm --prefix infra run diff:dev` | Review AWS dev changes before deploy. | Must show only approved ticket-scoped resources/code changes. If CDK cannot read the SSO profile directly, export temporary profile credentials into the shell process before running CDK. |
 | `npm --prefix infra run deploy:dev` | Deploy the approved dev foundation. | Run only after account `376129878018` and region `eu-north-1` are verified. |
+| `node --check infra/lambda/booking/index.js` | Confirm booking Lambda JavaScript syntax. | Added in T0031. |
 | `npm --prefix infra run register:webhook:dev` | Dry-run Roller Playground booking webhook registration for the dev endpoint. | Reads AWS SSM/Secrets Manager config, validates Playground, and does not print secrets. |
 | `npm --prefix infra run register:webhook:dev:apply` | Register the Roller Playground booking webhook for the dev endpoint. | Requires `ROLLER_WEBHOOK_REGISTER_ALLOW_WRITE=I_UNDERSTAND_THIS_REGISTERS_PLAYGROUND_WEBHOOK`; creates no duplicate when the webhook already exists. |
 | `npm --prefix infra run migrate:dev:status` | Show applied/pending Aurora migrations for dev. | Uses Aurora Data API and the `/jumpyard-check-in-dev/aurora/admin` secret; does not print secrets. |
@@ -137,21 +139,22 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0028` | Added QR/handoff lookup polish. | 2026-05-21 | Phone QR uses the server-owned `JY_HANDOFF:<handoffCode>:<checkinSessionId>` payload via the `qrcode` library, and admin can scan/paste QR payloads or type short codes to open handoff sessions. |
 | `T0029` | Added phone session resume routing. | 2026-05-21 | Paid lookup starts/resumes the server session; ready-for-staff sessions route directly from search to QR, completed/redeemed sessions show already checked in, and guest-in-progress sessions continue the normal phone flow. |
 | `T0030` | Added new-booking payment discovery tooling and docs. | 2026-05-21 | Confirmed Roller Playground draft booking returns costs plus `paymentJwt`; in-app payment still needs Roller payment-library authorization, domain allowlisting, package access, and test card details. |
+| `T0031` | Implemented deployed server-side booking quote/draft endpoints. | 2026-05-21 | Dev `POST /v1/bookings/quote` returns normalized Roller costs without creating a booking; dev `POST /v1/bookings/draft` creates a Playground draft behind `confirmDraft=true` and idempotency, returns safe payment config plus a raw `paymentJwt` only in the response. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0030` | New booking/payment discovery spike. | Completed locally | Added guarded local discovery tooling, confirmed `POST /bookings/draft` returns HTTP `201`, costs, and a present `paymentJwt` in Playground, and documented remaining Roller payment-library prerequisites. |
+| `T0031` | Server-side booking quote/draft. | Completed locally and deployed | Added deployed JumpYard Cloud quote/draft endpoints for new bookings against Roller Playground, with server-side credentials, Playground guard, idempotency, safe audit logs, and payment-session response data. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0031` | Server-side booking quote/draft | Add JumpYard Cloud quote/draft endpoints for new bookings against Roller Playground, with credentials and Roller writes kept server-side. |
-| `T0032` | Phone create-booking plus fake payment | Wire the phone app to create a booking and complete Playground/test payment if Roller payment-library prerequisites are available. |
-| `T0033` | Staff auth replacement for temporary dev code | Replace the temporary dev redeem code with the selected staff/admin auth model before production. |
-| `T0034` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
+| `T0032` | Payment package proof-of-concept | Verify Roller payment-library package access, public HTTPS allowlisting, and fake/test card behavior against the T0031 draft response before phone UI wiring. |
+| `T0033` | Phone create-booking/payment wiring | Wire the phone app to quote, draft, and the proven Playground/test payment path. |
+| `T0034` | Staff auth replacement for temporary dev code | Replace the temporary dev redeem code with the selected staff/admin auth model before production. |
+| `T0035` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
 
 ## Validation Status
 
@@ -343,10 +346,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0030 guarded draft write: direct guarded apply created Playground draft booking unique id `bcb88005-ae64-4617-ba7a-b02b095a86c2`; response returned HTTP `201`, total `260`, amount owing `260`, and `paymentJwtPresent=true` without printing the raw JWT.
 - T0030 official docs check: Roller Payments via API docs confirm the custom checkout path uses Roller's payment library plus returned draft-booking JWT, but requires ROLLER authorization, public HTTPS domain allowlisting, and approved payment package access.
 - T0030 root validation: `npm run validate` passed.
+- T0031 booking Lambda syntax: `node --check infra/lambda/booking/index.js` passed.
+- T0031 infra build: `npm --prefix infra run build` passed.
+- T0031 infra synth: `npm --prefix infra run synth:dev` passed.
+- T0031 CDK diff: scoped to `BookingHandler` code only. CDK needed temporary credentials exported from the `wrlds-dev` AWS CLI profile because direct SSO profile resolution failed inside the CDK process.
+- T0031 dev deploy: deployed `jumpyard-check-in-dev-stack-booking` code through CDK; CloudFormation update completed successfully.
+- T0031 deployed quote smoke: `POST /v1/bookings/quote` for product `1765836` on `2026-05-22` returned HTTP `200`, status `quoted`, total `260`, amount owing `260`, tax `14.72`, and `wroteBooking=false`.
+- T0031 deployed draft smoke: `POST /v1/bookings/draft` with `confirmDraft=true` and a unique idempotency key returned HTTP `201`, draft unique id `2c1abf4f-944c-4122-a4ff-da8440c46321`, total `260`, amount owing `260`, `jwtPresent=true`, `jwtPartCount=3`, and `paymentConfigAvailable=true`. The raw JWT was not printed.
+- T0031 post-deploy CDK diff: no differences.
 
 ## Known Issues Summary
 
-- AWS dev foundation is deployed. Lookup, session, webhook, safe redeem-planning, and controlled dev redeem execution handlers are implemented; booking handlers are still placeholders and return `501`.
+- AWS dev foundation is deployed. Lookup, session, webhook, safe redeem-planning, controlled dev redeem execution, and booking quote/draft handlers are implemented. Existing-booking add-product booking routes are still deferred and return `501`.
 - Roller credentials secret in AWS has been populated for dev and was used by T0009 lookup smoke tests.
 - JumpYard Cloud lookup API now uses Aurora first and refreshes from Roller when local data is missing or unsafe. Other API business logic is still pending.
 - Phone app booking lookup now calls JumpYard Cloud for the first check-in step, carries non-visible lookup source/freshness metadata, uses today's Stockholm date by default, starts/resumes a JumpYard Cloud session after paid lookup, routes active ready sessions directly to QR, and marks new sessions ready for staff after safety attestation. Booking creation and payment UI behavior are still pending.
@@ -357,7 +368,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
 - Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, and phone session resume routing is complete locally from T0029.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
-- Roller `POST /bookings/draft` has been executed once through the protected T0030 discovery path against Playground and returned costs plus `paymentJwt`; actual payment execution still needs Roller payment-library prerequisites.
+- Roller `POST /bookings/draft` has been executed through both the protected T0030 discovery path and deployed T0031 JumpYard Cloud draft endpoint against Playground and returned costs plus `paymentJwt`; actual payment execution still needs Roller payment-library prerequisites.
 - Existing-booking add-product linked-booking flow has not been tested yet.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
