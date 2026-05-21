@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-21
-- Current branch: `codex/t0029-phone-session-resume`
-- Current status: T0029 phone session resume completed locally.
-- Current ticket: `T0029` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`
-- Recommended next ticket: `T0030 New booking/payment discovery spike`
+- Current branch: `codex/t0030-new-booking-payment-discovery`
+- Current status: T0030 new booking/payment discovery completed locally.
+- Current ticket: `T0030` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`
+- Recommended next ticket: `T0031 Server-side booking quote/draft`
 
 ## Current Structure
 
@@ -30,6 +30,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- check-roller-env.js
 |   |-- roller-client.js
 |   |-- roller-data-api-smoke.js
+|   |-- roller-payment-discovery.js
 |   |-- roller-seed-playground.js
 |   `-- roller-smoke.js
 |-- infra/
@@ -89,6 +90,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm run roller:env:check` | Validate Roller env guard against current environment variables. | Requires `ROLLER_ENV=playground` and a Playground-looking `ROLLER_BASE_URL`; client credentials are optional. |
 | `npm run roller:smoke` | Verify local Roller Playground credentials with an OAuth token request and one read-only smoke request. | Loads local `.env`; does not print secrets or full Roller responses. |
 | `npm run roller:data:smoke` | Verify local Roller Data API `/data/bookingitems` access and safe response shape. | Loads local `.env`; uses modified-date window defaults and does not print secrets, tokens, customer names, emails, or phone numbers. |
+| `npm run roller:payment:discover` | Dry-run the Roller Playground new-booking payment discovery path. | Loads local `.env`, validates Playground, reads products, selects a jump/session product, and creates no booking. |
+| `npm run roller:payment:discover:apply-draft` | Create one guarded Roller Playground draft booking for payment discovery. | Requires `ROLLER_PAYMENT_DISCOVERY_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_DRAFT_BOOKING`; does not print secrets, access tokens, or raw payment JWTs. |
 | `npm run roller:seed:playground` | Plan deterministic Roller Playground seed bookings. | Dry-run by default; no booking writes. |
 | `npm run roller:seed:playground:apply` | Create deterministic Roller Playground seed bookings. | Writes only when `ROLLER_SEED_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_BOOKINGS` is set and the Playground guard passes. |
 | Read-only `GET /bookings/{bookingReference}` | Verify known Playground booking lookup behavior. | Run through the existing Roller client helper; do not print secrets or raw PII. |
@@ -133,20 +136,20 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0027` | Added staff-confirmed redeem from session. | 2026-05-21 | Dev staff redeem route reuses the controlled T0021 final refresh/redeem path, requires a temporary dev code, and admin app can trigger completion from the handoff detail. |
 | `T0028` | Added QR/handoff lookup polish. | 2026-05-21 | Phone QR uses the server-owned `JY_HANDOFF:<handoffCode>:<checkinSessionId>` payload via the `qrcode` library, and admin can scan/paste QR payloads or type short codes to open handoff sessions. |
 | `T0029` | Added phone session resume routing. | 2026-05-21 | Paid lookup starts/resumes the server session; ready-for-staff sessions route directly from search to QR, completed/redeemed sessions show already checked in, and guest-in-progress sessions continue the normal phone flow. |
+| `T0030` | Added new-booking payment discovery tooling and docs. | 2026-05-21 | Confirmed Roller Playground draft booking returns costs plus `paymentJwt`; in-app payment still needs Roller payment-library authorization, domain allowlisting, package access, and test card details. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0029` | Phone session resume. | Completed locally | Frontend-only resume routing: paid lookup starts/resumes the server session, `ready_for_staff` opens QR confirmation directly from search, completed/redeemed opens already checked in, and `guest_in_progress` continues normally without AWS, Roller, admin, or redeem changes. |
+| `T0030` | New booking/payment discovery spike. | Completed locally | Added guarded local discovery tooling, confirmed `POST /bookings/draft` returns HTTP `201`, costs, and a present `paymentJwt` in Playground, and documented remaining Roller payment-library prerequisites. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0030` | New booking/payment discovery spike | Confirm Roller Playground draft booking, `paymentJwt`, fake/test card support, and whether payment can happen inside the JumpYard PWA without hosted payment-link detour. |
 | `T0031` | Server-side booking quote/draft | Add JumpYard Cloud quote/draft endpoints for new bookings against Roller Playground, with credentials and Roller writes kept server-side. |
-| `T0032` | Phone create-booking plus fake payment | Wire the phone app to create a booking and complete Playground/test payment if T0030 confirms in-app payment is supported. |
+| `T0032` | Phone create-booking plus fake payment | Wire the phone app to create a booking and complete Playground/test payment if Roller payment-library prerequisites are available. |
 | `T0033` | Staff auth replacement for temporary dev code | Replace the temporary dev redeem code with the selected staff/admin auth model before production. |
 | `T0034` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
 
@@ -334,13 +337,19 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0029 root validation: `npm run validate` passed.
 - T0029 browser ready resume: local phone app at `http://localhost:3000` searched booking `5032469`, resumed fresh session `jycs_mpfm485d_f3717834`, and routed directly from search to QR confirmation with handoff code `JY1721`.
 - T0029 browser already-redeemed resume: local phone app opened booking `5032454`, received the already-redeemed session-start block, and routed to `Redan incheckad` with `data-already-checked-in=true`.
+- T0030 payment discovery syntax: `node --check scripts/roller-payment-discovery.js` passed.
+- T0030 payment discovery dry-run: `npm run roller:payment:discover` passed, selected product `Biljetter (260 kr)` id `1765836`, and created no booking.
+- T0030 payment discovery write guard: `npm run roller:payment:discover:apply-draft` failed closed without `ROLLER_PAYMENT_DISCOVERY_ALLOW_WRITE`.
+- T0030 guarded draft write: direct guarded apply created Playground draft booking unique id `bcb88005-ae64-4617-ba7a-b02b095a86c2`; response returned HTTP `201`, total `260`, amount owing `260`, and `paymentJwtPresent=true` without printing the raw JWT.
+- T0030 official docs check: Roller Payments via API docs confirm the custom checkout path uses Roller's payment library plus returned draft-booking JWT, but requires ROLLER authorization, public HTTPS domain allowlisting, and approved payment package access.
+- T0030 root validation: `npm run validate` passed.
 
 ## Known Issues Summary
 
 - AWS dev foundation is deployed. Lookup, session, webhook, safe redeem-planning, and controlled dev redeem execution handlers are implemented; booking handlers are still placeholders and return `501`.
 - Roller credentials secret in AWS has been populated for dev and was used by T0009 lookup smoke tests.
 - JumpYard Cloud lookup API now uses Aurora first and refreshes from Roller when local data is missing or unsafe. Other API business logic is still pending.
-- Phone app booking lookup now calls JumpYard Cloud for the first check-in step, carries non-visible lookup source/freshness metadata, uses today's Stockholm date by default, starts/resumes a JumpYard Cloud session after paid lookup, routes active ready sessions directly to QR, and marks new sessions ready for staff after safety attestation. Payment, redeem, staff/admin, and booking creation UI behavior are still pending.
+- Phone app booking lookup now calls JumpYard Cloud for the first check-in step, carries non-visible lookup source/freshness metadata, uses today's Stockholm date by default, starts/resumes a JumpYard Cloud session after paid lookup, routes active ready sessions directly to QR, and marks new sessions ready for staff after safety attestation. Booking creation and payment UI behavior are still pending.
 - Aurora schema exists in dev. T0012 writes normalized `/data/bookingitems` snapshots into `roller_bookings` and `roller_booking_items`, T0013 enriches booking item product names from `product_catalog_cache`, T0014 imports tickets plus customer contact data, T0016 live-refresh lookup can upsert refreshed booking/item/ticket data, and T0017 webhook enrichment can upsert refreshed booking/item/ticket data.
 - Booking index ingestion has started with Data API bookingitems, REST product catalog cache, tickets, booking payments, customer contact data, dev webhook event intake/enrichment, lookup-driven live refresh, and real Roller Playground webhook delivery.
 - Roller Data API `/data/bookingitems`, `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access, query params, paging shape, and modified-date behavior are confirmed in Playground for the T0008 seed window.
@@ -348,6 +357,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
 - Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, and phone session resume routing is complete locally from T0029.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
+- Roller `POST /bookings/draft` has been executed once through the protected T0030 discovery path against Playground and returned costs plus `paymentJwt`; actual payment execution still needs Roller payment-library prerequisites.
 - Existing-booking add-product linked-booking flow has not been tested yet.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
@@ -361,4 +371,4 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Which exact production auth header/signature and optional IP allowlisting should Roller webhook intake use beyond the confirmed Playground `x-roller-apikey` header?
 - Which real Roller redemption device name should JumpYard Cloud send, if any, before production check-in?
 - Which staff/admin authentication model should authorize final redeem in the pilot?
-- Does Roller Playground support draft-booking `paymentJwt` payment inside the JumpYard PWA, including fake/test cards and any domain allow-listing requirements?
+- Which Roller payment-library package, public HTTPS test domain allowlist, and fake/test card details are required before T0032 can complete payment inside the JumpYard PWA?

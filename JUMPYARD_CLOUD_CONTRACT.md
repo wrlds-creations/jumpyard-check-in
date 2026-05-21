@@ -126,7 +126,8 @@ Rules:
 | Booking search fallback | `GET /bookings` | Read | Confirmed | Requires at least one query param. Supports `keywords`, `date`, `startTime`, `productIds`, `locationIds`. Use when guest lacks QR/code. |
 | Booking detail | `GET /bookings/{uniqueId}` | Read | Confirmed | Booking reference is also accepted in Playground. Authoritative live lookup for existing booking flow. |
 | New booking cost | `POST /bookings/draft/costs` | Write-like calculation | Confirmed | Use for final pre-payment basket calculation. It applies pricing/discount logic better than product list display. |
-| Create draft booking | `POST /bookings/draft` | Write | Confirmed | Recommended path for new booking/payment flow. Holds capacity through draft timer. |
+| Create draft booking | `POST /bookings/draft` | Write | Confirmed | T0030 confirmed Playground HTTP `201` with cost fields and a present `paymentJwt`. Recommended path for new booking/payment flow. Holds capacity through draft timer. |
+| Roller Payments custom checkout | Roller Payments library + returned `paymentJwt` | Frontend payment package | Confirmed docs, implementation prerequisites open | Official docs describe passing the draft-booking JWT to Roller's payment library and Adyen drop-in. Requires ROLLER authorization, public HTTPS domain allowlisting, approved package access, and confirmed test/fake card details before phone UI work. |
 | Publish zero-owing draft | `POST /bookings/draft/publish` | Write | Confirmed | Use when no payment remains due, such as full gift-card coverage. |
 | Create booking | `POST /bookings` | Write | Confirmed endpoint | Available, but draft booking is preferred for payment-led phone flow. |
 | Update existing booking | `PUT /bookings/{uniqueId}` | Write | Confirmed but not primary for pilot add-products | Adds/removes products and preserves same booking code, but payment-link UX can break return to the JumpYard PWA/check-in flow. |
@@ -507,6 +508,16 @@ Draft rules:
 - If amount owing is zero, use `POST /bookings/draft/publish`.
 - Payment implementation must first confirm how Roller's returned `paymentJwt` is used, which fake/test card numbers are supported in Playground, and whether the payment component can run inside the JumpYard PWA without a hosted payment-link detour.
 
+T0030 discovery result:
+
+- Local dry-run command: `npm run roller:payment:discover`.
+- Guarded Playground draft command: `npm run roller:payment:discover:apply-draft` plus `ROLLER_PAYMENT_DISCOVERY_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_DRAFT_BOOKING`.
+- Guarded apply created draft unique id `bcb88005-ae64-4617-ba7a-b02b095a86c2` in Playground for a fake customer and did not process payment.
+- The draft response returned HTTP `201`, total `260`, amount owing `260`, and a present three-part `paymentJwt`.
+- The script summarizes only safe identifiers and JWT shape; it never prints the raw JWT, access token, client secret, or customer PII beyond fake-domain metadata.
+- Roller Payments via API docs confirm the intended custom checkout sequence: get venue payment configuration, bootstrap Roller's payment library, create a draft booking, pass the returned JWT to `setupPayment`, let Adyen drop-in collect payment, then use payment result and booking-created webhook for success handling.
+- Before T0032 phone payment UI, JumpYard needs Roller to authorize the connection, allowlist a public HTTPS test domain, provide the approved payment package, and confirm fake/test card details.
+
 ### `POST /v1/bookings/{bookingReference}/add-products/quote`
 
 Calculates an existing-booking product addition before changing the original booking.
@@ -610,7 +621,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0029`. The next recommended ticket is `T0030 New booking/payment discovery spike`.
+Current implementation has progressed through `T0030`. The next recommended ticket is `T0031 Server-side booking quote/draft`.
 
 Near-term sequence:
 
@@ -618,9 +629,9 @@ Near-term sequence:
 2. `T0027 Staff-confirmed redeem from session`: completed locally; staff can confirm redeem from a server-owned session after final Roller refresh.
 3. `T0028 QR/handoff code polish`: completed locally; phone QR uses `JY_HANDOFF:<handoffCode>:<checkinSessionId>`, and admin can scan/paste the payload or search by short code.
 4. `T0029 Phone session resume`: completed locally; paid lookup starts/resumes the server session, ready handoffs resume directly from search to the QR screen, completed/redeemed sessions show already checked in, and guest-in-progress sessions continue normally.
-5. `T0030 New booking/payment discovery spike`: prove the exact Roller Playground draft/payment path, including `paymentJwt`, fake/test cards, and in-app PWA feasibility.
+5. `T0030 New booking/payment discovery spike`: completed locally; `POST /bookings/draft` and `paymentJwt` are confirmed, while payment package, test cards, and domain allowlisting remain prerequisites.
 6. `T0031 Server-side booking quote/draft`: expose JumpYard Cloud quote/draft endpoints for new bookings while keeping Roller credentials server-side.
-7. `T0032 Phone create-booking plus fake payment`: wire the phone app to create and test-pay a Playground booking if T0030 confirms in-app payment is supported.
+7. `T0032 Phone create-booking plus fake payment`: wire the phone app to create and test-pay a Playground booking if Roller payment-library prerequisites are available.
 8. `T0033 Staff auth plan/implementation`: replace the temporary dev redeem code with the selected staff/admin authentication model.
 9. `T0034 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
 
@@ -628,7 +639,7 @@ Near-term sequence:
 
 - What is the best Roller field or internal JumpYard field for marking an add-on booking as linked to an original booking?
 - Which tenders work in the new add-on booking checkout flow: gift card, membership code, multi-visit value?
-- Does Roller Playground support in-app payment from draft booking `paymentJwt`, and what fake/test card details and domain allow-listing are required?
+- Does Roller Playground support in-app payment from draft booking `paymentJwt`, and what fake/test card details and domain allow-listing are required? T0030 confirmed the documented payment-library path and JWT shape, but test cards, package access, and allowlisting remain open.
 - What exact response shape should JumpYard expect from `POST /redemptions` for partial success/failure?
 - Which webhook event id should be used for idempotent webhook processing?
 - Which Data API export endpoint, credentials, and date range should JumpYard use for the morning booking seed?
