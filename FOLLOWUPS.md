@@ -22,6 +22,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-027` | `T0010` | Phone operating date | Replace the T0008 demo expected-date default with a venue operating-date source before pilot/production. | High | `TBD` | Open |
 | `FU-029` | `T0014` | Gift cards | Add `/data/giftcards` ingestion when gift card payment/check-in flows are explicitly scoped. | Medium | `TBD` | Open |
 | `FU-030` | `T0015` | Webhook registration | Register the Roller Playground booking webhook against the dev endpoint and confirm the real delivery headers/body before production hardening. | High | `TBD` | Open |
+| `FU-031` | `T0016` | Lookup fallback | Add supported `GET /bookings` search fallback for cases where direct `GET /bookings/{identifier}` cannot resolve an imprecise guest input. | Medium | `TBD` | Open |
 
 ## Resolved Followups
 

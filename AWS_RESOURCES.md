@@ -4,7 +4,7 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0002` have been applied, the dev lookup endpoint performs server-side Roller Playground booking lookup, the dev webhook endpoint records Roller webhook intake events, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, and webhook intake metadata.
+JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0002` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev webhook endpoint records Roller webhook intake events, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, and webhook intake metadata.
 
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
@@ -79,6 +79,14 @@ T0015 webhook intake deploy notes:
 - Response behavior: HTTP `200` for accepted, duplicate, unauthorized, invalid JSON, and oversized requests; HTTP `500` for config/database/internal failures that should trigger Roller retry.
 - Raw webhook payloads, customer names, addresses, booking notes, secrets, and tokens are not printed or intentionally stored.
 
+T0016 Aurora-first lookup deploy notes:
+
+- Changed resource: `jumpyard-check-in-dev-stack-lookup`
+- Endpoint: `POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/lookup`
+- Behavior: reads fresh local records from `jumpyard.roller_bookings`, `jumpyard.roller_booking_items`, and `jumpyard.roller_booking_tickets` before calling Roller; refreshes from Roller `GET /bookings/{identifier}` when local data is missing, stale, tombstoned, or unclear; and upserts refreshed booking/item/ticket metadata back into Aurora.
+- Roller writes: none.
+- Raw Roller payloads, customer names, addresses, booking notes, secrets, and tokens are not printed or intentionally stored.
+
 Confirmed T0006 dev target:
 
 | Field | Value |
@@ -97,7 +105,7 @@ Confirmed T0006 dev target:
 |---|---|---|---|---|---|
 | `jumpyard-check-in-dev-stack` | CloudFormation | `dev` | `eu-north-1` | `cdk` | `CREATE_COMPLETE`. |
 | `m0uo5g4mde` | API Gateway HTTP API | `dev` | `eu-north-1` | `cdk` | Endpoint `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`; lookup and webhook routes are implemented, booking/redeem placeholder routes return `501`. |
-| `jumpyard-check-in-dev-stack-lookup` | Lambda | `dev` | `eu-north-1` | `cdk` | T0009 lookup handler; reads Roller Playground booking detail server-side and returns normalized phone-flow lookup response. |
+| `jumpyard-check-in-dev-stack-lookup` | Lambda | `dev` | `eu-north-1` | `cdk` | T0016 lookup handler; reads Aurora first, refreshes from Roller Playground only when needed, and returns normalized phone-flow lookup response. |
 | `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | Placeholder booking handler; no Roller calls. |
 | `jumpyard-check-in-dev-stack-redeem` | Lambda | `dev` | `eu-north-1` | `cdk` | Placeholder redeem handler; no Roller calls. |
 | `jumpyard-check-in-dev-stack-webhook` | Lambda | `dev` | `eu-north-1` | `cdk` | T0015 webhook intake handler; validates a dev token, stores idempotent metadata, and makes no Roller calls. |
@@ -130,9 +138,9 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`.
 | Table | Purpose |
 |---|---|
 | `schema_migrations` | Tracks applied SQL migrations. Applied through `0002 related data sources`. |
-| `roller_bookings` | Latest normalized Roller booking snapshot from seed, webhook enrichment, or live refresh. |
-| `roller_booking_items` | Normalized booking item/product rows. |
-| `roller_booking_tickets` | Ticket ids and redeem readiness context from `/data/tickets`. |
+| `roller_bookings` | Latest normalized Roller booking snapshot from seed, webhook enrichment, or live refresh. T0016 can upsert lookup-refreshed booking rows. |
+| `roller_booking_items` | Normalized booking item/product rows. T0016 can upsert lookup-refreshed item rows. |
+| `roller_booking_tickets` | Ticket ids and redeem readiness context from `/data/tickets` or lookup live refresh. |
 | `roller_booking_payments` | Payment rows or summaries needed for check-in/payment decisions from `/data/bookingpayments`. |
 | `guest_profiles` | Structured guest email/phone contact state plus masked/hash values for SMS/readiness and late enrichment. |
 | `checkin_tokens` | SMS/link/open token state. |

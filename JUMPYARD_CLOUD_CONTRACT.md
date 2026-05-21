@@ -229,8 +229,11 @@ Response:
 
 Lookup rules:
 
-- If the identifier looks like a booking reference or unique id, call `GET /bookings/{identifier}` first.
-- If direct lookup fails, use `GET /bookings` with supported filters.
+- Try Aurora first by booking reference, Roller unique id, or known ticket id.
+- If Aurora has a fresh, usable record, return that normalized snapshot for display.
+- If Aurora is missing, stale, tombstoned, or payment state is unclear, call `GET /bookings/{identifier}`.
+- If direct live lookup fails, use `GET /bookings` with supported filters in a later fallback ticket.
+- Upsert successful live lookup refreshes back into Aurora.
 - Normalize Roller errors into stable JumpYard error codes.
 - Do not return raw Roller payloads to the phone app.
 - Do not persist full PII unless a later ticket explicitly approves it.

@@ -6,7 +6,7 @@ Use this file to define validation for the current project or milestone.
 
 | Command | Purpose | Result | Notes |
 |---|---|---|---|
-| `npm run validate` | Validate root WRLDS workflow files and skills. | Passed | Passed on 2026-05-20 during T0015. |
+| `npm run validate` | Validate root WRLDS workflow files and skills. | Passed | Passed on 2026-05-21 during T0016. |
 | `npm run roller:env:check` | Confirm Roller env guard passes for local Playground config. | Passed | Passed with local `.env`. |
 | `npm run roller:smoke` | Confirm Roller Playground auth works and one read-only request can run. | Passed | Passed with local `.env`; `/products` returned HTTP 200 and 96 products on 2026-05-19. |
 | `npm run roller:seed:playground` | Plan deterministic Playground seed bookings without writes. | Passed | Passed on 2026-05-20; resolved six scenarios to child/variation product IDs. |
@@ -64,6 +64,12 @@ Use this file to define validation for the current project or milestone.
 | T0015 deployed duplicate webhook smoke | Confirm webhook idempotency. | Passed | Repeating the same authorized event returned HTTP `200` and `duplicate`. |
 | T0015 Aurora webhook query | Confirm deployed webhook smoke wrote metadata into Aurora. | Passed | `jumpyard.roller_webhook_events` contains event `t0015-smoke-booking-created-5032210` with status `received`. |
 | T0015 post-deploy CDK diff | Confirm dev stack matches local T0015 template. | Passed | `npm --prefix infra run diff:dev` showed no differences. |
+| `node --check infra/lambda/lookup/index.js` | Confirm T0016 lookup Lambda JavaScript syntax. | Passed | Passed on 2026-05-21. |
+| T0016 local invalid JSON check | Confirm bad JSON is handled by the Lambda response instead of API Gateway failure. | Passed | Returned HTTP `400` with `invalid_json`. |
+| T0016 local Aurora-first smoke | Confirm seeded bookings read from Aurora without Roller refresh. | Passed | `5032210`, `5032211`, and `5032212` returned from source `jumpyard_cloud`. |
+| T0016 local live-refresh smoke | Confirm missing local booking refreshes from Roller and is then cached. | Passed | First `5001370` returned source `roller`; second `5001370` returned source `jumpyard_cloud`. |
+| T0016 deployed lookup smoke | Confirm dev API uses Aurora-first behavior. | Passed | `5032210` ready, `5032211` payment required, `5032212` wrong date, `999999999` not found, and invalid JSON returned expected responses. |
+| T0016 post-deploy CDK diff | Confirm dev stack matches local T0016 template. | Passed | `npm --prefix infra run diff:dev` showed no differences. |
 | `npm --prefix infra run migrate:dev:status` | Confirm pending/applied Aurora migrations for dev. | Passed | Showed `0001 initial schema: pending` before apply and `applied` after apply on 2026-05-20. |
 | `npm --prefix infra run migrate:dev` | Apply pending Aurora migrations to dev. | Passed | Applied `0001 initial schema` to the approved dev Aurora cluster on 2026-05-20. |
 | Aurora Data API schema query | Confirm expected `jumpyard` tables and indexes exist. | Passed | Verified 15 tables and 62 indexes in schema `jumpyard`. |
@@ -84,6 +90,7 @@ Use this file to define validation for the current project or milestone.
 | T0013 Query Editor review | Run the T0013 product verification SQL in AWS Query Editor. | Pending | Expected: 491 product cache rows and product names on the nine seed booking item rows. |
 | T0014 Query Editor review | Run the T0014 related data verification SQL in AWS Query Editor. | Pending | Expected: 6 tickets, 0 payments for the seed window, and 6 guest profiles with masked contact fields. |
 | T0015 Query Editor review | Run the T0015 webhook verification SQL in AWS Query Editor. | Pending | Expected: smoke event `t0015-smoke-booking-created-5032210` is visible with status `received`. |
+| T0016 Query Editor review | Run the T0016 lookup-refresh verification SQL in AWS Query Editor. | Pending | Expected: `5001370` exists in `roller_bookings` with `source_last_updated_by='roller_live_lookup'`. |
 
 ## Roller Playground Validation
 
@@ -151,6 +158,7 @@ Use this file to define validation for the current project or milestone.
 | T0009 CDK deploy | Dev lookup Lambda is updated. | Passed | `npm --prefix infra run deploy:dev` updated `jumpyard-check-in-dev-stack-lookup`. |
 | T0009 CDK diff after deploy | Dev stack is in sync after deploy. | Passed | `npm --prefix infra run diff:dev` showed no differences. |
 | T0015 CDK deploy | Dev webhook Lambda and dev token secret are in the approved stack. | Passed | `npm --prefix infra run deploy:dev` passed and reported no changes because the stack was already in sync. |
+| T0016 CDK deploy | Dev lookup Lambda is updated with Aurora-first code. | Passed | `npm --prefix infra run deploy:dev` updated only `LookupHandler`. |
 
 ## Aurora Schema Validation
 
