@@ -1,15 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0027
+T0028
 
 ## Goal
-Redeem selected tickets from a server-owned check-in session after staff confirmation.
+Improve the phone-to-staff handoff by making the guest QR payload usable in the staff/admin app.
 
 ## Dependencies
-- T0026 completed and merged.
-- Dev staff handoff list/detail endpoints exist.
-- Dev controlled Roller redeem token exists in AWS Secrets Manager.
+- T0027 completed and merged.
+- Phone app already receives a server-owned `handoffCode` and `checkinSessionId`.
+- Admin app already lists and opens ready-for-staff sessions.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -17,87 +17,86 @@ Redeem selected tickets from a server-owned check-in session after staff confirm
 - DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
-- AWS_RESOURCES.md
 - TEST_PLAN.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- `infra/lib/jumpyard-cloud-stack.ts`
-- `infra/lambda/redeem/index.js`
-- `jumpyard-checkin-admin/`
+- `jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx`
+- `jumpyard-checkin-phone/src/components/QrCode.tsx`
+- `jumpyard-checkin-phone/package.json`
+- `jumpyard-checkin-phone/package-lock.json`
+- `jumpyard-checkin-admin/src/app/page.tsx`
 
 ## Do not touch
-- Phone check-in flow
-- Kiosk flow
+- AWS infrastructure
+- Lambda/API handlers
+- Aurora migrations
+- Roller API code
+- Redeem business logic
 - Booking creation/add-product logic
 - Payment logic
-- Roller webhook registration
+- Kiosk flow
 - Production credentials
 - Live Roller config
 - Unrelated assets or deliverables
 
 ## Requirements
 
-1. Add staff-confirmed session redeem endpoint:
-   - `POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem`
+1. Keep the phone final confirmation QR based on the server-owned payload:
+   - `JY_HANDOFF:<handoffCode>:<checkinSessionId>`
 
-2. The endpoint must:
-   - Resolve the server-owned check-in session from Aurora.
-   - Require `status='ready_for_staff'` and `handoff_status='ready_for_staff'`.
-   - Require completed safety status for this first staff-confirmed path.
-   - Use the session's selected ticket ids.
-   - Require idempotency.
-   - Require the dev redeem token until a real staff auth model exists.
-   - Reuse the T0021 final Roller REST refresh and eligibility re-check before writing.
-   - Call Roller `POST /redemptions` only after all checks pass.
-   - Update local ticket state, check-in attempt audit, event log, and the session completion state after success.
+2. Polish the phone confirmation QR display:
+   - Show the scannable QR and short handoff code.
+   - Keep the full payload available for test/debug attributes.
+   - Use a proven QR generator so external QR scanners can decode the payload.
+   - Do not expose Roller secrets or redeem tokens.
+   - Do not call Roller or redeem tickets.
 
-3. Update the staff/admin app to:
-   - Show a staff-confirmed redeem action on the selected handoff detail.
-   - Require a manually entered temporary dev confirmation code.
-   - Never store the code in source, browser env, localStorage, or sessionStorage.
-   - Show success/error state after redeem.
-   - Remove completed sessions from the active waiting list.
+3. Add staff/admin handoff lookup improvements:
+   - Allow staff to scan the phone QR with the device camera.
+   - Allow staff to paste the full QR payload manually.
+   - Allow staff to type the short handoff code and select it from the active waiting list.
+   - Open the exact server-owned session when the QR payload contains `checkinSessionId`.
+   - Stop camera scanning after a successful scan or when the scanner is closed.
+   - Show a helpful error when a scanned/pasted value cannot be understood.
 
 4. Update source-of-truth docs with:
-   - T0027 status.
-   - Staff redeem endpoint contract.
-   - AWS route/resource notes.
+   - T0028 status.
+   - QR/handoff payload behavior.
    - Validation results.
    - Recommended next ticket.
 
 ## Non-goals
-- Do not implement production staff authentication.
-- Do not expose redeem tokens to the phone app.
-- Do not store the dev redeem token in frontend config or browser storage.
-- Do not implement QR scanner polish.
+- Do not add production staff authentication.
+- Do not change the temporary dev redeem code flow.
+- Do not create or change AWS resources.
+- Do not change Roller webhook registration.
+- Do not add a new backend endpoint.
 - Do not implement booking creation, add-products, or payment.
-- Do not change Roller Live/production.
+- Do not add QR signing or short-lived QR tokens yet.
 
 ## Acceptance criteria
-- Staff redeem endpoint is deployed to dev.
-- Admin app can trigger staff-confirmed redeem for a ready session.
-- Endpoint performs final Roller refresh before `POST /redemptions`.
-- Successful redeem marks the session `redeemed`/`completed`.
-- Successful redeem marks local selected tickets as redeemed.
+- Phone final screen shows a QR derived from the server-owned handoff payload.
+- Admin app can open a session by full QR payload.
+- Admin app can scan QR codes using the existing browser QR library.
+- Admin app can still search by short handoff code or booking reference.
 - `npm run validate` passes.
-- Infra checks pass.
+- Phone lint/build pass.
 - Admin lint/build pass.
-- No phone app source files are changed.
+- No AWS, Roller, or redeem handler changes are made.
 
 ## Manual verification
-1. Create or use a paid Playground booking.
-2. Complete the phone flow until the booking appears in the admin handoff list.
+1. Complete the phone flow until the confirmation screen shows a handoff code and QR.
+2. Confirm the QR card has payload `JY_HANDOFF:<handoffCode>:<checkinSessionId>`.
 3. Open the staff/admin app.
-4. Select the handoff.
-5. Enter the temporary dev redeem confirmation code.
-6. Click the staff-confirmed redeem action.
-7. Confirm the admin UI shows success and the session leaves the waiting list.
-8. Confirm Roller Playground shows the item/ticket as redeemed.
+4. Paste the full payload into the search field and click `Öppna`.
+5. Confirm the matching session detail opens.
+6. Click `Skanna QR`.
+7. Confirm the scanner opens and can be closed cleanly.
+8. If a camera is available, scan the phone QR and confirm the matching session detail opens.
 
 ## Automated validation
 Run:
 - `npm run validate`
-- `node --check infra/lambda/redeem/index.js`
-- `npm --prefix infra run build`
-- `npm --prefix infra run synth:dev`
+- `npm --prefix jumpyard-checkin-phone run lint`
+- `npm --prefix jumpyard-checkin-phone run build`
 - `npm --prefix jumpyard-checkin-admin run lint`
 - `npm --prefix jumpyard-checkin-admin run build`
