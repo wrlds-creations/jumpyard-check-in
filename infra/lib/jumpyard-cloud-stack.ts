@@ -252,11 +252,16 @@ export class JumpYardCloudStack extends Stack {
     const redeemHandler = this.createHandler('RedeemHandler', 'redeem', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'redeem')),
     });
+    const sessionHandler = this.createHandler('SessionHandler', 'session', handlerResources, {
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'session')),
+    });
     const webhookHandler = this.createHandler('WebhookHandler', 'webhook', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'webhook')),
     });
 
     this.addRoute(api, lookupHandler, 'POST /v1/check-in/lookup');
+    this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions');
+    this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff');
     this.addRoute(api, redeemHandler, 'POST /v1/check-in/redeem');
     this.addRoute(api, bookingHandler, 'POST /v1/bookings/quote');
     this.addRoute(api, bookingHandler, 'POST /v1/bookings/draft');
@@ -338,13 +343,17 @@ exports.handler = async () => ({
       environment,
     });
 
-    resources.rollerCredentialsSecret.grantRead(fn);
+    if (handlerName !== 'session') {
+      resources.rollerCredentialsSecret.grantRead(fn);
+    }
     resources.databaseSecret.grantRead(fn);
-    resources.rawPayloadBucket.grantReadWrite(fn);
-    resources.rollerOperationsQueue.grantSendMessages(fn);
-    resources.eventBus.grantPutEventsTo(fn);
-    resources.rollerEnvParameter.grantRead(fn);
-    resources.rollerBaseUrlParameter.grantRead(fn);
+    if (handlerName !== 'session') {
+      resources.rawPayloadBucket.grantReadWrite(fn);
+      resources.rollerOperationsQueue.grantSendMessages(fn);
+      resources.eventBus.grantPutEventsTo(fn);
+      resources.rollerEnvParameter.grantRead(fn);
+      resources.rollerBaseUrlParameter.grantRead(fn);
+    }
     if (handlerName === 'webhook') {
       resources.webhookDevTokenSecret.grantRead(fn);
     }

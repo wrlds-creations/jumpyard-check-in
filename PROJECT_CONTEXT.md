@@ -53,6 +53,8 @@ T0021 enables controlled Roller Playground redemption execution for dev only. Co
 
 T0022 locks the phone/staff redeem handoff design. The phone app may start or resume a server-owned check-in session, but it must not hold redeem secrets or directly execute Roller redemption. Final ticket redemption remains a JumpYard Cloud action after staff/admin or another trusted server-side confirmation step, with the T0021 final Roller refresh still required before `POST /redemptions`.
 
+T0023 implements the server-owned check-in session API skeleton in dev. JumpYard Cloud now has a `jumpyard.checkin_sessions` Aurora table, a deployed session Lambda, `POST /v1/check-in/sessions`, and `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff`. The session API reads Aurora booking/ticket context, creates or resumes active sessions, blocks unsafe contexts, marks sessions ready for staff, and never calls Roller or redeems tickets.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -154,6 +156,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0021 Controlled Playground redeem execution` | Protect confirmed dev redemption with a separate token, refresh live Roller state, then execute one controlled Playground redeem. | First real ticket-level check-in write, still dev-only and not wired to phone UI. |
 | `T0022 Phone/staff redeem handoff design` | Lock how the phone flow hands a ready booking to staff/server-owned final redeem. | Prevents exposing the T0021 dev token or future production redeem authority to the frontend. |
 | `T0023 Check-in session API skeleton` | Implement the server-owned check-in session/handoff endpoints without redeeming tickets from the phone UI. | Gives the phone flow a safe next step after lookup while keeping final Roller redemption behind staff/server confirmation. |
+| `T0024 Phone start-check-in session wiring` | Wire the phone app start-check-in CTA to `POST /v1/check-in/sessions`. | Lets the guest flow create/resume a server-owned session while still keeping final Roller redemption out of the phone UI. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -297,6 +300,15 @@ T0022 locks the handoff boundary:
 - the phone app must not call the confirmed redeem path with a secret token
 - final redeem must be staff/admin-confirmed or server-trusted
 - the final redeem path still needs the T0021 live Roller refresh and eligibility re-check before writing to Roller
+
+T0023 confirmed server-side session behavior:
+
+- dev endpoint `POST /v1/check-in/sessions` creates or resumes a session from Aurora booking/ticket snapshots
+- dev endpoint `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff` marks the session ready for staff and creates a handoff code
+- booking `5032210` created session `jycs_mpfe3dum_7dc29b1b` and was later resumed
+- booking `5032211` was blocked as `payment_required`
+- session `jycs_mpfe3dum_7dc29b1b` was marked `ready_for_staff` with handoff code `JY6085`
+- no Roller API calls or Roller writes happen in the session API
 
 ## Non-Goals For Current Ticket
 

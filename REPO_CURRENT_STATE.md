@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-21
-- Current branch: `codex/t0022-phone-staff-redeem-handoff-design`
-- Current status: T0022 phone/staff redeem handoff design completed locally; no app, infra, AWS, migration, credential, or Roller changes.
-- Current ticket: `T0022` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`
-- Recommended next ticket: `T0023 Check-in session API skeleton`
+- Current branch: `codex/t0023-checkin-session-api-skeleton`
+- Current status: T0023 check-in session API skeleton completed locally and deployed to dev.
+- Current ticket: `T0023` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`
+- Recommended next ticket: `T0024 Phone start-check-in session wiring`
 
 ## Current Structure
 
@@ -38,6 +38,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- config/dev.example.json
 |   |-- lambda/lookup/index.js
 |   |-- lambda/redeem/index.js
+|   |-- lambda/session/index.js
 |   |-- lambda/webhook/index.js
 |   |-- lib/config.ts
 |   |-- scripts/import-bookingitems.ts
@@ -47,6 +48,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- lib/jumpyard-cloud-stack.ts
 |   |-- migrations/0001_initial_schema.sql
 |   |-- migrations/0002_related_data_sources.sql
+|   |-- migrations/0003_checkin_sessions.sql
 |   |-- scripts/run-migrations.ts
 |   |-- cdk.json
 |   |-- package.json
@@ -119,22 +121,23 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0020` | Added safe server-owned redeem planning endpoint. | 2026-05-21 | Dev `POST /v1/check-in/redeem` resolves Aurora tickets, writes planned/blocked audit rows, and keeps Roller redemption writes disabled. |
 | `T0021` | Enabled controlled Playground redeem execution. | 2026-05-21 | Dev `POST /v1/check-in/redeem` requires a dev token for confirmed writes, refreshes Roller before write, and redeemed dedicated booking `5032454`. |
 | `T0022` | Locked phone/staff redeem handoff design. | 2026-05-21 | Phone may start/resume a JumpYard Cloud check-in session, but final Roller redemption must be staff/server-confirmed and never secret-powered from the frontend. |
+| `T0023` | Implemented server-owned check-in session API skeleton. | 2026-05-21 | Dev session API creates/resumes Aurora-backed sessions and marks sessions ready for staff without Roller calls or phone UI changes. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0022` | Phone/staff redeem handoff design. | Completed locally | Docs-only contract update; no app, Lambda, CDK, migration, AWS, `.env`, or Roller writes. |
+| `T0023` | Check-in session API skeleton. | Completed locally and deployed to dev | Session `jycs_mpfe3dum_7dc29b1b` for booking `5032210` reached `ready_for_staff` with handoff code `JY6085`; booking `5032211` was blocked as `payment_required`. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0023` | Check-in session API skeleton | Implement server-owned check-in session/handoff endpoints without exposing final Roller redemption to the phone UI. |
+| `T0024` | Phone start-check-in session wiring | Wire the phone app start-check-in CTA to `POST /v1/check-in/sessions` without direct phone redemption. |
 
 ## Validation Status
 
-- Automated root validation: `npm run validate` passed during T0018 on 2026-05-21.
+- Automated root validation: `npm run validate` passed during T0023 on 2026-05-21.
 - Infra validation: `npm run infra:check` passed during T0007 on 2026-05-20.
 - Infra synth: `npm run infra:synth` passed during T0004 using `infra/config/dev.example.json`.
 - Metadata guard: missing `-c config=...` fails as expected before synth.
@@ -282,10 +285,19 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0021 Aurora verification: direct Data API query showed `redeemed` and `already_redeemed` attempt rows, and `roller_booking_tickets.redeem_status_last_seen='redeemed'` for `5032454-21397335`.
 - T0021 post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
 - T0022 validation: `npm run validate` passed; no app code, infra code, AWS resources, migrations, credentials, `.env`, or Roller calls were changed.
+- T0023 validation: `npm run validate`, `node --check infra/lambda/session/index.js`, `npm --prefix infra run build`, and `npm --prefix infra run synth:dev` passed.
+- T0023 AWS preflight: `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`, and region `eu-north-1` was confirmed.
+- T0023 migration status before apply: `0001` and `0002` applied, `0003 checkin sessions` pending.
+- T0023 migration apply: `npm --prefix infra run migrate:dev` applied `0003 checkin sessions`.
+- T0023 pre-deploy diff: `npm --prefix infra run diff:dev` showed only the approved session Lambda, log group, two API routes, invoke permissions, and scoped DB/log permissions.
+- T0023 deploy: `npm --prefix infra run deploy:dev` created `jumpyard-check-in-dev-stack-session` and session API routes.
+- T0023 deployed smoke: booking `5032210` returned `session_started` with session `jycs_mpfe3dum_7dc29b1b`; repeating start returned `session_resumed`; booking `5032211` returned `payment_required`; marking the session ready returned `ready_for_staff` with handoff code `JY6085`.
+- T0023 Aurora verification: direct Data API query showed session `jycs_mpfe3dum_7dc29b1b` with `status='ready_for_staff'`, `handoff_status='ready_for_staff'`, and `safety_status='completed'`.
+- T0023 post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
 
 ## Known Issues Summary
 
-- AWS dev foundation is deployed. Lookup, webhook, safe redeem-planning, and controlled dev redeem execution handlers are implemented; booking handlers are still placeholders and return `501`.
+- AWS dev foundation is deployed. Lookup, session, webhook, safe redeem-planning, and controlled dev redeem execution handlers are implemented; booking handlers are still placeholders and return `501`.
 - Roller credentials secret in AWS has been populated for dev and was used by T0009 lookup smoke tests.
 - JumpYard Cloud lookup API now uses Aurora first and refreshes from Roller when local data is missing or unsafe. Other API business logic is still pending.
 - Phone app booking lookup now calls JumpYard Cloud for the first check-in step, carries non-visible lookup source/freshness metadata, uses today's Stockholm date by default, and still blocks unpaid bookings. Payment, redeem, and booking creation UI behavior are still pending.
@@ -294,7 +306,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Roller Data API `/data/bookingitems`, `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access, query params, paging shape, and modified-date behavior are confirmed in Playground for the T0008 seed window.
 - Webhook retry behavior, response handling, booking event names, Playground auth header `x-roller-apikey`, and dev webhook registration are confirmed. Exact production auth/signature and IP allowlisting choice remain open.
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
-- Staff handoff/redeem flow design is documented in T0022; session/handoff endpoint implementation has not been started.
+- Staff handoff/redeem flow design is documented in T0022, and server-owned session/handoff API skeleton is deployed from T0023. Phone UI and staff/admin UI wiring have not started.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
 - Existing-booking add-product linked-booking flow has not been tested yet.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.

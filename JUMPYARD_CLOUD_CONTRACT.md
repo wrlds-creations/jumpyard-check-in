@@ -273,6 +273,8 @@ Lookup rules:
 
 Starts or resumes a server-owned check-in session after a successful lookup.
 
+Implemented in T0023 for dev.
+
 Request:
 
 ```json
@@ -303,8 +305,10 @@ Response:
 Session rules:
 
 - Create or resume one active operational session for the booking and visit date.
+- Read booking/ticket context from Aurora only.
 - Store only server-owned state needed for the flow.
 - Do not redeem tickets from this endpoint.
+- Do not call Roller from this endpoint.
 - Do not expose dev/prod redeem secrets to the phone app.
 - Use idempotency so repeated taps do not create duplicate active sessions.
 - Route ambiguous, unpaid, wrong-date, or already-redeemed states to staff/status screens instead of forcing redemption.
@@ -313,11 +317,14 @@ Session rules:
 
 Marks a guest-side session as ready for staff or server confirmation.
 
+Implemented in T0023 for dev.
+
 Rules:
 
 - Used after guest-side steps are complete enough for pilot handoff.
 - Generates or refreshes a handoff code/status for staff/admin surfaces.
 - Does not call Roller.
+- Does not redeem tickets.
 - Records an event-log row for audit.
 
 ### `POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem`
@@ -546,18 +553,14 @@ Rules:
 
 ## Implementation Sequence
 
-Recommended next tickets:
+Current implementation has progressed through `T0023`. The next recommended ticket is `T0024 Phone start-check-in session wiring`, which should connect the phone app start-check-in action to `POST /v1/check-in/sessions` without adding phone-side redeem authority.
 
-1. `T0004 JumpYard Cloud AWS foundation`: deploy-blocked CDK skeleton, tags, API Gateway, Lambda placeholders, Secrets Manager placeholders, SSM config, Aurora PostgreSQL, S3 raw payload bucket, SQS/EventBridge queueing, no Roller writes. Completed locally; not deployed.
-2. `T0005 Booking index ingestion contract`: define daily Data API seed, booking webhook processing, and live lookup reconciliation in implementation-ready detail. Completed locally; not implemented.
-3. `T0006 AWS dev deploy`: confirm WRLDS metadata and deploy the CDK foundation to a real AWS dev environment.
-4. `T0007 Aurora schema/migrations`: add Aurora migrations for ingestion and operational tables.
-5. `T0008 Playground test booking seed tool`: create deterministic fake Playground bookings through protected server-side tooling.
-6. `T0009 Booking lookup endpoint`: implement `POST /v1/check-in/lookup` against Roller Playground and the local index shape.
-7. `T0010 Daily seed job`: implement the Roller Data API seed into Aurora.
-8. `T0011 Booking webhook intake`: implement webhook intake, idempotency, and enrichment.
-9. `T0022 Phone/staff redeem handoff design`: lock the boundary between phone session progress and staff/server-confirmed final redeem.
-10. `T0023 Check-in session API skeleton`: add the server-owned session/handoff endpoints without exposing final redeem to the phone UI.
+Near-term sequence:
+
+1. `T0024 Phone start-check-in session wiring`: create/resume a JumpYard Cloud session from the phone booking summary.
+2. `T0025 Staff/admin handoff list/detail`: show sessions with `handoff_status='ready_for_staff'` to staff.
+3. `T0026 Staff-confirmed redeem from session`: redeem selected tickets only after staff/server confirmation and final Roller refresh.
+4. `T0027 QR/handoff code polish`: improve how staff locates the ready session, including QR/handoff-code handling if needed.
 
 ## Open Contract Questions
 
