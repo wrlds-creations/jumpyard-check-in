@@ -85,6 +85,7 @@ interface CloudSession {
   handoffStatus?: string | null;
   handoffCode?: string | null;
   safetyStatus?: string | null;
+  completedAt?: string | null;
   expiresAt?: string | null;
 }
 
@@ -375,6 +376,7 @@ function toCheckInSession(session: CloudSession): CheckInSession {
     handoffCode: session.handoffCode ?? null,
     handoffStatus: session.handoffStatus ?? null,
     safetyStatus: session.safetyStatus ?? null,
+    completedAt: session.completedAt ?? null,
     expiresAt: session.expiresAt ?? null,
   };
 }

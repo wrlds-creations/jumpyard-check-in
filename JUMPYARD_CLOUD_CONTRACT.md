@@ -324,7 +324,8 @@ Response:
 Session rules:
 
 - Create or resume one active operational session for the booking and visit date.
-- The phone app must call this endpoint before advancing from booking summary into the guest-side check-in flow.
+- The phone app may call this endpoint immediately after a paid lookup to resume an existing active session before showing the booking summary.
+- If no resumable final state is returned, the phone app keeps the booking summary and continues the normal guest-side check-in flow.
 - Read booking/ticket context from Aurora only.
 - Store only server-owned state needed for the flow.
 - Do not redeem tickets from this endpoint.
@@ -609,14 +610,14 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0028`. The next recommended ticket is `T0029 Phone session resume`, followed by the new-booking/payment discovery path.
+Current implementation has progressed through `T0029`. The next recommended ticket is `T0030 New booking/payment discovery spike`.
 
 Near-term sequence:
 
 1. `T0026 Staff/admin handoff list/detail`: completed locally and deployed to dev; staff can inspect ready handoffs.
 2. `T0027 Staff-confirmed redeem from session`: completed locally; staff can confirm redeem from a server-owned session after final Roller refresh.
 3. `T0028 QR/handoff code polish`: completed locally; phone QR uses `JY_HANDOFF:<handoffCode>:<checkinSessionId>`, and admin can scan/paste the payload or search by short code.
-4. `T0029 Phone session resume`: restore the guest to the right phone state when a booking already has an active or completed JumpYard Cloud session.
+4. `T0029 Phone session resume`: completed locally; paid lookup starts/resumes the server session, ready handoffs resume directly from search to the QR screen, completed/redeemed sessions show already checked in, and guest-in-progress sessions continue normally.
 5. `T0030 New booking/payment discovery spike`: prove the exact Roller Playground draft/payment path, including `paymentJwt`, fake/test cards, and in-app PWA feasibility.
 6. `T0031 Server-side booking quote/draft`: expose JumpYard Cloud quote/draft endpoints for new bookings while keeping Roller credentials server-side.
 7. `T0032 Phone create-booking plus fake payment`: wire the phone app to create and test-pay a Playground booking if T0030 confirms in-app payment is supported.

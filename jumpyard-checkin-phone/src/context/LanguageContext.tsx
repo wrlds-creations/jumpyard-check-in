@@ -213,6 +213,9 @@ const sv = {
     complete: 'Klart & nästa gäst',
     done: 'Börja om',
     showStaffNote: 'Visa personalen',
+    alreadyCheckedInTitle: 'Redan incheckad',
+    alreadyCheckedInSubtitle: 'Den här bokningen är redan slutförd.',
+    alreadyCheckedInHelp: 'Hämta personal om något inte stämmer.',
   },
   print: {
     title: 'Klart, gå till banan!',
@@ -468,6 +471,9 @@ const en: typeof sv = {
     complete: 'Done & next guest',
     done: 'Start over',
     showStaffNote: 'Show staff',
+    alreadyCheckedInTitle: 'Already checked in',
+    alreadyCheckedInSubtitle: 'This booking has already been completed.',
+    alreadyCheckedInHelp: 'Call staff if anything looks wrong.',
   },
   print: {
     title: 'Done, head to the park!',

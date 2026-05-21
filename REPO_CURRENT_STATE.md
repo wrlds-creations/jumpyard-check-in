@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-21
-- Current branch: `codex/t0028-qr-handoff-flow`
-- Current status: T0028 QR/handoff lookup polish completed locally.
-- Current ticket: `T0028` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`
-- Recommended next ticket: `T0029 Phone session resume`
+- Current branch: `codex/t0029-phone-session-resume`
+- Current status: T0029 phone session resume completed locally.
+- Current ticket: `T0029` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`
+- Recommended next ticket: `T0030 New booking/payment discovery spike`
 
 ## Current Structure
 
@@ -132,18 +132,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0026` | Added staff/admin handoff list/detail. | 2026-05-21 | Dev staff API lists/detail reads `ready_for_staff` sessions from Aurora; admin app shows handoff code `JY6085`, booking `5032210`, products, tickets, and status details without redeeming. |
 | `T0027` | Added staff-confirmed redeem from session. | 2026-05-21 | Dev staff redeem route reuses the controlled T0021 final refresh/redeem path, requires a temporary dev code, and admin app can trigger completion from the handoff detail. |
 | `T0028` | Added QR/handoff lookup polish. | 2026-05-21 | Phone QR uses the server-owned `JY_HANDOFF:<handoffCode>:<checkinSessionId>` payload via the `qrcode` library, and admin can scan/paste QR payloads or type short codes to open handoff sessions. |
+| `T0029` | Added phone session resume routing. | 2026-05-21 | Paid lookup starts/resumes the server session; ready-for-staff sessions route directly from search to QR, completed/redeemed sessions show already checked in, and guest-in-progress sessions continue the normal phone flow. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0028` | QR/handoff lookup polish. | Completed locally | Frontend-only polish: phone QR display uses `qrcode`, full QR payload remains testable, and admin can scan/paste/open handoff sessions without AWS, Roller, or redeem changes. |
+| `T0029` | Phone session resume. | Completed locally | Frontend-only resume routing: paid lookup starts/resumes the server session, `ready_for_staff` opens QR confirmation directly from search, completed/redeemed opens already checked in, and `guest_in_progress` continues normally without AWS, Roller, admin, or redeem changes. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0029` | Phone session resume | If lookup finds an active JumpYard Cloud session, resume the correct phone state: QR for `ready_for_staff`, already checked in for completed/redeemed, and safe resume for in-progress sessions. |
 | `T0030` | New booking/payment discovery spike | Confirm Roller Playground draft booking, `paymentJwt`, fake/test card support, and whether payment can happen inside the JumpYard PWA without hosted payment-link detour. |
 | `T0031` | Server-side booking quote/draft | Add JumpYard Cloud quote/draft endpoints for new bookings against Roller Playground, with credentials and Roller writes kept server-side. |
 | `T0032` | Phone create-booking plus fake payment | Wire the phone app to create a booking and complete Playground/test payment if T0030 confirms in-app payment is supported. |
@@ -329,19 +329,24 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0027 browser verification: local admin app at `http://127.0.0.1:3002/` rendered ready handoff `JY7166` for booking `5032474` with the staff redeem panel, temporary dev-code input, and disabled `Slutför` button until a code is entered.
 - T0028 validation: `npm run validate`, `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, `npm --prefix jumpyard-checkin-admin run lint`, and `npm --prefix jumpyard-checkin-admin run build` passed. Phone lint still reports the pre-existing `<img>` warnings.
 - T0028 browser verification: local admin app at `http://127.0.0.1:3002/` rendered `Öppna` and `Skanna QR`, accepted full payload `JY_HANDOFF:JY2493:jycs_mpfh6ww7_9ff95b42`, opened handoff `JY2493`, and opened/closed the QR scanner cleanly.
+- T0029 phone lint: `npm --prefix jumpyard-checkin-phone run lint` passed with the same pre-existing `<img>` warnings.
+- T0029 phone build: `npm --prefix jumpyard-checkin-phone run build` passed.
+- T0029 root validation: `npm run validate` passed.
+- T0029 browser ready resume: local phone app at `http://localhost:3000` searched booking `5032469`, resumed fresh session `jycs_mpfm485d_f3717834`, and routed directly from search to QR confirmation with handoff code `JY1721`.
+- T0029 browser already-redeemed resume: local phone app opened booking `5032454`, received the already-redeemed session-start block, and routed to `Redan incheckad` with `data-already-checked-in=true`.
 
 ## Known Issues Summary
 
 - AWS dev foundation is deployed. Lookup, session, webhook, safe redeem-planning, and controlled dev redeem execution handlers are implemented; booking handlers are still placeholders and return `501`.
 - Roller credentials secret in AWS has been populated for dev and was used by T0009 lookup smoke tests.
 - JumpYard Cloud lookup API now uses Aurora first and refreshes from Roller when local data is missing or unsafe. Other API business logic is still pending.
-- Phone app booking lookup now calls JumpYard Cloud for the first check-in step, carries non-visible lookup source/freshness metadata, uses today's Stockholm date by default, starts/resumes a JumpYard Cloud session before leaving booking summary, and marks the session ready for staff after safety attestation. Payment, redeem, staff/admin, and booking creation UI behavior are still pending.
+- Phone app booking lookup now calls JumpYard Cloud for the first check-in step, carries non-visible lookup source/freshness metadata, uses today's Stockholm date by default, starts/resumes a JumpYard Cloud session after paid lookup, routes active ready sessions directly to QR, and marks new sessions ready for staff after safety attestation. Payment, redeem, staff/admin, and booking creation UI behavior are still pending.
 - Aurora schema exists in dev. T0012 writes normalized `/data/bookingitems` snapshots into `roller_bookings` and `roller_booking_items`, T0013 enriches booking item product names from `product_catalog_cache`, T0014 imports tickets plus customer contact data, T0016 live-refresh lookup can upsert refreshed booking/item/ticket data, and T0017 webhook enrichment can upsert refreshed booking/item/ticket data.
 - Booking index ingestion has started with Data API bookingitems, REST product catalog cache, tickets, booking payments, customer contact data, dev webhook event intake/enrichment, lookup-driven live refresh, and real Roller Playground webhook delivery.
 - Roller Data API `/data/bookingitems`, `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access, query params, paging shape, and modified-date behavior are confirmed in Playground for the T0008 seed window.
 - Webhook retry behavior, response handling, booking event names, Playground auth header `x-roller-apikey`, and dev webhook registration are confirmed. Exact production auth/signature and IP allowlisting choice remain open.
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
-- Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, and QR/paste lookup polish is complete locally from T0028.
+- Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, and phone session resume routing is complete locally from T0029.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
 - Existing-booking add-product linked-booking flow has not been tested yet.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
