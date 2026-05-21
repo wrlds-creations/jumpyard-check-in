@@ -23,8 +23,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-029` | `T0014` | Gift cards | Add `/data/giftcards` ingestion when gift card payment/check-in flows are explicitly scoped. | Medium | `TBD` | Open |
 | `FU-031` | `T0016` | Lookup fallback | Add supported `GET /bookings` search fallback for cases where direct `GET /bookings/{identifier}` cannot resolve an imprecise guest input. | Medium | `TBD` | Open |
 | `FU-032` | `T0017` | Webhook scaling | Move webhook enrichment off the request path to SQS/EventBridge before production if latency, retries, or traffic volume require faster acknowledgement. | Medium | `TBD` | Open |
-| `FU-033` | `T0020` | Redeem execution | Add endpoint auth/session protection and final live Roller refresh before enabling real Roller `POST /redemptions` writes from JumpYard Cloud. | High | `T0021` | Open |
-| `FU-034` | `T0020` | Redeem test data | Create a dedicated paid Playground booking for controlled redeem smoke so normal lookup fixtures are not consumed accidentally. | Medium | `T0021` | Open |
+| `FU-035` | `T0021` | Redeem configuration | Decide whether JumpYard Cloud should send a configured Roller `redemptionDevice` name before production. Roller rejects non-existent device names, so T0021 omits it by default. | Medium | `TBD` | Open |
 
 ## Resolved Followups
 
@@ -40,3 +39,5 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-025` | `T0009` | Real Roller Playground credentials were stored in AWS Secrets Manager secret `/jumpyard-check-in-dev/roller/credentials` and used successfully by the deployed lookup Lambda. | 2026-05-20 |
 | `FU-028` | `T0014` | Added structured email and phone fields to `jumpyard.guest_profiles`; T0014 imports `/data/customers` into full structured fields plus masked/hash values, while excluding names, addresses, notes, and raw payloads. | 2026-05-20 |
 | `FU-030` | `T0018` | Registered Roller Playground booking webhook id `238` against the dev endpoint and confirmed real delivery. Roller sends the configured token in `x-roller-apikey`; booking `5032443` produced a real `Created` event that enriched Aurora with status `processed`. | 2026-05-21 |
+| `FU-033` | `T0021` | Added a separate dev redeem token, final Roller REST refresh, Aurora re-evaluation, and protected dev-only `POST /redemptions` execution path. | 2026-05-21 |
+| `FU-034` | `T0021` | Created dedicated paid Playground booking `5032454` for controlled redeem smoke and redeemed ticket `5032454-21397335`, leaving the normal `5032210` lookup fixture unused. | 2026-05-21 |

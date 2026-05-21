@@ -4,7 +4,7 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0002` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev webhook endpoint records and enriches Roller webhook intake events, the dev redeem endpoint plans/audits redemption without enabling Roller writes, the real Roller Playground booking webhook is registered, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, webhook-enriched records, and redeem attempt audit rows.
+JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0002` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev webhook endpoint records and enriches Roller webhook intake events, the dev redeem endpoint plans/audits redemption and supports controlled Playground redemption behind a dev token, the real Roller Playground booking webhook is registered, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, webhook-enriched records, and redeem attempt audit rows.
 
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
@@ -116,6 +116,18 @@ T0020 redeem endpoint notes:
 - Roller writes: disabled in deployed dev config by `ENABLE_ROLLER_REDEEM_WRITES=false`.
 - Raw Roller payloads, customer names, addresses, booking notes, secrets, and tokens are not printed or intentionally stored.
 
+T0021 controlled redeem execution notes:
+
+- Changed resource: `jumpyard-check-in-dev-stack-redeem`
+- Added secret: `/jumpyard-check-in-dev/redeem/dev-token`
+- Endpoint: `POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/redeem`
+- Behavior: `confirmRedeem=true` requires the dev redeem token, refreshes the booking from Roller REST, upserts the refreshed snapshot into Aurora, re-runs eligibility, and then calls Roller Playground `POST /redemptions`.
+- Roller writes: enabled only for the protected dev path and still Playground-guarded.
+- Controlled redeem smoke: dedicated booking `5032454` redeemed ticket `5032454-21397335` successfully through Roller Playground.
+- Aurora verification: `jumpyard.checkin_attempts` contains the `redeemed` attempt and follow-up `already_redeemed` block; `jumpyard.roller_booking_tickets.redeem_status_last_seen='redeemed'` for `5032454-21397335`.
+- Roller device note: an invalid `redemptionDevice` is rejected by Roller, so the dev Lambda omits `redemptionDevice` unless a real Roller device name is provided.
+- Raw Roller payloads, customer names, addresses, booking notes, secrets, and tokens are not printed or intentionally stored.
+
 Confirmed T0006 dev target:
 
 | Field | Value |
@@ -136,7 +148,7 @@ Confirmed T0006 dev target:
 | `m0uo5g4mde` | API Gateway HTTP API | `dev` | `eu-north-1` | `cdk` | Endpoint `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`; lookup, webhook, and safe redeem-planning routes are implemented; booking placeholder routes return `501`. |
 | `jumpyard-check-in-dev-stack-lookup` | Lambda | `dev` | `eu-north-1` | `cdk` | T0016 lookup handler; reads Aurora first, refreshes from Roller Playground only when needed, and returns normalized phone-flow lookup response. |
 | `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | Placeholder booking handler; no Roller calls. |
-| `jumpyard-check-in-dev-stack-redeem` | Lambda | `dev` | `eu-north-1` | `cdk` | T0020 redeem handler; plans/validates server-side redemption from Aurora and records attempt audit. Real Roller redemption writes remain disabled by environment guard. |
+| `jumpyard-check-in-dev-stack-redeem` | Lambda | `dev` | `eu-north-1` | `cdk` | T0021 redeem handler; plans/validates server-side redemption from Aurora, requires a dev token for confirmed writes, refreshes live Roller state before write, and records attempt audit. |
 | `jumpyard-check-in-dev-stack-webhook` | Lambda | `dev` | `eu-north-1` | `cdk` | T0018 webhook handler; accepts Roller Playground `x-roller-apikey`, validates a dev token, stores idempotent metadata, refreshes booking detail from Roller Playground, and upserts Aurora booking/item/ticket snapshots. |
 | Roller Playground webhook `238` | Roller Webhooks API | `dev`/Playground | External | Roller | Posts booking `Created`, `Updated`, and `Cancelled` events with `tickets=true` to the dev JumpYard Cloud webhook endpoint. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-lookup` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
@@ -149,6 +161,7 @@ Confirmed T0006 dev target:
 | `/jumpyard-check-in-dev/aurora/admin` | Secrets Manager | `dev` | `eu-north-1` | `cdk` | Generated Aurora admin credentials. |
 | `/jumpyard-check-in-dev/roller/credentials` | Secrets Manager | `dev` | `eu-north-1` | `cdk` | Placeholder Roller credentials; values must be set in AWS before real Roller calls. |
 | `/jumpyard-check-in-dev/webhooks/dev-token` | Secrets Manager | `dev` | `eu-north-1` | `cdk` | Development-only shared token for Roller Playground webhook delivery. Do not print or commit the token value. |
+| `/jumpyard-check-in-dev/redeem/dev-token` | Secrets Manager | `dev` | `eu-north-1` | `cdk` | Development-only shared token for controlled Roller Playground redemption execution. Do not print or commit the token value. |
 | `/jumpyard-check-in-dev/roller/env` | SSM Parameter Store | `dev` | `eu-north-1` | `cdk` | Value `playground`. |
 | `/jumpyard-check-in-dev/roller/base-url` | SSM Parameter Store | `dev` | `eu-north-1` | `cdk` | Value `https://api.play.roller.app`. |
 | `jumpyard-check-in-dev-raw-payloads-376129878018-eu-north-1` | S3 | `dev` | `eu-north-1` | `cdk` | Encrypted, public access blocked, versioned, 30-day lifecycle, retained on stack deletion. |

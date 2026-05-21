@@ -5,7 +5,11 @@ const crypto = require('crypto');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const MAX_REDEEM_TICKETS = 10;
-const DEFAULT_REDEMPTION_DEVICE = 'JumpYard Cloud Dev';
+const REDEEM_TOKEN_HEADERS = [
+  'x-jumpyard-redeem-token',
+  'x-api-key',
+  'api-key',
+];
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
 
@@ -15,6 +19,7 @@ const ssmClient = new SSMClient({});
 
 let cachedRollerConfig = null;
 let cachedToken = null;
+let cachedRedeemDevToken = null;
 
 exports.handler = async (event) => {
   let correlationId = getHeader(event, 'x-correlation-id') || createCorrelationId();
@@ -29,6 +34,19 @@ exports.handler = async (event) => {
         status: 'invalid_request',
         error: requestError,
       });
+    }
+
+    if (request.confirmRedeem) {
+      const auth = await verifyRedeemDevToken(event);
+      if (!auth.ok) {
+        return jsonResponse(403, correlationId, {
+          status: 'forbidden',
+          error: {
+            code: auth.code,
+            message: 'Confirmed redeem requires the JumpYard dev redeem token.',
+          },
+        });
+      }
     }
 
     const redeemContext = await getRedeemContext(request.identifier);
@@ -118,11 +136,76 @@ exports.handler = async (event) => {
       });
     }
 
+    const config = await getRollerConfig();
+    const token = await getRollerAccessToken(config);
+    const refreshResult = await refreshRedeemContextFromRoller(config, token, redeemContext, request);
+    if (!refreshResult.ok) {
+      await persistCheckinAttempt({
+        booking: redeemContext.booking,
+        correlationId,
+        errorCode: refreshResult.reason,
+        idempotencyKey: request.idempotencyKey,
+        selectedTicketIds: decision.selectedTicketIds,
+        status: 'blocked',
+      });
+      await writeEventLog({
+        booking: redeemContext.booking,
+        correlationId,
+        eventType: 'checkin.redeem_blocked_after_refresh',
+        payload: {
+          reason: refreshResult.reason,
+          ticketCount: decision.selectedTicketIds.length,
+        },
+        summary: `Redeem blocked after Roller refresh: ${refreshResult.reason}`,
+      });
+
+      return jsonResponse(refreshResult.statusCode, correlationId, {
+        status: 'blocked',
+        error: {
+          code: refreshResult.reason,
+          message: refreshResult.message,
+        },
+        redeemPlan: buildRedeemPlan(redeemContext, decision, false),
+      });
+    }
+
+    const refreshedContext = refreshResult.context;
+    const refreshedDecision = evaluateRedeemContext(refreshedContext, request);
+    if (!refreshedDecision.canRedeem) {
+      await persistCheckinAttempt({
+        booking: refreshedContext.booking,
+        correlationId,
+        errorCode: refreshedDecision.reason,
+        idempotencyKey: request.idempotencyKey,
+        selectedTicketIds: refreshedDecision.selectedTicketIds,
+        status: 'blocked',
+      });
+      await writeEventLog({
+        booking: refreshedContext.booking,
+        correlationId,
+        eventType: 'checkin.redeem_blocked_after_refresh',
+        payload: {
+          reason: refreshedDecision.reason,
+          ticketCount: refreshedDecision.selectedTicketIds.length,
+        },
+        summary: `Redeem blocked after Roller refresh: ${refreshedDecision.reason}`,
+      });
+
+      return jsonResponse(409, correlationId, {
+        status: 'blocked',
+        error: {
+          code: refreshedDecision.reason,
+          message: refreshedDecision.message,
+        },
+        redeemPlan: buildRedeemPlan(refreshedContext, refreshedDecision, false),
+      });
+    }
+
     const requestHash = hashJson({
-      bookingReference: redeemContext.booking.bookingReference,
+      bookingReference: refreshedContext.booking.bookingReference,
       redemptionDevice: request.redemptionDevice,
       redemptionDate: request.redemptionDate,
-      ticketIds: decision.selectedTicketIds,
+      ticketIds: refreshedDecision.selectedTicketIds,
     });
     const idempotency = await reserveIdempotencyKey(request.idempotencyKey, requestHash);
     if (!idempotency.ok) {
@@ -135,35 +218,34 @@ exports.handler = async (event) => {
       });
     }
 
-    const config = await getRollerConfig();
-    const token = await getRollerAccessToken(config);
-    const rollerResult = await redeemRollerTickets(config, token, decision.selectedTicketIds, request);
+    const rollerResult = await redeemRollerTickets(config, token, refreshedDecision.selectedTicketIds, request);
 
     if (rollerResult.ok) {
       await persistCheckinAttempt({
-        booking: redeemContext.booking,
+        booking: refreshedContext.booking,
         correlationId,
         errorCode: null,
         idempotencyKey: request.idempotencyKey,
         rollerResponseRef: `roller_redemptions:http_${rollerResult.status}`,
-        selectedTicketIds: decision.selectedTicketIds,
+        selectedTicketIds: refreshedDecision.selectedTicketIds,
         status: 'redeemed',
       });
-      await markTicketsRedeemed(decision.selectedTicketIds);
-      await completeIdempotencyKey(request.idempotencyKey, 'succeeded', `redeemed:${redeemContext.booking.bookingReference}`);
+      await markTicketsRedeemed(refreshedDecision.selectedTicketIds);
+      await completeIdempotencyKey(request.idempotencyKey, 'succeeded', `redeemed:${refreshedContext.booking.bookingReference}`);
       await writeEventLog({
-        booking: redeemContext.booking,
+        booking: refreshedContext.booking,
         correlationId,
         eventType: 'checkin.redeem_succeeded',
         payload: {
-          ticketCount: decision.selectedTicketIds.length,
+          ticketCount: refreshedDecision.selectedTicketIds.length,
+          refreshedFromRoller: true,
         },
         summary: 'Redeem completed through Roller Playground.',
       });
 
       return jsonResponse(200, correlationId, {
         status: 'redeemed',
-        redeemedTicketIds: decision.selectedTicketIds,
+        redeemedTicketIds: refreshedDecision.selectedTicketIds,
         roller: {
           statusCode: rollerResult.status,
         },
@@ -171,12 +253,12 @@ exports.handler = async (event) => {
     }
 
     await persistCheckinAttempt({
-      booking: redeemContext.booking,
+      booking: refreshedContext.booking,
       correlationId,
       errorCode: 'roller_redeem_rejected',
       idempotencyKey: request.idempotencyKey,
       rollerResponseRef: `roller_redemptions:http_${rollerResult.status}`,
-      selectedTicketIds: decision.selectedTicketIds,
+      selectedTicketIds: refreshedDecision.selectedTicketIds,
       status: 'roller_rejected',
     });
     await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_http_${rollerResult.status}`);
@@ -228,7 +310,7 @@ function parseRequest(event) {
       identifier,
       idempotencyKey,
       redemptionDate: stringOrNull(parsed.redemptionDate),
-      redemptionDevice: stringOrNull(parsed.redemptionDevice) || DEFAULT_REDEMPTION_DEVICE,
+      redemptionDevice: stringOrNull(parsed.redemptionDevice),
       rollerUniqueId,
       ticketIds: rawTicketIds,
       ticketIdsContainDuplicates: new Set(rawTicketIds).size !== rawTicketIds.length,
@@ -453,11 +535,136 @@ function bookingMatchesExpectedDate(booking, tickets, expectedDate) {
 
 function isUsedRedeemStatus(status) {
   const normalized = String(status ?? '').toLowerCase();
-  return normalized.includes('redeem') || normalized.includes('used') || normalized.includes('exhausted');
+  if (!normalized || normalized.includes('unredeemed')) return false;
+  return normalized.includes('redeemed') || normalized.includes('used') || normalized.includes('exhausted');
 }
 
 function isRollerRedeemWriteEnabled() {
   return process.env.ENABLE_ROLLER_REDEEM_WRITES === 'true';
+}
+
+async function verifyRedeemDevToken(event) {
+  const providedToken = getRedeemAuthToken(event);
+  if (!providedToken) {
+    return { ok: false, code: 'redeem_token_required' };
+  }
+
+  const expectedToken = await getRedeemDevToken();
+  if (!safeEquals(providedToken, expectedToken)) {
+    return { ok: false, code: 'redeem_token_invalid' };
+  }
+
+  return { ok: true, code: null };
+}
+
+function getRedeemAuthToken(event) {
+  for (const header of REDEEM_TOKEN_HEADERS) {
+    const value = getHeader(event, header);
+    if (value) return value;
+  }
+
+  const authorization = getHeader(event, 'authorization');
+  if (authorization) {
+    return authorization.replace(/^(Bearer|ApiKey|Token)\s+/i, '').trim();
+  }
+
+  return null;
+}
+
+async function getRedeemDevToken() {
+  if (process.env.REDEEM_DEV_TOKEN) {
+    return process.env.REDEEM_DEV_TOKEN;
+  }
+
+  if (cachedRedeemDevToken) return cachedRedeemDevToken;
+
+  const secretId = process.env.REDEEM_DEV_TOKEN_SECRET_ARN;
+  if (!secretId) {
+    const error = new Error('Redeem dev token secret is not configured.');
+    error.code = 'redeem_config_error';
+    throw error;
+  }
+
+  const response = await secretsClient.send(new GetSecretValueCommand({ SecretId: secretId }));
+  const secretString = response.SecretString;
+  if (!secretString) {
+    const error = new Error('Redeem dev token secret has no string value.');
+    error.code = 'redeem_config_error';
+    throw error;
+  }
+
+  try {
+    const parsed = JSON.parse(secretString);
+    cachedRedeemDevToken = String(parsed.token ?? parsed.redeemToken ?? '').trim();
+  } catch {
+    cachedRedeemDevToken = secretString.trim();
+  }
+
+  if (!cachedRedeemDevToken) {
+    const error = new Error('Redeem dev token is empty.');
+    error.code = 'redeem_config_error';
+    throw error;
+  }
+
+  return cachedRedeemDevToken;
+}
+
+function safeEquals(left, right) {
+  const leftBuffer = Buffer.from(String(left));
+  const rightBuffer = Buffer.from(String(right));
+
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+async function refreshRedeemContextFromRoller(config, token, existingContext, request) {
+  const identifier = existingContext.booking.rollerUniqueId || existingContext.booking.bookingReference || request.identifier;
+  const bookingResult = await getBookingDetail(config, token, identifier);
+
+  if (bookingResult.status === 404) {
+    return {
+      ok: false,
+      statusCode: 409,
+      reason: 'booking_not_found_after_refresh',
+      message: 'Roller Playground no longer has this booking at final redeem refresh.',
+    };
+  }
+
+  if (!bookingResult.ok) {
+    return {
+      ok: false,
+      statusCode: 502,
+      reason: 'roller_refresh_failed',
+      message: `Final Roller refresh failed with HTTP ${bookingResult.status}.`,
+    };
+  }
+
+  const booking = normalizeBooking(bookingResult.body);
+  if (!booking.bookingReference || !booking.rollerUniqueId) {
+    return {
+      ok: false,
+      statusCode: 502,
+      reason: 'roller_refresh_invalid',
+      message: 'Final Roller refresh did not return required booking identifiers.',
+    };
+  }
+
+  await upsertLiveBooking(booking, config.env);
+  const refreshedContext = await getRedeemContext(booking.rollerUniqueId);
+
+  if (!refreshedContext) {
+    return {
+      ok: false,
+      statusCode: 502,
+      reason: 'booking_refresh_not_persisted',
+      message: 'Final Roller refresh could not be read back from JumpYard Cloud.',
+    };
+  }
+
+  return {
+    ok: true,
+    context: refreshedContext,
+  };
 }
 
 async function reserveIdempotencyKey(idempotencyKey, requestHash) {
@@ -730,14 +937,313 @@ async function getRollerAccessToken(config) {
   return cachedToken;
 }
 
+async function getBookingDetail(config, token, identifier) {
+  const response = await fetch(buildRollerUrl(config.baseUrl, `/bookings/${encodeURIComponent(identifier)}`), {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+    },
+  });
+
+  if (response.status === 404) {
+    return { ok: false, status: 404, body: null };
+  }
+
+  const text = await response.text();
+  const body = text ? JSON.parse(text) : null;
+
+  return {
+    body,
+    ok: response.ok,
+    status: response.status,
+  };
+}
+
+function normalizeBooking(booking) {
+  const items = Array.isArray(booking?.items) ? booking.items : [];
+
+  return {
+    amountOwing: numberOrNull(booking?.amountOwing ?? booking?.remainder ?? booking?.costs?.amountOwing),
+    bookingReference: stringOrNull(booking?.bookingReference ?? booking?.reference),
+    externalId: stringOrNull(booking?.externalId),
+    items: items.map(normalizeBookingItem),
+    paymentStatus: stringOrNull(booking?.paymentStatus ?? booking?.status ?? booking?.bookingStatus),
+    rollerUniqueId: stringOrNull(booking?.uniqueId ?? booking?.id),
+    status: stringOrNull(booking?.status ?? booking?.bookingStatus),
+    total: numberOrNull(booking?.total ?? booking?.costs?.total),
+  };
+}
+
+function normalizeBookingItem(item) {
+  const tickets = Array.isArray(item?.tickets) ? item.tickets : [];
+
+  return {
+    bookingDate: stringOrNull(item?.bookingDate),
+    bookingItemId: stringOrNull(item?.bookingItemId ?? item?.id),
+    endTime: stringOrNull(item?.endTime ?? item?.sessionEndTime),
+    parentProductId: numberOrNull(item?.parentProductId),
+    parentProductName: stringOrNull(item?.parentProductName),
+    productId: numberOrNull(item?.productId),
+    productName: stringOrNull(item?.productName),
+    productType: stringOrNull(item?.productType ?? item?.productSubType),
+    quantity: numberOrNull(item?.quantity),
+    startTime: stringOrNull(item?.startTime ?? item?.sessionStartTime),
+    tickets: tickets.map((ticket) => ({
+      locations: Array.isArray(ticket?.locations) ? ticket.locations : [],
+      ticketId: stringOrNull(ticket?.ticketId ?? ticket?.id),
+    })),
+  };
+}
+
+async function upsertLiveBooking(booking, rollerEnv) {
+  if (!booking.rollerUniqueId || !booking.bookingReference) return;
+
+  const bookingDates = booking.items.map((item) => item.bookingDate).filter(Boolean);
+  const startTimes = booking.items.map((item) => item.startTime).filter(Boolean);
+  const endTimes = booking.items.map((item) => item.endTime).filter(Boolean);
+  const payloadHash = hashJson({
+    bookingReference: booking.bookingReference,
+    itemCount: booking.items.length,
+    paymentStatus: booking.paymentStatus,
+    source: 'roller_redeem_final_refresh',
+    status: booking.status,
+  });
+
+  await executeStatement(
+    `INSERT INTO jumpyard.roller_bookings (
+      roller_unique_id,
+      booking_reference,
+      roller_env,
+      booking_status,
+      payment_status,
+      amount_owing_cents,
+      total_cents,
+      booking_date,
+      start_time,
+      end_time,
+      source_last_updated_by,
+      source_last_updated_at,
+      roller_modified_at,
+      last_seen_from_roller_at,
+      freshness_status,
+      is_tombstoned,
+      payload_hash,
+      normalized_summary
+    )
+    VALUES (
+      :rollerUniqueId,
+      :bookingReference,
+      :rollerEnv,
+      :bookingStatus,
+      :paymentStatus,
+      :amountOwingCents,
+      :totalCents,
+      CAST(:bookingDate AS date),
+      CAST(:startTime AS time),
+      CAST(:endTime AS time),
+      'roller_redeem_final_refresh',
+      now(),
+      NULL,
+      now(),
+      'fresh',
+      :isTombstoned,
+      :payloadHash,
+      CAST(:normalizedSummary AS jsonb)
+    )
+    ON CONFLICT (roller_unique_id) DO UPDATE SET
+      booking_reference = EXCLUDED.booking_reference,
+      roller_env = EXCLUDED.roller_env,
+      booking_status = EXCLUDED.booking_status,
+      payment_status = EXCLUDED.payment_status,
+      amount_owing_cents = EXCLUDED.amount_owing_cents,
+      total_cents = EXCLUDED.total_cents,
+      booking_date = EXCLUDED.booking_date,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      source_last_updated_by = EXCLUDED.source_last_updated_by,
+      source_last_updated_at = now(),
+      last_seen_from_roller_at = now(),
+      freshness_status = 'fresh',
+      is_tombstoned = EXCLUDED.is_tombstoned,
+      payload_hash = EXCLUDED.payload_hash,
+      normalized_summary = EXCLUDED.normalized_summary,
+      updated_at = now()`,
+    [
+      stringParameter('rollerUniqueId', booking.rollerUniqueId),
+      stringParameter('bookingReference', booking.bookingReference),
+      stringParameter('rollerEnv', rollerEnv),
+      stringParameter('bookingStatus', booking.status),
+      stringParameter('paymentStatus', booking.paymentStatus),
+      intParameter('amountOwingCents', currencyToCents(booking.amountOwing)),
+      intParameter('totalCents', currencyToCents(booking.total)),
+      stringParameter('bookingDate', minOrNull(bookingDates)),
+      stringParameter('startTime', minOrNull(startTimes)),
+      stringParameter('endTime', maxOrNull(endTimes)),
+      { name: 'isTombstoned', value: { booleanValue: isTombstoned(booking.status) } },
+      stringParameter('payloadHash', payloadHash),
+      stringParameter(
+        'normalizedSummary',
+        JSON.stringify({
+          externalId: booking.externalId,
+          itemCount: booking.items.length,
+          source: 'roller_redeem_final_refresh',
+        }),
+      ),
+    ],
+  );
+
+  for (const item of booking.items) {
+    const bookingItemKey = await upsertLiveBookingItem(booking.rollerUniqueId, item);
+
+    for (const ticket of item.tickets ?? []) {
+      await upsertLiveTicket(booking.rollerUniqueId, bookingItemKey, item, ticket);
+    }
+  }
+}
+
+async function upsertLiveBookingItem(rollerUniqueId, item) {
+  const bookingItemKey = localBookingItemKey(rollerUniqueId, item);
+
+  await executeStatement(
+    `INSERT INTO jumpyard.roller_booking_items (
+      booking_item_key,
+      roller_unique_id,
+      booking_item_id,
+      product_id,
+      parent_product_id,
+      product_name,
+      parent_product_name,
+      quantity,
+      booking_date,
+      start_time,
+      end_time,
+      item_summary
+    )
+    VALUES (
+      :bookingItemKey,
+      :rollerUniqueId,
+      :bookingItemId,
+      :productId,
+      :parentProductId,
+      :productName,
+      :parentProductName,
+      :quantity,
+      CAST(:bookingDate AS date),
+      CAST(:startTime AS time),
+      CAST(:endTime AS time),
+      CAST(:itemSummary AS jsonb)
+    )
+    ON CONFLICT (booking_item_key) DO UPDATE SET
+      roller_unique_id = EXCLUDED.roller_unique_id,
+      booking_item_id = EXCLUDED.booking_item_id,
+      product_id = EXCLUDED.product_id,
+      parent_product_id = COALESCE(EXCLUDED.parent_product_id, jumpyard.roller_booking_items.parent_product_id),
+      product_name = COALESCE(EXCLUDED.product_name, jumpyard.roller_booking_items.product_name),
+      parent_product_name = COALESCE(EXCLUDED.parent_product_name, jumpyard.roller_booking_items.parent_product_name),
+      quantity = EXCLUDED.quantity,
+      booking_date = EXCLUDED.booking_date,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      item_summary = EXCLUDED.item_summary,
+      updated_at = now()`,
+    [
+      stringParameter('bookingItemKey', bookingItemKey),
+      stringParameter('rollerUniqueId', rollerUniqueId),
+      stringParameter('bookingItemId', item.bookingItemId),
+      stringParameter('productId', item.productId),
+      stringParameter('parentProductId', item.parentProductId),
+      stringParameter('productName', item.productName),
+      stringParameter('parentProductName', item.parentProductName),
+      intParameter('quantity', item.quantity ?? 1),
+      stringParameter('bookingDate', item.bookingDate),
+      stringParameter('startTime', item.startTime),
+      stringParameter('endTime', item.endTime),
+      stringParameter(
+        'itemSummary',
+        JSON.stringify({
+          productType: item.productType,
+          source: 'roller_redeem_final_refresh',
+        }),
+      ),
+    ],
+  );
+
+  return bookingItemKey;
+}
+
+async function upsertLiveTicket(rollerUniqueId, bookingItemKey, item, ticket) {
+  if (!ticket.ticketId) return;
+
+  await executeStatement(
+    `INSERT INTO jumpyard.roller_booking_tickets (
+      ticket_id,
+      roller_unique_id,
+      booking_item_key,
+      booking_item_id,
+      locations,
+      last_seen_from_roller_at,
+      product_id,
+      booking_date,
+      ticket_summary
+    )
+    VALUES (
+      :ticketId,
+      :rollerUniqueId,
+      :bookingItemKey,
+      :bookingItemId,
+      CAST(:locations AS jsonb),
+      now(),
+      :productId,
+      CAST(:bookingDate AS date),
+      CAST(:ticketSummary AS jsonb)
+    )
+    ON CONFLICT (ticket_id) DO UPDATE SET
+      roller_unique_id = EXCLUDED.roller_unique_id,
+      booking_item_key = EXCLUDED.booking_item_key,
+      booking_item_id = EXCLUDED.booking_item_id,
+      locations = EXCLUDED.locations,
+      last_seen_from_roller_at = now(),
+      product_id = EXCLUDED.product_id,
+      booking_date = EXCLUDED.booking_date,
+      ticket_summary = EXCLUDED.ticket_summary,
+      updated_at = now()`,
+    [
+      stringParameter('ticketId', ticket.ticketId),
+      stringParameter('rollerUniqueId', rollerUniqueId),
+      stringParameter('bookingItemKey', bookingItemKey),
+      stringParameter('bookingItemId', item.bookingItemId),
+      stringParameter('locations', JSON.stringify(Array.isArray(ticket.locations) ? ticket.locations : [])),
+      stringParameter('productId', item.productId),
+      stringParameter('bookingDate', item.bookingDate),
+      stringParameter(
+        'ticketSummary',
+        JSON.stringify({
+          source: 'roller_redeem_final_refresh',
+        }),
+      ),
+    ],
+  );
+}
+
+function localBookingItemKey(rollerUniqueId, item) {
+  const keySource =
+    item.bookingItemId ||
+    `${rollerUniqueId}:${item.productId ?? 'unknown'}:${item.bookingDate ?? ''}:${item.startTime ?? ''}`;
+  return `bookingitem:${hashString(keySource)}`;
+}
+
 async function redeemRollerTickets(config, token, ticketIds, request) {
   const payload = {
     tickets: ticketIds.map((ticketId) => ({
       ticketId,
       ...(request.redemptionDate ? { redemptionDate: request.redemptionDate } : {}),
     })),
-    redemptionDevice: request.redemptionDevice,
   };
+
+  if (request.redemptionDevice) {
+    payload.redemptionDevice = request.redemptionDevice;
+  }
 
   const response = await fetch(buildRollerUrl(config.baseUrl, '/redemptions'), {
     method: 'POST',
@@ -849,6 +1355,33 @@ function stringParameter(name, value) {
   return value === null || value === undefined
     ? { name, value: { isNull: true } }
     : { name, value: { stringValue: String(value) } };
+}
+
+function intParameter(name, value) {
+  return value === null || value === undefined || !Number.isFinite(Number(value))
+    ? { name, value: { isNull: true } }
+    : { name, value: { longValue: Number(value) } };
+}
+
+function currencyToCents(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : null;
+}
+
+function minOrNull(values) {
+  const sorted = values.filter(Boolean).sort();
+  return sorted[0] ?? null;
+}
+
+function maxOrNull(values) {
+  const sorted = values.filter(Boolean).sort();
+  return sorted[sorted.length - 1] ?? null;
+}
+
+function isTombstoned(status) {
+  const normalized = String(status ?? '').toLowerCase();
+  return normalized === 'cancelled' || normalized === 'deleted';
 }
 
 function parseJsonArray(value) {

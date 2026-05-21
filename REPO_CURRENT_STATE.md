@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-21
-- Current branch: `codex/t0020-redeem-spike`
-- Current status: T0020 redeem spike/server endpoint completed locally and deployed to dev.
-- Current ticket: `T0020` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`
-- Recommended next ticket: `T0021 Controlled Playground redeem execution`
+- Current branch: `codex/t0021-controlled-redeem-execution`
+- Current status: T0021 controlled Playground redeem execution completed locally and deployed to dev.
+- Current ticket: `T0021` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`
+- Recommended next ticket: `T0022 Phone/staff redeem handoff design`
 
 ## Current Structure
 
@@ -117,19 +117,19 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0018` | Registered the real Roller Playground booking webhook. | 2026-05-21 | Roller webhook id `238` posts to dev JumpYard Cloud; real created-booking delivery for `5032443` reached AWS and was enriched into Aurora with status `processed`. |
 | `T0019` | Polished and verified phone lookup for webhook-created Aurora bookings. | 2026-05-21 | Booking `5032444` opens in the phone summary from `jumpyard_cloud`, remains blocked as unpaid, and carries source/freshness metadata for non-visible verification. |
 | `T0020` | Added safe server-owned redeem planning endpoint. | 2026-05-21 | Dev `POST /v1/check-in/redeem` resolves Aurora tickets, writes planned/blocked audit rows, and keeps Roller redemption writes disabled. |
+| `T0021` | Enabled controlled Playground redeem execution. | 2026-05-21 | Dev `POST /v1/check-in/redeem` requires a dev token for confirmed writes, refreshes Roller before write, and redeemed dedicated booking `5032454`. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0020` | Redeem spike/server endpoint. | Completed locally and deployed to dev | `POST /v1/check-in/redeem` now returns safe plans/blocks and cannot redeem Roller tickets while `ENABLE_ROLLER_REDEEM_WRITES=false`. |
+| `T0021` | Controlled Playground redeem execution. | Completed locally and deployed to dev | Booking `5032454` redeemed through Roller Playground; ticket `5032454-21397335` is locally marked `redeemed`, and reuse is blocked as `already_redeemed`. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0020` | Redeem spike/server endpoint | Add safe server-side redeem planning/audit and keep Roller writes disabled. |
-| `T0021` | Controlled Playground redeem execution | Add auth/session protection and a final live refresh before enabling one real Playground redeem smoke. |
+| `T0022` | Phone/staff redeem handoff design | Decide how the phone flow hands a ready booking into redeem/session completion without exposing dev-only controls. |
 
 ## Validation Status
 
@@ -269,10 +269,21 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0020 deployed smoke: missing idempotency returned HTTP `400`; booking `5032210` returned `planned` with 4 tickets; unpaid booking `5032211` returned `payment_required`; `confirmRedeem=true` returned `redeem_write_disabled`.
 - T0020 Aurora audit verification: direct Data API query showed `planned`, `blocked`, and `write_disabled` rows in `jumpyard.checkin_attempts` for the smoke requests.
 - T0020 post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
+- T0021 validation: `npm run validate`, `node --check infra/lambda/redeem/index.js`, `npm --prefix infra run build`, and `npm --prefix infra run synth:dev` passed.
+- T0021 AWS identity preflight: `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`.
+- T0021 AWS region preflight: `aws configure get region --profile wrlds-dev` returned `eu-north-1`.
+- T0021 pre-deploy diff: `npm --prefix infra run diff:dev` showed the approved redeem dev-token secret, CORS header, redeem Lambda asset/env change, and scoped Secrets Manager permission.
+- T0021 first deploy: `npm --prefix infra run deploy:dev` created `/jumpyard-check-in-dev/redeem/dev-token`, enabled protected redeem writes, and updated the redeem Lambda.
+- T0021 first controlled write smoke: `confirmRedeem=true` without token returned HTTP `403`; planning returned `planned`; first write attempt returned Roller HTTP `409` because default `redemptionDevice` did not exist in Roller.
+- T0021 follow-up diff/deploy: removed the invalid default `redemptionDevice`; diff showed only the redeem Lambda asset; deploy passed.
+- T0021 controlled redeem smoke: dedicated booking `5032454` returned HTTP `200` with status `redeemed`; ticket `5032454-21397335` was redeemed through Roller Playground.
+- T0021 reuse smoke: a follow-up plan for booking `5032454` returned HTTP `409` with `already_redeemed`.
+- T0021 Aurora verification: direct Data API query showed `redeemed` and `already_redeemed` attempt rows, and `roller_booking_tickets.redeem_status_last_seen='redeemed'` for `5032454-21397335`.
+- T0021 post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
 
 ## Known Issues Summary
 
-- AWS dev foundation is deployed. Lookup, webhook, and safe redeem-planning handlers are implemented; booking handlers are still placeholders and return `501`.
+- AWS dev foundation is deployed. Lookup, webhook, safe redeem-planning, and controlled dev redeem execution handlers are implemented; booking handlers are still placeholders and return `501`.
 - Roller credentials secret in AWS has been populated for dev and was used by T0009 lookup smoke tests.
 - JumpYard Cloud lookup API now uses Aurora first and refreshes from Roller when local data is missing or unsafe. Other API business logic is still pending.
 - Phone app booking lookup now calls JumpYard Cloud for the first check-in step, carries non-visible lookup source/freshness metadata, uses today's Stockholm date by default, and still blocks unpaid bookings. Payment, redeem, and booking creation UI behavior are still pending.
@@ -280,9 +291,9 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Booking index ingestion has started with Data API bookingitems, REST product catalog cache, tickets, booking payments, customer contact data, dev webhook event intake/enrichment, lookup-driven live refresh, and real Roller Playground webhook delivery.
 - Roller Data API `/data/bookingitems`, `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access, query params, paging shape, and modified-date behavior are confirmed in Playground for the T0008 seed window.
 - Webhook retry behavior, response handling, booking event names, Playground auth header `x-roller-apikey`, and dev webhook registration are confirmed. Exact production auth/signature and IP allowlisting choice remain open.
-- Already-redeemed Playground seed data is deferred until redemption is implemented and safely tested.
+- Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
 - Staff handoff/redeem flow integration has not been implemented.
-- Roller `POST /redemptions` client code exists behind a disabled guard, but no real Roller redemption write has been executed yet.
+- Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
 - Existing-booking add-product linked-booking flow has not been tested yet.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
@@ -294,3 +305,4 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Which exact production retention/encryption policy should apply to stored guest email and phone?
 - Should `/data/giftcards` be imported for gift card flows, and in which ticket?
 - Which exact production auth header/signature and optional IP allowlisting should Roller webhook intake use beyond the confirmed Playground `x-roller-apikey` header?
+- Which real Roller redemption device name should JumpYard Cloud send, if any, before production check-in?

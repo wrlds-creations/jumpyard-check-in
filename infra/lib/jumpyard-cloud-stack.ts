@@ -29,6 +29,7 @@ interface HandlerResources {
   readonly rollerEnvParameter: ssm.StringParameter;
   readonly rollerBaseUrlParameter: ssm.StringParameter;
   readonly webhookDevTokenSecret: secretsmanager.Secret;
+  readonly redeemDevTokenSecret: secretsmanager.Secret;
 }
 
 export class JumpYardCloudStack extends Stack {
@@ -107,6 +108,16 @@ export class JumpYardCloudStack extends Stack {
       description: 'Development-only shared token for accepting Roller Playground webhooks.',
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ purpose: 'roller-playground-webhook' }),
+        generateStringKey: 'token',
+        excludePunctuation: true,
+      },
+    });
+
+    const redeemDevTokenSecret = new secretsmanager.Secret(this, 'RedeemDevTokenSecret', {
+      secretName: `/${config.resourcePrefix}/redeem/dev-token`,
+      description: 'Development-only shared token for confirmed Roller Playground ticket redemption.',
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ purpose: 'roller-playground-redeem' }),
         generateStringKey: 'token',
         excludePunctuation: true,
       },
@@ -201,7 +212,13 @@ export class JumpYardCloudStack extends Stack {
       name: `${config.resourcePrefix}-api`,
       protocolType: 'HTTP',
       corsConfiguration: {
-        allowHeaders: ['content-type', 'x-correlation-id', 'x-idempotency-key'],
+        allowHeaders: [
+          'authorization',
+          'content-type',
+          'x-correlation-id',
+          'x-idempotency-key',
+          'x-jumpyard-redeem-token',
+        ],
         allowMethods: ['OPTIONS', 'POST'],
         allowOrigins: ['*'],
         maxAge: 300,
@@ -225,6 +242,7 @@ export class JumpYardCloudStack extends Stack {
       rollerEnvParameter,
       rollerBaseUrlParameter,
       webhookDevTokenSecret,
+      redeemDevTokenSecret,
     };
 
     const lookupHandler = this.createHandler('LookupHandler', 'lookup', handlerResources, {
@@ -295,7 +313,8 @@ export class JumpYardCloudStack extends Stack {
     }
 
     if (handlerName === 'redeem') {
-      environment.ENABLE_ROLLER_REDEEM_WRITES = 'false';
+      environment.ENABLE_ROLLER_REDEEM_WRITES = 'true';
+      environment.REDEEM_DEV_TOKEN_SECRET_ARN = resources.redeemDevTokenSecret.secretArn;
     }
 
     const fn = new lambda.Function(this, id, {
@@ -328,6 +347,9 @@ exports.handler = async () => ({
     resources.rollerBaseUrlParameter.grantRead(fn);
     if (handlerName === 'webhook') {
       resources.webhookDevTokenSecret.grantRead(fn);
+    }
+    if (handlerName === 'redeem') {
+      resources.redeemDevTokenSecret.grantRead(fn);
     }
 
     fn.addToRolePolicy(
