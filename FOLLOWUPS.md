@@ -15,13 +15,12 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-015` | `T0003` | Data ingestion | Confirm Roller Data API endpoint, credentials, date range, and payload shape for the daily morning booking seed. | High | `TBD` | Open |
 | `FU-018` | `T0004` | Dependency security | Evaluate the `aws-cdk-lib` bundled `brace-expansion` audit warning and any available `npm audit fix` path in a dedicated dependency ticket. | Medium | `TBD` | Open |
 | `FU-019` | `T0005` | Data ingestion | Confirm exact Data API query parameters, paging, credentials, and date-window support for Get tickets, Get payments, and Get customers in Playground. Bookingitems/Get bookings was confirmed in T0011. | High | `TBD` | Open |
-| `FU-020` | `T0005` | Webhook security | Confirm Roller production webhook auth header/signature, event id field, payload shape, and whether to use EMEA IP allowlisting before exposing webhook intake beyond dev. Retry behavior and booking event names were documented in T0015. | High | `TBD` | Open |
+| `FU-020` | `T0005/T0018` | Webhook security | Confirm Roller production webhook auth/signature policy and whether to use EMEA IP allowlisting before exposing webhook intake beyond dev. Playground delivery header `x-roller-apikey`, event id, and payload shape were confirmed in T0018. | High | `TBD` | Open |
 | `FU-021` | `T0005` | Data retention | Confirm retention period for normalized booking snapshots, event logs, sync runs, and any approved raw payload storage. | Medium | `TBD` | Open |
 | `FU-022` | `T0005` | Ingestion freshness | Confirm operational freshness thresholds for lookup display, SMS readiness, and mandatory live refresh before redeem. | Medium | `TBD` | Open |
 | `FU-026` | `T0008` | Test data | Add an already-redeemed Playground seed scenario after `POST /redemptions` is implemented and safely tested. | Medium | `TBD` | Open |
 | `FU-027` | `T0010` | Phone operating date | Replace the T0008 demo expected-date default with a venue operating-date source before pilot/production. | High | `TBD` | Open |
 | `FU-029` | `T0014` | Gift cards | Add `/data/giftcards` ingestion when gift card payment/check-in flows are explicitly scoped. | Medium | `TBD` | Open |
-| `FU-030` | `T0015/T0017` | Webhook registration | Register the Roller Playground booking webhook against the dev endpoint and confirm the real delivery headers/body now that dev enrichment is deployed. | High | `TBD` | Open |
 | `FU-031` | `T0016` | Lookup fallback | Add supported `GET /bookings` search fallback for cases where direct `GET /bookings/{identifier}` cannot resolve an imprecise guest input. | Medium | `TBD` | Open |
 | `FU-032` | `T0017` | Webhook scaling | Move webhook enrichment off the request path to SQS/EventBridge before production if latency, retries, or traffic volume require faster acknowledgement. | Medium | `TBD` | Open |
 
@@ -38,3 +37,4 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-024` | `T0006` | AWS SSO login succeeded for profile `wrlds-dev`; `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`, and region `eu-north-1` is configured. | 2026-05-19 |
 | `FU-025` | `T0009` | Real Roller Playground credentials were stored in AWS Secrets Manager secret `/jumpyard-check-in-dev/roller/credentials` and used successfully by the deployed lookup Lambda. | 2026-05-20 |
 | `FU-028` | `T0014` | Added structured email and phone fields to `jumpyard.guest_profiles`; T0014 imports `/data/customers` into full structured fields plus masked/hash values, while excluding names, addresses, notes, and raw payloads. | 2026-05-20 |
+| `FU-030` | `T0018` | Registered Roller Playground booking webhook id `238` against the dev endpoint and confirmed real delivery. Roller sends the configured token in `x-roller-apikey`; booking `5032443` produced a real `Created` event that enriched Aurora with status `processed`. | 2026-05-21 |

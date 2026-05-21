@@ -43,6 +43,8 @@ T0016 changed `POST /v1/check-in/lookup` to use Aurora first. The lookup Lambda 
 
 T0017 changed the dev booking webhook Lambda from metadata-only intake to booking snapshot enrichment. A new accepted booking webhook event now fetches `GET /bookings/{identifier}` from Roller Playground, enriches product names best-effort from `/products`, upserts booking/item/ticket snapshots into Aurora, and marks `jumpyard.roller_webhook_events` as `processed` or `failed`.
 
+T0018 registered the real Roller Playground booking webhook against the deployed dev endpoint. Roller webhook id `238` posts booking `Created`, `Updated`, and `Cancelled` events to JumpYard Cloud, includes tickets, sends the dev token in header `x-roller-apikey`, and real created-booking delivery has been confirmed through Aurora status `processed`.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -123,7 +125,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0015 Booking webhook intake` | Implement safe webhook intake and idempotency. | Completed locally and deployed to dev; provides the same-day change signal intake before enrichment/snapshot updates. |
 | `T0016 Aurora-first lookup` | Use Aurora for lookup display, then refresh from Roller when missing or unsafe. | Completed locally and deployed to dev; lets phone lookup stop depending on a live Roller read for every normal display lookup. |
 | `T0017 Booking webhook enrichment` | Refresh Roller booking detail from webhook events and update Aurora snapshots. | Completed locally and deployed to dev; turns same-day webhook signals into fresh booking snapshots once Roller delivery is registered. |
-| `T0018 Roller Playground webhook registration` | Register the Playground booking webhook against the dev endpoint and confirm real delivery headers/body. | Needed before edits in Roller Venue Manager automatically update Aurora without manual smoke payloads. |
+| `T0018 Roller Playground webhook registration` | Register the Playground booking webhook against the dev endpoint and confirm real delivery headers/body. | Completed locally and deployed to dev; real Roller deliveries now update Aurora through webhook enrichment. |
+| `T0019 Phone lookup display/source polish` | Decide whether to expose source/freshness/debug status in phone/admin UX. | Optional UI polish now that Aurora-first lookup and webhook freshness are working. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -231,12 +234,19 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
   - event `t0017-deployed-webhook-enrich-5032210-20260521095241`: HTTP `200`, status `accepted`, enrichment `processed`
   - refreshed booking `5032210` from Roller REST into Aurora with 2 items and 4 tickets
   - matching `jumpyard.roller_webhook_events` row status is `processed`
+- T0018 registered the real Roller Playground booking webhook:
+  - Roller webhook id `238`
+  - endpoint `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/roller/webhooks/bookings`
+  - subscribed events `created`, `updated`, and `cancelled`
+  - include `tickets=true`
+  - real Roller delivery uses header `x-roller-apikey`
+  - real created-booking event for booking `5032443` reached AWS, enriched through Roller REST, and wrote `status=processed` in `jumpyard.roller_webhook_events`
 
 ## Non-Goals For Current Ticket
 
 - Do not use Aurora lookup data as final authority before future write-critical actions such as redeem or add-on booking creation.
 - Do not implement daily seed ingestion.
-- Do not rely on automatic Roller webhook delivery until the Playground webhook is registered and real headers/body are confirmed.
+- Do not rely on automatic Roller webhook delivery in production until production auth, IP allowlisting, and environment registration are explicitly scoped.
 - Do not write to Roller Live/production.
 - Do not redeem Roller tickets.
 - Do not create staging or production AWS resources.
@@ -252,4 +262,4 @@ T0008 uses `npm run roller:seed:playground` as the local seed command. It reads 
 | What is the best field or internal model for linking an original booking to a separate add-on booking? | Required for add-product implementation. | `TBD` | `Open` |
 | Which products need reconfiguration from stock/add-on to ticket/session products for API-driven redemption? | Stock/add-on products are excluded from Roller ticket redemption webhook/API flow. | `TBD` | `Open` |
 | Which Roller Data API endpoints and date ranges should power tickets, payments, and customers ingestion? | Required after bookingitems ingestion. | `TBD` | `Open` |
-| Which webhook event id, signature, and payload fields does Roller provide in Playground and production? | Required before exposing webhook intake beyond local/dev testing. | `TBD` | `Open` |
+| Which webhook event id, signature, and payload fields does Roller provide in production? Playground delivery is confirmed with `x-roller-apikey`. | Required before exposing webhook intake beyond dev testing. | `TBD` | `Open` |

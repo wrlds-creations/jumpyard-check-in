@@ -6,7 +6,7 @@ Use this file to define validation for the current project or milestone.
 
 | Command | Purpose | Result | Notes |
 |---|---|---|---|
-| `npm run validate` | Validate root WRLDS workflow files and skills. | Passed | Passed on 2026-05-21 during T0017. |
+| `npm run validate` | Validate root WRLDS workflow files and skills. | Passed | Passed on 2026-05-21 during T0018. |
 | `npm run roller:env:check` | Confirm Roller env guard passes for local Playground config. | Passed | Passed with local `.env`. |
 | `npm run roller:smoke` | Confirm Roller Playground auth works and one read-only request can run. | Passed | Passed with local `.env`; `/products` returned HTTP 200 and 96 products on 2026-05-19. |
 | `npm run roller:seed:playground` | Plan deterministic Playground seed bookings without writes. | Passed | Passed on 2026-05-20; resolved six scenarios to child/variation product IDs. |
@@ -76,6 +76,13 @@ Use this file to define validation for the current project or milestone.
 | T0017 deployed webhook enrichment smoke | Confirm deployed webhook endpoint enriches through API Gateway/Lambda. | Passed | Event `t0017-deployed-webhook-enrich-5032210-20260521095241` returned enrichment `processed`, booking `5032210`, 2 items, and 4 tickets. |
 | T0017 deployed Aurora webhook query | Confirm deployed smoke event status changed after enrichment. | Passed | `jumpyard.roller_webhook_events` showed status `processed`, one enrichment attempt, and `processed_at`. |
 | T0017 post-deploy CDK diff | Confirm dev stack matches local T0017 template. | Passed | `npm --prefix infra run diff:dev` showed no differences. |
+| T0018 webhook registration dry-run | Confirm Roller Playground webhook registration can be inspected without writes. | Passed | `npm --prefix infra run register:webhook:dev` found existing webhook id `238` and printed no secrets. |
+| T0018 guarded webhook registration apply | Register the Roller Playground booking webhook against the dev endpoint. | Passed | Guarded apply registered webhook id `238` for booking `Created`, `Updated`, and `Cancelled` with `tickets=true`. |
+| T0018 webhook Lambda syntax | Confirm real Roller header support is syntactically valid. | Passed | `node --check infra/lambda/webhook/index.js` passed. |
+| T0018 infra build | Confirm registration script and Lambda changes compile. | Passed | `npm --prefix infra run build` passed. |
+| T0018 dev webhook deploy | Deploy real Roller header support and event-type normalization. | Passed | `npm --prefix infra run deploy:dev` updated `WebhookHandler`. |
+| T0018 real Roller delivery | Confirm an actual Roller Playground webhook reaches AWS and updates Aurora. | Passed | Booking `5032443` created a real `Created` event with status `processed` and one enrichment attempt. |
+| T0018 post-deploy CDK diff | Confirm dev stack matches local T0018 template. | Passed | `npm --prefix infra run diff:dev` showed no differences. |
 | `npm --prefix infra run migrate:dev:status` | Confirm pending/applied Aurora migrations for dev. | Passed | Showed `0001 initial schema: pending` before apply and `applied` after apply on 2026-05-20. |
 | `npm --prefix infra run migrate:dev` | Apply pending Aurora migrations to dev. | Passed | Applied `0001 initial schema` to the approved dev Aurora cluster on 2026-05-20. |
 | Aurora Data API schema query | Confirm expected `jumpyard` tables and indexes exist. | Passed | Verified 15 tables and 62 indexes in schema `jumpyard`. |
@@ -98,6 +105,7 @@ Use this file to define validation for the current project or milestone.
 | T0015 Query Editor review | Run the T0015 webhook verification SQL in AWS Query Editor. | Pending | Expected: smoke event `t0015-smoke-booking-created-5032210` is visible with status `received`. |
 | T0016 Query Editor review | Run the T0016 lookup-refresh verification SQL in AWS Query Editor. | Pending | Expected: `5001370` exists in `roller_bookings` with `source_last_updated_by='roller_live_lookup'`. |
 | T0017 Query Editor review | Run the T0017 webhook enrichment verification SQL in AWS Query Editor. | Pending | Expected: `t0017-deployed-webhook-enrich-5032210-20260521095241` is visible with status `processed`. |
+| T0018 Query Editor review | Run the T0018 real webhook verification SQL in AWS Query Editor. | Pending | Expected: booking `5032443` is visible in `roller_webhook_events` with event type `Created` and status `processed`. |
 
 ## Roller Playground Validation
 
@@ -118,6 +126,7 @@ Use this file to define validation for the current project or milestone.
 | T0008 SkyRider/add-on seed | Booking `5032213` can be read with jump entry plus SkyRider. | Passed | Status `PendingPayment`, amount owing `300`. |
 | T0008 linked add-on seeds | Bookings `5032214` and `5032215` can be read separately for future JumpYard Cloud linking. | Passed | Original amount owing `260`; add-on amount owing `92`. |
 | Data API bookingitems smoke | `GET /data/bookingitems` returns paged records for a modified-date window. | Passed | First page shape: `currentPage`, `totalPages`, `totalItems`, `itemsPerPage`, `items`. |
+| Real booking webhook delivery | Creating a Playground booking triggers the registered JumpYard Cloud webhook. | Passed | Roller sent the configured token in `x-roller-apikey`; booking `5032443` reached Aurora as `Created` and `processed`. |
 
 ## JumpYard Cloud Contract Validation
 
@@ -167,6 +176,7 @@ Use this file to define validation for the current project or milestone.
 | T0015 CDK deploy | Dev webhook Lambda and dev token secret are in the approved stack. | Passed | `npm --prefix infra run deploy:dev` passed and reported no changes because the stack was already in sync. |
 | T0016 CDK deploy | Dev lookup Lambda is updated with Aurora-first code. | Passed | `npm --prefix infra run deploy:dev` updated only `LookupHandler`. |
 | T0017 CDK deploy | Dev webhook Lambda is updated with enrichment code. | Passed | `npm --prefix infra run deploy:dev` updated only `WebhookHandler`. |
+| T0018 CDK deploy | Dev webhook Lambda is updated for real Roller header support. | Passed | `npm --prefix infra run deploy:dev` updated only `WebhookHandler`. |
 
 ## Aurora Schema Validation
 

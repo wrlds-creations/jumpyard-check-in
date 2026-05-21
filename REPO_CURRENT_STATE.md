@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-21
-- Current branch: `codex/t0017-webhook-enrichment`
-- Current status: T0017 booking webhook enrichment completed locally and deployed to dev.
-- Current ticket: `T0017` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`
-- Recommended next ticket: `T0018 Roller Playground webhook registration`
+- Current branch: `codex/t0018-roller-webhook-registration`
+- Current status: T0018 Roller Playground webhook registration completed locally and deployed to dev.
+- Current ticket: `T0018` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`
+- Recommended next ticket: `T0019 Phone lookup display/source polish`
 
 ## Current Structure
 
@@ -42,6 +42,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- scripts/import-bookingitems.ts
 |   |-- scripts/import-products.ts
 |   |-- scripts/import-related-data.ts
+|   |-- scripts/register-roller-webhook.ts
 |   |-- lib/jumpyard-cloud-stack.ts
 |   |-- migrations/0001_initial_schema.sql
 |   |-- migrations/0002_related_data_sources.sql
@@ -66,6 +67,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm --prefix infra run synth:dev` | Synthesize the confirmed T0006 dev stack. | Uses `infra/config/dev.json`. |
 | `npm --prefix infra run diff:dev` | Review AWS dev changes before deploy. | Must show only approved T0004 foundation resources. |
 | `npm --prefix infra run deploy:dev` | Deploy the approved dev foundation. | Run only after account `376129878018` and region `eu-north-1` are verified. |
+| `npm --prefix infra run register:webhook:dev` | Dry-run Roller Playground booking webhook registration for the dev endpoint. | Reads AWS SSM/Secrets Manager config, validates Playground, and does not print secrets. |
+| `npm --prefix infra run register:webhook:dev:apply` | Register the Roller Playground booking webhook for the dev endpoint. | Requires `ROLLER_WEBHOOK_REGISTER_ALLOW_WRITE=I_UNDERSTAND_THIS_REGISTERS_PLAYGROUND_WEBHOOK`; creates no duplicate when the webhook already exists. |
 | `npm --prefix infra run migrate:dev:status` | Show applied/pending Aurora migrations for dev. | Uses Aurora Data API and the `/jumpyard-check-in-dev/aurora/admin` secret; does not print secrets. |
 | `npm --prefix infra run migrate:dev` | Apply pending Aurora migrations to dev. | Run only after AWS account `376129878018` and region `eu-north-1` are verified. |
 | `npm --prefix infra run import:bookingitems:dev` | Dry-run Roller Data API `/data/bookingitems` normalization for dev Aurora import. | Reads local `.env`, calls Roller Playground, and performs no Aurora writes. |
@@ -110,23 +113,23 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0015` | Implemented safe dev Roller booking webhook intake. | 2026-05-20 | Deployed webhook Lambda with dev-token verification, metadata-only persistence, and idempotency; smoke event `t0015-smoke-booking-created-5032210` is in Aurora. |
 | `T0016` | Implemented Aurora-first lookup with Roller REST refresh. | 2026-05-21 | Dev lookup now returns fresh local Aurora records first, refreshes missing/unsafe records from Roller, and upserts live booking/item/ticket data back into Aurora. |
 | `T0017` | Implemented booking webhook enrichment. | 2026-05-21 | Dev webhook now refreshes Roller booking detail, upserts Aurora booking/item/ticket snapshots, and marks webhook events `processed` after enrichment. |
+| `T0018` | Registered the real Roller Playground booking webhook. | 2026-05-21 | Roller webhook id `238` posts to dev JumpYard Cloud; real created-booking delivery for `5032443` reached AWS and was enriched into Aurora with status `processed`. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0017` | Refresh Roller booking detail from booking webhooks and update Aurora. | Completed locally and deployed to dev | Commit/review still pending. |
+| `T0018` | Register Roller Playground booking webhook and confirm real delivery. | Completed locally and deployed to dev | Commit/review still pending. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0018` | Roller Playground webhook registration | Register the Playground booking webhook against the dev endpoint and confirm real delivery headers/body. |
 | `T0019` | Phone lookup display/source polish | Optionally expose/cache freshness/source labels in phone/admin UX, without changing core lookup behavior. |
 
 ## Validation Status
 
-- Automated root validation: `npm run validate` passed during T0008 on 2026-05-20.
+- Automated root validation: `npm run validate` passed during T0018 on 2026-05-21.
 - Infra validation: `npm run infra:check` passed during T0007 on 2026-05-20.
 - Infra synth: `npm run infra:synth` passed during T0004 using `infra/config/dev.example.json`.
 - Metadata guard: missing `-c config=...` fails as expected before synth.
@@ -243,6 +246,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0017 deployed Aurora verification: direct Data API query showed the deployed smoke event with status `processed`, one enrichment attempt, and `processed_at`.
 - T0017 post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
 - T0017 final validation: `npm run validate`, `npm --prefix infra run build`, and `node --check infra/lambda/webhook/index.js` passed.
+- T0018 webhook registration dry-run: `npm --prefix infra run register:webhook:dev` passed and detected existing webhook id `238`.
+- T0018 webhook registration apply: guarded apply registered Roller Playground webhook id `238` against the dev endpoint.
+- T0018 real delivery discovery: Roller sends the configured webhook token in header `x-roller-apikey`.
+- T0018 dev deploy: `npm --prefix infra run deploy:dev` updated `jumpyard-check-in-dev-stack-webhook` with real Roller header support and event-type normalization.
+- T0018 real Roller delivery: creating Playground booking `5032443` triggered a `Created` webhook, enriched booking `5032443`, and wrote `status=processed` in `jumpyard.roller_webhook_events`.
+- T0018 final validation: `npm run validate`, `npm --prefix infra run build`, `node --check infra/lambda/webhook/index.js`, `npm --prefix infra run register:webhook:dev`, and post-deploy `npm --prefix infra run diff:dev` passed.
 
 ## Known Issues Summary
 
@@ -251,9 +260,9 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - JumpYard Cloud lookup API now uses Aurora first and refreshes from Roller when local data is missing or unsafe. Other API business logic is still pending.
 - Phone app booking lookup now calls JumpYard Cloud for the first check-in step. Payment, redeem, and booking creation UI behavior are still pending.
 - Aurora schema exists in dev. T0012 writes normalized `/data/bookingitems` snapshots into `roller_bookings` and `roller_booking_items`, T0013 enriches booking item product names from `product_catalog_cache`, T0014 imports tickets plus customer contact data, T0016 live-refresh lookup can upsert refreshed booking/item/ticket data, and T0017 webhook enrichment can upsert refreshed booking/item/ticket data.
-- Booking index ingestion has started with Data API bookingitems, REST product catalog cache, tickets, booking payments, customer contact data, dev webhook event intake/enrichment, and lookup-driven live refresh. Real Roller Playground webhook registration is still pending.
+- Booking index ingestion has started with Data API bookingitems, REST product catalog cache, tickets, booking payments, customer contact data, dev webhook event intake/enrichment, lookup-driven live refresh, and real Roller Playground webhook delivery.
 - Roller Data API `/data/bookingitems`, `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access, query params, paging shape, and modified-date behavior are confirmed in Playground for the T0008 seed window.
-- Webhook retry behavior, response handling, and booking event names are documented from Roller docs. Exact production auth header/signature, IP allowlisting choice, and webhook registration are still open.
+- Webhook retry behavior, response handling, booking event names, Playground auth header `x-roller-apikey`, and dev webhook registration are confirmed. Exact production auth/signature and IP allowlisting choice remain open.
 - Already-redeemed Playground seed data is deferred until redemption is implemented and safely tested.
 - Staff handoff/redeem flow integration has not been implemented.
 - Roller `POST /redemptions` has not been tested yet.
@@ -267,4 +276,4 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Which products must be configured as ticket/session products to support API-driven redemption and webhook-based counters?
 - Which exact production retention/encryption policy should apply to stored guest email and phone?
 - Should `/data/giftcards` be imported for gift card flows, and in which ticket?
-- Which exact production auth header/signature and optional IP allowlisting should Roller webhook intake use?
+- Which exact production auth header/signature and optional IP allowlisting should Roller webhook intake use beyond the confirmed Playground `x-roller-apikey` header?

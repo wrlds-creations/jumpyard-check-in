@@ -306,6 +306,8 @@ It stores only normalized event metadata and a payload hash in Aurora. It does n
 
 T0017 extends the same dev endpoint with booking webhook enrichment. For each newly accepted booking webhook event with a booking reference or Roller unique id, JumpYard Cloud now refreshes `GET /bookings/{identifier}` from Roller Playground, enriches product names best-effort from `/products`, upserts normalized booking/item/ticket rows, and marks the webhook event as `processed` or `failed`.
 
+T0018 registers the real Roller Playground booking webhook against the dev endpoint. Roller webhook id `238` posts booking `Created`, `Updated`, and `Cancelled` events with `tickets=true`. Real delivery has been confirmed; Roller sends the configured dev token in header `x-roller-apikey`, and booking `5032443` produced a `Created` event that enriched Aurora with status `processed`.
+
 ### Intake Steps
 
 1. Receive webhook at JumpYard Cloud.
@@ -376,6 +378,14 @@ T0017 deployed smoke result:
 |---|---|
 | Authorized booking update event for `5032210` | HTTP `200`, `accepted`, enrichment `processed`, 2 items and 4 tickets refreshed into Aurora. |
 | Aurora webhook event state | Event `t0017-deployed-webhook-enrich-5032210-20260521095241` has status `processed`, one enrichment attempt, and `processed_at`. |
+
+T0018 real Roller delivery result:
+
+| Case | Result |
+|---|---|
+| Roller Playground registration | Webhook id `238`, endpoint `POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/roller/webhooks/bookings`, events `created`, `updated`, `cancelled`, include `tickets=true`. |
+| Real auth header | Roller sends the configured webhook token in `x-roller-apikey`; no token value is logged. |
+| Real created-booking event | Booking `5032443`, unique id `69ea56d8-969f-41a3-bda5-cb09ad8a67b2`, event type `Created`, status `processed`, one enrichment attempt. |
 
 ### Webhook Failure Rules
 
@@ -578,7 +588,7 @@ Recommended next implementation steps after T0014:
 3. `T0017 Booking webhook enrichment`
    - Completed in dev. Accepted booking webhook events now refresh Roller booking detail and update Aurora snapshots.
 4. `T0018 Roller Playground webhook registration`
-   - Register the Playground booking webhook and confirm the real delivery headers/body against the dev endpoint.
+   - Completed in dev. The Playground booking webhook is registered, real delivery headers/body are confirmed, and real deliveries update Aurora.
 5. `T0019 Phone lookup display/source polish`
    - Optionally expose/cache freshness/source labels in phone/admin UX without changing the core lookup behavior.
 
@@ -588,8 +598,8 @@ Recommended next implementation steps after T0014:
 |---|---|---|
 | Exact Data API query params/date filters for Get tickets, Get payments, and Get customers. | Related source ingestion. | Resolved for T0014 seed window; all three endpoints accepted `startDate`, `endDate`, `pageNumber`, and `pageSize`. |
 | Whether Playground exposes Data API credentials/scopes separately from REST API credentials. | Data API implementation. | Resolved for `/data/bookingitems`; current Playground credentials work. |
-| Exact webhook production auth header/signature/verification mechanism. | Webhook production safety. | Open |
-| Exact webhook event id field and nested payload fields in Playground deliveries. | Idempotency and normalization. | Open |
+| Exact webhook production auth header/signature/verification mechanism. | Webhook production safety. | Open; Playground token header `x-roller-apikey` is confirmed. |
+| Exact webhook event id field and nested payload fields in Playground deliveries. | Idempotency and normalization. | Resolved enough for dev in T0018; keep production confirmation open. |
 | Whether to enable IP allowlisting for Roller EMEA webhook source IPs. | Production hardening. | Open |
 | Whether booking webhook payload with payments is sufficient in all same-day cases or still needs detail refresh for safety. | Webhook enrichment strategy. | Partly confirmed |
 | Which customer/guest endpoint should be used when contact data is missing in a late booking. | SMS readiness. | Open |
