@@ -30,7 +30,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-039` | `T0023/T0027` | Staff/admin UI | Build staff/admin list/detail and final staff-confirmed redeem for `ready_for_staff` sessions after phone wiring exists. T0026 completed read-only list/detail; T0027 adds the dev staff redeem action. | High | `T0027` | Done |
 | `FU-040` | `T0024` | SMS/session resume | Replace the current mock SMS-token path with a real JumpYard Cloud token/session restore flow when SMS links are scoped. | High | `TBD` | Open |
 | `FU-041` | `T0028` | Handoff security | Replace raw `checkinSessionId` QR payloads with signed or short-lived handoff tokens before production if staff auth or public exposure requires it. | High | `TBD` | Open |
-| `FU-042` | `T0028` | Payment discovery | Confirm Roller draft-booking `paymentJwt` usage, fake/test card details, domain allow-listing, and whether Playground payment can complete inside the JumpYard PWA without a hosted payment-link detour. | High | `T0030` | Open |
+| `FU-042` | `T0028/T0030` | Payment prerequisites | T0030 confirmed Roller draft-booking `paymentJwt` usage and the documented in-app payment-library path. Remaining: obtain ROLLER authorization, approved payment package access, public HTTPS test-domain allowlisting, and fake/test card details before phone UI payment work. | High | `T0031/T0032` | Open |
 | `FU-043` | `T0028` | Dependency security | Evaluate the phone app `npm audit --audit-level=high` findings from the T0028 QR dependency work in a dedicated dependency ticket before production. | Medium | `TBD` | Open |
 
 ## Resolved Followups

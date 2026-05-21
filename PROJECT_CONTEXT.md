@@ -67,6 +67,8 @@ T0028 improves the phone-to-staff QR handoff. The phone confirmation screen keep
 
 T0029 improves phone-side session resume behavior without changing AWS or Roller logic. After a successful paid lookup, the phone app asks JumpYard Cloud to start or resume the server-owned session. When JumpYard Cloud returns a resumed `ready_for_staff` session, the phone app opens the final QR confirmation screen directly from search instead of showing booking summary or restarting add-ons/safety. When the session is completed/redeemed or the session start call reports `already_redeemed`, the phone app shows an already checked-in state instead of treating the booking as a fresh check-in.
 
+T0030 confirms the first Roller Playground draft-booking payment path without building payment UI. A guarded local discovery command creates no booking by default, can explicitly create a Playground-only draft booking, and confirmed that `POST /bookings/draft` returns cost fields plus a `paymentJwt`. Roller Payments official docs state that custom checkout payment uses Roller's payment library with the returned JWT, requires ROLLER authorization, a public HTTPS allowlisted domain for test and production, and an approved payment package. Test card details and exact venue enablement remain open before phone UI payment implementation.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -179,8 +181,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0027 Staff-confirmed redeem from session` | Redeem selected tickets from the server-owned session after staff confirmation and final Roller refresh. | Completed and deployed to dev; completes the first end-to-end existing-booking check-in write path in dev. |
 | `T0028 QR/handoff lookup polish` | Improve how staff finds handoff sessions by QR payload or short code. | Completed locally; phone QR uses the server-owned handoff payload, and admin can scan/paste/open the exact session. |
 | `T0029 Phone session resume` | If lookup finds an existing active session, resume the correct phone state instead of restarting the whole flow. | Completed locally; paid lookup now starts/resumes the session, `ready_for_staff` resumes directly from search to QR, completed/redeemed resumes to an already checked-in state, and guest-in-progress continues normally. |
-| `T0030 New booking/payment discovery spike` | Confirm the exact Roller Playground path for draft booking, payment token, test/fake card, and whether payment can stay inside the PWA without a hosted payment-link detour. | Prevents building the wrong checkout model; hosted payment links should remain fallback unless in-app payment is confirmed impossible. |
-| `T0031 Server-side booking quote/draft` | Add JumpYard Cloud endpoints for new-booking quote and draft creation against Roller Playground, without phone UI payment yet. | Keeps Roller credentials/server rules in JumpYard Cloud and gives a safe backend contract for the create-booking flow. |
+| `T0030 New booking/payment discovery spike` | Confirm the exact Roller Playground path for draft booking, payment token, test/fake card, and whether payment can stay inside the PWA without a hosted payment-link detour. | Completed locally; draft booking and `paymentJwt` are confirmed, while Roller payment-library authorization, domain allowlisting, package download, and test card details remain prerequisites for full in-app payment. |
+| `T0031 Server-side booking quote/draft` | Add JumpYard Cloud endpoints for new-booking quote and draft creation against Roller Playground, without phone UI payment yet. | Keeps Roller credentials/server rules in JumpYard Cloud and gives a safe backend contract for the create-booking flow while payment-library prerequisites are finalized. |
 | `T0032 Phone create-booking + fake payment` | Wire phone UI to create a booking and complete a Playground/test payment if Roller supports in-app payment. | Target first full new-booking flow: pick product/time, create draft, pay/test-pay without leaving the app, then continue toward check-in. |
 | `T0033 Staff auth replacement for temporary dev code` | Replace the manual dev redeem code with a real staff/admin auth model. | Needed before production-like staff redeem; can follow booking/payment spike unless pilot security timing forces it earlier. |
 | `T0034 Staff operations polish` | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. | Smooths the operational handoff after core create/check-in/redeem paths are proven. |
@@ -387,6 +389,16 @@ T0029 confirmed phone session resume behavior:
 - guest-in-progress sessions still route through the normal add-ons/safety flow
 - no Roller calls, redeem tokens, admin code, backend code, or AWS resources changed
 
+T0030 confirmed Roller draft/payment discovery facts:
+
+- `npm run roller:payment:discover` loads local `.env`, reuses the Playground guard, reads Roller products, selects a jump/session variation, and defaults to dry-run without creating a booking
+- `npm run roller:payment:discover:apply-draft` fails closed without `ROLLER_PAYMENT_DISCOVERY_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_DRAFT_BOOKING`
+- guarded direct apply created Playground draft booking unique id `bcb88005-ae64-4617-ba7a-b02b095a86c2` for `2026-05-22` at `10:00`
+- the draft response returned HTTP `201`, total `260`, amount owing `260`, and a present three-part `paymentJwt`
+- the script prints only safe response shape and never prints secrets, access tokens, or the raw payment JWT
+- Roller Payments via API docs confirm the intended custom checkout flow: call `POST /bookings/draft`, pass the returned JWT to Roller's payment library, receive Adyen drop-in payment status, and use booking-created webhook as a success signal
+- Roller Payments docs also state that the integration requires ROLLER approval, a public HTTPS allowlisted domain for test and production, and an approved payment package; test/fake card details are not confirmed in the available docs
+
 ## Non-Goals For Current Ticket
 
 - Do not use Aurora lookup data as final authority before future write-critical actions such as redeem or add-on booking creation.
@@ -394,7 +406,7 @@ T0029 confirmed phone session resume behavior:
 - Do not rely on automatic Roller webhook delivery in production until production auth, IP allowlisting, and environment registration are explicitly scoped.
 - Do not write to Roller Live/production.
 - Do not create staging or production AWS resources.
-- Do not add payment logic.
+- Do not add phone payment UI, production payment logic, or real payment processing.
 - Do not wire phone UI to redeem.
 - Do not expose the T0021 dev redeem token to frontend code or browser config.
 - Do not add a public demo button to the phone check-in UI.
@@ -403,8 +415,8 @@ T0029 confirmed phone session resume behavior:
 
 | Question | Why It Matters | Owner | Status |
 |---|---|---|---|
-| Which Roller Playground write scopes are enabled for create booking, draft booking, payment, and redemption? | Needed before T0030-T0032 booking/payment work. | `TBD` | `Open` |
-| Does Roller Playground support an in-app payment flow from draft booking `paymentJwt`, including documented test/fake card numbers and any domain allow-listing requirements? | Determines whether F1 can complete payment inside the JumpYard PWA or must use a hosted fallback. | `T0030` | `Open` |
+| Which Roller Playground write scopes are enabled for create booking, draft booking, payment, and redemption? | Needed before T0031-T0032 booking/payment work. Draft booking creation is confirmed; full payment processing still needs Roller payment-library enablement. | `TBD` | `Partially answered` |
+| Does Roller Playground support an in-app payment flow from draft booking `paymentJwt`, including documented test/fake card numbers and any domain allow-listing requirements? | Determines whether F1 can complete payment inside the JumpYard PWA or must use a hosted fallback. Roller docs support the in-app library path, but test cards, package access, account authorization, and domain allowlisting remain open. | `T0031/T0032` | `Partially answered` |
 | What is the best field or internal model for linking an original booking to a separate add-on booking? | Required for add-product implementation. | `TBD` | `Open` |
 | Which products need reconfiguration from stock/add-on to ticket/session products for API-driven redemption? | Stock/add-on products are excluded from Roller ticket redemption webhook/API flow. | `TBD` | `Open` |
 | Which Roller Data API endpoints and date ranges should power tickets, payments, and customers ingestion? | Required after bookingitems ingestion. | `TBD` | `Open` |

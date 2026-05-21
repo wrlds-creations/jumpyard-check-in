@@ -34,6 +34,10 @@ Use this file to define validation for the current project or milestone.
 | T0010 local phone server | Confirm local phone app starts for manual flow testing. | Passed | `http://127.0.0.1:3000` returned HTTP `200`. |
 | `node --check scripts/roller-data-api-smoke.js` | Confirm T0011 Data API smoke script syntax. | Passed | Passed on 2026-05-20. |
 | `npm run roller:data:smoke` | Confirm local Playground credentials can access Roller Data API `/data/bookingitems`. | Passed | Returned 9 records for modified-date window `2026-05-20 -> 2026-05-21` and found all six T0008 seed booking references. |
+| `node --check scripts/roller-payment-discovery.js` | Confirm T0030 payment discovery script syntax. | Passed | Script parses before running Roller calls. |
+| `npm run roller:payment:discover` | Confirm T0030 payment discovery dry-run path. | Passed | Loads local `.env`, validates Playground, reads products, selects product `1765836`, and creates no booking. |
+| `npm run roller:payment:discover:apply-draft` without confirmation | Confirm T0030 draft write fails closed unless explicitly confirmed. | Passed | Failed before creating a draft without `ROLLER_PAYMENT_DISCOVERY_ALLOW_WRITE`. |
+| Guarded T0030 draft apply | Confirm Roller Playground draft booking returns payment shape. | Passed | Direct guarded apply created draft unique id `bcb88005-ae64-4617-ba7a-b02b095a86c2`; response returned HTTP `201`, total `260`, amount owing `260`, and a present `paymentJwt` without printing the raw JWT. |
 | T0011 Data API production URL rejection | Confirm Data API smoke fails closed for live-looking Roller URL. | Passed | `ROLLER_BASE_URL=https://api.roller.app` was rejected before Data API calls. |
 | `npm --prefix infra run build` | Confirm T0012 TypeScript importer compiles. | Passed | Passed on 2026-05-20. |
 | T0012 bookingitems dry-run | Confirm Data API bookingitems importer normalizes records without Aurora writes. | Passed | Returned 9 records, 6 bookings, 9 booking items, and 0 skipped records. |
@@ -329,3 +333,14 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs and AWS tags validate after T0029. | Passed | `npm run validate` passed on 2026-05-21. |
 | Phone lint | Phone app lint passes after resume routing. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the pre-existing `<img>` warnings. |
 | Phone build | Phone app builds after resume routing. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed. |
+
+## T0030 New Booking Payment Discovery Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Dry-run discovery | Discovery command validates config, reads products, and creates no booking. | Passed | `npm run roller:payment:discover` selected `Biljetter (260 kr)` id `1765836`. |
+| Apply guard | Apply command refuses writes without explicit one-off confirmation. | Passed | `npm run roller:payment:discover:apply-draft` failed closed without the confirmation env var. |
+| Guarded Playground draft | Explicit guarded write creates only a Playground draft booking and does not process payment. | Passed | Draft unique id `bcb88005-ae64-4617-ba7a-b02b095a86c2`; amount owing `260`; `paymentJwtPresent=true`. |
+| Secret/JWT handling | Output never prints client secret, access token, or raw payment JWT. | Passed | Script reports only safe response shape and JWT metadata. |
+| Official docs review | Roller custom checkout path is documented before UI work. | Passed | Official Roller Payments docs require ROLLER authorization, public HTTPS domain allowlisting, and approved payment package access. |
+| Root validation | Source-of-truth docs and workflow checks pass after T0030. | Passed | `npm run validate` passed on 2026-05-21. |

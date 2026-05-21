@@ -13,6 +13,8 @@
     "roller:env:check": "node scripts/check-roller-env.js",
     "roller:smoke": "node scripts/roller-smoke.js",
     "roller:data:smoke": "node scripts/roller-data-api-smoke.js",
+    "roller:payment:discover": "node scripts/roller-payment-discovery.js",
+    "roller:payment:discover:apply-draft": "node scripts/roller-payment-discovery.js --apply-draft",
     "roller:seed:playground": "node scripts/roller-seed-playground.js",
     "roller:seed:playground:apply": "node scripts/roller-seed-playground.js --apply"
   }

@@ -1,15 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0029
+T0030
 
 ## Goal
-Resume an existing phone check-in session instead of restarting the guest flow.
+Discover and document the safe Roller Playground path for new booking payment.
 
 ## Dependencies
-- T0028 completed and merged.
-- Phone app already starts or resumes JumpYard Cloud check-in sessions.
-- Phone confirmation screen already renders the server-owned handoff QR.
+- T0029 completed and merged.
+- Roller Playground credentials exist locally in `.env`.
+- Existing Roller client guard rejects Live/production URLs.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,83 +19,87 @@ Resume an existing phone check-in session instead of restarting the guest flow.
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- `jumpyard-checkin-phone/src/app/page.tsx`
-- `jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx`
-- `jumpyard-checkin-phone/src/context/LanguageContext.tsx`
-- `jumpyard-checkin-phone/src/flow/cloudClient.ts`
-- `jumpyard-checkin-phone/src/flow/types.ts`
+- package.json
+- Existing `scripts/` Roller discovery tooling
+- New small Roller payment discovery script if needed
 
 ## Do not touch
+- Phone UI implementation
+- Admin UI implementation
+- Kiosk UI implementation
 - AWS infrastructure
 - Lambda/API handlers
 - Aurora migrations
-- Roller API code
 - Redeem business logic
-- Booking creation/add-product logic
-- Payment logic
-- Kiosk app
-- Admin app
+- Staff auth
 - Production credentials
 - Live Roller config
+- `.env`
 - Unrelated assets or deliverables
 
 ## Requirements
 
-1. When the phone app looks up a paid booking, start/resume the JumpYard Cloud session so active resume states can be detected before the booking summary.
+1. Confirm the intended Roller Playground payment flow for new bookings:
+   - Draft booking creation.
+   - Returned booking cost fields.
+   - Returned `paymentJwt`.
+   - How the booking becomes published/confirmed after payment.
 
-2. When JumpYard Cloud returns `ready_for_staff`:
-   - Skip the add-ons/safety flow.
-   - Show the final confirmation screen immediately after search.
-   - Preserve the server-owned handoff code and QR payload.
+2. Add or update a safe local discovery command if useful, for example:
+   - `npm run roller:payment:discover`
 
-3. When the session is already completed/redeemed or JumpYard Cloud reports `already_redeemed`:
-   - Do not restart the check-in flow.
-   - Show an "already checked in" completion state.
-   - Do not show a redeem QR or staff handoff action as if the booking still needs check-in.
+3. The discovery command must:
+   - Load local `.env` without committing it.
+   - Reuse the Playground environment guard.
+   - Fail if `ROLLER_ENV` is not `playground`.
+   - Fail if `ROLLER_BASE_URL` does not point to Playground.
+   - Never print `ROLLER_CLIENT_SECRET`, access tokens, or raw payment JWTs.
+   - Default to dry-run/no write mode.
+   - Require an explicit one-off confirmation env var before creating any Playground draft booking.
 
-4. When the session is still `guest_in_progress`:
-   - Continue the normal guest flow from the booking summary.
-   - Do not skip required guest-side steps.
+4. If a Playground draft booking is created:
+   - Use fake customer data only.
+   - Do not create a live/production booking.
+   - Do not process a real payment.
+   - Summarize only safe identifiers and response shape.
 
-5. Keep all Roller and redeem authority server-side:
-   - Do not call Roller from the phone app.
-   - Do not expose redeem tokens or staff secrets.
-   - Do not change backend write behavior.
+5. Document whether fake/test payment can happen inside the JumpYard PWA:
+   - Supported directly with Roller Payments and `paymentJwt`.
+   - Requires a Roller-hosted payment page/link.
+   - Requires extra docs from Roller or venue/payment configuration.
+   - Unknown/blocked.
 
 6. Update source-of-truth docs with:
-   - T0029 status.
-   - Resume behavior.
-   - Validation results.
+   - T0030 status.
+   - Findings.
+   - Open questions.
    - Recommended next ticket.
 
 ## Non-goals
-- Do not implement SMS token restore.
-- Do not implement booking creation.
-- Do not implement payment.
-- Do not implement staff authentication.
+- Do not build phone booking UI.
+- Do not implement JumpYard Cloud booking endpoints.
 - Do not deploy AWS changes.
-- Do not change Roller webhook registration.
-- Do not change final redeem behavior.
+- Do not create Aurora tables.
+- Do not process real payments.
+- Do not redeem tickets.
+- Do not implement add-product booking links.
+- Do not register or change webhooks.
 
 ## Acceptance criteria
-- Ready-for-staff resumed sessions open directly from phone lookup on the QR confirmation screen.
-- Already-redeemed/completed bookings show an already checked-in state.
-- Guest-in-progress sessions still follow the normal flow.
+- The intended Roller draft/payment flow is documented.
+- Any added discovery command defaults to no-write mode.
+- Any write test is Playground-only and explicitly guarded.
+- No secrets, access tokens, or raw payment JWTs are printed.
 - `npm run validate` passes.
-- Phone lint/build pass.
-- No AWS, Roller, admin, or redeem handler changes are made.
+- Recommended next ticket is updated based on findings.
 
 ## Manual verification
-1. Find a booking with an active `ready_for_staff` session.
-2. Open the phone app and look up that booking.
-3. Confirm the phone jumps directly to the QR confirmation screen after search.
-4. Find or use a booking whose selected tickets are already redeemed.
-5. Open the phone app and look up that booking.
-6. Confirm the phone shows the already checked-in state without restarting the flow.
-7. Confirm a normal paid booking without a ready handoff still continues through the normal guest flow.
+Review the T0030 findings in source-of-truth docs and confirm whether the next implementation should build:
+1. Server-side booking quote/draft endpoints.
+2. A hosted payment-link fallback.
+3. An in-app payment flow using Roller Payments.
 
 ## Automated validation
 Run:
 - `npm run validate`
-- `npm --prefix jumpyard-checkin-phone run lint`
-- `npm --prefix jumpyard-checkin-phone run build`
+- Any added Roller payment discovery command in dry-run mode
