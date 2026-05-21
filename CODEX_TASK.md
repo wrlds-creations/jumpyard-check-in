@@ -2,29 +2,28 @@
 
 ## Ticket ID
 
-T0024
+T0025
 
 ## Goal
 
-Wire the phone app start-check-in action to the server-owned JumpYard Cloud session API.
+Wire the phone app final guest-side step to the server-owned ready-for-staff handoff endpoint.
 
 ## Dependencies
 
-- T0023 completed, pushed, and merged to `main`.
-- Dev API exposes `POST /v1/check-in/sessions`.
-- Phone lookup already uses JumpYard Cloud and returns normalized booking summaries.
+- T0024 completed, pushed, and merged to `main`.
+- Dev API exposes `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff`.
+- Phone flow already starts or resumes a JumpYard Cloud session before leaving booking summary.
 
 ## Current Status
 
-Completed locally on branch `codex/t0024-phone-start-session-wiring`.
+Completed locally on branch `codex/t0025-phone-ready-for-staff-handoff`.
 
 Validation result:
 
 - `npm run validate`: passed.
-- `cd jumpyard-checkin-phone && npm run lint`: passed with four pre-existing `<img>` warnings.
-- `cd jumpyard-checkin-phone && npm run build`: passed.
-- Browser validation: paid booking `5032210` advanced from booking summary to add-ons only after storing session `jycs_mpfe3dum_7dc29b1b`.
-- Browser validation: unpaid booking `5032211` stayed on booking summary with disabled `Betalning krävs` CTA and no session id.
+- `npm --prefix jumpyard-checkin-phone run lint`: passed with four pre-existing `<img>` warnings.
+- `npm --prefix jumpyard-checkin-phone run build`: passed.
+- Browser validation: paid booking `5032210` reached `APP_CONFIRM` with session `jycs_mpfe3dum_7dc29b1b`, handoff status `ready_for_staff`, and handoff code `JY6085`.
 
 ## Allowed Areas
 
@@ -37,7 +36,8 @@ Validation result:
 - `TEST_PLAN.md`
 - `jumpyard-checkin-phone/src/flow/`
 - `jumpyard-checkin-phone/src/app/page.tsx`
-- `jumpyard-checkin-phone/src/components/BookingSummary.tsx`
+- `jumpyard-checkin-phone/src/components/SafetyAttest.tsx`
+- `jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx`
 - `jumpyard-checkin-phone/src/context/LanguageContext.tsx`
 
 ## Do Not Touch
@@ -59,24 +59,22 @@ Validation result:
 
 ## Requirements
 
-1. Add a phone-side JumpYard Cloud client function for `POST /v1/check-in/sessions`.
-2. Send a stable idempotency key when starting a session.
-3. Include booking reference, Roller unique id when available, and expected visit date.
-4. Store the returned `checkinSessionId` and session status in phone flow state.
-5. On the booking summary CTA:
-   - call the session API first
-   - show a starting state while the request is running
-   - continue the existing guest flow only after session start/resume succeeds
-6. Keep unpaid, wrong-date, already-redeemed, not-fresh, and failed session starts blocked in the phone UI.
-7. Do not call Roller from the phone app.
-8. Do not expose redeem tokens or credentials in frontend code.
-9. Do not mark sessions `ready_for_staff` in this ticket.
+1. Add a phone-side JumpYard Cloud client function for `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff`.
+2. Send a stable idempotency key when marking a session ready for staff.
+3. Call the endpoint only after the safety attestation step completes.
+4. Store the returned session status, handoff status, safety status, and handoff code in phone flow state.
+5. Show a processing state while ready-for-staff is running.
+6. Show a retryable error if ready-for-staff fails.
+7. Show the server-owned handoff code on the confirmation screen.
+8. Keep final Roller redemption out of the phone UI.
+9. Do not call Roller from the phone app.
+10. Do not expose redeem tokens or credentials in frontend code.
 
 ## Non-Goals
 
 - Do not implement staff/admin handoff views.
 - Do not wire final redeem.
-- Do not call `ready-for-staff`.
+- Do not call `POST /redemptions`.
 - Do not create or edit bookings.
 - Do not implement payment.
 - Do not implement add-product.
@@ -85,10 +83,10 @@ Validation result:
 
 ## Acceptance Criteria
 
-- A paid ready booking creates or resumes a JumpYard Cloud session before leaving the booking summary.
-- The phone flow stores the session id in client flow state.
-- Repeated starts resume the server-owned active session.
-- A pending-payment booking remains blocked and cannot start session progress from the phone UI.
+- A paid ready booking can progress through guest-side steps and mark its JumpYard Cloud session `ready_for_staff`.
+- The phone flow stores the returned handoff code and session status.
+- The confirmation screen shows the server-owned handoff code.
+- Failed ready-for-staff calls keep the guest on the safety attestation step with a visible error.
 - Phone app never calls Roller directly.
 - Phone app does not contain redeem secrets or Roller credentials.
 - `npm run validate` passes.
@@ -102,9 +100,10 @@ In the phone app:
 1. Enter paid booking `5032210`.
 2. Confirm the booking summary opens.
 3. Press `Ja, starta incheckning`.
-4. Confirm the flow advances only after a JumpYard Cloud session id is present.
-5. Enter unpaid booking `5032211`.
-6. Confirm the summary shows unpaid/payment-required and the start CTA stays disabled.
+4. Continue through add-ons, safety video, and safety attestation.
+5. Confirm the flow advances only after ready-for-staff succeeds.
+6. Confirm the final screen shows the server-owned handoff code.
+7. Confirm the page state includes `data-handoff-status="ready_for_staff"`.
 
 ## Automated Validation
 

@@ -3,8 +3,11 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
+import type { SessionIssue } from '@/flow/cloudClient';
 
 interface SafetyAttestProps {
+    isSubmitting?: boolean;
+    submitError?: SessionIssue | null;
     onComplete: (attestedAt: string) => void;
 }
 
@@ -31,7 +34,7 @@ const SAFETY_RULE_ICONS: Record<SafetyRuleKey, JumpyardIconName> = {
 
 const AGE_BULLETS = ['adultInArea35', 'adultInVenue610', 'canJumpAlone11'] as const;
 
-export const SafetyAttest = ({ onComplete }: SafetyAttestProps) => {
+export const SafetyAttest = ({ isSubmitting = false, submitError = null, onComplete }: SafetyAttestProps) => {
     const { t } = useTranslation();
     const [checked, setChecked] = useState<Record<string, boolean>>({});
 
@@ -123,12 +126,24 @@ export const SafetyAttest = ({ onComplete }: SafetyAttestProps) => {
                 <p className="text-muted text-xs text-center mb-2">{t.safetyAttest.finalAttest}</p>
             )}
 
+            {submitError && (
+                <div
+                    className="w-full mb-3 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2 text-left"
+                    data-testid="ready-for-staff-error"
+                >
+                    <p className="text-xs font-bold text-foreground">{t.safetyAttest.readyForStaffFailed}</p>
+                </div>
+            )}
+
             <button
                 onClick={() => onComplete(new Date().toISOString())}
-                disabled={!allChecked}
+                disabled={!allChecked || isSubmitting}
+                aria-busy={isSubmitting}
+                data-testid="ready-for-staff-submit"
+                data-ready-for-staff-state={isSubmitting ? 'submitting' : submitError ? submitError : 'idle'}
                 className="w-full bg-primary hover:bg-surface hover:text-primary hover:border-primary border border-transparent text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all disabled:opacity-40 shadow-sm"
             >
-                {t.safetyAttest.cta}
+                {isSubmitting ? t.safetyAttest.readyForStaffProcessing : t.safetyAttest.cta}
             </button>
         </motion.div>
     );

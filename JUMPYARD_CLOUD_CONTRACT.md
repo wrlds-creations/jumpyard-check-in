@@ -554,11 +554,11 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0024`. The next recommended ticket is `T0025 Phone ready-for-staff handoff wiring`, which should call the T0023 ready-for-staff endpoint after required guest-side steps are complete.
+Current implementation has progressed through `T0025`. The next recommended ticket is `T0026 Staff/admin handoff list/detail`, which should show staff the sessions that the phone flow has marked ready for handoff.
 
 Near-term sequence:
 
-1. `T0025 Phone ready-for-staff handoff wiring`: mark the existing session `ready_for_staff` when guest-side steps are complete.
+1. `T0025 Phone ready-for-staff handoff wiring`: completed locally; the phone app marks the existing session `ready_for_staff` after safety attestation and shows the server-owned handoff code.
 2. `T0026 Staff/admin handoff list/detail`: show sessions with `handoff_status='ready_for_staff'` to staff.
 3. `T0027 Staff-confirmed redeem from session`: redeem selected tickets only after staff/server confirmation and final Roller refresh.
 4. `T0028 QR/handoff code polish`: improve how staff locates the ready session, including QR/handoff-code handling if needed.

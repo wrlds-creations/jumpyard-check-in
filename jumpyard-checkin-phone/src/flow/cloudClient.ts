@@ -19,6 +19,8 @@ export type SessionIssue =
   | 'already_redeemed'
   | 'booking_not_active'
   | 'booking_not_fresh'
+  | 'session_expired'
+  | 'session_not_active'
   | 'session_failed'
   | 'network_error';
 
@@ -65,6 +67,7 @@ interface CloudSessionResponse {
   status:
     | 'session_started'
     | 'session_resumed'
+    | 'ready_for_staff'
     | 'blocked'
     | 'not_found'
     | 'invalid_request'
@@ -199,14 +202,46 @@ export async function startCheckInSession(booking: Booking): Promise<CheckInSess
     throw createSessionError(body, response.status);
   }
 
-  return {
-    checkinSessionId: body.session.checkinSessionId,
-    status: body.session.status,
-    handoffCode: body.session.handoffCode ?? null,
-    handoffStatus: body.session.handoffStatus ?? null,
-    safetyStatus: body.session.safetyStatus ?? null,
-    expiresAt: body.session.expiresAt ?? null,
-  };
+  return toCheckInSession(body.session);
+}
+
+export async function markSessionReadyForStaff(
+  session: CheckInSession,
+  safetyStatus: 'completed' | 'requires_staff' = 'completed'
+): Promise<CheckInSession> {
+  if (!session.checkinSessionId) {
+    throw new CloudSessionError('session_failed', 'A check-in session id is required before staff handoff.');
+  }
+
+  let response: Response;
+  let body: CloudSessionResponse | null = null;
+
+  try {
+    response = await fetch(
+      `${getApiBaseUrl()}/v1/check-in/sessions/${encodeURIComponent(session.checkinSessionId)}/ready-for-staff`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          idempotencyKey: getReadyForStaffIdempotencyKey(session, safetyStatus),
+          safetyStatus,
+          correlationId: `phone_ready_${Date.now().toString(36)}`,
+        }),
+      }
+    );
+    body = await parseSessionResponse(response);
+  } catch (error) {
+    if (error instanceof CloudSessionError) throw error;
+    throw new CloudSessionError('network_error', 'Could not reach JumpYard Cloud.');
+  }
+
+  if (!response.ok || !body?.session || body.status !== 'ready_for_staff') {
+    throw createSessionError(body, response.status);
+  }
+
+  return toCheckInSession(body.session);
 }
 
 function getApiBaseUrl() {
@@ -270,7 +305,11 @@ function createLookupError(body: CloudLookupResponse | null, httpStatus?: number
 }
 
 function createSessionError(body: CloudSessionResponse | null, httpStatus?: number) {
-  if (body?.status === 'not_found' || body?.error?.code === 'booking_not_found') {
+  if (
+    body?.status === 'not_found' ||
+    body?.error?.code === 'booking_not_found' ||
+    body?.error?.code === 'session_not_found'
+  ) {
     return new CloudSessionError('not_found', 'Booking was not found in JumpYard Cloud.', httpStatus);
   }
 
@@ -289,7 +328,9 @@ function isSessionIssue(value?: string): value is SessionIssue {
     value === 'no_redeemable_tickets' ||
     value === 'already_redeemed' ||
     value === 'booking_not_active' ||
-    value === 'booking_not_fresh'
+    value === 'booking_not_fresh' ||
+    value === 'session_expired' ||
+    value === 'session_not_active'
   );
 }
 
@@ -321,6 +362,21 @@ function getSessionStartIdempotencyKey(booking: Booking) {
   const bookingRef = booking.rollerUniqueId ?? booking.id;
   const visitDate = booking.date ?? getExpectedDate();
   return `phone-session-start:${bookingRef}:${visitDate}`;
+}
+
+function getReadyForStaffIdempotencyKey(session: CheckInSession, safetyStatus: string) {
+  return `phone-ready-for-staff:${session.checkinSessionId}:${safetyStatus}`;
+}
+
+function toCheckInSession(session: CloudSession): CheckInSession {
+  return {
+    checkinSessionId: session.checkinSessionId,
+    status: session.status,
+    handoffCode: session.handoffCode ?? null,
+    handoffStatus: session.handoffStatus ?? null,
+    safetyStatus: session.safetyStatus ?? null,
+    expiresAt: session.expiresAt ?? null,
+  };
 }
 
 function isPaidBooking(reason: string, booking: CloudBooking) {

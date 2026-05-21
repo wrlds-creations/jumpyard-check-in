@@ -1,14 +1,13 @@
 'use client';
-import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { commitCheckin } from '@/flow/mockClient';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { QrCode } from '@/components/QrCode';
-import type { Addon, Booking } from '@/flow/types';
+import type { Addon, Booking, CheckInSession } from '@/flow/types';
 
 interface ConfirmationScreenProps {
     booking: Booking;
+    checkinSession: CheckInSession | null;
     jumperCount: number;
     selectedAddons: Addon[];
 }
@@ -30,22 +29,12 @@ const EXPERIENCE_ICONS: Partial<Record<Addon['id'], JumpyardIconName>> = {
     extra_person: 'add-guest',
 };
 
-export const ConfirmationScreen = ({ booking, jumperCount, selectedAddons }: ConfirmationScreenProps) => {
+export const ConfirmationScreen = ({ booking, checkinSession, jumperCount, selectedAddons }: ConfirmationScreenProps) => {
     const { t } = useTranslation();
-    const [qrPayload, setQrPayload] = useState('');
-    const [shortCode, setShortCode] = useState('');
-
-    useEffect(() => {
-        let alive = true;
-        if (booking?.id) {
-            commitCheckin(booking.id).then(result => {
-                if (!alive) return;
-                setQrPayload(result.qrPayload);
-                setShortCode(result.shortCode);
-            });
-        }
-        return () => { alive = false; };
-    }, [booking?.id]);
+    const handoffCode = checkinSession?.handoffCode ?? '';
+    const qrPayload = handoffCode
+        ? `JY_HANDOFF:${handoffCode}:${checkinSession?.checkinSessionId ?? booking.id}`
+        : `JY_SESSION:${checkinSession?.checkinSessionId ?? booking.id}`;
 
     const handoutItems: { label: string; qty: number; icon: JumpyardIconName }[] = [
         { label: t.confirm.wristbands, qty: jumperCount, icon: 'visitor-wristband' },
@@ -64,6 +53,10 @@ export const ConfirmationScreen = ({ booking, jumperCount, selectedAddons }: Con
             className="w-full max-w-lg mx-auto flex flex-col items-center justify-center px-4 py-3 text-center"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
+            data-testid="confirmation-screen"
+            data-checkin-session-id={checkinSession?.checkinSessionId ?? ''}
+            data-handoff-code={handoffCode}
+            data-handoff-status={checkinSession?.handoffStatus ?? ''}
         >
             <div className="bg-surface p-5 rounded-2xl border border-border w-full shadow-sm text-foreground">
 
@@ -73,20 +66,20 @@ export const ConfirmationScreen = ({ booking, jumperCount, selectedAddons }: Con
                     <p className="text-muted text-sm">{t.confirm.subtitle}</p>
 
                     <div className="mt-4 bg-white p-4 rounded-xl border border-border shadow-sm flex flex-col items-center">
-                        <QrCode value={qrPayload || `JY:${booking.id}`} className="w-36 h-36 mb-2" />
+                        <QrCode value={qrPayload} className="w-36 h-36 mb-2" />
                         <p className="text-[11px] text-muted uppercase tracking-widest mb-0.5">{t.confirm.pickupCode}</p>
                         <p className="text-2xl font-black tracking-widest text-primary">
-                            {shortCode || '----'}
+                            {handoffCode || '----'}
                         </p>
                         <p className="text-[10px] text-muted font-mono mt-1 break-all max-w-[160px]">
-                            {qrPayload || '…'}
+                            {qrPayload}
                         </p>
                     </div>
 
-                    {shortCode && (
+                    {handoffCode && (
                         <div className="mt-3 bg-surface-strong border border-border rounded-lg px-4 py-2">
                             <p className="text-[10px] text-muted uppercase tracking-widest mb-0.5">{t.confirm.backupLabel}</p>
-                            <p className="text-xl font-black tracking-[0.3em] text-primary font-mono">{shortCode}</p>
+                            <p className="text-xl font-black tracking-[0.3em] text-primary font-mono">{handoffCode}</p>
                         </div>
                     )}
                 </div>
