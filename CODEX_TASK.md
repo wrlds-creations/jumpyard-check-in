@@ -2,25 +2,41 @@
 
 ## Ticket ID
 
-T0022
+T0023
 
 ## Goal
 
-Lock the phone-to-staff redeem handoff design so the phone flow can progress toward real check-in completion without exposing dev/prod redeem power to the frontend.
+Implement the server-owned check-in session API skeleton so the phone flow can start or resume a JumpYard Cloud session without directly redeeming Roller tickets.
 
 ## Dependencies
 
-- T0021 completed, pushed, and merged to `main`.
-- Dev `POST /v1/check-in/redeem` can safely plan redemptions and can execute controlled Playground redemption only with a dev token.
-- T0021 confirmed Roller redemption consumes ticket state, so production phone UI wiring must be designed before exposing any check-in completion action.
+- T0022 completed, pushed, and merged to `main`.
+- Dev Aurora contains Roller booking, item, and ticket snapshots.
+- Dev API already has lookup, webhook, and controlled redeem handlers.
+- T0022 locked that phone UI must not hold redeem secrets or directly execute Roller redemption.
 
 ## Current Status
 
-Completed locally on branch `codex/t0022-phone-staff-redeem-handoff-design`.
+Completed locally and deployed to dev on branch `codex/t0023-checkin-session-api-skeleton`.
 
 Validation result:
 
 - `npm run validate`: passed.
+- `node --check infra/lambda/session/index.js`: passed.
+- Local request-shape smoke: invalid JSON and missing idempotency key returned stable `400` errors.
+- `npm --prefix infra run build`: passed.
+- `npm --prefix infra run synth:dev`: passed.
+- AWS preflight: account `376129878018`, region `eu-north-1`.
+- `npm --prefix infra run migrate:dev:status`: showed `0003 checkin sessions` pending before apply.
+- `npm --prefix infra run migrate:dev`: applied `0003 checkin sessions`.
+- `npm --prefix infra run diff:dev`: showed only the approved session Lambda, log group, API routes, invoke permissions, and scoped DB/log permissions before deploy.
+- `npm --prefix infra run deploy:dev`: passed.
+- Dev smoke: booking `5032210` created session `jycs_mpfe3dum_7dc29b1b`.
+- Dev smoke: repeating `5032210` resumed the same active session.
+- Dev smoke: booking `5032211` was blocked as `payment_required`.
+- Dev smoke: session `jycs_mpfe3dum_7dc29b1b` was marked `ready_for_staff` with handoff code `JY6085`.
+- Aurora verification: `checkin_sessions` row exists with `status='ready_for_staff'`, `handoff_status='ready_for_staff'`, and `safety_status='completed'`.
+- Post-deploy `npm --prefix infra run diff:dev`: no differences.
 
 ## Allowed Areas
 
@@ -30,7 +46,11 @@ Validation result:
 - `JUMPYARD_CLOUD_CONTRACT.md`
 - `REPO_CURRENT_STATE.md`
 - `FOLLOWUPS.md`
+- `AWS_RESOURCES.md`
 - `TEST_PLAN.md`
+- `infra/migrations/`
+- `infra/lambda/session/`
+- `infra/lib/jumpyard-cloud-stack.ts`
 
 ## Do Not Touch
 
@@ -39,9 +59,6 @@ Validation result:
 - Admin UI
 - Assets
 - Deliverables
-- Lambda implementation
-- CDK/AWS resources
-- Database migrations
 - Booking creation implementation
 - Payment implementation
 - Add-product implementation
@@ -51,54 +68,77 @@ Validation result:
 
 ## Requirements
 
-1. Document that the guest phone app must not directly execute Roller redemption.
-2. Document that the dev-only redeem token from T0021 is for controlled backend testing only and must never be placed in frontend config.
-3. Define the intended pilot handoff shape:
-   - phone lookup displays booking state from JumpYard Cloud
-   - phone starts or resumes a server-owned check-in session
-   - JumpYard Cloud owns session state, safety status, handoff status, idempotency, and audit
-   - staff/admin or a server-trusted confirmation step performs final redeem
-   - final redeem still performs live Roller refresh before `POST /redemptions`
-4. Define proposed future API responsibilities without implementing them.
-5. Define the expected Aurora ownership model for session/handoff state without creating migrations in this ticket.
-6. Add a decision that phone UI must not hold redeem secrets or directly redeem tickets.
-7. Update current-state and test-plan docs with the T0022 scope and the next recommended implementation ticket.
+1. Add an Aurora migration for a `jumpyard.checkin_sessions` operational table.
+2. Add a session Lambda that supports:
+   - `POST /v1/check-in/sessions`
+   - `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff`
+3. `POST /v1/check-in/sessions` must:
+   - require a booking identifier
+   - require an idempotency key
+   - read booking/ticket context from Aurora
+   - create or resume an active server-owned session
+   - reject unpaid, wrong-date, inactive, missing-ticket, and already-redeemed contexts
+   - never call Roller
+   - never redeem tickets
+4. `ready-for-staff` must:
+   - require an idempotency key
+   - mark the session `ready_for_staff`
+   - create or preserve a short handoff code
+   - write safe audit/event rows
+   - never call Roller
+   - never redeem tickets
+5. Add the session Lambda and routes to CDK.
+6. Apply the dev Aurora migration and deploy the dev session API after AWS account/region preflight.
+7. Update source-of-truth docs, AWS inventory, and test plan.
 
 ## Non-Goals
 
-- Do not wire phone UI to redeem.
+- Do not wire phone UI to sessions.
 - Do not add staff/admin UI.
-- Do not create session endpoints.
-- Do not create new database tables.
-- Do not deploy AWS changes.
-- Do not call Roller.
-- Do not redeem additional tickets.
-- Do not add payment logic.
-- Do not add booking creation logic.
+- Do not execute Roller redemption from sessions.
+- Do not create payment logic.
+- Do not create booking logic.
+- Do not create add-product logic.
+- Do not write to Roller.
+- Do not create staging or production resources.
 
 ## Acceptance Criteria
 
-- Source-of-truth docs clearly state that the phone app cannot directly execute Roller redemption.
-- The recommended pilot flow is clear: phone starts a JumpYard Cloud session, staff/server confirmation executes final redeem.
-- The contract identifies future server endpoints and state ownership without implementing them.
-- `DECISIONS.md` contains the new handoff/redeem boundary decision.
-- `REPO_CURRENT_STATE.md` recommends the next implementation ticket.
-- No app code, infra code, AWS resources, migrations, assets, deliverables, credentials, or `.env` files are changed.
+- `checkin_sessions` exists in dev Aurora.
+- Dev API exposes session start/resume and ready-for-staff routes.
+- A paid ready booking can create a session.
+- Repeating the start request resumes the active session instead of creating duplicates.
+- A pending-payment booking is rejected.
+- A session can be marked `ready_for_staff` and receives a handoff code.
+- No phone UI, assets, deliverables, production config, production credentials, or `.env` files are changed.
+- Root and infra validation pass.
 
 ## Manual Verification
 
-Review:
+After deploy, call:
 
-- `PROJECT_CONTEXT.md`
-- `DECISIONS.md`
-- `JUMPYARD_CLOUD_CONTRACT.md`
-- `REPO_CURRENT_STATE.md`
-- `TEST_PLAN.md`
+```text
+POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/sessions
+POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/sessions/{checkinSessionId}/ready-for-staff
+```
 
-Confirm a new Codex session can understand why phone lookup and phone start-check-in are separate from final Roller redemption.
+Expected cases:
+
+1. Booking `5032210` creates or resumes a session.
+2. Booking `5032211` is rejected as `payment_required`.
+3. A created session can be marked `ready_for_staff`.
+4. Aurora shows the session and related event-log rows.
 
 ## Automated Validation
 
 Run:
 
 - `npm run validate`
+- `node --check infra/lambda/session/index.js`
+- `npm --prefix infra run build`
+- `npm --prefix infra run synth:dev`
+- `npm --prefix infra run migrate:dev:status`
+- `npm --prefix infra run migrate:dev`
+- `npm --prefix infra run diff:dev`
+- `npm --prefix infra run deploy:dev`
+- post-deploy endpoint smoke tests

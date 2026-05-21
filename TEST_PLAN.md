@@ -6,7 +6,7 @@ Use this file to define validation for the current project or milestone.
 
 | Command | Purpose | Result | Notes |
 |---|---|---|---|
-| `npm run validate` | Validate root WRLDS workflow files and skills. | Passed | Passed on 2026-05-21 during T0019. |
+| `npm run validate` | Validate root WRLDS workflow files and skills. | Passed | Passed on 2026-05-21 during T0023. |
 | `npm run roller:env:check` | Confirm Roller env guard passes for local Playground config. | Passed | Passed with local `.env`. |
 | `npm run roller:smoke` | Confirm Roller Playground auth works and one read-only request can run. | Passed | Passed with local `.env`; `/products` returned HTTP 200 and 96 products on 2026-05-19. |
 | `npm run roller:seed:playground` | Plan deterministic Playground seed bookings without writes. | Passed | Passed on 2026-05-20; resolved six scenarios to child/variation product IDs. |
@@ -183,6 +183,7 @@ Use this file to define validation for the current project or milestone.
 | T0016 CDK deploy | Dev lookup Lambda is updated with Aurora-first code. | Passed | `npm --prefix infra run deploy:dev` updated only `LookupHandler`. |
 | T0017 CDK deploy | Dev webhook Lambda is updated with enrichment code. | Passed | `npm --prefix infra run deploy:dev` updated only `WebhookHandler`. |
 | T0018 CDK deploy | Dev webhook Lambda is updated for real Roller header support. | Passed | `npm --prefix infra run deploy:dev` updated only `WebhookHandler`. |
+| T0023 CDK deploy | Dev session Lambda and session API routes are deployed. | Passed | `npm --prefix infra run deploy:dev` created `jumpyard-check-in-dev-stack-session` and session routes. |
 
 ## Aurora Schema Validation
 
@@ -231,3 +232,15 @@ Use this file to define validation for the current project or milestone.
 | Session handoff boundary | Docs state that phone can start/resume a JumpYard Cloud check-in session, while final redeem is staff/server-confirmed. | Documented | No implementation or AWS change in T0022. |
 | Final redeem safety | Docs preserve T0021 final live Roller refresh, eligibility re-check, idempotency, and audit before any `POST /redemptions`. | Documented | Future T0023 should implement session skeleton without phone-direct redeem. |
 | No code/resource changes | T0022 changes only source-of-truth docs and contract files. | Passed | T0022 modified docs/contract files only; older local asset changes remain outside the ticket. |
+
+## T0023 Check-in Session Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Session Lambda syntax | `node --check infra/lambda/session/index.js` passes. | Passed | Validated before deploy. |
+| Session migration | `0003 checkin sessions` applies to dev Aurora. | Passed | `npm --prefix infra run migrate:dev` applied the migration. |
+| Paid booking start | Booking `5032210` creates a server-owned session. | Passed | Created session `jycs_mpfe3dum_7dc29b1b`. |
+| Repeat start | Repeating the same booking start resumes the active session. | Passed | Returned `session_resumed` for `jycs_mpfe3dum_7dc29b1b`. |
+| Unpaid booking block | Booking `5032211` is rejected before session progress. | Passed | Returned `payment_required`. |
+| Ready for staff | A started session can be marked ready for staff. | Passed | Session `jycs_mpfe3dum_7dc29b1b` received handoff code `JY6085`. |
+| No Roller write | Session endpoints do not call Roller or redeem tickets. | Passed | The Lambda only reads/writes Aurora and event-log/idempotency rows. |
