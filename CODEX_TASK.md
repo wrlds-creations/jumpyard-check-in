@@ -2,42 +2,37 @@
 
 ## Ticket ID
 
-T0020
+T0021
 
 ## Goal
 
-Add the first safe server-owned redeem endpoint shape for the phone check-in flow without enabling public Roller redemption writes.
+Enable controlled Roller Playground ticket redemption through JumpYard Cloud with dev-only auth and a final live Roller refresh before any write.
 
 ## Dependencies
 
-- T0019 completed, pushed, and merged to `main`.
-- Dev API already exposes placeholder route `POST /v1/check-in/redeem`.
-- Dev Aurora contains fresh lookup/webhook booking snapshots and ticket ids.
-- Roller `POST /redemptions` request shape is confirmed:
-  - body has `tickets[]`
-  - each ticket has required `ticketId`
-  - optional `redemptionDate`
-  - optional `redemptionDevice`
-  - max 10 ticket redemptions per call
-  - ticket ids must be unique per call
+- T0020 completed, pushed, and merged to `main`.
+- Dev `POST /v1/check-in/redeem` already resolves local Aurora booking/ticket snapshots and audits attempts.
+- Roller `POST /redemptions` request shape is confirmed.
+- Dev AWS target remains account `376129878018`, region `eu-north-1`.
 
 ## Current Status
 
-Completed locally and deployed to dev on branch `codex/t0020-redeem-spike`.
+Completed locally and deployed to dev on branch `codex/t0021-controlled-redeem-execution`.
 
 Validation result:
 
 - `npm run validate`: passed.
 - `node --check infra/lambda/redeem/index.js`: passed.
-- local request-shape smoke tests: passed.
 - `npm --prefix infra run build`: passed.
 - `npm --prefix infra run synth:dev`: passed.
 - AWS preflight: account `376129878018`, region `eu-north-1`.
-- `npm --prefix infra run diff:dev`: showed only the approved redeem Lambda code/env change before deploy.
+- `npm --prefix infra run diff:dev`: showed the approved redeem dev-token secret, CORS header, redeem Lambda asset/env change, and scoped Secrets Manager permission before deploy.
 - `npm --prefix infra run deploy:dev`: passed.
-- post-deploy `npm --prefix infra run diff:dev`: no differences.
-- deployed endpoint smoke tests: passed.
-- Aurora audit verification: planned/blocked/write-disabled attempts were written without Roller redemption writes.
+- Follow-up `npm --prefix infra run diff:dev`: showed only the redeem Lambda asset update after removing the invalid default `redemptionDevice`.
+- Follow-up `npm --prefix infra run deploy:dev`: passed.
+- Final post-deploy `npm --prefix infra run diff:dev`: no differences.
+- Controlled redeem smoke: booking `5032454` returned `redeemed` through Roller Playground.
+- Aurora verification: ticket `5032454-21397335` is locally marked `redeemed`, and `jumpyard.checkin_attempts` contains `redeemed` plus follow-up `already_redeemed` rows.
 
 ## Allowed Areas
 
@@ -67,50 +62,41 @@ Validation result:
 
 ## Requirements
 
-1. Replace the dev redeem placeholder with a real Lambda asset.
-2. Keep the endpoint server-owned:
-   - phone app must not call Roller directly
-   - Roller credentials stay in AWS only
-3. Validate request shape:
-   - require booking identifier
-   - require idempotency key
-   - reject duplicate ticket ids
-   - reject more than 10 ticket ids
-4. Resolve the booking and ticket ids from Aurora.
-5. Return a safe redeem plan for eligible bookings without writing to Roller by default.
-6. Block unsafe cases before any Roller write:
-   - unpaid booking
-   - cancelled/deleted/draft booking
-   - stale local booking snapshot
-   - wrong expected date
-   - unknown ticket id
-   - already locally marked redeemed ticket
-   - no ticket ids
-7. Persist safe check-in attempt audit rows in Aurora.
-8. Persist safe event-log rows for planned or blocked redeem attempts.
-9. Include the Roller `POST /redemptions` client code behind a disabled environment guard for future controlled testing.
-10. Do not enable real Roller redemption writes in the deployed dev endpoint during this ticket.
+1. Keep default redeem planning behavior intact for `confirmRedeem=false`.
+2. Require a separate dev-only redeem token for `confirmRedeem=true`.
+3. Store the redeem token in AWS Secrets Manager, not in code or `.env`.
+4. Keep Roller config guarded to Playground only.
+5. Before any Roller redemption write:
+   - authenticate the confirmed redeem request
+   - refresh the booking from Roller REST `GET /bookings/{identifier}`
+   - upsert the refreshed booking/item/ticket snapshot into Aurora
+   - re-run redeem eligibility against the refreshed Aurora context
+6. Enable real Roller redemption writes only for the protected dev path.
+7. Persist audit rows for successful, blocked, rejected, and unauthorized-safe outcomes where appropriate.
+8. Run one controlled Playground redeem smoke against a dedicated paid test booking, not against the normal `5032210` lookup fixture if avoidable.
+9. Confirm already-redeemed local state is visible in Aurora after the controlled redeem.
 
 ## Non-Goals
 
 - Do not wire the phone UI to redeem.
-- Do not redeem real Playground tickets through the deployed public endpoint.
+- Do not create staff/admin redeem UI.
 - Do not create payment logic.
 - Do not create booking logic.
 - Do not implement add-product logic.
 - Do not create staging or production resources.
-- Do not change Roller Live/production.
-- Do not add staff handoff UI.
+- Do not write to Roller Live/production.
+- Do not expose this as a production-ready public redemption path.
 
 ## Acceptance Criteria
 
-- `POST /v1/check-in/redeem` no longer returns the T0004 placeholder.
-- The endpoint can return a `planned` response for an eligible paid booking using local Aurora ticket ids.
-- The endpoint blocks unpaid bookings before Roller writes.
-- The endpoint rejects invalid request shapes before database or Roller work.
-- Real Roller redemption writes are disabled in deployed dev config.
-- No phone UI, assets, deliverables, payment, booking creation, add-product, production config, or `.env` files are changed.
+- `confirmRedeem=true` without the dev token is blocked before Roller writes.
+- `confirmRedeem=true` with the dev token performs final Roller REST refresh before `POST /redemptions`.
+- A controlled Playground redeem smoke succeeds for a dedicated paid booking.
+- Aurora `jumpyard.checkin_attempts` records the successful redeem attempt.
+- Aurora `jumpyard.roller_booking_tickets` marks the redeemed ticket(s) locally after success.
 - Root validation and infra validation pass.
+- Dev CDK diff/deploy are reviewed and documented.
+- No UI, assets, deliverables, production config, production credentials, or `.env` files are changed.
 
 ## Manual Verification
 
@@ -120,12 +106,12 @@ After deploy, call the dev endpoint:
 POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/redeem
 ```
 
-Expected safe cases:
+Expected controlled cases:
 
-1. Missing idempotency key returns `invalid_request`.
-2. Paid booking `5032210` returns `planned` with selected ticket ids and no Roller write.
-3. Unpaid booking `5032211` returns `blocked` with reason `payment_required`.
-4. `confirmRedeem=true` returns `blocked` with `redeem_write_disabled` while the deployed guard is disabled.
+1. `confirmRedeem=true` without `x-jumpyard-redeem-token` returns HTTP `403`.
+2. `confirmRedeem=false` still returns a safe `planned` response.
+3. A dedicated paid Playground booking with valid dev token returns `redeemed`.
+4. Reusing the same ticket after success is blocked locally as `already_redeemed`.
 
 ## Automated Validation
 
@@ -137,4 +123,4 @@ Run:
 - `npm --prefix infra run synth:dev`
 - `npm --prefix infra run diff:dev`
 - `npm --prefix infra run deploy:dev`
-- post-deploy redeem endpoint smoke tests
+- post-deploy controlled redeem endpoint smoke tests

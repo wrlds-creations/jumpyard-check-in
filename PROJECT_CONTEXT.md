@@ -49,6 +49,8 @@ T0019 polished the phone lookup path for webhook-created Aurora bookings. The ph
 
 T0020 adds the first safe server-owned redeem endpoint shape. The dev `POST /v1/check-in/redeem` Lambda resolves bookings and ticket ids from Aurora, validates Roller `POST /redemptions` constraints, writes safe check-in attempt/event audit rows, and returns a redeem plan while real Roller redemption writes remain disabled in deployed dev config.
 
+T0021 enables controlled Roller Playground redemption execution for dev only. Confirmed redeem requests require a separate dev-only redeem token, refresh the booking from Roller REST immediately before the write, upsert the refreshed snapshot into Aurora, re-run eligibility, and only then call Roller `POST /redemptions`. The first controlled Playground redemption succeeded for dedicated booking `5032454`.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -132,6 +134,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0018 Roller Playground webhook registration` | Register the Playground booking webhook against the dev endpoint and confirm real delivery headers/body. | Completed locally and deployed to dev; real Roller deliveries now update Aurora through webhook enrichment. |
 | `T0019 Phone lookup display/source polish` | Decide whether to expose source/freshness/debug status in phone/admin UX. | Completed locally; source/freshness metadata is available for verification but remains hidden from guests by default. |
 | `T0020 Redeem spike/server endpoint` | Add a safe server-owned redeem planning endpoint and keep Roller redemption writes disabled until controlled execution is scoped. | Completed locally and deployed to dev; next step is controlled redeem execution with auth/session and final refresh rules. |
+| `T0021 Controlled Playground redeem execution` | Protect confirmed dev redemption with a separate token, refresh live Roller state, then execute one controlled Playground redeem. | First real ticket-level check-in write, still dev-only and not wired to phone UI. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -258,13 +261,23 @@ T0020 confirmed Roller `POST /redemptions` request rules:
 - `redemptionDevice` identifies the device name
 - one call accepts at most 10 unique ticket ids
 
+T0021 confirmed controlled Roller Playground redemption behavior:
+
+- dev token secret: `/jumpyard-check-in-dev/redeem/dev-token`
+- `confirmRedeem=true` without token returns HTTP `403` before Roller writes
+- safe planning still works without token when `confirmRedeem=false`
+- dedicated paid Playground booking `5032454` was created for the controlled redeem smoke
+- dedicated ticket `5032454-21397335` redeemed successfully through Roller Playground
+- Aurora marks ticket `5032454-21397335` with `redeem_status_last_seen='redeemed'`
+- reusing the same booking/ticket is blocked locally as `already_redeemed`
+- a non-existent `redemptionDevice` causes Roller HTTP `409` with `Redemption device not found`, so JumpYard Cloud omits `redemptionDevice` unless a real Roller device name is configured
+
 ## Non-Goals For Current Ticket
 
 - Do not use Aurora lookup data as final authority before future write-critical actions such as redeem or add-on booking creation.
 - Do not implement daily seed ingestion.
 - Do not rely on automatic Roller webhook delivery in production until production auth, IP allowlisting, and environment registration are explicitly scoped.
 - Do not write to Roller Live/production.
-- Do not enable Roller redemption writes from the deployed public dev endpoint.
 - Do not create staging or production AWS resources.
 - Do not add payment logic.
 - Do not wire phone UI to redeem.

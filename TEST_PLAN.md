@@ -212,3 +212,13 @@ Use this file to define validation for the current project or milestone.
 | Paid ready booking | Endpoint returns `planned` with ticket ids and writes check-in attempt/event audit rows. | Passed | Booking `5032210` returned `planned` with 4 tickets; Aurora attempt row status `planned`. |
 | Unpaid booking | Endpoint returns HTTP `409` with `payment_required`. | Passed | Booking `5032211` returned `blocked`; Aurora attempt row status `blocked`. |
 | Confirm redeem while write guard disabled | Endpoint returns HTTP `409` with `redeem_write_disabled`. | Passed | Booking `5032210` with `confirmRedeem=true` returned `blocked`; Aurora attempt row status `write_disabled`. |
+
+## T0021 Controlled Redeem Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Confirm without token | `confirmRedeem=true` returns HTTP `403` before Roller writes. | Passed | Deployed endpoint returned `forbidden` with `redeem_token_required`. |
+| Planning still works | `confirmRedeem=false` returns `planned` and does not write to Roller. | Passed | Booking `5032454` returned `planned`; booking `5032210` planning behavior also remained intact. |
+| Final live refresh | Confirmed redeem refreshes `GET /bookings/{identifier}` and upserts Aurora before write. | Passed | Aurora `roller_bookings.source_last_updated_by='roller_redeem_final_refresh'` for booking `5032454`. |
+| Controlled Playground redeem | Dedicated paid Playground booking returns `redeemed`. | Passed | Booking `5032454` redeemed ticket `5032454-21397335` through Roller Playground. |
+| Local already-redeemed block | Reusing the redeemed ticket is blocked as `already_redeemed`. | Passed | Follow-up request returned HTTP `409`; ticket row has `redeem_status_last_seen='redeemed'`. |
