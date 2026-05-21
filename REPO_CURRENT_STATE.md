@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-21
-- Current branch: `codex/t0016-aurora-first-lookup`
-- Current status: T0016 Aurora-first lookup completed locally and deployed to dev.
-- Current ticket: `T0016` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`
-- Recommended next ticket: `T0017 Phone lookup display/source polish`
+- Current branch: `codex/t0017-webhook-enrichment`
+- Current status: T0017 booking webhook enrichment completed locally and deployed to dev.
+- Current ticket: `T0017` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`
+- Recommended next ticket: `T0018 Roller Playground webhook registration`
 
 ## Current Structure
 
@@ -109,19 +109,20 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0014` | Imported Roller Data API tickets, booking payments, and customer contact data into dev Aurora. | 2026-05-20 | Applied migration `0002`, upserted 6 tickets and 6 guest profiles; booking payments returned 0 rows for the seed window. |
 | `T0015` | Implemented safe dev Roller booking webhook intake. | 2026-05-20 | Deployed webhook Lambda with dev-token verification, metadata-only persistence, and idempotency; smoke event `t0015-smoke-booking-created-5032210` is in Aurora. |
 | `T0016` | Implemented Aurora-first lookup with Roller REST refresh. | 2026-05-21 | Dev lookup now returns fresh local Aurora records first, refreshes missing/unsafe records from Roller, and upserts live booking/item/ticket data back into Aurora. |
+| `T0017` | Implemented booking webhook enrichment. | 2026-05-21 | Dev webhook now refreshes Roller booking detail, upserts Aurora booking/item/ticket snapshots, and marks webhook events `processed` after enrichment. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0016` | Use Aurora first for lookup and refresh from Roller when needed. | Completed locally and deployed to dev | Commit/review still pending. |
+| `T0017` | Refresh Roller booking detail from booking webhooks and update Aurora. | Completed locally and deployed to dev | Commit/review still pending. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0017` | Phone lookup display/source polish | Optionally expose/cache freshness/source labels in phone/admin UX, without changing core lookup behavior. |
-| `T0018` | Webhook enrichment and registration | Configure Roller Playground webhook delivery and update snapshots/enrichment outside the request path. |
+| `T0018` | Roller Playground webhook registration | Register the Playground booking webhook against the dev endpoint and confirm real delivery headers/body. |
+| `T0019` | Phone lookup display/source polish | Optionally expose/cache freshness/source labels in phone/admin UX, without changing core lookup behavior. |
 
 ## Validation Status
 
@@ -231,6 +232,17 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0016 deployed smoke: `5032210` => `ready` from `jumpyard_cloud`; `5032211` => `payment_required` from `jumpyard_cloud`; `5032212` => `wrong_date` from `jumpyard_cloud`; `999999999` => HTTP `404` `not_found`; invalid JSON => HTTP `400` `invalid_json`.
 - T0016 post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
 - T0016 final validation: `npm run validate`, `npm --prefix infra run build`, and `node --check infra/lambda/lookup/index.js` passed.
+- T0017 webhook Lambda syntax: `node --check infra/lambda/webhook/index.js` passed.
+- T0017 local webhook enrichment smoke: event `t0017-local-webhook-enrich-5032210-20260521094844` returned HTTP `200`, enrichment `processed`, booking `5032210`, 2 items, and 4 tickets.
+- T0017 local Aurora verification: direct Data API query showed the local smoke event with status `processed`, one enrichment attempt, and `processed_at`.
+- T0017 infra build: `npm --prefix infra run build` passed.
+- T0017 dev synth: `npm --prefix infra run synth:dev` passed.
+- T0017 pre-deploy diff: `npm --prefix infra run diff:dev` showed only the webhook Lambda code asset change.
+- T0017 deploy: `npm --prefix infra run deploy:dev` updated `jumpyard-check-in-dev-stack-webhook`.
+- T0017 deployed smoke: event `t0017-deployed-webhook-enrich-5032210-20260521095241` returned HTTP `200`, enrichment `processed`, booking `5032210`, 2 items, and 4 tickets.
+- T0017 deployed Aurora verification: direct Data API query showed the deployed smoke event with status `processed`, one enrichment attempt, and `processed_at`.
+- T0017 post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
+- T0017 final validation: `npm run validate`, `npm --prefix infra run build`, and `node --check infra/lambda/webhook/index.js` passed.
 
 ## Known Issues Summary
 
@@ -238,8 +250,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Roller credentials secret in AWS has been populated for dev and was used by T0009 lookup smoke tests.
 - JumpYard Cloud lookup API now uses Aurora first and refreshes from Roller when local data is missing or unsafe. Other API business logic is still pending.
 - Phone app booking lookup now calls JumpYard Cloud for the first check-in step. Payment, redeem, and booking creation UI behavior are still pending.
-- Aurora schema exists in dev. T0012 writes normalized `/data/bookingitems` snapshots into `roller_bookings` and `roller_booking_items`, T0013 enriches booking item product names from `product_catalog_cache`, T0014 imports tickets plus customer contact data, and T0016 live-refresh lookup can upsert refreshed booking/item/ticket data.
-- Booking index ingestion has started with Data API bookingitems, REST product catalog cache, tickets, booking payments, customer contact data, dev webhook event intake, and lookup-driven live refresh. Webhook enrichment/snapshot updates are not implemented yet.
+- Aurora schema exists in dev. T0012 writes normalized `/data/bookingitems` snapshots into `roller_bookings` and `roller_booking_items`, T0013 enriches booking item product names from `product_catalog_cache`, T0014 imports tickets plus customer contact data, T0016 live-refresh lookup can upsert refreshed booking/item/ticket data, and T0017 webhook enrichment can upsert refreshed booking/item/ticket data.
+- Booking index ingestion has started with Data API bookingitems, REST product catalog cache, tickets, booking payments, customer contact data, dev webhook event intake/enrichment, and lookup-driven live refresh. Real Roller Playground webhook registration is still pending.
 - Roller Data API `/data/bookingitems`, `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access, query params, paging shape, and modified-date behavior are confirmed in Playground for the T0008 seed window.
 - Webhook retry behavior, response handling, and booking event names are documented from Roller docs. Exact production auth header/signature, IP allowlisting choice, and webhook registration are still open.
 - Already-redeemed Playground seed data is deferred until redemption is implemented and safely tested.
