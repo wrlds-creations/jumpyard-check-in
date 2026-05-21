@@ -16,6 +16,7 @@ import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import { detectChannel, initialContext, initialState, nextState } from '@/flow/machine';
 import type { Branch } from '@/flow/machine';
 import { validateToken } from '@/flow/mockClient';
+import { CloudSessionError, startCheckInSession, type SessionIssue } from '@/flow/cloudClient';
 import type { ConnectedProfile, FlowContext, FlowState } from '@/flow/types';
 import { ParkChoice } from '@/components/ParkChoice';
 import { BookingLookup } from '@/components/BookingLookup';
@@ -137,6 +138,8 @@ function CheckInFlow() {
 
     const [state, setState] = useState<FlowState>(() => initialState(effectiveChannel));
     const [ctx, setCtx] = useState<FlowContext>(() => ({ ...initialContext(effectiveChannel), token }));
+    const [isStartingSession, setIsStartingSession] = useState(false);
+    const [sessionStartError, setSessionStartError] = useState<SessionIssue | null>(null);
 
     const scrollToTop = () => {
         window.scrollTo(0, 0);
@@ -151,6 +154,22 @@ function CheckInFlow() {
         scrollToTop();
     };
 
+    const startExistingBookingCheckIn = async () => {
+        if (!ctx.booking || isStartingSession) return;
+
+        setIsStartingSession(true);
+        setSessionStartError(null);
+        try {
+            const checkinSession = await startCheckInSession(ctx.booking);
+            advance({ checkinSession });
+        } catch (error) {
+            setSessionStartError(error instanceof CloudSessionError ? error.reason : 'session_failed');
+            scrollToTop();
+        } finally {
+            setIsStartingSession(false);
+        }
+    };
+
     useEffect(() => {
         scrollToTop();
     }, [state]);
@@ -160,7 +179,7 @@ function CheckInFlow() {
         let alive = true;
         validateToken(token ?? 'MOCK123').then(booking => {
             if (!alive) return;
-            advance({ booking, existingAddons: booking.existingAddons ?? [] });
+            advance({ booking, checkinSession: null, existingAddons: booking.existingAddons ?? [] });
         });
         return () => {
             alive = false;
@@ -169,7 +188,12 @@ function CheckInFlow() {
     }, [state]);
 
     return (
-        <div className="z-10 w-full max-w-lg flex flex-col items-center">
+        <div
+            className="z-10 w-full max-w-lg flex flex-col items-center"
+            data-flow-state={state}
+            data-checkin-session-id={ctx.checkinSession?.checkinSessionId ?? ''}
+            data-checkin-session-status={ctx.checkinSession?.status ?? ''}
+        >
             <ProgressBar state={state} />
 
             <div className="w-full max-w-md px-4 h-8 flex items-center">
@@ -212,7 +236,7 @@ function CheckInFlow() {
                     {state === 'KIOSK_LOOKUP' && (
                         <BookingLookup
                             key="park-lookup"
-                            onSuccess={booking => advance({ booking, existingAddons: booking.existingAddons ?? [] })}
+                            onSuccess={booking => advance({ booking, checkinSession: null, existingAddons: booking.existingAddons ?? [] })}
                             onBack={() => { setState('KIOSK_CHOICE'); scrollToTop(); }}
                         />
                     )}
@@ -223,6 +247,7 @@ function CheckInFlow() {
                             onComplete={(booking, contact, product) =>
                                 advance({
                                     booking,
+                                    checkinSession: null,
                                     existingAddons: booking.existingAddons ?? [],
                                     guestContactEmail: contact.email,
                                     guestContactPhone: contact.phone,
@@ -240,7 +265,13 @@ function CheckInFlow() {
                     )}
 
                     {state === 'APP_BOOKING' && ctx.booking && (
-                        <BookingSummary key="booking" booking={ctx.booking} onContinue={() => advance()} />
+                        <BookingSummary
+                            key="booking"
+                            booking={ctx.booking}
+                            isStartingSession={isStartingSession}
+                            sessionStartError={sessionStartError}
+                            onContinue={startExistingBookingCheckIn}
+                        />
                     )}
 
                     {state === 'APP_SAFETY_VIDEO' && (

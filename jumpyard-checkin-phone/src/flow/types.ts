@@ -43,8 +43,18 @@ export interface LookupSource {
   refreshedFromRoller?: boolean;
 }
 
+export interface CheckInSession {
+  checkinSessionId: string;
+  status: string;
+  handoffStatus?: string | null;
+  handoffCode?: string | null;
+  safetyStatus?: string | null;
+  expiresAt?: string | null;
+}
+
 export interface Booking {
   id: string;
+  rollerUniqueId?: string | null;
   jumpers: number;
   time: string;
   endTime?: string;
@@ -72,6 +82,7 @@ export interface FlowContext {
   channel: Channel;
   token: string | null;
   booking: Booking | null;
+  checkinSession: CheckInSession | null;
 
   safetyVideoSeenAt: string | null;
   safetyAttestedAt: string | null;
