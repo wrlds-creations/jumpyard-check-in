@@ -1,15 +1,24 @@
 const crypto = require('crypto');
 const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client-secrets-manager');
+const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const DEV_TOKEN_HEADERS = ['x-jumpyard-webhook-token', 'x-api-key', 'x-roller-api-key'];
 const MAX_BODY_BYTES = 256 * 1024;
+const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
+const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
+const PRODUCT_CACHE_TTL_MS = 15 * 60 * 1000;
+const RETRYABLE_DUPLICATE_STATUSES = new Set(['received', 'failed']);
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
+const ssmClient = new SSMClient({});
 
 let cachedWebhookToken = null;
+let cachedRollerConfig = null;
+let cachedToken = null;
+let cachedProducts = null;
 
 exports.handler = async (event) => {
   const correlationId = getHeader(event, 'x-correlation-id') || createCorrelationId();
@@ -29,16 +38,32 @@ exports.handler = async (event) => {
     }
 
     const intake = normalizeWebhookEvent(event, request);
-    const writeResult = await persistWebhookEvent(intake, auth.mode);
+    const writeResult = await persistWebhookEvent(intake, auth.mode, correlationId);
+
+    if (!writeResult.inserted && !RETRYABLE_DUPLICATE_STATUSES.has(writeResult.status)) {
+      return jsonResponse(200, correlationId, {
+        status: 'duplicate',
+        webhook: {
+          eventId: intake.eventId,
+          eventType: intake.eventType,
+          bookingReference: intake.bookingReference,
+          rollerUniqueId: intake.rollerUniqueId,
+          duplicate: true,
+        },
+      });
+    }
+
+    const enrichment = await enrichWebhookEvent(intake, correlationId);
 
     return jsonResponse(200, correlationId, {
-      status: writeResult.inserted ? 'accepted' : 'duplicate',
+      status: 'accepted',
       webhook: {
         eventId: intake.eventId,
         eventType: intake.eventType,
         bookingReference: intake.bookingReference,
         rollerUniqueId: intake.rollerUniqueId,
-        duplicate: !writeResult.inserted,
+        duplicate: false,
+        enrichment,
       },
     });
   } catch (error) {
@@ -218,7 +243,13 @@ function inferRouteEventType(event) {
 }
 
 function findNestedValues(value, keys, depth = 0) {
-  if (depth > 4 || !isRecord(value)) return [];
+  if (depth > 5) return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((nestedValue) => findNestedValues(nestedValue, keys, depth + 1));
+  }
+
+  if (!isRecord(value)) return [];
 
   const matches = [];
   for (const [key, nestedValue] of Object.entries(value)) {
@@ -234,7 +265,7 @@ function findNestedValues(value, keys, depth = 0) {
   return matches;
 }
 
-async function persistWebhookEvent(intake, authMode) {
+async function persistWebhookEvent(intake, authMode, correlationId) {
   const insertEvent = await executeStatement(
     `INSERT INTO jumpyard.roller_webhook_events (
       event_id_or_hash,
@@ -286,7 +317,7 @@ async function persistWebhookEvent(intake, authMode) {
       ON CONFLICT (event_id) DO NOTHING`,
       [
         stringParameter('eventLogId', `webhook:${intake.eventId}`),
-        stringParameter('correlationId', null),
+        stringParameter('correlationId', correlationId),
         stringParameter('subjectRef', intake.bookingReference || intake.rollerUniqueId || intake.eventId),
         stringParameter('summary', `Received ${intake.eventType} webhook via ${authMode}.`),
         stringParameter('eventPayload', JSON.stringify(intake.summary)),
@@ -294,7 +325,660 @@ async function persistWebhookEvent(intake, authMode) {
     );
   }
 
-  return { inserted };
+  if (inserted) {
+    return { inserted, status: 'received' };
+  }
+
+  const existingEvent = await executeStatement(
+    `SELECT status
+     FROM jumpyard.roller_webhook_events
+     WHERE event_id_or_hash = :eventId
+     LIMIT 1`,
+    [stringParameter('eventId', intake.eventId)],
+  );
+
+  const existingStatus = existingEvent.records?.[0]?.[0]?.stringValue ?? 'duplicate';
+  return { inserted, status: existingStatus };
+}
+
+async function enrichWebhookEvent(intake, correlationId) {
+  const identifier = intake.rollerUniqueId || intake.bookingReference;
+
+  if (!identifier) {
+    await markWebhookEventPending(intake.eventId, 'missing_booking_identifier');
+    return {
+      status: 'pending_enrichment',
+      updatedBooking: false,
+      reason: 'missing_booking_identifier',
+    };
+  }
+
+  try {
+    const config = await getRollerConfig();
+    const token = await getRollerAccessToken(config);
+    const bookingResult = await getBookingDetail(config, token, identifier);
+
+    if (bookingResult.status === 404) {
+      await updateWebhookEventStatus(intake.eventId, 'processed', 'booking_detail_not_found_for_enrichment', true);
+      return {
+        status: 'booking_not_found',
+        updatedBooking: false,
+        lookupPath: 'GET /bookings/{identifier}',
+      };
+    }
+
+    if (!bookingResult.ok) {
+      const error = new Error(`Roller booking detail failed with HTTP ${bookingResult.status}.`);
+      error.code = 'roller_lookup_error';
+      throw error;
+    }
+
+    const products = await getProductCatalogBestEffort(config, token);
+    const booking = normalizeBooking(bookingResult.body, products);
+    if (!booking.bookingReference || !booking.rollerUniqueId) {
+      const error = new Error('Roller booking detail did not include required booking identifiers.');
+      error.code = 'roller_lookup_error';
+      throw error;
+    }
+
+    await upsertWebhookBooking(booking, config.env, null);
+    await updateWebhookEventStatus(intake.eventId, 'processed', null, true);
+    await persistEnrichmentEventLog(intake, correlationId, booking, products.status);
+
+    return {
+      status: 'processed',
+      updatedBooking: Boolean(booking.bookingReference && booking.rollerUniqueId),
+      bookingReference: booking.bookingReference,
+      rollerUniqueId: booking.rollerUniqueId,
+      itemCount: booking.items.length,
+      ticketCount: booking.items.reduce((total, item) => total + (item.tickets?.length ?? 0), 0),
+      productCatalog: products.status,
+      lookupPath: 'GET /bookings/{identifier}',
+    };
+  } catch (error) {
+    await updateWebhookEventStatus(intake.eventId, 'failed', safeErrorSummary(error), false).catch(() => {});
+    throw error;
+  }
+}
+
+async function markWebhookEventPending(eventId, errorSummary) {
+  await executeStatement(
+    `UPDATE jumpyard.roller_webhook_events
+     SET status = 'pending_enrichment',
+         error_summary = :errorSummary
+     WHERE event_id_or_hash = :eventId`,
+    [stringParameter('eventId', eventId), stringParameter('errorSummary', errorSummary)],
+  );
+}
+
+async function updateWebhookEventStatus(eventId, status, errorSummary, processed) {
+  await executeStatement(
+    `UPDATE jumpyard.roller_webhook_events
+     SET status = :status,
+         error_summary = :errorSummary,
+         enrichment_attempts = enrichment_attempts + 1,
+         processed_at = CASE WHEN :processed THEN now() ELSE processed_at END
+     WHERE event_id_or_hash = :eventId`,
+    [
+      stringParameter('eventId', eventId),
+      stringParameter('status', status),
+      stringParameter('errorSummary', errorSummary),
+      { name: 'processed', value: { booleanValue: Boolean(processed) } },
+    ],
+  );
+}
+
+async function persistEnrichmentEventLog(intake, correlationId, booking, productCatalogStatus) {
+  await executeStatement(
+    `INSERT INTO jumpyard.event_log (
+      event_id,
+      correlation_id,
+      event_type,
+      subject_ref,
+      summary,
+      event_payload
+    )
+    VALUES (
+      :eventLogId,
+      :correlationId,
+      'roller_webhook.enriched',
+      :subjectRef,
+      :summary,
+      CAST(:eventPayload AS jsonb)
+    )
+    ON CONFLICT (event_id) DO NOTHING`,
+    [
+      stringParameter('eventLogId', `webhook-enriched:${intake.eventId}`),
+      stringParameter('correlationId', correlationId),
+      stringParameter('subjectRef', booking.bookingReference || booking.rollerUniqueId || intake.eventId),
+      stringParameter('summary', `Enriched ${intake.eventType} webhook from Roller booking detail.`),
+      stringParameter(
+        'eventPayload',
+        JSON.stringify({
+          bookingReference: booking.bookingReference,
+          itemCount: booking.items.length,
+          productCatalog: productCatalogStatus,
+          rollerUniqueId: booking.rollerUniqueId,
+          source: 'roller_webhook_enrichment',
+        }),
+      ),
+    ],
+  );
+}
+
+async function getRollerConfig() {
+  if (cachedRollerConfig) return cachedRollerConfig;
+
+  const [envParameter, baseUrlParameter, secret] = await Promise.all([
+    readParameter(process.env.ROLLER_ENV_PARAMETER_NAME),
+    readParameter(process.env.ROLLER_BASE_URL_PARAMETER_NAME),
+    readSecret(process.env.ROLLER_CREDENTIALS_SECRET_ARN),
+  ]);
+
+  const config = {
+    env: envParameter,
+    baseUrl: baseUrlParameter,
+    clientId: String(secret.clientId ?? secret.client_id ?? '').trim(),
+    clientSecret: String(secret.clientSecret ?? secret.client_secret ?? '').trim(),
+  };
+
+  validateRollerConfig(config);
+  cachedRollerConfig = config;
+  return config;
+}
+
+async function readParameter(name) {
+  if (!name) {
+    const error = new Error('Missing Roller SSM parameter environment variable.');
+    error.code = 'webhook_config_error';
+    throw error;
+  }
+
+  const response = await ssmClient.send(new GetParameterCommand({ Name: name }));
+  return String(response.Parameter?.Value ?? '').trim();
+}
+
+async function readSecret(secretId) {
+  if (!secretId) {
+    const error = new Error('Missing Roller credentials secret environment variable.');
+    error.code = 'webhook_config_error';
+    throw error;
+  }
+
+  const response = await secretsClient.send(new GetSecretValueCommand({ SecretId: secretId }));
+  const secretString = response.SecretString;
+  if (!secretString) {
+    const error = new Error('Roller credentials secret has no string value.');
+    error.code = 'webhook_config_error';
+    throw error;
+  }
+
+  return JSON.parse(secretString);
+}
+
+function validateRollerConfig(config) {
+  const errors = [];
+  let parsedBaseUrl = null;
+
+  if (config.env !== 'playground') {
+    errors.push('Roller environment must be playground.');
+  }
+
+  try {
+    parsedBaseUrl = new URL(config.baseUrl);
+  } catch {
+    errors.push('Roller base URL must be valid.');
+  }
+
+  if (parsedBaseUrl) {
+    const searchableUrl = `${parsedBaseUrl.hostname}${parsedBaseUrl.pathname}`;
+    if (parsedBaseUrl.protocol !== 'https:') {
+      errors.push('Roller base URL must use https.');
+    }
+    if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
+      errors.push('Roller base URL looks like production/live.');
+    }
+    if (!PLAYGROUND_URL_MARKER.test(searchableUrl)) {
+      errors.push('Roller base URL must point to Playground.');
+    }
+  }
+
+  if (!config.clientId || config.clientId === 'SET_IN_AWS_ONLY') {
+    errors.push('Roller client id is not configured.');
+  }
+
+  if (!config.clientSecret) {
+    errors.push('Roller client secret is not configured.');
+  }
+
+  if (errors.length > 0) {
+    const error = new Error(errors.join(' '));
+    error.code = 'webhook_config_error';
+    throw error;
+  }
+}
+
+async function getRollerAccessToken(config) {
+  if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) {
+    return cachedToken;
+  }
+
+  const response = await fetch(buildRollerUrl(config.baseUrl, '/token'), {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = new Error(`Roller token request failed with HTTP ${response.status}.`);
+    error.code = 'roller_token_error';
+    throw error;
+  }
+
+  const body = await response.json();
+  const accessToken = body.access_token ?? body.accessToken;
+  if (!accessToken) {
+    const error = new Error('Roller token response did not include an access token.');
+    error.code = 'roller_token_error';
+    throw error;
+  }
+
+  cachedToken = {
+    accessToken,
+    tokenType: body.token_type ?? body.tokenType ?? 'Bearer',
+    expiresAt: Date.now() + Number(body.expires_in ?? body.expiresIn ?? 300) * 1000,
+  };
+
+  return cachedToken;
+}
+
+async function getBookingDetail(config, token, identifier) {
+  const response = await fetch(buildRollerUrl(config.baseUrl, `/bookings/${encodeURIComponent(identifier)}`), {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+    },
+  });
+
+  if (response.status === 404) {
+    return { ok: false, status: 404, body: null };
+  }
+
+  const text = await response.text();
+  const body = text ? JSON.parse(text) : null;
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    body,
+  };
+}
+
+async function getProductCatalogBestEffort(config, token) {
+  if (cachedProducts && cachedProducts.expiresAt > Date.now()) {
+    return cachedProducts;
+  }
+
+  try {
+    const response = await fetch(buildRollerUrl(config.baseUrl, '/products'), {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const body = await response.json();
+    const products = Array.isArray(body) ? body : body.items ?? body.products ?? body.data;
+    const byId = new Map();
+
+    if (Array.isArray(products)) {
+      for (const product of flattenProducts(products)) {
+        if (product.id) byId.set(String(product.id), product);
+      }
+    }
+
+    cachedProducts = {
+      status: 'available',
+      byId,
+      expiresAt: Date.now() + PRODUCT_CACHE_TTL_MS,
+    };
+  } catch {
+    cachedProducts = {
+      status: 'unavailable',
+      byId: new Map(),
+      expiresAt: Date.now() + 60_000,
+    };
+  }
+
+  return cachedProducts;
+}
+
+function flattenProducts(products, parent = null) {
+  const flattened = [];
+
+  for (const product of products) {
+    const normalized = {
+      id: String(product.id ?? product.productId ?? product.parentProductId ?? ''),
+      name: product.name ?? product.productName ?? product.title ?? null,
+      parentProductId: product.parentProductId ? String(product.parentProductId) : parent?.id ?? null,
+      parentProductName: product.parentProductName ?? parent?.name ?? null,
+      type: product.type ?? product.productType ?? product.productSubType ?? null,
+      parentType: parent?.type ?? product.parentProductType ?? null,
+    };
+
+    if (normalized.id || normalized.name) {
+      flattened.push(normalized);
+    }
+
+    const childCollections = [product.products, product.variations, product.productVariations].filter(Array.isArray);
+    for (const children of childCollections) {
+      flattened.push(...flattenProducts(children, normalized));
+    }
+  }
+
+  return flattened;
+}
+
+function normalizeBooking(booking, products) {
+  const items = Array.isArray(booking.items) ? booking.items : [];
+
+  return {
+    bookingReference: stringOrNull(booking.bookingReference ?? booking.reference),
+    rollerUniqueId: stringOrNull(booking.uniqueId ?? booking.id),
+    externalId: stringOrNull(booking.externalId),
+    status: stringOrNull(booking.status ?? booking.bookingStatus),
+    paymentStatus: stringOrNull(booking.paymentStatus ?? booking.status ?? booking.bookingStatus),
+    total: numberOrNull(booking.total ?? booking.costs?.total),
+    amountOwing: numberOrNull(booking.amountOwing ?? booking.remainder ?? booking.costs?.amountOwing),
+    createdDate: stringOrNull(booking.createdDate),
+    customerId: stringOrNull(booking.customerId),
+    items: items.map((item) => normalizeBookingItem(item, products.byId)),
+  };
+}
+
+function normalizeBookingItem(item, productById) {
+  const productId = item.productId != null ? String(item.productId) : null;
+  const product = productId ? productById.get(productId) : null;
+  const tickets = Array.isArray(item.tickets) ? item.tickets : [];
+
+  return {
+    bookingItemId: stringOrNull(item.bookingItemId ?? item.id),
+    productId: numberOrNull(item.productId),
+    productName: stringOrNull(item.productName ?? product?.name),
+    parentProductId: numberOrNull(item.parentProductId ?? product?.parentProductId),
+    parentProductName: stringOrNull(item.parentProductName ?? product?.parentProductName),
+    productType: stringOrNull(product?.type ?? product?.parentType),
+    quantity: numberOrNull(item.quantity),
+    bookingDate: stringOrNull(item.bookingDate),
+    startTime: stringOrNull(item.startTime ?? item.sessionStartTime),
+    endTime: stringOrNull(item.endTime ?? item.sessionEndTime),
+    tickets: tickets.map((ticket) => ({
+      ticketId: stringOrNull(ticket.ticketId ?? ticket.id),
+      ticketHolderName: stringOrNull(ticket.ticketHolderName ?? ticket.name),
+      locations: Array.isArray(ticket.locations) ? ticket.locations : [],
+    })),
+  };
+}
+
+async function upsertWebhookBooking(booking, rollerEnv, venueId) {
+  if (!booking.rollerUniqueId || !booking.bookingReference) return;
+
+  const bookingDates = booking.items.map((item) => item.bookingDate).filter(Boolean);
+  const startTimes = booking.items.map((item) => item.startTime).filter(Boolean);
+  const endTimes = booking.items.map((item) => item.endTime).filter(Boolean);
+  const payloadHash = hashJson({
+    bookingReference: booking.bookingReference,
+    itemCount: booking.items.length,
+    paymentStatus: booking.paymentStatus,
+    source: 'roller_webhook_enrichment',
+    status: booking.status,
+  });
+
+  await executeStatement(
+    `INSERT INTO jumpyard.roller_bookings (
+      roller_unique_id,
+      booking_reference,
+      roller_env,
+      venue_id,
+      booking_status,
+      payment_status,
+      amount_owing_cents,
+      total_cents,
+      booking_date,
+      start_time,
+      end_time,
+      source_last_updated_by,
+      source_last_updated_at,
+      roller_modified_at,
+      last_seen_from_roller_at,
+      freshness_status,
+      is_tombstoned,
+      payload_hash,
+      normalized_summary
+    )
+    VALUES (
+      :rollerUniqueId,
+      :bookingReference,
+      :rollerEnv,
+      :venueId,
+      :bookingStatus,
+      :paymentStatus,
+      :amountOwingCents,
+      :totalCents,
+      CAST(:bookingDate AS date),
+      CAST(:startTime AS time),
+      CAST(:endTime AS time),
+      'roller_webhook_enrichment',
+      now(),
+      NULL,
+      now(),
+      'fresh',
+      :isTombstoned,
+      :payloadHash,
+      CAST(:normalizedSummary AS jsonb)
+    )
+    ON CONFLICT (roller_unique_id) DO UPDATE SET
+      booking_reference = EXCLUDED.booking_reference,
+      roller_env = EXCLUDED.roller_env,
+      venue_id = COALESCE(EXCLUDED.venue_id, jumpyard.roller_bookings.venue_id),
+      booking_status = EXCLUDED.booking_status,
+      payment_status = EXCLUDED.payment_status,
+      amount_owing_cents = EXCLUDED.amount_owing_cents,
+      total_cents = EXCLUDED.total_cents,
+      booking_date = EXCLUDED.booking_date,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      source_last_updated_by = EXCLUDED.source_last_updated_by,
+      source_last_updated_at = now(),
+      last_seen_from_roller_at = now(),
+      freshness_status = 'fresh',
+      is_tombstoned = EXCLUDED.is_tombstoned,
+      payload_hash = EXCLUDED.payload_hash,
+      normalized_summary = EXCLUDED.normalized_summary,
+      updated_at = now()`,
+    [
+      stringParameter('rollerUniqueId', booking.rollerUniqueId),
+      stringParameter('bookingReference', booking.bookingReference),
+      stringParameter('rollerEnv', rollerEnv),
+      stringParameter('venueId', venueId),
+      stringParameter('bookingStatus', booking.status),
+      stringParameter('paymentStatus', booking.paymentStatus),
+      intParameter('amountOwingCents', currencyToCents(booking.amountOwing)),
+      intParameter('totalCents', currencyToCents(booking.total)),
+      stringParameter('bookingDate', minOrNull(bookingDates)),
+      stringParameter('startTime', minOrNull(startTimes)),
+      stringParameter('endTime', maxOrNull(endTimes)),
+      { name: 'isTombstoned', value: { booleanValue: isTombstoned(booking.status) } },
+      stringParameter('payloadHash', payloadHash),
+      stringParameter(
+        'normalizedSummary',
+        JSON.stringify({
+          externalId: booking.externalId,
+          itemCount: booking.items.length,
+          source: 'roller_webhook_enrichment',
+        }),
+      ),
+    ],
+  );
+
+  for (const item of booking.items) {
+    const bookingItemKey = await upsertWebhookBookingItem(booking.rollerUniqueId, item);
+
+    for (const ticket of item.tickets ?? []) {
+      await upsertWebhookTicket(booking.rollerUniqueId, bookingItemKey, item, ticket);
+    }
+  }
+}
+
+async function upsertWebhookBookingItem(rollerUniqueId, item) {
+  const bookingItemKey = localBookingItemKey(rollerUniqueId, item);
+
+  await executeStatement(
+    `INSERT INTO jumpyard.roller_booking_items (
+      booking_item_key,
+      roller_unique_id,
+      booking_item_id,
+      product_id,
+      parent_product_id,
+      product_name,
+      parent_product_name,
+      quantity,
+      booking_date,
+      start_time,
+      end_time,
+      item_summary
+    )
+    VALUES (
+      :bookingItemKey,
+      :rollerUniqueId,
+      :bookingItemId,
+      :productId,
+      :parentProductId,
+      :productName,
+      :parentProductName,
+      :quantity,
+      CAST(:bookingDate AS date),
+      CAST(:startTime AS time),
+      CAST(:endTime AS time),
+      CAST(:itemSummary AS jsonb)
+    )
+    ON CONFLICT (booking_item_key) DO UPDATE SET
+      roller_unique_id = EXCLUDED.roller_unique_id,
+      booking_item_id = EXCLUDED.booking_item_id,
+      product_id = EXCLUDED.product_id,
+      parent_product_id = EXCLUDED.parent_product_id,
+      product_name = COALESCE(EXCLUDED.product_name, jumpyard.roller_booking_items.product_name),
+      parent_product_name = COALESCE(EXCLUDED.parent_product_name, jumpyard.roller_booking_items.parent_product_name),
+      quantity = EXCLUDED.quantity,
+      booking_date = EXCLUDED.booking_date,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      item_summary = EXCLUDED.item_summary,
+      updated_at = now()`,
+    [
+      stringParameter('bookingItemKey', bookingItemKey),
+      stringParameter('rollerUniqueId', rollerUniqueId),
+      stringParameter('bookingItemId', item.bookingItemId),
+      stringParameter('productId', item.productId),
+      stringParameter('parentProductId', item.parentProductId),
+      stringParameter('productName', item.productName),
+      stringParameter('parentProductName', item.parentProductName),
+      intParameter('quantity', item.quantity ?? 1),
+      stringParameter('bookingDate', item.bookingDate),
+      stringParameter('startTime', item.startTime),
+      stringParameter('endTime', item.endTime),
+      stringParameter(
+        'itemSummary',
+        JSON.stringify({
+          productType: item.productType,
+          source: 'roller_webhook_enrichment',
+        }),
+      ),
+    ],
+  );
+
+  return bookingItemKey;
+}
+
+async function upsertWebhookTicket(rollerUniqueId, bookingItemKey, item, ticket) {
+  if (!ticket.ticketId) return;
+
+  await executeStatement(
+    `INSERT INTO jumpyard.roller_booking_tickets (
+      ticket_id,
+      roller_unique_id,
+      booking_item_key,
+      booking_item_id,
+      ticket_holder_name_masked,
+      locations,
+      last_seen_from_roller_at,
+      product_id,
+      booking_date,
+      ticket_summary
+    )
+    VALUES (
+      :ticketId,
+      :rollerUniqueId,
+      :bookingItemKey,
+      :bookingItemId,
+      NULL,
+      CAST(:locations AS jsonb),
+      now(),
+      :productId,
+      CAST(:bookingDate AS date),
+      CAST(:ticketSummary AS jsonb)
+    )
+    ON CONFLICT (ticket_id) DO UPDATE SET
+      roller_unique_id = EXCLUDED.roller_unique_id,
+      booking_item_key = EXCLUDED.booking_item_key,
+      booking_item_id = EXCLUDED.booking_item_id,
+      locations = EXCLUDED.locations,
+      last_seen_from_roller_at = now(),
+      product_id = EXCLUDED.product_id,
+      booking_date = EXCLUDED.booking_date,
+      ticket_summary = EXCLUDED.ticket_summary,
+      updated_at = now()`,
+    [
+      stringParameter('ticketId', ticket.ticketId),
+      stringParameter('rollerUniqueId', rollerUniqueId),
+      stringParameter('bookingItemKey', bookingItemKey),
+      stringParameter('bookingItemId', item.bookingItemId),
+      stringParameter('locations', JSON.stringify(Array.isArray(ticket.locations) ? ticket.locations : [])),
+      stringParameter('productId', item.productId),
+      stringParameter('bookingDate', item.bookingDate),
+      stringParameter(
+        'ticketSummary',
+        JSON.stringify({
+          source: 'roller_webhook_enrichment',
+        }),
+      ),
+    ],
+  );
+}
+
+function localBookingItemKey(rollerUniqueId, item) {
+  const keySource =
+    item.bookingItemId ||
+    `${rollerUniqueId}:${item.productId ?? 'unknown'}:${item.bookingDate ?? ''}:${item.startTime ?? ''}`;
+  return `bookingitem:${hashString(keySource)}`;
+}
+
+function buildRollerUrl(baseUrl, endpointPath) {
+  const parsedBaseUrl = new URL(baseUrl);
+  const basePath = parsedBaseUrl.pathname.replace(/\/$/, '');
+  return new URL(`${basePath}${endpointPath}`, parsedBaseUrl.origin);
 }
 
 async function executeStatement(sql, parameters) {
@@ -310,6 +994,7 @@ async function executeStatement(sql, parameters) {
   return rdsClient.send(
     new ExecuteStatementCommand({
       database: DATABASE_NAME,
+      includeResultMetadata: true,
       parameters,
       resourceArn,
       secretArn,
@@ -337,6 +1022,12 @@ function stringParameter(name, value) {
     : { name, value: { stringValue: String(value) } };
 }
 
+function intParameter(name, value) {
+  return value === null || value === undefined || !Number.isFinite(Number(value))
+    ? { name, value: { isNull: true } }
+    : { name, value: { longValue: Number(value) } };
+}
+
 function firstString(values, fallback = null) {
   for (const value of values) {
     if (value !== undefined && value !== null && value !== '') {
@@ -347,6 +1038,37 @@ function firstString(values, fallback = null) {
   return fallback;
 }
 
+function stringOrNull(value) {
+  if (value === undefined || value === null || value === '') return null;
+  return String(value);
+}
+
+function numberOrNull(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function currencyToCents(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : null;
+}
+
+function minOrNull(values) {
+  const sorted = values.filter(Boolean).sort();
+  return sorted[0] ?? null;
+}
+
+function maxOrNull(values) {
+  const sorted = values.filter(Boolean).sort();
+  return sorted[sorted.length - 1] ?? null;
+}
+
+function hashJson(value) {
+  return hashString(JSON.stringify(value));
+}
+
 function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -355,8 +1077,19 @@ function hashString(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
 
+function isTombstoned(status) {
+  const normalized = String(status ?? '').toLowerCase();
+  return normalized === 'cancelled' || normalized === 'deleted';
+}
+
 function createCorrelationId() {
   return `jy_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function safeErrorSummary(error) {
+  const code = error?.code ? String(error.code) : 'webhook_enrichment_failed';
+  const message = error?.message ? String(error.message) : 'Webhook enrichment failed.';
+  return `${code}: ${message}`.slice(0, 500);
 }
 
 function classifyError(error) {
@@ -387,11 +1120,20 @@ function classifyError(error) {
     };
   }
 
+  if (error.code === 'roller_token_error' || error.code === 'roller_lookup_error') {
+    return {
+      statusCode: 500,
+      status: 'enrichment_failed',
+      code: error.code,
+      message: 'JumpYard Cloud webhook enrichment failed and Roller should retry the delivery.',
+    };
+  }
+
   return {
     statusCode: 500,
-    status: 'internal_error',
-    code: 'webhook_intake_failed',
-    message: 'JumpYard Cloud webhook intake failed.',
+    status: 'enrichment_failed',
+    code: 'webhook_enrichment_failed',
+    message: 'JumpYard Cloud webhook enrichment failed and Roller should retry the delivery.',
   };
 }
 

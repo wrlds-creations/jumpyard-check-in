@@ -2,51 +2,46 @@
 
 ## Ticket ID
 
-T0016
+T0017
 
 ## Goal
 
-Make `POST /v1/check-in/lookup` use Aurora first, with Roller REST refresh when the booking is missing or the local record is not safe to use.
+Enrich accepted Roller booking webhook events by refreshing the booking from Roller REST and updating the Aurora booking snapshot.
 
 ## Dependencies
 
-- T0015 completed, pushed, and merged to `main`.
+- T0016 completed, pushed, and merged to `main`.
 - Dev AWS foundation exists in account `376129878018`, region `eu-north-1`.
 - Aurora migrations through `0002` are applied.
-- Dev Aurora contains booking, booking-item, product-cache, ticket, and guest-profile data from T0012 through T0014.
+- Dev webhook intake endpoint exists.
 - Roller credentials are present in AWS Secrets Manager.
 
 ## Current Status
 
-Completed locally and deployed to dev on branch `codex/t0016-aurora-first-lookup`.
+Completed locally and deployed to dev on branch `codex/t0017-webhook-enrichment`.
 
 Validation result:
 
-- `node --check infra/lambda/lookup/index.js`: passed
-- Local handler invalid JSON check: returned HTTP `400` with `invalid_json`
-- Local handler smoke against dev Aurora:
-  - `5032210`: `ready`, source `jumpyard_cloud`, no Roller refresh
-  - `5032211`: `payment_required`, source `jumpyard_cloud`, no Roller refresh
-  - `5032212`: `wrong_date`, source `jumpyard_cloud`, no Roller refresh
-  - `999999999`: `not_found`
-- Local live-refresh smoke:
-  - First `5001370`: source `roller`, `refreshedFromRoller=true`
-  - Second `5001370`: source `jumpyard_cloud`, `refreshedFromRoller=false`
-- AWS identity preflight: account `376129878018`
-- AWS region preflight: `eu-north-1`
+- `node --check infra/lambda/webhook/index.js`: passed
+- Local webhook handler smoke against dev AWS/Roller:
+  - event `t0017-local-webhook-enrich-5032210-20260521094844`
+  - response HTTP `200`, `accepted`
+  - enrichment status `processed`
+  - booking reference `5032210`
+  - item count `2`
+  - ticket count `4`
+  - Aurora `roller_webhook_events.status` became `processed`
 - `npm --prefix infra run build`: passed
 - `npm --prefix infra run synth:dev`: passed
-- `npm --prefix infra run diff:dev`: showed only the lookup Lambda code asset change
+- `npm --prefix infra run diff:dev`: showed only the webhook Lambda code asset change before deploy
 - `npm --prefix infra run deploy:dev`: passed
+- Deployed webhook smoke:
+  - event `t0017-deployed-webhook-enrich-5032210-20260521095241`
+  - response HTTP `200`, `accepted`
+  - enrichment status `processed`
+  - Aurora `roller_webhook_events.status` is `processed`
 - Post-deploy `npm --prefix infra run diff:dev`: no differences
 - `npm run validate`: passed
-- Deployed API smoke:
-  - `5032210`: HTTP `200`, `ready`, source `jumpyard_cloud`
-  - `5032211`: HTTP `200`, `payment_required`, source `jumpyard_cloud`
-  - `5032212`: HTTP `200`, `wrong_date`, source `jumpyard_cloud`
-  - `5001370`: HTTP `200`, found from Aurora after prior live refresh
-  - `999999999`: HTTP `404`, `not_found`
-  - invalid JSON: HTTP `400`, `invalid_json`
 
 ## Allowed Areas
 
@@ -58,8 +53,7 @@ Validation result:
 - `TEST_PLAN.md`
 - `AWS_RESOURCES.md`
 - `BOOKING_INDEX_INGESTION_CONTRACT.md`
-- `JUMPYARD_CLOUD_CONTRACT.md`
-- `infra/lambda/lookup/`
+- `infra/lambda/webhook/`
 
 ## Do Not Touch
 
@@ -71,49 +65,49 @@ Validation result:
 - Payment implementation
 - Redeem implementation
 - Booking creation implementation
-- Webhook registration
 - Production config
 - Production credentials
 - `.env`
 
 ## Requirements
 
-1. Update lookup Lambda to query Aurora before Roller.
-2. Aurora lookup must support:
-   - `booking_reference`
-   - `roller_unique_id`
-   - known ticket id where present in `roller_booking_tickets`
-3. If Aurora has a fresh, usable record:
-   - Return the normalized booking from Aurora.
-   - Include booking items and ticket ids.
-   - Preserve existing phone response contract.
-   - Do not call Roller.
-4. If Aurora is missing, stale, tombstoned, or payment state is unclear:
-   - Call Roller `GET /bookings/{identifier}`.
-   - Normalize the Roller response.
-   - Upsert the refreshed booking, items, and ticket ids back into Aurora.
-   - Return the normalized refreshed response.
-5. Keep Roller as source of truth for live refreshes and future write-critical operations.
-6. Do not return raw Roller payloads.
-7. Do not store raw Roller payloads or customer names/notes.
-8. Keep current stop-state behavior for unpaid, wrong-date, no-ticket, not-found, and service failures.
+1. Keep the T0015 webhook intake behavior:
+   - Verify the dev webhook token.
+   - Deduplicate by event id or payload hash.
+   - Do not store raw webhook payloads.
+   - Return HTTP `200` for ignored unauthorized, invalid request, accepted, and duplicate deliveries.
+2. For a newly accepted booking webhook event:
+   - Resolve booking reference or Roller unique id from the payload.
+   - Call Roller REST `GET /bookings/{identifier}` through the existing server-side credentials/config guard.
+   - Reject non-Playground Roller config before any Roller call.
+   - Enrich product names from Roller `/products` on a best-effort basis.
+   - Upsert normalized booking, booking item, and ticket rows into Aurora.
+   - Mark the webhook event as `processed` when enrichment succeeds.
+3. If the event lacks a booking identifier:
+   - Mark it `pending_enrichment`.
+   - Return HTTP `200`.
+4. If enrichment fails because Roller or Aurora is unavailable:
+   - Mark the webhook event `failed`.
+   - Return HTTP `500` so Roller can retry.
+   - Allow retry of duplicate deliveries when the previous status is `received` or `failed`.
+5. Do not print secrets, access tokens, full raw Roller payloads, customer names, addresses, or notes.
 
 ## Non-Goals
 
-- Do not change phone UI.
+- Do not register the real Roller webhook yet.
+- Do not implement an async SQS enrichment worker yet.
 - Do not implement redeem.
 - Do not implement payment.
 - Do not implement booking creation.
-- Do not register or process real Roller webhooks beyond T0015 event intake.
-- Do not implement scheduled imports.
+- Do not change phone UI.
 - Do not add staging or production AWS resources.
 
 ## Acceptance Criteria
 
-- Known seeded bookings can be looked up from Aurora without Roller refresh.
-- Missing local bookings can refresh from Roller and then be found from Aurora on the next lookup.
-- Unknown bookings still return stable `404 not_found`.
-- Invalid JSON returns stable `400 invalid_json`.
+- New authorized booking webhook deliveries can update Aurora booking snapshots.
+- Duplicate processed deliveries are ignored safely.
+- Failed enrichment remains retryable through Roller webhook retries.
+- Webhook event status moves to `processed` after successful enrichment.
 - `npm run validate` passes.
 - `npm --prefix infra run build` passes.
 - `npm --prefix infra run diff:dev` after deploy shows no differences.
@@ -124,46 +118,53 @@ Validation result:
 Use the deployed dev endpoint:
 
 ```text
-POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/lookup
+POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/roller/webhooks/bookings
+```
+
+The request must include the current dev webhook token from AWS Secrets Manager in one accepted header, such as:
+
+```text
+x-jumpyard-webhook-token: <dev token from /jumpyard-check-in-dev/webhooks/dev-token>
 ```
 
 Recommended payload:
 
 ```json
 {
-  "identifier": "5032210",
-  "identifierType": "bookingReference",
-  "expectedDate": "2026-05-21"
+  "eventId": "manual-t0017-booking-updated-5032210",
+  "eventType": "Updated",
+  "data": {
+    "bookingReference": "5032210"
+  }
 }
 ```
 
 Expected result:
 
-- `status`: `found`
-- `eligibility.reason`: `ready`
-- `source.system`: `jumpyard_cloud`
-- `source.refreshedFromRoller`: `false`
+- `status`: `accepted`
+- `webhook.enrichment.status`: `processed`
+- `webhook.enrichment.updatedBooking`: `true`
+- `webhook.enrichment.bookingReference`: `5032210`
 
 Use AWS Query Editor against database `jumpyard_cloud`:
 
 ```sql
-select booking_reference, booking_status, payment_status, freshness_status, source_last_updated_by
-from jumpyard.roller_bookings
-where booking_reference in ('5032210', '5032211', '5032212', '5001370')
-order by booking_reference;
+select event_id_or_hash, status, booking_reference, enrichment_attempts, processed_at, error_summary
+from jumpyard.roller_webhook_events
+where event_id_or_hash like 'manual-t0017-%'
+order by received_at desc;
 ```
 
 ## Automated Validation
 
 Run:
 
-- `node --check infra/lambda/lookup/index.js`
-- Local handler smoke against dev Aurora
-- Local live-refresh smoke
+- `node --check infra/lambda/webhook/index.js`
+- Local webhook handler smoke against dev AWS/Roller
 - `npm --prefix infra run build`
 - `npm --prefix infra run synth:dev`
 - `npm --prefix infra run diff:dev`
 - `npm --prefix infra run deploy:dev`
-- Deployed API smoke
+- Deployed webhook smoke
 - Post-deploy `npm --prefix infra run diff:dev`
 - `npm run validate`

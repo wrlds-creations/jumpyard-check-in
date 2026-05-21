@@ -304,6 +304,8 @@ POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/roller/webhooks/
 
 It stores only normalized event metadata and a payload hash in Aurora. It does not call Roller, mutate booking snapshots, register webhooks, or store raw payloads.
 
+T0017 extends the same dev endpoint with booking webhook enrichment. For each newly accepted booking webhook event with a booking reference or Roller unique id, JumpYard Cloud now refreshes `GET /bookings/{identifier}` from Roller Playground, enriches product names best-effort from `/products`, upserts normalized booking/item/ticket rows, and marks the webhook event as `processed` or `failed`.
+
 ### Intake Steps
 
 1. Receive webhook at JumpYard Cloud.
@@ -368,10 +370,18 @@ T0015 deployed smoke result:
 | First authorized event | HTTP `200`, `accepted`, inserted `roller_webhook_events` row. |
 | Duplicate authorized event | HTTP `200`, `duplicate`, no duplicate row. |
 
+T0017 deployed smoke result:
+
+| Case | Result |
+|---|---|
+| Authorized booking update event for `5032210` | HTTP `200`, `accepted`, enrichment `processed`, 2 items and 4 tickets refreshed into Aurora. |
+| Aurora webhook event state | Event `t0017-deployed-webhook-enrich-5032210-20260521095241` has status `processed`, one enrichment attempt, and `processed_at`. |
+
 ### Webhook Failure Rules
 
 - Duplicate webhooks must be ignored safely.
-- Failed enrichment should remain retryable through SQS/EventBridge.
+- Failed enrichment should remain retryable. T0017 returns HTTP `500` for enrichment failures so Roller retries, and duplicate events with previous status `received` or `failed` are retried.
+- Future production enrichment should move slower work to SQS/EventBridge if latency or scale requires it.
 - Repeated enrichment failures should move to DLQ and create an operational event.
 - If webhook verification support is unclear, deployment must not expose production webhook intake until verification is confirmed.
 
@@ -565,10 +575,12 @@ Recommended next implementation steps after T0014:
    - Implement safe dev webhook intake and idempotency. Completed in T0015.
 2. `T0016 Lookup Aurora-first`
    - Use Aurora first for display, then live REST refresh when missing, stale, or check-in-critical.
-3. `T0017 Phone lookup display from Aurora`
-   - Let the phone flow consume Aurora display data once Aurora-first lookup is in place.
-4. `T0018 Webhook enrichment and registration`
-   - Register the Playground booking webhook and process received events into booking snapshot updates outside the request path.
+3. `T0017 Booking webhook enrichment`
+   - Completed in dev. Accepted booking webhook events now refresh Roller booking detail and update Aurora snapshots.
+4. `T0018 Roller Playground webhook registration`
+   - Register the Playground booking webhook and confirm the real delivery headers/body against the dev endpoint.
+5. `T0019 Phone lookup display/source polish`
+   - Optionally expose/cache freshness/source labels in phone/admin UX without changing the core lookup behavior.
 
 ## Open Questions
 
