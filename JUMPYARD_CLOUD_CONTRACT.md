@@ -226,6 +226,7 @@ Implemented in T0038 as the foundation for SMS/deep-link entry.
 
 ```text
 POST /v1/check-in/session-links
+POST /v1/check-in/session-links/send-sms
 POST /v1/check-in/session-links/resolve
 ```
 
@@ -238,6 +239,23 @@ Rules:
 - Resolving a link does not call Roller and does not redeem tickets.
 - Booking references remain lookup identifiers, not sufficient authority for SMS/deep-link session resume.
 - Production should revisit whether this payload should become a signed or short-lived token after staff/admin authentication is selected.
+
+### SMS Session Link Sending
+
+Implemented in T0039 as the first provider-backed sending foundation.
+
+```text
+POST /v1/check-in/session-links/send-sms
+```
+
+Rules:
+
+- Sending is protected by the same dev token as link creation until staff/internal auth exists.
+- Dry-run is the default. A request must set `confirmSend=true` before JumpYard Cloud calls AWS SNS.
+- The endpoint creates a T0038 check-in token internally, stores only the token hash, and never returns the raw token or full URL.
+- `jumpyard.sms_deliveries` records provider, delivery status, masked/hash destination, booking reference, Roller unique id, token hash, and safe error metadata.
+- The endpoint may use structured contact data from `jumpyard.guest_profiles` or a dev-supplied `phoneNumber`; responses return masked destination only.
+- The endpoint does not call Roller, redeem tickets, or mutate bookings.
 
 ### `POST /v1/check-in/lookup`
 

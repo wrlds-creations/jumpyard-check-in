@@ -4,7 +4,7 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0005` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev booking endpoint reads Roller Playground availability, quotes costs, creates Roller Playground draft bookings server-side, persists safe pre-payment draft rows, and creates separate linked add-product draft bookings for existing bookings, the dev webhook endpoint records and enriches Roller webhook intake events, the dev data-sync Lambda is scheduled by EventBridge for daily Roller Data API reconciliation, the dev redeem endpoint plans/audits redemption, supports controlled Playground redemption behind a dev token, and exposes staff-confirmed session redeem, the dev session endpoint creates/resumes server-owned check-in sessions, exposes read-only staff handoff list/detail routes, and can create/resolve hashed check-in session links, the real Roller Playground booking webhook is registered, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, webhook-enriched records, scheduled sync run rows, session rows, check-in token hashes, pre-payment draft rows, booking links, idempotency rows, event logs, and redeem attempt audit rows.
+JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0006` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev booking endpoint reads Roller Playground availability, quotes costs, creates Roller Playground draft bookings server-side, persists safe pre-payment draft rows, and creates separate linked add-product draft bookings for existing bookings, the dev webhook endpoint records and enriches Roller webhook intake events, the dev data-sync Lambda is scheduled by EventBridge for daily Roller Data API reconciliation, the dev redeem endpoint plans/audits redemption, supports controlled Playground redemption behind a dev token, and exposes staff-confirmed session redeem, the dev session endpoint creates/resumes server-owned check-in sessions, exposes read-only staff handoff list/detail routes, creates/resolves hashed check-in session links, and can dry-run or explicitly send those links through AWS SNS, the real Roller Playground booking webhook is registered, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, webhook-enriched records, scheduled sync run rows, session rows, check-in token hashes, SMS delivery audit rows, pre-payment draft rows, booking links, idempotency rows, event logs, and redeem attempt audit rows.
 
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
@@ -227,6 +227,20 @@ T0038 check-in session link deploy notes:
 - Unauthorized smoke: link creation without the dev token returned HTTP `401`.
 - Post-deploy diff: no differences.
 
+T0039 SMS sending deploy notes:
+
+- Changed resource: `jumpyard-check-in-dev-stack-session`
+- Added route:
+  - `POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/session-links/send-sms`
+- Applied migration: `0006 sms deliveries`
+- Added Aurora table: `jumpyard.sms_deliveries`
+- Added IAM permission: session Lambda can call `sns:Publish` for confirmed dev SMS sends.
+- Behavior: protected SMS sending resolves an Aurora booking, creates a hashed check-in token, records a delivery audit row, defaults to dry-run, and calls AWS SNS only when `confirmSend=true`.
+- Roller calls: none.
+- Roller writes: none.
+- Raw token handling: raw tokens and full check-in URLs are not returned by the SMS endpoint and are not persisted.
+- Contact handling: response and audit use masked/hash destination only; raw phone is used only in memory for provider send.
+
 Confirmed T0006 dev target:
 
 | Field | Value |
@@ -248,7 +262,7 @@ Confirmed T0006 dev target:
 | `jumpyard-check-in-dev-stack-lookup` | Lambda | `dev` | `eu-north-1` | `cdk` | T0016 lookup handler; reads Aurora first, refreshes from Roller Playground only when needed, and returns normalized phone-flow lookup response. |
 | `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | T0034 booking handler; reads Roller Playground availability, quotes Roller Playground draft costs, creates confirmed Playground draft bookings behind idempotency, creates separate linked add-product draft bookings for existing bookings, persists safe pre-payment draft rows, returns safe payment config and response-only `paymentJwt`, and writes safe audit rows. |
 | `jumpyard-check-in-dev-stack-redeem` | Lambda | `dev` | `eu-north-1` | `cdk` | T0027 redeem handler; plans/validates server-side redemption from Aurora, requires a dev token for confirmed writes, refreshes live Roller state before write, supports staff-confirmed session redeem, marks completed sessions, and records attempt audit. |
-| `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0038 session handler; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, creates/resolves hashed check-in session links, and serves read-only staff handoff list/detail without Roller calls or Roller writes. |
+| `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0039 session handler; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, creates/resolves hashed check-in session links, dry-runs or explicitly sends SMS links through AWS SNS, and serves read-only staff handoff list/detail without Roller calls or Roller writes. |
 | `jumpyard-check-in-dev-stack-webhook` | Lambda | `dev` | `eu-north-1` | `cdk` | T0018 webhook handler; accepts Roller Playground `x-roller-apikey`, validates a dev token, stores idempotent metadata, refreshes booking detail from Roller Playground, and upserts Aurora booking/item/ticket snapshots. |
 | `jumpyard-check-in-dev-stack-data-sync` | Lambda | `dev` | `eu-north-1` | `cdk` | T0037 scheduled sync handler; imports Roller Data API modified-date windows and product cache data into Aurora, records run health, and performs no Roller writes. |
 | Roller Playground webhook `238` | Roller Webhooks API | `dev`/Playground | External | Roller | Posts booking `Created`, `Updated`, and `Cancelled` events with `tickets=true` to the dev JumpYard Cloud webhook endpoint. |
