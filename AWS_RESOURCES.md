@@ -241,6 +241,17 @@ T0039 SMS sending deploy notes:
 - Raw token handling: raw tokens and full check-in URLs are not returned by the SMS endpoint and are not persisted.
 - Contact handling: response and audit use masked/hash destination only; raw phone is used only in memory for provider send.
 
+T0041 controlled SMS smoke notes:
+
+- AWS resources created or changed: none.
+- Endpoint used: `POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/session-links/send-sms`
+- Behavior tested: one protected confirmed send with `confirmSend=true` through the deployed T0039 path.
+- Result: AWS SNS accepted the message for masked destination `+46*****9508`.
+- Aurora verification: `jumpyard.sms_deliveries` row `jysms_mpgvzkpz_5b4ae399` has status `sent`, `dry_run=false`, provider `aws_sns`, provider message id present, token hash present, and sent timestamp present.
+- Link note: the SMS used the current dev `http://localhost:3000/` base URL, so provider delivery can be verified before the link is mobile-reachable.
+- Raw token handling: raw tokens and full check-in URLs were not printed or stored.
+- Contact handling: docs and verification output use masked destination only.
+
 Confirmed T0006 dev target:
 
 | Field | Value |

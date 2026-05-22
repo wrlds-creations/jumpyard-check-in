@@ -1,16 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0039
+T0041
 
 ## Goal
-Add server-owned SMS sending foundation for check-in session links.
+Run and document the first controlled real SMS smoke test through JumpYard Cloud dev.
 
 ## Dependencies
-- T0038 completed and merged.
+- T0039 completed and merged.
 - Dev AWS stack exists.
-- Dev Aurora has `jumpyard.checkin_tokens`.
-- Guest phone/contact rows may exist in `jumpyard.guest_profiles`.
+- `POST /v1/check-in/session-links/send-sms` is deployed.
+- User explicitly approved one destination phone number for this dev smoke.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,17 +19,16 @@ Add server-owned SMS sending foundation for check-in session links.
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
 - TEST_PLAN.md
-- BOOKING_INDEX_INGESTION_CONTRACT.md
-- JUMPYARD_CLOUD_CONTRACT.md
 - AWS_RESOURCES.md
-- infra/lib/jumpyard-cloud-stack.ts
-- infra/lambda/session/index.js
-- infra/migrations/
+- JUMPYARD_CLOUD_CONTRACT.md
 
 ## Do not touch
 - Phone UI
 - Admin UI
 - Kiosk UI
+- Lambda source code
+- CDK infrastructure code
+- Aurora migrations
 - Payment package/drop-in code
 - Redeem business logic
 - Roller booking/draft write logic
@@ -40,73 +39,49 @@ Add server-owned SMS sending foundation for check-in session links.
 
 ## Requirements
 
-1. Add a protected SMS send endpoint.
-   - Add `POST /v1/check-in/session-links/send-sms`.
-   - Require the same dev link token used for T0038 link creation.
-   - Resolve the target booking from Aurora by booking reference or Roller unique id.
-   - Create a T0038 check-in link token internally.
-   - Do not return the raw token or full check-in URL from the SMS endpoint response.
+1. Use the existing T0039 endpoint for one controlled real SMS smoke.
+   - Use `confirmSend=true`.
+   - Use a unique idempotency key.
+   - Use a known dev Aurora booking reference.
+   - Use the approved destination number from the user.
+   - Do not print the full destination number in terminal output or docs.
 
-2. Add safe SMS delivery behavior.
-   - Dry-run must be the default unless `confirmSend=true`.
-   - Dry-run must create the link and audit row but must not call the SMS provider.
-   - Confirmed sends may call AWS SNS from the session Lambda.
-   - Never log or persist raw phone numbers beyond existing structured contact fields.
-   - Never log or persist raw link tokens.
-   - Never call Roller from this endpoint.
+2. Verify the outcome safely.
+   - Confirm whether AWS SNS accepted the message.
+   - Query `jumpyard.sms_deliveries` for the delivery id.
+   - Verify status, provider, dry-run flag, masked destination, and token hash presence.
+   - Do not print raw token, full URL, full phone number, or provider secrets.
 
-3. Add Aurora delivery audit storage.
-   - Add a versioned migration for `jumpyard.sms_deliveries`.
-   - Store booking reference, Roller unique id, token hash, provider, masked/hash destination, template, delivery status, dry-run flag, provider message id, and safe error summary.
-   - Do not store raw SMS message text or raw link URL.
-
-4. Add AWS permissions through CDK.
-   - Add the new API Gateway route.
-   - Configure session Lambda SMS env values for dev.
-   - Grant only the session Lambda `sns:Publish` for provider sends.
-
-5. Update source-of-truth docs.
-   - Document SMS endpoint behavior.
-   - Document new Aurora table and AWS permission.
-   - Document validation and deploy results.
-   - Keep payment-drop-in work blocked until Roller prerequisites arrive.
+3. Document the result.
+   - Update source-of-truth docs with the real SMS smoke result.
+   - If AWS SNS blocks the send, document the safe blocker and next AWS setup step.
+   - Keep payment integration listed as blocked until Roller/Pabel prerequisites arrive.
 
 ## Non-goals
-- Do not build phone or admin UI for sending SMS.
-- Do not send real SMS during validation unless explicitly confirmed.
-- Do not add Twilio, Pinpoint, or another provider.
+- Do not build SMS buttons in phone/admin UI.
+- Do not change SMS provider implementation.
+- Do not create production SMS resources.
+- Do not send bulk SMS.
 - Do not call Roller.
 - Do not redeem tickets.
 - Do not create or mutate Roller bookings.
 - Do not add payment UI or payment processing.
-- Do not create production resources.
 
 ## Acceptance criteria
-- `POST /v1/check-in/session-links/send-sms` exists in dev.
-- Unauthorized SMS send requests return `401`.
-- Dry-run SMS requests create a hashed check-in token and `jumpyard.sms_deliveries` audit row without provider calls.
-- Confirmed send path is implemented behind `confirmSend=true`.
-- The session Lambda has the minimum new SMS provider permission.
-- Raw tokens and full phone numbers are not returned by the SMS endpoint.
+- One protected real SMS send attempt is made through JumpYard Cloud dev.
+- The result is visible in `jumpyard.sms_deliveries`.
+- Raw token, full URL, full phone number, and secrets are not printed or committed.
+- Docs identify whether real SMS delivery is accepted by AWS SNS.
 - `npm run validate` passes.
 
 ## Manual verification
-In AWS Console:
-- Open API Gateway and confirm the SMS send route exists.
-- Open Aurora Query Editor and confirm `jumpyard.sms_deliveries` exists.
-- Send one dry-run SMS request and confirm a `planned` row appears with masked destination and token hash only.
-- Confirm `jumpyard.checkin_tokens` has only token hashes.
+- User checks whether the approved phone receives an SMS.
+- If received, user confirms whether the text is understandable.
+- The localhost link is expected to be a dev-only URL unless a public/mobile-reachable base URL is provided later.
 
 ## Automated validation
 Run:
-- `node --check infra/lambda/session/index.js`
-- `npm --prefix infra run build`
-- `npm --prefix infra run migrate:dev`
-- `npm --prefix infra run synth:dev`
-- `npm --prefix infra run diff:dev`
-- `npm --prefix infra run deploy:dev`
-- Deployed API smoke for unauthorized SMS request
-- Deployed API smoke for dry-run SMS request
-- Aurora verification for `jumpyard.sms_deliveries`
+- Deployed API smoke with `confirmSend=true`
+- Aurora verification for the created `jumpyard.sms_deliveries` row
 - `npm run validate`
 - `git diff --check`
