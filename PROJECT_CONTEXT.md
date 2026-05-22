@@ -89,6 +89,8 @@ T0039 adds the server-owned SMS sending foundation for those check-in links. Dev
 
 T0041 runs the first controlled real SMS smoke through the T0039 endpoint. AWS SNS accepted one confirmed dev SMS for booking `5032210` to the user-approved masked destination `+46*****9508`, and Aurora recorded delivery `jysms_mpgvzkpz_5b4ae399` as `sent` with `dry_run=false`, provider `aws_sns`, provider message id present, and token hash present. The SMS used the current dev `http://localhost:3000/` base URL, so receiving the SMS validates provider delivery but the link is not expected to open correctly on an iPhone until a public/mobile-reachable app URL is configured.
 
+T0042 adds AWS SNS SMS delivery status diagnostics to the dev stack and runs a second protected diagnostic SMS with an AWS-owned HTTPS base URL. Aurora recorded delivery `jysms_mpgwlk9u_9566748e` as `sent`, but CloudWatch SNS delivery status logs show provider status `FAILURE` with `Sandboxed account unable to send to number.` The AWS account is in SNS SMS sandbox mode, so real SMS delivery requires verifying the destination phone in SNS sandbox or moving the account out of SMS sandbox before guest-facing SMS can work.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -218,7 +220,9 @@ After T0007, the next tickets should proceed in this order:
 | `T0039 SMS sending` | Integrate the selected SMS provider and send check-in links from server-owned booking/session state. | Completed in dev AWS; dry-run is default, AWS SNS send is behind explicit confirmation, and audit rows are stored in `jumpyard.sms_deliveries`. |
 | `T0040 Roller payment package/drop-in integration` | Add the approved Roller payment package, allowlisted public HTTPS origin, and fake/test card path when Roller/Pabel provides the missing prerequisites. | Blocked until Roller/Pabel provides the missing payment prerequisites. |
 | `T0041 Controlled SMS live smoke` | Send one confirmed dev SMS through JumpYard Cloud and document whether AWS SNS accepts it. | Completed locally against dev; provider accepted the message, but link usability still needs a public/mobile-reachable app URL. |
-| `T0042 Staff auth replacement for temporary dev code` | Replace the manual dev redeem/link tokens with a real staff/admin auth model. | Needed before production-like staff redeem/SMS operations. |
+| `T0042 SMS delivery diagnostics` | Configure SNS delivery status logs and diagnose why the approved phone did not receive the accepted SMS. | Completed in dev AWS; delivery status logs show the AWS account is still in SNS SMS sandbox mode. |
+| `T0043 SNS sandbox phone verification or exit` | Verify approved test phones in SNS sandbox or request SMS sandbox exit before expecting real SMS delivery. | Required before another real SMS delivery test can succeed. |
+| `T0044 Staff auth replacement for temporary dev code` | Replace the manual dev redeem/link tokens with a real staff/admin auth model. | Needed before production-like staff redeem/SMS operations. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 

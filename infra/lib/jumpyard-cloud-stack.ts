@@ -1,5 +1,6 @@
 import { Stack, StackProps, Tags, CfnOutput, Duration, RemovalPolicy, ArnFormat } from 'aws-cdk-lib';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import * as cr from 'aws-cdk-lib/custom-resources';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
@@ -221,6 +222,8 @@ export class JumpYardCloudStack extends Stack {
       eventBusName: `${config.resourcePrefix}-events`,
     });
 
+    this.configureSmsDeliveryStatusLogging(config);
+
     const api = new apigatewayv2.CfnApi(this, 'HttpApi', {
       name: `${config.resourcePrefix}-api`,
       protocolType: 'HTTP',
@@ -331,6 +334,62 @@ export class JumpYardCloudStack extends Stack {
     new CfnOutput(this, 'OperationalDatabaseClusterArn', {
       value: databaseClusterArn,
     });
+  }
+
+  private configureSmsDeliveryStatusLogging(config: JumpYardCloudConfig): void {
+    const smsDeliveryStatusRole = new iam.Role(this, 'SmsDeliveryStatusRole', {
+      roleName: `${config.resourcePrefix}-sns-sms-delivery-status`,
+      assumedBy: new iam.ServicePrincipal('sns.amazonaws.com'),
+      description: 'Allows Amazon SNS to write SMS delivery status logs for JumpYard Cloud dev diagnostics.',
+    });
+
+    smsDeliveryStatusRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+          'logs:PutMetricFilter',
+          'logs:PutMetricData',
+        ],
+        resources: ['*'],
+      }),
+    );
+
+    const attributes = {
+      DefaultSMSType: 'Transactional',
+      DeliveryStatusIAMRole: smsDeliveryStatusRole.roleArn,
+      DeliveryStatusSuccessSamplingRate: '100',
+    };
+
+    const smsDeliveryStatusAttributes = new cr.AwsCustomResource(this, 'SmsDeliveryStatusAttributes', {
+      onCreate: {
+        service: 'SNS',
+        action: 'setSMSAttributes',
+        parameters: { attributes },
+        physicalResourceId: cr.PhysicalResourceId.of(`${config.resourcePrefix}-sns-sms-delivery-status-v1`),
+      },
+      onUpdate: {
+        service: 'SNS',
+        action: 'setSMSAttributes',
+        parameters: { attributes },
+        physicalResourceId: cr.PhysicalResourceId.of(`${config.resourcePrefix}-sns-sms-delivery-status-v1`),
+      },
+      policy: cr.AwsCustomResourcePolicy.fromStatements([
+        new iam.PolicyStatement({
+          actions: ['sns:SetSMSAttributes'],
+          resources: ['*'],
+        }),
+        new iam.PolicyStatement({
+          actions: ['iam:PassRole'],
+          resources: [smsDeliveryStatusRole.roleArn],
+        }),
+      ]),
+      installLatestAwsSdk: false,
+      timeout: Duration.minutes(2),
+    });
+
+    smsDeliveryStatusAttributes.node.addDependency(smsDeliveryStatusRole);
   }
 
   private createHandler(
