@@ -823,7 +823,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0036`. The next recommended ticket is `T0037 Scheduled daily Data API sync`.
+Current implementation has progressed through `T0037`. The next recommended ticket is `T0038 SMS token/session link foundation`.
 
 Near-term sequence:
 
@@ -838,7 +838,7 @@ Near-term sequence:
 9. `T0034 Existing-booking add-product draft step 1`: completed and deployed to dev; JumpYard Cloud can quote and create a separate linked add-on draft for an existing booking.
 10. `T0035 Phone add-product UI wiring`: completed locally; the phone existing-booking flow can quote mapped add-ons, create a separate linked add-on draft, and stop at payment pending.
 11. `T0036 Data API backfill and sync foundation`: completed locally; a dry-run-first orchestrator runs bookingitems, related Data API sources, and product refresh over explicit daily modified-date windows.
-12. `T0037 Scheduled daily Data API sync`: run the T0036 import path on a daily modified-date window in dev AWS and record sync health.
+12. `T0037 Scheduled daily Data API sync`: completed in dev AWS; EventBridge invokes a dedicated data-sync Lambda daily, imports the previous modified-date window, refreshes products, and records health in `jumpyard.booking_seed_runs`.
 13. `T0038 SMS token/session link foundation`: create secure JumpYard Cloud links that start or resume check-in sessions without using raw booking numbers as authority.
 14. `T0039 SMS sending`: integrate the selected SMS provider and send check-in links from server-owned booking/session state.
 15. `T0040 Roller payment package/drop-in integration`: integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites.
@@ -853,7 +853,7 @@ Near-term sequence:
 - Does Roller Playground support in-app payment from draft booking `paymentJwt`, and what fake/test card details and domain allow-listing are required? T0030/T0031 confirmed the documented draft/JWT path and deployed server endpoint, but test cards, package access, and allowlisting remain open.
 - What exact response shape should JumpYard expect from `POST /redemptions` for partial success/failure?
 - Which webhook event id should be used for idempotent webhook processing?
-- Which Data API export endpoint, credentials, and date range should JumpYard use for the morning booking seed?
+- Which production Data API schedule, timezone, and backfill range should JumpYard use for the live morning booking seed?
 - Which products must be reconfigured from stock/add-on to ticket/session products if JumpYard wants API-driven redemption?
 - What is the preferred availability-display pattern for core jump-entry products and durations?
 - What AWS account, region, environment name, owner, data classification, exportability, and cost center should be used for the first dev deploy?

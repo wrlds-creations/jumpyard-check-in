@@ -287,6 +287,30 @@ ROLLER_DATA_BACKFILL_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_DATA_API_BA
 
 The orchestrator then sets the existing per-import write confirmations for bookingitems, related data, and products in the child processes. Dry-run remains the default, and output must avoid secrets, access tokens, raw payloads, raw customer names, raw emails, raw phone numbers, and booking notes.
 
+### T0037 Scheduled Dev Data API Sync
+
+T0037 moves the daily reconciliation path into AWS dev:
+
+```text
+EventBridge rule jumpyard-check-in-dev-data-api-daily-sync
+  -> Lambda jumpyard-check-in-dev-stack-data-sync
+  -> Aurora jumpyard booking snapshot/cache tables
+```
+
+Default schedule is `02:00 UTC` daily. The Lambda imports the previous UTC modified-date window by default and can also be manually invoked with explicit `startDate` and `endDate` for smoke testing or recovery.
+
+The Lambda reads Roller credentials from AWS Secrets Manager, reads Roller env/base URL from SSM Parameter Store, fails closed unless the env is Playground and the URL is Playground-looking, and then imports:
+
+| Source | Aurora target |
+|---|---|
+| `/data/bookingitems` | `jumpyard.roller_bookings`, `jumpyard.roller_booking_items` |
+| `/data/tickets` | `jumpyard.roller_booking_tickets` |
+| `/data/bookingpayments` | `jumpyard.roller_booking_payments` |
+| `/data/customers` | `jumpyard.guest_profiles` |
+| REST `/products` | `jumpyard.product_catalog_cache` and booking item product-name enrichment |
+
+Run health is recorded in `jumpyard.booking_seed_runs` with `scheduled-data-api:*` run ids. The scheduled sync is not a public API route, does not call Roller write endpoints, does not store raw Roller payloads, and does not print secrets, access tokens, raw guest names, raw emails, raw phone numbers, or booking notes.
+
 ### Seed Upsert Targets
 
 | Target | Source | Required Behavior |

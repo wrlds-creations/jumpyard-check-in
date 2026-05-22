@@ -1,15 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0036
+T0037
 
 ## Goal
-Create a safe Data API backfill/sync foundation that can fill Aurora from Roller booking exports without building the scheduled AWS job yet.
+Create the scheduled dev AWS Data API sync that keeps Aurora updated from Roller modified-date exports.
 
 ## Dependencies
-- T0035 completed and merged.
-- Dev Aurora and local Roller Playground credentials are available.
-- Existing import scripts for bookingitems, related data, and products exist.
+- T0036 completed and merged.
+- Dev AWS stack exists.
+- Dev Aurora schema through `0005` exists.
+- Roller Playground credentials are stored in AWS Secrets Manager.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -20,18 +21,17 @@ Create a safe Data API backfill/sync foundation that can fill Aurora from Roller
 - TEST_PLAN.md
 - BOOKING_INDEX_INGESTION_CONTRACT.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- infra/package.json
-- infra/scripts/import-data-api-backfill.ts
-- Existing infra import scripts only if required for orchestration compatibility
+- AWS_RESOURCES.md
+- infra/lib/jumpyard-cloud-stack.ts
+- infra/lambda/data-sync/index.js
 
 ## Do not touch
 - Phone UI
 - Admin UI
 - Kiosk UI
-- Backend API Lambda behavior
-- AWS CDK resources
-- AWS deploy configuration
-- Roller payment package/drop-in work
+- Package dependencies
+- Aurora migrations
+- Payment package/drop-in code
 - Redeem business logic
 - SMS provider integration
 - Production credentials
@@ -41,61 +41,66 @@ Create a safe Data API backfill/sync foundation that can fill Aurora from Roller
 
 ## Requirements
 
-1. Add a single local Data API backfill command.
-   - It must run existing product, bookingitems, tickets, bookingpayments, and customers import paths in a safe order.
-   - It must support explicit `--start-date` and `--end-date` arguments.
-   - It must split the range into daily modified-date windows.
+1. Add a dev-only scheduled Data API sync Lambda.
+   - It must read Roller config from AWS Secrets Manager and SSM.
+   - It must fail closed unless Roller is configured for Playground.
+   - It must fetch the previous daily modified-date window by default.
+   - It must support manual invocation with explicit `startDate` and `endDate`.
 
-2. Keep dry-run as the default.
-   - The command must not write to Aurora unless `--apply` is provided.
-   - Apply mode must require a separate explicit confirmation environment variable.
-   - Apply mode must continue using the existing per-import write confirmations internally.
+2. Use the current normalized Aurora model.
+   - Upsert `/data/bookingitems` into `jumpyard.roller_bookings` and `jumpyard.roller_booking_items`.
+   - Upsert `/data/tickets` into `jumpyard.roller_booking_tickets`.
+   - Upsert `/data/bookingpayments` into `jumpyard.roller_booking_payments`.
+   - Upsert `/data/customers` into `jumpyard.guest_profiles`.
+   - Refresh REST `/products` into `jumpyard.product_catalog_cache` for product-name enrichment.
 
-3. Preserve the Data API safety model.
-   - Use the existing Playground guard.
+3. Add an EventBridge schedule in the dev CDK stack.
+   - Run the sync once per day outside business hours.
+   - Record sync status in `jumpyard.booking_seed_runs`.
+   - Do not add any public API route for the sync.
+
+4. Preserve the data safety model.
    - Never print Roller credentials, access tokens, raw payloads, raw guest names, raw emails, raw phone numbers, or booking notes.
-   - Keep normalized Aurora upserts idempotent.
-
-4. Document how this differs from the future scheduled sync.
-   - T0036 is a local/manual foundation.
-   - T0037 will move the same pattern into a scheduled dev AWS sync.
+   - Do not store raw Roller payloads.
+   - Do not call Roller write endpoints.
 
 5. Update source-of-truth docs with:
-   - New command names.
-   - Validation results.
-   - Recommended next ticket: `T0037 Scheduled daily Data API sync`.
+   - New AWS resources.
+   - Validation and deploy results.
+   - Recommended next ticket: `T0038 SMS token/session link foundation`.
 
 ## Non-goals
-- Do not create or change AWS resources.
-- Do not deploy anything.
-- Do not add EventBridge schedules.
 - Do not send SMS.
 - Do not build SMS links or tokens.
-- Do not implement payment package/drop-in.
+- Do not implement payment drop-in.
 - Do not create or mutate Roller bookings.
+- Do not redeem tickets.
 - Do not change app UI.
+- Do not create production resources.
 
 ## Acceptance criteria
-- A dry-run command can read all scoped Data API sources across at least one daily window.
-- The apply command fails closed without the T0036 confirmation env var.
-- The orchestrator command runs bookingitems before related data for each window and refreshes products for enrichment.
-- `npm --prefix infra run build` passes.
+- `infra/lambda/data-sync/index.js` exists and passes syntax validation.
+- CDK synth includes a Lambda and EventBridge rule for scheduled dev Data API sync.
+- Dev deploy succeeds.
+- Manual Lambda smoke can sync a small modified-date window into Aurora.
+- `jumpyard.booking_seed_runs` records a succeeded T0037 run.
 - `npm run validate` passes.
 - No app code was changed.
 
 ## Manual verification
-Run a dry-run for a small Playground modified-date window and confirm the command reports:
-- daily window count
-- commands run
-- sources covered
-- `apply=false`
-
-Run apply mode without the confirmation env var and confirm it fails before Aurora writes.
+In AWS Console:
+- Open EventBridge and confirm rule `jumpyard-check-in-dev-data-api-daily-sync`.
+- Open Lambda and confirm function `jumpyard-check-in-dev-stack-data-sync`.
+- Open CloudWatch Logs for the data-sync Lambda and confirm the latest smoke invocation logs only safe counts.
+- Open Aurora Query Editor and inspect `jumpyard.booking_seed_runs` for the latest `scheduled-data-api:*` run id.
 
 ## Automated validation
 Run:
+- `node --check infra/lambda/data-sync/index.js`
 - `npm --prefix infra run build`
-- `npm --prefix infra run import:data-api-backfill:dev -- 2026-05-20 2026-05-21`
-- `npm --prefix infra run import:data-api-backfill:dev:apply -- 2026-05-20 2026-05-21`
+- `npm --prefix infra run synth:dev`
+- `npm --prefix infra run diff:dev`
+- `npm --prefix infra run deploy:dev`
+- Manual Lambda invoke against a small modified-date window
 - `npm run validate`
 - `git diff --check`

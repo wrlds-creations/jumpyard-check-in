@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-22
-- Current branch: `codex/t0036-data-api-backfill-sync`
-- Current status: T0036 Data API backfill and sync foundation completed locally; local command can dry-run bookingitems, tickets, bookingpayments, customers, and products over daily modified-date windows.
-- Current ticket: `T0036` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`
-- Recommended next ticket: `T0037 Scheduled daily Data API sync`
+- Current branch: `codex/t0037-scheduled-data-api-sync`
+- Current status: T0037 scheduled daily Data API sync completed and deployed to dev; EventBridge invokes a dedicated Lambda to import Roller modified-date windows into Aurora and record run health.
+- Current ticket: `T0037` completed and deployed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`
+- Recommended next ticket: `T0038 SMS token/session link foundation`
 
 ## Current Structure
 
@@ -43,6 +43,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- lambda/redeem/index.js
 |   |-- lambda/session/index.js
 |   |-- lambda/webhook/index.js
+|   |-- lambda/data-sync/index.js
 |   |-- lib/config.ts
 |   |-- scripts/import-bookingitems.ts
 |   |-- scripts/import-data-api-backfill.ts
@@ -154,18 +155,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0034` | Added existing-booking add-product quote/draft step 1. | 2026-05-22 | Dev `POST /v1/bookings/{bookingReference}/add-products/quote` returns add-on costs without creating a booking; dev `POST /v1/bookings/{bookingReference}/add-products` creates a separate Roller Playground add-on draft, stores `flow_type='add_product'`, and links it to the original booking in `jumpyard.booking_links`. |
 | `T0035` | Wired phone add-product UI to add-product quote/draft endpoints. | 2026-05-22 | Existing-booking phone add-ons now collect contact, quote mapped add-ons, create a separate linked Playground add-on draft, and stop at payment pending; socks-only/padlock-only drafts are treated as non-redeemable add-on drafts. |
 | `T0036` | Added local Data API backfill/sync foundation. | 2026-05-22 | New dry-run-first orchestrator runs bookingitems, tickets, bookingpayments, customers, and product refresh across daily modified-date windows; apply mode is separately guarded. |
+| `T0037` | Added scheduled dev Data API sync. | 2026-05-22 | EventBridge rule `jumpyard-check-in-dev-data-api-daily-sync` invokes Lambda `jumpyard-check-in-dev-stack-data-sync`, imports previous-day modified-date windows into Aurora, refreshes products, and records run health in `booking_seed_runs`. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0036` | Data API backfill and sync foundation. | Completed locally | Added a local daily-window orchestrator around existing bookingitems, related data, and product import scripts with dry-run default and separate apply guard. |
+| `T0037` | Scheduled daily Data API sync. | Completed and deployed | Added a dev EventBridge -> Lambda reconciliation job that imports Roller Data API sources and product cache data into Aurora with Playground-only guards and run tracking. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0037` | Scheduled daily Data API sync | Run the T0036 import path on a daily modified-date window in dev AWS and record sync health. |
 | `T0038` | SMS token/session link foundation | Create secure JumpYard Cloud links that start or resume check-in sessions without using raw booking numbers as authority. |
 | `T0039` | SMS sending | Integrate the selected SMS provider and send check-in links from server-owned booking/session state. |
 | `T0040` | Roller payment package/drop-in integration | Integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites. |
@@ -394,6 +395,10 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0036 infra build: `npm --prefix infra run build` passed.
 - T0036 dry-run: `npm --prefix infra run import:data-api-backfill:dev -- 2026-05-20 2026-05-21` passed and ran bookingitems, related data, and products with `apply=false`.
 - T0036 apply guard: `npm --prefix infra run import:data-api-backfill:dev:apply -- 2026-05-20 2026-05-21` failed closed without `ROLLER_DATA_BACKFILL_ALLOW_WRITE`.
+- T0037 syntax/build: `node --check infra/lambda/data-sync/index.js` and `npm --prefix infra run build` passed.
+- T0037 synth/diff/deploy: `npm --prefix infra run synth:dev`, `npm --prefix infra run diff:dev`, and `npm --prefix infra run deploy:dev` passed against account `376129878018`, region `eu-north-1`.
+- T0037 manual Lambda smoke: invoking `jumpyard-check-in-dev-stack-data-sync` for `2026-05-20 -> 2026-05-21` succeeded with 9 bookingitems, 6 tickets, 0 payments, 6 customers, and 491 product rows; Aurora `booking_seed_runs` recorded `succeeded`.
+- T0037 post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
 
 ## Known Issues Summary
 

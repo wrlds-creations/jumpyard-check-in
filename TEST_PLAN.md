@@ -83,6 +83,10 @@ Use this file to define validation for the current project or milestone.
 | T0036 infra build | Confirm Data API backfill orchestrator compiles. | Passed | `npm --prefix infra run build` passed. |
 | T0036 backfill dry-run | Confirm the all-source backfill command reads a daily window without Aurora writes. | Passed | `npm --prefix infra run import:data-api-backfill:dev -- 2026-05-20 2026-05-21` passed with `apply=false`. |
 | T0036 backfill apply guard | Confirm the all-source backfill command refuses writes without its top-level confirmation. | Passed | `npm --prefix infra run import:data-api-backfill:dev:apply -- 2026-05-20 2026-05-21` failed closed without `ROLLER_DATA_BACKFILL_ALLOW_WRITE`. |
+| T0037 data-sync syntax | Confirm scheduled sync Lambda JavaScript syntax. | Passed | `node --check infra/lambda/data-sync/index.js` passed. |
+| T0037 infra build | Confirm CDK TypeScript accepts the scheduled sync resources. | Passed | `npm --prefix infra run build` passed. |
+| T0037 synth/diff/deploy | Confirm dev AWS contains the data-sync Lambda and EventBridge rule. | Passed | `npm --prefix infra run synth:dev`, `npm --prefix infra run diff:dev`, and `npm --prefix infra run deploy:dev` passed; post-deploy diff showed no differences. |
+| T0037 manual Lambda smoke | Confirm the deployed Lambda can sync a small modified-date window. | Passed | Manual invoke for `2026-05-20 -> 2026-05-21` succeeded with 9 bookingitems, 6 tickets, 0 payments, 6 customers, and 491 product rows; Aurora `booking_seed_runs` recorded status `succeeded`. |
 | `node --check infra/lambda/webhook/index.js` | Confirm T0015 webhook Lambda JavaScript syntax. | Passed | Passed on 2026-05-20. |
 | T0015 local webhook handler smoke | Confirm fast-ack and retry classification before deploy. | Passed | Unauthorized and invalid JSON returned HTTP `200`; missing database config returned HTTP `500`. |
 | T0015 deployed unauthorized webhook smoke | Confirm unauthorized webhooks are acknowledged and ignored. | Passed | `POST /v1/roller/webhooks/bookings` without token returned HTTP `200` and `ignored_unauthorized`. |

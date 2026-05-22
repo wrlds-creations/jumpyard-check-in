@@ -2,6 +2,7 @@ import { Stack, StackProps, Tags, CfnOutput, Duration, RemovalPolicy, ArnFormat 
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -30,6 +31,7 @@ interface HandlerResources {
   readonly rollerBaseUrlParameter: ssm.StringParameter;
   readonly webhookDevTokenSecret: secretsmanager.Secret;
   readonly redeemDevTokenSecret: secretsmanager.Secret;
+  readonly resourcePrefix: string;
 }
 
 export class JumpYardCloudStack extends Stack {
@@ -243,6 +245,7 @@ export class JumpYardCloudStack extends Stack {
       rollerBaseUrlParameter,
       webhookDevTokenSecret,
       redeemDevTokenSecret,
+      resourcePrefix: config.resourcePrefix,
     };
 
     const lookupHandler = this.createHandler('LookupHandler', 'lookup', handlerResources, {
@@ -259,6 +262,27 @@ export class JumpYardCloudStack extends Stack {
     });
     const webhookHandler = this.createHandler('WebhookHandler', 'webhook', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'webhook')),
+    });
+    const dataSyncHandler = this.createHandler('DataSyncHandler', 'data-sync', handlerResources, {
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'data-sync')),
+      grantOperationalWriters: false,
+      memorySize: 512,
+      timeout: Duration.minutes(10),
+    });
+
+    new events.Rule(this, 'DailyDataApiSyncRule', {
+      ruleName: `${config.resourcePrefix}-data-api-daily-sync`,
+      description:
+        'Runs the dev Roller Data API modified-date sync for the previous UTC day. Roller writes are not performed.',
+      schedule: events.Schedule.cron({ minute: '0', hour: '2' }),
+      targets: [
+        new targets.LambdaFunction(dataSyncHandler, {
+          event: events.RuleTargetInput.fromObject({
+            source: 'eventbridge.daily',
+          }),
+          retryAttempts: 2,
+        }),
+      ],
     });
 
     this.addRoute(api, lookupHandler, 'POST /v1/check-in/lookup');
@@ -297,7 +321,12 @@ export class JumpYardCloudStack extends Stack {
     id: string,
     handlerName: string,
     resources: HandlerResources,
-    options: { readonly code?: lambda.Code } = {},
+    options: {
+      readonly code?: lambda.Code;
+      readonly grantOperationalWriters?: boolean;
+      readonly memorySize?: number;
+      readonly timeout?: Duration;
+    } = {},
   ): lambda.Function {
     const functionName = `${this.stackName}-${handlerName}`;
 
@@ -319,6 +348,10 @@ export class JumpYardCloudStack extends Stack {
       EVENT_BUS_NAME: resources.eventBus.eventBusName,
     };
 
+    if (handlerName === 'data-sync') {
+      environment.RESOURCE_PREFIX = resources.resourcePrefix;
+    }
+
     if (handlerName === 'webhook') {
       environment.WEBHOOK_DEV_TOKEN_SECRET_ARN = resources.webhookDevTokenSecret.secretArn;
     }
@@ -333,8 +366,8 @@ export class JumpYardCloudStack extends Stack {
       architecture: lambda.Architecture.ARM_64,
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
-      timeout: Duration.seconds(10),
-      memorySize: 256,
+      timeout: options.timeout ?? Duration.seconds(10),
+      memorySize: options.memorySize ?? 256,
       code: options.code ?? lambda.Code.fromInline(`
 exports.handler = async () => ({
   statusCode: 501,
@@ -353,10 +386,12 @@ exports.handler = async () => ({
       resources.rollerCredentialsSecret.grantRead(fn);
     }
     resources.databaseSecret.grantRead(fn);
-    if (handlerName !== 'session') {
+    if (options.grantOperationalWriters ?? handlerName !== 'session') {
       resources.rawPayloadBucket.grantReadWrite(fn);
       resources.rollerOperationsQueue.grantSendMessages(fn);
       resources.eventBus.grantPutEventsTo(fn);
+    }
+    if (handlerName !== 'session') {
       resources.rollerEnvParameter.grantRead(fn);
       resources.rollerBaseUrlParameter.grantRead(fn);
     }
