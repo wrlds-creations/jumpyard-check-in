@@ -1,12 +1,21 @@
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
+const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client-secrets-manager');
 const crypto = require('crypto');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const ACTIVE_SESSION_STATUSES = ['guest_in_progress', 'ready_for_staff', 'staff_in_progress'];
+const CHECKIN_LINK_DEV_TOKEN_HEADERS = ['x-jumpyard-link-token', 'authorization'];
+const CHECKIN_LINK_CHANNELS = new Set(['sms', 'email', 'manual', 'dev']);
 const DEFAULT_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const DEFAULT_CHECKIN_LINK_TTL_MINUTES = 72 * 60;
+const MAX_CHECKIN_LINK_TTL_MINUTES = 7 * 24 * 60;
 const MAX_SELECTED_TICKETS = 10;
+const TOKEN_BYTES = 32;
 
 const rdsClient = new RDSDataClient({});
+const secretsClient = new SecretsManagerClient({});
+
+let cachedCheckinLinkDevToken = null;
 
 exports.handler = async (event) => {
   let correlationId = getHeader(event, 'x-correlation-id') || createCorrelationId();
@@ -22,6 +31,14 @@ exports.handler = async (event) => {
 
     if (isStaffSessionDetailRoute(routeKey, event)) {
       return handleStaffSessionDetail(event, correlationId);
+    }
+
+    if (isCreateSessionLinkRoute(routeKey, event)) {
+      return handleCreateSessionLink(event, body, correlationId);
+    }
+
+    if (isResolveSessionLinkRoute(routeKey, event)) {
+      return handleResolveSessionLink(event, body, correlationId);
     }
 
     if (isStartSessionRoute(routeKey, event)) {
@@ -291,6 +308,137 @@ async function handleStaffSessionDetail(event, correlationId) {
   });
 }
 
+async function handleCreateSessionLink(event, body, correlationId) {
+  const auth = await verifyCheckinLinkDevToken(event);
+  if (!auth.ok) {
+    return jsonResponse(401, correlationId, {
+      status: 'unauthorized',
+      error: {
+        code: auth.code,
+        message: 'Check-in link creation requires the JumpYard Cloud development token.',
+      },
+    });
+  }
+
+  const request = normalizeSessionLinkCreateRequest(body);
+  const validationError = validateSessionLinkCreateRequest(request);
+  if (validationError) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: validationError,
+    });
+  }
+
+  const context = await getBookingContext(request.identifier);
+  if (!context) {
+    return jsonResponse(404, correlationId, {
+      status: 'not_found',
+      error: {
+        code: 'booking_not_found',
+        message: 'No local JumpYard Cloud booking snapshot was found for the supplied identifier.',
+      },
+    });
+  }
+
+  const link = await createSessionLinkToken({
+    channel: request.channel,
+    context,
+    ttlMinutes: request.ttlMinutes,
+  });
+  await writeEventLog({
+    booking: context.booking,
+    correlationId,
+    eventType: 'checkin.link_created',
+    payload: {
+      channel: request.channel,
+      expiresAt: link.expiresAt,
+      tokenHashPrefix: link.tokenHash.slice(0, 12),
+    },
+    summary: 'Check-in session link created.',
+  });
+
+  return jsonResponse(201, correlationId, {
+    status: 'link_created',
+    link: {
+      bookingReference: context.booking.bookingReference,
+      channel: request.channel,
+      checkinUrl: buildCheckinUrl(request.baseUrl, link.token),
+      expiresAt: link.expiresAt,
+      rollerUniqueId: context.booking.rollerUniqueId,
+      token: link.token,
+    },
+  });
+}
+
+async function handleResolveSessionLink(event, body, correlationId) {
+  const request = normalizeSessionLinkResolveRequest(event, body);
+  const validationError = validateSessionLinkResolveRequest(request);
+  if (validationError) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: validationError,
+    });
+  }
+
+  const tokenHash = hashString(request.token);
+  const tokenRecord = await findSessionLinkToken(tokenHash);
+  if (!tokenRecord) {
+    return jsonResponse(404, correlationId, {
+      status: 'not_found',
+      error: {
+        code: 'checkin_link_not_found',
+        message: 'No active JumpYard Cloud check-in link was found for the supplied token.',
+      },
+    });
+  }
+
+  if (tokenRecord.consumedAt) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: 'checkin_link_consumed',
+        message: 'The supplied check-in link has already been consumed.',
+      },
+    });
+  }
+
+  if (isExpired(tokenRecord.expiresAt)) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: 'checkin_link_expired',
+        message: 'The supplied check-in link has expired.',
+      },
+    });
+  }
+
+  await markSessionLinkOpened(tokenHash);
+  await writeEventLog({
+    booking: {
+      bookingReference: tokenRecord.bookingReference,
+      rollerUniqueId: tokenRecord.rollerUniqueId,
+    },
+    correlationId,
+    eventType: 'checkin.link_opened',
+    payload: {
+      channel: tokenRecord.channel,
+      tokenHashPrefix: tokenHash.slice(0, 12),
+    },
+    summary: 'Check-in session link opened.',
+  });
+
+  return handleStartSession(
+    event,
+    {
+      expectedDate: request.expectedDate,
+      idempotencyKey: request.idempotencyKey || `checkin-link:${tokenHash}`,
+      rollerUniqueId: tokenRecord.rollerUniqueId,
+      sourceLookupRef: `checkin_token:${tokenHash.slice(0, 12)}`,
+    },
+    correlationId,
+  );
+}
+
 async function expireOldSessions(rollerUniqueId, visitDate) {
   await executeStatement(
     `UPDATE jumpyard.checkin_sessions
@@ -334,6 +482,23 @@ function normalizeReadyRequest(event, body) {
   };
 }
 
+function normalizeSessionLinkCreateRequest(body) {
+  return {
+    baseUrl: stringOrNull(body.baseUrl) || stringOrNull(body.checkinBaseUrl),
+    channel: normalizeSessionLinkChannel(body.channel),
+    identifier: stringOrNull(body.identifier) || stringOrNull(body.bookingReference) || stringOrNull(body.rollerUniqueId),
+    ttlMinutes: normalizeTtlMinutes(body.ttlMinutes, body.ttlHours),
+  };
+}
+
+function normalizeSessionLinkResolveRequest(event, body) {
+  return {
+    expectedDate: stringOrNull(body.expectedDate) || stringOrNull(body.visitDate),
+    idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
+    token: stringOrNull(body.token) || stringOrNull(getHeader(event, 'x-jumpyard-checkin-token')),
+  };
+}
+
 function normalizeStaffListRequest(event) {
   const query = event?.queryStringParameters ?? {};
   const limit = Math.min(Math.max(numberOrNull(query.limit) ?? 25, 1), 50);
@@ -343,6 +508,42 @@ function normalizeStaffListRequest(event) {
     includeExpired,
     limit,
   };
+}
+
+function validateSessionLinkCreateRequest(request) {
+  if (!request.identifier) {
+    return {
+      code: 'identifier_required',
+      message: 'bookingReference, rollerUniqueId, or identifier is required.',
+    };
+  }
+
+  if (!CHECKIN_LINK_CHANNELS.has(request.channel)) {
+    return {
+      code: 'channel_invalid',
+      message: 'channel must be sms, email, manual, or dev.',
+    };
+  }
+
+  if (request.baseUrl && !isSafeCheckinBaseUrl(request.baseUrl)) {
+    return {
+      code: 'base_url_invalid',
+      message: 'baseUrl must be a valid http or https URL.',
+    };
+  }
+
+  return null;
+}
+
+function validateSessionLinkResolveRequest(request) {
+  if (!request.token) {
+    return {
+      code: 'token_required',
+      message: 'token or x-jumpyard-checkin-token is required.',
+    };
+  }
+
+  return null;
 }
 
 function validateStartRequest(request) {
@@ -663,6 +864,89 @@ async function findStaffBookingTickets(rollerUniqueId, selectedTicketIds) {
     summary: parseJsonObject(row.ticket_summary),
     ticketId: stringOrNull(row.ticket_id),
   }));
+}
+
+async function createSessionLinkToken({ channel, context, ttlMinutes }) {
+  const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const token = crypto.randomBytes(TOKEN_BYTES).toString('base64url');
+    const tokenHash = hashString(token);
+    const result = await executeStatement(
+      `INSERT INTO jumpyard.checkin_tokens (
+         token_hash,
+         roller_unique_id,
+         channel,
+         expires_at
+       )
+       VALUES (
+         :tokenHash,
+         :rollerUniqueId,
+         :channel,
+         CAST(:expiresAt AS timestamptz)
+       )
+       ON CONFLICT (token_hash) DO NOTHING
+       RETURNING token_hash, expires_at::text AS expires_at`,
+      [
+        stringParameter('tokenHash', tokenHash),
+        stringParameter('rollerUniqueId', context.booking.rollerUniqueId),
+        stringParameter('channel', channel),
+        stringParameter('expiresAt', expiresAt),
+      ],
+    );
+    const row = firstMappedRow(result);
+    if (row) {
+      return {
+        expiresAt: stringOrNull(row.expires_at),
+        token,
+        tokenHash,
+      };
+    }
+  }
+
+  const error = new Error('Could not allocate a unique check-in link token.');
+  error.code = 'checkin_link_token_collision';
+  throw error;
+}
+
+async function findSessionLinkToken(tokenHash) {
+  const result = await executeStatement(
+    `SELECT
+       ct.token_hash,
+       ct.roller_unique_id,
+       ct.channel,
+       ct.expires_at::text AS expires_at,
+       ct.opened_at::text AS opened_at,
+       ct.consumed_at::text AS consumed_at,
+       b.booking_reference
+     FROM jumpyard.checkin_tokens AS ct
+     LEFT JOIN jumpyard.roller_bookings AS b
+       ON b.roller_unique_id = ct.roller_unique_id
+     WHERE ct.token_hash = :tokenHash
+     LIMIT 1`,
+    [stringParameter('tokenHash', tokenHash)],
+  );
+  const row = firstMappedRow(result);
+  if (!row) return null;
+
+  return {
+    bookingReference: stringOrNull(row.booking_reference),
+    channel: stringOrNull(row.channel),
+    consumedAt: stringOrNull(row.consumed_at),
+    expiresAt: stringOrNull(row.expires_at),
+    openedAt: stringOrNull(row.opened_at),
+    rollerUniqueId: stringOrNull(row.roller_unique_id),
+    tokenHash: stringOrNull(row.token_hash),
+  };
+}
+
+async function markSessionLinkOpened(tokenHash) {
+  await executeStatement(
+    `UPDATE jumpyard.checkin_tokens
+     SET opened_at = COALESCE(opened_at, now())
+     WHERE token_hash = :tokenHash`,
+    [stringParameter('tokenHash', tokenHash)],
+  );
 }
 
 function evaluateStartContext(context, request) {
@@ -1123,6 +1407,17 @@ function isReadyForStaffRoute(routeKey, event) {
   );
 }
 
+function isCreateSessionLinkRoute(routeKey, event) {
+  return routeKey === 'POST /v1/check-in/session-links' || event?.rawPath === '/v1/check-in/session-links';
+}
+
+function isResolveSessionLinkRoute(routeKey, event) {
+  return (
+    routeKey === 'POST /v1/check-in/session-links/resolve' ||
+    event?.rawPath === '/v1/check-in/session-links/resolve'
+  );
+}
+
 function extractSessionIdFromPath(rawPath) {
   const match = String(rawPath ?? '').match(/^\/v1\/check-in\/sessions\/([^/]+)\/ready-for-staff$/);
   return match ? decodeURIComponent(match[1]) : null;
@@ -1170,6 +1465,109 @@ function normalizeSafetyStatus(value) {
 
   const allowed = new Set(['not_started', 'in_progress', 'completed', 'requires_staff', 'skipped']);
   return allowed.has(normalized) ? normalized : 'requires_staff';
+}
+
+function normalizeSessionLinkChannel(value) {
+  return stringOrNull(value)?.toLowerCase() || 'sms';
+}
+
+function normalizeTtlMinutes(ttlMinutesValue, ttlHoursValue) {
+  const ttlMinutes = numberOrNull(ttlMinutesValue);
+  const ttlHours = numberOrNull(ttlHoursValue);
+  const rawMinutes = ttlMinutes ?? (ttlHours === null ? null : ttlHours * 60);
+
+  if (rawMinutes === null) return DEFAULT_CHECKIN_LINK_TTL_MINUTES;
+  return Math.min(Math.max(Math.floor(rawMinutes), 5), MAX_CHECKIN_LINK_TTL_MINUTES);
+}
+
+function isSafeCheckinBaseUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function buildCheckinUrl(baseUrl, token) {
+  if (!baseUrl) return null;
+
+  const parsed = new URL(baseUrl);
+  parsed.searchParams.set('jy_token', token);
+  return parsed.toString();
+}
+
+async function verifyCheckinLinkDevToken(event) {
+  const providedToken = getCheckinLinkAuthToken(event);
+
+  if (!providedToken) {
+    return { ok: false, code: 'checkin_link_token_required' };
+  }
+
+  const expectedToken = await getCheckinLinkDevToken();
+  if (!safeEquals(providedToken, expectedToken)) {
+    return { ok: false, code: 'checkin_link_token_invalid' };
+  }
+
+  return { ok: true, code: 'authorized' };
+}
+
+function getCheckinLinkAuthToken(event) {
+  for (const headerName of CHECKIN_LINK_DEV_TOKEN_HEADERS) {
+    const value = getHeader(event, headerName);
+    if (!value) continue;
+
+    const bearerMatch = value.match(/^Bearer\s+(.+)$/i);
+    return bearerMatch ? bearerMatch[1].trim() : value;
+  }
+
+  return null;
+}
+
+async function getCheckinLinkDevToken() {
+  if (process.env.CHECKIN_LINK_DEV_TOKEN) {
+    return process.env.CHECKIN_LINK_DEV_TOKEN;
+  }
+
+  if (cachedCheckinLinkDevToken) return cachedCheckinLinkDevToken;
+
+  const secretId = process.env.CHECKIN_LINK_DEV_TOKEN_SECRET_ARN;
+  if (!secretId) {
+    const error = new Error('Check-in link dev token secret is not configured.');
+    error.code = 'checkin_link_config_error';
+    throw error;
+  }
+
+  const response = await secretsClient.send(new GetSecretValueCommand({ SecretId: secretId }));
+  const secretString = response.SecretString;
+  if (!secretString) {
+    const error = new Error('Check-in link dev token secret has no string value.');
+    error.code = 'checkin_link_config_error';
+    throw error;
+  }
+
+  try {
+    const parsed = JSON.parse(secretString);
+    cachedCheckinLinkDevToken = String(parsed.token ?? parsed.checkinLinkToken ?? '').trim();
+  } catch {
+    cachedCheckinLinkDevToken = secretString.trim();
+  }
+
+  if (!cachedCheckinLinkDevToken) {
+    const error = new Error('Check-in link dev token is empty.');
+    error.code = 'checkin_link_config_error';
+    throw error;
+  }
+
+  return cachedCheckinLinkDevToken;
+}
+
+function safeEquals(left, right) {
+  const leftBuffer = Buffer.from(String(left));
+  const rightBuffer = Buffer.from(String(right));
+
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 async function executeStatement(sql, parameters = []) {
@@ -1315,6 +1713,24 @@ function classifyError(error) {
       status: 'internal_error',
       code: 'handoff_code_collision',
       message: 'JumpYard Cloud could not allocate a handoff code.',
+    };
+  }
+
+  if (error.code === 'checkin_link_config_error') {
+    return {
+      statusCode: 500,
+      status: 'config_error',
+      code: 'checkin_link_config_error',
+      message: 'JumpYard Cloud check-in link token configuration is incomplete.',
+    };
+  }
+
+  if (error.code === 'checkin_link_token_collision') {
+    return {
+      statusCode: 500,
+      status: 'internal_error',
+      code: 'checkin_link_token_collision',
+      message: 'JumpYard Cloud could not allocate a check-in link token.',
     };
   }
 

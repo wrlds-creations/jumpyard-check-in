@@ -83,6 +83,8 @@ T0036 adds a local Data API backfill orchestrator for the manual foundation befo
 
 T0037 adds the scheduled dev AWS Data API sync. EventBridge rule `jumpyard-check-in-dev-data-api-daily-sync` invokes Lambda `jumpyard-check-in-dev-stack-data-sync` daily at `02:00 UTC` and the Lambda imports the previous UTC modified-date window by default. It reads Playground-only Roller config from AWS Secrets Manager and SSM, upserts bookingitems, tickets, bookingpayments, customers, and products into the existing Aurora snapshot/cache tables, records health in `jumpyard.booking_seed_runs`, and performs no Roller writes.
 
+T0038 adds the JumpYard Cloud SMS token/session link foundation without sending SMS. Dev can create a protected check-in link for an Aurora booking through `POST /v1/check-in/session-links`; JumpYard Cloud stores only a SHA-256 token hash in `jumpyard.checkin_tokens`. The public `POST /v1/check-in/session-links/resolve` endpoint accepts the raw token, marks it opened, and starts or resumes the linked JumpYard Cloud check-in session without calling Roller.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -130,6 +132,7 @@ The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_C
 - Product catalog names/types may be cached because they are needed for display and normalization and are not guest PII.
 - Guest email and phone may be stored as explicit structured contact fields for check-in/SMS readiness; free-text names, notes, addresses, and booking comments remain deferred.
 - Check-in session state, staff handoff state, safety status, final redeem confirmation, idempotency, and audit are JumpYard Cloud-owned operational data.
+- Check-in link tokens are JumpYard Cloud-owned operational data. Raw tokens are response-only; Aurora stores only token hashes plus expiry/opened/consumed timestamps.
 - Pre-payment draft state is JumpYard Cloud operational state. It may store selected item summaries, totals, status, Roller draft ids, and structured guest email/phone with masked/hash fields, but raw payment JWTs remain response-only and must not be persisted.
 - Existing-booking add-product drafts are JumpYard Cloud operational state linked to the original booking. Stock-only add-on drafts are handled as payment-pending add-ons and should not create guest check-in/redeem expectations by themselves.
 
@@ -206,8 +209,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0035 Phone add-product UI wiring` | Wire existing-booking add-products in the phone flow to the T0034 quote/draft endpoints. | Completed locally; lets a guest add mapped add-ons to an existing check-in session, create a separate linked Playground draft, and stop at payment pending. |
 | `T0036 Data API backfill and sync foundation` | Build a fuller Data API import path for bookingitems, tickets, payments, and customers/contact data so Aurora can be filled consistently from Roller exports. | Completed locally; gives JumpYard Cloud a repeatable booking baseline before SMS links and production-like operating workflows. |
 | `T0037 Scheduled daily Data API sync` | Move the T0036 import path into a scheduled dev AWS sync that runs a daily modified-date window and records run status. | Completed in dev AWS; keeps Aurora reconciled even if webhooks are delayed, disabled, or out of order. |
-| `T0038 SMS token/session link foundation` | Add secure JumpYard Cloud links that can resume or start a booking check-in session without exposing raw booking numbers as authority. | Prepares the phone flow for SMS delivery while keeping session ownership server-side. |
-| `T0039 SMS sending` | Integrate the selected SMS provider and send check-in links from server-owned booking/session state. | Lets JumpYard invite guests into the phone check-in flow before arrival or from staff/admin workflows. |
+| `T0038 SMS token/session link foundation` | Add secure JumpYard Cloud links that can resume or start a booking check-in session without exposing raw booking numbers as authority. | Completed and deployed to dev; prepares the phone flow for SMS delivery while keeping session ownership server-side. |
+| `T0039 SMS sending` | Integrate the selected SMS provider and send check-in links from server-owned booking/session state. | Next ticket; lets JumpYard invite guests into the phone check-in flow before arrival or from staff/admin workflows. |
 | `T0040 Roller payment package/drop-in integration` | Add the approved Roller payment package, allowlisted public HTTPS origin, and fake/test card path when Roller/Pabel provides the missing prerequisites. | Completes in-PWA payment for both new-booking and add-product drafts once external blockers are removed. |
 | `T0041 Staff auth replacement for temporary dev code` | Replace the manual dev redeem code with a real staff/admin auth model. | Needed before production-like staff redeem; can follow data/SMS work unless pilot security timing forces it earlier. |
 

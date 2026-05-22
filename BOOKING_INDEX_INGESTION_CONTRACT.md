@@ -39,6 +39,15 @@ Roller remains the source of truth. The local booking index is a speed, UX, supp
 | Reduce Roller load | Data API seed and webhooks reduce repeated live REST polling. |
 | Fail safely | When index freshness is uncertain, JumpYard Cloud should refresh from Roller or route to staff. |
 
+## SMS Link Readiness
+
+T0038 adds the token foundation that future SMS sending will use:
+
+- `jumpyard.checkin_tokens` stores only hashed tokens linked to `roller_unique_id`.
+- The local booking index must contain the target booking before a link can be created.
+- SMS delivery is a future provider integration and should use the token creation endpoint rather than exposing booking references as link authority.
+- Opening a token resumes or starts JumpYard Cloud session state; it does not replace the daily Data API sync, webhook enrichment, or live REST confirmation before write-critical actions.
+
 ## Non-Goals
 
 - Do not replace Roller as the booking source of truth.
