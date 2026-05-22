@@ -89,6 +89,8 @@ interface CloudSessionResponse {
     code?: string;
     message?: string;
   };
+  booking?: CloudBooking;
+  source?: CloudLookupSource;
 }
 
 interface CloudSession {
@@ -230,6 +232,11 @@ export interface AddProductDraftResult {
   prepayment?: NewBookingDraftResult['prepayment'];
 }
 
+export interface CheckInSessionLinkResult {
+  booking: Booking;
+  checkinSession: CheckInSession;
+}
+
 interface CloudBookingCosts {
   total: number | null;
   amountOwing: number | null;
@@ -327,6 +334,46 @@ export async function lookupBooking(code: string): Promise<Booking> {
   }
 
   return toBooking(body.booking, body.eligibility.reason, body.source);
+}
+
+export async function resolveCheckInSessionLink(token: string): Promise<CheckInSessionLinkResult> {
+  const rawToken = token.trim();
+  if (!rawToken) {
+    throw new CloudSessionError('session_failed', 'A check-in link token is required.');
+  }
+
+  let response: Response;
+  let body: CloudSessionResponse | null = null;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/v1/check-in/session-links/resolve`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        correlationId: `phone_link_${Date.now().toString(36)}`,
+        token: rawToken,
+      }),
+    });
+    body = await parseSessionResponse(response);
+  } catch (error) {
+    if (error instanceof CloudSessionError) throw error;
+    throw new CloudSessionError('network_error', 'Could not reach JumpYard Cloud.');
+  }
+
+  if (!response.ok || !body?.session || !body.booking) {
+    throw createSessionError(body, response.status);
+  }
+
+  if (body.status !== 'session_started' && body.status !== 'session_resumed') {
+    throw createSessionError(body, response.status);
+  }
+
+  return {
+    booking: toBooking(body.booking, 'ready', body.source),
+    checkinSession: toCheckInSession(body.session),
+  };
 }
 
 export async function startCheckInSession(booking: Booking): Promise<CheckInSession> {

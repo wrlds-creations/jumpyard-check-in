@@ -26,7 +26,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-037` | `T0022` | Session expiry | Define TTL, resume behavior, and cleanup rules for check-in sessions and handoff codes. | Medium | `TBD` | Open |
 | `FU-038` | `T0022` | Safety gate | Confirm which guest-side safety/video/waiver states must be complete before staff/server-confirmed redeem. | High | `TBD` | Open |
 | `FU-039` | `T0023/T0027` | Staff/admin UI | Build staff/admin list/detail and final staff-confirmed redeem for `ready_for_staff` sessions after phone wiring exists. T0026 completed read-only list/detail; T0027 adds the dev staff redeem action. | High | `T0027` | Done |
-| `FU-040` | `T0024` | SMS/session resume | Replace the current mock SMS-token path with a real JumpYard Cloud token/session restore flow when SMS links are scoped. | High | `T0038` | Open |
+| `FU-040` | `T0024` | SMS/session resume | Replace the current mock SMS-token path with a real JumpYard Cloud token/session restore flow when SMS links are scoped. | High | `T0044` | Done |
 | `FU-041` | `T0028` | Handoff security | Replace raw `checkinSessionId` QR payloads with signed or short-lived handoff tokens before production if staff auth or public exposure requires it. | High | `TBD` | Open |
 | `FU-042` | `T0028/T0030/T0031/T0032/T0033/T0034` | Payment prerequisites | T0030 confirmed Roller draft-booking `paymentJwt`; T0031 deployed quote/draft endpoints that return payment-session data; T0032 added a safe local POC harness; T0033 completed the phone pre-payment flow up to payment pending; T0034 reused the same draft/payment-pending model for add-product drafts. Remaining: obtain ROLLER authorization, approved payment package access, public HTTPS test-domain allowlisting, and fake/test card details before payment drop-in work. | High | `Pabel/T0040` | Open |
 | `FU-043` | `T0028` | Dependency security | Evaluate the phone app `npm audit --audit-level=high` findings from the T0028 QR dependency work in a dedicated dependency ticket before production. | Medium | `TBD` | Open |
@@ -34,6 +34,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-045` | `T0039` | SMS production readiness | Choose production SMS sender setup, consent/unsubscribe policy, delivery monitoring, and staff/admin auth before enabling guest-facing SMS outside dev dry-run testing. | High | `TBD` | Open |
 | `FU-046` | `T0041` | SMS link URL | Configure a public or mobile-reachable check-in app base URL before expecting SMS links to open on phones. T0041 used `http://localhost:3000/`, which validates provider delivery only. | High | `TBD` | Open |
 | `FU-047` | `T0042/T0043` | SMS sandbox | AWS SNS SMS account is in sandbox mode. T0043 verified one approved masked test phone and confirmed delivery status `SUCCESS`; unverified numbers still require sandbox verification or SNS sandbox exit. | High | `T0043` | Done |
+| `FU-048` | `T0044` | SMS timing | Connect SMS sending to booking date/time rules, for example sending a check-in link before the booked jump time instead of sending only manually triggered test SMS. | High | `T0045` | Open |
 
 ## Resolved Followups
 
@@ -53,3 +54,4 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-030` | `T0018` | Registered Roller Playground booking webhook id `238` against the dev endpoint and confirmed real delivery. Roller sends the configured token in `x-roller-apikey`; booking `5032443` produced a real `Created` event that enriched Aurora with status `processed`. | 2026-05-21 |
 | `FU-033` | `T0021` | Added a separate dev redeem token, final Roller REST refresh, Aurora re-evaluation, and protected dev-only `POST /redemptions` execution path. | 2026-05-21 |
 | `FU-034` | `T0021` | Created dedicated paid Playground booking `5032454` for controlled redeem smoke and redeemed ticket `5032454-21397335`, leaving the normal `5032210` lookup fixture unused. | 2026-05-21 |
+| `FU-040` | `T0044` | Phone links with `?jy_token=...` now resolve through JumpYard Cloud, return safe booking/session context, and route from server session state instead of mock token data. | 2026-05-22 |

@@ -129,6 +129,7 @@ export function nextState(
 }
 
 export function detectChannel(search: URLSearchParams): Channel {
+  if (search.get('jy_token')) return 'sms';
   if (search.get('token')) return 'sms';
   if (search.get('park') === '1') return 'park-qr';
   return 'kiosk';

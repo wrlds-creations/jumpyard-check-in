@@ -93,6 +93,8 @@ T0042 adds AWS SNS SMS delivery status diagnostics to the dev stack and runs a s
 
 T0043 verifies the approved masked test phone `+46*****9508` in AWS SNS SMS sandbox and reruns the protected JumpYard Cloud SMS send. Aurora recorded delivery `jysms_mpgxbla6_b59779cd` as `sent`, and CloudWatch SNS delivery status logs show `SUCCESS` with provider response `Message has been accepted by phone.` The AWS account is still in SNS SMS sandbox, so only verified sandbox numbers can receive SMS until sandbox exit is requested and approved.
 
+T0044 wires those server-owned SMS/check-in links into the phone app. The phone app now treats `jy_token` as the SMS entry channel, resolves it through JumpYard Cloud `POST /v1/check-in/session-links/resolve`, and routes from the returned server session state: guest-in-progress opens the booking summary, ready-for-staff opens the QR confirmation, and invalid/expired links fall back to manual booking lookup. The deployed session Lambda now includes a safe Aurora booking summary in successful token-resolution responses without returning contact PII, raw Roller payloads, or secrets.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -224,7 +226,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0041 Controlled SMS live smoke` | Send one confirmed dev SMS through JumpYard Cloud and document whether AWS SNS accepts it. | Completed locally against dev; provider accepted the message, but link usability still needs a public/mobile-reachable app URL. |
 | `T0042 SMS delivery diagnostics` | Configure SNS delivery status logs and diagnose why the approved phone did not receive the accepted SMS. | Completed in dev AWS; delivery status logs show the AWS account is still in SNS SMS sandbox mode. |
 | `T0043 SNS sandbox phone verification` | Verify the approved test phone in SNS sandbox and resend a JumpYard Cloud SMS. | Completed locally against dev; SNS delivery status logs show `SUCCESS` for the verified test phone. |
-| `T0044 Staff auth replacement for temporary dev code` | Replace the manual dev redeem/link tokens with a real staff/admin auth model. | Needed before production-like staff redeem/SMS operations. |
+| `T0044 Phone SMS link resume` | Make SMS links open the phone app via `jy_token` and resolve through JumpYard Cloud. | Completed locally and deployed to dev; phone links now use server session state instead of mock token data. |
+| `T0045 Booking-time SMS trigger` | Connect SMS sending to booking time windows, for example sending a check-in link before the jump time. | Recommended next SMS ticket; still must respect SNS sandbox limits until sandbox exit is approved. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 

@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-22
-- Current branch: `codex/t0043-sns-sandbox-phone-verification`
-- Current status: T0043 SNS sandbox phone verification completed locally against dev; the approved masked phone is verified and SNS delivery logs show the JumpYard Cloud SMS reached provider status `SUCCESS`.
-- Current ticket: `T0043` completed locally, not yet committed or merged
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`
-- Recommended next ticket: `T0044 Staff auth replacement for temporary dev code` unless Roller payment prerequisites arrive for `T0040`
+- Current branch: `codex/t0044-mobile-sms-link-url`
+- Current status: T0044 phone SMS link resume completed locally and deployed to dev; `jy_token` phone links now resolve through JumpYard Cloud and return safe booking/session context.
+- Current ticket: `T0044` completed locally, not yet committed or merged
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`
+- Recommended next ticket: `T0045 Booking-time SMS trigger` unless Roller payment prerequisites arrive for `T0040`
 
 ## Current Structure
 
@@ -68,7 +68,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- src/components/ConfirmationScreen.tsx
 |   |-- src/components/SafetyAttest.tsx
 |   |-- src/context/LanguageContext.tsx
-|   `-- src/flow/cloudClient.ts
+|   |-- src/flow/cloudClient.ts
+|   `-- src/flow/machine.ts
 |-- jumpyard-checkin-kiosk/
 `-- jumpyard-checkin-admin/
 ```
@@ -162,20 +163,22 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0041` | Ran controlled real SMS smoke. | 2026-05-22 | AWS SNS accepted one confirmed dev SMS for booking `5032210`; Aurora delivery `jysms_mpgvzkpz_5b4ae399` is `sent` with masked destination `+46*****9508`, `dry_run=false`, provider message id present, and token hash present. |
 | `T0042` | Added SMS delivery diagnostics. | 2026-05-22 | Dev SNS SMS delivery status logs are enabled; diagnostic delivery `jysms_mpgwlk9u_9566748e` was accepted by SNS but CloudWatch shows provider `FAILURE` because the account is in SMS sandbox mode. |
 | `T0043` | Verified SNS sandbox phone and resent SMS. | 2026-05-22 | Masked destination `+46*****9508` is verified in SNS sandbox; Aurora delivery `jysms_mpgxbla6_b59779cd` is `sent` and CloudWatch shows provider `SUCCESS`. |
+| `T0044` | Added phone SMS link resume. | 2026-05-22 | Phone `jy_token` links resolve through JumpYard Cloud, receive safe booking/session context, and route to booking summary, QR confirmation, or manual lookup without mock token data. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0043` | SNS sandbox phone verification. | Completed locally | Verified the approved masked test phone, resent one protected JumpYard Cloud SMS, verified the Aurora audit row, and confirmed SNS success delivery status in CloudWatch. |
+| `T0044` | Phone SMS link resume. | Completed locally and deployed to dev | Session link resolve now returns safe booking/session context; phone app detects `jy_token` and routes from server session state. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
 | `T0040` | Roller payment package/drop-in integration | Blocked until Roller/Pabel provides package access, allowlisted HTTPS test origin, and fake/test card behavior. |
-| `T0044` | Staff auth replacement for temporary dev code | Replace temporary dev codes for SMS/redeem-style protected operations with a real staff/admin auth model. |
-| `T0045` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
+| `T0045` | Booking-time SMS trigger | Connect SMS sending to booking date/time windows, for example sending a check-in link before the jump time. |
+| `T0046` | Staff auth replacement for temporary dev code | Replace temporary dev codes for SMS/redeem-style protected operations with a real staff/admin auth model. |
+| `T0047` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
 
 ## Validation Status
 
@@ -428,6 +431,13 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0043 SNS sandbox verification: masked destination `+46*****9508` is `Verified` in SNS SMS sandbox. The one-time password was used once and not stored.
 - T0043 verified SMS smoke: protected request for booking `5032210` with `confirmSend=true` created Aurora row `jysms_mpgxbla6_b59779cd` with status `sent`, provider `aws_sns`, `dry_run=false`, masked destination, provider message id present, and token hash present.
 - T0043 CloudWatch delivery status: SNS success log group reports `SUCCESS` with provider response `Message has been accepted by phone.`
+- T0044 session Lambda syntax/build: `node --check infra/lambda/session/index.js` and `npm --prefix infra run build` passed.
+- T0044 phone lint/build: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing `<img>` warnings, and `npm --prefix jumpyard-checkin-phone run build` passed.
+- T0044 root validation: `npm run validate` passed.
+- T0044 AWS preflight: account `376129878018`, region `eu-north-1`.
+- T0044 CDK diff/deploy: pre-deploy diff showed only `SessionHandler` Lambda code changing; `npm --prefix infra run deploy:dev` passed; post-deploy diff showed no differences.
+- T0044 deployed API smoke: protected link creation followed by public resolve returned `session_started`, included safe booking reference `5032210`, included 2 booking item rows, and returned source `jumpyard_cloud` / `checkin_link` without printing the raw token.
+- T0044 browser smoke: local phone app opened a generated `?jy_token=...` link and reached `APP_BOOKING` with `checkinSessionStatus='guest_in_progress'`; invalid token fallback reached `KIOSK_LOOKUP`.
 
 ## Known Issues Summary
 

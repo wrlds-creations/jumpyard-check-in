@@ -142,6 +142,7 @@ async function handleStartSession(event, body, correlationId) {
   await expireOldSessions(context.booking.rollerUniqueId, decision.visitDate);
   const existingSession = await findActiveSession(context.booking.rollerUniqueId, decision.visitDate);
   if (existingSession) {
+    const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
     await writeEventLog({
       booking: context.booking,
       correlationId,
@@ -156,6 +157,7 @@ async function handleStartSession(event, body, correlationId) {
     return jsonResponse(200, correlationId, {
       status: 'session_resumed',
       session: existingSession,
+      ...(bookingResponse ? bookingResponse : {}),
     });
   }
 
@@ -178,9 +180,12 @@ async function handleStartSession(event, body, correlationId) {
     summary: 'Check-in session started.',
   });
 
+  const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
+
   return jsonResponse(201, correlationId, {
     status: 'session_started',
     session,
+    ...(bookingResponse ? bookingResponse : {}),
   });
 }
 
@@ -647,6 +652,7 @@ async function handleResolveSessionLink(event, body, correlationId) {
     event,
     {
       expectedDate: request.expectedDate,
+      includeBooking: true,
       idempotencyKey: request.idempotencyKey || `checkin-link:${tokenHash}`,
       rollerUniqueId: tokenRecord.rollerUniqueId,
       sourceLookupRef: `checkin_token:${tokenHash.slice(0, 12)}`,
@@ -680,6 +686,7 @@ function normalizeStartRequest(event, body) {
     expectedDate: stringOrNull(body.expectedDate) || stringOrNull(body.visitDate),
     idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
     identifier,
+    includeBooking: body.includeBooking === true,
     rollerUniqueId,
     sourceLookupRef: stringOrNull(body.sourceLookupId) || stringOrNull(body.sourceLookupRef),
     ticketIds: rawTicketIds,
@@ -1424,6 +1431,109 @@ function buildSessionPlan(context, decision) {
   };
 }
 
+async function buildPhoneSessionBookingResponse(context) {
+  const items = await findPhoneBookingItems(context.booking.rollerUniqueId);
+  const fallbackItem = fallbackPhoneBookingItem(context);
+
+  return {
+    booking: {
+      amountOwing: centsToCurrency(context.booking.amountOwingCents),
+      bookingReference: context.booking.bookingReference,
+      items: items.length > 0 ? items : [fallbackItem].filter(Boolean),
+      paymentStatus: context.booking.paymentStatus ?? context.booking.bookingStatus,
+      rollerUniqueId: context.booking.rollerUniqueId,
+      status: context.booking.bookingStatus,
+    },
+    source: {
+      environment: context.booking.rollerEnv,
+      freshnessStatus: context.booking.freshnessStatus,
+      lookupPath: 'checkin_link',
+      refreshedFromRoller: false,
+      system: 'jumpyard_cloud',
+    },
+  };
+}
+
+async function findPhoneBookingItems(rollerUniqueId) {
+  if (!rollerUniqueId) return [];
+
+  const result = await executeStatement(
+    `SELECT
+       item.booking_item_id,
+       item.product_id,
+       item.parent_product_id,
+       item.product_name,
+       item.parent_product_name,
+       COALESCE(item.item_summary ->> 'productType', item.item_summary ->> 'productSubType', item.item_summary ->> 'parentType') AS product_type,
+       item.quantity,
+       item.booking_date::text AS booking_date,
+       item.start_time::text AS start_time,
+       item.end_time::text AS end_time,
+       COALESCE(
+         jsonb_agg(
+           jsonb_build_object(
+             'ticketId', ticket.ticket_id
+           )
+           ORDER BY ticket.ticket_id
+         ) FILTER (WHERE ticket.ticket_id IS NOT NULL),
+         '[]'::jsonb
+       )::text AS tickets_json
+     FROM jumpyard.roller_booking_items AS item
+     LEFT JOIN jumpyard.roller_booking_tickets AS ticket
+       ON ticket.roller_unique_id = item.roller_unique_id
+      AND (
+        ticket.booking_item_key = item.booking_item_key
+        OR (ticket.booking_item_id IS NOT NULL AND ticket.booking_item_id = item.booking_item_id)
+      )
+     WHERE item.roller_unique_id = :rollerUniqueId
+     GROUP BY
+       item.booking_item_id,
+       item.product_id,
+       item.parent_product_id,
+       item.product_name,
+       item.parent_product_name,
+       item.item_summary,
+       item.quantity,
+       item.booking_date,
+       item.start_time,
+       item.end_time
+     ORDER BY item.booking_date NULLS LAST, item.start_time NULLS LAST, item.product_name NULLS LAST`,
+    [stringParameter('rollerUniqueId', rollerUniqueId)],
+  );
+
+  return mappedRows(result).map((row) => ({
+    bookingDate: stringOrNull(row.booking_date),
+    bookingItemId: stringOrNull(row.booking_item_id),
+    endTime: stringOrNull(row.end_time),
+    parentProductId: numberOrNull(row.parent_product_id),
+    parentProductName: stringOrNull(row.parent_product_name),
+    productId: numberOrNull(row.product_id),
+    productName: stringOrNull(row.product_name),
+    productType: stringOrNull(row.product_type),
+    quantity: numberOrNull(row.quantity),
+    startTime: stringOrNull(row.start_time),
+    tickets: parseJsonArray(row.tickets_json),
+  }));
+}
+
+function fallbackPhoneBookingItem(context) {
+  if (!context.booking.bookingDate && !context.booking.startTime && !context.booking.endTime) return null;
+
+  return {
+    bookingDate: context.booking.bookingDate,
+    bookingItemId: null,
+    endTime: context.booking.endTime,
+    parentProductId: null,
+    parentProductName: null,
+    productId: null,
+    productName: null,
+    productType: null,
+    quantity: context.tickets.length || null,
+    startTime: context.booking.startTime,
+    tickets: context.tickets.map((ticket) => ({ ticketId: ticket.ticketId })).filter((ticket) => ticket.ticketId),
+  };
+}
+
 async function findActiveSession(rollerUniqueId, visitDate) {
   const result = await executeStatement(
     `SELECT
@@ -2101,6 +2211,11 @@ function numberOrNull(value) {
   if (value === undefined || value === null || value === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function centsToCurrency(value) {
+  const cents = numberOrNull(value);
+  return cents === null ? null : Number((cents / 100).toFixed(2));
 }
 
 function stringParameter(name, value) {
