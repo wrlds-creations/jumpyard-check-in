@@ -6,7 +6,6 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 
 | ID | Source Ticket | Type | Description | Priority | Owner | Status |
 |---|---|---|---|---|---|---|
-| `FU-008` | `T0003` | Add-product architecture | Define exact link model between original Roller booking and separate add-on Roller booking in JumpYard Cloud. | High | `TBD` | Open |
 | `FU-009` | `T0003` | Roller clarification | Confirm which tenders work in the new add-on booking checkout flow: gift card, membership code, and multi-visit value. | High | `TBD` | Open |
 | `FU-010` | `T0003` | Product configuration | Identify which add-ons must be reconfigured from stock/add-on products to ticket/session products if JumpYard wants API-driven redemption and webhook counting. | High | `TBD` | Open |
 | `FU-011` | `T0003` | Roller clarification | Confirm the exact `POST /redemptions` response shape for full success, partial success, already redeemed, and invalid ticket cases. | Medium | `TBD` | Open |
@@ -30,7 +29,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-039` | `T0023/T0027` | Staff/admin UI | Build staff/admin list/detail and final staff-confirmed redeem for `ready_for_staff` sessions after phone wiring exists. T0026 completed read-only list/detail; T0027 adds the dev staff redeem action. | High | `T0027` | Done |
 | `FU-040` | `T0024` | SMS/session resume | Replace the current mock SMS-token path with a real JumpYard Cloud token/session restore flow when SMS links are scoped. | High | `TBD` | Open |
 | `FU-041` | `T0028` | Handoff security | Replace raw `checkinSessionId` QR payloads with signed or short-lived handoff tokens before production if staff auth or public exposure requires it. | High | `TBD` | Open |
-| `FU-042` | `T0028/T0030/T0031/T0032/T0033` | Payment prerequisites | T0030 confirmed Roller draft-booking `paymentJwt`; T0031 deployed quote/draft endpoints that return payment-session data; T0032 added a safe local POC harness; T0033 completed the phone pre-payment flow up to payment pending. Remaining: obtain ROLLER authorization, approved payment package access, public HTTPS test-domain allowlisting, and fake/test card details before payment drop-in work. | High | `T0034` | Open |
+| `FU-042` | `T0028/T0030/T0031/T0032/T0033/T0034` | Payment prerequisites | T0030 confirmed Roller draft-booking `paymentJwt`; T0031 deployed quote/draft endpoints that return payment-session data; T0032 added a safe local POC harness; T0033 completed the phone pre-payment flow up to payment pending; T0034 reused the same draft/payment-pending model for add-product drafts. Remaining: obtain ROLLER authorization, approved payment package access, public HTTPS test-domain allowlisting, and fake/test card details before payment drop-in work. | High | `T0036` | Open |
 | `FU-043` | `T0028` | Dependency security | Evaluate the phone app `npm audit --audit-level=high` findings from the T0028 QR dependency work in a dedicated dependency ticket before production. | Medium | `TBD` | Open |
 
 ## Resolved Followups
@@ -39,6 +38,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 |---|---|---|---|
 | `FU-006` | `T0002` | Confirmed `/products` is usable as the harmless read-only smoke endpoint for current Playground credentials; `npm run roller:smoke` returned HTTP 200, and later Playground sync returned 96 products. | 2026-05-18 |
 | `FU-007` | `T0002` | Confirmed ROLLER's documented Playground base URL is `https://api.play.roller.app`; guard now accepts `play` and `playground` markers while still blocking live/prod markers. | 2026-05-18 |
+| `FU-008` | `T0034` | Add-product step 1 uses `jumpyard.booking_links` as the original-to-add-on link model with `add_on_group_id`, and `jumpyard.prepayment_booking_drafts.flow_type='add_product'` distinguishes add-product drafts from new-booking drafts. | 2026-05-22 |
 | `FU-012` | `T0006` | Confirmed first deploy target from Bluetooth Hub dev setup and user input: account `376129878018`, region `eu-north-1`, environment `dev`, owner `love`, data classification `internal`, exportable `true`, and cost center `unassigned`. | 2026-05-19 |
 | `FU-016` | `T0008` | Added a protected Playground seed tool that creates deterministic paid, pending-payment, wrong-date, SkyRider/add-on, original-booking, and linked add-on bookings. Already-redeemed seed data is deferred to `FU-026` because T0008 does not call redemption. | 2026-05-20 |
 | `FU-017` | `T0006` | Added confirmed non-secret dev deployment config at `infra/config/dev.json`. | 2026-05-19 |

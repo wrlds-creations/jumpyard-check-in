@@ -595,7 +595,7 @@ T0030 discovery result:
 - The draft response returned HTTP `201`, total `260`, amount owing `260`, and a present three-part `paymentJwt`.
 - The script summarizes only safe identifiers and JWT shape; it never prints the raw JWT, access token, client secret, or customer PII beyond fake-domain metadata.
 - Roller Payments via API docs confirm the intended custom checkout sequence: get venue payment configuration, bootstrap Roller's payment library, create a draft booking, pass the returned JWT to `setupPayment`, let Adyen drop-in collect payment, then use payment result and booking-created webhook for success handling.
-- Before T0034 phone payment UI wiring, JumpYard needs Roller to authorize the connection, allowlist a public HTTPS test domain, provide the approved payment package, and confirm fake/test card details.
+- Before payment UI wiring, JumpYard needs Roller to authorize the connection, allowlist a public HTTPS test domain, provide the approved payment package, and confirm fake/test card details.
 
 T0031 deployed endpoint result:
 
@@ -615,28 +615,123 @@ T0033 phone pre-payment result:
 - `POST /v1/bookings/availability` is deployed and returns normalized Roller Playground availability for phone jump-entry products.
 - The phone app buy-entry path now selects one of the next three half-hour start times, caps quantity by server-returned capacity, collects first name, last name, email, and phone, quotes through JumpYard Cloud, creates a guarded Roller Playground draft, and stops at payment pending.
 - `jumpyard.prepayment_booking_drafts` stores safe draft state, totals, selected item summary, guest email/phone plus masked/hash fields, and JWT/config presence flags.
-- Raw `paymentJwt` values remain response-only for future T0034 payment package/drop-in work and are not persisted in Aurora.
+- Raw `paymentJwt` values remain response-only for future payment package/drop-in work and are not persisted in Aurora.
 
 ### `POST /v1/bookings/{bookingReference}/add-products/quote`
 
 Calculates an existing-booking product addition before changing the original booking.
 
+Request:
+
+```json
+{
+  "requireAvailability": true,
+  "items": [
+    {
+      "productId": 1765860,
+      "quantity": 1,
+      "bookingDate": "2026-05-22",
+      "startTime": "11:00"
+    }
+  ]
+}
+```
+
+Response:
+
+```json
+{
+  "status": "quoted",
+  "quote": {
+    "externalId": "JY-AQ-...",
+    "costs": {
+      "total": 200,
+      "amountOwing": 200
+    },
+    "itemCount": 1
+  },
+  "addOn": {
+    "originalBookingReference": "5032210",
+    "originalRollerUniqueId": "82eed927-963c-49fd-9602-4ad6361d0c5a",
+    "mode": "separate_draft_booking"
+  },
+  "source": {
+    "system": "roller",
+    "environment": "playground",
+    "endpoint": "POST /bookings/draft/costs",
+    "wroteBooking": false
+  }
+}
+```
+
 Rules:
 
-- Lookup booking detail first.
-- For SkyRider or other session products, run availability check first.
-- Use Booking Costs on the add-on booking payload to show final price impact.
+- Lookup booking detail through Roller first and block cancelled, deleted, or draft originals.
+- For SkyRider or other session products, run availability check first when `requireAvailability=true`.
+- Use Roller `POST /bookings/draft/costs` on the add-on booking payload to show final price impact.
 - Do not call `PUT /bookings/{uniqueId}` as the primary pilot path.
-- Prepare a separate add-on booking draft that can be linked to the original booking in JumpYard Cloud.
+- Quote mode must not create a Roller draft booking or Aurora booking link.
+- T0034 implements this in the deployed booking Lambda.
 
 ### `POST /v1/bookings/{bookingReference}/add-products`
 
 Adds products to an existing booking after user confirmation.
 
+Request:
+
+```json
+{
+  "confirmDraft": true,
+  "idempotencyKey": "client-or-server-generated-key",
+  "customer": {
+    "firstName": "Guest",
+    "lastName": "Guest",
+    "email": "guest@example.com",
+    "phone": "+46000000000"
+  },
+  "items": [
+    {
+      "productId": 1765860,
+      "quantity": 1,
+      "bookingDate": "2026-05-22",
+      "startTime": "11:00"
+    }
+  ]
+}
+```
+
+Response:
+
+```json
+{
+  "status": "add_product_draft_created",
+  "draft": {
+    "uniqueId": "18e85e91-9a53-4afd-a951-75d1a41eaf9f",
+    "bookingReference": null,
+    "costs": {
+      "total": 200,
+      "amountOwing": 200
+    }
+  },
+  "addOn": {
+    "addOnGroupId": "jyao_...",
+    "originalBookingReference": "5032210",
+    "mode": "separate_draft_booking"
+  },
+  "prepayment": {
+    "flowType": "add_product",
+    "status": "payment_pending"
+  }
+}
+```
+
 Rules:
 
 - Primary pilot pattern: create a separate add-on booking in Roller for the selected products.
 - Link the original booking and add-on booking in JumpYard Cloud using the original `rollerUniqueId`, original `bookingReference`, add-on `rollerUniqueId`, add-on `bookingReference`, and an internal `addOnGroupId`.
+- T0034 stores that link in `jumpyard.booking_links` with `link_type='add_product_draft'` and stores add-product draft metadata in `jumpyard.prepayment_booking_drafts` with `flow_type='add_product'`.
+- `confirmDraft=true`, customer fields, and an idempotency key are required because the route creates a Roller Playground draft booking.
+- Raw `paymentJwt` values remain response-only and are not persisted in Aurora.
 - Keep the guest inside the JumpYard PWA/check-in flow as much as possible by using the new booking/payment path instead of same-booking hosted payment link.
 - Do not use same-booking `PUT /bookings/{uniqueId}` plus payment link as the primary pilot path.
 - Same-booking update remains a future option only if Roller confirms a reliable return path and JumpYard explicitly chooses that UX.
@@ -720,7 +815,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0033`. The next recommended ticket is `T0034 Roller payment package/drop-in integration`.
+Current implementation has progressed through `T0034`. The next recommended ticket is `T0035 Phone add-product UI wiring`.
 
 Near-term sequence:
 
@@ -732,13 +827,15 @@ Near-term sequence:
 6. `T0031 Server-side booking quote/draft`: completed and deployed to dev; JumpYard Cloud quotes costs and creates confirmed draft bookings while keeping Roller credentials server-side.
 7. `T0032 Payment package proof-of-concept`: completed locally as a safe harness; quote/draft can be exercised through JumpYard Cloud, but the payment drop-in is still externally blocked by package, allowlist, and test-card prerequisites.
 8. `T0033 Phone create-booking pre-payment flow`: completed and deployed to dev; phone buy-entry reaches a Roller Playground draft and payment-pending state through JumpYard Cloud without rendering payment UI.
-9. `T0034 Roller payment package/drop-in integration`: integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites.
-10. `T0035 Staff auth plan/implementation`: replace the temporary dev redeem code with the selected staff/admin authentication model.
-11. `T0036 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
+9. `T0034 Existing-booking add-product draft step 1`: completed and deployed to dev; JumpYard Cloud can quote and create a separate linked add-on draft for an existing booking.
+10. `T0035 Phone add-product UI wiring`: let the phone existing-booking flow call the T0034 quote/draft endpoints and stop at payment pending.
+11. `T0036 Roller payment package/drop-in integration`: integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites.
+12. `T0037 Staff auth plan/implementation`: replace the temporary dev redeem code with the selected staff/admin authentication model.
+13. `T0038 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
 
 ## Open Contract Questions
 
-- What is the best Roller field or internal JumpYard field for marking an add-on booking as linked to an original booking?
+- How should published add-on bookings update `jumpyard.booking_links.linked_booking_reference` after payment/publish completes?
 - Which tenders work in the new add-on booking checkout flow: gift card, membership code, multi-visit value?
 - Does Roller Playground support in-app payment from draft booking `paymentJwt`, and what fake/test card details and domain allow-listing are required? T0030/T0031 confirmed the documented draft/JWT path and deployed server endpoint, but test cards, package access, and allowlisting remain open.
 - What exact response shape should JumpYard expect from `POST /redemptions` for partial success/failure?
