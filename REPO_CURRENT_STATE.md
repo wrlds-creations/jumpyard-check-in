@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-22
-- Current branch: `codex/t0032-payment-package-poc`
-- Current status: T0032 payment package POC completed locally; full browser payment remains blocked by external Roller prerequisites.
-- Current ticket: `T0032` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`
-- Recommended next ticket: `T0033 Phone create-booking pre-payment flow`
+- Current branch: `codex/t0033-phone-prepayment-flow`
+- Current status: T0033 phone create-booking pre-payment flow completed locally and deployed to dev; full browser payment remains blocked by external Roller prerequisites.
+- Current ticket: `T0033` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`
+- Recommended next ticket: `T0034 Roller payment package/drop-in integration`
 
 ## Current Structure
 
@@ -52,6 +52,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- migrations/0001_initial_schema.sql
 |   |-- migrations/0002_related_data_sources.sql
 |   |-- migrations/0003_checkin_sessions.sql
+|   |-- migrations/0004_prepayment_booking_drafts.sql
 |   |-- scripts/run-migrations.ts
 |   |-- cdk.json
 |   |-- package.json
@@ -97,6 +98,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm run roller:payment:discover:apply-draft` | Create one guarded Roller Playground draft booking for payment discovery. | Requires `ROLLER_PAYMENT_DISCOVERY_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_DRAFT_BOOKING`; does not print secrets, access tokens, or raw payment JWTs. |
 | `npm run roller:payment:poc` | Run the T0032 JumpYard Cloud payment-package POC preflight. | Calls deployed `POST /v1/bookings/quote`, creates no booking, and reports package/origin/test-card blockers without printing secrets or raw JWTs. |
 | `npm run roller:payment:poc:apply-draft` | Create one guarded Playground draft through JumpYard Cloud for payment-package POC. | Requires `ROLLER_PAYMENT_POC_ALLOW_DRAFT=I_UNDERSTAND_THIS_CREATES_PLAYGROUND_DRAFT_BOOKING`; does not print secrets or raw payment JWTs. |
+| Deployed `POST /v1/bookings/availability` | Load Roller Playground product availability through JumpYard Cloud. | Used by the phone buy-entry flow; the frontend still never calls Roller directly. |
 | `npm run roller:seed:playground` | Plan deterministic Roller Playground seed bookings. | Dry-run by default; no booking writes. |
 | `npm run roller:seed:playground:apply` | Create deterministic Roller Playground seed bookings. | Writes only when `ROLLER_SEED_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_BOOKINGS` is set and the Playground guard passes. |
 | Read-only `GET /bookings/{bookingReference}` | Verify known Playground booking lookup behavior. | Run through the existing Roller client helper; do not print secrets or raw PII. |
@@ -144,18 +146,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0030` | Added new-booking payment discovery tooling and docs. | 2026-05-21 | Confirmed Roller Playground draft booking returns costs plus `paymentJwt`; in-app payment still needs Roller payment-library authorization, domain allowlisting, package access, and test card details. |
 | `T0031` | Implemented deployed server-side booking quote/draft endpoints. | 2026-05-21 | Dev `POST /v1/bookings/quote` returns normalized Roller costs without creating a booking; dev `POST /v1/bookings/draft` creates a Playground draft behind `confirmDraft=true` and idempotency, returns safe payment config plus a raw `paymentJwt` only in the response. |
 | `T0032` | Added payment-package POC harness. | 2026-05-22 | `npm run roller:payment:poc` exercises deployed JumpYard Cloud quote without creating a booking; guarded apply-draft created Playground draft `a8644795-a29d-4302-8a37-056d525e7bd4` and confirmed `paymentJwtPresent=true`. Full payment remains blocked by package, public HTTPS allowlist, and fake/test card prerequisites. |
+| `T0033` | Added phone create-booking pre-payment flow. | 2026-05-22 | Phone buy-entry loads server-side Roller availability, quotes a selected time/product/quantity, creates a guarded Playground draft, stops at payment pending, and persists safe draft metadata in `jumpyard.prepayment_booking_drafts` without raw `paymentJwt`. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0032` | Payment package proof-of-concept. | Completed locally | Added safe JumpYard Cloud payment-package POC tooling; quote/draft can be exercised, but real payment drop-in execution remains externally blocked until Roller provides package access, public HTTPS allowlisting, and fake/test card details. |
+| `T0033` | Phone create-booking pre-payment flow. | Completed locally and deployed to dev | Added availability, quote, draft, payment-pending phone flow and safe Aurora pre-payment draft persistence. Real payment drop-in execution remains externally blocked until Roller provides package access, public HTTPS allowlisting, and fake/test card details. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0033` | Phone create-booking pre-payment flow | Wire the phone app to product/time selection, server-side availability/capacity checks where needed, quote, guarded draft creation, and a payment-pending state. |
 | `T0034` | Roller payment package/drop-in integration | Integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites. |
 | `T0035` | Staff auth replacement for temporary dev code | Replace the temporary dev redeem code with the selected staff/admin auth model before production. |
 | `T0036` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
@@ -363,6 +365,13 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0032 payment POC write guard: `npm run roller:payment:poc:apply-draft` without confirmation failed closed before creating a draft.
 - T0032 guarded payment POC draft: guarded apply created Playground draft `a8644795-a29d-4302-8a37-056d525e7bd4`, returned HTTP `201`, `paymentJwtPresent=true`, `paymentJwtPartCount=3`, and `venuePaymentConfigAvailable=true`; raw JWT was not printed.
 - T0032 final validation: `npm run validate` and `git diff --check` passed.
+- T0033 AWS preflight: `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`, and `aws configure get region --profile wrlds-dev` returned `eu-north-1`.
+- T0033 migration: `npm --prefix infra run migrate:dev` applied `0004 prepayment booking drafts`; post-apply status shows applied.
+- T0033 deploy: `npm --prefix infra run deploy:dev` updated `jumpyard-check-in-dev-stack` with `POST /v1/bookings/availability` and booking Lambda changes; post-deploy `npm --prefix infra run diff:dev` showed no differences.
+- T0033 deployed API smoke: `POST /v1/bookings/availability` returned available jump products for `2026-05-22`, `POST /v1/bookings/quote` returned HTTP `200` with total `200`, and `POST /v1/bookings/draft` returned HTTP `201` with draft `045b9ed6-7541-4f33-9e61-bfbd5bf0f8a3`, `paymentJwtPresent=true`, and raw JWT not printed.
+- T0033 Aurora verification: `jumpyard.prepayment_booking_drafts` contains deployed smoke row `jypd_5d96dca81de8429eb4` and browser smoke row `jypd_f78fea81bea24fdea2` with masked/hash contact fields and no raw payment JWT column.
+- T0033 browser smoke: local phone buy-entry selected `10:00`, `60 min entré`, quantity `1`, quoted `200 kr`, created a Playground draft, and ended at `Betalning väntar` with `data-prepayment-status="payment_pending"`.
+- T0033 final validation: `node --check infra/lambda/booking/index.js`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, `npm run validate`, and `git diff --check` passed. Phone lint still reports the existing four `<img>` warnings.
 
 ## Known Issues Summary
 

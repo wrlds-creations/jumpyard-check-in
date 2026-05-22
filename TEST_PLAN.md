@@ -50,6 +50,13 @@ Use this file to define validation for the current project or milestone.
 | `node --check scripts/roller-payment-package-poc.js` | Confirm T0032 payment package POC script syntax. | Passed | Passed during T0032 validation. |
 | `npm run roller:payment:poc` | Confirm T0032 quote/default POC path without booking creation. | Passed | Returned quote HTTP `200`, total `260`, amount owing `260`, and status `blocked_prerequisites` with no draft booking created. |
 | `npm run roller:payment:poc:apply-draft` without confirmation | Confirm T0032 draft mode fails closed. | Passed | Failed before creating a Playground draft without `ROLLER_PAYMENT_POC_ALLOW_DRAFT`. |
+| `node --check infra/lambda/booking/index.js` | Confirm T0033 booking Lambda syntax. | Passed | Passed after availability/pre-payment changes. |
+| `npm --prefix infra run build` | Confirm T0033 infra TypeScript compiles. | Passed | Passed after availability route and migration changes. |
+| `npm --prefix infra run synth:dev` | Synthesize the T0033 dev stack. | Passed | Uses non-secret `infra/config/dev.json`. |
+| `npm --prefix jumpyard-checkin-phone run lint` | Confirm phone lint passes after T0033 buy-entry changes. | Passed | Passed with the same pre-existing `<img>` warnings. |
+| `npm --prefix jumpyard-checkin-phone run build` | Confirm phone app build passes after T0033 buy-entry changes. | Passed | Static export build passed. |
+| T0033 deployed availability smoke | Confirm JumpYard Cloud reads Roller availability server-side. | Passed | `POST /v1/bookings/availability` returned HTTP `200` and available jump products for `2026-05-22`. |
+| T0033 deployed quote/draft smoke | Confirm quote and draft work for the selected available slot. | Passed | Quote returned total `200`; draft returned HTTP `201`, `paymentJwtPresent=true`, and persisted pre-payment draft id `jypd_5d96dca81de8429eb4`. |
 | T0011 Data API production URL rejection | Confirm Data API smoke fails closed for live-looking Roller URL. | Passed | `ROLLER_BASE_URL=https://api.roller.app` was rejected before Data API calls. |
 | `npm --prefix infra run build` | Confirm T0012 TypeScript importer compiles. | Passed | Passed on 2026-05-20. |
 | T0012 bookingitems dry-run | Confirm Data API bookingitems importer normalizes records without Aurora writes. | Passed | Returned 9 records, 6 bookings, 9 booking items, and 0 skipped records. |
@@ -367,3 +374,17 @@ Use this file to define validation for the current project or milestone.
 | Guarded draft | Explicit guarded apply creates at most one Playground draft via JumpYard Cloud. | Passed | Created draft unique id `a8644795-a29d-4302-8a37-056d525e7bd4`, returned `paymentJwtPresent=true`, and did not print the raw JWT. |
 | Payment package readiness | Missing package URL, public HTTPS origin, and fake/test card details are reported as blockers. | Passed | Current blockers: approved payment package, public HTTPS allowlisted origin, and Roller fake/test card details. |
 | Root validation | Source-of-truth docs and workflow checks pass after T0032. | Passed | `npm run validate` passed on 2026-05-22. |
+
+## T0033 Phone Pre-Payment Flow Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Booking Lambda syntax | `node --check infra/lambda/booking/index.js` passes. | Passed | Passed after T0033 implementation. |
+| Infra build/synth | `npm --prefix infra run build` and `npm --prefix infra run synth:dev` pass. | Passed | Passed before dev deploy. |
+| Dev migration/deploy | Migration `0004` applies and dev stack deploys only approved booking route/Lambda changes. | Passed | `npm --prefix infra run migrate:dev`, `npm --prefix infra run deploy:dev`, and post-deploy diff passed. |
+| Availability smoke | Deployed `POST /v1/bookings/availability` returns normalized capacity for the next phone start times. | Passed | Returned available `Entré 60 min` at `10:00` for `2026-05-22`. |
+| Quote/draft smoke | Deployed quote and draft endpoints work for an available product/time/quantity. | Passed | Quote total `200`; draft `045b9ed6-7541-4f33-9e61-bfbd5bf0f8a3`, `paymentJwtPresent=true`, raw JWT not printed. |
+| Aurora persistence | Draft creation stores safe pre-payment metadata without raw `paymentJwt`. | Passed | Verified row `jypd_5d96dca81de8429eb4`; browser smoke row `jypd_f78fea81bea24fdea2` also persisted. |
+| Phone browser smoke | Local phone buy-entry reaches payment-pending state after creating a draft. | Passed | Selected 60 min at 10:00, quantity 1, quoted `200 kr`, then showed `Betalning väntar`. |
+| Phone lint/build | Phone lint and build pass after the buy-entry UI changes. | Passed | Lint passed with existing `<img>` warnings; build passed. |
+| Root validation | Source-of-truth docs and workflow checks pass after T0033. | Passed | `npm run validate` and `git diff --check` passed on 2026-05-22. |
