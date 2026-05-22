@@ -97,6 +97,7 @@ Use this file to define validation for the current project or milestone.
 | T0039 synth/diff/deploy | Confirm dev AWS contains the SMS send route and SNS permission. | Passed | Diff showed only the approved route, session Lambda env/code, and `sns:Publish`; deploy passed and post-deploy diff showed no differences. |
 | T0039 deployed unauthorized smoke | Confirm SMS sending is protected. | Passed | `POST /v1/check-in/session-links/send-sms` without dev token returned HTTP `401`. |
 | T0039 deployed dry-run smoke | Confirm SMS dry-run creates audit state without provider send. | Passed | Protected request returned `sms_planned`, provider `aws_sns`, dryRun `true`, masked destination `+46*****0000`. |
+| T0041 real SMS smoke | Confirm AWS SNS accepts one protected confirmed SMS send. | Passed | Protected `confirmSend=true` request returned `sms_sent`, provider `aws_sns`, dryRun `false`, and masked destination `+46*****9508`. |
 | `node --check infra/lambda/webhook/index.js` | Confirm T0015 webhook Lambda JavaScript syntax. | Passed | Passed on 2026-05-20. |
 | T0015 local webhook handler smoke | Confirm fast-ack and retry classification before deploy. | Passed | Unauthorized and invalid JSON returned HTTP `200`; missing database config returned HTTP `500`. |
 | T0015 deployed unauthorized webhook smoke | Confirm unauthorized webhooks are acknowledged and ignored. | Passed | `POST /v1/roller/webhooks/bookings` without token returned HTTP `200` and `ignored_unauthorized`. |
@@ -178,6 +179,8 @@ Use this file to define validation for the current project or milestone.
 | T0027 admin ready action | Open the admin app and inspect a ready handoff with redeem controls. | Passed | Browser verification showed booking `5032474`, handoff `JY7166`, token input, and disabled `Slutför` button until a code is entered. |
 | T0038 Query Editor review | Inspect generated check-in token rows. | Passed | Deployed smoke confirmed the row exists by token hash only, with `opened_at` populated after token resolution. |
 | T0039 Query Editor review | Inspect SMS delivery audit rows. | Passed | `jumpyard.sms_deliveries` row `jysms_mpgvgmyt_f49e7b7d` has status `planned`, dry_run `true`, provider `aws_sns`, masked destination, and token hash present. |
+| T0041 Query Editor review | Inspect real SMS delivery audit row. | Passed | `jumpyard.sms_deliveries` row `jysms_mpgvzkpz_5b4ae399` has status `sent`, dry_run `false`, provider `aws_sns`, masked destination, token hash present, provider message id present, and sent timestamp present. |
+| T0041 user receipt check | Confirm the approved phone received the SMS. | Pending | User needs to confirm receipt manually; current link uses `http://localhost:3000/`, so mobile link opening is not expected to work yet. |
 
 ## Roller Playground Validation
 

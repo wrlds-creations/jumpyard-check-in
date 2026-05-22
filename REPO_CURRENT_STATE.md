@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-22
-- Current branch: `codex/t0039-sms-sending`
-- Current status: T0039 SMS sending foundation completed and deployed to dev; JumpYard Cloud can create protected SMS check-in links, default to dry-run, record `jumpyard.sms_deliveries`, and call AWS SNS only when explicitly confirmed.
-- Current ticket: `T0039` completed and deployed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`
-- Recommended next ticket: `T0041 Staff auth replacement for temporary dev code` unless Roller payment prerequisites arrive for `T0040`
+- Current branch: `codex/t0041-controlled-sms-live-smoke`
+- Current status: T0041 controlled real SMS smoke completed locally against dev; AWS SNS accepted one confirmed SMS send and Aurora recorded it as `sent`.
+- Current ticket: `T0041` completed locally, not yet committed or merged
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`
+- Recommended next ticket: `T0042 Staff auth replacement for temporary dev code` unless Roller payment prerequisites arrive for `T0040`
 
 ## Current Structure
 
@@ -159,20 +159,21 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0037` | Added scheduled dev Data API sync. | 2026-05-22 | EventBridge rule `jumpyard-check-in-dev-data-api-daily-sync` invokes Lambda `jumpyard-check-in-dev-stack-data-sync`, imports previous-day modified-date windows into Aurora, refreshes products, and records run health in `booking_seed_runs`. |
 | `T0038` | Added SMS token/session link foundation. | 2026-05-22 | Dev `POST /v1/check-in/session-links` creates protected check-in links and stores only SHA-256 token hashes; public `POST /v1/check-in/session-links/resolve` marks links opened and starts/resumes JumpYard Cloud sessions without Roller calls. |
 | `T0039` | Added server-owned SMS sending foundation. | 2026-05-22 | Dev `POST /v1/check-in/session-links/send-sms` creates hashed check-in tokens, records `jumpyard.sms_deliveries`, defaults to dry-run, and can send through AWS SNS only with explicit confirmation. |
+| `T0041` | Ran controlled real SMS smoke. | 2026-05-22 | AWS SNS accepted one confirmed dev SMS for booking `5032210`; Aurora delivery `jysms_mpgvzkpz_5b4ae399` is `sent` with masked destination `+46*****9508`, `dry_run=false`, provider message id present, and token hash present. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0039` | SMS sending foundation. | Completed and deployed | Added protected dry-run-first SMS send route, `jumpyard.sms_deliveries`, session Lambda `sns:Publish`, and deployed smoke for unauthorized plus dry-run requests. |
+| `T0041` | Controlled SMS live smoke. | Completed locally | Sent one confirmed dev SMS through the deployed T0039 endpoint and verified the `jumpyard.sms_deliveries` row. User receipt confirmation is still manual. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
 | `T0040` | Roller payment package/drop-in integration | Blocked until Roller/Pabel provides package access, allowlisted HTTPS test origin, and fake/test card behavior. |
-| `T0041` | Staff auth replacement for temporary dev code | Recommended next if payment remains blocked; replace temporary dev codes for SMS/redeem-style protected operations with a real staff/admin auth model. |
-| `T0042` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
+| `T0042` | Staff auth replacement for temporary dev code | Recommended next if payment remains blocked; replace temporary dev codes for SMS/redeem-style protected operations with a real staff/admin auth model. |
+| `T0043` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
 
 ## Validation Status
 
@@ -415,6 +416,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0039 deployed dry-run smoke: protected request for booking `5032210` returned `sms_planned`, provider `aws_sns`, dryRun `true`, and masked destination `+46*****0000` without sending SMS.
 - T0039 Aurora verification: `jumpyard.sms_deliveries` row `jysms_mpgvgmyt_f49e7b7d` has status `planned`, dry_run `true`, provider `aws_sns`, masked destination, and a token hash.
 - T0039 final validation: `npm run validate` and `git diff --check` passed.
+- T0041 real SMS smoke: protected request for booking `5032210` with `confirmSend=true` returned `sms_sent`, provider `aws_sns`, `dryRun=false`, masked destination `+46*****9508`, and provider accepted the message.
+- T0041 Aurora verification: `jumpyard.sms_deliveries` row `jysms_mpgvzkpz_5b4ae399` has status `sent`, dry_run `false`, provider `aws_sns`, masked destination, token hash present, provider message id present, and sent timestamp present.
 
 ## Known Issues Summary
 

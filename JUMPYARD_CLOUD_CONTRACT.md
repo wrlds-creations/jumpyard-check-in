@@ -256,6 +256,7 @@ Rules:
 - `jumpyard.sms_deliveries` records provider, delivery status, masked/hash destination, booking reference, Roller unique id, token hash, and safe error metadata.
 - The endpoint may use structured contact data from `jumpyard.guest_profiles` or a dev-supplied `phoneNumber`; responses return masked destination only.
 - The endpoint does not call Roller, redeem tickets, or mutate bookings.
+- T0041 confirmed AWS SNS accepts one protected dev send. The current dev SMS base URL is `http://localhost:3000/`, so real guest use still needs a public/mobile-reachable app URL before SMS links are useful on phones.
 
 ### `POST /v1/check-in/lookup`
 

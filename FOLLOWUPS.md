@@ -32,6 +32,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-043` | `T0028` | Dependency security | Evaluate the phone app `npm audit --audit-level=high` findings from the T0028 QR dependency work in a dedicated dependency ticket before production. | Medium | `TBD` | Open |
 | `FU-044` | `T0035` | Product catalog | Replace T0035's phone-side mapped Playground add-on product ids with a server-owned add-on catalog before production or multi-venue rollout. | High | `TBD` | Open |
 | `FU-045` | `T0039` | SMS production readiness | Choose production SMS sender setup, consent/unsubscribe policy, delivery monitoring, and staff/admin auth before enabling guest-facing SMS outside dev dry-run testing. | High | `TBD` | Open |
+| `FU-046` | `T0041` | SMS link URL | Configure a public or mobile-reachable check-in app base URL before expecting SMS links to open on phones. T0041 used `http://localhost:3000/`, which validates provider delivery only. | High | `TBD` | Open |
 
 ## Resolved Followups
 

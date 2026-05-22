@@ -87,6 +87,8 @@ T0038 adds the JumpYard Cloud SMS token/session link foundation without sending 
 
 T0039 adds the server-owned SMS sending foundation for those check-in links. Dev now has protected `POST /v1/check-in/session-links/send-sms`, which creates a hashed check-in token, records a safe `jumpyard.sms_deliveries` audit row, defaults to dry-run, and can send through AWS SNS only when explicitly confirmed. The endpoint does not call Roller, does not return raw tokens, and returns only masked destination details.
 
+T0041 runs the first controlled real SMS smoke through the T0039 endpoint. AWS SNS accepted one confirmed dev SMS for booking `5032210` to the user-approved masked destination `+46*****9508`, and Aurora recorded delivery `jysms_mpgvzkpz_5b4ae399` as `sent` with `dry_run=false`, provider `aws_sns`, provider message id present, and token hash present. The SMS used the current dev `http://localhost:3000/` base URL, so receiving the SMS validates provider delivery but the link is not expected to open correctly on an iPhone until a public/mobile-reachable app URL is configured.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -214,8 +216,9 @@ After T0007, the next tickets should proceed in this order:
 | `T0037 Scheduled daily Data API sync` | Move the T0036 import path into a scheduled dev AWS sync that runs a daily modified-date window and records run status. | Completed in dev AWS; keeps Aurora reconciled even if webhooks are delayed, disabled, or out of order. |
 | `T0038 SMS token/session link foundation` | Add secure JumpYard Cloud links that can resume or start a booking check-in session without exposing raw booking numbers as authority. | Completed and deployed to dev; prepares the phone flow for SMS delivery while keeping session ownership server-side. |
 | `T0039 SMS sending` | Integrate the selected SMS provider and send check-in links from server-owned booking/session state. | Completed in dev AWS; dry-run is default, AWS SNS send is behind explicit confirmation, and audit rows are stored in `jumpyard.sms_deliveries`. |
-| `T0040 Roller payment package/drop-in integration` | Add the approved Roller payment package, allowlisted public HTTPS origin, and fake/test card path when Roller/Pabel provides the missing prerequisites. | Completes in-PWA payment for both new-booking and add-product drafts once external blockers are removed. |
-| `T0041 Staff auth replacement for temporary dev code` | Replace the manual dev redeem code with a real staff/admin auth model. | Needed before production-like staff redeem; can follow data/SMS work unless pilot security timing forces it earlier. |
+| `T0040 Roller payment package/drop-in integration` | Add the approved Roller payment package, allowlisted public HTTPS origin, and fake/test card path when Roller/Pabel provides the missing prerequisites. | Blocked until Roller/Pabel provides the missing payment prerequisites. |
+| `T0041 Controlled SMS live smoke` | Send one confirmed dev SMS through JumpYard Cloud and document whether AWS SNS accepts it. | Completed locally against dev; provider accepted the message, but link usability still needs a public/mobile-reachable app URL. |
+| `T0042 Staff auth replacement for temporary dev code` | Replace the manual dev redeem/link tokens with a real staff/admin auth model. | Needed before production-like staff redeem/SMS operations. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
