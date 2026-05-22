@@ -267,6 +267,17 @@ T0042 SMS delivery diagnostics notes:
 - SNS sandbox status: `IsInSandbox=true`.
 - Raw token handling: raw tokens, full check-in URLs, SMS text, and full destination numbers were not printed or stored.
 
+T0043 SNS sandbox phone verification notes:
+
+- AWS resources created or changed: no CDK resources changed.
+- External AWS SNS sandbox config changed: masked test phone `+46*****9508` is verified in SNS SMS sandbox.
+- Endpoint used after verification: `POST https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com/v1/check-in/session-links/send-sms`
+- Diagnostic SMS result: Aurora row `jysms_mpgxbla6_b59779cd` is `sent`, `dry_run=false`, provider `aws_sns`, provider message id present, and token hash present.
+- Delivery status result: CloudWatch SNS status is `SUCCESS` with provider response `Message has been accepted by phone.`
+- SNS sandbox status remains `IsInSandbox=true`, so only verified sandbox numbers can receive SMS until sandbox exit is approved.
+- OTP handling: the sandbox OTP was used once through AWS SNS and was not stored or committed.
+- Raw token handling: raw tokens, full check-in URLs, SMS text, and full destination numbers were not printed or stored.
+
 Confirmed T0006 dev target:
 
 | Field | Value |
@@ -291,6 +302,7 @@ Confirmed T0006 dev target:
 | `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0039 session handler; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, creates/resolves hashed check-in session links, dry-runs or explicitly sends SMS links through AWS SNS, and serves read-only staff handoff list/detail without Roller calls or Roller writes. |
 | `jumpyard-check-in-dev-sns-sms-delivery-status` | IAM Role | `dev` | `eu-north-1` | `cdk` | Allows Amazon SNS to write SMS delivery status logs for JumpYard Cloud dev diagnostics. |
 | `SmsDeliveryStatusAttributes` | CloudFormation Custom Resource | `dev` | `eu-north-1` | `cdk` | Sets dev SNS SMS attributes for transactional SMS and 100% delivery status sampling. |
+| SNS SMS sandbox phone `+46*****9508` | Amazon SNS SMS sandbox | `dev` | `eu-north-1` | AWS CLI/manual verification | Verified test destination for dev SMS delivery while the account remains in SMS sandbox. |
 | `jumpyard-check-in-dev-stack-webhook` | Lambda | `dev` | `eu-north-1` | `cdk` | T0018 webhook handler; accepts Roller Playground `x-roller-apikey`, validates a dev token, stores idempotent metadata, refreshes booking detail from Roller Playground, and upserts Aurora booking/item/ticket snapshots. |
 | `jumpyard-check-in-dev-stack-data-sync` | Lambda | `dev` | `eu-north-1` | `cdk` | T0037 scheduled sync handler; imports Roller Data API modified-date windows and product cache data into Aurora, records run health, and performs no Roller writes. |
 | Roller Playground webhook `238` | Roller Webhooks API | `dev`/Playground | External | Roller | Posts booking `Created`, `Updated`, and `Cancelled` events with `tickets=true` to the dev JumpYard Cloud webhook endpoint. |
@@ -299,6 +311,7 @@ Confirmed T0006 dev target:
 | `/aws/lambda/jumpyard-check-in-dev-stack-redeem` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-session` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
 | `sns/eu-north-1/376129878018/DirectPublishToPhoneNumber/Failure` | CloudWatch Logs | `dev` | `eu-north-1` | SNS/CDK attributes | SNS SMS delivery status failure logs. T0042 confirmed sandbox rejection here. |
+| `sns/eu-north-1/376129878018/DirectPublishToPhoneNumber` | CloudWatch Logs | `dev` | `eu-north-1` | SNS/CDK attributes | SNS SMS delivery status success logs. T0043 confirmed verified-phone delivery acceptance here. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-webhook` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-data-sync` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
 | `jumpyard-check-in-dev-aurora` | Aurora PostgreSQL Serverless v2 | `dev` | `eu-north-1` | `cdk` plus SQL migrations | Engine `aurora-postgresql 16.13`, database `jumpyard_cloud`, encrypted, deletion protection enabled, Data API enabled, schema `jumpyard` created by T0007. |

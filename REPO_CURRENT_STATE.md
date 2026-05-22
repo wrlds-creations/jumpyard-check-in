@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-22
-- Current branch: `codex/t0042-sms-delivery-diagnostics`
-- Current status: T0042 SMS delivery diagnostics completed locally against dev; SNS delivery logs show the AWS account is in SMS sandbox and rejected delivery to the unverified approved phone.
-- Current ticket: `T0042` completed locally, not yet committed or merged
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`
-- Recommended next ticket: `T0043 SNS sandbox phone verification or sandbox exit` unless Roller payment prerequisites arrive for `T0040`
+- Current branch: `codex/t0043-sns-sandbox-phone-verification`
+- Current status: T0043 SNS sandbox phone verification completed locally against dev; the approved masked phone is verified and SNS delivery logs show the JumpYard Cloud SMS reached provider status `SUCCESS`.
+- Current ticket: `T0043` completed locally, not yet committed or merged
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`
+- Recommended next ticket: `T0044 Staff auth replacement for temporary dev code` unless Roller payment prerequisites arrive for `T0040`
 
 ## Current Structure
 
@@ -161,19 +161,19 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0039` | Added server-owned SMS sending foundation. | 2026-05-22 | Dev `POST /v1/check-in/session-links/send-sms` creates hashed check-in tokens, records `jumpyard.sms_deliveries`, defaults to dry-run, and can send through AWS SNS only with explicit confirmation. |
 | `T0041` | Ran controlled real SMS smoke. | 2026-05-22 | AWS SNS accepted one confirmed dev SMS for booking `5032210`; Aurora delivery `jysms_mpgvzkpz_5b4ae399` is `sent` with masked destination `+46*****9508`, `dry_run=false`, provider message id present, and token hash present. |
 | `T0042` | Added SMS delivery diagnostics. | 2026-05-22 | Dev SNS SMS delivery status logs are enabled; diagnostic delivery `jysms_mpgwlk9u_9566748e` was accepted by SNS but CloudWatch shows provider `FAILURE` because the account is in SMS sandbox mode. |
+| `T0043` | Verified SNS sandbox phone and resent SMS. | 2026-05-22 | Masked destination `+46*****9508` is verified in SNS sandbox; Aurora delivery `jysms_mpgxbla6_b59779cd` is `sent` and CloudWatch shows provider `SUCCESS`. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0042` | SMS delivery diagnostics. | Completed locally | Added dev SNS delivery status logging, sent one diagnostic SMS, verified the Aurora audit row, and confirmed SNS sandbox rejection in CloudWatch. |
+| `T0043` | SNS sandbox phone verification. | Completed locally | Verified the approved masked test phone, resent one protected JumpYard Cloud SMS, verified the Aurora audit row, and confirmed SNS success delivery status in CloudWatch. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
 | `T0040` | Roller payment package/drop-in integration | Blocked until Roller/Pabel provides package access, allowlisted HTTPS test origin, and fake/test card behavior. |
-| `T0043` | SNS sandbox phone verification or sandbox exit | Verify approved test phones in SNS sandbox or request SMS sandbox exit before expecting real SMS delivery. |
 | `T0044` | Staff auth replacement for temporary dev code | Replace temporary dev codes for SMS/redeem-style protected operations with a real staff/admin auth model. |
 | `T0045` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
 
@@ -425,6 +425,9 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0042 diagnostic SMS: protected request for booking `5032210` with `confirmSend=true` created Aurora row `jysms_mpgwlk9u_9566748e` with status `sent`, provider `aws_sns`, `dry_run=false`, masked destination, provider message id present, and token hash present.
 - T0042 CloudWatch delivery status: SNS failure log group reports `FAILURE` with provider response `Sandboxed account unable to send to number.`
 - T0042 SNS sandbox status: `aws sns get-sms-sandbox-account-status` returned `IsInSandbox=true`.
+- T0043 SNS sandbox verification: masked destination `+46*****9508` is `Verified` in SNS SMS sandbox. The one-time password was used once and not stored.
+- T0043 verified SMS smoke: protected request for booking `5032210` with `confirmSend=true` created Aurora row `jysms_mpgxbla6_b59779cd` with status `sent`, provider `aws_sns`, `dry_run=false`, masked destination, provider message id present, and token hash present.
+- T0043 CloudWatch delivery status: SNS success log group reports `SUCCESS` with provider response `Message has been accepted by phone.`
 
 ## Known Issues Summary
 

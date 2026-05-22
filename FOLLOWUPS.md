@@ -33,7 +33,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-044` | `T0035` | Product catalog | Replace T0035's phone-side mapped Playground add-on product ids with a server-owned add-on catalog before production or multi-venue rollout. | High | `TBD` | Open |
 | `FU-045` | `T0039` | SMS production readiness | Choose production SMS sender setup, consent/unsubscribe policy, delivery monitoring, and staff/admin auth before enabling guest-facing SMS outside dev dry-run testing. | High | `TBD` | Open |
 | `FU-046` | `T0041` | SMS link URL | Configure a public or mobile-reachable check-in app base URL before expecting SMS links to open on phones. T0041 used `http://localhost:3000/`, which validates provider delivery only. | High | `TBD` | Open |
-| `FU-047` | `T0042` | SMS sandbox | AWS SNS SMS account is in sandbox mode, and delivery logs reject the approved phone with `Sandboxed account unable to send to number.` Verify test phones in SNS sandbox or request SMS sandbox exit before expecting real guest SMS delivery. | High | `T0043` | Open |
+| `FU-047` | `T0042/T0043` | SMS sandbox | AWS SNS SMS account is in sandbox mode. T0043 verified one approved masked test phone and confirmed delivery status `SUCCESS`; unverified numbers still require sandbox verification or SNS sandbox exit. | High | `T0043` | Done |
 
 ## Resolved Followups
 
