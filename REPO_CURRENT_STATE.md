@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-22
-- Current branch: `codex/t0033-phone-prepayment-flow`
-- Current status: T0033 phone create-booking pre-payment flow completed locally and deployed to dev; full browser payment remains blocked by external Roller prerequisites.
-- Current ticket: `T0033` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`
-- Recommended next ticket: `T0034 Roller payment package/drop-in integration`
+- Current branch: `codex/t0034-add-product-draft-step1`
+- Current status: T0034 add-product architecture build step 1 completed locally and deployed to dev; phone add-product UI wiring and payment execution remain separate future tickets.
+- Current ticket: `T0034` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`
+- Recommended next ticket: `T0035 Phone add-product UI wiring`
 
 ## Current Structure
 
@@ -53,6 +53,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- migrations/0002_related_data_sources.sql
 |   |-- migrations/0003_checkin_sessions.sql
 |   |-- migrations/0004_prepayment_booking_drafts.sql
+|   |-- migrations/0005_add_product_draft_links.sql
 |   |-- scripts/run-migrations.ts
 |   |-- cdk.json
 |   |-- package.json
@@ -147,20 +148,22 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0031` | Implemented deployed server-side booking quote/draft endpoints. | 2026-05-21 | Dev `POST /v1/bookings/quote` returns normalized Roller costs without creating a booking; dev `POST /v1/bookings/draft` creates a Playground draft behind `confirmDraft=true` and idempotency, returns safe payment config plus a raw `paymentJwt` only in the response. |
 | `T0032` | Added payment-package POC harness. | 2026-05-22 | `npm run roller:payment:poc` exercises deployed JumpYard Cloud quote without creating a booking; guarded apply-draft created Playground draft `a8644795-a29d-4302-8a37-056d525e7bd4` and confirmed `paymentJwtPresent=true`. Full payment remains blocked by package, public HTTPS allowlist, and fake/test card prerequisites. |
 | `T0033` | Added phone create-booking pre-payment flow. | 2026-05-22 | Phone buy-entry loads server-side Roller availability, quotes a selected time/product/quantity, creates a guarded Playground draft, stops at payment pending, and persists safe draft metadata in `jumpyard.prepayment_booking_drafts` without raw `paymentJwt`. |
+| `T0034` | Added existing-booking add-product quote/draft step 1. | 2026-05-22 | Dev `POST /v1/bookings/{bookingReference}/add-products/quote` returns add-on costs without creating a booking; dev `POST /v1/bookings/{bookingReference}/add-products` creates a separate Roller Playground add-on draft, stores `flow_type='add_product'`, and links it to the original booking in `jumpyard.booking_links`. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0033` | Phone create-booking pre-payment flow. | Completed locally and deployed to dev | Added availability, quote, draft, payment-pending phone flow and safe Aurora pre-payment draft persistence. Real payment drop-in execution remains externally blocked until Roller provides package access, public HTTPS allowlisting, and fake/test card details. |
+| `T0034` | Existing-booking add-product draft step 1. | Completed locally and deployed to dev | Added add-product quote and draft endpoints for existing bookings, created migration `0005`, stored add-product draft metadata in `jumpyard.prepayment_booking_drafts`, and linked the add-on draft to the original booking in `jumpyard.booking_links`. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0034` | Roller payment package/drop-in integration | Integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites. |
-| `T0035` | Staff auth replacement for temporary dev code | Replace the temporary dev redeem code with the selected staff/admin auth model before production. |
-| `T0036` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
+| `T0035` | Phone add-product UI wiring | Wire existing-booking add-products in the phone flow to the T0034 quote/draft endpoints and stop at payment pending. |
+| `T0036` | Roller payment package/drop-in integration | Integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites. |
+| `T0037` | Staff auth replacement for temporary dev code | Replace the temporary dev redeem code with the selected staff/admin auth model before production. |
+| `T0038` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
 
 ## Validation Status
 
@@ -372,10 +375,16 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0033 Aurora verification: `jumpyard.prepayment_booking_drafts` contains deployed smoke row `jypd_5d96dca81de8429eb4` and browser smoke row `jypd_f78fea81bea24fdea2` with masked/hash contact fields and no raw payment JWT column.
 - T0033 browser smoke: local phone buy-entry selected `10:00`, `60 min entré`, quantity `1`, quoted `200 kr`, created a Playground draft, and ended at `Betalning väntar` with `data-prepayment-status="payment_pending"`.
 - T0033 final validation: `node --check infra/lambda/booking/index.js`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, `npm run validate`, and `git diff --check` passed. Phone lint still reports the existing four `<img>` warnings.
+- T0034 AWS preflight: `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`, and `aws configure get region --profile wrlds-dev` returned `eu-north-1`.
+- T0034 migration: first `0005` attempt failed because the migration runner cannot safely split `DO $$` blocks; migration was rewritten without a `DO` block, then `npm --prefix infra run migrate:dev` applied `0005 add product draft links`.
+- T0034 deploy: `npm --prefix infra run diff:dev` showed only the booking Lambda code asset before deploy; `npm --prefix infra run deploy:dev` updated `jumpyard-check-in-dev-stack-booking`; post-deploy `npm --prefix infra run diff:dev` showed no differences.
+- T0034 deployed quote smoke: `POST /v1/bookings/5032210/add-products/quote` returned HTTP `200`, total `200`, amount owing `200`, `wroteBooking=false`, and Aurora `booking_links` count for original `5032210` remained unchanged.
+- T0034 deployed draft smoke: `POST /v1/bookings/5032210/add-products` returned HTTP `201`, Roller draft `18e85e91-9a53-4afd-a951-75d1a41eaf9f`, add-on group `jyao_2b05e40abbda4bad9a`, link `jyl_cf14c98651b4451aba`, prepayment draft `jypd_2a5ad290e9c34eadaa`, and `paymentJwtPresent=true`.
+- T0034 Aurora verification: `jumpyard.prepayment_booking_drafts` has `flow_type='add_product'` with original booking reference `5032210`; `jumpyard.booking_links` has `link_type='add_product_draft'`; the only JWT-related column is `payment_jwt_present`.
 
 ## Known Issues Summary
 
-- AWS dev foundation is deployed. Lookup, session, webhook, safe redeem-planning, controlled dev redeem execution, and booking quote/draft handlers are implemented. Existing-booking add-product booking routes are still deferred and return `501`.
+- AWS dev foundation is deployed. Lookup, session, webhook, safe redeem-planning, controlled dev redeem execution, booking quote/draft handlers, and existing-booking add-product quote/draft handlers are implemented.
 - Roller credentials secret in AWS has been populated for dev and was used by T0009 lookup smoke tests.
 - JumpYard Cloud lookup API now uses Aurora first and refreshes from Roller when local data is missing or unsafe. Other API business logic is still pending.
 - Phone app booking lookup now calls JumpYard Cloud for the first check-in step, carries non-visible lookup source/freshness metadata, uses today's Stockholm date by default, starts/resumes a JumpYard Cloud session after paid lookup, routes active ready sessions directly to QR, and marks new sessions ready for staff after safety attestation. Booking creation and payment UI behavior are still pending.
@@ -387,7 +396,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, and phone session resume routing is complete locally from T0029.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
 - Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; actual payment execution still needs Roller payment-library prerequisites.
-- Existing-booking add-product linked-booking flow has not been tested yet.
+- Existing-booking add-product linked-booking flow has been tested server-side in dev; phone UI wiring is still pending.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
 ## Open Questions
@@ -400,4 +409,4 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Which exact production auth header/signature and optional IP allowlisting should Roller webhook intake use beyond the confirmed Playground `x-roller-apikey` header?
 - Which real Roller redemption device name should JumpYard Cloud send, if any, before production check-in?
 - Which staff/admin authentication model should authorize final redeem in the pilot?
-- Which Roller payment-library package, public HTTPS test domain allowlist, and fake/test card details are required before T0034 can complete payment inside the JumpYard PWA?
+- Which Roller payment-library package, public HTTPS test domain allowlist, and fake/test card details are required before payment can complete inside the JumpYard PWA?

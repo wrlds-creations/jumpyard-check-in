@@ -201,7 +201,7 @@ Use this file to define validation for the current project or milestone.
 |---|---|---|---|
 | CDK metadata guard | Missing `-c config=...` fails with a helpful message. | Passed | Verified on 2026-05-19. |
 | CDK example synth | `npm run infra:synth` produces a template using `infra/config/dev.example.json`. | Passed | Example config is not approved for deploy. |
-| Historical placeholder handlers | Unimplemented Lambda inline code returns `501` and does not call Roller. | Passed | Lookup, booking quote/draft, webhook, session, and redeem handlers are now implemented; existing-booking add-product booking routes remain deferred. |
+| Historical placeholder handlers | Unimplemented Lambda inline code returns `501` and does not call Roller. | Passed | Lookup, booking quote/draft, existing-booking add-product quote/draft, webhook, session, and redeem handlers are now implemented. |
 | No AWS creation | No `cdk deploy` is run and `AWS_RESOURCES.md` keeps inventory empty. | Passed | Required for T0004 only; T0006 intentionally deployed dev. |
 
 ## Booking Index Ingestion Validation
@@ -388,3 +388,15 @@ Use this file to define validation for the current project or milestone.
 | Phone browser smoke | Local phone buy-entry reaches payment-pending state after creating a draft. | Passed | Selected 60 min at 10:00, quantity 1, quoted `200 kr`, then showed `Betalning väntar`. |
 | Phone lint/build | Phone lint and build pass after the buy-entry UI changes. | Passed | Lint passed with existing `<img>` warnings; build passed. |
 | Root validation | Source-of-truth docs and workflow checks pass after T0033. | Passed | `npm run validate` and `git diff --check` passed on 2026-05-22. |
+
+## T0034 Add-Product Draft Step 1 Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Booking Lambda syntax | `node --check infra/lambda/booking/index.js` passes. | Passed | Passed after T0034 implementation. |
+| Infra build/synth | `npm --prefix infra run build` and `npm --prefix infra run synth:dev` pass. | Passed | Passed before dev deploy. |
+| Dev migration/deploy | Migration `0005` applies and dev stack deploys only approved booking Lambda changes. | Passed | First migration attempt exposed the runner's `DO $$` limitation; migration was rewritten without a block, then apply/deploy passed. |
+| Add-product quote smoke | Deployed quote validates original booking and returns costs without creating a draft or link. | Passed | `POST /v1/bookings/5032210/add-products/quote` returned HTTP `200`, total `200`, amount owing `200`, and `wroteBooking=false`; link count stayed unchanged. |
+| Add-product draft smoke | Deployed draft creates a separate Roller Playground draft and Aurora link. | Passed | Created draft `18e85e91-9a53-4afd-a951-75d1a41eaf9f`, add-on group `jyao_2b05e40abbda4bad9a`, link `jyl_cf14c98651b4451aba`, and prepayment draft `jypd_2a5ad290e9c34eadaa`. |
+| Aurora persistence | Add-product draft state is stored without raw `paymentJwt`. | Passed | `prepayment_booking_drafts.flow_type='add_product'`, `booking_links.link_type='add_product_draft'`, and the only JWT column is `payment_jwt_present`. |
+| Root validation | Source-of-truth docs and workflow checks pass after T0034. | Passed | `npm run validate`, `node --check infra/lambda/booking/index.js`, `npm --prefix infra run migrate:dev:status`, and `git diff --check` passed on 2026-05-22. |

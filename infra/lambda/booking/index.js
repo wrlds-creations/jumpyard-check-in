@@ -33,18 +33,16 @@ exports.handler = async (event) => {
   try {
     const routeKey = event?.routeKey || `${event?.requestContext?.http?.method ?? ''} ${event?.rawPath ?? ''}`.trim();
 
-    if (isAddProductRoute(routeKey, event)) {
-      return jsonResponse(501, correlationId, {
-        status: 'not_implemented',
-        error: {
-          code: 'add_product_booking_deferred',
-          message: 'Add-product booking endpoints are deferred; T0031 implements new-booking quote and draft only.',
-        },
-      });
-    }
-
     const body = parseBody(event);
     correlationId = stringOrNull(body.correlationId) || correlationId;
+
+    if (isAddProductQuoteRoute(routeKey, event)) {
+      return handleAddProductQuote(event, body, correlationId);
+    }
+
+    if (isAddProductDraftRoute(routeKey, event)) {
+      return handleAddProductDraft(event, body, correlationId);
+    }
 
     if (isAvailabilityRoute(routeKey, event)) {
       return handleAvailability(body, correlationId);
@@ -373,6 +371,286 @@ async function handleDraft(event, body, correlationId) {
   });
 }
 
+async function handleAddProductQuote(event, body, correlationId) {
+  const bookingReference = getBookingReferenceFromPath(event);
+  if (!bookingReference) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: {
+        code: 'booking_reference_required',
+        message: 'bookingReference is required in the add-products path.',
+      },
+    });
+  }
+
+  const request = normalizeAddProductQuoteRequest(body, bookingReference);
+  const validationError = validateQuoteRequest(request);
+  if (validationError) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: validationError,
+    });
+  }
+
+  const config = await getRollerConfig();
+  const token = await getRollerAccessToken(config);
+  const original = await resolveOriginalBookingContext(config, token, bookingReference);
+  if (!original.ok) {
+    return jsonResponse(original.statusCode, correlationId, {
+      status: original.status,
+      error: original.error,
+    });
+  }
+
+  const availabilityError = request.requireAvailability ? await validateItemsAvailable(config, token, request.items) : null;
+  if (availabilityError) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: availabilityError,
+    });
+  }
+
+  const payload = buildRollerBookingPayload(request, {
+    customer: request.customer || buildQuoteCustomer(),
+    externalIdPrefix: 'JY-AQ',
+  });
+  const rollerResult = await postRollerJson(config, token, '/bookings/draft/costs', payload);
+
+  if (!rollerResult.ok) {
+    await writeBookingEventLog({
+      correlationId,
+      eventType: 'booking.add_product_quote_failed',
+      payload: {
+        endpoint: 'POST /bookings/draft/costs',
+        itemCount: request.items.length,
+        originalBookingReference: original.bookingReference,
+        rollerStatus: rollerResult.status,
+      },
+      subjectRef: original.bookingReference,
+      summary: `Roller add-product quote failed with HTTP ${rollerResult.status}.`,
+    });
+
+    return jsonResponse(rollerResult.status === 409 ? 409 : 502, correlationId, {
+      status: rollerResult.status === 409 ? 'rejected' : 'roller_error',
+      error: {
+        code: 'roller_add_product_quote_failed',
+        message: `Roller add-product quote failed with HTTP ${rollerResult.status}.`,
+      },
+      roller: {
+        statusCode: rollerResult.status,
+        error: summarizeRollerError(rollerResult.body),
+      },
+    });
+  }
+
+  const costs = normalizeCosts(rollerResult.body);
+  await writeBookingEventLog({
+    correlationId,
+    eventType: 'booking.add_product_quote_succeeded',
+    payload: {
+      endpoint: 'POST /bookings/draft/costs',
+      itemCount: request.items.length,
+      originalBookingReference: original.bookingReference,
+      originalRollerUniqueId: original.rollerUniqueId,
+      rollerEnvironment: config.env,
+      total: costs.total,
+      amountOwing: costs.amountOwing,
+    },
+    subjectRef: original.bookingReference,
+    summary: 'Roller Playground add-product quote succeeded.',
+  });
+
+  return jsonResponse(200, correlationId, {
+    status: 'quoted',
+    quote: {
+      externalId: payload.externalId,
+      costs,
+      itemCount: request.items.length,
+      expiresAt: null,
+    },
+    addOn: {
+      originalBookingReference: original.bookingReference,
+      originalRollerUniqueId: original.rollerUniqueId,
+      mode: 'separate_draft_booking',
+    },
+    source: {
+      system: 'roller',
+      environment: config.env,
+      endpoint: 'POST /bookings/draft/costs',
+      wroteBooking: false,
+    },
+  });
+}
+
+async function handleAddProductDraft(event, body, correlationId) {
+  const bookingReference = getBookingReferenceFromPath(event);
+  if (!bookingReference) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: {
+        code: 'booking_reference_required',
+        message: 'bookingReference is required in the add-products path.',
+      },
+    });
+  }
+
+  const request = normalizeAddProductDraftRequest(event, body, bookingReference);
+  const validationError = validateDraftRequest(request);
+  if (validationError) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: validationError,
+    });
+  }
+
+  const config = await getRollerConfig();
+  const token = await getRollerAccessToken(config);
+  const original = await resolveOriginalBookingContext(config, token, bookingReference);
+  if (!original.ok) {
+    return jsonResponse(original.statusCode, correlationId, {
+      status: original.status,
+      error: original.error,
+    });
+  }
+
+  const requestHash = hashJson({
+    customer: maskCustomerForHash(request.customer),
+    items: request.items,
+    operation: 'booking_add_product_draft_create',
+    originalBookingReference: original.bookingReference,
+    originalRollerUniqueId: original.rollerUniqueId,
+    sendConfirmations: request.sendConfirmations,
+    customerPaysFees: request.customerPaysFees,
+  });
+  const idempotency = await reserveIdempotencyKey('booking_add_product_draft_create', request.idempotencyKey, requestHash);
+  if (!idempotency.ok) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: idempotency.code,
+        message: idempotency.message,
+      },
+      idempotency: {
+        status: idempotency.status,
+        resultRef: stringOrNull(idempotency.resultRef),
+      },
+    });
+  }
+
+  const availabilityError = request.requireAvailability ? await validateItemsAvailable(config, token, request.items) : null;
+  if (availabilityError) {
+    await completeIdempotencyKey(request.idempotencyKey, 'failed', availabilityError.code);
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: availabilityError,
+    });
+  }
+
+  const addOnGroupId = `jyao_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`;
+  request.addOnGroupId = addOnGroupId;
+  request.originalBookingReference = original.bookingReference;
+  request.originalRollerUniqueId = original.rollerUniqueId;
+
+  const payload = buildRollerBookingPayload(request, {
+    customer: request.customer,
+    externalIdPrefix: 'JY-AD',
+  });
+  const rollerResult = await postRollerJson(config, token, '/bookings/draft', payload);
+
+  if (!rollerResult.ok) {
+    await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_http_${rollerResult.status}`);
+    await writeBookingEventLog({
+      correlationId,
+      eventType: 'booking.add_product_draft_failed',
+      payload: {
+        endpoint: 'POST /bookings/draft',
+        itemCount: request.items.length,
+        originalBookingReference: original.bookingReference,
+        rollerStatus: rollerResult.status,
+      },
+      subjectRef: original.bookingReference,
+      summary: `Roller add-product draft creation failed with HTTP ${rollerResult.status}.`,
+    });
+
+    return jsonResponse(rollerResult.status === 409 ? 409 : 502, correlationId, {
+      status: rollerResult.status === 409 ? 'rejected' : 'roller_error',
+      error: {
+        code: 'roller_add_product_draft_failed',
+        message: `Roller add-product draft creation failed with HTTP ${rollerResult.status}.`,
+      },
+      roller: {
+        statusCode: rollerResult.status,
+        error: summarizeRollerError(rollerResult.body),
+      },
+    });
+  }
+
+  const draft = normalizeDraftResponse(rollerResult.body, request.items.length);
+  const paymentConfig = await getVenuePaymentConfig(config, token);
+  const jwtSummary = summarizeJwt(rollerResult.body?.paymentJwt);
+  const prepaymentDraft = await persistPrepaymentDraft({
+    config,
+    draft,
+    externalId: payload.externalId,
+    idempotencyKey: request.idempotencyKey,
+    jwtSummary,
+    paymentConfig,
+    request,
+  });
+  const link = await persistAddOnBookingLink({
+    addOnGroupId,
+    draft,
+    original,
+    prepaymentDraft,
+  });
+
+  await completeIdempotencyKey(request.idempotencyKey, 'succeeded', `add_on_draft:${draft.uniqueId ?? payload.externalId}`);
+  await writeBookingEventLog({
+    correlationId,
+    eventType: 'booking.add_product_draft_succeeded',
+    payload: {
+      addOnGroupId,
+      endpoint: 'POST /bookings/draft',
+      itemCount: request.items.length,
+      paymentJwtPresent: jwtSummary.present,
+      prepaymentDraftId: prepaymentDraft.prepaymentDraftId,
+      originalBookingReference: original.bookingReference,
+      originalRollerUniqueId: original.rollerUniqueId,
+      rollerDraftUniqueId: draft.uniqueId,
+      rollerEnvironment: config.env,
+      total: draft.costs.total,
+      amountOwing: draft.costs.amountOwing,
+    },
+    subjectRef: original.bookingReference,
+    summary: 'Roller Playground add-product draft booking created and linked.',
+  });
+
+  return jsonResponse(201, correlationId, {
+    status: 'add_product_draft_created',
+    draft,
+    addOn: {
+      addOnGroupId,
+      originalBookingReference: original.bookingReference,
+      originalRollerUniqueId: original.rollerUniqueId,
+      link,
+      mode: 'separate_draft_booking',
+    },
+    prepayment: prepaymentDraft,
+    paymentSession: {
+      jwt: rollerResult.body?.paymentJwt ?? null,
+      jwtPresent: jwtSummary.present,
+      jwtSummary,
+      config: paymentConfig,
+    },
+    source: {
+      system: 'roller',
+      environment: config.env,
+      endpoint: 'POST /bookings/draft',
+      wroteBooking: true,
+    },
+  });
+}
+
 function normalizeQuoteRequest(body) {
   return {
     capacityReservationId: stringOrNull(body.capacityReservationId),
@@ -411,6 +689,24 @@ function normalizeDraftRequest(event, body) {
     sendConfirmations: body.sendConfirmations === true,
     venueId: stringOrNull(body.venueId),
   };
+}
+
+function normalizeAddProductQuoteRequest(body, bookingReference) {
+  const request = normalizeQuoteRequest(body);
+  request.flowType = 'add_product';
+  request.originalBookingReference = bookingReference;
+  request.name = request.name || `Add-on for ${bookingReference}`;
+  request.comments = request.comments || `JumpYard add-product quote for original booking ${bookingReference}`;
+  return request;
+}
+
+function normalizeAddProductDraftRequest(event, body, bookingReference) {
+  const request = normalizeDraftRequest(event, body);
+  request.flowType = 'add_product';
+  request.originalBookingReference = bookingReference;
+  request.name = request.name || `Add-on for ${bookingReference}`;
+  request.comments = request.comments || `JumpYard add-product draft for original booking ${bookingReference}`;
+  return request;
 }
 
 function normalizeAvailabilityRequest(body) {
@@ -830,6 +1126,120 @@ async function getRollerJson(config, token, endpointPath) {
   };
 }
 
+async function resolveOriginalBookingContext(config, token, bookingReference) {
+  const normalizedReference = stringOrNull(bookingReference);
+  const [localBooking, rollerResult] = await Promise.all([
+    findLocalOriginalBooking(normalizedReference),
+    getRollerJson(config, token, `/bookings/${encodeURIComponent(normalizedReference)}`),
+  ]);
+
+  if (rollerResult.status === 404) {
+    return {
+      ok: false,
+      status: 'not_found',
+      statusCode: 404,
+      error: {
+        code: 'original_booking_not_found',
+        message: `Original booking ${normalizedReference} was not found in Roller Playground.`,
+      },
+    };
+  }
+
+  if (!rollerResult.ok) {
+    return {
+      ok: false,
+      status: 'roller_error',
+      statusCode: rollerResult.status === 409 ? 409 : 502,
+      error: {
+        code: 'roller_original_booking_lookup_failed',
+        message: `Roller original booking lookup failed with HTTP ${rollerResult.status}.`,
+      },
+      roller: {
+        statusCode: rollerResult.status,
+        error: summarizeRollerError(rollerResult.body),
+      },
+    };
+  }
+
+  const original = normalizeOriginalBookingContext(rollerResult.body, normalizedReference, localBooking);
+  if (!original.bookingReference || !original.rollerUniqueId) {
+    return {
+      ok: false,
+      status: 'roller_error',
+      statusCode: 502,
+      error: {
+        code: 'roller_original_booking_incomplete',
+        message: 'Roller original booking lookup did not return both bookingReference and uniqueId.',
+      },
+    };
+  }
+
+  if (!isOriginalBookingEligibleForAddProduct(original)) {
+    return {
+      ok: false,
+      status: 'blocked',
+      statusCode: 409,
+      error: {
+        code: 'original_booking_not_eligible',
+        message: `Original booking ${original.bookingReference} cannot receive add-products in its current status.`,
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    ...original,
+  };
+}
+
+async function findLocalOriginalBooking(bookingReference) {
+  if (!bookingReference) return null;
+
+  const result = await executeStatement(
+    `SELECT
+       roller_unique_id,
+       booking_reference,
+       booking_status,
+       payment_status,
+       booking_date::text AS booking_date,
+       start_time::text AS start_time,
+       freshness_status
+     FROM jumpyard.roller_bookings
+     WHERE booking_reference = :bookingReference
+     LIMIT 1`,
+    [stringParameter('bookingReference', bookingReference)],
+  );
+
+  return firstMappedRow(result);
+}
+
+function normalizeOriginalBookingContext(body, bookingReference, localBooking) {
+  const booking = body?.booking && typeof body.booking === 'object' ? body.booking : body;
+  const items = Array.isArray(booking?.items) ? booking.items : [];
+  const firstItem = items[0] ?? {};
+
+  return {
+    bookingDate: stringOrNull(booking?.bookingDate ?? firstItem.bookingDate ?? localBooking?.booking_date),
+    bookingReference:
+      stringOrNull(booking?.bookingReference ?? booking?.reference ?? booking?.bookingId) ||
+      stringOrNull(localBooking?.booking_reference) ||
+      bookingReference,
+    bookingStatus: stringOrNull(booking?.status ?? booking?.bookingStatus ?? localBooking?.booking_status),
+    localFreshnessStatus: stringOrNull(localBooking?.freshness_status),
+    paymentStatus: stringOrNull(booking?.paymentStatus ?? booking?.status ?? booking?.bookingStatus ?? localBooking?.payment_status),
+    rollerUniqueId: stringOrNull(booking?.uniqueId ?? booking?.id ?? booking?.bookingUniqueId ?? localBooking?.roller_unique_id),
+    startTime: stringOrNull(booking?.startTime ?? firstItem.startTime ?? firstItem.sessionStartTime ?? localBooking?.start_time),
+  };
+}
+
+function isOriginalBookingEligibleForAddProduct(original) {
+  const statusValues = [original.bookingStatus, original.paymentStatus]
+    .map((value) => stringOrNull(value)?.toLowerCase())
+    .filter(Boolean);
+
+  return !statusValues.some((status) => ['cancelled', 'canceled', 'deleted', 'draft'].includes(status));
+}
+
 async function loadPhoneBookingParentProducts(rollerEnv) {
   const result = await executeStatement(
     `SELECT DISTINCT
@@ -1125,6 +1535,7 @@ function normalizeCosts(body) {
 async function persistPrepaymentDraft({ config, draft, externalId, idempotencyKey, jwtSummary, paymentConfig, request }) {
   const prepaymentDraftId = `jypd_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`;
   const firstItem = request.items[0] ?? {};
+  const flowType = request.flowType === 'add_product' ? 'add_product' : 'new_booking';
   const totalCents = centsFromAmount(draft.costs.total);
   const amountOwingCents = centsFromAmount(draft.costs.amountOwing);
   const email = request.customer.email;
@@ -1143,6 +1554,10 @@ async function persistPrepaymentDraft({ config, draft, externalId, idempotencyKe
        roller_capacity_reservation_id,
        external_id,
        idempotency_key,
+       flow_type,
+       original_booking_reference,
+       original_roller_unique_id,
+       add_on_group_id,
        status,
        roller_env,
        booking_date,
@@ -1168,6 +1583,10 @@ async function persistPrepaymentDraft({ config, draft, externalId, idempotencyKe
        :rollerCapacityReservationId,
        :externalId,
        :idempotencyKey,
+       :flowType,
+       :originalBookingReference,
+       :originalRollerUniqueId,
+       :addOnGroupId,
        'payment_pending',
        :rollerEnv,
        CAST(:bookingDate AS date),
@@ -1190,6 +1609,10 @@ async function persistPrepaymentDraft({ config, draft, externalId, idempotencyKe
      ON CONFLICT (idempotency_key) DO UPDATE SET
        roller_draft_unique_id = EXCLUDED.roller_draft_unique_id,
        roller_capacity_reservation_id = EXCLUDED.roller_capacity_reservation_id,
+       flow_type = EXCLUDED.flow_type,
+       original_booking_reference = EXCLUDED.original_booking_reference,
+       original_roller_unique_id = EXCLUDED.original_roller_unique_id,
+       add_on_group_id = EXCLUDED.add_on_group_id,
        status = EXCLUDED.status,
        total_cents = EXCLUDED.total_cents,
        amount_owing_cents = EXCLUDED.amount_owing_cents,
@@ -1203,6 +1626,10 @@ async function persistPrepaymentDraft({ config, draft, externalId, idempotencyKe
       stringParameter('rollerCapacityReservationId', draft.capacityReservationId),
       stringParameter('externalId', externalId),
       stringParameter('idempotencyKey', idempotencyKey),
+      stringParameter('flowType', flowType),
+      stringParameter('originalBookingReference', request.originalBookingReference),
+      stringParameter('originalRollerUniqueId', request.originalRollerUniqueId),
+      stringParameter('addOnGroupId', request.addOnGroupId),
       stringParameter('rollerEnv', config.env),
       stringParameter('bookingDate', firstItem.bookingDate),
       stringParameter('startTime', firstItem.startTime),
@@ -1225,13 +1652,74 @@ async function persistPrepaymentDraft({ config, draft, externalId, idempotencyKe
   return {
     amountOwing: draft.costs.amountOwing,
     amountOwingCents,
+    addOnGroupId: request.addOnGroupId ?? null,
     expiresAt: null,
+    flowType,
+    originalBookingReference: request.originalBookingReference ?? null,
+    originalRollerUniqueId: request.originalRollerUniqueId ?? null,
     paymentBlockedReason: 'payment_dropin_not_configured',
     prepaymentDraftId,
     rollerDraftUniqueId: draft.uniqueId,
     status: 'payment_pending',
     total: draft.costs.total,
     totalCents,
+  };
+}
+
+async function persistAddOnBookingLink({ addOnGroupId, draft, original, prepaymentDraft }) {
+  const linkId = `jyl_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`;
+  const result = await executeStatement(
+    `INSERT INTO jumpyard.booking_links (
+       link_id,
+       link_type,
+       original_roller_unique_id,
+       original_booking_reference,
+       linked_roller_unique_id,
+       linked_booking_reference,
+       add_on_group_id,
+       status
+     )
+     VALUES (
+       :linkId,
+       'add_product_draft',
+       :originalRollerUniqueId,
+       :originalBookingReference,
+       :linkedRollerUniqueId,
+       :linkedBookingReference,
+       :addOnGroupId,
+       'payment_pending'
+     )
+     RETURNING
+       link_id,
+       link_type,
+       original_roller_unique_id,
+       original_booking_reference,
+       linked_roller_unique_id,
+       linked_booking_reference,
+       add_on_group_id,
+       status,
+       created_at::text AS created_at`,
+    [
+      stringParameter('linkId', linkId),
+      stringParameter('originalRollerUniqueId', original.rollerUniqueId),
+      stringParameter('originalBookingReference', original.bookingReference),
+      stringParameter('linkedRollerUniqueId', draft.uniqueId || prepaymentDraft.rollerDraftUniqueId),
+      stringParameter('linkedBookingReference', draft.bookingReference),
+      stringParameter('addOnGroupId', addOnGroupId),
+    ],
+  );
+  const row = firstMappedRow(result);
+
+  return {
+    addOnGroupId: stringOrNull(row?.add_on_group_id),
+    createdAt: stringOrNull(row?.created_at),
+    linkId: stringOrNull(row?.link_id),
+    linkType: stringOrNull(row?.link_type),
+    linkedBookingReference: stringOrNull(row?.linked_booking_reference),
+    linkedRollerUniqueId: stringOrNull(row?.linked_roller_unique_id),
+    originalBookingReference: stringOrNull(row?.original_booking_reference),
+    originalRollerUniqueId: stringOrNull(row?.original_roller_unique_id),
+    status: stringOrNull(row?.status),
   };
 }
 
@@ -1488,13 +1976,33 @@ function isAvailabilityRoute(routeKey, event) {
   return routeKey === 'POST /v1/bookings/availability' || event?.rawPath === '/v1/bookings/availability';
 }
 
-function isAddProductRoute(routeKey, event) {
+function isAddProductQuoteRoute(routeKey, event) {
   const rawPath = event?.rawPath ?? '';
   return (
     routeKey === 'POST /v1/bookings/{bookingReference}/add-products/quote' ||
-    routeKey === 'POST /v1/bookings/{bookingReference}/add-products' ||
-    /^\/v1\/bookings\/[^/]+\/add-products(\/quote)?$/.test(rawPath)
+    /^POST\s+\/v1\/bookings\/[^/]+\/add-products\/quote$/.test(routeKey) ||
+    /^\/v1\/bookings\/[^/]+\/add-products\/quote$/.test(rawPath)
   );
+}
+
+function isAddProductDraftRoute(routeKey, event) {
+  const rawPath = event?.rawPath ?? '';
+  return (
+    routeKey === 'POST /v1/bookings/{bookingReference}/add-products' ||
+    /^POST\s+\/v1\/bookings\/[^/]+\/add-products$/.test(routeKey) ||
+    /^\/v1\/bookings\/[^/]+\/add-products$/.test(rawPath)
+  );
+}
+
+function getBookingReferenceFromPath(event) {
+  const pathParameters = event?.pathParameters ?? {};
+  const fromParameters = stringOrNull(
+    pathParameters.bookingReference ?? pathParameters.bookingreference ?? pathParameters.booking_reference,
+  );
+  if (fromParameters) return fromParameters;
+
+  const match = /^\/v1\/bookings\/([^/]+)\/add-products(?:\/quote)?$/.exec(event?.rawPath ?? '');
+  return match ? stringOrNull(decodeURIComponent(match[1])) : null;
 }
 
 function getHeader(event, name) {
