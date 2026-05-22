@@ -494,6 +494,7 @@ Quote rules:
 - Quote returns normalized `bookingCosts` fields and must not return a Roller booking id.
 - Use `/product-availability` before quote when the selected product is session/capacity constrained.
 - Product list prices are display hints only; final price comes from Booking Costs.
+- T0033 phone pre-payment flow should expose availability/capacity only through JumpYard Cloud. The phone app must not call Roller `/product-availability` directly.
 
 ### `POST /v1/bookings/draft`
 
@@ -549,6 +550,13 @@ T0031 deployed endpoint result:
 - `POST /v1/bookings/quote` returned HTTP `200`, total `260`, amount owing `260`, tax `14.72`, and `wroteBooking=false` for product `1765836`.
 - `POST /v1/bookings/draft` returned HTTP `201`, draft unique id `2c1abf4f-944c-4122-a4ff-da8440c46321`, total `260`, amount owing `260`, `paymentJwtPresent=true`, `paymentJwt` part count `3`, and available payment config.
 - T0031 writes only safe `jumpyard.idempotency_records` and `jumpyard.event_log` rows; it does not persist raw payment JWTs.
+
+T0032 POC harness result:
+
+- `npm run roller:payment:poc` calls the deployed JumpYard Cloud quote endpoint and creates no Roller booking.
+- `npm run roller:payment:poc:apply-draft` is guarded by `ROLLER_PAYMENT_POC_ALLOW_DRAFT=I_UNDERSTAND_THIS_CREATES_PLAYGROUND_DRAFT_BOOKING`.
+- The harness reports only safe fields such as total, amount owing, draft unique id, JWT presence/part count, venue payment config availability, package URL host, and public origin host.
+- Full browser payment remains blocked until Roller provides the approved package URL/download, a public HTTPS allowlisted test origin, and fake/test card details.
 
 ### `POST /v1/bookings/{bookingReference}/add-products/quote`
 
@@ -653,7 +661,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0031`. The next recommended ticket is `T0032 Payment package proof-of-concept`.
+Current implementation has progressed through `T0032`. The next recommended ticket is `T0033 Phone create-booking pre-payment flow`.
 
 Near-term sequence:
 
@@ -663,10 +671,11 @@ Near-term sequence:
 4. `T0029 Phone session resume`: completed locally; paid lookup starts/resumes the server session, ready handoffs resume directly from search to the QR screen, completed/redeemed sessions show already checked in, and guest-in-progress sessions continue normally.
 5. `T0030 New booking/payment discovery spike`: completed locally; `POST /bookings/draft` and `paymentJwt` are confirmed, while payment package, test cards, and domain allowlisting remain prerequisites.
 6. `T0031 Server-side booking quote/draft`: completed and deployed to dev; JumpYard Cloud quotes costs and creates confirmed draft bookings while keeping Roller credentials server-side.
-7. `T0032 Payment package proof-of-concept`: verify Roller payment-library package access, public HTTPS allowlisting, and fake/test card behavior against the T0031 draft response.
-8. `T0033 Phone create-booking/payment wiring`: wire the phone app to quote, draft, and the proven Playground/test payment path.
-9. `T0034 Staff auth plan/implementation`: replace the temporary dev redeem code with the selected staff/admin authentication model.
-10. `T0035 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
+7. `T0032 Payment package proof-of-concept`: completed locally as a safe harness; quote/draft can be exercised through JumpYard Cloud, but the payment drop-in is still externally blocked by package, allowlist, and test-card prerequisites.
+8. `T0033 Phone create-booking pre-payment flow`: wire the phone app to product/time selection, server-side availability/capacity checks where needed, quote, guarded draft creation, and a payment-pending state without rendering payment UI.
+9. `T0034 Roller payment package/drop-in integration`: integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites.
+10. `T0035 Staff auth plan/implementation`: replace the temporary dev redeem code with the selected staff/admin authentication model.
+11. `T0036 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
 
 ## Open Contract Questions
 

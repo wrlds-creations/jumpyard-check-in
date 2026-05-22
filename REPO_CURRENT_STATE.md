@@ -4,12 +4,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Snapshot
 
-- Date: 2026-05-21
-- Current branch: `codex/t0031-server-booking-quote-draft`
-- Current status: T0031 server-side booking quote/draft completed locally and deployed to dev.
-- Current ticket: `T0031` completed locally and deployed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`
-- Recommended next ticket: `T0032 Payment package proof-of-concept`
+- Date: 2026-05-22
+- Current branch: `codex/t0032-payment-package-poc`
+- Current status: T0032 payment package POC completed locally; full browser payment remains blocked by external Roller prerequisites.
+- Current ticket: `T0032` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`
+- Recommended next ticket: `T0033 Phone create-booking pre-payment flow`
 
 ## Current Structure
 
@@ -31,6 +31,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- roller-client.js
 |   |-- roller-data-api-smoke.js
 |   |-- roller-payment-discovery.js
+|   |-- roller-payment-package-poc.js
 |   |-- roller-seed-playground.js
 |   `-- roller-smoke.js
 |-- infra/
@@ -94,6 +95,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm run roller:data:smoke` | Verify local Roller Data API `/data/bookingitems` access and safe response shape. | Loads local `.env`; uses modified-date window defaults and does not print secrets, tokens, customer names, emails, or phone numbers. |
 | `npm run roller:payment:discover` | Dry-run the Roller Playground new-booking payment discovery path. | Loads local `.env`, validates Playground, reads products, selects a jump/session product, and creates no booking. |
 | `npm run roller:payment:discover:apply-draft` | Create one guarded Roller Playground draft booking for payment discovery. | Requires `ROLLER_PAYMENT_DISCOVERY_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_DRAFT_BOOKING`; does not print secrets, access tokens, or raw payment JWTs. |
+| `npm run roller:payment:poc` | Run the T0032 JumpYard Cloud payment-package POC preflight. | Calls deployed `POST /v1/bookings/quote`, creates no booking, and reports package/origin/test-card blockers without printing secrets or raw JWTs. |
+| `npm run roller:payment:poc:apply-draft` | Create one guarded Playground draft through JumpYard Cloud for payment-package POC. | Requires `ROLLER_PAYMENT_POC_ALLOW_DRAFT=I_UNDERSTAND_THIS_CREATES_PLAYGROUND_DRAFT_BOOKING`; does not print secrets or raw payment JWTs. |
 | `npm run roller:seed:playground` | Plan deterministic Roller Playground seed bookings. | Dry-run by default; no booking writes. |
 | `npm run roller:seed:playground:apply` | Create deterministic Roller Playground seed bookings. | Writes only when `ROLLER_SEED_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_BOOKINGS` is set and the Playground guard passes. |
 | Read-only `GET /bookings/{bookingReference}` | Verify known Playground booking lookup behavior. | Run through the existing Roller client helper; do not print secrets or raw PII. |
@@ -140,21 +143,22 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0029` | Added phone session resume routing. | 2026-05-21 | Paid lookup starts/resumes the server session; ready-for-staff sessions route directly from search to QR, completed/redeemed sessions show already checked in, and guest-in-progress sessions continue the normal phone flow. |
 | `T0030` | Added new-booking payment discovery tooling and docs. | 2026-05-21 | Confirmed Roller Playground draft booking returns costs plus `paymentJwt`; in-app payment still needs Roller payment-library authorization, domain allowlisting, package access, and test card details. |
 | `T0031` | Implemented deployed server-side booking quote/draft endpoints. | 2026-05-21 | Dev `POST /v1/bookings/quote` returns normalized Roller costs without creating a booking; dev `POST /v1/bookings/draft` creates a Playground draft behind `confirmDraft=true` and idempotency, returns safe payment config plus a raw `paymentJwt` only in the response. |
+| `T0032` | Added payment-package POC harness. | 2026-05-22 | `npm run roller:payment:poc` exercises deployed JumpYard Cloud quote without creating a booking; guarded apply-draft created Playground draft `a8644795-a29d-4302-8a37-056d525e7bd4` and confirmed `paymentJwtPresent=true`. Full payment remains blocked by package, public HTTPS allowlist, and fake/test card prerequisites. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0031` | Server-side booking quote/draft. | Completed locally and deployed | Added deployed JumpYard Cloud quote/draft endpoints for new bookings against Roller Playground, with server-side credentials, Playground guard, idempotency, safe audit logs, and payment-session response data. |
+| `T0032` | Payment package proof-of-concept. | Completed locally | Added safe JumpYard Cloud payment-package POC tooling; quote/draft can be exercised, but real payment drop-in execution remains externally blocked until Roller provides package access, public HTTPS allowlisting, and fake/test card details. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0032` | Payment package proof-of-concept | Verify Roller payment-library package access, public HTTPS allowlisting, and fake/test card behavior against the T0031 draft response before phone UI wiring. |
-| `T0033` | Phone create-booking/payment wiring | Wire the phone app to quote, draft, and the proven Playground/test payment path. |
-| `T0034` | Staff auth replacement for temporary dev code | Replace the temporary dev redeem code with the selected staff/admin auth model before production. |
-| `T0035` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
+| `T0033` | Phone create-booking pre-payment flow | Wire the phone app to product/time selection, server-side availability/capacity checks where needed, quote, guarded draft creation, and a payment-pending state. |
+| `T0034` | Roller payment package/drop-in integration | Integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites. |
+| `T0035` | Staff auth replacement for temporary dev code | Replace the temporary dev redeem code with the selected staff/admin auth model before production. |
+| `T0036` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
 
 ## Validation Status
 
@@ -354,6 +358,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0031 deployed quote smoke: `POST /v1/bookings/quote` for product `1765836` on `2026-05-22` returned HTTP `200`, status `quoted`, total `260`, amount owing `260`, tax `14.72`, and `wroteBooking=false`.
 - T0031 deployed draft smoke: `POST /v1/bookings/draft` with `confirmDraft=true` and a unique idempotency key returned HTTP `201`, draft unique id `2c1abf4f-944c-4122-a4ff-da8440c46321`, total `260`, amount owing `260`, `jwtPresent=true`, `jwtPartCount=3`, and `paymentConfigAvailable=true`. The raw JWT was not printed.
 - T0031 post-deploy CDK diff: no differences.
+- T0032 payment POC syntax: `node --check scripts/roller-payment-package-poc.js` passed.
+- T0032 payment POC default: `npm run roller:payment:poc` returned quote HTTP `200`, total `260`, amount owing `260`, created no draft booking, and reported blockers `approved_payment_package`, `public_https_allowlisted_origin`, and `roller_fake_or_test_card_details`.
+- T0032 payment POC write guard: `npm run roller:payment:poc:apply-draft` without confirmation failed closed before creating a draft.
+- T0032 guarded payment POC draft: guarded apply created Playground draft `a8644795-a29d-4302-8a37-056d525e7bd4`, returned HTTP `201`, `paymentJwtPresent=true`, `paymentJwtPartCount=3`, and `venuePaymentConfigAvailable=true`; raw JWT was not printed.
+- T0032 final validation: `npm run validate` and `git diff --check` passed.
 
 ## Known Issues Summary
 
@@ -368,7 +377,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
 - Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, and phone session resume routing is complete locally from T0029.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
-- Roller `POST /bookings/draft` has been executed through both the protected T0030 discovery path and deployed T0031 JumpYard Cloud draft endpoint against Playground and returned costs plus `paymentJwt`; actual payment execution still needs Roller payment-library prerequisites.
+- Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; actual payment execution still needs Roller payment-library prerequisites.
 - Existing-booking add-product linked-booking flow has not been tested yet.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
@@ -382,4 +391,4 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Which exact production auth header/signature and optional IP allowlisting should Roller webhook intake use beyond the confirmed Playground `x-roller-apikey` header?
 - Which real Roller redemption device name should JumpYard Cloud send, if any, before production check-in?
 - Which staff/admin authentication model should authorize final redeem in the pilot?
-- Which Roller payment-library package, public HTTPS test domain allowlist, and fake/test card details are required before T0032 can complete payment inside the JumpYard PWA?
+- Which Roller payment-library package, public HTTPS test domain allowlist, and fake/test card details are required before T0034 can complete payment inside the JumpYard PWA?
