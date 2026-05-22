@@ -1,4 +1,5 @@
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
+const { PublishCommand, SNSClient } = require('@aws-sdk/client-sns');
 const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client-secrets-manager');
 const crypto = require('crypto');
 
@@ -10,10 +11,15 @@ const DEFAULT_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_CHECKIN_LINK_TTL_MINUTES = 72 * 60;
 const MAX_CHECKIN_LINK_TTL_MINUTES = 7 * 24 * 60;
 const MAX_SELECTED_TICKETS = 10;
+const CHECKIN_SMS_TEMPLATE = 'checkin_link_v1';
+const DEFAULT_SMS_BASE_URL = process.env.CHECKIN_SMS_BASE_URL || null;
+const SMS_PROVIDER = process.env.SMS_PROVIDER || 'aws_sns';
+const SMS_SENDER_ID = process.env.SMS_SENDER_ID || '';
 const TOKEN_BYTES = 32;
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
+const snsClient = new SNSClient({});
 
 let cachedCheckinLinkDevToken = null;
 
@@ -35,6 +41,10 @@ exports.handler = async (event) => {
 
     if (isCreateSessionLinkRoute(routeKey, event)) {
       return handleCreateSessionLink(event, body, correlationId);
+    }
+
+    if (isSendSessionLinkSmsRoute(routeKey, event)) {
+      return handleSendSessionLinkSms(event, body, correlationId);
     }
 
     if (isResolveSessionLinkRoute(routeKey, event)) {
@@ -370,6 +380,212 @@ async function handleCreateSessionLink(event, body, correlationId) {
   });
 }
 
+async function handleSendSessionLinkSms(event, body, correlationId) {
+  const auth = await verifyCheckinLinkDevToken(event);
+  if (!auth.ok) {
+    return jsonResponse(401, correlationId, {
+      status: 'unauthorized',
+      error: {
+        code: auth.code,
+        message: 'Check-in SMS sending requires the JumpYard Cloud development token.',
+      },
+    });
+  }
+
+  const request = normalizeSessionLinkSmsRequest(event, body);
+  const validationError = validateSessionLinkSmsRequest(request);
+  if (validationError) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: validationError,
+    });
+  }
+
+  const context = await getBookingContext(request.identifier);
+  if (!context) {
+    return jsonResponse(404, correlationId, {
+      status: 'not_found',
+      error: {
+        code: 'booking_not_found',
+        message: 'No local JumpYard Cloud booking snapshot was found for the supplied identifier.',
+      },
+    });
+  }
+
+  const destination = request.phoneNumber
+    ? buildSmsDestination(request.phoneNumber, 'request')
+    : await findSmsDestinationForBooking(context.booking.rollerUniqueId);
+  if (!destination) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: 'sms_destination_missing',
+        message: 'No SMS-ready phone number was found for this booking. Provide phoneNumber for dev testing.',
+      },
+    });
+  }
+
+  const requestHash = hashJson({
+    baseUrl: request.baseUrl,
+    bookingReference: context.booking.bookingReference,
+    destinationHash: destination.hash,
+    dryRun: request.dryRun,
+    operation: 'checkin_sms_send',
+    ttlMinutes: request.ttlMinutes,
+  });
+  const idempotency = await reserveIdempotencyKey('checkin_sms_send', request.idempotencyKey, requestHash);
+  if (!idempotency.ok || idempotency.replayed) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: idempotency.ok ? 'idempotency_key_replayed' : 'idempotency_key_reused',
+        message: idempotency.ok
+          ? 'The supplied idempotency key has already been used for this SMS request.'
+          : 'The supplied idempotency key has already been used for a different SMS request.',
+      },
+    });
+  }
+
+  const link = await createSessionLinkToken({
+    channel: 'sms',
+    context,
+    ttlMinutes: request.ttlMinutes,
+  });
+  const checkinUrl = buildCheckinUrl(request.baseUrl, link.token);
+  const message = buildCheckinSmsMessage(checkinUrl);
+  const deliveryId = createSmsDeliveryId();
+
+  if (request.dryRun) {
+    await recordSmsDelivery({
+      booking: context.booking,
+      deliveryId,
+      destination,
+      dryRun: true,
+      provider: SMS_PROVIDER,
+      status: 'planned',
+      tokenHash: link.tokenHash,
+    });
+    await completeIdempotencyKey(request.idempotencyKey, 'succeeded', `sms_delivery:${deliveryId}`);
+    await writeEventLog({
+      booking: context.booking,
+      correlationId,
+      eventType: 'checkin.sms_planned',
+      payload: {
+        deliveryId,
+        destinationMasked: destination.masked,
+        dryRun: true,
+        provider: SMS_PROVIDER,
+        tokenHashPrefix: link.tokenHash.slice(0, 12),
+      },
+      summary: 'Check-in SMS planned in dry-run mode.',
+    });
+
+    return jsonResponse(201, correlationId, {
+      status: 'sms_planned',
+      sms: {
+        bookingReference: context.booking.bookingReference,
+        deliveryId,
+        destinationMasked: destination.masked,
+        dryRun: true,
+        expiresAt: link.expiresAt,
+        provider: SMS_PROVIDER,
+        rollerUniqueId: context.booking.rollerUniqueId,
+      },
+    });
+  }
+
+  try {
+    const providerMessageId = await sendSmsWithSns({
+      message,
+      phoneNumber: destination.phoneNumber,
+    });
+    await recordSmsDelivery({
+      booking: context.booking,
+      deliveryId,
+      destination,
+      dryRun: false,
+      provider: SMS_PROVIDER,
+      providerMessageId,
+      status: 'sent',
+      tokenHash: link.tokenHash,
+    });
+    await markSessionLinkSent(link.tokenHash);
+    await completeIdempotencyKey(request.idempotencyKey, 'succeeded', `sms_delivery:${deliveryId}`);
+    await writeEventLog({
+      booking: context.booking,
+      correlationId,
+      eventType: 'checkin.sms_sent',
+      payload: {
+        deliveryId,
+        destinationMasked: destination.masked,
+        dryRun: false,
+        provider: SMS_PROVIDER,
+        providerMessageId,
+        tokenHashPrefix: link.tokenHash.slice(0, 12),
+      },
+      summary: 'Check-in SMS sent.',
+    });
+
+    return jsonResponse(200, correlationId, {
+      status: 'sms_sent',
+      sms: {
+        bookingReference: context.booking.bookingReference,
+        deliveryId,
+        destinationMasked: destination.masked,
+        dryRun: false,
+        expiresAt: link.expiresAt,
+        provider: SMS_PROVIDER,
+        providerMessageId,
+        rollerUniqueId: context.booking.rollerUniqueId,
+      },
+    });
+  } catch (error) {
+    const safeError = safeSmsProviderError(error, destination.phoneNumber);
+    await recordSmsDelivery({
+      booking: context.booking,
+      deliveryId,
+      destination,
+      dryRun: false,
+      errorCode: safeError.code,
+      errorSummary: safeError.message,
+      provider: SMS_PROVIDER,
+      status: 'failed',
+      tokenHash: link.tokenHash,
+    });
+    await completeIdempotencyKey(request.idempotencyKey, 'failed', `sms_delivery:${deliveryId}`);
+    await writeEventLog({
+      booking: context.booking,
+      correlationId,
+      eventType: 'checkin.sms_failed',
+      payload: {
+        deliveryId,
+        destinationMasked: destination.masked,
+        dryRun: false,
+        errorCode: safeError.code,
+        provider: SMS_PROVIDER,
+        tokenHashPrefix: link.tokenHash.slice(0, 12),
+      },
+      summary: 'Check-in SMS failed before provider confirmation.',
+    });
+
+    return jsonResponse(502, correlationId, {
+      status: 'sms_failed',
+      error: {
+        code: safeError.code,
+        message: 'The SMS provider did not confirm delivery acceptance.',
+      },
+      sms: {
+        bookingReference: context.booking.bookingReference,
+        deliveryId,
+        destinationMasked: destination.masked,
+        dryRun: false,
+        provider: SMS_PROVIDER,
+        rollerUniqueId: context.booking.rollerUniqueId,
+      },
+    });
+  }
+}
+
 async function handleResolveSessionLink(event, body, correlationId) {
   const request = normalizeSessionLinkResolveRequest(event, body);
   const validationError = validateSessionLinkResolveRequest(request);
@@ -491,6 +707,21 @@ function normalizeSessionLinkCreateRequest(body) {
   };
 }
 
+function normalizeSessionLinkSmsRequest(event, body) {
+  const confirmSend = booleanFromValue(body.confirmSend);
+  const explicitDryRun = body.dryRun === undefined ? null : booleanFromValue(body.dryRun);
+
+  return {
+    baseUrl: stringOrNull(body.baseUrl) || stringOrNull(body.checkinBaseUrl) || DEFAULT_SMS_BASE_URL,
+    confirmSend,
+    dryRun: confirmSend ? (explicitDryRun ?? false) : true,
+    idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
+    identifier: stringOrNull(body.identifier) || stringOrNull(body.bookingReference) || stringOrNull(body.rollerUniqueId),
+    phoneNumber: stringOrNull(body.phoneNumber) || stringOrNull(body.to),
+    ttlMinutes: normalizeTtlMinutes(body.ttlMinutes, body.ttlHours),
+  };
+}
+
 function normalizeSessionLinkResolveRequest(event, body) {
   return {
     expectedDate: stringOrNull(body.expectedDate) || stringOrNull(body.visitDate),
@@ -529,6 +760,38 @@ function validateSessionLinkCreateRequest(request) {
     return {
       code: 'base_url_invalid',
       message: 'baseUrl must be a valid http or https URL.',
+    };
+  }
+
+  return null;
+}
+
+function validateSessionLinkSmsRequest(request) {
+  if (!request.identifier) {
+    return {
+      code: 'identifier_required',
+      message: 'bookingReference, rollerUniqueId, or identifier is required.',
+    };
+  }
+
+  if (!request.idempotencyKey) {
+    return {
+      code: 'idempotency_key_required',
+      message: 'idempotencyKey or x-idempotency-key is required.',
+    };
+  }
+
+  if (!request.baseUrl || !isSafeCheckinBaseUrl(request.baseUrl)) {
+    return {
+      code: 'base_url_invalid',
+      message: 'baseUrl must be a valid http or https URL for the check-in app.',
+    };
+  }
+
+  if (request.phoneNumber && !normalizePhoneForSms(request.phoneNumber)) {
+    return {
+      code: 'phone_number_invalid',
+      message: 'phoneNumber must be E.164 or a Swedish mobile number such as 0700000000.',
     };
   }
 
@@ -679,6 +942,36 @@ async function getBookingContext(identifier) {
       redeemStatusLastSeen: stringOrNull(ticket.redeemStatusLastSeen),
       ticketId: stringOrNull(ticket.ticketId),
     })),
+  };
+}
+
+async function findSmsDestinationForBooking(rollerUniqueId) {
+  if (!rollerUniqueId) return null;
+
+  const result = await executeStatement(
+    `SELECT
+       gp.contact_number,
+       gp.contact_number_hash,
+       gp.contact_number_masked
+     FROM jumpyard.roller_booking_tickets AS ticket
+     INNER JOIN jumpyard.guest_profiles AS gp
+       ON gp.roller_customer_id = ticket.roller_customer_id
+     WHERE ticket.roller_unique_id = :rollerUniqueId
+       AND gp.contact_number IS NOT NULL
+     ORDER BY gp.updated_at DESC
+     LIMIT 1`,
+    [stringParameter('rollerUniqueId', rollerUniqueId)],
+  );
+  const row = firstMappedRow(result);
+  if (!row) return null;
+
+  const destination = buildSmsDestination(row.contact_number, 'guest_profile');
+  if (!destination) return null;
+
+  return {
+    ...destination,
+    hash: stringOrNull(row.contact_number_hash) || destination.hash,
+    masked: stringOrNull(row.contact_number_masked) || destination.masked,
   };
 }
 
@@ -947,6 +1240,116 @@ async function markSessionLinkOpened(tokenHash) {
      WHERE token_hash = :tokenHash`,
     [stringParameter('tokenHash', tokenHash)],
   );
+}
+
+async function markSessionLinkSent(tokenHash) {
+  await executeStatement(
+    `UPDATE jumpyard.checkin_tokens
+     SET sent_at = COALESCE(sent_at, now())
+     WHERE token_hash = :tokenHash`,
+    [stringParameter('tokenHash', tokenHash)],
+  );
+}
+
+async function recordSmsDelivery({
+  booking,
+  deliveryId,
+  destination,
+  dryRun,
+  errorCode = null,
+  errorSummary = null,
+  provider,
+  providerMessageId = null,
+  status,
+  tokenHash,
+}) {
+  const sentAt = status === 'sent' ? new Date().toISOString() : null;
+  const failedAt = status === 'failed' ? new Date().toISOString() : null;
+
+  await executeStatement(
+    `INSERT INTO jumpyard.sms_deliveries (
+       sms_delivery_id,
+       roller_unique_id,
+       booking_reference,
+       token_hash,
+       provider,
+       destination_hash,
+       destination_masked,
+       message_template,
+       status,
+       dry_run,
+       provider_message_id,
+       error_code,
+       error_summary,
+       sent_at,
+       failed_at
+     )
+     VALUES (
+       :deliveryId,
+       :rollerUniqueId,
+       :bookingReference,
+       :tokenHash,
+       :provider,
+       :destinationHash,
+       :destinationMasked,
+       :messageTemplate,
+       :status,
+       :dryRun,
+       :providerMessageId,
+       :errorCode,
+       :errorSummary,
+       CAST(:sentAt AS timestamptz),
+       CAST(:failedAt AS timestamptz)
+     )`,
+    [
+      stringParameter('deliveryId', deliveryId),
+      stringParameter('rollerUniqueId', booking.rollerUniqueId),
+      stringParameter('bookingReference', booking.bookingReference),
+      stringParameter('tokenHash', tokenHash),
+      stringParameter('provider', provider),
+      stringParameter('destinationHash', destination.hash),
+      stringParameter('destinationMasked', destination.masked),
+      stringParameter('messageTemplate', CHECKIN_SMS_TEMPLATE),
+      stringParameter('status', status),
+      booleanParameter('dryRun', dryRun),
+      stringParameter('providerMessageId', providerMessageId),
+      stringParameter('errorCode', errorCode),
+      stringParameter('errorSummary', errorSummary),
+      stringParameter('sentAt', sentAt),
+      stringParameter('failedAt', failedAt),
+    ],
+  );
+}
+
+async function sendSmsWithSns({ message, phoneNumber }) {
+  if (SMS_PROVIDER !== 'aws_sns') {
+    const error = new Error('Unsupported SMS provider.');
+    error.code = 'sms_provider_unsupported';
+    throw error;
+  }
+
+  const messageAttributes = {
+    'AWS.SNS.SMS.SMSType': {
+      DataType: 'String',
+      StringValue: 'Transactional',
+    },
+  };
+  if (/^[A-Za-z0-9]{1,11}$/.test(SMS_SENDER_ID)) {
+    messageAttributes['AWS.SNS.SMS.SenderID'] = {
+      DataType: 'String',
+      StringValue: SMS_SENDER_ID,
+    };
+  }
+
+  const response = await snsClient.send(
+    new PublishCommand({
+      Message: message,
+      MessageAttributes: messageAttributes,
+      PhoneNumber: phoneNumber,
+    }),
+  );
+
+  return response.MessageId || null;
 }
 
 function evaluateStartContext(context, request) {
@@ -1411,6 +1814,13 @@ function isCreateSessionLinkRoute(routeKey, event) {
   return routeKey === 'POST /v1/check-in/session-links' || event?.rawPath === '/v1/check-in/session-links';
 }
 
+function isSendSessionLinkSmsRoute(routeKey, event) {
+  return (
+    routeKey === 'POST /v1/check-in/session-links/send-sms' ||
+    event?.rawPath === '/v1/check-in/session-links/send-sms'
+  );
+}
+
 function isResolveSessionLinkRoute(routeKey, event) {
   return (
     routeKey === 'POST /v1/check-in/session-links/resolve' ||
@@ -1495,6 +1905,57 @@ function buildCheckinUrl(baseUrl, token) {
   const parsed = new URL(baseUrl);
   parsed.searchParams.set('jy_token', token);
   return parsed.toString();
+}
+
+function buildCheckinSmsMessage(checkinUrl) {
+  return `JumpYard: Din incheckning ar redo. Oppna: ${checkinUrl}`;
+}
+
+function buildSmsDestination(value, source) {
+  const phoneNumber = normalizePhoneForSms(value);
+  if (!phoneNumber) return null;
+
+  return {
+    hash: hashString(phoneNumber),
+    masked: maskPhoneNumber(phoneNumber),
+    phoneNumber,
+    source,
+  };
+}
+
+function normalizePhoneForSms(value) {
+  const raw = stringOrNull(value);
+  if (!raw) return null;
+
+  let normalized = raw.replace(/[\s().-]/g, '');
+  if (normalized.startsWith('00')) normalized = `+${normalized.slice(2)}`;
+  if (normalized.startsWith('07')) normalized = `+46${normalized.slice(1)}`;
+
+  return /^\+[1-9]\d{7,14}$/.test(normalized) ? normalized : null;
+}
+
+function maskPhoneNumber(phoneNumber) {
+  const value = String(phoneNumber);
+  if (value.length <= 7) return '***';
+  return `${value.slice(0, 3)}*****${value.slice(-4)}`;
+}
+
+function booleanFromValue(value) {
+  if (value === true) return true;
+  if (value === false) return false;
+  return ['1', 'true', 'yes'].includes(String(value ?? '').toLowerCase());
+}
+
+function createSmsDeliveryId() {
+  return `jysms_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function safeSmsProviderError(error, phoneNumber) {
+  const code = stringOrNull(error?.code) || stringOrNull(error?.name) || 'sms_provider_error';
+  const rawMessage = stringOrNull(error?.message) || 'SMS provider request failed.';
+  const message = rawMessage.replaceAll(String(phoneNumber), '[redacted_phone]').slice(0, 240);
+
+  return { code, message };
 }
 
 async function verifyCheckinLinkDevToken(event) {
@@ -1646,6 +2107,10 @@ function stringParameter(name, value) {
   return value === null || value === undefined
     ? { name, value: { isNull: true } }
     : { name, value: { stringValue: String(value) } };
+}
+
+function booleanParameter(name, value) {
+  return { name, value: { booleanValue: Boolean(value) } };
 }
 
 function parseJsonArray(value) {

@@ -31,6 +31,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-042` | `T0028/T0030/T0031/T0032/T0033/T0034` | Payment prerequisites | T0030 confirmed Roller draft-booking `paymentJwt`; T0031 deployed quote/draft endpoints that return payment-session data; T0032 added a safe local POC harness; T0033 completed the phone pre-payment flow up to payment pending; T0034 reused the same draft/payment-pending model for add-product drafts. Remaining: obtain ROLLER authorization, approved payment package access, public HTTPS test-domain allowlisting, and fake/test card details before payment drop-in work. | High | `Pabel/T0040` | Open |
 | `FU-043` | `T0028` | Dependency security | Evaluate the phone app `npm audit --audit-level=high` findings from the T0028 QR dependency work in a dedicated dependency ticket before production. | Medium | `TBD` | Open |
 | `FU-044` | `T0035` | Product catalog | Replace T0035's phone-side mapped Playground add-on product ids with a server-owned add-on catalog before production or multi-venue rollout. | High | `TBD` | Open |
+| `FU-045` | `T0039` | SMS production readiness | Choose production SMS sender setup, consent/unsubscribe policy, delivery monitoring, and staff/admin auth before enabling guest-facing SMS outside dev dry-run testing. | High | `TBD` | Open |
 
 ## Resolved Followups
 

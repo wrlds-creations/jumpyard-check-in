@@ -1,16 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0038
+T0039
 
 ## Goal
-Create the JumpYard Cloud SMS token/session link foundation without sending SMS.
+Add server-owned SMS sending foundation for check-in session links.
 
 ## Dependencies
-- T0037 completed and merged.
+- T0038 completed and merged.
 - Dev AWS stack exists.
-- Dev Aurora schema already includes `jumpyard.checkin_tokens`.
-- Dev booking/session API is deployed.
+- Dev Aurora has `jumpyard.checkin_tokens`.
+- Guest phone/contact rows may exist in `jumpyard.guest_profiles`.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -24,16 +24,15 @@ Create the JumpYard Cloud SMS token/session link foundation without sending SMS.
 - AWS_RESOURCES.md
 - infra/lib/jumpyard-cloud-stack.ts
 - infra/lambda/session/index.js
+- infra/migrations/
 
 ## Do not touch
 - Phone UI
 - Admin UI
 - Kiosk UI
-- Package dependencies
-- Aurora migrations
 - Payment package/drop-in code
 - Redeem business logic
-- SMS provider integration
+- Roller booking/draft write logic
 - Production credentials
 - Live Roller config
 - `.env`
@@ -41,41 +40,41 @@ Create the JumpYard Cloud SMS token/session link foundation without sending SMS.
 
 ## Requirements
 
-1. Add a dev-protected check-in session link creation endpoint.
-   - It must require a server/dev token before creating links.
-   - It must accept a booking reference or Roller unique id that exists in Aurora.
-   - It must generate a high-entropy raw token and store only a SHA-256 token hash in `jumpyard.checkin_tokens`.
-   - It must return the raw token and optional phone check-in URL only once in the API response.
-   - It must never log raw tokens or guest PII.
+1. Add a protected SMS send endpoint.
+   - Add `POST /v1/check-in/session-links/send-sms`.
+   - Require the same dev link token used for T0038 link creation.
+   - Resolve the target booking from Aurora by booking reference or Roller unique id.
+   - Create a T0038 check-in link token internally.
+   - Do not return the raw token or full check-in URL from the SMS endpoint response.
 
-2. Add a public check-in session link resolve endpoint.
-   - It must accept a raw token.
-   - It must hash the token and find the matching row in `jumpyard.checkin_tokens`.
-   - It must reject missing, expired, or consumed links.
-   - It must mark the link as opened.
-   - It must start or resume the existing JumpYard Cloud check-in session for the linked booking.
-   - It must not call Roller.
+2. Add safe SMS delivery behavior.
+   - Dry-run must be the default unless `confirmSend=true`.
+   - Dry-run must create the link and audit row but must not call the SMS provider.
+   - Confirmed sends may call AWS SNS from the session Lambda.
+   - Never log or persist raw phone numbers beyond existing structured contact fields.
+   - Never log or persist raw link tokens.
+   - Never call Roller from this endpoint.
 
-3. Add dev AWS resources through CDK.
-   - Add a Secrets Manager secret for the dev link-creation token.
-   - Grant only the session Lambda read access to that secret.
-   - Add API Gateway routes for link creation and token resolution.
-   - Add the required CORS header for the dev link-creation token.
+3. Add Aurora delivery audit storage.
+   - Add a versioned migration for `jumpyard.sms_deliveries`.
+   - Store booking reference, Roller unique id, token hash, provider, masked/hash destination, template, delivery status, dry-run flag, provider message id, and safe error summary.
+   - Do not store raw SMS message text or raw link URL.
 
-4. Preserve the security model.
-   - The raw booking number must not be the only authority when using a link.
-   - Token hashes may be stored; raw tokens must not be persisted.
-   - SMS sending remains out of scope for this ticket.
+4. Add AWS permissions through CDK.
+   - Add the new API Gateway route.
+   - Configure session Lambda SMS env values for dev.
+   - Grant only the session Lambda `sns:Publish` for provider sends.
 
-5. Update source-of-truth docs with:
-   - New AWS resource and endpoint details.
-   - Validation and deploy results.
-   - Recommended next ticket: `T0039 SMS sending`.
+5. Update source-of-truth docs.
+   - Document SMS endpoint behavior.
+   - Document new Aurora table and AWS permission.
+   - Document validation and deploy results.
+   - Keep payment-drop-in work blocked until Roller prerequisites arrive.
 
 ## Non-goals
-- Do not send SMS.
-- Do not integrate Twilio, AWS SNS, Pinpoint, or another SMS provider.
-- Do not change phone UI routing.
+- Do not build phone or admin UI for sending SMS.
+- Do not send real SMS during validation unless explicitly confirmed.
+- Do not add Twilio, Pinpoint, or another provider.
 - Do not call Roller.
 - Do not redeem tickets.
 - Do not create or mutate Roller bookings.
@@ -83,27 +82,31 @@ Create the JumpYard Cloud SMS token/session link foundation without sending SMS.
 - Do not create production resources.
 
 ## Acceptance criteria
-- `POST /v1/check-in/session-links` creates a protected dev token link for an Aurora booking.
-- `POST /v1/check-in/session-links/resolve` resolves the token and starts/resumes a JumpYard Cloud session.
-- Raw token values are response-only and are not stored in Aurora.
-- Dev deploy succeeds.
+- `POST /v1/check-in/session-links/send-sms` exists in dev.
+- Unauthorized SMS send requests return `401`.
+- Dry-run SMS requests create a hashed check-in token and `jumpyard.sms_deliveries` audit row without provider calls.
+- Confirmed send path is implemented behind `confirmSend=true`.
+- The session Lambda has the minimum new SMS provider permission.
+- Raw tokens and full phone numbers are not returned by the SMS endpoint.
 - `npm run validate` passes.
-- No app UI code was changed.
 
 ## Manual verification
 In AWS Console:
-- Open Secrets Manager and confirm `/jumpyard-check-in-dev/checkin-links/dev-token` exists.
-- Open API Gateway and confirm the session-link routes exist.
-- Open Aurora Query Editor and confirm `jumpyard.checkin_tokens` has only token hashes.
-- Resolve a generated token and confirm `opened_at` is set and a check-in session exists or resumes.
+- Open API Gateway and confirm the SMS send route exists.
+- Open Aurora Query Editor and confirm `jumpyard.sms_deliveries` exists.
+- Send one dry-run SMS request and confirm a `planned` row appears with masked destination and token hash only.
+- Confirm `jumpyard.checkin_tokens` has only token hashes.
 
 ## Automated validation
 Run:
 - `node --check infra/lambda/session/index.js`
 - `npm --prefix infra run build`
+- `npm --prefix infra run migrate:dev`
 - `npm --prefix infra run synth:dev`
 - `npm --prefix infra run diff:dev`
 - `npm --prefix infra run deploy:dev`
-- Deployed API smoke for link creation and token resolution
+- Deployed API smoke for unauthorized SMS request
+- Deployed API smoke for dry-run SMS request
+- Aurora verification for `jumpyard.sms_deliveries`
 - `npm run validate`
 - `git diff --check`

@@ -91,6 +91,12 @@ Use this file to define validation for the current project or milestone.
 | T0038 infra build | Confirm CDK accepts the link routes and dev-token secret. | Passed | `npm --prefix infra run build` passed. |
 | T0038 synth/diff/deploy | Confirm dev AWS contains the check-in link routes and secret. | Passed | `npm --prefix infra run synth:dev`, `npm --prefix infra run diff:dev`, and `npm --prefix infra run deploy:dev` passed; post-deploy diff showed no differences. |
 | T0038 deployed link smoke | Confirm protected link creation and public token resolution work. | Passed | Created a link without printing the raw token, resolved it to `session_started`, and verified the token row has `opened=true`, `consumed=false`, `active=true`. |
+| T0039 session Lambda syntax | Confirm SMS send route code is syntactically valid. | Passed | `node --check infra/lambda/session/index.js` passed. |
+| T0039 infra build | Confirm CDK accepts SMS route/env/IAM changes. | Passed | `npm --prefix infra run build` passed. |
+| T0039 migration apply | Confirm SMS delivery audit table exists in dev Aurora. | Passed | `npm --prefix infra run migrate:dev` applied `0006 sms deliveries`; status shows applied. |
+| T0039 synth/diff/deploy | Confirm dev AWS contains the SMS send route and SNS permission. | Passed | Diff showed only the approved route, session Lambda env/code, and `sns:Publish`; deploy passed and post-deploy diff showed no differences. |
+| T0039 deployed unauthorized smoke | Confirm SMS sending is protected. | Passed | `POST /v1/check-in/session-links/send-sms` without dev token returned HTTP `401`. |
+| T0039 deployed dry-run smoke | Confirm SMS dry-run creates audit state without provider send. | Passed | Protected request returned `sms_planned`, provider `aws_sns`, dryRun `true`, masked destination `+46*****0000`. |
 | `node --check infra/lambda/webhook/index.js` | Confirm T0015 webhook Lambda JavaScript syntax. | Passed | Passed on 2026-05-20. |
 | T0015 local webhook handler smoke | Confirm fast-ack and retry classification before deploy. | Passed | Unauthorized and invalid JSON returned HTTP `200`; missing database config returned HTTP `500`. |
 | T0015 deployed unauthorized webhook smoke | Confirm unauthorized webhooks are acknowledged and ignored. | Passed | `POST /v1/roller/webhooks/bookings` without token returned HTTP `200` and `ignored_unauthorized`. |
@@ -171,6 +177,7 @@ Use this file to define validation for the current project or milestone.
 | T0027 staff-confirmed redeem | Redeem a dedicated ready handoff through the new staff endpoint. | Passed | Booking `5032473`, session `jycs_mpfhz4jp_a4770adb`, handoff `JY3091` redeemed 1 ticket, marked session completed, and left the waiting list. |
 | T0027 admin ready action | Open the admin app and inspect a ready handoff with redeem controls. | Passed | Browser verification showed booking `5032474`, handoff `JY7166`, token input, and disabled `Slutför` button until a code is entered. |
 | T0038 Query Editor review | Inspect generated check-in token rows. | Passed | Deployed smoke confirmed the row exists by token hash only, with `opened_at` populated after token resolution. |
+| T0039 Query Editor review | Inspect SMS delivery audit rows. | Passed | `jumpyard.sms_deliveries` row `jysms_mpgvgmyt_f49e7b7d` has status `planned`, dry_run `true`, provider `aws_sns`, masked destination, and token hash present. |
 
 ## Roller Playground Validation
 
@@ -245,6 +252,7 @@ Use this file to define validation for the current project or milestone.
 | T0018 CDK deploy | Dev webhook Lambda is updated for real Roller header support. | Passed | `npm --prefix infra run deploy:dev` updated only `WebhookHandler`. |
 | T0023 CDK deploy | Dev session Lambda and session API routes are deployed. | Passed | `npm --prefix infra run deploy:dev` created `jumpyard-check-in-dev-stack-session` and session routes. |
 | T0038 CDK deploy | Dev session link routes and dev-token secret are deployed. | Passed | Created `/jumpyard-check-in-dev/checkin-links/dev-token`, `POST /v1/check-in/session-links`, and `POST /v1/check-in/session-links/resolve`. |
+| T0039 CDK deploy | Dev SMS send route and session SNS permission are deployed. | Passed | Created `POST /v1/check-in/session-links/send-sms`, added session Lambda SMS env values, and granted `sns:Publish` to the session Lambda. |
 
 ## Aurora Schema Validation
 
@@ -254,6 +262,7 @@ Use this file to define validation for the current project or milestone.
 | Migration apply | `0001 initial schema` applies successfully and records a row in `jumpyard.schema_migrations`. | Passed | `npm --prefix infra run migrate:dev`. |
 | Migration status after apply | `0001 initial schema` is applied. | Passed | Re-running status showed `applied`. |
 | Migration idempotency | Re-running migration command does not reapply `0001`. | Passed | Second `npm --prefix infra run migrate:dev` showed `0001 initial schema: applied` and made no pending changes. |
+| T0039 SMS delivery migration | `0006 sms deliveries` creates `jumpyard.sms_deliveries`. | Passed | `npm --prefix infra run migrate:dev:status` shows `0006 sms deliveries: applied`. |
 | Table inventory | `jumpyard` schema contains the expected ingestion and operational tables. | Passed | Direct Aurora Data API query returned 15 tables. |
 | Index inventory | Lookup, webhook, seed, idempotency, and audit indexes exist. | Passed | Direct Aurora Data API query returned 62 indexes. |
 | Secret handling | Migration runner resolves the Aurora admin secret without printing secret values. | Passed | Output prints cluster target and migration status only. |

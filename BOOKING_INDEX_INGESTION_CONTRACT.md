@@ -41,11 +41,12 @@ Roller remains the source of truth. The local booking index is a speed, UX, supp
 
 ## SMS Link Readiness
 
-T0038 adds the token foundation that future SMS sending will use:
+T0038 adds the token foundation and T0039 adds the first server-owned SMS sending foundation:
 
 - `jumpyard.checkin_tokens` stores only hashed tokens linked to `roller_unique_id`.
 - The local booking index must contain the target booking before a link can be created.
-- SMS delivery is a future provider integration and should use the token creation endpoint rather than exposing booking references as link authority.
+- SMS delivery uses the protected `POST /v1/check-in/session-links/send-sms` endpoint, which creates the token internally and defaults to dry-run.
+- `jumpyard.sms_deliveries` records provider status, masked/hash destination, and token hash without storing raw link URLs or raw SMS text.
 - Opening a token resumes or starts JumpYard Cloud session state; it does not replace the daily Data API sync, webhook enrichment, or live REST confirmation before write-critical actions.
 
 ## Non-Goals

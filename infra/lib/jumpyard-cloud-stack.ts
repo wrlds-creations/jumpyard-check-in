@@ -300,6 +300,7 @@ export class JumpYardCloudStack extends Stack {
 
     this.addRoute(api, lookupHandler, 'POST /v1/check-in/lookup');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links');
+    this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-sms');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/resolve');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff');
@@ -372,7 +373,10 @@ export class JumpYardCloudStack extends Stack {
     }
 
     if (handlerName === 'session') {
+      environment.CHECKIN_SMS_BASE_URL = 'http://localhost:3000/';
       environment.CHECKIN_LINK_DEV_TOKEN_SECRET_ARN = resources.checkinLinkDevTokenSecret.secretArn;
+      environment.SMS_PROVIDER = 'aws_sns';
+      environment.SMS_SENDER_ID = 'JumpYard';
     }
 
     if (handlerName === 'redeem') {
@@ -422,6 +426,12 @@ exports.handler = async () => ({
     }
     if (handlerName === 'session') {
       resources.checkinLinkDevTokenSecret.grantRead(fn);
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['sns:Publish'],
+          resources: ['*'],
+        }),
+      );
     }
 
     fn.addToRolePolicy(
