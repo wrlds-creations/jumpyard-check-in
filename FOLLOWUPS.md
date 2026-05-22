@@ -34,7 +34,8 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-045` | `T0039` | SMS production readiness | Choose production SMS sender setup, consent/unsubscribe policy, delivery monitoring, and staff/admin auth before enabling guest-facing SMS outside dev dry-run testing. | High | `TBD` | Open |
 | `FU-046` | `T0041` | SMS link URL | Configure a public or mobile-reachable check-in app base URL before expecting SMS links to open on phones. T0041 used `http://localhost:3000/`, which validates provider delivery only. | High | `TBD` | Open |
 | `FU-047` | `T0042/T0043` | SMS sandbox | AWS SNS SMS account is in sandbox mode. T0043 verified one approved masked test phone and confirmed delivery status `SUCCESS`; unverified numbers still require sandbox verification or SNS sandbox exit. | High | `T0043` | Done |
-| `FU-048` | `T0044` | SMS timing | Connect SMS sending to booking date/time rules, for example sending a check-in link before the booked jump time instead of sending only manually triggered test SMS. | High | `T0045` | Open |
+| `FU-048` | `T0044` | SMS timing | Connect SMS sending to booking date/time rules, for example sending a check-in link before the booked jump time instead of sending only manually triggered test SMS. | High | `T0045` | Done |
+| `FU-049` | `T0045` | SMS scheduling | Add an unattended EventBridge schedule for booking-time SMS after public/mobile URL, consent/unsubscribe policy, SNS sandbox exit, and production staff/internal auth are approved. | High | `TBD` | Open |
 
 ## Resolved Followups
 
@@ -55,3 +56,4 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-033` | `T0021` | Added a separate dev redeem token, final Roller REST refresh, Aurora re-evaluation, and protected dev-only `POST /redemptions` execution path. | 2026-05-21 |
 | `FU-034` | `T0021` | Created dedicated paid Playground booking `5032454` for controlled redeem smoke and redeemed ticket `5032454-21397335`, leaving the normal `5032210` lookup fixture unused. | 2026-05-21 |
 | `FU-040` | `T0044` | Phone links with `?jy_token=...` now resolve through JumpYard Cloud, return safe booking/session context, and route from server session state instead of mock token data. | 2026-05-22 |
+| `FU-048` | `T0045` | Protected `POST /v1/check-in/session-links/send-due-sms` can plan booking-time SMS candidates from Aurora and manually send only with `confirmSend=true`; automatic scheduling remains deferred in `FU-049`. | 2026-05-22 |

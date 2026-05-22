@@ -108,6 +108,10 @@ Use this file to define validation for the current project or milestone.
 | T0044 synth/diff/deploy | Deploy only the approved session Lambda code change. | Passed | AWS account `376129878018`, region `eu-north-1`; pre-deploy diff showed only `SessionHandler` code; deploy passed; post-deploy diff showed no differences. |
 | T0044 deployed link resolve smoke | Confirm public resolve returns phone-renderable context. | Passed | Protected link creation followed by public resolve returned `session_started`, safe booking reference `5032210`, 2 booking item rows, and source `jumpyard_cloud` / `checkin_link` without printing the raw token. |
 | T0044 phone browser smoke | Confirm phone app opens SMS links through JumpYard Cloud. | Passed | Local phone app opened `?jy_token=...` to `APP_BOOKING` with `checkinSessionStatus='guest_in_progress'`; invalid token fallback reached `KIOSK_LOOKUP`. |
+| T0045 session Lambda syntax/build | Confirm booking-time SMS trigger code is valid. | Passed | `node --check infra/lambda/session/index.js`, `npm --prefix infra run build`, and `npm --prefix infra run synth:dev` passed. |
+| T0045 synth/diff/deploy | Deploy only the approved session route/code change. | Passed | AWS account `376129878018`, region `eu-north-1`; diff showed new `send-due-sms` route and session Lambda code, then the fallback fix showed only session Lambda code; deploys passed and post-deploy diff showed no differences. |
+| T0045 deployed planning smoke | Confirm booking-time trigger can plan without sending SMS. | Passed | Protected planning requests returned safe candidate/skip metadata with no raw tokens, full URLs, SMS text, or full phone numbers. |
+| T0045 duplicate guard smoke | Confirm recent real sends are skipped. | Passed | Booking `5032210` was skipped as `sms_already_sent_recently`; unpaid booking `5032211` was skipped as `payment_required`; both returned masked destination only. |
 | `node --check infra/lambda/webhook/index.js` | Confirm T0015 webhook Lambda JavaScript syntax. | Passed | Passed on 2026-05-20. |
 | T0015 local webhook handler smoke | Confirm fast-ack and retry classification before deploy. | Passed | Unauthorized and invalid JSON returned HTTP `200`; missing database config returned HTTP `500`. |
 | T0015 deployed unauthorized webhook smoke | Confirm unauthorized webhooks are acknowledged and ignored. | Passed | `POST /v1/roller/webhooks/bookings` without token returned HTTP `200` and `ignored_unauthorized`. |
@@ -196,6 +200,7 @@ Use this file to define validation for the current project or milestone.
 | T0042 next receipt check | Confirm SMS delivery after sandbox verification or sandbox exit. | Passed | T0043 verified the masked test phone and SNS success logs now report `Message has been accepted by phone.` |
 | T0043 user receipt check | Confirm the verified phone received the JumpYard Cloud SMS. | Pending | AWS provider status is `SUCCESS`; user should confirm the physical phone received it. |
 | T0044 local phone link check | Open a generated dev `jy_token` link in the phone app. | Passed | Browser verification reached booking summary with server-owned session state. A public/mobile-reachable app URL is still required for iPhone SMS links outside localhost. |
+| T0045 booking-time SMS planning review | Run the protected due-SMS endpoint against a narrow test window. | Passed | Planning mode sent no SMS; responses showed masked destinations for bookings with structured contacts and skip reasons for duplicate/unpaid cases. |
 
 ## Roller Playground Validation
 

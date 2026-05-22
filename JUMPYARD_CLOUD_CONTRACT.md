@@ -227,6 +227,7 @@ Implemented in T0038 as the foundation for SMS/deep-link entry.
 ```text
 POST /v1/check-in/session-links
 POST /v1/check-in/session-links/send-sms
+POST /v1/check-in/session-links/send-due-sms
 POST /v1/check-in/session-links/resolve
 ```
 
@@ -263,6 +264,26 @@ Rules:
 - T0042 confirmed AWS SNS provider acceptance is not the same as delivery. Dev SNS delivery status logs are enabled, and the diagnostic send failed at provider delivery with `Sandboxed account unable to send to number.` The AWS account is currently in SNS SMS sandbox mode, so real SMS delivery requires sandbox phone verification or sandbox exit.
 - T0043 verified one masked test phone in SNS sandbox and confirmed a protected JumpYard Cloud SMS reached provider status `SUCCESS` with `Message has been accepted by phone.` The account still remains sandboxed, so unverified numbers will continue to be blocked until sandbox exit.
 - T0044 confirmed the local phone app can open `?jy_token=...`, resolve it through JumpYard Cloud, and reach booking summary with a server-owned `guest_in_progress` session. A public/mobile-reachable app URL is still needed before real guest phone links can open outside the developer machine.
+
+### Booking-Time SMS Trigger
+
+Implemented in T0045 as the protected manual trigger foundation before scheduling.
+
+```text
+POST /v1/check-in/session-links/send-due-sms
+```
+
+Rules:
+
+- The trigger is protected by the same dev token as the existing SMS send endpoint until staff/internal auth exists.
+- Planning mode is the default. Without `confirmSend=true`, the endpoint returns due candidates and sends no SMS.
+- Default timing is a `30` minute lead with a `10` minute window in `Europe/Stockholm`; dev tests may pass explicit `windowStartAt` and `windowEndAt`.
+- The endpoint reads Aurora `roller_bookings`, `roller_booking_tickets`, and `guest_profiles` only. It does not call Roller.
+- Candidates must be fresh, active, SMS-ready, and pass the existing check-in session eligibility rules before a real send is attempted.
+- Confirmed sends reuse `POST /v1/check-in/session-links/send-sms` behavior internally, including hashed check-in tokens, idempotency, `jumpyard.sms_deliveries`, and AWS SNS.
+- Recent real sends for the same booking/template are skipped to avoid duplicate reminders.
+- The endpoint caps each run to a small batch and returns only safe booking metadata plus masked destinations.
+- Scheduling this trigger through EventBridge is deferred to a later ticket after timing, consent, sandbox exit, and production URL rules are confirmed.
 
 ### `POST /v1/check-in/lookup`
 
@@ -867,7 +888,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0044`. The next recommended ticket is `T0045 Booking-time SMS trigger` unless Roller payment prerequisites arrive for `T0040`.
+Current implementation has progressed through `T0045`. The next recommended ticket is `T0046 Staff auth plan/implementation` unless Roller payment prerequisites arrive for `T0040`.
 
 Near-term sequence:
 
@@ -890,7 +911,7 @@ Near-term sequence:
 17. `T0042 SMS delivery diagnostics`: configure SNS delivery status logs, send one diagnostic SMS, and identify provider-level delivery blockers.
 18. `T0043 SNS sandbox phone verification`: verify test phones in SNS sandbox and prove one real SMS delivery path.
 19. `T0044 Phone SMS link resume`: completed and deployed to dev; phone links with `jy_token` resolve through JumpYard Cloud and route from server session state.
-20. `T0045 Booking-time SMS trigger`: send check-in links from booking/session timing rules, such as before the booked jump time, while respecting SNS sandbox limits.
+20. `T0045 Booking-time SMS trigger`: completed in dev foundation; protected endpoint plans due booking reminders and sends only with explicit confirmation while respecting SNS sandbox limits.
 21. `T0046 Staff auth plan/implementation`: replace the temporary dev redeem/link code with the selected staff/admin authentication model.
 22. `T0047 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
 
