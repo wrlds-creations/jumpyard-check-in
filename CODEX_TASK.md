@@ -1,16 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0031
+T0032
 
 ## Goal
-Implement server-side JumpYard Cloud quote and draft booking endpoints for new bookings against Roller Playground.
+Create a safe Roller payment-package proof-of-concept harness against the deployed JumpYard Cloud quote/draft endpoints.
 
 ## Dependencies
-- T0030 completed and merged.
-- Dev AWS foundation is deployed.
-- Roller Playground credentials exist in AWS Secrets Manager.
-- Roller environment/base URL are configured in AWS SSM as Playground.
+- T0031 completed, deployed, and merged.
+- Dev JumpYard Cloud API is available.
+- Roller Playground quote/draft credentials are stored server-side in AWS.
+- No public phone payment UI is allowed until Roller payment-package prerequisites are confirmed.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -18,19 +18,20 @@ Implement server-side JumpYard Cloud quote and draft booking endpoints for new b
 - DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
-- AWS_RESOURCES.md
 - TEST_PLAN.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- infra/lib/jumpyard-cloud-stack.ts
-- infra/lambda/booking/**
+- .env.example
+- package.json
+- scripts/roller-payment-package-poc.js
 
 ## Do not touch
 - Phone UI implementation
 - Admin UI implementation
 - Kiosk UI implementation
+- AWS resources
 - Aurora migrations
+- Roller webhook registration
 - Redeem business logic
-- Staff auth
 - Production credentials
 - Live Roller config
 - `.env`
@@ -39,82 +40,70 @@ Implement server-side JumpYard Cloud quote and draft booking endpoints for new b
 
 ## Requirements
 
-1. Replace the booking placeholder Lambda with a real booking handler for:
-   - `POST /v1/bookings/quote`
-   - `POST /v1/bookings/draft`
+1. Add a guarded local POC command, for example:
+   - `npm run roller:payment:poc`
+   - `npm run roller:payment:poc:apply-draft`
 
-2. The quote endpoint must:
-   - Read Roller config and credentials server-side.
-   - Reuse the Playground fail-closed guard.
-   - Validate product/date/time/quantity input.
-   - Call Roller Playground `POST /bookings/draft/costs`.
-   - Return normalized cost fields only.
-   - Not create a booking.
+2. The POC must:
+   - Call JumpYard Cloud `POST /v1/bookings/quote` by default.
+   - Create no Roller booking by default.
+   - Optionally call JumpYard Cloud `POST /v1/bookings/draft` only with an explicit one-off confirmation env var.
+   - Use safe fake customer data only.
+   - Never call Roller directly from the browser or frontend.
+   - Never print Roller secrets, access tokens, or raw `paymentJwt`.
 
-3. The draft endpoint must:
-   - Read Roller config and credentials server-side.
-   - Reuse the Playground fail-closed guard.
-   - Validate customer and item input.
-   - Require an idempotency key.
-   - Require explicit `confirmDraft=true`.
-   - Call Roller Playground `POST /bookings/draft`.
-   - Return the draft unique id, costs, payment config, and the returned `paymentJwt` for the future frontend payment component.
-   - Not log or persist the raw `paymentJwt`.
+3. Payment-package prerequisite checks must:
+   - Detect whether an approved Roller payment-package/download URL has been configured.
+   - Require the package URL to use HTTPS.
+   - Detect whether a public HTTPS test origin has been configured for Roller allowlisting.
+   - Treat localhost/private origins as not ready for the real payment drop-in test.
+   - Record that fake/test card details still need Roller confirmation unless explicitly marked confirmed.
 
-4. Payment config handling must:
-   - Read safe venue payment settings from `GET /venues/me`.
-   - Return `integrationId`, `configurationId`, and `apiUrl` when available.
-   - Never return Roller OAuth tokens or client credentials.
-
-5. Idempotency and audit must:
-   - Use existing `jumpyard.idempotency_records` for draft writes.
-   - Write safe `jumpyard.event_log` rows for quote/draft attempts.
-   - Store only safe identifiers and summaries, never raw payment JWTs.
-
-6. Deployment:
-   - Synthesize and diff the dev stack.
-   - Deploy only the approved booking Lambda code change if diff is scoped.
-   - Smoke test deployed quote and draft endpoints against Playground.
-   - Update `AWS_RESOURCES.md`.
-
-7. Documentation:
-   - Update source-of-truth docs with T0031 status.
-   - Lock next ticket as `T0032 Payment package proof-of-concept`.
-   - Shift phone UI create-booking/payment wiring to the following ticket.
+4. Documentation must:
+   - Capture the current T0032 outcome.
+   - Make clear that quote/draft are ready, but actual in-PWA payment remains blocked until Roller provides/authorizes the payment package, public HTTPS allowlist, and fake/test card details.
+   - Keep phone create-booking/payment UI wiring in a later ticket.
 
 ## Non-goals
 - Do not build phone booking UI.
-- Do not render Roller/Adyen payment component.
-- Do not process fake/test payment.
+- Do not render the Roller/Adyen payment component in the phone app.
+- Do not process a real or fake card payment.
 - Do not publish a paid booking after payment.
-- Do not implement add-product linked booking.
-- Do not redeem tickets.
-- Do not add staff auth.
-- Do not create Aurora tables.
+- Do not add product/add-on linked-booking flow.
+- Do not change AWS infrastructure.
+- Do not add dependencies.
 - Do not write to Roller Live/production.
 
 ## Acceptance criteria
-- `POST /v1/bookings/quote` works against Roller Playground and returns normalized costs.
-- `POST /v1/bookings/draft` works against Roller Playground and returns draft/payment-session data.
-- Draft writes are idempotency-keyed and require explicit confirmation.
-- No secrets, access tokens, or raw payment JWTs are printed or persisted.
-- Dev deploy succeeds with scoped booking Lambda changes only.
+- `npm run roller:payment:poc` reaches the deployed JumpYard Cloud quote endpoint and creates no booking.
+- `npm run roller:payment:poc:apply-draft` fails closed without the explicit confirmation env var.
+- A guarded apply-draft run creates at most one Roller Playground draft booking and reports only safe payment-session metadata.
+- Missing Roller payment package, public HTTPS origin, and test-card details are reported as blockers, not guessed.
 - `npm run validate` passes.
-- Infra build/synth pass.
+- No app UI, AWS resources, production config, or dependencies are changed.
 
 ## Manual verification
-Call the deployed dev endpoints with a known Playground product variation such as `1765836`, date, time, fake customer data for draft, and a unique idempotency key.
+Run:
+
+```bash
+npm run roller:payment:poc
+```
+
+Optionally create one Playground draft booking:
+
+```bash
+ROLLER_PAYMENT_POC_ALLOW_DRAFT=I_UNDERSTAND_THIS_CREATES_PLAYGROUND_DRAFT_BOOKING npm run roller:payment:poc:apply-draft
+```
 
 Confirm:
-1. Quote returns costs but no booking id.
-2. Draft returns a draft unique id and payment JWT presence.
-3. Roller Live is not called.
-4. No app UI changed.
+1. Quote returns cost data from JumpYard Cloud.
+2. Draft mode requires explicit confirmation.
+3. Output does not print the raw `paymentJwt`.
+4. Payment-package and HTTPS-origin blockers are explicit.
 
 ## Automated validation
 Run:
 - `npm run validate`
-- `node --check infra/lambda/booking/index.js`
-- `npm --prefix infra run build`
-- `npm --prefix infra run synth:dev`
-- `npm --prefix infra run diff:dev`
+- `node --check scripts/roller-payment-package-poc.js`
+- `npm run roller:payment:poc`
+- `npm run roller:payment:poc:apply-draft` without confirmation

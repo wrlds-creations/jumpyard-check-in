@@ -47,6 +47,9 @@ Use this file to define validation for the current project or milestone.
 | T0031 deployed quote smoke | Confirm server-side quote works without creating booking. | Passed | `POST /v1/bookings/quote` returned HTTP `200`, total `260`, amount owing `260`, tax `14.72`, and `wroteBooking=false`. |
 | T0031 deployed draft smoke | Confirm server-side draft creation and payment-session response. | Passed | `POST /v1/bookings/draft` returned HTTP `201`, draft unique id `2c1abf4f-944c-4122-a4ff-da8440c46321`, total `260`, amount owing `260`, `jwtPresent=true`, `jwtPartCount=3`, and payment config available; raw JWT was not printed. |
 | T0031 post-deploy CDK diff | Confirm deployed stack matches local template. | Passed | CDK diff showed no differences after deploy. |
+| `node --check scripts/roller-payment-package-poc.js` | Confirm T0032 payment package POC script syntax. | Passed | Passed during T0032 validation. |
+| `npm run roller:payment:poc` | Confirm T0032 quote/default POC path without booking creation. | Passed | Returned quote HTTP `200`, total `260`, amount owing `260`, and status `blocked_prerequisites` with no draft booking created. |
+| `npm run roller:payment:poc:apply-draft` without confirmation | Confirm T0032 draft mode fails closed. | Passed | Failed before creating a Playground draft without `ROLLER_PAYMENT_POC_ALLOW_DRAFT`. |
 | T0011 Data API production URL rejection | Confirm Data API smoke fails closed for live-looking Roller URL. | Passed | `ROLLER_BASE_URL=https://api.roller.app` was rejected before Data API calls. |
 | `npm --prefix infra run build` | Confirm T0012 TypeScript importer compiles. | Passed | Passed on 2026-05-20. |
 | T0012 bookingitems dry-run | Confirm Data API bookingitems importer normalizes records without Aurora writes. | Passed | Returned 9 records, 6 bookings, 9 booking items, and 0 skipped records. |
@@ -353,3 +356,14 @@ Use this file to define validation for the current project or milestone.
 | Secret/JWT handling | Output never prints client secret, access token, or raw payment JWT. | Passed | Script reports only safe response shape and JWT metadata. |
 | Official docs review | Roller custom checkout path is documented before UI work. | Passed | Official Roller Payments docs require ROLLER authorization, public HTTPS domain allowlisting, and approved payment package access. |
 | Root validation | Source-of-truth docs and workflow checks pass after T0030. | Passed | `npm run validate` passed on 2026-05-21. |
+
+## T0032 Payment Package POC Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Script syntax | `node --check scripts/roller-payment-package-poc.js` passes. | Passed | Passed during T0032 validation. |
+| Quote-only default | `npm run roller:payment:poc` calls JumpYard Cloud quote and creates no booking. | Passed | Returned quote HTTP `200`, total `260`, amount owing `260`, and status `blocked_prerequisites`. |
+| Draft guard | `npm run roller:payment:poc:apply-draft` fails closed without confirmation. | Passed | Failed before creating a Playground draft without `ROLLER_PAYMENT_POC_ALLOW_DRAFT`. |
+| Guarded draft | Explicit guarded apply creates at most one Playground draft via JumpYard Cloud. | Passed | Created draft unique id `a8644795-a29d-4302-8a37-056d525e7bd4`, returned `paymentJwtPresent=true`, and did not print the raw JWT. |
+| Payment package readiness | Missing package URL, public HTTPS origin, and fake/test card details are reported as blockers. | Passed | Current blockers: approved payment package, public HTTPS allowlisted origin, and Roller fake/test card details. |
+| Root validation | Source-of-truth docs and workflow checks pass after T0032. | Passed | `npm run validate` passed on 2026-05-22. |
