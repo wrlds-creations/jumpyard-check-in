@@ -79,6 +79,8 @@ T0034 implements add-product architecture build step 1 for existing bookings. Ju
 
 T0035 wires the phone existing-booking add-ons step to the T0034 JumpYard Cloud add-product quote/draft endpoints. The phone flow can select mapped add-ons such as JumpSocks, Hänglås, Bryggkaffe, and SkyRider, collects the contact fields required by Roller draft booking, shows a server-side quote, creates a separate add-on draft, and stops at payment pending. Stock-only add-on drafts such as socks-only or padlock-only are valid linked add-on drafts, but they are not treated as redeemable check-in bookings.
 
+T0036 adds a local Data API backfill orchestrator for the manual foundation before scheduling. `npm --prefix infra run import:data-api-backfill:dev` splits an explicit modified-date range into daily windows, runs bookingitems before related Data API sources for each day, and refreshes the product cache for item-name enrichment. It is dry-run by default. Apply mode requires `--apply` plus `ROLLER_DATA_BACKFILL_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_DATA_API_BACKFILL`, then sets the existing per-import write confirmations for the child import scripts.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -162,6 +164,7 @@ The T0021 dev redeem token is only for controlled backend testing. It must never
 - Data API sync should use Get bookings, Get tickets, Get payments, and Get customers as the expected source set.
 - Get attendance is for actual arrival/redeem reconciliation, not for seeding expected guests.
 - Webhook payloads may be sufficient when configured with booking detail and payments, but JumpYard Cloud should enrich from live booking detail when data is incomplete, suspicious, stale, or check-in-critical.
+- T0036 is the manual/local backfill foundation. T0037 should schedule the same modified-date sync pattern in dev AWS instead of adding another import model.
 
 ## Confirmed Implementation Roadmap
 
@@ -199,7 +202,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0033 Phone create-booking pre-payment flow` | Wire the phone app to product/time selection, server-side availability/capacity check where needed, quote, guarded draft creation, and a payment-pending state. | Completed and deployed to dev; phone buy-entry now reaches a Roller Playground draft and stores safe pre-payment draft state in Aurora without rendering payment UI. |
 | `T0034 Existing-booking add-product draft step 1` | Add server-side quote and separate add-on draft creation for existing bookings, linked in JumpYard Cloud. | Completed and deployed to dev; no phone UI wiring or payment execution yet. |
 | `T0035 Phone add-product UI wiring` | Wire existing-booking add-products in the phone flow to the T0034 quote/draft endpoints. | Completed locally; lets a guest add mapped add-ons to an existing check-in session, create a separate linked Playground draft, and stop at payment pending. |
-| `T0036 Data API backfill and sync foundation` | Build a fuller Data API import path for bookingitems, tickets, payments, and customers/contact data so Aurora can be filled consistently from Roller exports. | Gives JumpYard Cloud a repeatable booking baseline before SMS links and production-like operating workflows. |
+| `T0036 Data API backfill and sync foundation` | Build a fuller Data API import path for bookingitems, tickets, payments, and customers/contact data so Aurora can be filled consistently from Roller exports. | Completed locally; gives JumpYard Cloud a repeatable booking baseline before SMS links and production-like operating workflows. |
 | `T0037 Scheduled daily Data API sync` | Move the T0036 import path into a scheduled dev AWS sync that runs a daily modified-date window and records run status. | Keeps Aurora reconciled even if webhooks are delayed, disabled, or out of order. |
 | `T0038 SMS token/session link foundation` | Add secure JumpYard Cloud links that can resume or start a booking check-in session without exposing raw booking numbers as authority. | Prepares the phone flow for SMS delivery while keeping session ownership server-side. |
 | `T0039 SMS sending` | Integrate the selected SMS provider and send check-in links from server-owned booking/session state. | Lets JumpYard invite guests into the phone check-in flow before arrival or from staff/admin workflows. |
@@ -421,7 +424,7 @@ T0030 confirmed Roller draft/payment discovery facts:
 ## Non-Goals For Current Ticket
 
 - Do not use Aurora lookup data as final authority before future write-critical actions such as redeem or add-on booking creation.
-- Do not implement daily seed ingestion.
+- Do not implement the scheduled daily AWS sync; T0036 is a local/manual backfill foundation.
 - Do not rely on automatic Roller webhook delivery in production until production auth, IP allowlisting, and environment registration are explicitly scoped.
 - Do not write to Roller Live/production.
 - Do not create staging or production AWS resources.

@@ -1,16 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0035
+T0036
 
 ## Goal
-Wire the phone existing-booking add-product step to JumpYard Cloud quote/draft endpoints and stop safely at payment pending.
+Create a safe Data API backfill/sync foundation that can fill Aurora from Roller booking exports without building the scheduled AWS job yet.
 
 ## Dependencies
-- T0034 completed and merged.
-- Dev JumpYard Cloud API is available.
-- Payment package/drop-in remains externally blocked.
-- Existing booking add-products must use the separate linked booking pattern from `D0007` and `D0044`.
+- T0035 completed and merged.
+- Dev Aurora and local Roller Playground credentials are available.
+- Existing import scripts for bookingitems, related data, and products exist.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,75 +18,84 @@ Wire the phone existing-booking add-product step to JumpYard Cloud quote/draft e
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
 - TEST_PLAN.md
+- BOOKING_INDEX_INGESTION_CONTRACT.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- jumpyard-checkin-phone/src/app/page.tsx
-- jumpyard-checkin-phone/src/components/AddonsOffer.tsx
-- jumpyard-checkin-phone/src/context/LanguageContext.tsx
-- jumpyard-checkin-phone/src/flow/cloudClient.ts
-- jumpyard-checkin-phone/src/flow/types.ts
+- infra/package.json
+- infra/scripts/import-data-api-backfill.ts
+- Existing infra import scripts only if required for orchestration compatibility
 
 ## Do not touch
-- Backend Lambda implementation
-- AWS infrastructure
-- Admin UI implementation
-- Kiosk UI implementation
+- Phone UI
+- Admin UI
+- Kiosk UI
+- Backend API Lambda behavior
+- AWS CDK resources
+- AWS deploy configuration
+- Roller payment package/drop-in work
 - Redeem business logic
-- Roller webhook registration
+- SMS provider integration
 - Production credentials
 - Live Roller config
 - `.env`
-- Package dependencies
 - Unrelated assets or deliverables
 
 ## Requirements
 
-1. Update the existing phone add-ons step for existing bookings.
-   - Keep the existing check-in flow intact when no new add-ons are selected.
-   - Only create an add-product draft when the guest selects new add-ons.
-   - Do not mutate the original Roller booking.
+1. Add a single local Data API backfill command.
+   - It must run existing product, bookingitems, tickets, bookingpayments, and customers import paths in a safe order.
+   - It must support explicit `--start-date` and `--end-date` arguments.
+   - It must split the range into daily modified-date windows.
 
-2. Call the T0034 JumpYard Cloud endpoints from the phone client.
-   - Quote with `POST /v1/bookings/{bookingReference}/add-products/quote`.
-   - Create a separate add-on draft with `POST /v1/bookings/{bookingReference}/add-products`.
-   - Require customer contact before draft creation because Roller draft booking requires it.
-   - Use an idempotency key for draft creation.
+2. Keep dry-run as the default.
+   - The command must not write to Aurora unless `--apply` is provided.
+   - Apply mode must require a separate explicit confirmation environment variable.
+   - Apply mode must continue using the existing per-import write confirmations internally.
 
-3. Stop at payment pending.
-   - Show the quoted total before creating the draft.
-   - Show a clear payment-pending state after draft creation.
-   - Do not collect card details.
-   - Do not publish the draft booking.
-   - Do not continue the add-on flow as if the add-on is paid.
+3. Preserve the Data API safety model.
+   - Use the existing Playground guard.
+   - Never print Roller credentials, access tokens, raw payloads, raw guest names, raw emails, raw phone numbers, or booking notes.
+   - Keep normalized Aurora upserts idempotent.
 
-4. Handle stock-only add-ons correctly.
-   - A separate add-on draft may contain only stock/add-on products such as socks or padlock.
-   - Do not treat stock-only add-on drafts as redeemable check-in bookings.
-   - Products that are not mapped to a safe Playground product id yet must be visibly disabled or blocked.
+4. Document how this differs from the future scheduled sync.
+   - T0036 is a local/manual foundation.
+   - T0037 will move the same pattern into a scheduled dev AWS sync.
+
+5. Update source-of-truth docs with:
+   - New command names.
+   - Validation results.
+   - Recommended next ticket: `T0037 Scheduled daily Data API sync`.
 
 ## Non-goals
-- Do not implement real or fake card payment.
-- Do not build the Roller payment package/drop-in.
-- Do not publish draft bookings.
-- Do not create a server-side add-on catalog endpoint.
-- Do not change staff/admin redeem behavior.
-- Do not change the new-booking buy-entry flow except for shared client types if needed.
+- Do not create or change AWS resources.
+- Do not deploy anything.
+- Do not add EventBridge schedules.
+- Do not send SMS.
+- Do not build SMS links or tokens.
+- Do not implement payment package/drop-in.
+- Do not create or mutate Roller bookings.
+- Do not change app UI.
 
 ## Acceptance criteria
-- Existing-booking add-ons can quote through JumpYard Cloud.
-- Existing-booking add-ons can create a separate Roller Playground draft through JumpYard Cloud.
-- The phone UI stops at payment pending after the add-on draft.
-- Socks-only or padlock-only add-on drafts are supported as separate non-redeemable add-on drafts.
-- Raw `paymentJwt` is not displayed or stored by the phone UI.
+- A dry-run command can read all scoped Data API sources across at least one daily window.
+- The apply command fails closed without the T0036 confirmation env var.
+- The orchestrator command runs bookingitems before related data for each window and refreshes products for enrichment.
+- `npm --prefix infra run build` passes.
 - `npm run validate` passes.
-- Phone lint/build pass.
+- No app code was changed.
 
 ## Manual verification
-Open the phone app, search a paid existing booking, start check-in, add socks or another mapped add-on, enter contact details, quote the add-on, reserve the draft, and confirm the UI ends at payment pending.
+Run a dry-run for a small Playground modified-date window and confirm the command reports:
+- daily window count
+- commands run
+- sources covered
+- `apply=false`
 
-Confirm in Aurora that the draft is stored as `flow_type='add_product'` and linked to the original booking through `jumpyard.booking_links`.
+Run apply mode without the confirmation env var and confirm it fails before Aurora writes.
 
 ## Automated validation
 Run:
+- `npm --prefix infra run build`
+- `npm --prefix infra run import:data-api-backfill:dev -- 2026-05-20 2026-05-21`
+- `npm --prefix infra run import:data-api-backfill:dev:apply -- 2026-05-20 2026-05-21`
 - `npm run validate`
-- `npm --prefix jumpyard-checkin-phone run lint`
-- `npm --prefix jumpyard-checkin-phone run build`
+- `git diff --check`

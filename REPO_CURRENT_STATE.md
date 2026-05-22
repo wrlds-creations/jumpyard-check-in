@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-22
-- Current branch: `codex/t0035-phone-add-product-ui`
-- Current status: T0035 phone add-product UI wiring completed locally; existing-booking add-ons can create a separate linked add-on draft and stop at payment pending.
-- Current ticket: `T0035` completed locally
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`
-- Recommended next ticket: `T0036 Data API backfill and sync foundation`
+- Current branch: `codex/t0036-data-api-backfill-sync`
+- Current status: T0036 Data API backfill and sync foundation completed locally; local command can dry-run bookingitems, tickets, bookingpayments, customers, and products over daily modified-date windows.
+- Current ticket: `T0036` completed locally
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`
+- Recommended next ticket: `T0037 Scheduled daily Data API sync`
 
 ## Current Structure
 
@@ -45,6 +45,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- lambda/webhook/index.js
 |   |-- lib/config.ts
 |   |-- scripts/import-bookingitems.ts
+|   |-- scripts/import-data-api-backfill.ts
 |   |-- scripts/import-products.ts
 |   |-- scripts/import-related-data.ts
 |   |-- scripts/register-roller-webhook.ts
@@ -91,6 +92,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm --prefix infra run import:products:dev:apply` | Apply Roller product cache import and booking item enrichment into dev Aurora. | Requires `ROLLER_PRODUCT_IMPORT_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_PRODUCTS`; verify AWS account and region first. |
 | `npm --prefix infra run import:related-data:dev` | Dry-run Roller Data API tickets, payments, and customers normalization for dev Aurora import. | Reads local `.env`, calls Roller Playground, and performs no Aurora writes. |
 | `npm --prefix infra run import:related-data:dev:apply` | Apply Roller related Data API source import into dev Aurora. | Requires `ROLLER_RELATED_IMPORT_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_RELATED_DATA`; verify AWS account and region first. |
+| `npm --prefix infra run import:data-api-backfill:dev` | Dry-run all current Roller Data API import sources over explicit daily modified-date windows. | Requires explicit start/end dates, e.g. `-- 2026-05-20 2026-05-21`; runs bookingitems, related data, and product refresh without Aurora writes. |
+| `npm --prefix infra run import:data-api-backfill:dev:apply` | Apply all current Roller Data API import sources over explicit daily modified-date windows. | Requires `ROLLER_DATA_BACKFILL_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_DATA_API_BACKFILL`; child import write guards are set internally. |
 | `npm --prefix infra audit` | Audit infra dependencies. | Currently reports one moderate bundled `brace-expansion` issue inside `aws-cdk-lib`; automatic fix unavailable. |
 | `npm run roller:env:check` | Validate Roller env guard against current environment variables. | Requires `ROLLER_ENV=playground` and a Playground-looking `ROLLER_BASE_URL`; client credentials are optional. |
 | `npm run roller:smoke` | Verify local Roller Playground credentials with an OAuth token request and one read-only smoke request. | Loads local `.env`; does not print secrets or full Roller responses. |
@@ -150,18 +153,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0033` | Added phone create-booking pre-payment flow. | 2026-05-22 | Phone buy-entry loads server-side Roller availability, quotes a selected time/product/quantity, creates a guarded Playground draft, stops at payment pending, and persists safe draft metadata in `jumpyard.prepayment_booking_drafts` without raw `paymentJwt`. |
 | `T0034` | Added existing-booking add-product quote/draft step 1. | 2026-05-22 | Dev `POST /v1/bookings/{bookingReference}/add-products/quote` returns add-on costs without creating a booking; dev `POST /v1/bookings/{bookingReference}/add-products` creates a separate Roller Playground add-on draft, stores `flow_type='add_product'`, and links it to the original booking in `jumpyard.booking_links`. |
 | `T0035` | Wired phone add-product UI to add-product quote/draft endpoints. | 2026-05-22 | Existing-booking phone add-ons now collect contact, quote mapped add-ons, create a separate linked Playground add-on draft, and stop at payment pending; socks-only/padlock-only drafts are treated as non-redeemable add-on drafts. |
+| `T0036` | Added local Data API backfill/sync foundation. | 2026-05-22 | New dry-run-first orchestrator runs bookingitems, tickets, bookingpayments, customers, and product refresh across daily modified-date windows; apply mode is separately guarded. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0035` | Phone add-product UI wiring. | Completed locally | Wired existing-booking add-ons to the T0034 quote/draft endpoints, added contact/review/payment-pending UI, and kept stock-only add-on drafts out of redeem/check-in routing. |
+| `T0036` | Data API backfill and sync foundation. | Completed locally | Added a local daily-window orchestrator around existing bookingitems, related data, and product import scripts with dry-run default and separate apply guard. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0036` | Data API backfill and sync foundation | Build a fuller import path for bookingitems, tickets, bookingpayments, and customers/contact data into Aurora. |
 | `T0037` | Scheduled daily Data API sync | Run the T0036 import path on a daily modified-date window in dev AWS and record sync health. |
 | `T0038` | SMS token/session link foundation | Create secure JumpYard Cloud links that start or resume check-in sessions without using raw booking numbers as authority. |
 | `T0039` | SMS sending | Integrate the selected SMS provider and send check-in links from server-owned booking/session state. |
@@ -388,6 +391,9 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0035 validation: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, `npm run validate`, and `git diff --check` passed on 2026-05-22; lint still reports only pre-existing `<img>` warnings.
 - T0035 browser smoke: local phone app searched paid booking `5032443`, started a session, added one socks item, quoted `45 kr`, created add-product draft `jypd_740b8fc10ee446639b`, and stopped at payment pending.
 - T0035 Aurora verification: draft `jypd_740b8fc10ee446639b` has `flow_type='add_product'`, `status='payment_pending'`, original booking `5032443`, `amount_owing_cents=4500`, `payment_jwt_present=true`, and a `booking_links.link_type='add_product_draft'` row.
+- T0036 infra build: `npm --prefix infra run build` passed.
+- T0036 dry-run: `npm --prefix infra run import:data-api-backfill:dev -- 2026-05-20 2026-05-21` passed and ran bookingitems, related data, and products with `apply=false`.
+- T0036 apply guard: `npm --prefix infra run import:data-api-backfill:dev:apply -- 2026-05-20 2026-05-21` failed closed without `ROLLER_DATA_BACKFILL_ALLOW_WRITE`.
 
 ## Known Issues Summary
 
@@ -396,7 +402,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - JumpYard Cloud lookup API now uses Aurora first and refreshes from Roller when local data is missing or unsafe. Other API business logic is still pending.
 - Phone app booking lookup now calls JumpYard Cloud for the first check-in step, carries non-visible lookup source/freshness metadata, uses today's Stockholm date by default, starts/resumes a JumpYard Cloud session after paid lookup, routes active ready sessions directly to QR, and marks new sessions ready for staff after safety attestation. Booking creation and payment UI behavior are still pending.
 - Aurora schema exists in dev. T0012 writes normalized `/data/bookingitems` snapshots into `roller_bookings` and `roller_booking_items`, T0013 enriches booking item product names from `product_catalog_cache`, T0014 imports tickets plus customer contact data, T0016 live-refresh lookup can upsert refreshed booking/item/ticket data, and T0017 webhook enrichment can upsert refreshed booking/item/ticket data.
-- Booking index ingestion has started with Data API bookingitems, REST product catalog cache, tickets, booking payments, customer contact data, dev webhook event intake/enrichment, lookup-driven live refresh, and real Roller Playground webhook delivery.
+- Booking index ingestion has started with Data API bookingitems, REST product catalog cache, tickets, booking payments, customer contact data, dev webhook event intake/enrichment, lookup-driven live refresh, real Roller Playground webhook delivery, and a local all-source daily-window backfill orchestrator.
 - Roller Data API `/data/bookingitems`, `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access, query params, paging shape, and modified-date behavior are confirmed in Playground for the T0008 seed window.
 - Webhook retry behavior, response handling, booking event names, Playground auth header `x-roller-apikey`, and dev webhook registration are confirmed. Exact production auth/signature and IP allowlisting choice remain open.
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.

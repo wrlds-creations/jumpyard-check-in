@@ -268,6 +268,25 @@ Applied import result for modified-date window `2026-05-20 -> 2026-05-21`:
 
 Email and phone are stored as explicit structured fields with hash/masked companion fields. Customer names, addresses, booking notes, raw payloads, secrets, and tokens are not printed or intentionally stored in T0014.
 
+### T0036 Local Data API Backfill Orchestrator
+
+T0036 adds a local orchestrator around the existing import scripts:
+
+```text
+npm --prefix infra run import:data-api-backfill:dev -- 2026-05-20 2026-05-21
+npm --prefix infra run import:data-api-backfill:dev:apply -- 2026-05-20 2026-05-21
+```
+
+The command requires explicit `--start-date` and `--end-date`, splits the range into daily modified-date windows, runs bookingitems before related data for each window, and refreshes products at the end for item-name enrichment.
+
+Apply mode writes only when:
+
+```text
+ROLLER_DATA_BACKFILL_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_DATA_API_BACKFILL
+```
+
+The orchestrator then sets the existing per-import write confirmations for bookingitems, related data, and products in the child processes. Dry-run remains the default, and output must avoid secrets, access tokens, raw payloads, raw customer names, raw emails, raw phone numbers, and booking notes.
+
 ### Seed Upsert Targets
 
 | Target | Source | Required Behavior |
