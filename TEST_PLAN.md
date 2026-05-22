@@ -80,6 +80,9 @@ Use this file to define validation for the current project or milestone.
 | T0014 related data dev apply | Import related Data API sources into dev Aurora. | Passed | Guarded apply upserted 6 tickets, 0 payments, and 6 customers. |
 | T0014 idempotency check | Re-run guarded import against the same modified-date window. | Passed | Re-run upserted the same 6 tickets and 6 customers without duplicate rows. |
 | T0014 Aurora verification | Query dev Aurora for ticket, payment, and guest profile counts. | Passed | Counts: 6 tickets, 0 payments, 6 guest profiles; query output used masked contact values only. |
+| T0036 infra build | Confirm Data API backfill orchestrator compiles. | Passed | `npm --prefix infra run build` passed. |
+| T0036 backfill dry-run | Confirm the all-source backfill command reads a daily window without Aurora writes. | Passed | `npm --prefix infra run import:data-api-backfill:dev -- 2026-05-20 2026-05-21` passed with `apply=false`. |
+| T0036 backfill apply guard | Confirm the all-source backfill command refuses writes without its top-level confirmation. | Passed | `npm --prefix infra run import:data-api-backfill:dev:apply -- 2026-05-20 2026-05-21` failed closed without `ROLLER_DATA_BACKFILL_ALLOW_WRITE`. |
 | `node --check infra/lambda/webhook/index.js` | Confirm T0015 webhook Lambda JavaScript syntax. | Passed | Passed on 2026-05-20. |
 | T0015 local webhook handler smoke | Confirm fast-ack and retry classification before deploy. | Passed | Unauthorized and invalid JSON returned HTTP `200`; missing database config returned HTTP `500`. |
 | T0015 deployed unauthorized webhook smoke | Confirm unauthorized webhooks are acknowledged and ignored. | Passed | `POST /v1/roller/webhooks/bookings` without token returned HTTP `200` and `ignored_unauthorized`. |

@@ -823,7 +823,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0035`. The next recommended ticket is `T0036 Data API backfill and sync foundation`.
+Current implementation has progressed through `T0036`. The next recommended ticket is `T0037 Scheduled daily Data API sync`.
 
 Near-term sequence:
 
@@ -837,7 +837,7 @@ Near-term sequence:
 8. `T0033 Phone create-booking pre-payment flow`: completed and deployed to dev; phone buy-entry reaches a Roller Playground draft and payment-pending state through JumpYard Cloud without rendering payment UI.
 9. `T0034 Existing-booking add-product draft step 1`: completed and deployed to dev; JumpYard Cloud can quote and create a separate linked add-on draft for an existing booking.
 10. `T0035 Phone add-product UI wiring`: completed locally; the phone existing-booking flow can quote mapped add-ons, create a separate linked add-on draft, and stop at payment pending.
-11. `T0036 Data API backfill and sync foundation`: build a fuller Data API import path for bookingitems, tickets, bookingpayments, and customers/contact data into Aurora.
+11. `T0036 Data API backfill and sync foundation`: completed locally; a dry-run-first orchestrator runs bookingitems, related Data API sources, and product refresh over explicit daily modified-date windows.
 12. `T0037 Scheduled daily Data API sync`: run the T0036 import path on a daily modified-date window in dev AWS and record sync health.
 13. `T0038 SMS token/session link foundation`: create secure JumpYard Cloud links that start or resume check-in sessions without using raw booking numbers as authority.
 14. `T0039 SMS sending`: integrate the selected SMS provider and send check-in links from server-owned booking/session state.
