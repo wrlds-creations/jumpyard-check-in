@@ -617,6 +617,13 @@ T0033 phone pre-payment result:
 - `jumpyard.prepayment_booking_drafts` stores safe draft state, totals, selected item summary, guest email/phone plus masked/hash fields, and JWT/config presence flags.
 - Raw `paymentJwt` values remain response-only for future payment package/drop-in work and are not persisted in Aurora.
 
+T0035 phone add-product result:
+
+- The existing-booking add-ons screen calls JumpYard Cloud add-product quote/draft endpoints instead of the old local/mock payment path.
+- The phone app collects first name, last name, email, and phone before creating an add-on draft because Roller draft booking requires customer fields.
+- Mapped Playground add-ons are currently JumpSocks `1765445`, Hänglås `1765441`, Bryggkaffe `1765452`, and SkyRider `1765443`; unmapped products are blocked in the phone UI until a server-owned catalog exists.
+- Stock-only selections such as socks-only or padlock-only create separate linked add-on drafts and stop at payment pending. They must not be routed into safety, QR, or ticket redemption as standalone check-in bookings.
+
 ### `POST /v1/bookings/{bookingReference}/add-products/quote`
 
 Calculates an existing-booking product addition before changing the original booking.
@@ -736,6 +743,7 @@ Rules:
 - Do not use same-booking `PUT /bookings/{uniqueId}` plus payment link as the primary pilot path.
 - Same-booking update remains a future option only if Roller confirms a reliable return path and JumpYard explicitly chooses that UX.
 - Stock/add-on products cannot be redeemed through the same ticket-level API path unless configured as ticket/session products.
+- T0035 phone UI treats add-product draft payment as unresolved. It does not publish the draft, collect card details, or continue as if the add-on was paid.
 
 ## Error Contract
 
@@ -815,7 +823,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0034`. The next recommended ticket is `T0035 Phone add-product UI wiring`.
+Current implementation has progressed through `T0035`. The next recommended ticket is `T0036 Data API backfill and sync foundation`.
 
 Near-term sequence:
 
@@ -828,14 +836,19 @@ Near-term sequence:
 7. `T0032 Payment package proof-of-concept`: completed locally as a safe harness; quote/draft can be exercised through JumpYard Cloud, but the payment drop-in is still externally blocked by package, allowlist, and test-card prerequisites.
 8. `T0033 Phone create-booking pre-payment flow`: completed and deployed to dev; phone buy-entry reaches a Roller Playground draft and payment-pending state through JumpYard Cloud without rendering payment UI.
 9. `T0034 Existing-booking add-product draft step 1`: completed and deployed to dev; JumpYard Cloud can quote and create a separate linked add-on draft for an existing booking.
-10. `T0035 Phone add-product UI wiring`: let the phone existing-booking flow call the T0034 quote/draft endpoints and stop at payment pending.
-11. `T0036 Roller payment package/drop-in integration`: integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites.
-12. `T0037 Staff auth plan/implementation`: replace the temporary dev redeem code with the selected staff/admin authentication model.
-13. `T0038 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
+10. `T0035 Phone add-product UI wiring`: completed locally; the phone existing-booking flow can quote mapped add-ons, create a separate linked add-on draft, and stop at payment pending.
+11. `T0036 Data API backfill and sync foundation`: build a fuller Data API import path for bookingitems, tickets, bookingpayments, and customers/contact data into Aurora.
+12. `T0037 Scheduled daily Data API sync`: run the T0036 import path on a daily modified-date window in dev AWS and record sync health.
+13. `T0038 SMS token/session link foundation`: create secure JumpYard Cloud links that start or resume check-in sessions without using raw booking numbers as authority.
+14. `T0039 SMS sending`: integrate the selected SMS provider and send check-in links from server-owned booking/session state.
+15. `T0040 Roller payment package/drop-in integration`: integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites.
+16. `T0041 Staff auth plan/implementation`: replace the temporary dev redeem code with the selected staff/admin authentication model.
+17. `T0042 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
 
 ## Open Contract Questions
 
 - How should published add-on bookings update `jumpyard.booking_links.linked_booking_reference` after payment/publish completes?
+- Should add-on product ids come from a server-owned add-on catalog endpoint before production/multi-venue rollout?
 - Which tenders work in the new add-on booking checkout flow: gift card, membership code, multi-visit value?
 - Does Roller Playground support in-app payment from draft booking `paymentJwt`, and what fake/test card details and domain allow-listing are required? T0030/T0031 confirmed the documented draft/JWT path and deployed server endpoint, but test cards, package access, and allowlisting remain open.
 - What exact response shape should JumpYard expect from `POST /redemptions` for partial success/failure?

@@ -1,17 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0034
+T0035
 
 ## Goal
-Build add-product architecture step 1: server-side quote and separate add-on draft booking linked to an existing booking.
+Wire the phone existing-booking add-product step to JumpYard Cloud quote/draft endpoints and stop safely at payment pending.
 
 ## Dependencies
-- T0033 completed and merged.
+- T0034 completed and merged.
 - Dev JumpYard Cloud API is available.
-- Roller Playground credentials are stored server-side in AWS.
 - Payment package/drop-in remains externally blocked.
-- Existing booking add-products must use the separate linked booking pattern from `D0007`.
+- Existing booking add-products must use the separate linked booking pattern from `D0007` and `D0044`.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -21,12 +20,15 @@ Build add-product architecture step 1: server-side quote and separate add-on dra
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- AWS_RESOURCES.md
-- infra/lambda/booking/index.js
-- infra/migrations/
+- jumpyard-checkin-phone/src/app/page.tsx
+- jumpyard-checkin-phone/src/components/AddonsOffer.tsx
+- jumpyard-checkin-phone/src/context/LanguageContext.tsx
+- jumpyard-checkin-phone/src/flow/cloudClient.ts
+- jumpyard-checkin-phone/src/flow/types.ts
 
 ## Do not touch
-- Phone UI implementation
+- Backend Lambda implementation
+- AWS infrastructure
 - Admin UI implementation
 - Kiosk UI implementation
 - Redeem business logic
@@ -39,62 +41,53 @@ Build add-product architecture step 1: server-side quote and separate add-on dra
 
 ## Requirements
 
-1. Implement `POST /v1/bookings/{bookingReference}/add-products/quote`.
-   - Resolve and validate the original booking server-side.
-   - Use Roller Playground only.
-   - Quote the requested add-on items as a separate booking/draft cost request.
-   - Do not modify the original Roller booking.
-   - Do not create a draft booking in quote mode.
+1. Update the existing phone add-ons step for existing bookings.
+   - Keep the existing check-in flow intact when no new add-ons are selected.
+   - Only create an add-product draft when the guest selects new add-ons.
+   - Do not mutate the original Roller booking.
 
-2. Implement `POST /v1/bookings/{bookingReference}/add-products`.
-   - Require `confirmDraft=true`.
-   - Require an idempotency key.
-   - Resolve and validate the original booking server-side immediately before the write.
-   - Create a separate Roller Playground draft booking for the add-on items.
-   - Link the original booking to the add-on draft in JumpYard Cloud.
-   - Persist safe pre-payment draft metadata.
-   - Never persist raw `paymentJwt`.
+2. Call the T0034 JumpYard Cloud endpoints from the phone client.
+   - Quote with `POST /v1/bookings/{bookingReference}/add-products/quote`.
+   - Create a separate add-on draft with `POST /v1/bookings/{bookingReference}/add-products`.
+   - Require customer contact before draft creation because Roller draft booking requires it.
+   - Use an idempotency key for draft creation.
 
-3. Add any missing Aurora metadata needed for add-on draft tracking.
-   - Keep the existing `jumpyard.booking_links` model as the primary original-to-add-on link.
-   - Add only minimal columns needed to distinguish new-booking drafts from add-product drafts.
-   - Keep guest contact fields structured and masked/hashed where applicable.
-
-4. Keep payment execution deferred.
-   - Do not render payment UI.
+3. Stop at payment pending.
+   - Show the quoted total before creating the draft.
+   - Show a clear payment-pending state after draft creation.
    - Do not collect card details.
-   - Do not publish the add-on draft booking.
-   - Document that payment completion remains blocked until the Roller payment package/drop-in is available.
+   - Do not publish the draft booking.
+   - Do not continue the add-on flow as if the add-on is paid.
+
+4. Handle stock-only add-ons correctly.
+   - A separate add-on draft may contain only stock/add-on products such as socks or padlock.
+   - Do not treat stock-only add-on drafts as redeemable check-in bookings.
+   - Products that are not mapped to a safe Playground product id yet must be visibly disabled or blocked.
 
 ## Non-goals
-- Do not build phone add-product UI.
 - Do not implement real or fake card payment.
-- Do not publish the add-on draft booking.
-- Do not call `PUT /bookings/{uniqueId}` on the original booking.
-- Do not change redemption behavior.
-- Do not write to Roller Live/production.
+- Do not build the Roller payment package/drop-in.
+- Do not publish draft bookings.
+- Do not create a server-side add-on catalog endpoint.
+- Do not change staff/admin redeem behavior.
+- Do not change the new-booking buy-entry flow except for shared client types if needed.
 
 ## Acceptance criteria
-- Add-product quote returns costs without creating a booking.
-- Add-product draft creates a separate Roller Playground draft booking.
-- Aurora links the original booking to the add-on draft through `jumpyard.booking_links`.
-- Aurora records the add-on draft in pre-payment state without raw `paymentJwt`.
+- Existing-booking add-ons can quote through JumpYard Cloud.
+- Existing-booking add-ons can create a separate Roller Playground draft through JumpYard Cloud.
+- The phone UI stops at payment pending after the add-on draft.
+- Socks-only or padlock-only add-on drafts are supported as separate non-redeemable add-on drafts.
+- Raw `paymentJwt` is not displayed or stored by the phone UI.
 - `npm run validate` passes.
-- Booking Lambda syntax, infra build, and dev synth pass.
-- Dev migration/deploy are applied only to the approved dev stack.
+- Phone lint/build pass.
 
 ## Manual verification
-Run a deployed add-product quote against a known Playground booking and confirm no draft/link row is created.
+Open the phone app, search a paid existing booking, start check-in, add socks or another mapped add-on, enter contact details, quote the add-on, reserve the draft, and confirm the UI ends at payment pending.
 
-Run a deployed add-product draft against a known Playground booking and confirm:
-- Roller returns a draft unique id.
-- `jumpyard.prepayment_booking_drafts` has an add-product draft row.
-- `jumpyard.booking_links` links the original booking to the add-on draft.
-- Raw `paymentJwt` is not stored in Aurora.
+Confirm in Aurora that the draft is stored as `flow_type='add_product'` and linked to the original booking through `jumpyard.booking_links`.
 
 ## Automated validation
 Run:
 - `npm run validate`
-- `node --check infra/lambda/booking/index.js`
-- `npm --prefix infra run build`
-- `npm --prefix infra run synth:dev`
+- `npm --prefix jumpyard-checkin-phone run lint`
+- `npm --prefix jumpyard-checkin-phone run build`

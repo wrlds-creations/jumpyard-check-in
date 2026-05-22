@@ -400,3 +400,14 @@ Use this file to define validation for the current project or milestone.
 | Add-product draft smoke | Deployed draft creates a separate Roller Playground draft and Aurora link. | Passed | Created draft `18e85e91-9a53-4afd-a951-75d1a41eaf9f`, add-on group `jyao_2b05e40abbda4bad9a`, link `jyl_cf14c98651b4451aba`, and prepayment draft `jypd_2a5ad290e9c34eadaa`. |
 | Aurora persistence | Add-product draft state is stored without raw `paymentJwt`. | Passed | `prepayment_booking_drafts.flow_type='add_product'`, `booking_links.link_type='add_product_draft'`, and the only JWT column is `payment_jwt_present`. |
 | Root validation | Source-of-truth docs and workflow checks pass after T0034. | Passed | `npm run validate`, `node --check infra/lambda/booking/index.js`, `npm --prefix infra run migrate:dev:status`, and `git diff --check` passed on 2026-05-22. |
+
+## T0035 Phone Add-Product UI Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Phone lint | Phone app lint passes after add-product UI wiring. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the pre-existing `<img>` warnings. |
+| Phone build | Phone app builds after add-product UI wiring. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed. |
+| Socks quote smoke | Add-product quote supports a stock-only socks add-on without creating a draft. | Passed | Direct dev API quote for booking `5032210`, product `1765445`, quantity `1`, `requireAvailability=false` returned total `45`, amount owing `45`, and `wroteBooking=false`. |
+| Browser add-product flow | Existing-booking phone flow can create a separate add-on draft and stop at payment pending. | Passed | Browser smoke with booking `5032443` added one socks item, quoted `45 kr`, created draft `jypd_740b8fc10ee446639b`, and showed `data-add-product-status="payment_pending"`. |
+| Aurora persistence | Browser-created add-product draft is linked to the original booking. | Passed | Aurora row `jypd_740b8fc10ee446639b` has `flow_type='add_product'`, `status='payment_pending'`, original booking `5032443`, amount `4500`, `payment_jwt_present=true`, and `booking_links.link_type='add_product_draft'`. |
+| Root validation | Source-of-truth docs and workflow checks pass after T0035. | Passed | `npm run validate` and `git diff --check` passed on 2026-05-22. |
