@@ -203,8 +203,12 @@ export interface NewBookingDraftResult {
     };
   };
   prepayment?: {
+    addOnGroupId?: string | null;
     amountOwing: number | null;
     amountOwingCents: number | null;
+    flowType?: 'new_booking' | 'add_product' | string;
+    originalBookingReference?: string | null;
+    originalRollerUniqueId?: string | null;
     paymentBlockedReason: string | null;
     prepaymentDraftId: string;
     rollerDraftUniqueId: string | null;
@@ -212,6 +216,18 @@ export interface NewBookingDraftResult {
     total: number | null;
     totalCents: number | null;
   };
+}
+
+export interface AddProductDraftResult {
+  draft: NewBookingDraftResult['draft'];
+  addOn?: {
+    addOnGroupId: string | null;
+    originalBookingReference: string | null;
+    originalRollerUniqueId: string | null;
+    mode: string | null;
+  };
+  paymentSession: NewBookingDraftResult['paymentSession'];
+  prepayment?: NewBookingDraftResult['prepayment'];
 }
 
 interface CloudBookingCosts {
@@ -238,6 +254,28 @@ interface QuoteResponse {
 interface DraftResponse {
   status: 'draft_created' | 'invalid_request' | 'blocked' | 'rejected' | 'roller_error' | 'config_error' | 'internal_error';
   draft?: NewBookingDraftResult['draft'];
+  paymentSession?: NewBookingDraftResult['paymentSession'];
+  prepayment?: NewBookingDraftResult['prepayment'];
+  error?: { code?: string; message?: string };
+}
+
+interface AddProductQuoteResponse {
+  status: 'quoted' | 'invalid_request' | 'blocked' | 'rejected' | 'roller_error' | 'config_error' | 'internal_error';
+  quote?: NewBookingQuote;
+  error?: { code?: string; message?: string };
+}
+
+interface AddProductDraftResponse {
+  status:
+    | 'add_product_draft_created'
+    | 'invalid_request'
+    | 'blocked'
+    | 'rejected'
+    | 'roller_error'
+    | 'config_error'
+    | 'internal_error';
+  draft?: NewBookingDraftResult['draft'];
+  addOn?: AddProductDraftResult['addOn'];
   paymentSession?: NewBookingDraftResult['paymentSession'];
   prepayment?: NewBookingDraftResult['prepayment'];
   error?: { code?: string; message?: string };
@@ -468,6 +506,92 @@ export async function createDraftBooking(
   }
 
   return {
+    draft: body.draft,
+    paymentSession: {
+      config: body.paymentSession.config,
+      jwtPresent: body.paymentSession.jwtPresent,
+      jwtSummary: body.paymentSession.jwtSummary,
+    },
+    prepayment: body.prepayment,
+  };
+}
+
+export async function quoteAddProducts(
+  bookingReference: string,
+  customer: NewBookingCustomer,
+  items: NewBookingItemRequest[],
+  requireAvailability: boolean
+): Promise<NewBookingQuote> {
+  let response: Response;
+  let body: AddProductQuoteResponse | null = null;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/v1/bookings/${encodeURIComponent(bookingReference)}/add-products/quote`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        correlationId: `phone_addon_quote_${Date.now().toString(36)}`,
+        customer,
+        items,
+        name: `Add-on for ${bookingReference}`,
+        requireAvailability,
+      }),
+    });
+    body = await parseBookingResponse<AddProductQuoteResponse>(response);
+  } catch (error) {
+    if (error instanceof CloudBookingError) throw error;
+    throw new CloudBookingError('network_error', 'Could not reach JumpYard Cloud.');
+  }
+
+  if (!response.ok || body?.status !== 'quoted' || !body.quote) {
+    throw createBookingError(body, response.status);
+  }
+
+  return body.quote;
+}
+
+export async function createAddProductDraft(
+  bookingReference: string,
+  customer: NewBookingCustomer,
+  items: NewBookingItemRequest[],
+  idempotencyKey: string,
+  requireAvailability: boolean
+): Promise<AddProductDraftResult> {
+  let response: Response;
+  let body: AddProductDraftResponse | null = null;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/v1/bookings/${encodeURIComponent(bookingReference)}/add-products`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-idempotency-key': idempotencyKey,
+      },
+      body: JSON.stringify({
+        confirmDraft: true,
+        correlationId: `phone_addon_draft_${Date.now().toString(36)}`,
+        customer,
+        idempotencyKey,
+        items,
+        name: `Add-on for ${bookingReference}`,
+        requireAvailability,
+        sendConfirmations: false,
+      }),
+    });
+    body = await parseBookingResponse<AddProductDraftResponse>(response);
+  } catch (error) {
+    if (error instanceof CloudBookingError) throw error;
+    throw new CloudBookingError('network_error', 'Could not reach JumpYard Cloud.');
+  }
+
+  if (!response.ok || body?.status !== 'add_product_draft_created' || !body.draft || !body.paymentSession) {
+    throw createBookingError(body, response.status);
+  }
+
+  return {
+    addOn: body.addOn,
     draft: body.draft,
     paymentSession: {
       config: body.paymentSession.config,

@@ -33,6 +33,8 @@ export interface Addon {
   label: string;
   price: number;
   qty: number;
+  rollerProductId?: number | null;
+  requiresAvailability?: boolean;
 }
 
 export interface LookupSource {

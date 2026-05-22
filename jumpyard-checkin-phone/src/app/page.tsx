@@ -374,6 +374,7 @@ function CheckInFlow() {
                     {state === 'APP_ADDONS' && ctx.booking && (
                         <AddonsOffer
                             key="addons"
+                            booking={ctx.booking}
                             guestCount={ctx.booking.jumpers}
                             existingAddons={ctx.existingAddons}
                             onContinue={({ selectedAddons, addonsTotal, skyriderSelected, connectedSelected }) =>
@@ -385,6 +386,12 @@ function CheckInFlow() {
                                     paymentTotal: (ctx.baseTotal || 0) + addonsTotal,
                                 })
                             }
+                            onPendingDone={() => {
+                                setAlreadyCheckedIn(false);
+                                setCtx({ ...initialContext(effectiveChannel), token });
+                                setState('KIOSK_CHOICE');
+                                scrollToTop();
+                            }}
                         />
                     )}
 
