@@ -91,6 +91,8 @@ T0041 runs the first controlled real SMS smoke through the T0039 endpoint. AWS S
 
 T0042 adds AWS SNS SMS delivery status diagnostics to the dev stack and runs a second protected diagnostic SMS with an AWS-owned HTTPS base URL. Aurora recorded delivery `jysms_mpgwlk9u_9566748e` as `sent`, but CloudWatch SNS delivery status logs show provider status `FAILURE` with `Sandboxed account unable to send to number.` The AWS account is in SNS SMS sandbox mode, so real SMS delivery requires verifying the destination phone in SNS sandbox or moving the account out of SMS sandbox before guest-facing SMS can work.
 
+T0043 verifies the approved masked test phone `+46*****9508` in AWS SNS SMS sandbox and reruns the protected JumpYard Cloud SMS send. Aurora recorded delivery `jysms_mpgxbla6_b59779cd` as `sent`, and CloudWatch SNS delivery status logs show `SUCCESS` with provider response `Message has been accepted by phone.` The AWS account is still in SNS SMS sandbox, so only verified sandbox numbers can receive SMS until sandbox exit is requested and approved.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -221,7 +223,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0040 Roller payment package/drop-in integration` | Add the approved Roller payment package, allowlisted public HTTPS origin, and fake/test card path when Roller/Pabel provides the missing prerequisites. | Blocked until Roller/Pabel provides the missing payment prerequisites. |
 | `T0041 Controlled SMS live smoke` | Send one confirmed dev SMS through JumpYard Cloud and document whether AWS SNS accepts it. | Completed locally against dev; provider accepted the message, but link usability still needs a public/mobile-reachable app URL. |
 | `T0042 SMS delivery diagnostics` | Configure SNS delivery status logs and diagnose why the approved phone did not receive the accepted SMS. | Completed in dev AWS; delivery status logs show the AWS account is still in SNS SMS sandbox mode. |
-| `T0043 SNS sandbox phone verification or exit` | Verify approved test phones in SNS sandbox or request SMS sandbox exit before expecting real SMS delivery. | Required before another real SMS delivery test can succeed. |
+| `T0043 SNS sandbox phone verification` | Verify the approved test phone in SNS sandbox and resend a JumpYard Cloud SMS. | Completed locally against dev; SNS delivery status logs show `SUCCESS` for the verified test phone. |
 | `T0044 Staff auth replacement for temporary dev code` | Replace the manual dev redeem/link tokens with a real staff/admin auth model. | Needed before production-like staff redeem/SMS operations. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.

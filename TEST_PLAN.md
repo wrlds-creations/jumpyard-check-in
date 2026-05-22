@@ -101,6 +101,8 @@ Use this file to define validation for the current project or milestone.
 | T0042 SNS diagnostics deploy | Configure SNS SMS delivery status logs for dev. | Passed | CDK deploy added `jumpyard-check-in-dev-sns-sms-delivery-status` and set SNS attributes `DefaultSMSType=Transactional`, `DeliveryStatusSuccessSamplingRate=100`, and `DeliveryStatusIAMRole`. |
 | T0042 diagnostic SMS smoke | Confirm a second protected SMS send is audited and provider delivery status is visible. | Passed | Aurora row `jysms_mpgwlk9u_9566748e` is `sent`; CloudWatch SNS delivery status is `FAILURE` with provider response `Sandboxed account unable to send to number.` |
 | T0042 SNS sandbox status | Confirm whether the AWS account is still SMS sandboxed. | Passed | `aws sns get-sms-sandbox-account-status` returned `IsInSandbox=true`. |
+| T0043 sandbox phone verification | Verify one approved phone number in SNS SMS sandbox. | Passed | SNS sandbox list shows masked destination `+46*****9508` as `Verified`; OTP was not stored or committed. |
+| T0043 verified SMS smoke | Confirm a protected SMS can be delivered to the verified sandbox number. | Passed | Aurora row `jysms_mpgxbla6_b59779cd` is `sent`; CloudWatch SNS delivery status is `SUCCESS` with provider response `Message has been accepted by phone.` |
 | `node --check infra/lambda/webhook/index.js` | Confirm T0015 webhook Lambda JavaScript syntax. | Passed | Passed on 2026-05-20. |
 | T0015 local webhook handler smoke | Confirm fast-ack and retry classification before deploy. | Passed | Unauthorized and invalid JSON returned HTTP `200`; missing database config returned HTTP `500`. |
 | T0015 deployed unauthorized webhook smoke | Confirm unauthorized webhooks are acknowledged and ignored. | Passed | `POST /v1/roller/webhooks/bookings` without token returned HTTP `200` and `ignored_unauthorized`. |
@@ -186,7 +188,8 @@ Use this file to define validation for the current project or milestone.
 | T0041 user receipt check | Confirm the approved phone received the SMS. | Failed as expected | T0042 delivery logs explain the missing receipt: SNS SMS sandbox rejected delivery to the unverified destination. |
 | T0042 Query Editor review | Inspect diagnostic SMS delivery audit row. | Passed | `jumpyard.sms_deliveries` row `jysms_mpgwlk9u_9566748e` has status `sent`, dry_run `false`, provider `aws_sns`, masked destination, token hash present, provider message id present, and sent timestamp present. |
 | T0042 CloudWatch delivery review | Inspect SNS SMS delivery status logs. | Passed | Failure log group `sns/eu-north-1/376129878018/DirectPublishToPhoneNumber/Failure` shows provider response `Sandboxed account unable to send to number.` |
-| T0042 next receipt check | Confirm SMS delivery after sandbox verification or sandbox exit. | Blocked | Requires `T0043` because the AWS account currently reports `IsInSandbox=true`. |
+| T0042 next receipt check | Confirm SMS delivery after sandbox verification or sandbox exit. | Passed | T0043 verified the masked test phone and SNS success logs now report `Message has been accepted by phone.` |
+| T0043 user receipt check | Confirm the verified phone received the JumpYard Cloud SMS. | Pending | AWS provider status is `SUCCESS`; user should confirm the physical phone received it. |
 
 ## Roller Playground Validation
 

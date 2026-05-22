@@ -258,6 +258,7 @@ Rules:
 - The endpoint does not call Roller, redeem tickets, or mutate bookings.
 - T0041 confirmed AWS SNS accepts one protected dev send. The current dev SMS base URL is `http://localhost:3000/`, so real guest use still needs a public/mobile-reachable app URL before SMS links are useful on phones.
 - T0042 confirmed AWS SNS provider acceptance is not the same as delivery. Dev SNS delivery status logs are enabled, and the diagnostic send failed at provider delivery with `Sandboxed account unable to send to number.` The AWS account is currently in SNS SMS sandbox mode, so real SMS delivery requires sandbox phone verification or sandbox exit.
+- T0043 verified one masked test phone in SNS sandbox and confirmed a protected JumpYard Cloud SMS reached provider status `SUCCESS` with `Message has been accepted by phone.` The account still remains sandboxed, so unverified numbers will continue to be blocked until sandbox exit.
 
 ### `POST /v1/check-in/lookup`
 
@@ -862,7 +863,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0042`. The next recommended ticket is `T0043 SNS sandbox phone verification or sandbox exit`.
+Current implementation has progressed through `T0043`. The next recommended ticket is `T0044 Staff auth plan/implementation` unless Roller payment prerequisites arrive for `T0040`.
 
 Near-term sequence:
 
@@ -883,7 +884,7 @@ Near-term sequence:
 15. `T0040 Roller payment package/drop-in integration`: integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites.
 16. `T0041 Controlled SMS live smoke`: send one confirmed dev SMS through JumpYard Cloud and verify the Aurora audit trail.
 17. `T0042 SMS delivery diagnostics`: configure SNS delivery status logs, send one diagnostic SMS, and identify provider-level delivery blockers.
-18. `T0043 SNS sandbox phone verification or sandbox exit`: verify test phones in SNS sandbox or request sandbox exit before expecting real SMS delivery.
+18. `T0043 SNS sandbox phone verification`: verify test phones in SNS sandbox and prove one real SMS delivery path.
 19. `T0044 Staff auth plan/implementation`: replace the temporary dev redeem/link code with the selected staff/admin authentication model.
 20. `T0045 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
 
