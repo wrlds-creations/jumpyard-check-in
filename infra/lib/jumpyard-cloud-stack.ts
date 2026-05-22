@@ -270,6 +270,7 @@ export class JumpYardCloudStack extends Stack {
     this.addRoute(api, redeemHandler, 'POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem');
     this.addRoute(api, bookingHandler, 'POST /v1/bookings/quote');
     this.addRoute(api, bookingHandler, 'POST /v1/bookings/draft');
+    this.addRoute(api, bookingHandler, 'POST /v1/bookings/availability');
     this.addRoute(api, bookingHandler, 'POST /v1/bookings/{bookingReference}/add-products/quote');
     this.addRoute(api, bookingHandler, 'POST /v1/bookings/{bookingReference}/add-products');
     this.addRoute(api, webhookHandler, 'POST /v1/roller/webhooks/bookings');

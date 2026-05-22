@@ -73,6 +73,8 @@ T0031 implements and deploys the server-side JumpYard Cloud new-booking quote/dr
 
 T0032 adds a local payment-package POC harness against the deployed JumpYard Cloud quote/draft endpoints. It calls `POST /v1/bookings/quote` by default without creating a booking, can create one guarded Playground draft booking through `POST /v1/bookings/draft`, and reports only safe payment-session metadata. The actual in-PWA payment drop-in remains blocked until Roller provides/authorizes the approved payment package, a public HTTPS allowlisted test origin, and fake/test card details.
 
+T0033 implements the phone create-booking pre-payment flow. The phone app now calls JumpYard Cloud `POST /v1/bookings/availability` to show the next three half-hour start times and capacity-limited jump products, calls `POST /v1/bookings/quote` for server-side cost confirmation, creates a guarded Roller Playground draft through `POST /v1/bookings/draft`, and ends in a payment-pending state. JumpYard Cloud persists safe draft metadata in `jumpyard.prepayment_booking_drafts`, including structured guest email/phone plus masked/hash fields, but never stores raw `paymentJwt` values.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -120,6 +122,7 @@ The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_C
 - Product catalog names/types may be cached because they are needed for display and normalization and are not guest PII.
 - Guest email and phone may be stored as explicit structured contact fields for check-in/SMS readiness; free-text names, notes, addresses, and booking comments remain deferred.
 - Check-in session state, staff handoff state, safety status, final redeem confirmation, idempotency, and audit are JumpYard Cloud-owned operational data.
+- Pre-payment draft state is JumpYard Cloud operational state. It may store selected item summaries, totals, status, Roller draft ids, and structured guest email/phone with masked/hash fields, but raw payment JWTs remain response-only and must not be persisted.
 
 ## Phone-First Flow Targets
 
@@ -127,7 +130,7 @@ The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_C
 - `F2`: create a booking and check in by resolving Roller ticket ids and redeeming tickets server-side.
 - `F3`: check in an existing booking and add products by creating a separate linked add-on booking, then linking original booking and add-on booking inside JumpYard Cloud.
 
-For `F1`, the preferred target is to keep the guest inside the JumpYard PWA for booking creation and Playground/test payment if Roller supports a safe in-app payment flow through draft booking `paymentJwt` or an approved frontend payment component. T0033 should proceed with a pre-payment booking flow while the payment package is externally blocked: product/time selection, server-side availability/capacity check where required, server-side quote, guarded draft creation, and a clear "payment setup pending" state. Hosted payment links remain a fallback, not the preferred pilot UX.
+For `F1`, the preferred target is to keep the guest inside the JumpYard PWA for booking creation and Playground/test payment if Roller supports a safe in-app payment flow through draft booking `paymentJwt` or an approved frontend payment component. T0033 implements the pre-payment booking flow while the payment package is externally blocked: product/time selection, server-side availability/capacity check where required, server-side quote, guarded draft creation, and a clear payment-pending state. T0034 should add the payment package/drop-in when Roller/Pabel provides the missing prerequisites. Hosted payment links remain a fallback, not the preferred pilot UX.
 
 ## Phone/Staff Redeem Handoff
 
@@ -188,8 +191,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0030 New booking/payment discovery spike` | Confirm the exact Roller Playground path for draft booking, payment token, test/fake card, and whether payment can stay inside the PWA without a hosted payment-link detour. | Completed locally; draft booking and `paymentJwt` are confirmed, while Roller payment-library authorization, domain allowlisting, package download, and test card details remain prerequisites for full in-app payment. |
 | `T0031 Server-side booking quote/draft` | Add JumpYard Cloud endpoints for new-booking quote and draft creation against Roller Playground, without phone UI payment yet. | Completed and deployed to dev; quote returns normalized costs without creating a booking, draft returns a Roller draft id plus payment-session data behind idempotency and confirmation. |
 | `T0032 Payment package proof-of-concept` | Verify the Roller payment-library package, fake/test card flow, and public HTTPS allowlisting path against the T0031 draft response. | Completed locally as a safe POC harness; quote/draft can be exercised through JumpYard Cloud, but full payment execution remains blocked by external Roller prerequisites. |
-| `T0033 Phone create-booking pre-payment flow` | Wire the phone app to product/time selection, server-side availability/capacity check where needed, quote, guarded draft creation, and a payment-pending state. | Builds the real booking UX up to the external Roller payment-package blocker without rendering payment drop-in or collecting card details. |
-| `T0034 Roller payment package/drop-in integration` | Add the approved Roller payment package, allowlisted public HTTPS origin, and fake/test card path when Roller/Pabel provides the missing prerequisites. | Completes in-PWA payment after T0033 proves the pre-payment booking flow. |
+| `T0033 Phone create-booking pre-payment flow` | Wire the phone app to product/time selection, server-side availability/capacity check where needed, quote, guarded draft creation, and a payment-pending state. | Completed and deployed to dev; phone buy-entry now reaches a Roller Playground draft and stores safe pre-payment draft state in Aurora without rendering payment UI. |
+| `T0034 Roller payment package/drop-in integration` | Add the approved Roller payment package, allowlisted public HTTPS origin, and fake/test card path when Roller/Pabel provides the missing prerequisites. | Next payment ticket; completes in-PWA payment after T0033 proves the pre-payment booking flow. |
 | `T0035 Staff auth replacement for temporary dev code` | Replace the manual dev redeem code with a real staff/admin auth model. | Needed before production-like staff redeem; can follow booking/payment spike unless pilot security timing forces it earlier. |
 | `T0036 Staff operations polish` | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. | Smooths the operational handoff after core create/check-in/redeem paths are proven. |
 
@@ -421,7 +424,7 @@ T0030 confirmed Roller draft/payment discovery facts:
 
 | Question | Why It Matters | Owner | Status |
 |---|---|---|---|
-| Which Roller Playground write scopes are enabled for create booking, draft booking, payment, and redemption? | Needed before booking/payment work. Draft booking creation is confirmed through T0030/T0031/T0032; full payment processing still needs Roller payment-library enablement. | `T0033` | `Partially answered` |
+| Which Roller Playground write scopes are enabled for create booking, draft booking, payment, and redemption? | Needed before booking/payment work. Draft booking creation is confirmed through T0030/T0031/T0032/T0033; full payment processing still needs Roller payment-library enablement. | `T0034` | `Partially answered` |
 | Does Roller Playground support an in-app payment flow from draft booking `paymentJwt`, including documented test/fake card numbers and any domain allow-listing requirements? | Determines whether F1 can complete payment inside the JumpYard PWA or must use a hosted fallback. Roller docs support the in-app library path, and T0032 can check the required inputs, but test cards, package access, account authorization, and domain allowlisting remain open. | `T0034` | `Blocked externally` |
 | What is the best field or internal model for linking an original booking to a separate add-on booking? | Required for add-product implementation. | `TBD` | `Open` |
 | Which products need reconfiguration from stock/add-on to ticket/session products for API-driven redemption? | Stock/add-on products are excluded from Roller ticket redemption webhook/API flow. | `TBD` | `Open` |

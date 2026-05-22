@@ -48,6 +48,18 @@ export class CloudSessionError extends Error {
   }
 }
 
+export class CloudBookingError extends Error {
+  readonly code: string;
+  readonly httpStatus?: number;
+
+  constructor(code: string, message: string, httpStatus?: number) {
+    super(message);
+    this.name = 'CloudBookingError';
+    this.code = code;
+    this.httpStatus = httpStatus;
+  }
+}
+
 interface CloudLookupResponse {
   status: 'found' | 'not_found' | 'invalid_request' | 'roller_error' | 'config_error' | 'internal_error';
   booking?: CloudBooking;
@@ -115,6 +127,120 @@ interface CloudBookingItem {
   startTime: string | null;
   endTime: string | null;
   tickets: unknown[];
+}
+
+export interface NewBookingProduct {
+  available: boolean;
+  capacityRemaining: number | null;
+  durationMinutes: number;
+  endTime: string | null;
+  jumpersPerUnit: number;
+  key: string;
+  label: string;
+  onlineSalesOpen: boolean;
+  parentProductId: string;
+  productId: string | null;
+  productName: string | null;
+  startTime: string;
+  type: 'entry' | 'family';
+  unitPrice: number | null;
+  unitPriceCents: number | null;
+}
+
+export interface NewBookingAvailabilitySlot {
+  date: string;
+  startTime: string;
+  products: NewBookingProduct[];
+}
+
+export interface NewBookingAvailability {
+  date: string;
+  slots: NewBookingAvailabilitySlot[];
+}
+
+export interface NewBookingCustomer {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+}
+
+export interface NewBookingItemRequest {
+  bookingDate: string;
+  productId: number;
+  quantity: number;
+  startTime: string;
+}
+
+export interface NewBookingQuote {
+  externalId: string | null;
+  costs: CloudBookingCosts;
+  itemCount: number;
+  expiresAt: string | null;
+}
+
+export interface NewBookingDraftResult {
+  draft: {
+    uniqueId: string | null;
+    capacityReservationId: string | null;
+    bookingReference: string | null;
+    costs: CloudBookingCosts;
+    itemCount: number;
+  };
+  paymentSession: {
+    jwtPresent: boolean;
+    jwtSummary?: {
+      present: boolean;
+      partCount?: number;
+      expiresAt?: string | null;
+    };
+    config?: {
+      available: boolean;
+      apiUrl: string | null;
+      configurationId: string | null;
+      integrationId: string | null;
+      lookupStatusCode?: number | null;
+    };
+  };
+  prepayment?: {
+    amountOwing: number | null;
+    amountOwingCents: number | null;
+    paymentBlockedReason: string | null;
+    prepaymentDraftId: string;
+    rollerDraftUniqueId: string | null;
+    status: string;
+    total: number | null;
+    totalCents: number | null;
+  };
+}
+
+interface CloudBookingCosts {
+  total: number | null;
+  amountOwing: number | null;
+  tax?: number | null;
+  transactionFee?: number | null;
+  cardFee?: number | null;
+  discount?: number | null;
+}
+
+interface AvailabilityResponse {
+  status: 'available' | 'invalid_request' | 'blocked' | 'roller_error' | 'config_error' | 'internal_error';
+  availability?: NewBookingAvailability;
+  error?: { code?: string; message?: string };
+}
+
+interface QuoteResponse {
+  status: 'quoted' | 'invalid_request' | 'blocked' | 'rejected' | 'roller_error' | 'config_error' | 'internal_error';
+  quote?: NewBookingQuote;
+  error?: { code?: string; message?: string };
+}
+
+interface DraftResponse {
+  status: 'draft_created' | 'invalid_request' | 'blocked' | 'rejected' | 'roller_error' | 'config_error' | 'internal_error';
+  draft?: NewBookingDraftResult['draft'];
+  paymentSession?: NewBookingDraftResult['paymentSession'];
+  prepayment?: NewBookingDraftResult['prepayment'];
+  error?: { code?: string; message?: string };
 }
 
 export async function lookupBooking(code: string): Promise<Booking> {
@@ -245,6 +371,113 @@ export async function markSessionReadyForStaff(
   return toCheckInSession(body.session);
 }
 
+export async function getNewBookingAvailability(startTimes: string[], date = getExpectedDate()): Promise<NewBookingAvailability> {
+  let response: Response;
+  let body: AvailabilityResponse | null = null;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/v1/bookings/availability`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        correlationId: `phone_availability_${Date.now().toString(36)}`,
+        date,
+        startTimes,
+      }),
+    });
+    body = await parseBookingResponse<AvailabilityResponse>(response);
+  } catch (error) {
+    if (error instanceof CloudBookingError) throw error;
+    throw new CloudBookingError('network_error', 'Could not reach JumpYard Cloud.');
+  }
+
+  if (!response.ok || body?.status !== 'available' || !body.availability) {
+    throw createBookingError(body, response.status);
+  }
+
+  return body.availability;
+}
+
+export async function quoteNewBooking(customer: NewBookingCustomer, items: NewBookingItemRequest[]): Promise<NewBookingQuote> {
+  let response: Response;
+  let body: QuoteResponse | null = null;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/v1/bookings/quote`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        correlationId: `phone_quote_${Date.now().toString(36)}`,
+        customer,
+        items,
+        name: `${customer.firstName} ${customer.lastName}`.trim() || 'JumpYard booking',
+        requireAvailability: true,
+      }),
+    });
+    body = await parseBookingResponse<QuoteResponse>(response);
+  } catch (error) {
+    if (error instanceof CloudBookingError) throw error;
+    throw new CloudBookingError('network_error', 'Could not reach JumpYard Cloud.');
+  }
+
+  if (!response.ok || body?.status !== 'quoted' || !body.quote) {
+    throw createBookingError(body, response.status);
+  }
+
+  return body.quote;
+}
+
+export async function createDraftBooking(
+  customer: NewBookingCustomer,
+  items: NewBookingItemRequest[],
+  idempotencyKey: string
+): Promise<NewBookingDraftResult> {
+  let response: Response;
+  let body: DraftResponse | null = null;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/v1/bookings/draft`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-idempotency-key': idempotencyKey,
+      },
+      body: JSON.stringify({
+        confirmDraft: true,
+        correlationId: `phone_draft_${Date.now().toString(36)}`,
+        customer,
+        idempotencyKey,
+        items,
+        name: `${customer.firstName} ${customer.lastName}`.trim() || 'JumpYard booking',
+        requireAvailability: true,
+        sendConfirmations: false,
+      }),
+    });
+    body = await parseBookingResponse<DraftResponse>(response);
+  } catch (error) {
+    if (error instanceof CloudBookingError) throw error;
+    throw new CloudBookingError('network_error', 'Could not reach JumpYard Cloud.');
+  }
+
+  if (!response.ok || body?.status !== 'draft_created' || !body.draft || !body.paymentSession) {
+    throw createBookingError(body, response.status);
+  }
+
+  return {
+    draft: body.draft,
+    paymentSession: {
+      config: body.paymentSession.config,
+      jwtPresent: body.paymentSession.jwtPresent,
+      jwtSummary: body.paymentSession.jwtSummary,
+    },
+    prepayment: body.prepayment,
+  };
+}
+
 function getApiBaseUrl() {
   const configured = process.env.NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL || DEFAULT_CLOUD_API_BASE_URL;
   return configured.replace(/\/+$/, '');
@@ -297,6 +530,17 @@ async function parseSessionResponse(response: Response): Promise<CloudSessionRes
   }
 }
 
+async function parseBookingResponse<T>(response: Response): Promise<T | null> {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new CloudBookingError('booking_response_invalid', 'JumpYard Cloud returned an invalid booking response.', response.status);
+  }
+}
+
 function createLookupError(body: CloudLookupResponse | null, httpStatus?: number) {
   if (body?.status === 'not_found' || body?.error?.code === 'booking_not_found') {
     return new CloudLookupError('not_found', 'Booking was not found.', httpStatus);
@@ -320,6 +564,14 @@ function createSessionError(body: CloudSessionResponse | null, httpStatus?: numb
   }
 
   return new CloudSessionError('session_failed', body?.error?.message ?? 'Check-in session could not start.', httpStatus);
+}
+
+function createBookingError(body: { error?: { code?: string; message?: string } } | null, httpStatus?: number) {
+  return new CloudBookingError(
+    body?.error?.code ?? 'booking_failed',
+    body?.error?.message ?? 'JumpYard Cloud booking request failed.',
+    httpStatus
+  );
 }
 
 function isSessionIssue(value?: string): value is SessionIssue {

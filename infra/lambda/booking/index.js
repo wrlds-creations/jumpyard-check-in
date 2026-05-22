@@ -5,8 +5,19 @@ const crypto = require('crypto');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const MAX_BOOKING_ITEMS = 10;
+const MAX_AVAILABILITY_SLOTS = 6;
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
+const VENUE_TIME_ZONE = 'Europe/Stockholm';
+
+const PHONE_BOOKING_PRODUCTS = [
+  { key: 'E60', parentName: 'Entré 60 min', label: '60 min entré', type: 'entry', durationMinutes: 60, jumpersPerUnit: 1 },
+  { key: 'E90', parentName: 'Entré 90 min', label: '90 min entré', type: 'entry', durationMinutes: 90, jumpersPerUnit: 1 },
+  { key: 'E120', parentName: 'Entré 120 min', label: '120 min entré', type: 'entry', durationMinutes: 120, jumpersPerUnit: 1 },
+  { key: 'F60', parentName: 'Entré 60 min - Familj', label: '60 min familj', type: 'family', durationMinutes: 60, jumpersPerUnit: 4 },
+  { key: 'F90', parentName: 'Entré 90 min - Familj', label: '90 min familj', type: 'family', durationMinutes: 90, jumpersPerUnit: 4 },
+  { key: 'F120', parentName: 'Entré 120 min - Familj', label: '120 min familj', type: 'family', durationMinutes: 120, jumpersPerUnit: 4 },
+];
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
@@ -35,6 +46,10 @@ exports.handler = async (event) => {
     const body = parseBody(event);
     correlationId = stringOrNull(body.correlationId) || correlationId;
 
+    if (isAvailabilityRoute(routeKey, event)) {
+      return handleAvailability(body, correlationId);
+    }
+
     if (isQuoteRoute(routeKey, event)) {
       return handleQuote(event, body, correlationId);
     }
@@ -62,6 +77,93 @@ exports.handler = async (event) => {
   }
 };
 
+async function handleAvailability(body, correlationId) {
+  const request = normalizeAvailabilityRequest(body);
+  const validationError = validateAvailabilityRequest(request);
+  if (validationError) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: validationError,
+    });
+  }
+
+  const config = await getRollerConfig();
+  const token = await getRollerAccessToken(config);
+  const parentProducts = await loadPhoneBookingParentProducts(config.env);
+  const missingParents = PHONE_BOOKING_PRODUCTS.filter((product) => !parentProducts.some((parent) => parent.key === product.key));
+
+  if (missingParents.length > 0) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: 'phone_products_missing',
+        message: `Product cache is missing ${missingParents[0].parentName}. Refresh the Roller product cache before booking creation.`,
+      },
+    });
+  }
+
+  const parentProductIds = parentProducts.map((product) => product.parentProductId);
+  const rollerResult = await getRollerJson(
+    config,
+    token,
+    `/product-availability?${new URLSearchParams({
+      Date: request.date,
+      ProductIds: parentProductIds.join(','),
+    }).toString()}`,
+  );
+
+  if (!rollerResult.ok) {
+    await writeBookingEventLog({
+      correlationId,
+      eventType: 'booking.availability_failed',
+      payload: {
+        endpoint: 'GET /product-availability',
+        rollerStatus: rollerResult.status,
+      },
+      subjectRef: request.date,
+      summary: `Roller availability failed with HTTP ${rollerResult.status}.`,
+    });
+
+    return jsonResponse(rollerResult.status === 409 ? 409 : 502, correlationId, {
+      status: rollerResult.status === 409 ? 'rejected' : 'roller_error',
+      error: {
+        code: 'roller_availability_failed',
+        message: `Roller availability failed with HTTP ${rollerResult.status}.`,
+      },
+      roller: {
+        statusCode: rollerResult.status,
+        error: summarizeRollerError(rollerResult.body),
+      },
+    });
+  }
+
+  const availability = buildPhoneAvailability(request, parentProducts, rollerResult.body);
+  await writeBookingEventLog({
+    correlationId,
+    eventType: 'booking.availability_succeeded',
+    payload: {
+      endpoint: 'GET /product-availability',
+      date: request.date,
+      requestedSlots: request.startTimes.length,
+      rollerEnvironment: config.env,
+      availableProductCount: availability.products.filter((product) => product.available).length,
+    },
+    subjectRef: request.date,
+    summary: 'Roller Playground product availability read succeeded.',
+  });
+
+  return jsonResponse(200, correlationId, {
+    status: 'available',
+    availability,
+    source: {
+      system: 'roller',
+      environment: config.env,
+      endpoint: 'GET /product-availability',
+      wroteBooking: false,
+    },
+  });
+}
+
 async function handleQuote(event, body, correlationId) {
   const request = normalizeQuoteRequest(body);
   const validationError = validateQuoteRequest(request);
@@ -74,6 +176,14 @@ async function handleQuote(event, body, correlationId) {
 
   const config = await getRollerConfig();
   const token = await getRollerAccessToken(config);
+  const availabilityError = request.requireAvailability ? await validateItemsAvailable(config, token, request.items) : null;
+  if (availabilityError) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: availabilityError,
+    });
+  }
+
   const payload = buildRollerBookingPayload(request, {
     customer: request.customer || buildQuoteCustomer(),
     externalIdPrefix: 'JY-Q',
@@ -172,6 +282,15 @@ async function handleDraft(event, body, correlationId) {
 
   const config = await getRollerConfig();
   const token = await getRollerAccessToken(config);
+  const availabilityError = request.requireAvailability ? await validateItemsAvailable(config, token, request.items) : null;
+  if (availabilityError) {
+    await completeIdempotencyKey(request.idempotencyKey, 'failed', availabilityError.code);
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: availabilityError,
+    });
+  }
+
   const payload = buildRollerBookingPayload(request, {
     customer: request.customer,
     externalIdPrefix: 'JY-D',
@@ -208,6 +327,15 @@ async function handleDraft(event, body, correlationId) {
   const draft = normalizeDraftResponse(rollerResult.body, request.items.length);
   const paymentConfig = await getVenuePaymentConfig(config, token);
   const jwtSummary = summarizeJwt(rollerResult.body?.paymentJwt);
+  const prepaymentDraft = await persistPrepaymentDraft({
+    config,
+    draft,
+    externalId: payload.externalId,
+    idempotencyKey: request.idempotencyKey,
+    jwtSummary,
+    paymentConfig,
+    request,
+  });
   await completeIdempotencyKey(request.idempotencyKey, 'succeeded', `roller_draft:${draft.uniqueId ?? payload.externalId}`);
   await writeBookingEventLog({
     correlationId,
@@ -216,6 +344,7 @@ async function handleDraft(event, body, correlationId) {
       endpoint: 'POST /bookings/draft',
       itemCount: request.items.length,
       paymentJwtPresent: jwtSummary.present,
+      prepaymentDraftId: prepaymentDraft.prepaymentDraftId,
       rollerEnvironment: config.env,
       rollerDraftUniqueId: draft.uniqueId,
       total: draft.costs.total,
@@ -228,6 +357,7 @@ async function handleDraft(event, body, correlationId) {
   return jsonResponse(201, correlationId, {
     status: 'draft_created',
     draft,
+    prepayment: prepaymentDraft,
     paymentSession: {
       jwt: rollerResult.body?.paymentJwt ?? null,
       jwtPresent: jwtSummary.present,
@@ -256,6 +386,7 @@ function normalizeQuoteRequest(body) {
     giftCards: normalizeGiftCards(body.giftCards),
     items: normalizeItems(body.items),
     name: stringOrNull(body.name),
+    requireAvailability: body.requireAvailability === true,
     sendConfirmations: false,
     venueId: stringOrNull(body.venueId),
   };
@@ -276,8 +407,20 @@ function normalizeDraftRequest(event, body) {
     idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
     items: normalizeItems(body.items),
     name: stringOrNull(body.name),
+    requireAvailability: body.requireAvailability === true,
     sendConfirmations: body.sendConfirmations === true,
     venueId: stringOrNull(body.venueId),
+  };
+}
+
+function normalizeAvailabilityRequest(body) {
+  const startTimes = Array.isArray(body.startTimes)
+    ? body.startTimes.map(stringOrNull).filter(Boolean).slice(0, MAX_AVAILABILITY_SLOTS)
+    : getNextHalfHourSlots(3);
+
+  return {
+    date: stringOrNull(body.date) || getVenueToday(),
+    startTimes,
   };
 }
 
@@ -381,6 +524,33 @@ function validateDraftRequest(request) {
   if (customerError) return customerError;
 
   return validateItems(request.items);
+}
+
+function validateAvailabilityRequest(request) {
+  if (!isIsoDate(request.date)) {
+    return {
+      code: 'availability_date_invalid',
+      message: 'date must use yyyy-mm-dd format.',
+    };
+  }
+
+  if (!Array.isArray(request.startTimes) || request.startTimes.length === 0) {
+    return {
+      code: 'availability_start_times_required',
+      message: 'At least one start time is required.',
+    };
+  }
+
+  for (const startTime of request.startTimes) {
+    if (!isTime(startTime)) {
+      return {
+        code: 'availability_start_time_invalid',
+        message: 'Each start time must use HH:mm format.',
+      };
+    }
+  }
+
+  return null;
 }
 
 function validateCustomer(customer) {
@@ -642,6 +812,245 @@ async function postRollerJson(config, token, endpointPath, payload) {
   };
 }
 
+async function getRollerJson(config, token, endpointPath) {
+  const response = await fetch(buildRollerUrl(config.baseUrl, endpointPath), {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+    },
+  });
+  const text = await response.text();
+  const body = parseJsonOrNull(text);
+
+  return {
+    body,
+    ok: response.ok,
+    status: response.status,
+  };
+}
+
+async function loadPhoneBookingParentProducts(rollerEnv) {
+  const result = await executeStatement(
+    `SELECT DISTINCT
+       summary ->> 'parentProductId' AS parent_product_id,
+       summary ->> 'parentProductName' AS parent_product_name,
+       summary ->> 'id' AS id,
+       summary ->> 'name' AS name
+     FROM jumpyard.product_catalog_cache
+     WHERE roller_env = :rollerEnv
+       AND (
+         summary ->> 'parentProductName' IN (
+           'Entré 60 min',
+           'Entré 90 min',
+           'Entré 120 min',
+           'Entré 60 min - Familj',
+           'Entré 90 min - Familj',
+           'Entré 120 min - Familj'
+         )
+         OR summary ->> 'name' IN (
+           'Entré 60 min',
+           'Entré 90 min',
+           'Entré 120 min',
+           'Entré 60 min - Familj',
+           'Entré 90 min - Familj',
+           'Entré 120 min - Familj'
+         )
+       )`,
+    [stringParameter('rollerEnv', rollerEnv)],
+  );
+  const rows = mappedRows(result);
+
+  return PHONE_BOOKING_PRODUCTS.map((product) => {
+    const row = rows.find((candidate) => candidate.parent_product_name === product.parentName || candidate.name === product.parentName);
+    const parentProductId = stringOrNull(row?.parent_product_id) || stringOrNull(row?.id);
+    if (!parentProductId) return null;
+
+    return {
+      ...product,
+      parentProductId,
+    };
+  }).filter(Boolean);
+}
+
+async function validateItemsAvailable(config, token, items) {
+  const productIds = [...new Set(items.map((item) => item.productId).filter(Boolean))];
+  const productParents = await loadParentProductsForChildIds(config.env, productIds);
+  const parentsByProductId = new Map(productParents.map((product) => [String(product.productId), product]));
+
+  for (const item of items) {
+    const productParent = parentsByProductId.get(String(item.productId));
+    if (!productParent?.parentProductId) {
+      return {
+        code: 'availability_product_missing',
+        message: `Product ${item.productId} is not present in the local Roller product cache.`,
+      };
+    }
+
+    const rollerResult = await getRollerJson(
+      config,
+      token,
+      `/product-availability?${new URLSearchParams({
+        Date: item.bookingDate,
+        ProductIds: productParent.parentProductId,
+      }).toString()}`,
+    );
+
+    if (!rollerResult.ok) {
+      return {
+        code: 'roller_availability_failed',
+        message: `Roller availability failed with HTTP ${rollerResult.status}.`,
+      };
+    }
+
+    const parent = Array.isArray(rollerResult.body)
+      ? rollerResult.body.find((candidate) => String(candidate.parentProductId ?? candidate.id) === productParent.parentProductId)
+      : null;
+    const session = findSessionForProduct(parent, String(item.productId), item.startTime);
+    const capacity = getSessionCapacityRemaining(session);
+    const onlineSalesOpen = session?.onlineSalesOpen !== false;
+
+    if (!session || !onlineSalesOpen || (capacity !== null && capacity < item.quantity)) {
+      return {
+        code: 'capacity_unavailable',
+        message: `Product ${item.productId} is not available for ${item.bookingDate} ${item.startTime}.`,
+      };
+    }
+  }
+
+  return null;
+}
+
+async function loadParentProductsForChildIds(rollerEnv, productIds) {
+  if (productIds.length === 0) return [];
+
+  const clauses = productIds.map((_, index) => `summary ->> 'id' = :productId${index}`).join(' OR ');
+  const result = await executeStatement(
+    `SELECT
+       summary ->> 'id' AS product_id,
+       COALESCE(NULLIF(summary ->> 'parentProductId', ''), summary ->> 'id') AS parent_product_id
+     FROM jumpyard.product_catalog_cache
+     WHERE roller_env = :rollerEnv
+       AND (${clauses})`,
+    [
+      stringParameter('rollerEnv', rollerEnv),
+      ...productIds.map((productId, index) => stringParameter(`productId${index}`, String(productId))),
+    ],
+  );
+
+  return mappedRows(result).map((row) => ({
+    parentProductId: stringOrNull(row.parent_product_id),
+    productId: stringOrNull(row.product_id),
+  }));
+}
+
+function buildPhoneAvailability(request, parentProducts, rollerBody) {
+  const rollerProducts = Array.isArray(rollerBody) ? rollerBody : [];
+  const products = [];
+  const slots = request.startTimes.map((startTime) => ({
+    date: request.date,
+    startTime,
+    products: parentProducts.map((definition) => {
+      const parent = rollerProducts.find((candidate) => String(candidate.parentProductId ?? candidate.id) === definition.parentProductId);
+      const session = findSessionForParent(parent, startTime);
+      const selectedProduct = selectAvailabilityProduct(parent, session);
+      const capacityRemaining = getSessionCapacityRemaining(session);
+      const onlineSalesOpen = session?.onlineSalesOpen !== false;
+      const available = Boolean(session && selectedProduct && onlineSalesOpen && (capacityRemaining === null || capacityRemaining > 0));
+      const unitPrice = numberOrNull(selectedProduct?.cost);
+      const product = {
+        available,
+        capacityRemaining,
+        durationMinutes: definition.durationMinutes,
+        endTime: stringOrNull(session?.endTime),
+        jumpersPerUnit: definition.jumpersPerUnit,
+        key: definition.key,
+        label: definition.label,
+        onlineSalesOpen,
+        parentProductId: definition.parentProductId,
+        productId: stringOrNull(selectedProduct?.id),
+        productName: stringOrNull(selectedProduct?.name),
+        startTime,
+        type: definition.type,
+        unitPrice,
+        unitPriceCents: unitPrice === null ? null : Math.round(unitPrice * 100),
+      };
+      products.push(product);
+      return product;
+    }),
+  }));
+
+  return {
+    date: request.date,
+    products,
+    slots,
+  };
+}
+
+function findSessionForParent(parent, startTime) {
+  if (!parent || typeof parent !== 'object') return null;
+
+  const direct = Array.isArray(parent.sessions) ? parent.sessions : [];
+  const directMatch = direct.find((session) => stringOrNull(session?.startTime) === startTime);
+  if (directMatch) return directMatch;
+
+  const products = Array.isArray(parent.products) ? parent.products : [];
+  for (const product of products) {
+    const availabilities = Array.isArray(product?.availabilities) ? product.availabilities : [];
+    for (const availability of availabilities) {
+      const sessions = Array.isArray(availability?.sessions) ? availability.sessions : [];
+      const match = sessions.find((session) => stringOrNull(session?.startTime) === startTime);
+      if (match) return match;
+    }
+  }
+
+  return null;
+}
+
+function findSessionForProduct(parent, productId, startTime) {
+  const session = findSessionForParent(parent, startTime);
+  if (!session) return null;
+
+  const allocations = Array.isArray(session.allocations) ? session.allocations : [];
+  if (allocations.length === 0) return session;
+
+  return allocations.some((allocation) => String(allocation?.productId ?? '') === productId) ? session : null;
+}
+
+function selectAvailabilityProduct(parent, session) {
+  const products = Array.isArray(parent?.products) ? parent.products : [];
+  if (products.length === 0) return null;
+
+  const allocationProductId = Array.isArray(session?.allocations)
+    ? stringOrNull(session.allocations.find((allocation) => allocation?.productId)?.productId)
+    : null;
+  const matching = allocationProductId ? products.find((product) => String(product?.id) === allocationProductId) : null;
+  if (matching) return matching;
+
+  return products.find((product) => product?.isSuspended !== true) ?? products[0];
+}
+
+function getSessionCapacityRemaining(session) {
+  if (!session) return 0;
+
+  const candidates = [
+    numberOrNull(session.capacityRemaining),
+    numberOrNull(session.ticketCapacityRemaining),
+    numberOrNull(session.resourceCapacityRemaining),
+    ...(
+      Array.isArray(session.allocations)
+        ? session.allocations.flatMap((allocation) => [
+            numberOrNull(allocation?.bookableCapacityRemaining),
+            numberOrNull(allocation?.capacityRemaining),
+          ])
+        : []
+    ),
+  ].filter((value) => value !== null);
+
+  if (candidates.length === 0) return null;
+  return Math.min(...candidates);
+}
+
 async function getVenuePaymentConfig(config, token) {
   if (cachedVenuePaymentConfig) return cachedVenuePaymentConfig;
 
@@ -711,6 +1120,124 @@ function normalizeCosts(body) {
     subTotalTax: numberOrNull(costs.subTotalTax),
     discount: numberOrNull(costs.discount),
   };
+}
+
+async function persistPrepaymentDraft({ config, draft, externalId, idempotencyKey, jwtSummary, paymentConfig, request }) {
+  const prepaymentDraftId = `jypd_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`;
+  const firstItem = request.items[0] ?? {};
+  const totalCents = centsFromAmount(draft.costs.total);
+  const amountOwingCents = centsFromAmount(draft.costs.amountOwing);
+  const email = request.customer.email;
+  const phone = request.customer.phone;
+  const itemsSummary = request.items.map((item) => ({
+    bookingDate: item.bookingDate,
+    productId: item.productId,
+    quantity: item.quantity,
+    startTime: item.startTime,
+  }));
+
+  await executeStatement(
+    `INSERT INTO jumpyard.prepayment_booking_drafts (
+       prepayment_draft_id,
+       roller_draft_unique_id,
+       roller_capacity_reservation_id,
+       external_id,
+       idempotency_key,
+       status,
+       roller_env,
+       booking_date,
+       start_time,
+       total_cents,
+       amount_owing_cents,
+       currency,
+       customer_email,
+       customer_email_hash,
+       customer_email_masked,
+       customer_phone,
+       customer_phone_hash,
+       customer_phone_masked,
+       item_count,
+       items_summary,
+       payment_jwt_present,
+       payment_config_available,
+       expires_at
+     )
+     VALUES (
+       :prepaymentDraftId,
+       :rollerDraftUniqueId,
+       :rollerCapacityReservationId,
+       :externalId,
+       :idempotencyKey,
+       'payment_pending',
+       :rollerEnv,
+       CAST(:bookingDate AS date),
+       CAST(:startTime AS time),
+       :totalCents,
+       :amountOwingCents,
+       :currency,
+       :customerEmail,
+       :customerEmailHash,
+       :customerEmailMasked,
+       :customerPhone,
+       :customerPhoneHash,
+       :customerPhoneMasked,
+       :itemCount,
+       CAST(:itemsSummary AS jsonb),
+       :paymentJwtPresent,
+       :paymentConfigAvailable,
+       now() + interval '30 minutes'
+     )
+     ON CONFLICT (idempotency_key) DO UPDATE SET
+       roller_draft_unique_id = EXCLUDED.roller_draft_unique_id,
+       roller_capacity_reservation_id = EXCLUDED.roller_capacity_reservation_id,
+       status = EXCLUDED.status,
+       total_cents = EXCLUDED.total_cents,
+       amount_owing_cents = EXCLUDED.amount_owing_cents,
+       items_summary = EXCLUDED.items_summary,
+       payment_jwt_present = EXCLUDED.payment_jwt_present,
+       payment_config_available = EXCLUDED.payment_config_available,
+       updated_at = now()`,
+    [
+      stringParameter('prepaymentDraftId', prepaymentDraftId),
+      stringParameter('rollerDraftUniqueId', draft.uniqueId),
+      stringParameter('rollerCapacityReservationId', draft.capacityReservationId),
+      stringParameter('externalId', externalId),
+      stringParameter('idempotencyKey', idempotencyKey),
+      stringParameter('rollerEnv', config.env),
+      stringParameter('bookingDate', firstItem.bookingDate),
+      stringParameter('startTime', firstItem.startTime),
+      integerParameter('totalCents', totalCents),
+      integerParameter('amountOwingCents', amountOwingCents),
+      stringParameter('currency', 'SEK'),
+      stringParameter('customerEmail', email),
+      stringParameter('customerEmailHash', hashString(email.toLowerCase())),
+      stringParameter('customerEmailMasked', maskEmail(email)),
+      stringParameter('customerPhone', phone),
+      stringParameter('customerPhoneHash', hashString(phone)),
+      stringParameter('customerPhoneMasked', maskPhone(phone)),
+      integerParameter('itemCount', request.items.length),
+      stringParameter('itemsSummary', JSON.stringify(itemsSummary)),
+      booleanParameter('paymentJwtPresent', jwtSummary.present === true),
+      booleanParameter('paymentConfigAvailable', paymentConfig?.available === true),
+    ],
+  );
+
+  return {
+    amountOwing: draft.costs.amountOwing,
+    amountOwingCents,
+    expiresAt: null,
+    paymentBlockedReason: 'payment_dropin_not_configured',
+    prepaymentDraftId,
+    rollerDraftUniqueId: draft.uniqueId,
+    status: 'payment_pending',
+    total: draft.costs.total,
+    totalCents,
+  };
+}
+
+function centsFromAmount(amount) {
+  const parsed = numberOrNull(amount);
+  return parsed === null ? null : Math.round(parsed * 100);
 }
 
 async function reserveIdempotencyKey(operation, idempotencyKey, requestHash) {
@@ -957,6 +1484,10 @@ function isDraftRoute(routeKey, event) {
   return routeKey === 'POST /v1/bookings/draft' || event?.rawPath === '/v1/bookings/draft';
 }
 
+function isAvailabilityRoute(routeKey, event) {
+  return routeKey === 'POST /v1/bookings/availability' || event?.rawPath === '/v1/bookings/availability';
+}
+
 function isAddProductRoute(routeKey, event) {
   const rawPath = event?.rawPath ?? '';
   return (
@@ -996,6 +1527,16 @@ function stringParameter(name, value) {
     : { name, value: { stringValue: String(value) } };
 }
 
+function integerParameter(name, value) {
+  return value === null || value === undefined
+    ? { name, value: { isNull: true } }
+    : { name, value: { longValue: Number(value) } };
+}
+
+function booleanParameter(name, value) {
+  return { name, value: { booleanValue: value === true } };
+}
+
 function createCorrelationId() {
   return `jy_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
 }
@@ -1020,6 +1561,53 @@ function maskCustomerForHash(customer) {
     lastName: customer.lastName,
     phoneHash: hashString(customer.phone),
   };
+}
+
+function maskEmail(email) {
+  const [local = '', domain = ''] = String(email ?? '').split('@');
+  if (!local || !domain) return null;
+  const visibleLocal = local.length <= 2 ? local[0] : `${local[0]}${'*'.repeat(Math.min(6, local.length - 2))}${local.at(-1)}`;
+  return `${visibleLocal}@${domain}`;
+}
+
+function maskPhone(phone) {
+  const normalized = String(phone ?? '').replace(/\s+/g, '');
+  if (normalized.length <= 4) return normalized || null;
+  return `${'*'.repeat(Math.max(0, normalized.length - 4))}${normalized.slice(-4)}`;
+}
+
+function getVenueToday() {
+  return new Intl.DateTimeFormat('sv-SE', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: VENUE_TIME_ZONE,
+    year: 'numeric',
+  }).format(new Date());
+}
+
+function getNextHalfHourSlots(count) {
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: VENUE_TIME_ZONE,
+  }).formatToParts(new Date());
+  const hours = Number(parts.find((part) => part.type === 'hour')?.value ?? 0);
+  const minutes = Number(parts.find((part) => part.type === 'minute')?.value ?? 0);
+  const start = Math.ceil((hours * 60 + minutes) / 30) * 30;
+  const slots = [];
+
+  for (let minutesFromMidnight = start; slots.length < count && minutesFromMidnight < 24 * 60; minutesFromMidnight += 30) {
+    slots.push(formatMinutesAsTime(minutesFromMidnight));
+  }
+
+  return slots;
+}
+
+function formatMinutesAsTime(minutesFromMidnight) {
+  const hours = Math.floor(minutesFromMidnight / 60);
+  const minutes = minutesFromMidnight % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
 function isIsoDate(value) {

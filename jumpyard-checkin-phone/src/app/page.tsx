@@ -341,23 +341,6 @@ function CheckInFlow() {
                     {state === 'KIOSK_BUY' && (
                         <BuyTickets
                             key="park-buy"
-                            onComplete={(booking, contact, product) => {
-                                setAlreadyCheckedIn(false);
-                                advance({
-                                    booking,
-                                    checkinSession: null,
-                                    existingAddons: booking.existingAddons ?? [],
-                                    guestContactEmail: contact.email,
-                                    guestContactPhone: contact.phone,
-                                    baseProductId: product.id,
-                                    baseProductLabel: product.label,
-                                    baseProductType: product.type,
-                                    baseDurationMinutes: product.durationMinutes,
-                                    baseUnitPrice: product.unitPrice,
-                                    baseQuantity: product.quantity,
-                                    baseTotal: product.total,
-                                });
-                            }}
                             onBack={() => { setState('KIOSK_CHOICE'); scrollToTop(); }}
                         />
                     )}

@@ -441,6 +441,56 @@ Redeem rules:
 - Never put the T0021 dev redeem token in browser env, browser storage, app source, or public phone network calls.
 - Log every attempt and result.
 
+### `POST /v1/bookings/availability`
+
+Returns the safe availability options used by the phone buy-entry flow. The phone app must call this JumpYard Cloud endpoint, not Roller directly.
+
+Request:
+
+```json
+{
+  "date": "2026-05-22",
+  "startTimes": ["10:00", "10:30", "11:00"]
+}
+```
+
+Response:
+
+```json
+{
+  "status": "available",
+  "date": "2026-05-22",
+  "startTimes": [
+    {
+      "startTime": "10:00",
+      "products": [
+        {
+          "code": "E60",
+          "name": "Entré 60 min",
+          "productId": 1765860,
+          "durationMinutes": 60,
+          "unitPrice": 200,
+          "currency": "SEK",
+          "capacityRemaining": 153
+        }
+      ]
+    }
+  ],
+  "source": {
+    "system": "roller",
+    "environment": "playground",
+    "endpoint": "GET /product-availability"
+  }
+}
+```
+
+Availability rules:
+
+- Use Roller `GET /product-availability` server-side.
+- Query parent product ids for the relevant phone jump-entry products and return only the normalized product/time/capacity fields needed by the phone flow.
+- Capacity must be checked again before quote and before draft creation because availability can change between screen steps.
+- Frontend quantity controls must be capped by the returned capacity, but server-side quote/draft validation remains authoritative.
+
 ### `POST /v1/bookings/quote`
 
 Calculates price and availability for a new booking or product addition before committing a write.
@@ -493,6 +543,7 @@ Quote rules:
 - T0031 implemented this in the deployed booking Lambda.
 - Quote returns normalized `bookingCosts` fields and must not return a Roller booking id.
 - Use `/product-availability` before quote when the selected product is session/capacity constrained.
+- T0033 implemented server-side availability re-check before quote.
 - Product list prices are display hints only; final price comes from Booking Costs.
 - T0033 phone pre-payment flow should expose availability/capacity only through JumpYard Cloud. The phone app must not call Roller `/product-availability` directly.
 
@@ -532,6 +583,7 @@ Draft rules:
 - Draft creation holds capacity through Roller's draft timer.
 - Return the draft unique id, normalized costs, payment config from `GET /venues/me`, and the raw `paymentJwt` only in the API response.
 - Do not log, print, or persist the raw `paymentJwt`.
+- T0033 persists safe draft metadata to `jumpyard.prepayment_booking_drafts`, including `payment_jwt_present` and `payment_config_available` flags, but no raw `paymentJwt` value.
 - If amount owing is zero, use `POST /bookings/draft/publish`.
 - Payment implementation must first confirm how Roller's returned `paymentJwt` is used, which fake/test card numbers are supported in Playground, and whether the payment component can run inside the JumpYard PWA without a hosted payment-link detour.
 
@@ -543,7 +595,7 @@ T0030 discovery result:
 - The draft response returned HTTP `201`, total `260`, amount owing `260`, and a present three-part `paymentJwt`.
 - The script summarizes only safe identifiers and JWT shape; it never prints the raw JWT, access token, client secret, or customer PII beyond fake-domain metadata.
 - Roller Payments via API docs confirm the intended custom checkout sequence: get venue payment configuration, bootstrap Roller's payment library, create a draft booking, pass the returned JWT to `setupPayment`, let Adyen drop-in collect payment, then use payment result and booking-created webhook for success handling.
-- Before T0033 phone payment UI wiring, JumpYard needs Roller to authorize the connection, allowlist a public HTTPS test domain, provide the approved payment package, and confirm fake/test card details.
+- Before T0034 phone payment UI wiring, JumpYard needs Roller to authorize the connection, allowlist a public HTTPS test domain, provide the approved payment package, and confirm fake/test card details.
 
 T0031 deployed endpoint result:
 
@@ -557,6 +609,13 @@ T0032 POC harness result:
 - `npm run roller:payment:poc:apply-draft` is guarded by `ROLLER_PAYMENT_POC_ALLOW_DRAFT=I_UNDERSTAND_THIS_CREATES_PLAYGROUND_DRAFT_BOOKING`.
 - The harness reports only safe fields such as total, amount owing, draft unique id, JWT presence/part count, venue payment config availability, package URL host, and public origin host.
 - Full browser payment remains blocked until Roller provides the approved package URL/download, a public HTTPS allowlisted test origin, and fake/test card details.
+
+T0033 phone pre-payment result:
+
+- `POST /v1/bookings/availability` is deployed and returns normalized Roller Playground availability for phone jump-entry products.
+- The phone app buy-entry path now selects one of the next three half-hour start times, caps quantity by server-returned capacity, collects first name, last name, email, and phone, quotes through JumpYard Cloud, creates a guarded Roller Playground draft, and stops at payment pending.
+- `jumpyard.prepayment_booking_drafts` stores safe draft state, totals, selected item summary, guest email/phone plus masked/hash fields, and JWT/config presence flags.
+- Raw `paymentJwt` values remain response-only for future T0034 payment package/drop-in work and are not persisted in Aurora.
 
 ### `POST /v1/bookings/{bookingReference}/add-products/quote`
 
@@ -661,7 +720,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0032`. The next recommended ticket is `T0033 Phone create-booking pre-payment flow`.
+Current implementation has progressed through `T0033`. The next recommended ticket is `T0034 Roller payment package/drop-in integration`.
 
 Near-term sequence:
 
@@ -672,7 +731,7 @@ Near-term sequence:
 5. `T0030 New booking/payment discovery spike`: completed locally; `POST /bookings/draft` and `paymentJwt` are confirmed, while payment package, test cards, and domain allowlisting remain prerequisites.
 6. `T0031 Server-side booking quote/draft`: completed and deployed to dev; JumpYard Cloud quotes costs and creates confirmed draft bookings while keeping Roller credentials server-side.
 7. `T0032 Payment package proof-of-concept`: completed locally as a safe harness; quote/draft can be exercised through JumpYard Cloud, but the payment drop-in is still externally blocked by package, allowlist, and test-card prerequisites.
-8. `T0033 Phone create-booking pre-payment flow`: wire the phone app to product/time selection, server-side availability/capacity checks where needed, quote, guarded draft creation, and a payment-pending state without rendering payment UI.
+8. `T0033 Phone create-booking pre-payment flow`: completed and deployed to dev; phone buy-entry reaches a Roller Playground draft and payment-pending state through JumpYard Cloud without rendering payment UI.
 9. `T0034 Roller payment package/drop-in integration`: integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites.
 10. `T0035 Staff auth plan/implementation`: replace the temporary dev redeem code with the selected staff/admin authentication model.
 11. `T0036 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
