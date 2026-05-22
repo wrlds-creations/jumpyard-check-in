@@ -87,6 +87,10 @@ Use this file to define validation for the current project or milestone.
 | T0037 infra build | Confirm CDK TypeScript accepts the scheduled sync resources. | Passed | `npm --prefix infra run build` passed. |
 | T0037 synth/diff/deploy | Confirm dev AWS contains the data-sync Lambda and EventBridge rule. | Passed | `npm --prefix infra run synth:dev`, `npm --prefix infra run diff:dev`, and `npm --prefix infra run deploy:dev` passed; post-deploy diff showed no differences. |
 | T0037 manual Lambda smoke | Confirm the deployed Lambda can sync a small modified-date window. | Passed | Manual invoke for `2026-05-20 -> 2026-05-21` succeeded with 9 bookingitems, 6 tickets, 0 payments, 6 customers, and 491 product rows; Aurora `booking_seed_runs` recorded status `succeeded`. |
+| T0038 session Lambda syntax | Confirm check-in link code is syntactically valid. | Passed | `node --check infra/lambda/session/index.js` passed. |
+| T0038 infra build | Confirm CDK accepts the link routes and dev-token secret. | Passed | `npm --prefix infra run build` passed. |
+| T0038 synth/diff/deploy | Confirm dev AWS contains the check-in link routes and secret. | Passed | `npm --prefix infra run synth:dev`, `npm --prefix infra run diff:dev`, and `npm --prefix infra run deploy:dev` passed; post-deploy diff showed no differences. |
+| T0038 deployed link smoke | Confirm protected link creation and public token resolution work. | Passed | Created a link without printing the raw token, resolved it to `session_started`, and verified the token row has `opened=true`, `consumed=false`, `active=true`. |
 | `node --check infra/lambda/webhook/index.js` | Confirm T0015 webhook Lambda JavaScript syntax. | Passed | Passed on 2026-05-20. |
 | T0015 local webhook handler smoke | Confirm fast-ack and retry classification before deploy. | Passed | Unauthorized and invalid JSON returned HTTP `200`; missing database config returned HTTP `500`. |
 | T0015 deployed unauthorized webhook smoke | Confirm unauthorized webhooks are acknowledged and ignored. | Passed | `POST /v1/roller/webhooks/bookings` without token returned HTTP `200` and `ignored_unauthorized`. |
@@ -166,6 +170,7 @@ Use this file to define validation for the current project or milestone.
 | T0026 admin handoff view | Open the staff/admin app and inspect ready session `JY6085`. | Passed | Local browser verification at `http://127.0.0.1:3002/` showed `JY6085`, booking `5032210`, products, and tickets. |
 | T0027 staff-confirmed redeem | Redeem a dedicated ready handoff through the new staff endpoint. | Passed | Booking `5032473`, session `jycs_mpfhz4jp_a4770adb`, handoff `JY3091` redeemed 1 ticket, marked session completed, and left the waiting list. |
 | T0027 admin ready action | Open the admin app and inspect a ready handoff with redeem controls. | Passed | Browser verification showed booking `5032474`, handoff `JY7166`, token input, and disabled `Slutför` button until a code is entered. |
+| T0038 Query Editor review | Inspect generated check-in token rows. | Passed | Deployed smoke confirmed the row exists by token hash only, with `opened_at` populated after token resolution. |
 
 ## Roller Playground Validation
 
@@ -239,6 +244,7 @@ Use this file to define validation for the current project or milestone.
 | T0017 CDK deploy | Dev webhook Lambda is updated with enrichment code. | Passed | `npm --prefix infra run deploy:dev` updated only `WebhookHandler`. |
 | T0018 CDK deploy | Dev webhook Lambda is updated for real Roller header support. | Passed | `npm --prefix infra run deploy:dev` updated only `WebhookHandler`. |
 | T0023 CDK deploy | Dev session Lambda and session API routes are deployed. | Passed | `npm --prefix infra run deploy:dev` created `jumpyard-check-in-dev-stack-session` and session routes. |
+| T0038 CDK deploy | Dev session link routes and dev-token secret are deployed. | Passed | Created `/jumpyard-check-in-dev/checkin-links/dev-token`, `POST /v1/check-in/session-links`, and `POST /v1/check-in/session-links/resolve`. |
 
 ## Aurora Schema Validation
 

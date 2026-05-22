@@ -31,6 +31,7 @@ interface HandlerResources {
   readonly rollerBaseUrlParameter: ssm.StringParameter;
   readonly webhookDevTokenSecret: secretsmanager.Secret;
   readonly redeemDevTokenSecret: secretsmanager.Secret;
+  readonly checkinLinkDevTokenSecret: secretsmanager.Secret;
   readonly resourcePrefix: string;
 }
 
@@ -120,6 +121,16 @@ export class JumpYardCloudStack extends Stack {
       description: 'Development-only shared token for confirmed Roller Playground ticket redemption.',
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ purpose: 'roller-playground-redeem' }),
+        generateStringKey: 'token',
+        excludePunctuation: true,
+      },
+    });
+
+    const checkinLinkDevTokenSecret = new secretsmanager.Secret(this, 'CheckinLinkDevTokenSecret', {
+      secretName: `/${config.resourcePrefix}/checkin-links/dev-token`,
+      description: 'Development-only shared token for creating JumpYard Cloud check-in session links.',
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ purpose: 'checkin-session-link-create' }),
         generateStringKey: 'token',
         excludePunctuation: true,
       },
@@ -219,6 +230,7 @@ export class JumpYardCloudStack extends Stack {
           'content-type',
           'x-correlation-id',
           'x-idempotency-key',
+          'x-jumpyard-link-token',
           'x-jumpyard-redeem-token',
         ],
         allowMethods: ['GET', 'OPTIONS', 'POST'],
@@ -245,6 +257,7 @@ export class JumpYardCloudStack extends Stack {
       rollerBaseUrlParameter,
       webhookDevTokenSecret,
       redeemDevTokenSecret,
+      checkinLinkDevTokenSecret,
       resourcePrefix: config.resourcePrefix,
     };
 
@@ -286,6 +299,8 @@ export class JumpYardCloudStack extends Stack {
     });
 
     this.addRoute(api, lookupHandler, 'POST /v1/check-in/lookup');
+    this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links');
+    this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/resolve');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff');
     this.addRoute(api, sessionHandler, 'GET /v1/staff/check-in/sessions');
@@ -356,6 +371,10 @@ export class JumpYardCloudStack extends Stack {
       environment.WEBHOOK_DEV_TOKEN_SECRET_ARN = resources.webhookDevTokenSecret.secretArn;
     }
 
+    if (handlerName === 'session') {
+      environment.CHECKIN_LINK_DEV_TOKEN_SECRET_ARN = resources.checkinLinkDevTokenSecret.secretArn;
+    }
+
     if (handlerName === 'redeem') {
       environment.ENABLE_ROLLER_REDEEM_WRITES = 'true';
       environment.REDEEM_DEV_TOKEN_SECRET_ARN = resources.redeemDevTokenSecret.secretArn;
@@ -400,6 +419,9 @@ exports.handler = async () => ({
     }
     if (handlerName === 'redeem') {
       resources.redeemDevTokenSecret.grantRead(fn);
+    }
+    if (handlerName === 'session') {
+      resources.checkinLinkDevTokenSecret.grantRead(fn);
     }
 
     fn.addToRolePolicy(
