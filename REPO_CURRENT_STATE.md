@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-22
-- Current branch: `codex/t0044-mobile-sms-link-url`
-- Current status: T0044 phone SMS link resume completed locally and deployed to dev; `jy_token` phone links now resolve through JumpYard Cloud and return safe booking/session context.
-- Current ticket: `T0044` completed locally, not yet committed or merged
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`
-- Recommended next ticket: `T0045 Booking-time SMS trigger` unless Roller payment prerequisites arrive for `T0040`
+- Current branch: `codex/t0045-booking-time-sms-trigger`
+- Current status: T0045 booking-time SMS trigger completed locally and deployed to dev; protected due-SMS planning reads Aurora booking time windows and sends only with explicit confirmation.
+- Current ticket: `T0045` completed locally, not yet committed or merged
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`
+- Recommended next ticket: `T0046 Staff auth replacement for temporary dev code` unless Roller payment prerequisites arrive for `T0040`
 
 ## Current Structure
 
@@ -106,6 +106,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm run roller:payment:poc` | Run the T0032 JumpYard Cloud payment-package POC preflight. | Calls deployed `POST /v1/bookings/quote`, creates no booking, and reports package/origin/test-card blockers without printing secrets or raw JWTs. |
 | `npm run roller:payment:poc:apply-draft` | Create one guarded Playground draft through JumpYard Cloud for payment-package POC. | Requires `ROLLER_PAYMENT_POC_ALLOW_DRAFT=I_UNDERSTAND_THIS_CREATES_PLAYGROUND_DRAFT_BOOKING`; does not print secrets or raw payment JWTs. |
 | Deployed `POST /v1/bookings/availability` | Load Roller Playground product availability through JumpYard Cloud. | Used by the phone buy-entry flow; the frontend still never calls Roller directly. |
+| Deployed `POST /v1/check-in/session-links/send-due-sms` | Plan or manually confirm booking-time SMS sends from Aurora booking time windows. | Protected by the check-in link dev token; planning mode sends no SMS, and confirmed sends still respect SNS sandbox limits. |
 | `npm run roller:seed:playground` | Plan deterministic Roller Playground seed bookings. | Dry-run by default; no booking writes. |
 | `npm run roller:seed:playground:apply` | Create deterministic Roller Playground seed bookings. | Writes only when `ROLLER_SEED_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_BOOKINGS` is set and the Playground guard passes. |
 | Read-only `GET /bookings/{bookingReference}` | Verify known Playground booking lookup behavior. | Run through the existing Roller client helper; do not print secrets or raw PII. |
@@ -164,19 +165,19 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0042` | Added SMS delivery diagnostics. | 2026-05-22 | Dev SNS SMS delivery status logs are enabled; diagnostic delivery `jysms_mpgwlk9u_9566748e` was accepted by SNS but CloudWatch shows provider `FAILURE` because the account is in SMS sandbox mode. |
 | `T0043` | Verified SNS sandbox phone and resent SMS. | 2026-05-22 | Masked destination `+46*****9508` is verified in SNS sandbox; Aurora delivery `jysms_mpgxbla6_b59779cd` is `sent` and CloudWatch shows provider `SUCCESS`. |
 | `T0044` | Added phone SMS link resume. | 2026-05-22 | Phone `jy_token` links resolve through JumpYard Cloud, receive safe booking/session context, and route to booking summary, QR confirmation, or manual lookup without mock token data. |
+| `T0045` | Added booking-time SMS trigger foundation. | 2026-05-22 | Dev `POST /v1/check-in/session-links/send-due-sms` plans upcoming Aurora bookings by start time, skips unsafe/duplicate candidates, and reuses the existing SMS sender only with `confirmSend=true`. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0044` | Phone SMS link resume. | Completed locally and deployed to dev | Session link resolve now returns safe booking/session context; phone app detects `jy_token` and routes from server session state. |
+| `T0045` | Booking-time SMS trigger. | Completed locally and deployed to dev | Protected due-SMS endpoint plans booking-time reminders from Aurora, uses `bookingCustomerId` contact fallback, and sends only with explicit confirmation. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
 | `T0040` | Roller payment package/drop-in integration | Blocked until Roller/Pabel provides package access, allowlisted HTTPS test origin, and fake/test card behavior. |
-| `T0045` | Booking-time SMS trigger | Connect SMS sending to booking date/time windows, for example sending a check-in link before the jump time. |
 | `T0046` | Staff auth replacement for temporary dev code | Replace temporary dev codes for SMS/redeem-style protected operations with a real staff/admin auth model. |
 | `T0047` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
 
@@ -438,6 +439,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0044 CDK diff/deploy: pre-deploy diff showed only `SessionHandler` Lambda code changing; `npm --prefix infra run deploy:dev` passed; post-deploy diff showed no differences.
 - T0044 deployed API smoke: protected link creation followed by public resolve returned `session_started`, included safe booking reference `5032210`, included 2 booking item rows, and returned source `jumpyard_cloud` / `checkin_link` without printing the raw token.
 - T0044 browser smoke: local phone app opened a generated `?jy_token=...` link and reached `APP_BOOKING` with `checkinSessionStatus='guest_in_progress'`; invalid token fallback reached `KIOSK_LOOKUP`.
+- T0045 session Lambda syntax/build/synth: `node --check infra/lambda/session/index.js`, `npm --prefix infra run build`, and `npm --prefix infra run synth:dev` passed.
+- T0045 root validation: `npm run validate` passed.
+- T0045 AWS preflight: account `376129878018`, region `eu-north-1`.
+- T0045 CDK diff/deploy: first diff showed the new `send-due-sms` route, invoke permission, and session Lambda code; fallback fix diff showed only session Lambda code; deploys passed and post-deploy diff showed no differences.
+- T0045 deployed planning smoke: protected planning mode returned `booking_time_sms_planned` without sending SMS; booking `5032210` was skipped as `sms_already_sent_recently`, and booking `5032211` was skipped as `payment_required`, both with masked destinations only.
 
 ## Known Issues Summary
 
