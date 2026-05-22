@@ -15,8 +15,7 @@ import { ConfirmationScreen } from '@/components/ConfirmationScreen';
 import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import { detectChannel, initialContext, initialState, nextState } from '@/flow/machine';
 import type { Branch } from '@/flow/machine';
-import { validateToken } from '@/flow/mockClient';
-import { CloudSessionError, markSessionReadyForStaff, startCheckInSession, type SessionIssue } from '@/flow/cloudClient';
+import { CloudSessionError, markSessionReadyForStaff, resolveCheckInSessionLink, startCheckInSession, type SessionIssue } from '@/flow/cloudClient';
 import type { Booking, CheckInSession, ConnectedProfile, FlowContext, FlowState } from '@/flow/types';
 import { ParkChoice } from '@/components/ParkChoice';
 import { BookingLookup } from '@/components/BookingLookup';
@@ -128,7 +127,8 @@ function ProgressBar({ state }: { state: FlowState }) {
 
 function CheckInFlow() {
     const searchParams = useSearchParams();
-    const token = searchParams.get('token') ?? searchParams.get('bookingRef');
+    const linkToken = searchParams.get('jy_token') ?? searchParams.get('token');
+    const token = linkToken ?? searchParams.get('bookingRef');
     const { t } = useTranslation();
 
     const params = new URLSearchParams(searchParams.toString());
@@ -268,11 +268,30 @@ function CheckInFlow() {
     useEffect(() => {
         if (state !== 'APP_MOBILE') return;
         let alive = true;
-        validateToken(token ?? 'MOCK123').then(booking => {
-            if (!alive) return;
-            setAlreadyCheckedIn(false);
-            advance({ booking, checkinSession: null, existingAddons: booking.existingAddons ?? [] });
-        });
+        if (!linkToken) {
+            setState('KIOSK_LOOKUP');
+            return () => {
+                alive = false;
+            };
+        }
+
+        setSessionStartError(null);
+        resolveCheckInSessionLink(linkToken)
+            .then(({ booking, checkinSession }) => {
+                if (!alive) return;
+                setAlreadyCheckedIn(false);
+                routeFromSessionResume(
+                    checkinSession,
+                    { booking, checkinSession, existingAddons: booking.existingAddons ?? [] },
+                    'booking-summary'
+                );
+            })
+            .catch(error => {
+                if (!alive) return;
+                setSessionStartError(error instanceof CloudSessionError ? error.reason : 'session_failed');
+                setState('KIOSK_LOOKUP');
+                scrollToTop();
+            });
         return () => {
             alive = false;
         };

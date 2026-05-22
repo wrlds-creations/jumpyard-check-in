@@ -1,37 +1,39 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0043
+T0044
 
 ## Goal
-Verify a test phone number in AWS SNS SMS sandbox and resend one JumpYard Cloud SMS link after verification.
+Make JumpYard Cloud SMS check-in links open correctly in the phone app by resolving `jy_token` through the server-side session-link API.
 
 ## Dependencies
+- T0038 completed and merged.
 - T0039 completed and merged.
-- T0042 completed and merged.
+- T0043 completed and merged.
 - Dev AWS stack exists in account `376129878018`, region `eu-north-1`.
-- AWS SNS SMS sandbox is active.
-- User provides one approved test destination phone number and the OTP received on that phone.
+- Existing SMS links are server-owned opaque tokens, not booking numbers.
 
 ## Allowed areas
 - CODEX_TASK.md
 - PROJECT_CONTEXT.md
+- DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - AWS_RESOURCES.md
 - JUMPYARD_CLOUD_CONTRACT.md
+- infra/lambda/session/index.js
+- jumpyard-checkin-phone/src/app/page.tsx
+- jumpyard-checkin-phone/src/flow/cloudClient.ts
+- jumpyard-checkin-phone/src/flow/machine.ts
 
 ## Do not touch
-- Phone UI
 - Admin UI
 - Kiosk UI
-- Lambda source code
-- CDK infrastructure code
-- Aurora migrations
 - Payment package/drop-in code
 - Redeem business logic
 - Roller booking/draft write logic
+- Aurora migrations
 - Production credentials
 - Live Roller config
 - `.env`
@@ -39,39 +41,40 @@ Verify a test phone number in AWS SNS SMS sandbox and resend one JumpYard Cloud 
 
 ## Requirements
 
-1. Confirm current SNS sandbox state.
-   - Check whether the account is in SMS sandbox.
-   - List existing sandbox phone numbers.
-   - Do not print full phone numbers in output or docs.
+1. Update the phone app link detection.
+   - Treat `jy_token` as an SMS/deep-link channel.
+   - Keep legacy `token` support where it already exists.
+   - Do not treat booking reference alone as check-in authority.
 
-2. Start sandbox phone verification for one approved test number.
-   - Use AWS SNS sandbox verification.
-   - Mask the destination number in any output.
-   - Wait for the user to provide the OTP from the phone.
+2. Add a phone client call for session-link resolution.
+   - Call JumpYard Cloud `POST /v1/check-in/session-links/resolve`.
+   - Send the raw token only in the request body.
+   - Do not log, persist, or expose raw tokens in UI.
 
-3. Complete sandbox phone verification.
-   - Submit the OTP through AWS SNS.
-   - Confirm the phone number status is verified.
-   - Do not store or commit the OTP.
+3. Return enough safe data from session-link resolution for the phone UI.
+   - Include the server-owned check-in session.
+   - Include a normalized booking summary from Aurora.
+   - Do not return guest email, phone, raw Roller payloads, or secrets.
 
-4. Resend one JumpYard Cloud SMS link after verification.
-   - Use the existing T0039 endpoint.
-   - Use `confirmSend=true`.
-   - Use a unique idempotency key.
-   - Use a known dev Aurora booking reference.
-   - Do not print the full destination number, raw token, full check-in URL, SMS text, OTP, or provider secrets.
+4. Route the phone app after link resolution.
+   - `guest_in_progress` opens the booking summary / normal continuation.
+   - `ready_for_staff` opens the final QR confirmation screen.
+   - completed/redeemed sessions show the already checked-in state.
+   - Invalid or expired links fall back to manual booking lookup without exposing token details.
 
-5. Verify delivery evidence.
-   - Query `jumpyard.sms_deliveries` for the new delivery audit row.
-   - Check CloudWatch SNS delivery status logs.
-   - Ask the user to confirm whether the phone received the SMS.
+5. Deploy the dev session Lambda if backend code changes.
+   - Verify AWS account `376129878018`.
+   - Verify region `eu-north-1`.
+   - Use CDK diff before deploy.
+   - Update AWS docs if the deployed session endpoint behavior changes.
 
 6. Document the result.
-   - Update source-of-truth docs with sandbox verification result.
-   - Keep payment integration listed as blocked until Roller/Pabel prerequisites arrive.
+   - Update source-of-truth docs with the new SMS/mobile link behavior.
+   - Keep SNS sandbox status and public/mobile URL limitation documented.
 
 ## Non-goals
-- Do not request production SNS sandbox exit in this ticket unless the user explicitly asks.
+- Do not request production SNS sandbox exit.
+- Do not add SMS scheduling by booking time.
 - Do not build SMS buttons in phone/admin UI.
 - Do not change SMS provider implementation.
 - Do not send bulk SMS.
@@ -82,26 +85,31 @@ Verify a test phone number in AWS SNS SMS sandbox and resend one JumpYard Cloud 
 - Do not replace temporary staff/dev auth.
 
 ## Acceptance criteria
-- One approved test number is verified in SNS sandbox, or a clear AWS blocker is documented.
-- One protected SMS send is attempted after verification.
-- The result is visible in `jumpyard.sms_deliveries`.
-- CloudWatch/SNS delivery status logs are checked.
-- Raw token, full URL, full phone number, SMS message text, OTP, and secrets are not printed or committed.
+- A URL containing `?jy_token=...` enters the SMS phone flow.
+- The phone app resolves the token through JumpYard Cloud, not mock data.
+- The phone app can render the resolved booking/session state.
+- Raw token, full SMS URL, full phone number, SMS text, OTP, and secrets are not printed or committed.
 - `npm run validate` passes.
+- Phone lint/build pass.
+- Session Lambda syntax/build/synth pass.
+- If deployed, post-deploy diff shows no unexpected changes.
 
 ## Manual verification
-- User provides the OTP from the approved phone when AWS sends it.
-- User confirms whether the approved phone receives the final JumpYard Cloud SMS.
-- Link opening is not fully validated until the phone app has a public/mobile-reachable URL.
+- Create or use a dev check-in link for a known paid booking.
+- Open the phone app with `?jy_token=<raw token>` locally.
+- Confirm the app reaches booking summary, QR confirmation, or already-checked-in based on server session state.
+- Do not paste the raw token into committed files or docs.
 
 ## Automated validation
 Run:
-- AWS identity and region preflight
-- SNS sandbox status check
-- SNS sandbox phone-number list/status check
-- AWS SNS sandbox phone verification commands
-- Deployed API smoke with `confirmSend=true`
-- Aurora verification for the created `jumpyard.sms_deliveries` row
-- CloudWatch Logs inspection for SNS SMS delivery status
+- `node --check infra/lambda/session/index.js`
+- `npm --prefix infra run build`
+- `npm --prefix infra run synth:dev`
+- `npm --prefix jumpyard-checkin-phone run lint`
+- `npm --prefix jumpyard-checkin-phone run build`
 - `npm run validate`
 - `git diff --check`
+- AWS identity and region preflight before deploy
+- `npm --prefix infra run diff:dev` before deploy
+- `npm --prefix infra run deploy:dev` only for approved dev backend behavior
+- `npm --prefix infra run diff:dev` after deploy
