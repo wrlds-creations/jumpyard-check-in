@@ -81,6 +81,8 @@ T0035 wires the phone existing-booking add-ons step to the T0034 JumpYard Cloud 
 
 T0036 adds a local Data API backfill orchestrator for the manual foundation before scheduling. `npm --prefix infra run import:data-api-backfill:dev` splits an explicit modified-date range into daily windows, runs bookingitems before related Data API sources for each day, and refreshes the product cache for item-name enrichment. It is dry-run by default. Apply mode requires `--apply` plus `ROLLER_DATA_BACKFILL_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_DEV_AURORA_DATA_API_BACKFILL`, then sets the existing per-import write confirmations for the child import scripts.
 
+T0037 adds the scheduled dev AWS Data API sync. EventBridge rule `jumpyard-check-in-dev-data-api-daily-sync` invokes Lambda `jumpyard-check-in-dev-stack-data-sync` daily at `02:00 UTC` and the Lambda imports the previous UTC modified-date window by default. It reads Playground-only Roller config from AWS Secrets Manager and SSM, upserts bookingitems, tickets, bookingpayments, customers, and products into the existing Aurora snapshot/cache tables, records health in `jumpyard.booking_seed_runs`, and performs no Roller writes.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -164,7 +166,7 @@ The T0021 dev redeem token is only for controlled backend testing. It must never
 - Data API sync should use Get bookings, Get tickets, Get payments, and Get customers as the expected source set.
 - Get attendance is for actual arrival/redeem reconciliation, not for seeding expected guests.
 - Webhook payloads may be sufficient when configured with booking detail and payments, but JumpYard Cloud should enrich from live booking detail when data is incomplete, suspicious, stale, or check-in-critical.
-- T0036 is the manual/local backfill foundation. T0037 should schedule the same modified-date sync pattern in dev AWS instead of adding another import model.
+- T0036 is the manual/local backfill foundation. T0037 schedules the same modified-date sync pattern in dev AWS instead of adding another import model.
 
 ## Confirmed Implementation Roadmap
 
@@ -203,7 +205,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0034 Existing-booking add-product draft step 1` | Add server-side quote and separate add-on draft creation for existing bookings, linked in JumpYard Cloud. | Completed and deployed to dev; no phone UI wiring or payment execution yet. |
 | `T0035 Phone add-product UI wiring` | Wire existing-booking add-products in the phone flow to the T0034 quote/draft endpoints. | Completed locally; lets a guest add mapped add-ons to an existing check-in session, create a separate linked Playground draft, and stop at payment pending. |
 | `T0036 Data API backfill and sync foundation` | Build a fuller Data API import path for bookingitems, tickets, payments, and customers/contact data so Aurora can be filled consistently from Roller exports. | Completed locally; gives JumpYard Cloud a repeatable booking baseline before SMS links and production-like operating workflows. |
-| `T0037 Scheduled daily Data API sync` | Move the T0036 import path into a scheduled dev AWS sync that runs a daily modified-date window and records run status. | Keeps Aurora reconciled even if webhooks are delayed, disabled, or out of order. |
+| `T0037 Scheduled daily Data API sync` | Move the T0036 import path into a scheduled dev AWS sync that runs a daily modified-date window and records run status. | Completed in dev AWS; keeps Aurora reconciled even if webhooks are delayed, disabled, or out of order. |
 | `T0038 SMS token/session link foundation` | Add secure JumpYard Cloud links that can resume or start a booking check-in session without exposing raw booking numbers as authority. | Prepares the phone flow for SMS delivery while keeping session ownership server-side. |
 | `T0039 SMS sending` | Integrate the selected SMS provider and send check-in links from server-owned booking/session state. | Lets JumpYard invite guests into the phone check-in flow before arrival or from staff/admin workflows. |
 | `T0040 Roller payment package/drop-in integration` | Add the approved Roller payment package, allowlisted public HTTPS origin, and fake/test card path when Roller/Pabel provides the missing prerequisites. | Completes in-PWA payment for both new-booking and add-product drafts once external blockers are removed. |
