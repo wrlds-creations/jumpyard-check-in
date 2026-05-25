@@ -8,8 +8,10 @@
   --border: #E4E4E7;
   --muted: #71717A;
   --primary: #E31837;
+  --primary-dark: #B9102B;
   --success: #10B981;
   --warning: #F59E0B;
+  --danger: #DC2626;
 }
 
 @theme inline {
@@ -20,14 +22,24 @@
   --color-border: var(--border);
   --color-muted: var(--muted);
   --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
   --color-success: var(--success);
   --color-warning: var(--warning);
-  --font-sans: var(--font-space-grotesk), sans-serif;
+  --color-danger: var(--danger);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input {
+  font-family: inherit;
 }
 
 .text-jy-red {

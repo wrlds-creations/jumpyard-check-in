@@ -920,7 +920,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0047` in dev AWS. The next recommended ticket is `T0048 Staff operations polish` unless Roller payment prerequisites arrive for `T0040`.
+Current implementation has progressed through `T0048` locally. The next recommended ticket is staff operations production readiness, confirmed scheduled SMS sends, or `T0040` if Roller payment prerequisites arrive.
 
 Near-term sequence:
 
@@ -946,7 +946,7 @@ Near-term sequence:
 20. `T0045 Booking-time SMS trigger`: completed in dev foundation; protected endpoint plans due booking reminders and sends only with explicit confirmation while respecting SNS sandbox limits.
 21. `T0046 Scheduled booking-time SMS processing`: completed in dev AWS; EventBridge invokes the T0045 due-SMS processor every 5 minutes, running dev planning mode by default.
 22. `T0047 Staff auth replacement`: replaces the normal admin temporary redeem-code flow with staff login and short-lived staff tokens for staff list/detail/redeem.
-23. `T0048 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
+23. `T0048 Staff operations polish`: completed locally; admin handoff now uses JumpYard phone-app visual assets, the documented system sans-serif font stack, mobile-first layout, larger tap targets, and selected-detail-first behavior on phone-sized screens without changing backend contracts. Google font imports and historical display-font overrides are removed from the current check-in app shells.
 
 ## Open Contract Questions
 

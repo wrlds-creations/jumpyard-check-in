@@ -483,3 +483,20 @@ Use this file to define validation for the current project or milestone.
 | Staff redeem auth guard | Staff redeem rejects missing auth and passes auth for a fake session without redeeming a real Roller ticket. | Passed | Authenticated fake session returned HTTP `404`/`session_not_found`, confirming auth passed without a real redeem. |
 | Admin UI login | Admin app shows staff login and removes the temporary dev-code input from the normal handoff panel. | Passed | Browser verification at `http://127.0.0.1:3002/` found `staff-auth-login` and no temporary dev-code text. |
 | Dev deploy | Dev stack deploys the staff auth secret, route, grants, and Lambda code. | Passed | CDK diff matched T0047 scope, deploy completed, and post-deploy diff showed no differences. |
+
+## T0048 Staff Operations Polish Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Admin lint | Admin app lint passes after visual polish. | Passed | `npm --prefix jumpyard-checkin-admin run lint` passed on 2026-05-25. |
+| Admin build | Admin app static build passes after visual polish. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed on 2026-05-25. |
+| Phone lint/build | Phone shell font change validates without flow changes. | Passed with warnings | `npm --prefix jumpyard-checkin-phone run lint` passed with existing `img` warnings; `npm --prefix jumpyard-checkin-phone run build` passed. |
+| Kiosk build | Kiosk shell font change builds without flow changes. | Passed | `npm --prefix jumpyard-checkin-kiosk run build` passed. |
+| Kiosk lint | Kiosk shell font change lint check is run. | Blocked by existing issues | `npm --prefix jumpyard-checkin-kiosk run lint` still fails on pre-existing component/context lint errors outside T0048 shell changes. |
+| Mobile ergonomics | Staff login/list/detail/scanner/redeem UI fits phone-sized screens without horizontal overflow. | Passed | Browser viewport `390x844` showed no horizontal overflow; scanner panel opened and stayed within the viewport. |
+| Visual alignment | Admin app reuses check-in app font stack, JumpYard icon style, rounded controls, and red/neutral color language. | Passed | Browser verification showed the system sans-serif stack active, JumpYard icon assets rendering, and no desktop horizontal overflow at `1280x800`. |
+| Admin login copy and icons | Login surface avoids the rejected staff/personnel wording and decorative login/input icons. | Passed | Browser check on `http://localhost:3002/` rendered `HANDOFF`, `KOD`, and `FORTSÄTT`, with no `Personal`, `Logga in`, `Logga ut`, key icon, or login shield icon visible. |
+| Admin compact header/search copy | Logged-in header stays compact and search actions are clear. | Passed | Browser check at `390x844` showed a one-row 61px header, no overflow, placeholder `Sök eller skanna QR`, and `Sök`/`Skanna QR` as 900 italic. |
+| Historical display font cleanup | Check-in app shells and docs use the documented system sans-serif stack without Google font imports. | Passed | Targeted search for the old font import names and Google font import path returned no source/doc matches. |
+| Phone shell visual check | Phone app uses the same system font stack after the shell change. | Passed | Browser checks at `390x844` and `1280x800` showed the documented font stack and no horizontal overflow on `http://localhost:3000/`. |
+| Contract preservation | Staff auth/list/detail/redeem request behavior is unchanged. | Passed | T0048 does not modify Lambda/backend code, AWS resources, Roller logic, SMS logic, payment logic, or phone/kiosk flow components. |

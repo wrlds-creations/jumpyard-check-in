@@ -101,6 +101,8 @@ T0046 adds the dev AWS schedule for booking-time SMS processing. EventBridge rul
 
 T0047 replaces the normal admin handoff temporary redeem-code flow with a first server-owned staff authentication slice. JumpYard Cloud now has `POST /v1/staff/auth/login`, backed by AWS Secrets Manager secret `/jumpyard-check-in-dev/staff/auth`, which validates a staff passcode server-side and issues a short-lived staff token. Staff list, detail, and staff-confirmed redeem routes require that token. The admin app shows a staff login screen, stores only the short-lived auth session in browser session storage, sends the token on staff requests, and no longer asks for the old temporary redeem dev code in the normal handoff panel. This is a pilot/dev auth slice, not final production SSO/Cognito.
 
+T0048 polishes the staff/admin handoff app without changing backend behavior. The admin app now uses the same JumpYard icon asset style, system sans-serif font stack, red/neutral color tokens, rounded controls, and italic/uppercase emphasis as the check-in apps. It keeps QR scan/paste/manual code entry available and makes selected handoff detail appear before the waiting list on phone-sized screens so staff can review and redeem from a mobile device.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -113,6 +115,16 @@ The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_C
 - Roller integration must fail closed unless it is explicitly configured for Playground.
 - Phone UI must not hold redeem tokens, Roller credentials, or final ticket-redemption authority.
 - Staff/admin handoff in dev requires the T0047 staff auth token for list/detail/redeem; final production staff identity and roles remain a follow-up.
+- Staff/admin handoff UI should be mobile-first and visually aligned with the phone check-in app while remaining an operational staff tool.
+
+## JumpYard UI Rules
+
+- Font stack: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`.
+- Do not use Google font imports or historical display-font overrides in the current check-in app surfaces.
+- Core color tokens: `#FFFFFF` background, `#1C1C1E` foreground, `#F4F4F5` surface, `#E4E4E7` surface/border, `#71717A` muted, `#E31837` primary red, `#B9102B` primary dark, `#10B981` success, `#F59E0B` warning, `#DC2626` danger.
+- Type emphasis: headings, primary buttons, compact labels, and operational codes use bold or black weight, uppercase where useful, and italic emphasis in the established phone/kiosk style.
+- Avoid heavy muted text. Muted copy should be light/supportive; strong labels and actions should use foreground, primary, success, warning, or danger colors.
+- Shape and sizing: phone-first cards and controls generally use `rounded-2xl`, primary CTAs use large tap targets around `py-4`/`min-h-14`, compact labels use `text-[10px]` or `text-[11px]`, and staff tools must avoid horizontal overflow on phone viewports.
 
 ## Current Repository Shape
 
@@ -236,6 +248,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0045 Booking-time SMS trigger` | Connect SMS sending to booking time windows, for example sending a check-in link before the jump time. | Completed in dev foundation; protected endpoint plans due bookings by time and sends only with explicit confirmation. |
 | `T0046 Scheduled booking-time SMS processing` | Run the booking-time SMS trigger from EventBridge without staff/admin manually calling it. | Completed in dev AWS; dev schedule runs every 5 minutes in planning mode with real sending still disabled until public/mobile URL and SMS production readiness are approved. |
 | `T0047 Staff auth replacement for temporary dev code` | Replace the normal admin handoff temporary redeem-code flow with server-owned staff login and short-lived staff tokens. | Completed locally and deployed to dev; production SSO/Cognito and roles remain follow-up work. |
+| `T0048 Staff operations polish` | Make the staff/admin handoff app mobile-friendly and visually aligned with the phone check-in app. | Completed locally; historical display-font imports were removed from check-in app shells, and no backend, AWS, Roller, SMS, or payment behavior changed. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
