@@ -301,6 +301,30 @@ export class JumpYardCloudStack extends Stack {
       ],
     });
 
+    if (config.bookingTimeSms.scheduleEnabled) {
+      new events.Rule(this, 'BookingTimeSmsScheduleRule', {
+        ruleName: `${config.resourcePrefix}-booking-time-sms-schedule`,
+        description:
+          'Runs the dev booking-time SMS trigger on a fixed cadence. Real sends are controlled by config.bookingTimeSms.confirmSend.',
+        schedule: events.Schedule.rate(Duration.minutes(config.bookingTimeSms.rateMinutes)),
+        targets: [
+          new targets.LambdaFunction(sessionHandler, {
+            event: events.RuleTargetInput.fromObject({
+              source: 'jumpyard.booking-time-sms-scheduler',
+              detail: {
+                confirmSend: config.bookingTimeSms.confirmSend,
+                leadMinutes: config.bookingTimeSms.leadMinutes,
+                limit: config.bookingTimeSms.limit,
+                trigger: 'scheduled_booking_time_sms',
+                windowMinutes: config.bookingTimeSms.windowMinutes,
+              },
+            }),
+            retryAttempts: 2,
+          }),
+        ],
+      });
+    }
+
     this.addRoute(api, lookupHandler, 'POST /v1/check-in/lookup');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-sms');

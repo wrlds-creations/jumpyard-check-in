@@ -457,3 +457,16 @@ Use this file to define validation for the current project or milestone.
 | Browser add-product flow | Existing-booking phone flow can create a separate add-on draft and stop at payment pending. | Passed | Browser smoke with booking `5032443` added one socks item, quoted `45 kr`, created draft `jypd_740b8fc10ee446639b`, and showed `data-add-product-status="payment_pending"`. |
 | Aurora persistence | Browser-created add-product draft is linked to the original booking. | Passed | Aurora row `jypd_740b8fc10ee446639b` has `flow_type='add_product'`, `status='payment_pending'`, original booking `5032443`, amount `4500`, `payment_jwt_present=true`, and `booking_links.link_type='add_product_draft'`. |
 | Root validation | Source-of-truth docs and workflow checks pass after T0035. | Passed | `npm run validate` and `git diff --check` passed on 2026-05-22. |
+
+## T0046 Scheduled Booking-Time SMS Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Session Lambda syntax | `node --check infra/lambda/session/index.js` passes. | Passed | Passed after adding EventBridge internal invocation handling. |
+| Infra build | `npm --prefix infra run build` passes. | Passed | TypeScript config and CDK stack compile with booking-time SMS config fields. |
+| Dev synth | `npm --prefix infra run synth:dev` passes. | Passed | Passed with `infra/config/dev.json`. |
+| Root validation | `npm run validate` passes. | Passed | Root workflow, skill, and AWS tag validation passed. |
+| AWS preflight | Account `376129878018` and region `eu-north-1` are verified. | Passed | AWS SSO was refreshed; account and region matched the approved dev target. |
+| CDK diff | Diff shows only the approved EventBridge rule/session Lambda/config changes. | Passed | Pre-deploy diff added the booking-time SMS rule, Lambda invoke permission, and session Lambda code asset only. |
+| Dev deploy | Dev stack deploys the schedule safely. | Passed | `npm --prefix infra run deploy:dev` completed successfully; post-deploy diff showed no differences. |
+| Scheduled payload smoke | Direct Lambda invoke with EventBridge-shaped payload returns planning result. | Passed | Returned `booking_time_sms_planned`, `confirmSend=false`, `sent=0`, and skipped booking `5032210` as already sent recently. |

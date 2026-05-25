@@ -20,6 +20,14 @@ type RequiredWrlDsTag = (typeof REQUIRED_WRLDS_TAGS)[number];
 export interface JumpYardCloudConfig {
   readonly awsAccount: string;
   readonly awsRegion: string;
+  readonly bookingTimeSms: {
+    readonly confirmSend: boolean;
+    readonly leadMinutes: number;
+    readonly limit: number;
+    readonly rateMinutes: number;
+    readonly scheduleEnabled: boolean;
+    readonly windowMinutes: number;
+  };
   readonly resourcePrefix: string;
   readonly roller: {
     readonly environment: string;
@@ -31,6 +39,14 @@ export interface JumpYardCloudConfig {
 interface RawConfig {
   readonly awsAccount?: unknown;
   readonly awsRegion?: unknown;
+  readonly bookingTimeSms?: {
+    readonly confirmSend?: unknown;
+    readonly leadMinutes?: unknown;
+    readonly limit?: unknown;
+    readonly rateMinutes?: unknown;
+    readonly scheduleEnabled?: unknown;
+    readonly windowMinutes?: unknown;
+  };
   readonly resourcePrefix?: unknown;
   readonly roller?: {
     readonly environment?: unknown;
@@ -54,6 +70,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   const tags = readRequiredTags(raw.tags);
   const awsAccount = readString(raw.awsAccount, 'awsAccount');
   const awsRegion = readString(raw.awsRegion, 'awsRegion');
+  const bookingTimeSms = readBookingTimeSmsConfig(raw.bookingTimeSms);
   const resourcePrefix = readString(raw.resourcePrefix, 'resourcePrefix');
   const rollerEnvironment = readString(raw.roller?.environment, 'roller.environment');
   const rollerBaseUrl = readString(raw.roller?.baseUrl, 'roller.baseUrl');
@@ -85,12 +102,24 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   return {
     awsAccount,
     awsRegion,
+    bookingTimeSms,
     resourcePrefix,
     roller: {
       environment: rollerEnvironment,
       baseUrl: rollerBaseUrl.replace(/\/$/, ''),
     },
     tags,
+  };
+}
+
+function readBookingTimeSmsConfig(raw: RawConfig['bookingTimeSms']): JumpYardCloudConfig['bookingTimeSms'] {
+  return {
+    confirmSend: readOptionalBoolean(raw?.confirmSend, false, 'bookingTimeSms.confirmSend'),
+    leadMinutes: readOptionalInteger(raw?.leadMinutes, 30, 0, 24 * 60, 'bookingTimeSms.leadMinutes'),
+    limit: readOptionalInteger(raw?.limit, 10, 1, 10, 'bookingTimeSms.limit'),
+    rateMinutes: readOptionalInteger(raw?.rateMinutes, 5, 1, 60, 'bookingTimeSms.rateMinutes'),
+    scheduleEnabled: readOptionalBoolean(raw?.scheduleEnabled, false, 'bookingTimeSms.scheduleEnabled'),
+    windowMinutes: readOptionalInteger(raw?.windowMinutes, 10, 1, 180, 'bookingTimeSms.windowMinutes'),
   };
 }
 
@@ -124,4 +153,25 @@ function readString(value: unknown, fieldName: string): string {
   }
 
   return value.trim();
+}
+
+function readOptionalBoolean(value: unknown, fallback: boolean, fieldName: string): boolean {
+  if (value === undefined) return fallback;
+  if (typeof value === 'boolean') return value;
+  throw new Error(`Config field ${fieldName} must be a boolean when supplied.`);
+}
+
+function readOptionalInteger(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+  fieldName: string,
+): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`Config field ${fieldName} must be an integer between ${min} and ${max}.`);
+  }
+
+  return value;
 }

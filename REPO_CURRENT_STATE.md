@@ -4,12 +4,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Snapshot
 
-- Date: 2026-05-22
-- Current branch: `codex/t0045-booking-time-sms-trigger`
-- Current status: T0045 booking-time SMS trigger completed locally and deployed to dev; protected due-SMS planning reads Aurora booking time windows and sends only with explicit confirmation.
-- Current ticket: `T0045` completed locally, not yet committed or merged
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`
-- Recommended next ticket: `T0046 Staff auth replacement for temporary dev code` unless Roller payment prerequisites arrive for `T0040`
+- Date: 2026-05-25
+- Current branch: `codex/t0046-scheduled-booking-time-sms`
+- Current status: T0046 scheduled booking-time SMS processing completed locally and deployed to dev; EventBridge invokes the session Lambda every 5 minutes in planning mode with `confirmSend=false`.
+- Current ticket: `T0046` completed locally, not yet committed or merged
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`
+- Recommended next ticket: `T0047 Staff auth replacement for temporary dev code` unless Roller payment prerequisites arrive for `T0040`
 
 ## Current Structure
 
@@ -166,20 +166,22 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0043` | Verified SNS sandbox phone and resent SMS. | 2026-05-22 | Masked destination `+46*****9508` is verified in SNS sandbox; Aurora delivery `jysms_mpgxbla6_b59779cd` is `sent` and CloudWatch shows provider `SUCCESS`. |
 | `T0044` | Added phone SMS link resume. | 2026-05-22 | Phone `jy_token` links resolve through JumpYard Cloud, receive safe booking/session context, and route to booking summary, QR confirmation, or manual lookup without mock token data. |
 | `T0045` | Added booking-time SMS trigger foundation. | 2026-05-22 | Dev `POST /v1/check-in/session-links/send-due-sms` plans upcoming Aurora bookings by start time, skips unsafe/duplicate candidates, and reuses the existing SMS sender only with `confirmSend=true`. |
+| `T0046` | Added scheduled booking-time SMS processing. | 2026-05-25 | EventBridge rule `jumpyard-check-in-dev-booking-time-sms-schedule` invokes the session Lambda every 5 minutes in dev planning mode with `confirmSend=false`; public due-SMS endpoint remains token-protected. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0045` | Booking-time SMS trigger. | Completed locally and deployed to dev | Protected due-SMS endpoint plans booking-time reminders from Aurora, uses `bookingCustomerId` contact fallback, and sends only with explicit confirmation. |
+| `T0046` | Scheduled booking-time SMS processing. | Completed locally and deployed to dev | EventBridge invokes the due-SMS processor internally every 5 minutes, but dev config keeps real sends disabled with `confirmSend=false`. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
 | `T0040` | Roller payment package/drop-in integration | Blocked until Roller/Pabel provides package access, allowlisted HTTPS test origin, and fake/test card behavior. |
-| `T0046` | Staff auth replacement for temporary dev code | Replace temporary dev codes for SMS/redeem-style protected operations with a real staff/admin auth model. |
-| `T0047` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
+| `T0047` | Staff auth replacement for temporary dev code | Replace temporary dev codes for staff/redeem-style protected operations with a real staff/admin auth model. |
+| `T0048` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
+| `T0049` | Confirmed scheduled SMS sends | Enable `confirmSend=true` only after public/mobile URL, SMS sender/sandbox, and messaging policy are approved. |
 
 ## Validation Status
 

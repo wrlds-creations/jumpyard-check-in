@@ -4,7 +4,7 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0006` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev booking endpoint reads Roller Playground availability, quotes costs, creates Roller Playground draft bookings server-side, persists safe pre-payment draft rows, and creates separate linked add-product draft bookings for existing bookings, the dev webhook endpoint records and enriches Roller webhook intake events, the dev data-sync Lambda is scheduled by EventBridge for daily Roller Data API reconciliation, the dev redeem endpoint plans/audits redemption, supports controlled Playground redemption behind a dev token, and exposes staff-confirmed session redeem, the dev session endpoint creates/resumes server-owned check-in sessions, exposes read-only staff handoff list/detail routes, creates/resolves hashed check-in session links with safe booking summaries for phone resume, can dry-run or explicitly send those links through AWS SNS, and can plan booking-time SMS candidates from Aurora before any confirmed send, SNS SMS delivery diagnostics are configured for dev, the real Roller Playground booking webhook is registered, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, webhook-enriched records, scheduled sync run rows, session rows, check-in token hashes, SMS delivery audit rows, pre-payment draft rows, booking links, idempotency rows, event logs, and redeem attempt audit rows.
+JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0006` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev booking endpoint reads Roller Playground availability, quotes costs, creates Roller Playground draft bookings server-side, persists safe pre-payment draft rows, and creates separate linked add-product draft bookings for existing bookings, the dev webhook endpoint records and enriches Roller webhook intake events, the dev data-sync Lambda is scheduled by EventBridge for daily Roller Data API reconciliation, the dev redeem endpoint plans/audits redemption, supports controlled Playground redemption behind a dev token, and exposes staff-confirmed session redeem, the dev session endpoint creates/resumes server-owned check-in sessions, exposes read-only staff handoff list/detail routes, creates/resolves hashed check-in session links with safe booking summaries for phone resume, can dry-run or explicitly send those links through AWS SNS, can plan booking-time SMS candidates from Aurora before any confirmed send, and is now invoked by a dev EventBridge booking-time SMS schedule in planning mode, SNS SMS delivery diagnostics are configured for dev, the real Roller Playground booking webhook is registered, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, webhook-enriched records, scheduled sync run rows, session rows, check-in token hashes, SMS delivery audit rows, pre-payment draft rows, booking links, idempotency rows, event logs, and redeem attempt audit rows.
 
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
@@ -304,6 +304,20 @@ T0045 booking-time SMS trigger notes:
 - Contact handling: response returns masked destinations only.
 - Raw token handling: raw tokens and full check-in URLs are created only inside confirmed sends and are not returned by the due trigger or persisted.
 
+T0046 scheduled booking-time SMS processing notes:
+
+- Changed resource: `jumpyard-check-in-dev-stack-session`
+- Added EventBridge rule: `jumpyard-check-in-dev-booking-time-sms-schedule`
+- Schedule: every 5 minutes in dev.
+- Behavior: invokes the session Lambda internally with the T0045 due-SMS processor.
+- Dev config: `confirmSend=false`, `leadMinutes=30`, `windowMinutes=10`, `limit=10`.
+- Public API routes: none added; `POST /v1/check-in/session-links/send-due-sms` remains token-protected.
+- Roller calls: none.
+- Roller writes: none.
+- Real SMS sends: disabled by dev config while the check-in app URL is still `http://localhost:3000/` and SNS sandbox constraints remain.
+- Contact handling: scheduled results use the same masked-destination planning rules as T0045.
+- Raw token handling: no raw tokens or full check-in URLs are created in planning mode.
+
 Confirmed T0006 dev target:
 
 | Field | Value |
@@ -325,7 +339,7 @@ Confirmed T0006 dev target:
 | `jumpyard-check-in-dev-stack-lookup` | Lambda | `dev` | `eu-north-1` | `cdk` | T0016 lookup handler; reads Aurora first, refreshes from Roller Playground only when needed, and returns normalized phone-flow lookup response. |
 | `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | T0034 booking handler; reads Roller Playground availability, quotes Roller Playground draft costs, creates confirmed Playground draft bookings behind idempotency, creates separate linked add-product draft bookings for existing bookings, persists safe pre-payment draft rows, returns safe payment config and response-only `paymentJwt`, and writes safe audit rows. |
 | `jumpyard-check-in-dev-stack-redeem` | Lambda | `dev` | `eu-north-1` | `cdk` | T0027 redeem handler; plans/validates server-side redemption from Aurora, requires a dev token for confirmed writes, refreshes live Roller state before write, supports staff-confirmed session redeem, marks completed sessions, and records attempt audit. |
-| `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0045 session handler; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, creates/resolves hashed check-in session links with safe booking summaries for phone resume, dry-runs or explicitly sends SMS links through AWS SNS, plans booking-time SMS candidates from Aurora, and serves read-only staff handoff list/detail without Roller calls or Roller writes. |
+| `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0046 session handler; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, creates/resolves hashed check-in session links with safe booking summaries for phone resume, dry-runs or explicitly sends SMS links through AWS SNS, plans booking-time SMS candidates from Aurora, accepts internal EventBridge booking-time planning invocations, and serves read-only staff handoff list/detail without Roller calls or Roller writes. |
 | `jumpyard-check-in-dev-sns-sms-delivery-status` | IAM Role | `dev` | `eu-north-1` | `cdk` | Allows Amazon SNS to write SMS delivery status logs for JumpYard Cloud dev diagnostics. |
 | `SmsDeliveryStatusAttributes` | CloudFormation Custom Resource | `dev` | `eu-north-1` | `cdk` | Sets dev SNS SMS attributes for transactional SMS and 100% delivery status sampling. |
 | SNS SMS sandbox phone `+46*****9508` | Amazon SNS SMS sandbox | `dev` | `eu-north-1` | AWS CLI/manual verification | Verified test destination for dev SMS delivery while the account remains in SMS sandbox. |
@@ -355,6 +369,7 @@ Confirmed T0006 dev target:
 | `jumpyard-check-in-dev-roller-ops-dlq` | SQS | `dev` | `eu-north-1` | `cdk` | Dead-letter queue. |
 | `jumpyard-check-in-dev-events` | EventBridge | `dev` | `eu-north-1` | `cdk` | Internal JumpYard Cloud event bus. |
 | `jumpyard-check-in-dev-data-api-daily-sync` | EventBridge Rule | `dev` | `eu-north-1` | `cdk` | Invokes `jumpyard-check-in-dev-stack-data-sync` daily at `02:00 UTC` for the previous modified-date window. |
+| `jumpyard-check-in-dev-booking-time-sms-schedule` | EventBridge Rule | `dev` | `eu-north-1` | `cdk` | Invokes `jumpyard-check-in-dev-stack-session` every 5 minutes for booking-time SMS processing in planning mode with `confirmSend=false`. |
 | `vpc-0d3ec43331e52813e` | VPC | `dev` | `eu-north-1` | `cdk` | CIDR `10.72.0.0/16`. |
 | `subnet-005b2679b14023edc` | EC2 subnet | `dev` | `eu-north-1a` | `cdk` | Isolated subnet A. |
 | `subnet-07bc326946413a10a` | EC2 subnet | `dev` | `eu-north-1b` | `cdk` | Isolated subnet B. |
