@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-25
-- Current branch: `codex/t0047-staff-auth-replacement`
-- Current status: T0047 staff auth replacement completed locally and deployed to dev; admin handoff now uses JumpYard Cloud staff login and short-lived staff tokens instead of the normal temporary redeem dev-code input.
-- Current ticket: `T0047` completed locally, not yet committed or merged
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`
-- Recommended next ticket: `T0048 Staff operations polish` unless Roller payment prerequisites arrive for `T0040`
+- Current branch: `codex/t0048-staff-ops-visual-polish`
+- Current status: T0048 staff operations polish completed locally; admin handoff is mobile-first, check-in app shells use the documented system sans-serif stack, and backend behavior is unchanged.
+- Current ticket: `T0048` completed locally, not yet committed or merged
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`
+- Recommended next ticket: `T0049 Confirmed scheduled SMS sends` only after public/mobile URL, SMS sender/sandbox, and messaging policy are approved; otherwise continue staff production readiness or `T0040` when Roller payment prerequisites arrive.
 
 ## Current Structure
 
@@ -168,24 +168,29 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0045` | Added booking-time SMS trigger foundation. | 2026-05-22 | Dev `POST /v1/check-in/session-links/send-due-sms` plans upcoming Aurora bookings by start time, skips unsafe/duplicate candidates, and reuses the existing SMS sender only with `confirmSend=true`. |
 | `T0046` | Added scheduled booking-time SMS processing. | 2026-05-25 | EventBridge rule `jumpyard-check-in-dev-booking-time-sms-schedule` invokes the session Lambda every 5 minutes in dev planning mode with `confirmSend=false`; public due-SMS endpoint remains token-protected. |
 | `T0047` | Added staff auth replacement for temporary dev code. | 2026-05-25 | Normal admin handoff now uses JumpYard Cloud staff login and a short-lived staff token for list/detail/redeem; the lower-level direct redeem dev token remains for controlled internal/dev testing only. |
+| `T0048` | Polished staff/admin handoff UI. | 2026-05-25 | Admin handoff now uses JumpYard phone-app icons, the documented system sans-serif font stack, mobile-first selected-detail ordering, larger rounded tap targets, simplified handoff copy, fewer decorative icons, and clearer scanner/list/detail/redeem states without changing backend contracts. Historical display-font imports were removed from admin/phone/kiosk app shells. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0047` | Staff auth replacement for temporary dev code. | Completed locally and deployed to dev | Normal admin handoff uses staff login plus short-lived staff tokens for list/detail/redeem; direct redeem dev token remains only for controlled lower-level dev testing. |
+| `T0048` | Staff operations polish. | Completed locally | Admin UI polish aligns with the check-in apps and improves phone-sized handoff ergonomics; login copy now uses `Handoff`, `Kod`, and `Fortsätt`; admin/phone/kiosk shells now use the documented system sans-serif stack; no backend, AWS, Roller, SMS, or payment behavior changed. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
 | `T0040` | Roller payment package/drop-in integration | Blocked until Roller/Pabel provides package access, allowlisted HTTPS test origin, and fake/test card behavior. |
-| `T0048` | Staff operations polish | Improve staff-side speed, loading states, scanner feedback, and real-world handoff ergonomics. |
 | `T0049` | Confirmed scheduled SMS sends | Enable `confirmSend=true` only after public/mobile URL, SMS sender/sandbox, and messaging policy are approved. |
+| `T0050` | Staff production readiness | Replace pilot passcode auth with production staff identity/roles and harden handoff QR/token policy before production rollout. |
 
 ## Validation Status
 
-- Automated root validation: `npm run validate` passed during T0023 on 2026-05-21.
+- Automated root validation: `npm run validate` passed on 2026-05-25 during T0048.
+- T0048 validation: admin lint/build passed, phone lint/build passed with existing image optimization warnings, kiosk build passed, `npm run validate` passed, and `git diff --check` passed.
+- T0048 kiosk lint: `npm --prefix jumpyard-checkin-kiosk run lint` is still blocked by pre-existing component/context lint errors outside the shell font change.
+- T0048 browser validation: admin `http://127.0.0.1:3002/` and phone `http://localhost:3000/` both used the documented system sans-serif font stack and showed no horizontal overflow at `390x844` or `1280x800`.
+- T0048 admin copy validation: browser checks on `http://localhost:3002/` showed the login surface no longer renders `Personal`, `Logga in`, `Logga ut`, or the previous login/input icons. Logged-in mobile header stays on one row, `Sök` and `Skanna QR` render as 900 italic, and the search placeholder is `Sök eller skanna QR`.
 - Infra validation: `npm run infra:check` passed during T0007 on 2026-05-20.
 - Infra synth: `npm run infra:synth` passed during T0004 using `infra/config/dev.example.json`.
 - Metadata guard: missing `-c config=...` fails as expected before synth.
@@ -458,7 +463,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Roller Data API `/data/bookingitems`, `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access, query params, paging shape, and modified-date behavior are confirmed in Playground for the T0008 seed window.
 - Webhook retry behavior, response handling, booking event names, Playground auth header `x-roller-apikey`, and dev webhook registration are confirmed. Exact production auth/signature and IP allowlisting choice remain open.
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
-- Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, and phone session resume routing is complete locally from T0029.
+- Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, phone session resume routing is complete locally from T0029, staff auth replacement is deployed from T0047, and staff/admin mobile visual polish is complete locally from T0048.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
 - Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; actual payment execution still needs Roller payment-library prerequisites.
 - Existing-booking add-product linked-booking flow has been tested server-side in dev; phone UI wiring is still pending.

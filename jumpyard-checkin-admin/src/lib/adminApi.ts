@@ -143,7 +143,7 @@ export async function loginStaff(passcode: string): Promise<StaffAuthSession> {
   const body = await parseJson<StaffAuthResponse>(response);
 
   if (!response.ok || body.status !== "authenticated" || !body.auth || !body.staff) {
-    throw new Error(body.error?.message ?? "JumpYard Cloud kunde inte logga in personal.");
+    throw new Error(body.error?.message ?? "JumpYard Cloud kunde inte logga in.");
   }
 
   return {
@@ -162,7 +162,7 @@ export async function listReadyStaffSessions(staffToken: string): Promise<StaffS
   const body = await parseJson<StaffListResponse>(response);
 
   if (!response.ok || body.status !== "found") {
-    throw new Error(body.error?.message ?? "JumpYard Cloud kunde inte hamta personalhandovers.");
+    throw new Error(body.error?.message ?? "JumpYard Cloud kunde inte hämta handovers.");
   }
 
   return (body.sessions ?? []).filter((session) => Boolean(session.checkinSessionId));
@@ -181,7 +181,7 @@ export async function getStaffSession(checkinSessionId: string, staffToken: stri
   const body = await parseJson<StaffDetailResponse>(response);
 
   if (!response.ok || body.status !== "found" || !body.session) {
-    throw new Error(body.error?.message ?? "JumpYard Cloud kunde inte hamta handoff-detaljen.");
+    throw new Error(body.error?.message ?? "JumpYard Cloud kunde inte hämta handoff-detaljen.");
   }
 
   return body.session;

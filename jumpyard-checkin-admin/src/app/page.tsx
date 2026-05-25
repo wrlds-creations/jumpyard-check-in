@@ -6,19 +6,10 @@ import type { IScannerControls } from "@zxing/browser";
 import {
   AlertTriangle,
   CalendarDays,
-  Camera,
   CheckCircle2,
-  Clock3,
-  Hash,
-  KeyRound,
   Loader2,
-  PackageCheck,
   RefreshCcw,
-  Search,
-  ShieldCheck,
-  ScanLine,
   TicketCheck,
-  X,
 } from "lucide-react";
 import {
   getStaffSession,
@@ -42,6 +33,39 @@ interface ParsedHandoffPayload {
   checkinSessionId: string | null;
   handoffCode: string | null;
   raw: string;
+}
+
+type StaffIconName =
+  | "addons-bag"
+  | "admission-ticket"
+  | "booking-card"
+  | "group"
+  | "info"
+  | "jump"
+  | "payment-card"
+  | "profile"
+  | "safety-check"
+  | "success-check"
+  | "time"
+  | "visitor-wristband";
+
+function StaffIcon({
+  className = "h-8 w-8",
+  name,
+}: {
+  className?: string;
+  name: StaffIconName;
+}) {
+  return (
+    <Image
+      src={`/jumpyard-next-icons/${name}.png`}
+      alt=""
+      width={48}
+      height={48}
+      aria-hidden="true"
+      className={`origin-center scale-125 object-contain ${className}`}
+    />
+  );
 }
 
 function formatClock(value?: string | null) {
@@ -144,7 +168,7 @@ function statusLabel(value?: string | null) {
     paid: "Betald",
     ready_for_staff: "Redo",
     redeemed: "Incheckad",
-    requires_staff: "Kräver personal",
+    requires_staff: "Kräver hjälp",
     unredeemed: "Ej incheckad",
   };
 
@@ -198,26 +222,31 @@ function SessionRow({
       onClick={onSelect}
       data-testid="handoff-session-row"
       data-handoff-code={session.handoffCode ?? ""}
-      className={`w-full border-l-4 px-4 py-4 text-left transition ${
+      className={`w-full rounded-2xl border px-4 py-4 text-left shadow-sm transition active:scale-[0.99] ${
         isSelected
-          ? "border-primary bg-primary/5"
-          : "border-transparent bg-white hover:border-primary/40 hover:bg-surface"
+          ? "border-primary bg-primary/5 ring-4 ring-primary/10"
+          : "border-border bg-white hover:border-primary/40 hover:bg-surface"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-xl font-black italic uppercase text-foreground">{getDisplayCode(session)}</p>
-          <p className="mt-1 text-sm font-semibold text-muted">Bokning {session.bookingReference ?? "-"}</p>
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-surface">
+            <StaffIcon name="visitor-wristband" className="h-7 w-7" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-2xl font-black italic uppercase leading-none text-foreground">{getDisplayCode(session)}</p>
+            <p className="mt-1 text-sm italic text-foreground/65">Bokning {session.bookingReference ?? "-"}</p>
+          </div>
         </div>
-        <span className="rounded-md bg-success/10 px-2.5 py-1 text-xs font-black uppercase text-success">
+        <span className="rounded-full bg-success/10 px-3 py-1 text-[11px] font-black uppercase text-success">
           {statusLabel(session.handoffStatus)}
         </span>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2 text-xs font-bold uppercase text-muted">
-        <span>{formatDate(session.visitDate)}</span>
-        <span>{formatClock(session.booking.startTime)}</span>
-        <span>{session.counts.selectedTickets} biljetter</span>
+      <div className="mt-4 grid grid-cols-3 gap-2 text-[11px] uppercase text-foreground/60">
+        <span className="rounded-xl bg-surface px-2 py-1.5 text-center">{formatDate(session.visitDate)}</span>
+        <span className="rounded-xl bg-surface px-2 py-1.5 text-center">{formatClock(session.booking.startTime)}</span>
+        <span className="rounded-xl bg-surface px-2 py-1.5 text-center">{session.counts.selectedTickets} biljetter</span>
       </div>
     </button>
   );
@@ -233,31 +262,34 @@ function InfoTile({
   value: string | number;
 }) {
   return (
-    <div className="min-h-24 border border-border bg-white p-4">
+    <div className="min-h-24 rounded-2xl border border-border bg-white p-4 shadow-sm">
       <div className="mb-3 text-muted">{icon}</div>
-      <p className="text-lg font-black text-foreground">{value}</p>
-      <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-muted">{label}</p>
+      <p className="break-words text-lg font-black italic text-foreground">{value}</p>
+      <p className="mt-1 text-[11px] uppercase tracking-wide text-foreground/60">{label}</p>
     </div>
   );
 }
 
 function ItemRows({ items }: { items: StaffBookingItem[] }) {
   if (items.length === 0) {
-    return <p className="border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">Inga produktrader.</p>;
+    return <p className="rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground/65">Inga produktrader.</p>;
   }
 
   return (
-    <div className="divide-y divide-border border border-border bg-white">
+    <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
       {items.map((item) => (
-        <div key={item.bookingItemKey ?? item.bookingItemId ?? item.productId ?? item.productName ?? "item"} className="grid gap-3 px-4 py-3 sm:grid-cols-[1fr_90px_120px]">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-black text-foreground">{item.parentProductName ?? item.productName ?? "Produkt"}</p>
-            <p className="truncate text-xs font-semibold text-muted">
-              {item.productName ?? item.productId ?? "-"}
-            </p>
+        <div key={item.bookingItemKey ?? item.bookingItemId ?? item.productId ?? item.productName ?? "item"} className="grid gap-3 border-b border-border px-4 py-3 last:border-b-0 sm:grid-cols-[1fr_86px_112px]">
+          <div className="flex min-w-0 items-center gap-3">
+            <StaffIcon name="admission-ticket" className="h-7 w-7 shrink-0" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black italic text-foreground">{item.parentProductName ?? item.productName ?? "Produkt"}</p>
+              <p className="truncate text-xs text-foreground/60">
+                {item.productName ?? item.productId ?? "-"}
+              </p>
+            </div>
           </div>
-          <p className="text-sm font-black text-foreground">{item.quantity} st</p>
-          <p className="text-sm font-semibold text-muted">
+          <p className="text-sm font-black italic text-foreground">{item.quantity} st</p>
+          <p className="text-sm text-foreground/65">
             {formatClock(item.startTime)}-{formatClock(item.endTime)}
           </p>
         </div>
@@ -268,25 +300,28 @@ function ItemRows({ items }: { items: StaffBookingItem[] }) {
 
 function TicketRows({ tickets }: { tickets: StaffBookingTicket[] }) {
   if (tickets.length === 0) {
-    return <p className="border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">Inga biljetter.</p>;
+    return <p className="rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground/65">Inga biljetter.</p>;
   }
 
   return (
-    <div className="divide-y divide-border border border-border bg-white">
+    <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
       {tickets.map((ticket) => (
-        <div key={ticket.ticketId ?? ticket.customTicketId ?? "ticket"} className="grid gap-3 px-4 py-3 sm:grid-cols-[1fr_140px_120px]">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-black text-foreground">{ticket.ticketId ?? ticket.customTicketId ?? "-"}</p>
-            <p className="truncate text-xs font-semibold text-muted">Item {ticket.bookingItemId ?? "-"}</p>
+        <div key={ticket.ticketId ?? ticket.customTicketId ?? "ticket"} className="grid gap-3 border-b border-border px-4 py-3 last:border-b-0 sm:grid-cols-[1fr_118px_108px]">
+          <div className="flex min-w-0 items-center gap-3">
+            <StaffIcon name="booking-card" className="h-7 w-7 shrink-0" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black italic text-foreground">{ticket.ticketId ?? ticket.customTicketId ?? "-"}</p>
+              <p className="truncate text-xs text-foreground/60">Item {ticket.bookingItemId ?? "-"}</p>
+            </div>
           </div>
           <span
-            className={`w-fit rounded-md px-2.5 py-1 text-xs font-black uppercase ${
+            className={`w-fit rounded-full px-3 py-1 text-[11px] font-black uppercase ${
               ticket.selectedForCheckIn ? "bg-primary/10 text-primary" : "bg-surface text-muted"
             }`}
           >
             {ticket.selectedForCheckIn ? "Vald" : "Ej vald"}
           </span>
-          <p className="text-sm font-semibold text-muted">{statusLabel(ticket.redeemStatusLastSeen) ?? "-"}</p>
+          <p className="text-sm text-foreground/65">{statusLabel(ticket.redeemStatusLastSeen) ?? "-"}</p>
         </div>
       ))}
     </div>
@@ -310,8 +345,8 @@ function DetailPanel({
 }) {
   if (loading && !detail) {
     return (
-      <section className="grid min-h-80 place-items-center border border-border bg-surface p-8">
-        <div className="flex items-center gap-3 text-sm font-black uppercase text-muted">
+      <section className="grid min-h-80 place-items-center rounded-3xl border border-border bg-surface p-8 shadow-sm">
+        <div className="flex items-center gap-3 text-sm font-black italic uppercase text-foreground">
           <Loader2 className="animate-spin" size={20} />
           Hämtar handoff
         </div>
@@ -321,11 +356,11 @@ function DetailPanel({
 
   if (!detail) {
     return (
-      <section className="grid min-h-80 place-items-center border border-border bg-surface p-8 text-center">
+      <section className="grid min-h-80 place-items-center rounded-3xl border border-border bg-surface p-8 text-center shadow-sm">
         <div>
-          <TicketCheck className="mx-auto mb-3 text-muted" size={34} />
-          <p className="text-lg font-black text-foreground">Ingen handoff vald</p>
-          <p className="mt-1 text-sm font-semibold text-muted">Välj en rad i listan.</p>
+          <StaffIcon name="info" className="mx-auto mb-3 h-12 w-12 opacity-70" />
+          <p className="text-lg font-black italic text-foreground">Ingen handoff vald</p>
+          <p className="mt-1 text-sm text-foreground/65">Välj en rad i listan.</p>
         </div>
       </section>
     );
@@ -344,45 +379,50 @@ function DetailPanel({
     <section
       data-testid="handoff-detail"
       data-handoff-code={detail.handoffCode ?? ""}
-      className="border border-border bg-surface"
+      className="overflow-hidden rounded-3xl border border-border bg-surface shadow-sm"
     >
-      <div className="border-b border-border bg-white px-5 py-4">
+      <div className="border-b border-border bg-white px-5 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-muted">Handoff</p>
-            <h2 className="mt-1 text-3xl font-black italic uppercase text-foreground">{getDisplayCode(detail)}</h2>
-            <p className="mt-1 text-sm font-semibold text-muted">Session {detail.checkinSessionId}</p>
+          <div className="flex min-w-0 items-start gap-4">
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-primary/10">
+              <StaffIcon name="success-check" className="h-10 w-10" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs uppercase tracking-[0.18em] text-foreground/60">Handoff</p>
+              <h2 className="mt-1 truncate text-4xl font-black italic uppercase leading-none text-foreground">{getDisplayCode(detail)}</h2>
+              <p className="mt-1 text-sm text-foreground/65">Session {detail.checkinSessionId}</p>
+            </div>
           </div>
-          <span className="rounded-md bg-success/10 px-3 py-2 text-sm font-black uppercase text-success">
+          <span className="rounded-full bg-success/10 px-4 py-2 text-sm font-black uppercase text-success">
             {statusLabel(detail.handoffStatus)}
           </span>
         </div>
       </div>
 
       <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
-        <InfoTile icon={<Hash size={20} />} label="Bokning" value={detail.bookingReference ?? "-"} />
+        <InfoTile icon={<StaffIcon name="booking-card" className="h-7 w-7" />} label="Bokning" value={detail.bookingReference ?? "-"} />
         <InfoTile icon={<CalendarDays size={20} />} label="Datum" value={formatDate(detail.visitDate)} />
         <InfoTile
-          icon={<Clock3 size={20} />}
+          icon={<StaffIcon name="time" className="h-7 w-7" />}
           label="Tid"
           value={`${formatClock(detail.booking.startTime)}-${formatClock(detail.booking.endTime)}`}
         />
-        <InfoTile icon={<ShieldCheck size={20} />} label="Säkerhet" value={statusLabel(detail.safetyStatus)} />
+        <InfoTile icon={<StaffIcon name="safety-check" className="h-7 w-7" />} label="Säkerhet" value={statusLabel(detail.safetyStatus)} />
       </div>
 
       <div className="grid gap-4 p-4 pt-0 xl:grid-cols-[1fr_1fr]">
         <section>
           <div className="mb-2 flex items-center gap-2">
-            <PackageCheck className="text-primary" size={20} />
-            <h3 className="text-base font-black uppercase text-foreground">Produkter</h3>
+            <StaffIcon name="addons-bag" className="h-7 w-7" />
+            <h3 className="text-base font-black italic uppercase text-foreground">Produkter</h3>
           </div>
           <ItemRows items={detail.items} />
         </section>
 
         <section>
           <div className="mb-2 flex items-center gap-2">
-            <TicketCheck className="text-primary" size={20} />
-            <h3 className="text-base font-black uppercase text-foreground">Biljetter</h3>
+            <StaffIcon name="visitor-wristband" className="h-7 w-7" />
+            <h3 className="text-base font-black italic uppercase text-foreground">Biljetter</h3>
           </div>
           <TicketRows tickets={detail.tickets} />
         </section>
@@ -392,22 +432,19 @@ function DetailPanel({
         data-testid="staff-redeem-panel"
         className="border-t border-border bg-white p-4"
       >
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
             <div className="mb-2 flex items-center gap-2">
-              <TicketCheck className="text-primary" size={20} />
-              <h3 className="text-base font-black uppercase text-foreground">Slutför check-in</h3>
+              <StaffIcon name="success-check" className="h-7 w-7" />
+              <h3 className="text-base font-black italic uppercase text-foreground">Slutför check-in</h3>
             </div>
-            <p className="text-sm font-semibold text-muted">
+            <p className="text-sm text-foreground/65">
               Servern gör sista Roller-kontrollen och redeemar valda biljetter.
-            </p>
-            <p className="mt-1 text-xs font-bold uppercase text-muted">
-              Inloggad: {auth?.staff.displayName ?? "Personal"}
             </p>
           </div>
 
           {isCompleted ? (
-            <span className="inline-flex min-h-11 items-center gap-2 bg-success/10 px-4 text-sm font-black uppercase text-success">
+            <span className="inline-flex min-h-12 items-center gap-2 rounded-2xl bg-success/10 px-4 text-sm font-black uppercase text-success">
               <CheckCircle2 size={18} />
               Incheckad
             </span>
@@ -418,7 +455,7 @@ function DetailPanel({
                 onClick={onRedeem}
                 disabled={!canRedeem}
                 data-testid="staff-redeem-button"
-                className="flex min-h-11 items-center justify-center gap-2 bg-primary px-4 text-sm font-black uppercase text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-surface-strong disabled:text-muted"
+                className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-black italic uppercase text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-surface-strong disabled:text-foreground/45"
               >
                 {redeemState === "loading" ? <Loader2 className="animate-spin" size={18} /> : <TicketCheck size={18} />}
                 Slutför
@@ -438,7 +475,7 @@ function DetailPanel({
         )}
       </div>
 
-      <div className="grid gap-3 border-t border-border bg-white p-4 text-sm font-semibold text-muted sm:grid-cols-3">
+      <div className="grid gap-3 border-t border-border bg-white p-4 text-sm text-foreground/65 sm:grid-cols-3">
         <p>Betalning: {statusLabel(detail.booking.paymentStatus ?? detail.booking.bookingStatus)}</p>
         <p>Total: {formatMoney(detail.booking.totalCents)}</p>
         <p>Redo: {formatDateTime(detail.readyForStaffAt)}</p>
@@ -516,7 +553,7 @@ export default function Home() {
     (value: string) => {
       const parsed = parseHandoffPayload(value);
       if (!parsed) {
-        setError("Koden kÃ¤nns inte igen. Skanna QR-koden eller klistra in hela handoff-koden.");
+        setError("Koden känns inte igen. Skanna QR-koden eller klistra in hela handoff-koden.");
         return;
       }
 
@@ -540,7 +577,7 @@ export default function Home() {
       }
 
       setQuery(parsed.handoffCode ?? parsed.raw);
-      setError("Handoff-koden finns inte i vÃ¤ntelistan. Tryck Uppdatera eller klistra in hela QR-payloaden.");
+      setError("Handoff-koden finns inte i väntelistan. Tryck Uppdatera eller klistra in hela QR-payloaden.");
     },
     [selectSession, sessions]
   );
@@ -651,7 +688,7 @@ export default function Home() {
   const handleRedeem = useCallback(
     async () => {
       if (!detail || !auth || isStaffAuthExpired(auth)) {
-        setRedeemMessage("Logga in igen för att slutföra check-in.");
+        setRedeemMessage("Ange kod igen för att slutföra check-in.");
         setRedeemState("error");
         return;
       }
@@ -702,7 +739,7 @@ export default function Home() {
 
       const passcode = authPasscode.trim();
       if (!passcode) {
-        setAuthError("Ange personalkod.");
+        setAuthError("Ange kod.");
         return;
       }
 
@@ -717,7 +754,7 @@ export default function Home() {
         setAuthState("ready");
         setState("loading");
       } catch (loginError) {
-        setAuthError(loginError instanceof Error ? loginError.message : "Kunde inte logga in personal.");
+        setAuthError(loginError instanceof Error ? loginError.message : "Kunde inte logga in.");
         setAuthState("error");
       }
     },
@@ -752,54 +789,54 @@ export default function Home() {
   if (!auth) {
     return (
       <main className="grid min-h-screen place-items-center bg-background px-4 py-8 text-foreground">
-        <section className="w-full max-w-md border border-border bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/jumpyard_logo.png"
-              alt="JumpYard"
-              width={44}
-              height={44}
-              priority
-              className="h-11 w-11 object-contain"
-            />
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-muted">Personal</p>
-              <h1 className="text-2xl font-black italic uppercase text-foreground">Personalhandoff</h1>
+        <section className="w-full max-w-md rounded-3xl border border-border bg-surface p-4 shadow-sm">
+          <div className="rounded-2xl border border-border bg-white p-5">
+            <div className="flex items-center gap-3">
+              <Image
+                src="/jumpyard_logo.png"
+                alt="JumpYard"
+                width={44}
+                height={44}
+                priority
+                className="h-11 w-11 object-contain"
+              />
+              <h1 className="text-2xl font-black italic uppercase text-foreground">Handoff</h1>
             </div>
+
+            <p className="mt-4 text-sm leading-relaxed text-foreground/70">Ange kod för att öppna handoff-kön.</p>
+
+            <form className="mt-6 grid gap-4" onSubmit={handleStaffLogin} data-testid="staff-auth-login">
+              <label className="grid gap-2">
+                <span className="text-[10px] uppercase tracking-[0.22em] text-foreground/60">Kod</span>
+                <span className="flex min-h-14 items-center rounded-2xl border border-border bg-white px-4 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
+                  <input
+                    value={authPasscode}
+                    onChange={(event) => setAuthPasscode(event.target.value)}
+                    data-testid="staff-auth-passcode"
+                    type="password"
+                    autoComplete="current-password"
+                    className="h-full min-w-0 flex-1 border-0 bg-transparent text-base font-bold outline-none"
+                  />
+                </span>
+              </label>
+
+              {authError && (
+                <p className="rounded-2xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+                  {authError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={authState === "loading"}
+                data-testid="staff-auth-submit"
+                className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-lg font-black italic uppercase text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-surface-strong disabled:text-foreground/45"
+              >
+                {authState === "loading" && <Loader2 className="animate-spin" size={18} />}
+                Fortsätt
+              </button>
+            </form>
           </div>
-
-          <form className="mt-6 grid gap-4" onSubmit={handleStaffLogin} data-testid="staff-auth-login">
-            <label className="grid gap-2">
-              <span className="text-sm font-black uppercase text-foreground">Personalkod</span>
-              <span className="flex min-h-12 items-center gap-2 border border-border bg-white px-3 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
-                <KeyRound className="shrink-0 text-muted" size={18} />
-                <input
-                  value={authPasscode}
-                  onChange={(event) => setAuthPasscode(event.target.value)}
-                  data-testid="staff-auth-passcode"
-                  type="password"
-                  autoComplete="current-password"
-                  className="h-full min-w-0 flex-1 border-0 bg-transparent text-base font-semibold outline-none"
-                />
-              </span>
-            </label>
-
-            {authError && (
-              <p className="border border-danger/20 bg-danger/5 px-3 py-2 text-sm font-semibold text-danger">
-                {authError}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={authState === "loading"}
-              data-testid="staff-auth-submit"
-              className="flex min-h-12 items-center justify-center gap-2 bg-primary px-4 text-sm font-black uppercase text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-surface-strong disabled:text-muted"
-            >
-              {authState === "loading" ? <Loader2 className="animate-spin" size={18} /> : <ShieldCheck size={18} />}
-              Logga in
-            </button>
-          </form>
         </section>
       </main>
     );
@@ -807,8 +844,8 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border bg-white px-4 py-4 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
+      <header className="sticky top-0 z-20 border-b border-border bg-white/95 px-4 py-2 backdrop-blur sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Image
               src="/jumpyard_logo.png"
@@ -816,51 +853,48 @@ export default function Home() {
               width={42}
               height={42}
               priority
-              className="h-10 w-10 object-contain"
+              className="h-9 w-9 object-contain"
             />
-            <div>
-              <h1 className="text-2xl font-black italic uppercase text-foreground">Personalhandoff</h1>
-              <p className="text-sm font-semibold text-muted">Redo för personal från JumpYard Cloud</p>
+            <div className="min-w-0">
+              <h1 className="text-xl font-black italic uppercase leading-none text-foreground sm:text-2xl">Handoff</h1>
+              <p className="truncate text-xs text-foreground/65 sm:text-sm">Redo för check-in</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="min-h-11 border border-border bg-surface px-3 py-2 text-xs font-black uppercase text-muted">
-              {auth.staff.displayName}
-            </span>
+          <div className="flex shrink-0 items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => void refreshSessions()}
               disabled={state === "loading"}
-              className="flex min-h-11 items-center gap-2 border border-border bg-white px-4 text-sm font-black uppercase text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Uppdatera"
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-white text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCcw className={state === "loading" ? "animate-spin" : ""} size={18} />
-              Uppdatera
             </button>
             <button
               type="button"
               onClick={handleStaffLogout}
-              className="flex min-h-11 items-center gap-2 border border-border bg-white px-4 text-sm font-black uppercase text-muted transition hover:border-danger hover:text-danger"
+              aria-label="Avsluta"
+              className="min-h-11 rounded-2xl px-2 text-sm italic text-foreground/65 transition hover:text-danger sm:px-3"
             >
-              Logga ut
+              Avsluta
             </button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-4 px-4 py-4 sm:px-6 lg:grid-cols-[380px_1fr] lg:px-8">
-        <aside className="border border-border bg-white">
+      <div className="mx-auto grid max-w-7xl gap-4 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 lg:grid-cols-[minmax(340px,400px)_1fr] lg:px-8">
+        <aside className={`${selectedId ? "order-2" : "order-1"} rounded-3xl border border-border bg-white shadow-sm lg:order-1`}>
           <div className="border-b border-border p-4">
-            <label className="flex min-h-12 items-center gap-2 border border-border bg-white px-3 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
-              <Search className="shrink-0 text-muted" size={18} />
+            <label className="flex min-h-14 items-center rounded-2xl border border-border bg-white px-4 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") openHandoffPayload(query);
                 }}
-                placeholder="Sök, skanna eller klistra in QR"
-                className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold outline-none"
+                placeholder="Sök eller skanna QR"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm font-bold outline-none placeholder:text-foreground/35"
                 autoComplete="off"
               />
             </label>
@@ -871,10 +905,9 @@ export default function Home() {
                 onClick={() => openHandoffPayload(query)}
                 disabled={!query.trim()}
                 data-testid="handoff-open-code"
-                className="flex min-h-11 items-center justify-center gap-2 border border-border bg-white px-3 text-xs font-black uppercase text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted"
+                className="flex min-h-12 items-center justify-center rounded-2xl border border-border bg-white px-3 text-sm font-black italic uppercase text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:bg-surface disabled:text-foreground/40"
               >
-                <ScanLine size={17} />
-                Öppna
+                Sök
               </button>
               <button
                 type="button"
@@ -890,9 +923,8 @@ export default function Home() {
                   setScannerOpen(true);
                 }}
                 data-testid="handoff-scan-toggle"
-                className="flex min-h-11 items-center justify-center gap-2 bg-primary px-3 text-xs font-black uppercase text-white transition hover:bg-primary-dark"
+                className="flex min-h-12 items-center justify-center rounded-2xl bg-primary px-3 text-sm font-black italic uppercase text-white shadow-sm transition hover:bg-primary-dark"
               >
-                {scannerOpen ? <X size={17} /> : <Camera size={17} />}
                 {scannerOpen ? "Stäng" : "Skanna QR"}
               </button>
             </div>
@@ -900,16 +932,16 @@ export default function Home() {
             {scannerOpen && (
               <div
                 data-testid="handoff-qr-scanner"
-                className="mt-3 overflow-hidden border border-border bg-surface"
+                className="mt-3 overflow-hidden rounded-2xl border border-border bg-surface"
               >
                 <video
                   ref={scannerVideoRef}
-                  className="h-56 w-full bg-black object-cover"
+                  className="aspect-[4/3] w-full bg-black object-cover sm:aspect-video"
                   muted
                   playsInline
                 />
                 <div className="flex items-center justify-between gap-3 border-t border-border bg-white px-3 py-2">
-                  <p className="text-xs font-bold uppercase text-muted">
+                  <p className="text-xs uppercase text-foreground/60">
                     {scannerState === "starting"
                       ? "Startar kamera"
                       : scannerState === "scanning"
@@ -926,7 +958,7 @@ export default function Home() {
 
           {hasError && (
             <div className="border-b border-danger/20 bg-danger/5 px-4 py-3">
-              <div className="flex items-start gap-2 text-sm font-semibold text-danger">
+              <div className="flex items-start gap-2 text-sm text-danger">
                 <AlertTriangle className="mt-0.5 shrink-0" size={18} />
                 <span>{error}</span>
               </div>
@@ -934,20 +966,20 @@ export default function Home() {
           )}
 
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <p className="text-sm font-black uppercase text-foreground">Väntar</p>
-            <span className="rounded-md bg-surface px-2.5 py-1 text-xs font-black text-muted">{filteredSessions.length}</span>
+            <p className="text-sm font-black italic uppercase text-foreground">Väntar</p>
+            <span className="rounded-full bg-surface px-3 py-1 text-xs text-foreground/60">{filteredSessions.length}</span>
           </div>
 
-          <div className="max-h-[calc(100vh-245px)] overflow-auto">
+          <div className="grid max-h-none gap-3 overflow-auto p-3 lg:max-h-[calc(100vh-245px)]">
             {state === "loading" && sessions.length === 0 && (
-              <div className="flex items-center gap-3 px-4 py-5 text-sm font-black uppercase text-muted">
+              <div className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-5 text-sm font-black italic uppercase text-foreground">
                 <Loader2 className="animate-spin" size={18} />
                 Hämtar
               </div>
             )}
 
             {state !== "loading" && filteredSessions.length === 0 && (
-              <div className="px-4 py-8 text-sm font-semibold text-muted">Inga handovers väntar.</div>
+              <div className="rounded-2xl bg-surface px-4 py-8 text-sm text-foreground/65">Inga handovers väntar.</div>
             )}
 
             {filteredSessions.map((session) => (
@@ -961,15 +993,17 @@ export default function Home() {
           </div>
         </aside>
 
-        <DetailPanel
-          auth={auth}
-          key={detail?.checkinSessionId ?? "empty"}
-          detail={detail}
-          loading={detailState === "loading"}
-          onRedeem={handleRedeem}
-          redeemMessage={redeemMessage}
-          redeemState={redeemState}
-        />
+        <div className={`${selectedId ? "order-1" : "order-2 hidden lg:block"} lg:order-2`}>
+          <DetailPanel
+            auth={auth}
+            key={detail?.checkinSessionId ?? "empty"}
+            detail={detail}
+            loading={detailState === "loading"}
+            onRedeem={handleRedeem}
+            redeemMessage={redeemMessage}
+            redeemState={redeemState}
+          />
+        </div>
       </div>
     </main>
   );
