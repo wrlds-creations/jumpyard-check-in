@@ -97,6 +97,8 @@ T0044 wires those server-owned SMS/check-in links into the phone app. The phone 
 
 T0045 adds the protected booking-time SMS trigger foundation. Dev now has `POST /v1/check-in/session-links/send-due-sms`, which plans upcoming Aurora bookings by booking date/start time, defaults to no-send planning mode, requires `confirmSend=true` before reusing the existing SMS sender, skips unsafe or already-recently-sent bookings, and returns only safe booking metadata plus masked destinations. It does not call Roller, schedule automatic SMS, or send to unverified SNS sandbox numbers.
 
+T0046 adds the dev AWS schedule for booking-time SMS processing. EventBridge rule `jumpyard-check-in-dev-booking-time-sms-schedule` invokes the session Lambda every 5 minutes with the same T0045 due-SMS logic, but dev config keeps `confirmSend=false` so the scheduled job plans candidates without sending real SMS while the app URL is still `localhost` and SNS remains sandbox-limited. The scheduled path is internal AWS invocation and does not require a staff/admin dev code; the public HTTP endpoint remains token-protected.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -230,6 +232,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0043 SNS sandbox phone verification` | Verify the approved test phone in SNS sandbox and resend a JumpYard Cloud SMS. | Completed locally against dev; SNS delivery status logs show `SUCCESS` for the verified test phone. |
 | `T0044 Phone SMS link resume` | Make SMS links open the phone app via `jy_token` and resolve through JumpYard Cloud. | Completed locally and deployed to dev; phone links now use server session state instead of mock token data. |
 | `T0045 Booking-time SMS trigger` | Connect SMS sending to booking time windows, for example sending a check-in link before the jump time. | Completed in dev foundation; protected endpoint plans due bookings by time and sends only with explicit confirmation. |
+| `T0046 Scheduled booking-time SMS processing` | Run the booking-time SMS trigger from EventBridge without staff/admin manually calling it. | Completed in dev AWS; dev schedule runs every 5 minutes in planning mode with real sending still disabled until public/mobile URL and SMS production readiness are approved. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 

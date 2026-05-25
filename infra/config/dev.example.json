@@ -6,6 +6,14 @@
     "environment": "playground",
     "baseUrl": "https://api.play.roller.app"
   },
+  "bookingTimeSms": {
+    "scheduleEnabled": false,
+    "confirmSend": false,
+    "rateMinutes": 5,
+    "leadMinutes": 30,
+    "windowMinutes": 10,
+    "limit": 10
+  },
   "tags": {
     "WRLDS:Client": "JumpYard",
     "WRLDS:Project": "JumpYard Next",

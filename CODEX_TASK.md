@@ -1,17 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0045
+T0046
 
 ## Goal
-Add a safe booking-time SMS trigger foundation that can find upcoming bookings from Aurora and send check-in links through the existing server-owned SMS path.
+Add the dev AWS schedule for booking-time SMS processing so JumpYard Cloud can run the T0045 due-SMS trigger without a staff/admin manually calling the endpoint.
 
 ## Dependencies
-- T0038 completed and merged.
-- T0039 completed and merged.
-- T0044 completed and merged.
+- T0045 completed and merged.
 - Dev AWS stack exists in account `376129878018`, region `eu-north-1`.
 - SNS SMS sandbox is still active; only verified sandbox numbers can receive real SMS.
+- The current dev check-in app URL is still `http://localhost:3000/`, so guest-facing real SMS links are not production-ready.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -22,8 +21,11 @@ Add a safe booking-time SMS trigger foundation that can find upcoming bookings f
 - TEST_PLAN.md
 - AWS_RESOURCES.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- infra/lambda/session/index.js
+- infra/config/dev.json
+- infra/config/dev.example.json
+- infra/lib/config.ts
 - infra/lib/jumpyard-cloud-stack.ts
+- infra/lambda/session/index.js
 
 ## Do not touch
 - Phone UI
@@ -32,7 +34,7 @@ Add a safe booking-time SMS trigger foundation that can find upcoming bookings f
 - Payment package/drop-in code
 - Redeem business logic
 - Roller booking/draft write logic
-- Aurora migrations unless strictly required
+- Aurora migrations
 - Production credentials
 - Live Roller config
 - `.env`
@@ -40,43 +42,43 @@ Add a safe booking-time SMS trigger foundation that can find upcoming bookings f
 
 ## Requirements
 
-1. Add a protected booking-time SMS trigger endpoint.
-   - Use the existing check-in link dev token protection.
-   - Find upcoming bookings from Aurora by booking date/start time.
-   - Default to a no-send planning response.
-   - Require explicit `confirmSend=true` before calling AWS SNS.
+1. Add an EventBridge schedule for booking-time SMS processing.
+   - Use the existing session Lambda.
+   - Invoke the existing T0045 due-SMS logic internally.
+   - Do not expose a new public API route.
 
-2. Select only safe candidates.
-   - Use Aurora booking snapshots and guest contact data.
-   - Require fresh, active bookings.
-   - Require a stored SMS-ready destination.
-   - Require the booking to pass existing check-in session eligibility.
-   - Do not send duplicate booking-time SMS if a real check-in SMS was already sent recently for the same booking.
+2. Keep the dev schedule safe by default.
+   - Run on a short dev cadence so behavior can be observed.
+   - Keep `confirmSend=false` in dev config until a public/mobile URL, SNS sandbox readiness, and messaging policy are approved.
+   - Do not require a staff/admin dev code for scheduled internal AWS invocation.
+   - Keep the HTTP endpoint token-protected.
 
-3. Reuse the existing SMS/link path.
-   - Create hashed check-in tokens only when actually sending.
-   - Store only token hashes and SMS delivery audit rows.
-   - Do not return or log raw tokens, full URLs, SMS text, or full phone numbers.
+3. Make the schedule configurable.
+   - Configure schedule enabled/disabled.
+   - Configure `confirmSend`.
+   - Configure `rateMinutes`, `leadMinutes`, `windowMinutes`, and `limit`.
+   - Validate config bounds during CDK synth.
 
-4. Keep the trigger configurable for dev testing.
-   - Support a default `30` minute lead time window.
-   - Support explicit `windowStartAt` and `windowEndAt` for safe test windows.
-   - Cap batch size so this cannot become an accidental bulk sender.
+4. Preserve T0045 safety rules.
+   - Candidate selection still reads Aurora booking time windows.
+   - Candidate sends still reuse the audited SMS/link path.
+   - Duplicate recent sends are still skipped.
+   - Raw tokens, full URLs, SMS text, full phone numbers, and secrets are not logged or persisted.
 
-5. Deploy dev session Lambda if backend behavior changes.
+5. Deploy dev AWS changes if validation passes.
    - Verify AWS account `376129878018`.
    - Verify region `eu-north-1`.
-   - Use CDK diff before deploy.
-   - Update AWS docs if endpoint behavior changes.
+   - Run CDK diff before deploy.
+   - Update AWS docs with the new EventBridge rule.
 
 6. Document the result.
-   - Update source-of-truth docs with booking-time SMS trigger behavior.
-   - Keep SNS sandbox and public/mobile URL limitations documented.
+   - Update source-of-truth docs with the scheduled processing behavior.
+   - Keep clear that dev currently schedules planning mode, not real guest SMS sending.
+   - Move real confirmed scheduled SMS sending to a follow-up once public/mobile URL and production SMS readiness are approved.
 
 ## Non-goals
-- Do not create a scheduled EventBridge SMS sender yet.
+- Do not enable unattended real SMS sending in dev while the base URL is `localhost`.
 - Do not request SNS sandbox exit.
-- Do not send bulk SMS.
 - Do not add SMS buttons in phone/admin UI.
 - Do not change SMS provider implementation.
 - Do not call Roller.
@@ -86,20 +88,19 @@ Add a safe booking-time SMS trigger foundation that can find upcoming bookings f
 - Do not replace temporary staff/dev auth.
 
 ## Acceptance criteria
-- A protected endpoint can plan upcoming booking-time SMS candidates from Aurora.
-- Planning mode returns masked destinations only and sends no SMS.
-- Confirmed mode reuses the existing server-owned SMS link sender.
-- Raw token, full SMS URL, full phone number, SMS text, OTP, and secrets are not printed or committed.
-- Duplicate recent real SMS sends are skipped.
+- A dev EventBridge rule invokes the session Lambda for booking-time SMS processing.
+- The scheduled path does not require manual staff/admin dev-token input.
+- The public HTTP due-SMS endpoint remains token-protected.
+- Dev schedule runs in planning mode with `confirmSend=false`.
+- Schedule parameters are explicit in dev config.
 - `npm run validate` passes.
-- Session Lambda syntax/build/synth pass.
+- Session Lambda syntax, infra build, and synth pass.
 - If deployed, post-deploy diff shows no unexpected changes.
 
 ## Manual verification
-- Run the booking-time SMS trigger in planning mode against a test window that includes known dev bookings.
-- Confirm the response shows only masked destinations and safe booking metadata.
-- Run confirmed send only for a verified sandbox destination and a narrow test window.
-- Check `jumpyard.sms_deliveries` and SNS delivery diagnostics if a real send is performed.
+- Invoke the scheduled EventBridge-shaped payload against the session Lambda and confirm it returns a planning response.
+- Confirm no real SMS is sent while `confirmSend=false`.
+- Check CloudFormation/EventBridge for rule `jumpyard-check-in-dev-booking-time-sms-schedule`.
 
 ## Automated validation
 Run:

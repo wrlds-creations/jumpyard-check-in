@@ -36,6 +36,12 @@ exports.handler = async (event) => {
     const body = parseBody(event);
     correlationId = stringOrNull(body.correlationId) || correlationId;
 
+    if (isScheduledDueSessionLinkSmsEvent(event)) {
+      const scheduledBody = normalizeScheduledDueSessionLinkSmsBody(event);
+      const scheduledCorrelationId = stringOrNull(scheduledBody.correlationId) || correlationId;
+      return handleSendDueSessionLinkSms(event, scheduledBody, scheduledCorrelationId, { trustedScheduler: true });
+    }
+
     if (isStaffSessionListRoute(routeKey, event)) {
       return handleStaffSessionList(event, correlationId);
     }
@@ -394,16 +400,18 @@ async function handleCreateSessionLink(event, body, correlationId) {
   });
 }
 
-async function handleSendSessionLinkSms(event, body, correlationId) {
-  const auth = await verifyCheckinLinkDevToken(event);
-  if (!auth.ok) {
-    return jsonResponse(401, correlationId, {
-      status: 'unauthorized',
-      error: {
-        code: auth.code,
-        message: 'Check-in SMS sending requires the JumpYard Cloud development token.',
-      },
-    });
+async function handleSendSessionLinkSms(event, body, correlationId, options = {}) {
+  if (!options.trustedScheduler) {
+    const auth = await verifyCheckinLinkDevToken(event);
+    if (!auth.ok) {
+      return jsonResponse(401, correlationId, {
+        status: 'unauthorized',
+        error: {
+          code: auth.code,
+          message: 'Check-in SMS sending requires the JumpYard Cloud development token.',
+        },
+      });
+    }
   }
 
   const request = normalizeSessionLinkSmsRequest(event, body);
@@ -600,16 +608,18 @@ async function handleSendSessionLinkSms(event, body, correlationId) {
   }
 }
 
-async function handleSendDueSessionLinkSms(event, body, correlationId) {
-  const auth = await verifyCheckinLinkDevToken(event);
-  if (!auth.ok) {
-    return jsonResponse(401, correlationId, {
-      status: 'unauthorized',
-      error: {
-        code: auth.code,
-        message: 'Booking-time SMS sending requires the JumpYard Cloud development token.',
-      },
-    });
+async function handleSendDueSessionLinkSms(event, body, correlationId, options = {}) {
+  if (!options.trustedScheduler) {
+    const auth = await verifyCheckinLinkDevToken(event);
+    if (!auth.ok) {
+      return jsonResponse(401, correlationId, {
+        status: 'unauthorized',
+        error: {
+          code: auth.code,
+          message: 'Booking-time SMS sending requires the JumpYard Cloud development token.',
+        },
+      });
+    }
   }
 
   const request = normalizeDueSessionLinkSmsRequest(body);
@@ -645,6 +655,7 @@ async function handleSendDueSessionLinkSms(event, body, correlationId) {
           ttlMinutes: request.ttlMinutes,
         },
         correlationId,
+        options,
       );
       items.push(mapDueSmsSendResponse(candidate, sendResponse, item));
       continue;
@@ -2212,6 +2223,30 @@ function createDueSmsIdempotencyKey(window, candidate) {
   ].join(':');
 
   return `booking-time-sms:${hashString(seed).slice(0, 48)}`;
+}
+
+function isScheduledDueSessionLinkSmsEvent(event) {
+  return (
+    stringOrNull(event?.source) === 'jumpyard.booking-time-sms-scheduler' &&
+    stringOrNull(event?.detail?.trigger) === 'scheduled_booking_time_sms'
+  );
+}
+
+function normalizeScheduledDueSessionLinkSmsBody(event) {
+  const detail = event?.detail ?? {};
+
+  return {
+    baseUrl: stringOrNull(detail.baseUrl) || DEFAULT_SMS_BASE_URL,
+    confirmSend: booleanFromValue(detail.confirmSend),
+    correlationId: stringOrNull(event?.id) ? `eventbridge:${event.id}` : null,
+    leadMinutes: detail.leadMinutes,
+    limit: detail.limit,
+    now: stringOrNull(detail.now),
+    ttlMinutes: detail.ttlMinutes,
+    windowEndAt: stringOrNull(detail.windowEndAt),
+    windowMinutes: detail.windowMinutes,
+    windowStartAt: stringOrNull(detail.windowStartAt),
+  };
 }
 
 function parseBody(event) {

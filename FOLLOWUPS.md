@@ -35,7 +35,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-046` | `T0041` | SMS link URL | Configure a public or mobile-reachable check-in app base URL before expecting SMS links to open on phones. T0041 used `http://localhost:3000/`, which validates provider delivery only. | High | `TBD` | Open |
 | `FU-047` | `T0042/T0043` | SMS sandbox | AWS SNS SMS account is in sandbox mode. T0043 verified one approved masked test phone and confirmed delivery status `SUCCESS`; unverified numbers still require sandbox verification or SNS sandbox exit. | High | `T0043` | Done |
 | `FU-048` | `T0044` | SMS timing | Connect SMS sending to booking date/time rules, for example sending a check-in link before the booked jump time instead of sending only manually triggered test SMS. | High | `T0045` | Done |
-| `FU-049` | `T0045` | SMS scheduling | Add an unattended EventBridge schedule for booking-time SMS after public/mobile URL, consent/unsubscribe policy, SNS sandbox exit, and production staff/internal auth are approved. | High | `TBD` | Open |
+| `FU-049` | `T0045/T0046` | SMS scheduling | Enable confirmed unattended real SMS sends after public/mobile URL, consent/unsubscribe policy, SNS sandbox exit or verified-recipient policy, and production staff/internal auth are approved. T0046 adds the planning-only EventBridge schedule. | High | `TBD` | Open |
 
 ## Resolved Followups
 

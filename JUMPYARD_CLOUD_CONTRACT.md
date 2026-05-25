@@ -283,7 +283,24 @@ Rules:
 - Confirmed sends reuse `POST /v1/check-in/session-links/send-sms` behavior internally, including hashed check-in tokens, idempotency, `jumpyard.sms_deliveries`, and AWS SNS.
 - Recent real sends for the same booking/template are skipped to avoid duplicate reminders.
 - The endpoint caps each run to a small batch and returns only safe booking metadata plus masked destinations.
-- Scheduling this trigger through EventBridge is deferred to a later ticket after timing, consent, sandbox exit, and production URL rules are confirmed.
+- T0046 schedules this trigger through EventBridge for dev, but the scheduled config keeps `confirmSend=false` until public/mobile URL, consent, sandbox exit or verified-recipient policy, and production SMS rules are confirmed.
+
+### Scheduled Booking-Time SMS Processing
+
+Implemented in T0046 as the internal AWS scheduler for the T0045 trigger.
+
+```text
+EventBridge -> jumpyard-check-in-dev-stack-session
+```
+
+Rules:
+
+- The schedule is an internal AWS invocation, not a public API endpoint.
+- Dev rule `jumpyard-check-in-dev-booking-time-sms-schedule` runs every 5 minutes.
+- The scheduled payload uses `leadMinutes=30`, `windowMinutes=10`, `limit=10`, and `confirmSend=false`.
+- Because `confirmSend=false`, scheduled runs plan candidates and send no SMS.
+- The public HTTP endpoint `POST /v1/check-in/session-links/send-due-sms` remains protected by the check-in link dev token.
+- Enabling unattended real SMS requires changing config to `confirmSend=true` in a later ticket after the public/mobile URL and production SMS prerequisites are approved.
 
 ### `POST /v1/check-in/lookup`
 
@@ -888,7 +905,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0045`. The next recommended ticket is `T0046 Staff auth plan/implementation` unless Roller payment prerequisites arrive for `T0040`.
+Current implementation has progressed through `T0046` in dev AWS. The next recommended ticket is `T0047 Staff auth plan/implementation` unless Roller payment prerequisites arrive for `T0040`.
 
 Near-term sequence:
 
@@ -912,8 +929,9 @@ Near-term sequence:
 18. `T0043 SNS sandbox phone verification`: verify test phones in SNS sandbox and prove one real SMS delivery path.
 19. `T0044 Phone SMS link resume`: completed and deployed to dev; phone links with `jy_token` resolve through JumpYard Cloud and route from server session state.
 20. `T0045 Booking-time SMS trigger`: completed in dev foundation; protected endpoint plans due booking reminders and sends only with explicit confirmation while respecting SNS sandbox limits.
-21. `T0046 Staff auth plan/implementation`: replace the temporary dev redeem/link code with the selected staff/admin authentication model.
-22. `T0047 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
+21. `T0046 Scheduled booking-time SMS processing`: completed in dev AWS; EventBridge invokes the T0045 due-SMS processor every 5 minutes, running dev planning mode by default.
+22. `T0047 Staff auth plan/implementation`: replace the temporary dev redeem/link code with the selected staff/admin authentication model.
+23. `T0048 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
 
 ## Open Contract Questions
 
