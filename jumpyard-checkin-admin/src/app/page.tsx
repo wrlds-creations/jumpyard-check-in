@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import type { IScannerControls } from "@zxing/browser";
 import {
@@ -22,10 +22,12 @@ import {
 } from "lucide-react";
 import {
   getStaffSession,
+  loginStaff,
   listReadyStaffSessions,
   redeemStaffSession,
   type StaffBookingItem,
   type StaffBookingTicket,
+  type StaffAuthSession,
   type StaffSessionDetail,
   type StaffSessionSummary,
 } from "@/lib/adminApi";
@@ -33,6 +35,8 @@ import {
 type LoadState = "idle" | "loading" | "ready" | "error";
 type RedeemState = "idle" | "loading" | "success" | "error";
 type ScannerState = "idle" | "starting" | "scanning" | "error";
+
+const STAFF_AUTH_STORAGE_KEY = "jumpyard_staff_auth_v1";
 
 interface ParsedHandoffPayload {
   checkinSessionId: string | null;
@@ -147,6 +151,38 @@ function statusLabel(value?: string | null) {
   return labels[value] ?? value.replace(/_/g, " ");
 }
 
+function isStaffAuthExpired(auth: StaffAuthSession | null) {
+  if (!auth?.auth.expiresAt) return true;
+  return Date.parse(auth.auth.expiresAt) <= Date.now();
+}
+
+function readStoredStaffAuth() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(STAFF_AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StaffAuthSession;
+    if (!parsed?.auth?.token || isStaffAuthExpired(parsed)) {
+      window.sessionStorage.removeItem(STAFF_AUTH_STORAGE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    window.sessionStorage.removeItem(STAFF_AUTH_STORAGE_KEY);
+    return null;
+  }
+}
+
+function storeStaffAuth(auth: StaffAuthSession | null) {
+  if (typeof window === "undefined") return;
+  if (!auth) {
+    window.sessionStorage.removeItem(STAFF_AUTH_STORAGE_KEY);
+    return;
+  }
+  window.sessionStorage.setItem(STAFF_AUTH_STORAGE_KEY, JSON.stringify(auth));
+}
+
 function SessionRow({
   isSelected,
   onSelect,
@@ -258,20 +294,20 @@ function TicketRows({ tickets }: { tickets: StaffBookingTicket[] }) {
 }
 
 function DetailPanel({
+  auth,
   detail,
   loading,
   onRedeem,
   redeemMessage,
   redeemState,
 }: {
+  auth: StaffAuthSession | null;
   detail: StaffSessionDetail | null;
   loading: boolean;
-  onRedeem: (devToken: string) => void;
+  onRedeem: () => void;
   redeemMessage: string;
   redeemState: RedeemState;
 }) {
-  const [redeemToken, setRedeemToken] = useState("");
-
   if (loading && !detail) {
     return (
       <section className="grid min-h-80 place-items-center border border-border bg-surface p-8">
@@ -301,7 +337,7 @@ function DetailPanel({
     detail.status === "ready_for_staff" &&
     detail.handoffStatus === "ready_for_staff" &&
     detail.safetyStatus === "completed" &&
-    redeemToken.trim().length > 0 &&
+    Boolean(auth?.auth.token) &&
     redeemState !== "loading";
 
   return (
@@ -365,6 +401,9 @@ function DetailPanel({
             <p className="text-sm font-semibold text-muted">
               Servern gör sista Roller-kontrollen och redeemar valda biljetter.
             </p>
+            <p className="mt-1 text-xs font-bold uppercase text-muted">
+              Inloggad: {auth?.staff.displayName ?? "Personal"}
+            </p>
           </div>
 
           {isCompleted ? (
@@ -373,26 +412,10 @@ function DetailPanel({
               Incheckad
             </span>
           ) : (
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[360px] sm:flex-row">
-              <label className="flex min-h-11 flex-1 items-center gap-2 border border-border bg-white px-3 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
-                <KeyRound className="shrink-0 text-muted" size={18} />
-                <input
-                  value={redeemToken}
-                  onChange={(event) => setRedeemToken(event.target.value)}
-                  placeholder="Tillfällig dev-kod"
-                  type="password"
-                  data-testid="staff-redeem-token"
-                  className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold outline-none"
-                  autoComplete="off"
-                />
-              </label>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[220px]">
               <button
                 type="button"
-                onClick={() => {
-                  const token = redeemToken.trim();
-                  setRedeemToken("");
-                  onRedeem(token);
-                }}
+                onClick={onRedeem}
                 disabled={!canRedeem}
                 data-testid="staff-redeem-button"
                 className="flex min-h-11 items-center justify-center gap-2 bg-primary px-4 text-sm font-black uppercase text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-surface-strong disabled:text-muted"
@@ -425,6 +448,10 @@ function DetailPanel({
 }
 
 export default function Home() {
+  const [auth, setAuth] = useState<StaffAuthSession | null>(null);
+  const [authError, setAuthError] = useState("");
+  const [authPasscode, setAuthPasscode] = useState("");
+  const [authState, setAuthState] = useState<LoadState>("loading");
   const [detail, setDetail] = useState<StaffSessionDetail | null>(null);
   const [detailState, setDetailState] = useState<LoadState>("idle");
   const [error, setError] = useState("");
@@ -452,11 +479,23 @@ export default function Home() {
   }, []);
 
   const refreshSessions = useCallback(async () => {
+    if (!auth || isStaffAuthExpired(auth)) {
+      setAuth(null);
+      setAuthState("idle");
+      setDetail(null);
+      setDetailState("idle");
+      setSelectedId(null);
+      setSessions([]);
+      storeStaffAuth(null);
+      setState("idle");
+      return;
+    }
+
     setState("loading");
     setError("");
 
     try {
-      const nextSessions = await listReadyStaffSessions();
+      const nextSessions = await listReadyStaffSessions(auth.auth.token);
       const nextSelectedId =
         selectedId && nextSessions.some((session) => session.checkinSessionId === selectedId)
           ? selectedId
@@ -471,7 +510,7 @@ export default function Home() {
       setError(loadError instanceof Error ? loadError.message : "Kunde inte hämta handovers.");
       setState("error");
     }
-  }, [selectedId]);
+  }, [auth, selectedId]);
 
   const openHandoffPayload = useCallback(
     (value: string) => {
@@ -507,27 +546,26 @@ export default function Home() {
   );
 
   useEffect(() => {
-    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      const storedAuth = readStoredStaffAuth();
+      if (!storedAuth) {
+        setAuthState("idle");
+        setState("idle");
+        return;
+      }
 
-    listReadyStaffSessions()
-      .then((nextSessions) => {
-        if (cancelled) return;
-        const nextSelectedId = nextSessions[0]?.checkinSessionId ?? null;
-        setSessions(nextSessions);
-        setSelectedId(nextSelectedId);
-        setDetailState(nextSelectedId ? "loading" : "idle");
-        setState("ready");
-      })
-      .catch((loadError) => {
-        if (cancelled) return;
-        setError(loadError instanceof Error ? loadError.message : "Kunde inte hämta handovers.");
-        setState("error");
-      });
+      setAuth(storedAuth);
+      setAuthState("ready");
+    }, 0);
 
-    return () => {
-      cancelled = true;
-    };
+    return () => window.clearTimeout(timeoutId);
   }, []);
+
+  useEffect(() => {
+    if (!auth) return;
+    const timeoutId = window.setTimeout(() => void refreshSessions(), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [auth, refreshSessions]);
 
   useEffect(() => {
     if (!scannerOpen) return;
@@ -588,11 +626,11 @@ export default function Home() {
   }, [openHandoffPayload, scannerOpen]);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId || !auth || isStaffAuthExpired(auth)) return;
 
     let cancelled = false;
 
-    getStaffSession(selectedId)
+    getStaffSession(selectedId, auth.auth.token)
       .then((nextDetail) => {
         if (cancelled) return;
         setDetail(nextDetail);
@@ -608,11 +646,15 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [detailRequestId, selectedId]);
+  }, [auth, detailRequestId, selectedId]);
 
   const handleRedeem = useCallback(
-    async (devToken: string) => {
-      if (!detail || !devToken) return;
+    async () => {
+      if (!detail || !auth || isStaffAuthExpired(auth)) {
+        setRedeemMessage("Logga in igen för att slutföra check-in.");
+        setRedeemState("error");
+        return;
+      }
 
       setError("");
       setRedeemMessage("");
@@ -621,7 +663,7 @@ export default function Home() {
       try {
         const result = await redeemStaffSession({
           checkinSessionId: detail.checkinSessionId,
-          devToken,
+          staffToken: auth.auth.token,
           idempotencyKey: `staff-redeem:${detail.checkinSessionId}:${crypto.randomUUID()}`,
         });
         const redeemedIds = new Set(result.redeemedTicketIds);
@@ -651,8 +693,53 @@ export default function Home() {
         setRedeemState("error");
       }
     },
-    [detail]
+    [auth, detail]
   );
+
+  const handleStaffLogin = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      const passcode = authPasscode.trim();
+      if (!passcode) {
+        setAuthError("Ange personalkod.");
+        return;
+      }
+
+      setAuthError("");
+      setAuthState("loading");
+
+      try {
+        const nextAuth = await loginStaff(passcode);
+        storeStaffAuth(nextAuth);
+        setAuth(nextAuth);
+        setAuthPasscode("");
+        setAuthState("ready");
+        setState("loading");
+      } catch (loginError) {
+        setAuthError(loginError instanceof Error ? loginError.message : "Kunde inte logga in personal.");
+        setAuthState("error");
+      }
+    },
+    [authPasscode]
+  );
+
+  const handleStaffLogout = useCallback(() => {
+    storeStaffAuth(null);
+    setAuth(null);
+    setAuthError("");
+    setAuthPasscode("");
+    setAuthState("idle");
+    setDetail(null);
+    setDetailState("idle");
+    setError("");
+    setQuery("");
+    setRedeemMessage("");
+    setRedeemState("idle");
+    setSelectedId(null);
+    setSessions([]);
+    setState("idle");
+  }, []);
 
   const filteredSessions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -661,6 +748,62 @@ export default function Home() {
   }, [query, sessions]);
 
   const hasError = state === "error" || detailState === "error";
+
+  if (!auth) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-background px-4 py-8 text-foreground">
+        <section className="w-full max-w-md border border-border bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/jumpyard_logo.png"
+              alt="JumpYard"
+              width={44}
+              height={44}
+              priority
+              className="h-11 w-11 object-contain"
+            />
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-muted">Personal</p>
+              <h1 className="text-2xl font-black italic uppercase text-foreground">Personalhandoff</h1>
+            </div>
+          </div>
+
+          <form className="mt-6 grid gap-4" onSubmit={handleStaffLogin} data-testid="staff-auth-login">
+            <label className="grid gap-2">
+              <span className="text-sm font-black uppercase text-foreground">Personalkod</span>
+              <span className="flex min-h-12 items-center gap-2 border border-border bg-white px-3 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
+                <KeyRound className="shrink-0 text-muted" size={18} />
+                <input
+                  value={authPasscode}
+                  onChange={(event) => setAuthPasscode(event.target.value)}
+                  data-testid="staff-auth-passcode"
+                  type="password"
+                  autoComplete="current-password"
+                  className="h-full min-w-0 flex-1 border-0 bg-transparent text-base font-semibold outline-none"
+                />
+              </span>
+            </label>
+
+            {authError && (
+              <p className="border border-danger/20 bg-danger/5 px-3 py-2 text-sm font-semibold text-danger">
+                {authError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={authState === "loading"}
+              data-testid="staff-auth-submit"
+              className="flex min-h-12 items-center justify-center gap-2 bg-primary px-4 text-sm font-black uppercase text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-surface-strong disabled:text-muted"
+            >
+              {authState === "loading" ? <Loader2 className="animate-spin" size={18} /> : <ShieldCheck size={18} />}
+              Logga in
+            </button>
+          </form>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -681,15 +824,27 @@ export default function Home() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void refreshSessions()}
-            disabled={state === "loading"}
-            className="flex min-h-11 items-center gap-2 border border-border bg-white px-4 text-sm font-black uppercase text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCcw className={state === "loading" ? "animate-spin" : ""} size={18} />
-            Uppdatera
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="min-h-11 border border-border bg-surface px-3 py-2 text-xs font-black uppercase text-muted">
+              {auth.staff.displayName}
+            </span>
+            <button
+              type="button"
+              onClick={() => void refreshSessions()}
+              disabled={state === "loading"}
+              className="flex min-h-11 items-center gap-2 border border-border bg-white px-4 text-sm font-black uppercase text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCcw className={state === "loading" ? "animate-spin" : ""} size={18} />
+              Uppdatera
+            </button>
+            <button
+              type="button"
+              onClick={handleStaffLogout}
+              className="flex min-h-11 items-center gap-2 border border-border bg-white px-4 text-sm font-black uppercase text-muted transition hover:border-danger hover:text-danger"
+            >
+              Logga ut
+            </button>
+          </div>
         </div>
       </header>
 
@@ -807,6 +962,7 @@ export default function Home() {
         </aside>
 
         <DetailPanel
+          auth={auth}
           key={detail?.checkinSessionId ?? "empty"}
           detail={detail}
           loading={detailState === "loading"}

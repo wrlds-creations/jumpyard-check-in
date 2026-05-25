@@ -22,7 +22,6 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-031` | `T0016` | Lookup fallback | Add supported `GET /bookings` search fallback for cases where direct `GET /bookings/{identifier}` cannot resolve an imprecise guest input. | Medium | `TBD` | Open |
 | `FU-032` | `T0017` | Webhook scaling | Move webhook enrichment off the request path to SQS/EventBridge before production if latency, retries, or traffic volume require faster acknowledgement. | Medium | `TBD` | Open |
 | `FU-035` | `T0021` | Redeem configuration | Decide whether JumpYard Cloud should send a configured Roller `redemptionDevice` name before production. Roller rejects non-existent device names, so T0021 omits it by default. | Medium | `TBD` | Open |
-| `FU-036` | `T0022` | Staff auth | Choose the staff/admin authentication model that will authorize final redeem in the pilot. | High | `TBD` | Open |
 | `FU-037` | `T0022` | Session expiry | Define TTL, resume behavior, and cleanup rules for check-in sessions and handoff codes. | Medium | `TBD` | Open |
 | `FU-038` | `T0022` | Safety gate | Confirm which guest-side safety/video/waiver states must be complete before staff/server-confirmed redeem. | High | `TBD` | Open |
 | `FU-039` | `T0023/T0027` | Staff/admin UI | Build staff/admin list/detail and final staff-confirmed redeem for `ready_for_staff` sessions after phone wiring exists. T0026 completed read-only list/detail; T0027 adds the dev staff redeem action. | High | `T0027` | Done |
@@ -36,6 +35,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-047` | `T0042/T0043` | SMS sandbox | AWS SNS SMS account is in sandbox mode. T0043 verified one approved masked test phone and confirmed delivery status `SUCCESS`; unverified numbers still require sandbox verification or SNS sandbox exit. | High | `T0043` | Done |
 | `FU-048` | `T0044` | SMS timing | Connect SMS sending to booking date/time rules, for example sending a check-in link before the booked jump time instead of sending only manually triggered test SMS. | High | `T0045` | Done |
 | `FU-049` | `T0045/T0046` | SMS scheduling | Enable confirmed unattended real SMS sends after public/mobile URL, consent/unsubscribe policy, SNS sandbox exit or verified-recipient policy, and production staff/internal auth are approved. T0046 adds the planning-only EventBridge schedule. | High | `TBD` | Open |
+| `FU-050` | `T0047` | Staff auth | Replace the T0047 pilot passcode/token model with production staff identity, roles, MFA/session policy, and audit ownership before production rollout. | High | `TBD` | Open |
 
 ## Resolved Followups
 
@@ -55,5 +55,6 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-030` | `T0018` | Registered Roller Playground booking webhook id `238` against the dev endpoint and confirmed real delivery. Roller sends the configured token in `x-roller-apikey`; booking `5032443` produced a real `Created` event that enriched Aurora with status `processed`. | 2026-05-21 |
 | `FU-033` | `T0021` | Added a separate dev redeem token, final Roller REST refresh, Aurora re-evaluation, and protected dev-only `POST /redemptions` execution path. | 2026-05-21 |
 | `FU-034` | `T0021` | Created dedicated paid Playground booking `5032454` for controlled redeem smoke and redeemed ticket `5032454-21397335`, leaving the normal `5032210` lookup fixture unused. | 2026-05-21 |
+| `FU-036` | `T0047` | Added first pilot staff auth slice: AWS-stored passcode, `POST /v1/staff/auth/login`, short-lived staff token, and token-protected staff list/detail/redeem. Production identity remains `FU-050`. | 2026-05-25 |
 | `FU-040` | `T0044` | Phone links with `?jy_token=...` now resolve through JumpYard Cloud, return safe booking/session context, and route from server session state instead of mock token data. | 2026-05-22 |
 | `FU-048` | `T0045` | Protected `POST /v1/check-in/session-links/send-due-sms` can plan booking-time SMS candidates from Aurora and manually send only with `confirmSend=true`; automatic scheduling remains deferred in `FU-049`. | 2026-05-22 |

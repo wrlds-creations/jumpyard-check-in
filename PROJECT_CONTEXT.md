@@ -99,6 +99,8 @@ T0045 adds the protected booking-time SMS trigger foundation. Dev now has `POST 
 
 T0046 adds the dev AWS schedule for booking-time SMS processing. EventBridge rule `jumpyard-check-in-dev-booking-time-sms-schedule` invokes the session Lambda every 5 minutes with the same T0045 due-SMS logic, but dev config keeps `confirmSend=false` so the scheduled job plans candidates without sending real SMS while the app URL is still `localhost` and SNS remains sandbox-limited. The scheduled path is internal AWS invocation and does not require a staff/admin dev code; the public HTTP endpoint remains token-protected.
 
+T0047 replaces the normal admin handoff temporary redeem-code flow with a first server-owned staff authentication slice. JumpYard Cloud now has `POST /v1/staff/auth/login`, backed by AWS Secrets Manager secret `/jumpyard-check-in-dev/staff/auth`, which validates a staff passcode server-side and issues a short-lived staff token. Staff list, detail, and staff-confirmed redeem routes require that token. The admin app shows a staff login screen, stores only the short-lived auth session in browser session storage, sends the token on staff requests, and no longer asks for the old temporary redeem dev code in the normal handoff panel. This is a pilot/dev auth slice, not final production SSO/Cognito.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -110,7 +112,7 @@ The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_C
 - Server-side integration should provide controlled logging, retries, error handling, and fallbacks.
 - Roller integration must fail closed unless it is explicitly configured for Playground.
 - Phone UI must not hold redeem tokens, Roller credentials, or final ticket-redemption authority.
-- Staff/admin redeem in dev requires a manually entered temporary confirmation code until a real staff authentication model is implemented.
+- Staff/admin handoff in dev requires the T0047 staff auth token for list/detail/redeem; final production staff identity and roles remain a follow-up.
 
 ## Current Repository Shape
 
@@ -233,6 +235,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0044 Phone SMS link resume` | Make SMS links open the phone app via `jy_token` and resolve through JumpYard Cloud. | Completed locally and deployed to dev; phone links now use server session state instead of mock token data. |
 | `T0045 Booking-time SMS trigger` | Connect SMS sending to booking time windows, for example sending a check-in link before the jump time. | Completed in dev foundation; protected endpoint plans due bookings by time and sends only with explicit confirmation. |
 | `T0046 Scheduled booking-time SMS processing` | Run the booking-time SMS trigger from EventBridge without staff/admin manually calling it. | Completed in dev AWS; dev schedule runs every 5 minutes in planning mode with real sending still disabled until public/mobile URL and SMS production readiness are approved. |
+| `T0047 Staff auth replacement for temporary dev code` | Replace the normal admin handoff temporary redeem-code flow with server-owned staff login and short-lived staff tokens. | Completed locally and deployed to dev; production SSO/Cognito and roles remain follow-up work. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 

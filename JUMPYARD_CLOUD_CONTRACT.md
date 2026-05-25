@@ -431,14 +431,28 @@ Rules:
 - Does not redeem tickets.
 - Records an event-log row for audit.
 
+### `POST /v1/staff/auth/login`
+
+Authenticates staff/admin for the pilot handoff app and returns a short-lived staff token.
+
+Implemented in T0047 for dev.
+
+Rules:
+
+- Validate the submitted passcode against AWS Secrets Manager secret `/jumpyard-check-in-dev/staff/auth`.
+- Return a short-lived bearer-style staff token, expiry, and safe staff display metadata.
+- Do not return, log, or persist the stored passcode.
+- Treat this as a pilot/dev auth slice, not final production SSO/Cognito.
+
 ### `GET /v1/staff/check-in/sessions`
 
 Returns ready-for-staff sessions for the staff/admin surface.
 
-Implemented in T0026 for dev.
+Implemented in T0026 for dev and protected by T0047 staff auth.
 
 Rules:
 
+- Requires a valid T0047 staff token.
 - Read from Aurora only.
 - Return sessions with `handoff_status='ready_for_staff'` and `status='ready_for_staff'`.
 - Return booking reference, handoff code, visit date, safety status, selected ticket count, booking status, payment status, and summary counts.
@@ -451,10 +465,11 @@ Rules:
 
 Returns detail for one ready-for-staff session.
 
-Implemented in T0026 for dev.
+Implemented in T0026 for dev and protected by T0047 staff auth.
 
 Rules:
 
+- Requires a valid T0047 staff token.
 - Read from Aurora only.
 - Return session state, booking summary, selected ticket ids, booking items, and ticket summaries.
 - Include product names and parent product names when present in the local product cache/imported item rows.
@@ -466,11 +481,11 @@ Rules:
 
 Staff/admin-confirmed endpoint that performs final redemption for a check-in session.
 
-Implemented in T0027 for dev.
+Implemented in T0027 for dev and protected by T0047 staff auth for the normal admin flow.
 
 Rules:
 
-- Requires the temporary dev redeem token until staff/admin auth exists.
+- Requires a valid T0047 staff token for the staff/admin route.
 - Resolves the session to booking and ticket ids server-side.
 - Requires the session to be `ready_for_staff` with `handoff_status='ready_for_staff'`.
 - Requires completed safety status for the first implementation.
@@ -480,7 +495,7 @@ Rules:
 - Calls Roller `POST /redemptions` only after all checks pass.
 - Updates `checkin_attempts`, ticket local state, handoff/session state, and event log.
 - This replaces any direct phone call to the protected T0021 dev redeem path.
-- The temporary dev code must be manually entered for dev testing and must not be stored in source, browser env, localStorage, or sessionStorage.
+- The lower-level direct redeem dev token remains only for controlled internal/dev testing outside the normal staff handoff UI.
 
 ### `POST /v1/check-in/redeem`
 
@@ -905,7 +920,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0046` in dev AWS. The next recommended ticket is `T0047 Staff auth plan/implementation` unless Roller payment prerequisites arrive for `T0040`.
+Current implementation has progressed through `T0047` in dev AWS. The next recommended ticket is `T0048 Staff operations polish` unless Roller payment prerequisites arrive for `T0040`.
 
 Near-term sequence:
 
@@ -930,7 +945,7 @@ Near-term sequence:
 19. `T0044 Phone SMS link resume`: completed and deployed to dev; phone links with `jy_token` resolve through JumpYard Cloud and route from server session state.
 20. `T0045 Booking-time SMS trigger`: completed in dev foundation; protected endpoint plans due booking reminders and sends only with explicit confirmation while respecting SNS sandbox limits.
 21. `T0046 Scheduled booking-time SMS processing`: completed in dev AWS; EventBridge invokes the T0045 due-SMS processor every 5 minutes, running dev planning mode by default.
-22. `T0047 Staff auth plan/implementation`: replace the temporary dev redeem/link code with the selected staff/admin authentication model.
+22. `T0047 Staff auth replacement`: replaces the normal admin temporary redeem-code flow with staff login and short-lived staff tokens for staff list/detail/redeem.
 23. `T0048 Staff operations polish`: improve staff-side speed, loading states, scanner feedback, and handoff ergonomics.
 
 ## Open Contract Questions

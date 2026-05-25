@@ -1,16 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0046
+T0047
 
 ## Goal
-Add the dev AWS schedule for booking-time SMS processing so JumpYard Cloud can run the T0045 due-SMS trigger without a staff/admin manually calling the endpoint.
+Replace the staff/admin temporary redeem dev-code flow with a first server-owned staff authentication slice for the dev handoff app.
 
 ## Dependencies
-- T0045 completed and merged.
+- T0046 completed and merged.
 - Dev AWS stack exists in account `376129878018`, region `eu-north-1`.
-- SNS SMS sandbox is still active; only verified sandbox numbers can receive real SMS.
-- The current dev check-in app URL is still `http://localhost:3000/`, so guest-facing real SMS links are not production-ready.
+- Staff/admin production identity provider is not selected yet.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -21,20 +20,19 @@ Add the dev AWS schedule for booking-time SMS processing so JumpYard Cloud can r
 - TEST_PLAN.md
 - AWS_RESOURCES.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- infra/config/dev.json
-- infra/config/dev.example.json
-- infra/lib/config.ts
 - infra/lib/jumpyard-cloud-stack.ts
 - infra/lambda/session/index.js
+- infra/lambda/redeem/index.js
+- jumpyard-checkin-admin/src/lib/adminApi.ts
+- jumpyard-checkin-admin/src/app/page.tsx
 
 ## Do not touch
 - Phone UI
-- Admin UI
 - Kiosk UI
 - Payment package/drop-in code
-- Redeem business logic
 - Roller booking/draft write logic
 - Aurora migrations
+- SMS scheduling logic
 - Production credentials
 - Live Roller config
 - `.env`
@@ -42,71 +40,81 @@ Add the dev AWS schedule for booking-time SMS processing so JumpYard Cloud can r
 
 ## Requirements
 
-1. Add an EventBridge schedule for booking-time SMS processing.
-   - Use the existing session Lambda.
-   - Invoke the existing T0045 due-SMS logic internally.
-   - Do not expose a new public API route.
+1. Add a dev staff auth secret.
+   - Store a generated staff passcode in AWS Secrets Manager.
+   - Do not commit or print the passcode.
+   - Keep the secret separate from Roller credentials and redeem dev-token secrets.
 
-2. Keep the dev schedule safe by default.
-   - Run on a short dev cadence so behavior can be observed.
-   - Keep `confirmSend=false` in dev config until a public/mobile URL, SNS sandbox readiness, and messaging policy are approved.
-   - Do not require a staff/admin dev code for scheduled internal AWS invocation.
-   - Keep the HTTP endpoint token-protected.
+2. Add a staff login endpoint.
+   - Expose `POST /v1/staff/auth/login` through JumpYard Cloud.
+   - Validate the passcode server-side.
+   - Return a short-lived staff token and safe staff display metadata.
+   - Never return or log the stored passcode.
 
-3. Make the schedule configurable.
-   - Configure schedule enabled/disabled.
-   - Configure `confirmSend`.
-   - Configure `rateMinutes`, `leadMinutes`, `windowMinutes`, and `limit`.
-   - Validate config bounds during CDK synth.
+3. Protect staff handoff endpoints with staff auth.
+   - Require the staff token for `GET /v1/staff/check-in/sessions`.
+   - Require the staff token for `GET /v1/staff/check-in/sessions/{checkinSessionId}`.
+   - Return a clear forbidden/expired response for missing or invalid tokens.
 
-4. Preserve T0045 safety rules.
-   - Candidate selection still reads Aurora booking time windows.
-   - Candidate sends still reuse the audited SMS/link path.
-   - Duplicate recent sends are still skipped.
-   - Raw tokens, full URLs, SMS text, full phone numbers, and secrets are not logged or persisted.
+4. Protect staff-confirmed redeem with staff auth.
+   - Require the staff token for `POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem`.
+   - Keep final Roller refresh, eligibility checks, idempotency, audit, and session completion behavior unchanged.
+   - Do not require the admin app to send the old manually entered redeem dev code for the staff route.
 
-5. Deploy dev AWS changes if validation passes.
+5. Update the admin app.
+   - Show a staff login screen before handoff data loads.
+   - Store the short-lived staff auth session in browser session storage only.
+   - Send the staff token on staff list, detail, and redeem requests.
+   - Remove the visible temporary dev-code input from the normal staff handoff flow.
+   - Allow logout to clear the staff auth session.
+
+6. Deploy dev AWS changes if validation passes.
    - Verify AWS account `376129878018`.
    - Verify region `eu-north-1`.
    - Run CDK diff before deploy.
-   - Update AWS docs with the new EventBridge rule.
+   - Update AWS docs with the new staff auth secret and route.
 
-6. Document the result.
-   - Update source-of-truth docs with the scheduled processing behavior.
-   - Keep clear that dev currently schedules planning mode, not real guest SMS sending.
-   - Move real confirmed scheduled SMS sending to a follow-up once public/mobile URL and production SMS readiness are approved.
+7. Document the result.
+   - Update source-of-truth docs with the staff auth behavior.
+   - Keep clear that this is a pilot/dev auth slice, not final production SSO/Cognito.
+   - Add follow-up for production staff identity, roles, and token/session policy.
 
 ## Non-goals
-- Do not enable unattended real SMS sending in dev while the base URL is `localhost`.
-- Do not request SNS sandbox exit.
-- Do not add SMS buttons in phone/admin UI.
-- Do not change SMS provider implementation.
-- Do not call Roller.
-- Do not redeem tickets.
-- Do not create or mutate Roller bookings.
-- Do not add payment UI or payment processing.
-- Do not replace temporary staff/dev auth.
+- Do not implement Cognito, SSO, or production staff identity yet.
+- Do not change phone check-in behavior.
+- Do not change SMS sending behavior.
+- Do not change Roller booking, payment, draft, or add-product behavior.
+- Do not create or change Aurora schema.
+- Do not redeem a real Playground ticket during validation unless explicitly requested.
+- Do not remove the lower-level protected direct redeem dev-token path used for controlled internal/dev testing.
 
 ## Acceptance criteria
-- A dev EventBridge rule invokes the session Lambda for booking-time SMS processing.
-- The scheduled path does not require manual staff/admin dev-token input.
-- The public HTTP due-SMS endpoint remains token-protected.
-- Dev schedule runs in planning mode with `confirmSend=false`.
-- Schedule parameters are explicit in dev config.
+- Staff/admin app no longer asks for a temporary dev redeem code in the normal handoff redeem flow.
+- Staff login succeeds only with the AWS-stored staff passcode.
+- Staff list/detail routes reject missing or invalid staff auth.
+- Staff redeem route rejects missing or invalid staff auth.
+- Staff redeem route still delegates to the existing server-side final Roller refresh/redeem path after auth succeeds.
 - `npm run validate` passes.
-- Session Lambda syntax, infra build, and synth pass.
+- Admin lint/build pass.
+- Lambda syntax, infra build, synth, and diff pass.
 - If deployed, post-deploy diff shows no unexpected changes.
 
 ## Manual verification
-- Invoke the scheduled EventBridge-shaped payload against the session Lambda and confirm it returns a planning response.
-- Confirm no real SMS is sent while `confirmSend=false`.
-- Check CloudFormation/EventBridge for rule `jumpyard-check-in-dev-booking-time-sms-schedule`.
+- Retrieve the generated staff passcode from AWS Secrets Manager without printing it.
+- Confirm staff login returns a token and expiry.
+- Confirm staff list fails without a token.
+- Confirm staff list succeeds with the token.
+- Confirm staff redeem against a fake/nonexistent session passes auth and returns not found, without redeeming any real Roller ticket.
+- Open the admin app and confirm the temporary dev-code input is gone from the normal handoff panel.
 
 ## Automated validation
 Run:
 - `node --check infra/lambda/session/index.js`
+- `node --check infra/lambda/redeem/index.js`
 - `npm --prefix infra run build`
 - `npm --prefix infra run synth:dev`
+- `npm --prefix jumpyard-checkin-admin run lint`
+- `npm --prefix jumpyard-checkin-admin run build`
 - `npm run validate`
 - `git diff --check`
 - AWS identity and region preflight before deploy
