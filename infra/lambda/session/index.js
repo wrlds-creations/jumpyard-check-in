@@ -7,8 +7,11 @@ const DATABASE_NAME = 'jumpyard_cloud';
 const ACTIVE_SESSION_STATUSES = ['guest_in_progress', 'ready_for_staff', 'staff_in_progress'];
 const CHECKIN_LINK_DEV_TOKEN_HEADERS = ['x-jumpyard-link-token', 'authorization'];
 const CHECKIN_LINK_CHANNELS = new Set(['sms', 'email', 'manual', 'dev']);
+const STAFF_AUTH_HEADERS = ['x-jumpyard-staff-token', 'authorization'];
 const DEFAULT_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_CHECKIN_LINK_TTL_MINUTES = 72 * 60;
+const DEFAULT_STAFF_AUTH_TTL_MINUTES = 12 * 60;
+const STAFF_AUTH_CONFIG_CACHE_MS = 30 * 1000;
 const MAX_CHECKIN_LINK_TTL_MINUTES = 7 * 24 * 60;
 const MAX_SELECTED_TICKETS = 10;
 const CHECKIN_SMS_TEMPLATE = 'checkin_link_v1';
@@ -27,6 +30,8 @@ const secretsClient = new SecretsManagerClient({});
 const snsClient = new SNSClient({});
 
 let cachedCheckinLinkDevToken = null;
+let cachedStaffAuthConfig = null;
+let cachedStaffAuthConfigExpiresAt = 0;
 
 exports.handler = async (event) => {
   let correlationId = getHeader(event, 'x-correlation-id') || createCorrelationId();
@@ -40,6 +45,10 @@ exports.handler = async (event) => {
       const scheduledBody = normalizeScheduledDueSessionLinkSmsBody(event);
       const scheduledCorrelationId = stringOrNull(scheduledBody.correlationId) || correlationId;
       return handleSendDueSessionLinkSms(event, scheduledBody, scheduledCorrelationId, { trustedScheduler: true });
+    }
+
+    if (isStaffAuthLoginRoute(routeKey, event)) {
+      return handleStaffAuthLogin(body, correlationId);
     }
 
     if (isStaffSessionListRoute(routeKey, event)) {
@@ -293,6 +302,11 @@ async function handleReadyForStaff(event, body, correlationId) {
 }
 
 async function handleStaffSessionList(event, correlationId) {
+  const auth = await verifyStaffAuthToken(event);
+  if (!auth.ok) {
+    return staffAuthErrorResponse(correlationId, auth);
+  }
+
   const request = normalizeStaffListRequest(event);
   const sessions = await findReadyStaffSessions(request);
 
@@ -308,6 +322,11 @@ async function handleStaffSessionList(event, correlationId) {
 }
 
 async function handleStaffSessionDetail(event, correlationId) {
+  const auth = await verifyStaffAuthToken(event);
+  if (!auth.ok) {
+    return staffAuthErrorResponse(correlationId, auth);
+  }
+
   const checkinSessionId =
     stringOrNull(event?.pathParameters?.checkinSessionId) || extractStaffSessionIdFromPath(event?.rawPath);
 
@@ -335,6 +354,44 @@ async function handleStaffSessionDetail(event, correlationId) {
   return jsonResponse(200, correlationId, {
     status: 'found',
     session,
+  });
+}
+
+async function handleStaffAuthLogin(body, correlationId) {
+  const request = normalizeStaffAuthLoginRequest(body);
+  if (!request.passcode) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: {
+        code: 'staff_passcode_required',
+        message: 'Staff passcode is required.',
+      },
+    });
+  }
+
+  const config = await getStaffAuthConfig();
+  if (!safeEquals(request.passcode, config.passcode)) {
+    return jsonResponse(403, correlationId, {
+      status: 'forbidden',
+      error: {
+        code: 'staff_passcode_invalid',
+        message: 'Staff passcode is invalid.',
+      },
+    });
+  }
+
+  const issued = createStaffAuthToken(config);
+
+  return jsonResponse(200, correlationId, {
+    status: 'authenticated',
+    auth: {
+      expiresAt: issued.expiresAt,
+      token: issued.token,
+      tokenType: 'Bearer',
+    },
+    staff: {
+      displayName: config.displayName,
+    },
   });
 }
 
@@ -853,6 +910,12 @@ function normalizeStaffListRequest(event) {
   return {
     includeExpired,
     limit,
+  };
+}
+
+function normalizeStaffAuthLoginRequest(body) {
+  return {
+    passcode: stringOrNull(body.passcode),
   };
 }
 
@@ -2270,6 +2333,10 @@ function isStartSessionRoute(routeKey, event) {
   return routeKey === 'POST /v1/check-in/sessions' || event?.rawPath === '/v1/check-in/sessions';
 }
 
+function isStaffAuthLoginRoute(routeKey, event) {
+  return routeKey === 'POST /v1/staff/auth/login' || event?.rawPath === '/v1/staff/auth/login';
+}
+
 function isStaffSessionListRoute(routeKey, event) {
   return (
     routeKey === 'GET /v1/staff/check-in/sessions' ||
@@ -2562,6 +2629,134 @@ async function getCheckinLinkDevToken() {
   return cachedCheckinLinkDevToken;
 }
 
+async function getStaffAuthConfig() {
+  const now = Date.now();
+  if (cachedStaffAuthConfig && cachedStaffAuthConfigExpiresAt > now) return cachedStaffAuthConfig;
+
+  const secretId = process.env.STAFF_AUTH_SECRET_ARN;
+  if (!secretId) {
+    const error = new Error('Staff auth secret is not configured.');
+    error.code = 'staff_auth_config_error';
+    throw error;
+  }
+
+  const response = await secretsClient.send(new GetSecretValueCommand({ SecretId: secretId }));
+  const secretString = response.SecretString;
+  if (!secretString) {
+    const error = new Error('Staff auth secret has no string value.');
+    error.code = 'staff_auth_config_error';
+    throw error;
+  }
+
+  let parsed = {};
+  try {
+    parsed = JSON.parse(secretString);
+  } catch {
+    parsed = { passcode: secretString };
+  }
+
+  const passcode = stringOrNull(parsed.passcode) || stringOrNull(parsed.staffPasscode) || stringOrNull(parsed.token);
+  if (!passcode) {
+    const error = new Error('Staff auth passcode is empty.');
+    error.code = 'staff_auth_config_error';
+    throw error;
+  }
+
+  cachedStaffAuthConfig = {
+    displayName: stringOrNull(parsed.displayName) || 'JumpYard Staff',
+    passcode,
+    signingSecret: stringOrNull(parsed.signingSecret) || passcode,
+    tokenTtlMinutes: clampInteger(parsed.tokenTtlMinutes, 5, 24 * 60, DEFAULT_STAFF_AUTH_TTL_MINUTES),
+  };
+  cachedStaffAuthConfigExpiresAt = now + STAFF_AUTH_CONFIG_CACHE_MS;
+
+  return cachedStaffAuthConfig;
+}
+
+function createStaffAuthToken(config) {
+  const issuedAtSeconds = Math.floor(Date.now() / 1000);
+  const expiresAtSeconds = issuedAtSeconds + config.tokenTtlMinutes * 60;
+  const payload = {
+    displayName: config.displayName,
+    exp: expiresAtSeconds,
+    iat: issuedAtSeconds,
+    scope: 'staff',
+    sub: 'jumpyard-staff',
+    v: 1,
+  };
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = signStaffAuthPayload(encodedPayload, config.signingSecret);
+
+  return {
+    expiresAt: new Date(expiresAtSeconds * 1000).toISOString(),
+    token: `${encodedPayload}.${signature}`,
+  };
+}
+
+async function verifyStaffAuthToken(event) {
+  const token = getStaffAuthToken(event);
+  if (!token) {
+    return { ok: false, code: 'staff_auth_token_required' };
+  }
+
+  const [encodedPayload, providedSignature] = token.split('.');
+  if (!encodedPayload || !providedSignature) {
+    return { ok: false, code: 'staff_auth_token_invalid' };
+  }
+
+  const config = await getStaffAuthConfig();
+  const expectedSignature = signStaffAuthPayload(encodedPayload, config.signingSecret);
+  if (!safeEquals(providedSignature, expectedSignature)) {
+    return { ok: false, code: 'staff_auth_token_invalid' };
+  }
+
+  const payload = parseJsonObject(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
+  if (payload.scope !== 'staff' || payload.sub !== 'jumpyard-staff') {
+    return { ok: false, code: 'staff_auth_token_invalid' };
+  }
+
+  if (numberOrNull(payload.exp) === null || numberOrNull(payload.exp) <= Math.floor(Date.now() / 1000)) {
+    return { ok: false, code: 'staff_auth_token_expired' };
+  }
+
+  return {
+    ok: true,
+    code: 'authorized',
+    staff: {
+      displayName: stringOrNull(payload.displayName) || config.displayName,
+    },
+  };
+}
+
+function getStaffAuthToken(event) {
+  for (const headerName of STAFF_AUTH_HEADERS) {
+    const value = getHeader(event, headerName);
+    if (!value) continue;
+
+    const bearerMatch = value.match(/^Bearer\s+(.+)$/i);
+    return bearerMatch ? bearerMatch[1].trim() : value;
+  }
+
+  return null;
+}
+
+function signStaffAuthPayload(encodedPayload, signingSecret) {
+  return crypto.createHmac('sha256', signingSecret).update(encodedPayload).digest('base64url');
+}
+
+function staffAuthErrorResponse(correlationId, auth) {
+  return jsonResponse(auth.code === 'staff_auth_token_expired' ? 401 : 403, correlationId, {
+    status: 'forbidden',
+    error: {
+      code: auth.code,
+      message:
+        auth.code === 'staff_auth_token_expired'
+          ? 'Staff authentication has expired.'
+          : 'Staff authentication is required.',
+    },
+  });
+}
+
 function safeEquals(left, right) {
   const leftBuffer = Buffer.from(String(left));
   const rightBuffer = Buffer.from(String(right));
@@ -2751,6 +2946,15 @@ function classifyError(error) {
       status: 'internal_error',
       code: 'checkin_link_token_collision',
       message: 'JumpYard Cloud could not allocate a check-in link token.',
+    };
+  }
+
+  if (error.code === 'staff_auth_config_error') {
+    return {
+      statusCode: 500,
+      status: 'config_error',
+      code: 'staff_auth_config_error',
+      message: 'JumpYard Cloud staff authentication configuration is incomplete.',
     };
   }
 

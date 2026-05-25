@@ -77,6 +77,17 @@ export interface StaffRedeemResult {
   };
 }
 
+export interface StaffAuthSession {
+  auth: {
+    expiresAt: string;
+    token: string;
+    tokenType: "Bearer";
+  };
+  staff: {
+    displayName: string;
+  };
+}
+
 interface StaffListResponse {
   status: "found" | "not_found" | "invalid_request" | "internal_error";
   sessions?: StaffSessionSummary[];
@@ -110,10 +121,42 @@ interface StaffRedeemResponse {
   };
 }
 
-export async function listReadyStaffSessions(): Promise<StaffSessionSummary[]> {
+interface StaffAuthResponse {
+  status: "authenticated" | "forbidden" | "invalid_request" | "internal_error";
+  auth?: StaffAuthSession["auth"];
+  staff?: StaffAuthSession["staff"];
+  error?: {
+    code?: string;
+    message?: string;
+  };
+}
+
+export async function loginStaff(passcode: string): Promise<StaffAuthSession> {
+  const response = await fetch(`${getApiBaseUrl()}/v1/staff/auth/login`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ passcode }),
+  });
+  const body = await parseJson<StaffAuthResponse>(response);
+
+  if (!response.ok || body.status !== "authenticated" || !body.auth || !body.staff) {
+    throw new Error(body.error?.message ?? "JumpYard Cloud kunde inte logga in personal.");
+  }
+
+  return {
+    auth: body.auth,
+    staff: body.staff,
+  };
+}
+
+export async function listReadyStaffSessions(staffToken: string): Promise<StaffSessionSummary[]> {
   const response = await fetch(`${getApiBaseUrl()}/v1/staff/check-in/sessions`, {
     headers: {
       accept: "application/json",
+      authorization: `Bearer ${staffToken}`,
     },
   });
   const body = await parseJson<StaffListResponse>(response);
@@ -125,12 +168,13 @@ export async function listReadyStaffSessions(): Promise<StaffSessionSummary[]> {
   return (body.sessions ?? []).filter((session) => Boolean(session.checkinSessionId));
 }
 
-export async function getStaffSession(checkinSessionId: string): Promise<StaffSessionDetail> {
+export async function getStaffSession(checkinSessionId: string, staffToken: string): Promise<StaffSessionDetail> {
   const response = await fetch(
     `${getApiBaseUrl()}/v1/staff/check-in/sessions/${encodeURIComponent(checkinSessionId)}`,
     {
       headers: {
         accept: "application/json",
+        authorization: `Bearer ${staffToken}`,
       },
     }
   );
@@ -145,12 +189,12 @@ export async function getStaffSession(checkinSessionId: string): Promise<StaffSe
 
 export async function redeemStaffSession({
   checkinSessionId,
-  devToken,
   idempotencyKey,
+  staffToken,
 }: {
   checkinSessionId: string;
-  devToken: string;
   idempotencyKey: string;
+  staffToken: string;
 }): Promise<StaffRedeemResult> {
   const response = await fetch(
     `${getApiBaseUrl()}/v1/staff/check-in/sessions/${encodeURIComponent(checkinSessionId)}/redeem`,
@@ -158,9 +202,9 @@ export async function redeemStaffSession({
       method: "POST",
       headers: {
         accept: "application/json",
+        authorization: `Bearer ${staffToken}`,
         "content-type": "application/json",
         "x-idempotency-key": idempotencyKey,
-        "x-jumpyard-redeem-token": devToken,
       },
       body: JSON.stringify({
         confirmRedeem: true,

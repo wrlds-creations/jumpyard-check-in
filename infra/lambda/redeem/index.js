@@ -10,6 +10,9 @@ const REDEEM_TOKEN_HEADERS = [
   'x-api-key',
   'api-key',
 ];
+const STAFF_AUTH_HEADERS = ['x-jumpyard-staff-token', 'authorization'];
+const DEFAULT_STAFF_AUTH_TTL_MINUTES = 12 * 60;
+const STAFF_AUTH_CONFIG_CACHE_MS = 30 * 1000;
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
 
@@ -20,6 +23,8 @@ const ssmClient = new SSMClient({});
 let cachedRollerConfig = null;
 let cachedToken = null;
 let cachedRedeemDevToken = null;
+let cachedStaffAuthConfig = null;
+let cachedStaffAuthConfigExpiresAt = 0;
 
 exports.handler = async (event) => {
   let correlationId = getHeader(event, 'x-correlation-id') || createCorrelationId();
@@ -40,7 +45,7 @@ exports.handler = async (event) => {
       });
     }
 
-    if (request.confirmRedeem) {
+    if (request.confirmRedeem && !event.__jumpyardTrustedStaffRedeem) {
       const auth = await verifyRedeemDevToken(event);
       if (!auth.ok) {
         return jsonResponse(403, correlationId, {
@@ -303,13 +308,16 @@ async function handleStaffSessionRedeem(event, correlationId) {
     });
   }
 
-  const auth = await verifyRedeemDevToken(event);
+  const auth = await verifyStaffAuthToken(event);
   if (!auth.ok) {
-    return jsonResponse(403, correlationId, {
+    return jsonResponse(auth.code === 'staff_auth_token_expired' ? 401 : 403, correlationId, {
       status: 'forbidden',
       error: {
         code: auth.code,
-        message: 'Staff-confirmed redeem requires the JumpYard dev redeem token until staff auth exists.',
+        message:
+          auth.code === 'staff_auth_token_expired'
+            ? 'Staff authentication has expired.'
+            : 'Staff authentication is required for staff-confirmed redeem.',
       },
     });
   }
@@ -362,6 +370,7 @@ async function handleStaffSessionRedeem(event, correlationId) {
       rollerUniqueId: session.rollerUniqueId,
       ticketIds: session.selectedTicketIds,
     }),
+    __jumpyardTrustedStaffRedeem: true,
     pathParameters: {},
     rawPath: '/v1/check-in/redeem',
     routeKey: 'POST /v1/check-in/redeem',
@@ -381,6 +390,7 @@ async function handleStaffSessionRedeem(event, correlationId) {
       eventType: 'checkin.staff_redeem_completed',
       payload: {
         checkinSessionId: completedSession.checkinSessionId,
+        staffDisplayName: auth.staff?.displayName ?? null,
         ticketCount: completedSession.selectedTicketIds.length,
       },
       summary: 'Staff-confirmed check-in session redeemed.',
@@ -941,6 +951,107 @@ async function getRedeemDevToken() {
   }
 
   return cachedRedeemDevToken;
+}
+
+async function getStaffAuthConfig() {
+  const now = Date.now();
+  if (cachedStaffAuthConfig && cachedStaffAuthConfigExpiresAt > now) return cachedStaffAuthConfig;
+
+  const secretId = process.env.STAFF_AUTH_SECRET_ARN;
+  if (!secretId) {
+    const error = new Error('Staff auth secret is not configured.');
+    error.code = 'staff_auth_config_error';
+    throw error;
+  }
+
+  const response = await secretsClient.send(new GetSecretValueCommand({ SecretId: secretId }));
+  const secretString = response.SecretString;
+  if (!secretString) {
+    const error = new Error('Staff auth secret has no string value.');
+    error.code = 'staff_auth_config_error';
+    throw error;
+  }
+
+  let parsed = {};
+  try {
+    parsed = JSON.parse(secretString);
+  } catch {
+    parsed = { passcode: secretString };
+  }
+
+  const passcode = stringOrNull(parsed.passcode) || stringOrNull(parsed.staffPasscode) || stringOrNull(parsed.token);
+  if (!passcode) {
+    const error = new Error('Staff auth passcode is empty.');
+    error.code = 'staff_auth_config_error';
+    throw error;
+  }
+
+  cachedStaffAuthConfig = {
+    displayName: stringOrNull(parsed.displayName) || 'JumpYard Staff',
+    passcode,
+    signingSecret: stringOrNull(parsed.signingSecret) || passcode,
+    tokenTtlMinutes: readStaffTokenTtlMinutes(parsed.tokenTtlMinutes),
+  };
+  cachedStaffAuthConfigExpiresAt = now + STAFF_AUTH_CONFIG_CACHE_MS;
+
+  return cachedStaffAuthConfig;
+}
+
+async function verifyStaffAuthToken(event) {
+  const token = getStaffAuthToken(event);
+  if (!token) {
+    return { ok: false, code: 'staff_auth_token_required' };
+  }
+
+  const [encodedPayload, providedSignature] = token.split('.');
+  if (!encodedPayload || !providedSignature) {
+    return { ok: false, code: 'staff_auth_token_invalid' };
+  }
+
+  const config = await getStaffAuthConfig();
+  const expectedSignature = signStaffAuthPayload(encodedPayload, config.signingSecret);
+  if (!safeEquals(providedSignature, expectedSignature)) {
+    return { ok: false, code: 'staff_auth_token_invalid' };
+  }
+
+  const payload = parseJsonOrNull(Buffer.from(encodedPayload, 'base64url').toString('utf8')) ?? {};
+  if (payload.scope !== 'staff' || payload.sub !== 'jumpyard-staff') {
+    return { ok: false, code: 'staff_auth_token_invalid' };
+  }
+
+  if (numberOrNull(payload.exp) === null || numberOrNull(payload.exp) <= Math.floor(Date.now() / 1000)) {
+    return { ok: false, code: 'staff_auth_token_expired' };
+  }
+
+  return {
+    ok: true,
+    code: 'authorized',
+    staff: {
+      displayName: stringOrNull(payload.displayName) || config.displayName,
+    },
+  };
+}
+
+function getStaffAuthToken(event) {
+  for (const headerName of STAFF_AUTH_HEADERS) {
+    const value = getHeader(event, headerName);
+    if (!value) continue;
+
+    const bearerMatch = value.match(/^Bearer\s+(.+)$/i);
+    return bearerMatch ? bearerMatch[1].trim() : value;
+  }
+
+  return null;
+}
+
+function signStaffAuthPayload(encodedPayload, signingSecret) {
+  return crypto.createHmac('sha256', signingSecret).update(encodedPayload).digest('base64url');
+}
+
+function readStaffTokenTtlMinutes(value) {
+  const parsed = numberOrNull(value);
+  if (parsed === null) return DEFAULT_STAFF_AUTH_TTL_MINUTES;
+  return Math.min(Math.max(Math.floor(parsed), 5), 24 * 60);
 }
 
 function safeEquals(left, right) {
@@ -1788,6 +1899,15 @@ function classifyError(error) {
       status: 'config_error',
       code: 'redeem_config_error',
       message: 'JumpYard Cloud redeem configuration is incomplete or unsafe.',
+    };
+  }
+
+  if (error.code === 'staff_auth_config_error') {
+    return {
+      statusCode: 500,
+      status: 'config_error',
+      code: 'staff_auth_config_error',
+      message: 'JumpYard Cloud staff authentication configuration is incomplete.',
     };
   }
 

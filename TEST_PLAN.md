@@ -470,3 +470,16 @@ Use this file to define validation for the current project or milestone.
 | CDK diff | Diff shows only the approved EventBridge rule/session Lambda/config changes. | Passed | Pre-deploy diff added the booking-time SMS rule, Lambda invoke permission, and session Lambda code asset only. |
 | Dev deploy | Dev stack deploys the schedule safely. | Passed | `npm --prefix infra run deploy:dev` completed successfully; post-deploy diff showed no differences. |
 | Scheduled payload smoke | Direct Lambda invoke with EventBridge-shaped payload returns planning result. | Passed | Returned `booking_time_sms_planned`, `confirmSend=false`, `sent=0`, and skipped booking `5032210` as already sent recently. |
+
+## T0047 Staff Auth Replacement Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Session Lambda syntax | `node --check infra/lambda/session/index.js` passes. | Passed | Validated staff auth login/list/detail syntax. |
+| Redeem Lambda syntax | `node --check infra/lambda/redeem/index.js` passes. | Passed | Validated staff-token protected redeem syntax. |
+| Admin lint/build | Admin app lint/build pass after replacing the temporary dev-code input. | Passed | `npm --prefix jumpyard-checkin-admin run lint` and `npm --prefix jumpyard-checkin-admin run build` passed. |
+| Staff login without secret output | Deployed `POST /v1/staff/auth/login` returns a token for the AWS-stored passcode without printing the passcode. | Passed | Smoke returned `authenticated`, token present, expiry present, and did not print passcode/token; staff secret cache is capped at 30 seconds for dev passcode edits. |
+| Staff list auth guard | Staff list rejects missing auth and succeeds with the staff token. | Passed | Missing auth returned HTTP `403`/`staff_auth_token_required`; token request returned `found`. |
+| Staff redeem auth guard | Staff redeem rejects missing auth and passes auth for a fake session without redeeming a real Roller ticket. | Passed | Authenticated fake session returned HTTP `404`/`session_not_found`, confirming auth passed without a real redeem. |
+| Admin UI login | Admin app shows staff login and removes the temporary dev-code input from the normal handoff panel. | Passed | Browser verification at `http://127.0.0.1:3002/` found `staff-auth-login` and no temporary dev-code text. |
+| Dev deploy | Dev stack deploys the staff auth secret, route, grants, and Lambda code. | Passed | CDK diff matched T0047 scope, deploy completed, and post-deploy diff showed no differences. |
