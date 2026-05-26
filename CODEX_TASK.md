@@ -1,16 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0053
+T0054
 
 ## Goal
-Change the phone buy-entry flow so guests build one basket with entry tickets and add-ons before creating one Roller draft booking and paying once.
+Confirm the public Roller payment behavior after T0053 and lock the remaining card-method blocker before building the next phone-flow step.
 
 ## Dependencies
-- T0051 completed and merged.
-- T0052 completed and merged.
+- T0053 completed and merged.
 - Roller Playground API credentials are valid locally and in AWS.
-- Full public browser payment smoke still depends on Roller allowlist confirmation for `https://jumpyard-check-in.pages.dev`.
+- Pabel confirmed `https://jumpyard-check-in.pages.dev` is allowlisted for Playground payment testing.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -20,15 +19,11 @@ Change the phone buy-entry flow so guests build one basket with entry tickets an
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- jumpyard-checkin-phone/src/components/BuyTickets.tsx
-- jumpyard-checkin-phone/src/context/LanguageContext.tsx
-- jumpyard-checkin-phone/src/flow/cloudClient.ts
 
 ## Do not touch
+- App source code
 - Staff/admin UI
 - Kiosk UI
-- Existing-booking add-product flow
-- Existing booking lookup/check-in/redeem behavior
 - AWS resources or CDK config
 - Backend/Lambda code
 - Aurora migrations
@@ -42,57 +37,48 @@ Change the phone buy-entry flow so guests build one basket with entry tickets an
 
 ## Requirements
 
-1. Correct the new-booking flow order.
-   - The phone buy-entry flow should be: choose time, choose entry product and quantity, choose add-ons, enter contact details, review, create one draft booking, pay once, continue check-in.
-   - Do not create or pay the entry booking before the guest can choose add-ons.
+1. Re-run the public payment smoke on `https://jumpyard-check-in.pages.dev`.
+   - Confirm T0053 is live on Cloudflare.
+   - Create only Playground test drafts/bookings.
+   - Do not print raw `paymentJwt`, access tokens, client secrets, or full card numbers.
 
-2. Build one Roller draft booking basket.
-   - Include the selected entry item and selected mapped add-ons in the same `POST /v1/bookings/draft` request.
-   - Use the same selected booking date and start time for basket items.
-   - Keep final pricing from JumpYard Cloud/Roller quote, not from frontend estimates.
+2. Explain the Swish result.
+   - Confirm whether Swish produced a real paid Roller Playground booking.
+   - Confirm the booking is visible through JumpYard Cloud lookup as paid/ready.
 
-3. Keep payment behavior from T0051.
-   - Use the existing Roller payment drop-in after the combined draft is created.
-   - Keep raw `paymentJwt` response-only and in memory.
-   - Keep the payment-pending fallback when JWT/config/package setup is unavailable.
-   - On approved payment, resolve the paid booking through JumpYard Cloud and continue check-in.
+3. Investigate why card fields are missing.
+   - Confirm whether the phone app filters out card payment.
+   - Inspect Roller's public payment configuration/session shape safely.
+   - Determine whether the missing card UI is fixable in JumpYard code or requires Roller/Adyen configuration.
 
-4. Keep existing-booking add-products separate.
-   - Do not change T0052 behavior for guests who already have a booking.
-   - Existing booking plus add-ons still uses separate linked add-product drafts.
-
-5. Update source-of-truth docs.
-   - Record that new booking add-ons are part of the same draft/payment basket.
-   - Move staff production readiness to the next available ticket number after T0053.
+4. Lock the next phone-flow ticket.
+   - Document that after a paid new booking, the guest should enter the check-in flow at safety/QR instead of returning through add-ons/payment.
+   - Document the desired buy-entry progress bar: product, add-ons, payment, safety, done.
 
 ## Non-goals
 - Do not implement production payment rollout.
-- Do not add gift card, membership, discount, or multi-visit payment behavior.
-- Do not add a server-owned add-on catalog endpoint.
-- Do not add add-on fulfillment reconciliation or payment-result webhooks.
+- Do not implement post-payment progress bar/routing yet.
+- Do not add gift card, membership, discount, or multi-visit behavior.
+- Do not add or edit payment package vendor code.
+- Do not add package dependencies.
 - Do not create or change AWS resources.
-- Do not change SMS, webhook, Data API, staff auth, or redeem behavior.
+- Do not change SMS, webhook, Data API, staff auth, redeem, or app behavior.
 
 ## Acceptance criteria
-- Phone buy-entry flow shows add-ons before contact/review/payment.
-- New booking draft contains entry plus selected add-ons in one basket.
-- Review step shows basket lines and the server/Roller quoted total.
-- Payment happens once for the combined draft.
-- Existing-booking add-product flow is unchanged.
+- Public T0053 payment smoke result is documented.
+- Swish paid-booking behavior is explained and verified.
+- Card-method status is documented with a clear next action.
+- The next phone-flow/progressbar ticket is documented.
+- No app, backend, AWS, package, vendor, or credential files are changed.
 - `npm run validate` passes.
-- `cd jumpyard-checkin-phone && npm run lint` passes.
-- `cd jumpyard-checkin-phone && npm run build` passes.
 
 ## Manual verification
-- Open the phone app buy-entry flow.
-- Choose a time, entry product, quantity, and at least one mapped add-on.
-- Confirm the review step shows both entry and add-on lines.
-- Confirm the draft/payment step represents one combined basket.
-- Confirm public card execution remains blocked until `https://jumpyard-check-in.pages.dev` is allowlisted.
+- On the public Cloudflare URL, create a Playground-only test draft with entry plus add-on.
+- Confirm payment UI renders after review.
+- Confirm Swish can produce a paid booking in Playground if selected.
+- Confirm card fields are still absent until Roller/Adyen enables the card/scheme method for this Playground configuration.
 
 ## Automated validation
 Run:
 - `npm run validate`
-- `cd jumpyard-checkin-phone && npm run lint`
-- `cd jumpyard-checkin-phone && npm run build`
 - `git diff --check`

@@ -548,6 +548,16 @@ Use this file to define validation for the current project or milestone.
 | Local browser smoke | Local phone app loads after T0052 wiring. | Passed | Browser check at `http://localhost:3000/` loaded `JumpYard Connected Entry`, rendered `KIOSK_CHOICE`, and reported no console errors. |
 | Diff whitespace | `git diff --check` passes. | Passed | Passed on 2026-05-26; line-ending notices are Git CRLF warnings only. |
 
+## T0054 Public Payment Method Smoke Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Public T0053 deploy | Cloudflare URL shows add-ons before contact/review/payment. | Passed | Public smoke on `https://jumpyard-check-in.pages.dev` reached review with 60 min entry plus JumpSocks before creating one draft. |
+| Swish payment | Selecting Swish in Playground can complete payment and publish/create a paid Roller booking. | Passed | Public smoke returned to booking summary for booking `5063382`; JumpYard Cloud lookup reports `Paid`, amount owing `0`, and `canCheckIn=true`. |
+| Card method visibility | Card fields should be visible only if Roller/Adyen exposes the card/scheme method. | Blocked externally | Rendered payment UI showed Swish/Google Pay but no card fields. Safe config/session inspection found no `scheme` method available from the current Playground payment configuration. |
+| Raw secret/JWT handling | Payment investigation does not print secrets, access tokens, raw JWTs, or full card numbers. | Passed | Only safe status, booking reference, method names, and boolean summaries were inspected. |
+| Root validation | Source-of-truth docs validate after T0054 updates. | Passed | `npm run validate` passed on 2026-05-26. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

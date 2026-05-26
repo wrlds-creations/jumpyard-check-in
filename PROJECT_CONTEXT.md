@@ -105,7 +105,7 @@ T0048 polishes the staff/admin handoff app without changing backend behavior. Th
 
 T0049 adds and deploys the safe configuration path for confirmed scheduled booking-time SMS sends. Dev scheduled SMS still runs in planning mode with `confirmSend=false`, but the CDK config now makes the check-in SMS base URL explicit and blocks `confirmSend=true` unless an approval phrase and public HTTPS app URL are configured. The session Lambda also blocks EventBridge-shaped confirmed sends at runtime if those safeguards are missing. No real unattended SMS is enabled in dev by default.
 
-T0050 bootstraps the Roller Payments readiness path without payment execution. Pabel confirmed that the venue is authorized for Roller Payments via API if API keys can be generated, that payment configuration comes from `GET /venues/me` under `paymentSettings`, that the public test origin must be allowlisted, and that the Adyen test-card docs should be used with the Visa card ending `1142`. Pabel later confirmed that `https://jumpyard-check-in.pages.dev` is allowlisted for Playground payment testing. The readiness script checks Roller's version-history docs page at `https://docs.roller.app/docs/roller-payments/egj77d29eagwv-version-history` because the docs root is a navigation entry. T0040 is now treated as the old payment placeholder and is superseded by T0050-T0053.
+T0050 bootstraps the Roller Payments readiness path without payment execution. Pabel confirmed that the venue is authorized for Roller Payments via API if API keys can be generated, that payment configuration comes from `GET /venues/me` under `paymentSettings`, that the public test origin must be allowlisted, and that the Adyen test-card docs should be used with the Visa card ending `1142`. Pabel later confirmed that `https://jumpyard-check-in.pages.dev` is allowlisted for Playground payment testing. The readiness script checks Roller's version-history docs page at `https://docs.roller.app/docs/roller-payments/egj77d29eagwv-version-history` because the docs root is a navigation entry. T0040 is now treated as the old payment placeholder and is superseded by the T0050+ payment sequence.
 
 T0051 integrates the Roller-approved `@roller/ecom-payments` package `v217` into the phone buy-entry flow for new booking drafts. The phone app now keeps using JumpYard Cloud for availability, quote, and draft creation, then passes the response-only draft `paymentJwt` and safe `paymentSettings` config to Roller's payment package in memory. The raw JWT is not persisted, logged, printed, or rendered. If the payment package cannot bootstrap its configuration, the phone app fails closed into a visible payment-unavailable state instead of spinning indefinitely. After an approved payment, the phone app attempts to resolve the newly paid booking through JumpYard Cloud lookup and continue into the normal check-in path; if Roller/webhook sync lags, it shows a retryable sync message. Add-product payment is intentionally deferred to T0052.
 
@@ -259,8 +259,10 @@ After T0007, the next tickets should proceed in this order:
 | `T0050 Payment readiness/bootstrap` | Lock payment prerequisites, verify `/venues/me` paymentSettings, set the public test origin, and document the T0040 replacement. | Completed and merged; no booking writes, payment UI, or AWS changes. |
 | `T0051 New-booking payment execution` | Integrate the Roller Payments package/drop-in for new booking drafts created through the existing phone buy-entry flow. | Completed and merged with package `v217` vendored and phone buy-entry wired; public end-to-end payment smoke is now unblocked by Pabel's allowlist confirmation and still needs execution. |
 | `T0052 Add-product payment execution` | Reuse the same payment execution path for separate linked add-product drafts. | Completed and merged; existing-booking add-product drafts now use the shared Roller payment component when JWT/config are present. |
-| `T0053 New-booking basket before payment` | Move add-ons before contact/review/payment in the phone buy-entry flow. | Completed locally; one Roller draft/payment now represents entry plus selected mapped add-ons. |
-| `T0054 Staff production readiness` | Replace pilot staff auth with the production-ready staff identity/session/role model. | Separate from payment and SMS; follows T0053. |
+| `T0053 New-booking basket before payment` | Move add-ons before contact/review/payment in the phone buy-entry flow. | Completed and merged; one Roller draft/payment now represents entry plus selected mapped add-ons. |
+| `T0054 Public payment method smoke` | Confirm public payment-package behavior, explain Swish success, and lock the missing card/scheme blocker. | Current ticket; no app/backend/AWS changes expected unless Roller/Adyen configuration changes. |
+| `T0055 New-booking paid continuation` | After a paid new booking, route directly into the check-in/safety/QR path and add a buy-entry progress bar. | Next phone-flow ticket after card-method status is locked. |
+| `T0056 Staff production readiness` | Replace pilot staff auth with the production-ready staff identity/session/role model. | Separate from payment and SMS; follows the immediate payment/phone-flow tickets. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -481,6 +483,15 @@ T0053 confirmed the buy-entry payment order:
 - the payment step is one payment for the combined basket, not a payment before add-ons
 - existing-booking add-products stay on the separate linked add-on draft path from T0052
 
+T0054 confirmed the public payment-package behavior after Pabel's allowlist:
+
+- `https://jumpyard-check-in.pages.dev` runs the T0053 buy-entry order and can render the Roller/Adyen payment UI.
+- A public Playground payment using Swish completed and produced paid booking `5063382`.
+- JumpYard Cloud lookup returned booking `5063382` as `Paid`, amount owing `0`, and `canCheckIn=true`.
+- The phone app does not filter out card payment methods; it passes the Roller payment package the payment JWT and public venue payment config.
+- Roller's public ecom payment configuration currently returns no `scheme` card method for this Playground configuration, and the rendered payment UI exposes Swish/Google Pay but no card fields.
+- Card entry with the Adyen Visa test card ending `1142` therefore needs Roller/Adyen configuration help, specifically enabling or confirming the card/scheme payment method for Playground custom checkout.
+
 ## Non-Goals For Current Ticket
 
 - Do not use Aurora lookup data as final authority before future write-critical actions such as redeem or add-on booking creation.
@@ -498,7 +509,7 @@ T0053 confirmed the buy-entry payment order:
 | Question | Why It Matters | Owner | Status |
 |---|---|---|---|
 | Which Roller Playground write scopes are enabled for create booking, draft booking, payment, and redemption? | Needed before booking/payment work. Draft booking creation is confirmed through T0030/T0031/T0032/T0033/T0034; Pabel confirmed Roller Payments API authorization when API keys can be generated. | `T0050/T0051` | `Partially answered` |
-| Does Roller Playground support an in-app payment flow from draft booking `paymentJwt`, including documented test/fake card numbers and any domain allow-listing requirements? | Determines whether F1 can complete payment inside the JumpYard PWA or must use a hosted fallback. Pabel confirmed the docs, `paymentSettings`, Adyen test card ending `1142`, and that `https://jumpyard-check-in.pages.dev` is allowlisted. | `T0050/T0051` | `Answered; public smoke pending` |
+| Does Roller Playground support an in-app payment flow from draft booking `paymentJwt`, including documented test/fake card numbers and any domain allow-listing requirements? | Determines whether F1 can complete payment inside the JumpYard PWA or must use a hosted fallback. Pabel confirmed the docs, `paymentSettings`, Adyen test card ending `1142`, and that `https://jumpyard-check-in.pages.dev` is allowlisted. T0054 confirmed Swish works publicly, while card/scheme is missing from the current payment methods. | `T0050/T0054` | `Partially answered; card method blocked externally` |
 | What is the best field or internal model for linking an original booking to a separate add-on booking? | T0034 selected `jumpyard.booking_links` with `add_on_group_id` plus add-product draft metadata in `jumpyard.prepayment_booking_drafts`. | `T0034` | `Answered for step 1` |
 | Which products need reconfiguration from stock/add-on to ticket/session products for API-driven redemption? | Stock/add-on products are excluded from Roller ticket redemption webhook/API flow. | `TBD` | `Open` |
 | Which Roller Data API endpoints and date ranges should power tickets, payments, and customers ingestion? | Required after bookingitems ingestion. | `T0036` | `Open` |
