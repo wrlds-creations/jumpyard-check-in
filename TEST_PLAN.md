@@ -50,6 +50,8 @@ Use this file to define validation for the current project or milestone.
 | `node --check scripts/roller-payment-package-poc.js` | Confirm T0032 payment package POC script syntax. | Passed | Passed during T0032 validation. |
 | `npm run roller:payment:poc` | Confirm T0032 quote/default POC path without booking creation. | Passed | Returned quote HTTP `200`, total `260`, amount owing `260`, and status `blocked_prerequisites` with no draft booking created. |
 | `npm run roller:payment:poc:apply-draft` without confirmation | Confirm T0032 draft mode fails closed. | Passed | Failed before creating a Playground draft without `ROLLER_PAYMENT_POC_ALLOW_DRAFT`. |
+| `node --check scripts/roller-payment-readiness.js` | Confirm T0050 payment readiness script syntax. | Passed | Passed on 2026-05-26. |
+| `npm run roller:payment:readiness` | Confirm T0050 payment readiness without writes. | Passed | Reads local `.env`, confirms Roller Playground `/venues/me` payment settings, checks the public test origin, and reports allowlist confirmation as pending without printing secrets. |
 | `node --check infra/lambda/booking/index.js` | Confirm T0033 booking Lambda syntax. | Passed | Passed after availability/pre-payment changes. |
 | `npm --prefix infra run build` | Confirm T0033 infra TypeScript compiles. | Passed | Passed after availability route and migration changes. |
 | `npm --prefix infra run synth:dev` | Synthesize the T0033 dev stack. | Passed | Uses non-secret `infra/config/dev.json`. |

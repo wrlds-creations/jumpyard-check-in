@@ -128,7 +128,7 @@ Rules:
 | Booking detail | `GET /bookings/{uniqueId}` | Read | Confirmed | Booking reference is also accepted in Playground. Authoritative live lookup for existing booking flow. |
 | New booking cost | `POST /bookings/draft/costs` | Write-like calculation | Confirmed | Use for final pre-payment basket calculation. It applies pricing/discount logic better than product list display. |
 | Create draft booking | `POST /bookings/draft` | Write | Confirmed | T0030 confirmed Playground HTTP `201` with cost fields and a present `paymentJwt`. Recommended path for new booking/payment flow. Holds capacity through draft timer. |
-| Roller Payments custom checkout | Roller Payments library + returned `paymentJwt` | Frontend payment package | Confirmed docs, implementation prerequisites open | Official docs describe passing the draft-booking JWT to Roller's payment library and Adyen drop-in. Requires ROLLER authorization, public HTTPS domain allowlisting, approved package access, and confirmed test/fake card details before phone UI work. |
+| Roller Payments custom checkout | Roller Payments library + returned `paymentJwt` | Frontend payment package | Confirmed docs, allowlist pending | Official docs describe passing the draft-booking JWT to Roller's payment library and Adyen drop-in. Pabel confirmed API authorization when API keys can be generated, `paymentSettings` from `GET /venues/me`, and Adyen Visa test card ending `1142`; `https://jumpyard-check-in.pages.dev` still needs allowlist confirmation before browser execution. |
 | Publish zero-owing draft | `POST /bookings/draft/publish` | Write | Confirmed | Use when no payment remains due, such as full gift-card coverage. |
 | Create booking | `POST /bookings` | Write | Confirmed endpoint | Available, but draft booking is preferred for payment-led phone flow. |
 | Update existing booking | `PUT /bookings/{uniqueId}` | Write | Confirmed but not primary for pilot add-products | Adds/removes products and preserves same booking code, but payment-link UX can break return to the JumpYard PWA/check-in flow. |
@@ -693,7 +693,7 @@ T0030 discovery result:
 - The draft response returned HTTP `201`, total `260`, amount owing `260`, and a present three-part `paymentJwt`.
 - The script summarizes only safe identifiers and JWT shape; it never prints the raw JWT, access token, client secret, or customer PII beyond fake-domain metadata.
 - Roller Payments via API docs confirm the intended custom checkout sequence: get venue payment configuration, bootstrap Roller's payment library, create a draft booking, pass the returned JWT to `setupPayment`, let Adyen drop-in collect payment, then use payment result and booking-created webhook for success handling.
-- Before payment UI wiring, JumpYard needs Roller to authorize the connection, allowlist a public HTTPS test domain, provide the approved payment package, and confirm fake/test card details.
+- T0050 captured Pabel's payment-readiness answer: API-key access authorizes Roller Payments via API, `GET /venues/me` provides `paymentSettings`, the public test origin must be allowlisted, and Adyen's Visa test card ending `1142` should be used from official docs. The readiness script checks Roller's version-history docs page because the docs root is a navigation entry.
 
 T0031 deployed endpoint result:
 
@@ -706,7 +706,7 @@ T0032 POC harness result:
 - `npm run roller:payment:poc` calls the deployed JumpYard Cloud quote endpoint and creates no Roller booking.
 - `npm run roller:payment:poc:apply-draft` is guarded by `ROLLER_PAYMENT_POC_ALLOW_DRAFT=I_UNDERSTAND_THIS_CREATES_PLAYGROUND_DRAFT_BOOKING`.
 - The harness reports only safe fields such as total, amount owing, draft unique id, JWT presence/part count, venue payment config availability, package URL host, and public origin host.
-- Full browser payment remains blocked until Roller provides the approved package URL/download, a public HTTPS allowlisted test origin, and fake/test card details.
+- Full browser payment remains blocked until `https://jumpyard-check-in.pages.dev` is confirmed allowlisted and T0051 integrates the approved payment package/drop-in.
 
 T0033 phone pre-payment result:
 
@@ -921,7 +921,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0048` locally. The next recommended ticket is staff operations production readiness, confirmed scheduled SMS sends, or `T0040` if Roller payment prerequisites arrive.
+Current implementation has progressed through `T0049` merged to main and `T0050` locally. The old T0040 payment placeholder is superseded by T0050-T0052.
 
 Near-term sequence:
 
@@ -939,22 +939,27 @@ Near-term sequence:
 12. `T0037 Scheduled daily Data API sync`: completed in dev AWS; EventBridge invokes a dedicated data-sync Lambda daily, imports the previous modified-date window, refreshes products, and records health in `jumpyard.booking_seed_runs`.
 13. `T0038 SMS token/session link foundation`: create secure JumpYard Cloud links that start or resume check-in sessions without using raw booking numbers as authority.
 14. `T0039 SMS sending`: integrate the selected SMS provider and send check-in links from server-owned booking/session state.
-15. `T0040 Roller payment package/drop-in integration`: integrate the approved package, allowlisted HTTPS test origin, and fake/test card flow after Roller/Pabel provides the prerequisites.
-16. `T0041 Controlled SMS live smoke`: send one confirmed dev SMS through JumpYard Cloud and verify the Aurora audit trail.
-17. `T0042 SMS delivery diagnostics`: configure SNS delivery status logs, send one diagnostic SMS, and identify provider-level delivery blockers.
-18. `T0043 SNS sandbox phone verification`: verify test phones in SNS sandbox and prove one real SMS delivery path.
+15. `T0040 Roller payment package/drop-in integration`: old placeholder; superseded by T0050-T0052.
+16. `T0041 Controlled SMS live smoke`: completed; sent one confirmed dev SMS through JumpYard Cloud and verified the Aurora audit trail.
+17. `T0042 SMS delivery diagnostics`: completed; configured SNS delivery status logs and identified SNS sandbox as the delivery blocker.
+18. `T0043 SNS sandbox phone verification`: completed; verified the test phone in SNS sandbox and proved one real SMS delivery path.
 19. `T0044 Phone SMS link resume`: completed and deployed to dev; phone links with `jy_token` resolve through JumpYard Cloud and route from server session state.
 20. `T0045 Booking-time SMS trigger`: completed in dev foundation; protected endpoint plans due booking reminders and sends only with explicit confirmation while respecting SNS sandbox limits.
 21. `T0046 Scheduled booking-time SMS processing`: completed in dev AWS; EventBridge invokes the T0045 due-SMS processor every 5 minutes, running dev planning mode by default.
-22. `T0047 Staff auth replacement`: replaces the normal admin temporary redeem-code flow with staff login and short-lived staff tokens for staff list/detail/redeem.
-23. `T0048 Staff operations polish`: completed locally; admin handoff now uses JumpYard phone-app visual assets, the documented system sans-serif font stack, mobile-first layout, larger tap targets, and selected-detail-first behavior on phone-sized screens without changing backend contracts. Google font imports and historical display-font overrides are removed from the current check-in app shells.
+22. `T0047 Staff auth replacement`: completed; replaces the normal admin temporary redeem-code flow with staff login and short-lived staff tokens for staff list/detail/redeem.
+23. `T0048 Staff operations polish`: completed; admin handoff now uses JumpYard phone-app visual assets, the documented system sans-serif font stack, mobile-first layout, larger tap targets, and selected-detail-first behavior on phone-sized screens without changing backend contracts.
+24. `T0049 Confirmed scheduled SMS sends`: completed and deployed; confirmed scheduled SMS remains disabled by default and requires a public HTTPS base URL plus explicit approval phrase.
+25. `T0050 Payment readiness/bootstrap`: current local ticket; documents the T0040 replacement, captures Pabel's answers, and adds safe readiness validation.
+26. `T0051 New-booking payment execution`: next payment ticket; integrate the Roller payment package/drop-in for new booking drafts after public-origin allowlisting is confirmed.
+27. `T0052 Add-product payment execution`: reuse the proven payment execution path for separate linked add-product drafts.
+28. `T0053 Staff production readiness`: later separate ticket for production staff identity, roles, MFA/session policy, and audit ownership.
 
 ## Open Contract Questions
 
 - How should published add-on bookings update `jumpyard.booking_links.linked_booking_reference` after payment/publish completes?
 - Should add-on product ids come from a server-owned add-on catalog endpoint before production/multi-venue rollout?
 - Which tenders work in the new add-on booking checkout flow: gift card, membership code, multi-visit value?
-- Does Roller Playground support in-app payment from draft booking `paymentJwt`, and what fake/test card details and domain allow-listing are required? T0030/T0031 confirmed the documented draft/JWT path and deployed server endpoint, but test cards, package access, and allowlisting remain open.
+- Is `https://jumpyard-check-in.pages.dev` confirmed allowlisted for Roller Playground payment testing? Pabel confirmed the payment docs, API authorization, `paymentSettings`, and Adyen Visa test card ending `1142`; allowlist confirmation is the remaining external prerequisite before T0051 browser payment execution.
 - What exact response shape should JumpYard expect from `POST /redemptions` for partial success/failure?
 - Which webhook event id should be used for idempotent webhook processing?
 - Which production Data API schedule, timezone, and backfill range should JumpYard use for the live morning booking seed?
