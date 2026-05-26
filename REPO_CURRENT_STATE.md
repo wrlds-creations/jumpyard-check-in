@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-26
-- Current branch: `codex/t0053-new-booking-basket-before-payment`
-- Current status: T0053 new-booking basket-before-payment completed locally; phone buy-entry now collects entry product, quantity, and mapped add-ons before contact/review, then creates one Roller draft with all selected items and one payment step. Pabel has confirmed `https://jumpyard-check-in.pages.dev` is allowlisted, so public end-to-end card smokes are now unblocked once T0053 is deployed.
-- Current ticket: `T0053` completed locally, not yet committed or merged
+- Current branch: `codex/t0054-payment-card-method`
+- Current status: T0054 public payment method smoke/investigation completed. T0053 is merged to `main` and deployed on Cloudflare. Public payment smoke confirmed Swish can complete and create paid booking `5063382`, but card/scheme fields are not exposed by the current Roller/Adyen Playground payment configuration.
+- Current ticket: `T0054` completed locally, not committed
 - Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`
-- Recommended next step: commit, push, and merge T0053 so Cloudflare deploys the corrected basket flow, then run public browser payment smokes for new-booking and add-product payment with the Adyen Visa test card ending `1142`.
+- Recommended next step: ask Pabel/Roller to enable or confirm the `scheme` card method for Playground custom checkout, then implement T0055 to route paid new bookings directly into check-in/safety with a buy-entry progress bar.
 
 ## Current Structure
 
@@ -184,20 +184,20 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0053` | New-booking basket before payment. | Completed locally, not deployed | Phone app UI/client changes only; no AWS deploy and public card smoke still waits for Roller allowlisting. |
+| `T0054` | Public payment method smoke. | Completed locally, not committed | T0053 is deployed publicly. Swish paid-booking smoke succeeded for booking `5063382`; card/scheme is missing from current Roller/Adyen Playground payment methods. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `Public T0051/T0052/T0053 payment smoke` | Verify new-booking basket payment and add-product browser payment on Cloudflare | Pabel confirmed `https://jumpyard-check-in.pages.dev` is allowlisted; run after T0053 is merged/deployed, using the official Adyen Visa test card ending `1142`. |
-| `T0054` | Staff production readiness | Replace pilot passcode auth with production staff identity/roles and harden handoff QR/token policy before production rollout. |
-| `Future buy-entry progress bar` | Add a progress indicator to the buy-entry flow | Documented as `FU-052`; should visually match the booked-check-in progress bar and cover time, tickets, add-ons, contact, payment, and check-in. |
+| `T0055` | New-booking paid continuation and progress bar | After a paid new booking, route directly into safety/check-in instead of repeating add-ons/payment; add a buy-entry progress indicator with product, add-ons, payment, safety, and done. |
+| `T0056` | Staff production readiness | Replace pilot passcode auth with production staff identity/roles and harden handoff QR/token policy before production rollout. |
 | `Manual integrated smoke pass` | Validate the current end-to-end flow together | Run a small number of guided test cases one at a time after the public payment blocker is cleared, or run non-payment check-in/staff tests meanwhile. |
 
 ## Validation Status
 
-- Automated root validation: `npm run validate` passed on 2026-05-26 during T0050.
+- Automated root validation: `npm run validate` passed on 2026-05-26 for T0054 source-of-truth updates.
+- T0054 validation: public Cloudflare smoke confirmed T0053 flow order, Swish payment created paid booking `5063382`, JumpYard Cloud lookup returned `Paid`/`amountOwing=0`/`canCheckIn=true`, safe payment-config inspection found no `scheme` card method for the current Playground custom-checkout configuration, and `git diff --check` passed with CRLF notices only.
 - T0053 validation: `npm run validate`, `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, local browser flow smoke at `http://localhost:3000/`, and `git diff --check` passed on 2026-05-26. Browser smoke selected 60 min entry plus one socks add-on and reached review with both lines before draft/payment. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings.
 - T0052 validation: `npm run validate`, `cd jumpyard-checkin-phone && npm run lint`, `cd jumpyard-checkin-phone && npm run build`, source scan for raw JWT/logging, local browser smoke at `http://localhost:3000/`, and `git diff --check` passed on 2026-05-26. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings. Public browser card smoke is now unblocked by Pabel's allowlist confirmation and remains pending execution.
 - T0051 validation: `npm run validate`, `npm run roller:payment:readiness`, `cd jumpyard-checkin-phone && npm run lint`, `cd jumpyard-checkin-phone && npm run build`, source scan for raw JWT/logging, local browser smoke at `http://127.0.0.1:3000/`, and `git diff --check` passed on 2026-05-26. Pabel later confirmed the public-origin allowlist. `npm audit --omit=dev` warns on existing `next@16.0.8`/`postcss` advisories and is tracked as `FU-043`. A local payment bootstrap spinner was fixed so missing package configuration becomes a visible unavailable state.
