@@ -1,15 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0052
+T0053
 
 ## Goal
-Reuse the T0051 Roller payment execution path for separate linked add-product drafts in the existing-booking phone check-in flow.
+Change the phone buy-entry flow so guests build one basket with entry tickets and add-ons before creating one Roller draft booking and paying once.
 
 ## Dependencies
 - T0051 completed and merged.
+- T0052 completed and merged.
 - Roller Playground API credentials are valid locally and in AWS.
-- The public test origin `https://jumpyard-check-in.pages.dev` has been requested for Roller allowlisting. Full public browser payment smoke still depends on allowlist confirmation.
+- Full public browser payment smoke still depends on Roller allowlist confirmation for `https://jumpyard-check-in.pages.dev`.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,15 +20,15 @@ Reuse the T0051 Roller payment execution path for separate linked add-product dr
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- jumpyard-checkin-phone/src/app/page.tsx
-- jumpyard-checkin-phone/src/components/AddonsOffer.tsx
-- jumpyard-checkin-phone/src/components/RollerPaymentDropIn.tsx
+- jumpyard-checkin-phone/src/components/BuyTickets.tsx
 - jumpyard-checkin-phone/src/context/LanguageContext.tsx
 - jumpyard-checkin-phone/src/flow/cloudClient.ts
 
 ## Do not touch
 - Staff/admin UI
 - Kiosk UI
+- Existing-booking add-product flow
+- Existing booking lookup/check-in/redeem behavior
 - AWS resources or CDK config
 - Backend/Lambda code
 - Aurora migrations
@@ -41,57 +42,53 @@ Reuse the T0051 Roller payment execution path for separate linked add-product dr
 
 ## Requirements
 
-1. Preserve the add-product architecture.
-   - Existing-booking add-products must still create a separate linked add-on draft booking.
-   - Do not mutate the original Roller booking through `PUT /bookings/{uniqueId}`.
-   - Do not use a hosted payment-link fallback.
+1. Correct the new-booking flow order.
+   - The phone buy-entry flow should be: choose time, choose entry product and quantity, choose add-ons, enter contact details, review, create one draft booking, pay once, continue check-in.
+   - Do not create or pay the entry booking before the guest can choose add-ons.
 
-2. Wire add-product drafts into the T0051 payment component.
-   - Use the existing `POST /v1/bookings/{bookingReference}/add-products` response.
-   - Keep the raw `paymentJwt` response-only and in memory.
-   - Render the Roller payment drop-in when JWT and payment config are present.
+2. Build one Roller draft booking basket.
+   - Include the selected entry item and selected mapped add-ons in the same `POST /v1/bookings/draft` request.
+   - Use the same selected booking date and start time for basket items.
+   - Keep final pricing from JumpYard Cloud/Roller quote, not from frontend estimates.
+
+3. Keep payment behavior from T0051.
+   - Use the existing Roller payment drop-in after the combined draft is created.
+   - Keep raw `paymentJwt` response-only and in memory.
    - Keep the payment-pending fallback when JWT/config/package setup is unavailable.
-   - Do not store, log, print, or render the raw `paymentJwt`.
+   - On approved payment, resolve the paid booking through JumpYard Cloud and continue check-in.
 
-3. Continue the phone check-in flow after approved add-product payment.
-   - A successful add-product payment should continue the original booking's check-in flow.
-   - The separate add-on booking should not be treated as the guest's redeemable check-in booking.
-   - The legacy local/mock `APP_PAYMENT` screen must not run after the add-product payment is already handled by Roller.
-
-4. Keep scope narrow.
-   - Do not implement payment-result polling, payment webhooks, add-on fulfillment reconciliation, or staff add-on pickup changes.
-   - Do not change new-booking payment behavior beyond shared type compatibility.
+4. Keep existing-booking add-products separate.
+   - Do not change T0052 behavior for guests who already have a booking.
+   - Existing booking plus add-ons still uses separate linked add-product drafts.
 
 5. Update source-of-truth docs.
-   - Record T0052 behavior and the remaining public allowlist/payment smoke blocker.
-   - Document that add-product payment uses the same narrow JWT/package exception as T0051.
+   - Record that new booking add-ons are part of the same draft/payment basket.
+   - Move staff production readiness to the next available ticket number after T0053.
 
 ## Non-goals
 - Do not implement production payment rollout.
 - Do not add gift card, membership, discount, or multi-visit payment behavior.
-- Do not publish draft bookings manually outside Roller Payments.
+- Do not add a server-owned add-on catalog endpoint.
+- Do not add add-on fulfillment reconciliation or payment-result webhooks.
 - Do not create or change AWS resources.
 - Do not change SMS, webhook, Data API, staff auth, or redeem behavior.
-- Do not change add-on product mappings or add a server-owned catalog endpoint.
 
 ## Acceptance criteria
-- Add-product drafts carry the response-only `paymentJwt` into the phone payment component in memory.
-- Existing-booking add-ons render the Roller payment drop-in when payment setup is available.
-- Missing/blocked payment setup still shows the existing safe payment-pending fallback.
-- Approved add-product payment continues the original booking check-in path without entering the legacy payment screen.
-- Original booking mutation remains out of scope.
+- Phone buy-entry flow shows add-ons before contact/review/payment.
+- New booking draft contains entry plus selected add-ons in one basket.
+- Review step shows basket lines and the server/Roller quoted total.
+- Payment happens once for the combined draft.
+- Existing-booking add-product flow is unchanged.
 - `npm run validate` passes.
 - `cd jumpyard-checkin-phone && npm run lint` passes.
 - `cd jumpyard-checkin-phone && npm run build` passes.
 
 ## Manual verification
-- Confirm `https://jumpyard-check-in.pages.dev` is allowlisted before expecting public card payment to complete end-to-end.
-- Start with a paid existing booking.
-- Add a mapped add-on such as socks or padlock.
-- Confirm the add-on quote and separate draft creation still work.
-- Confirm payment UI renders when the draft has JWT/config.
-- Use the Adyen official test-card docs and the Visa card ending `1142` after allowlist confirmation.
-- Confirm approved payment continues into the normal safety/QR check-in flow for the original booking.
+- Open the phone app buy-entry flow.
+- Choose a time, entry product, quantity, and at least one mapped add-on.
+- Confirm the review step shows both entry and add-on lines.
+- Confirm the draft/payment step represents one combined basket.
+- Confirm public card execution remains blocked until `https://jumpyard-check-in.pages.dev` is allowlisted.
 
 ## Automated validation
 Run:

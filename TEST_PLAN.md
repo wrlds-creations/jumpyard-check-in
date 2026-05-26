@@ -51,7 +51,7 @@ Use this file to define validation for the current project or milestone.
 | `npm run roller:payment:poc` | Confirm T0032 quote/default POC path without booking creation. | Passed | Returned quote HTTP `200`, total `260`, amount owing `260`, and status `blocked_prerequisites` with no draft booking created. |
 | `npm run roller:payment:poc:apply-draft` without confirmation | Confirm T0032 draft mode fails closed. | Passed | Failed before creating a Playground draft without `ROLLER_PAYMENT_POC_ALLOW_DRAFT`. |
 | `node --check scripts/roller-payment-readiness.js` | Confirm T0050 payment readiness script syntax. | Passed | Passed on 2026-05-26. |
-| `npm run roller:payment:readiness` | Confirm T0050 payment readiness without writes. | Passed | Reads local `.env`, confirms Roller Playground `/venues/me` payment settings, checks the public test origin, and reports allowlist confirmation as pending without printing secrets. |
+| `npm run roller:payment:readiness` | Confirm T0050 payment readiness without writes. | Passed | Reads local `.env`, confirms Roller Playground `/venues/me` payment settings, and checks the public test origin without printing secrets. Pabel later confirmed the origin allowlist. |
 | `node --check infra/lambda/booking/index.js` | Confirm T0033 booking Lambda syntax. | Passed | Passed after availability/pre-payment changes. |
 | `npm --prefix infra run build` | Confirm T0033 infra TypeScript compiles. | Passed | Passed after availability route and migration changes. |
 | `npm --prefix infra run synth:dev` | Synthesize the T0033 dev stack. | Passed | Uses non-secret `infra/config/dev.json`. |
@@ -524,15 +524,15 @@ Use this file to define validation for the current project or milestone.
 | Phone dependency install | Phone package manifest and lockfile include the Roller package and required Adyen/PayPal dependencies. | Passed | `npm install` completed after adding `file:vendor/ecom-payments`; npm audit reports 7 newly surfaced dependency vulnerabilities from the payment dependency tree. |
 | Raw JWT handling | Raw `paymentJwt` remains response-only and is not persisted/logged/rendered. | Passed | Source scan found JWT use only in the booking Lambda response, phone in-memory payment component, and safe presence/summary fields; no `console.*` logging in the payment component. |
 | Root validation | `npm run validate` passes after T0051 source-of-truth updates. | Passed | Passed on 2026-05-26. |
-| Payment readiness | `npm run roller:payment:readiness` reports current external state without writes. | Passed with blocker | `/venues/me.paymentSettings` is available and public origin returns HTTP 200; blocker remains `public_origin_allowlist_confirmation`. |
+| Payment readiness | `npm run roller:payment:readiness` reports current external state without writes. | Passed | `/venues/me.paymentSettings` is available, public origin returns HTTP 200, and Pabel later confirmed the domain allowlist. |
 | Phone production audit | `npm audit --omit=dev` documents current production dependency risk. | Warning | Reports advisories through `next@16.0.8` and bundled `postcss`; npm suggests non-major `next@16.2.6`. Tracked as `FU-043` because framework upgrade is outside T0051. |
 | Phone lint | `cd jumpyard-checkin-phone && npm run lint` passes after payment wiring. | Passed with warnings | Passed with the pre-existing four `<img>` warnings. Vendor package is ignored by ESLint so Roller-approved package source is not rewritten. |
 | Phone build | `cd jumpyard-checkin-phone && npm run build` passes after payment wiring. | Passed | Static export build passed; Next reported stale `baseline-browser-mapping` advisory warnings. |
 | Diff whitespace | `git diff --check` passes. | Passed | Passed on 2026-05-26; line-ending warnings are Git CRLF notices only. |
 | Local browser smoke | Local phone app loads after T0051 wiring. | Passed | Browser check at `http://127.0.0.1:3000/` loaded `JumpYard Connected Entry`, showed buy-entry copy, and had no console errors. |
 | Payment bootstrap failure | Missing package bootstrap configuration fails closed visibly. | Passed | Local payment screen no longer stays in an indefinite `Startar betalning` state when the Roller payment package returns no bootstrap configuration. |
-| Public browser payment smoke | Cloudflare URL renders the Roller/Adyen drop-in and accepts the Adyen Visa test card ending `1142`. | Blocked | Requires explicit confirmation that `https://jumpyard-check-in.pages.dev` is allowlisted by Roller. |
-| Approved payment continuation | Approved payment resolves the paid booking through JumpYard Cloud and continues into check-in. | Pending manual | Must be verified after allowlist confirmation and a successful Playground payment. |
+| Public browser payment smoke | Cloudflare URL renders the Roller/Adyen drop-in and accepts the Adyen Visa test card ending `1142`. | Pending manual | Domain allowlist is confirmed; run after T0053 is merged/deployed so the basket order is correct. |
+| Approved payment continuation | Approved payment resolves the paid booking through JumpYard Cloud and continues into check-in. | Pending manual | Must be verified with a successful Playground payment on the public Cloudflare URL. |
 
 ## T0052 Add-Product Payment Execution Validation
 
@@ -540,10 +540,23 @@ Use this file to define validation for the current project or milestone.
 |---|---|---|---|
 | Raw JWT handling | Add-product draft JWT stays response-only and in-memory. | Passed | Source scan found JWT use only in the client response type, in-memory payment component, and payment readiness gate; no logging or rendering was added. |
 | Payment fallback | Add-product drafts without JWT/config keep the safe payment-pending fallback. | Passed | `AddonsOffer` only enters payment when JWT and config are present; otherwise it keeps the T0035 pending screen. |
-| Payment drop-in | Existing-booking add-products render the Roller payment drop-in when JWT/config are present. | Pending manual | Code path is wired; full card execution requires `https://jumpyard-check-in.pages.dev` allowlist confirmation. |
-| Approved add-product continuation | Approved add-product payment continues the original booking check-in path. | Pending manual | Code path skips legacy `APP_PAYMENT`; must be proven with a successful public card smoke after allowlisting. |
+| Payment drop-in | Existing-booking add-products render the Roller payment drop-in when JWT/config are present. | Pending manual | Code path is wired; domain allowlist is confirmed and full card execution is ready for public smoke. |
+| Approved add-product continuation | Approved add-product payment continues the original booking check-in path. | Pending manual | Code path skips legacy `APP_PAYMENT`; must be proven with a successful public card smoke. |
 | Root validation | `npm run validate` passes after T0052 updates. | Passed | Passed on 2026-05-26. |
 | Phone lint | `npm --prefix jumpyard-checkin-phone run lint` passes. | Passed with warnings | Passed with the pre-existing four `<img>` warnings. |
 | Phone build | `npm --prefix jumpyard-checkin-phone run build` passes. | Passed | Static export build passed; Next reported stale `baseline-browser-mapping` advisory warnings. |
 | Local browser smoke | Local phone app loads after T0052 wiring. | Passed | Browser check at `http://localhost:3000/` loaded `JumpYard Connected Entry`, rendered `KIOSK_CHOICE`, and reported no console errors. |
+| Diff whitespace | `git diff --check` passes. | Passed | Passed on 2026-05-26; line-ending notices are Git CRLF warnings only. |
+
+## T0053 New-Booking Basket Before Payment Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Flow order | Buy-entry collects add-ons before contact, review, draft creation, and payment. | Passed | Browser smoke reached add-ons after quantity and before contact. |
+| Combined basket quote | Quote request supports entry item plus selected mapped add-ons before draft creation. | Passed | Browser smoke selected 60 min entry plus one socks add-on; review showed both lines and Roller quote total `245 kr` without creating a draft. |
+| Existing-booking add-product isolation | T0052 existing-booking add-product flow remains unchanged. | Passed | T0053 only touches buy-entry client flow and shared optional request flag; `AddonsOffer` was not changed. |
+| Root validation | `npm run validate` passes after T0053 updates. | Passed | Passed on 2026-05-26. |
+| Phone lint | `npm --prefix jumpyard-checkin-phone run lint` passes. | Passed with warnings | Passed on 2026-05-26 with the pre-existing four `<img>` warnings. |
+| Phone build | `npm --prefix jumpyard-checkin-phone run build` passes. | Passed | Static export build passed; Next reported stale `baseline-browser-mapping` advisory warnings. |
+| Local browser smoke | Local buy-entry review shows one basket before draft/payment. | Passed | Browser check on `http://localhost:3000/` showed `60 min entré`, `Strumpor`, and `Reservera bokning` on the review step. |
 | Diff whitespace | `git diff --check` passes. | Passed | Passed on 2026-05-26; line-ending notices are Git CRLF warnings only. |

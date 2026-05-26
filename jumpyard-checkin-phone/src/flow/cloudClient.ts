@@ -486,7 +486,11 @@ export async function getNewBookingAvailability(startTimes: string[], date = get
   return body.availability;
 }
 
-export async function quoteNewBooking(customer: NewBookingCustomer, items: NewBookingItemRequest[]): Promise<NewBookingQuote> {
+export async function quoteNewBooking(
+  customer: NewBookingCustomer,
+  items: NewBookingItemRequest[],
+  requireAvailability = true
+): Promise<NewBookingQuote> {
   let response: Response;
   let body: QuoteResponse | null = null;
 
@@ -501,7 +505,7 @@ export async function quoteNewBooking(customer: NewBookingCustomer, items: NewBo
         customer,
         items,
         name: `${customer.firstName} ${customer.lastName}`.trim() || 'JumpYard booking',
-        requireAvailability: true,
+        requireAvailability,
       }),
     });
     body = await parseBookingResponse<QuoteResponse>(response);
@@ -520,7 +524,8 @@ export async function quoteNewBooking(customer: NewBookingCustomer, items: NewBo
 export async function createDraftBooking(
   customer: NewBookingCustomer,
   items: NewBookingItemRequest[],
-  idempotencyKey: string
+  idempotencyKey: string,
+  requireAvailability = true
 ): Promise<NewBookingDraftResult> {
   let response: Response;
   let body: DraftResponse | null = null;
@@ -539,7 +544,7 @@ export async function createDraftBooking(
         idempotencyKey,
         items,
         name: `${customer.firstName} ${customer.lastName}`.trim() || 'JumpYard booking',
-        requireAvailability: true,
+        requireAvailability,
         sendConfirmations: false,
       }),
     });
