@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-26
-- Current branch: `codex/t0054-payment-card-method`
-- Current status: T0054 public payment method smoke/investigation completed. T0053 is merged to `main` and deployed on Cloudflare. Public payment smoke confirmed Swish can complete and create paid booking `5063382`, but card/scheme fields are not exposed by the current Roller/Adyen Playground payment configuration.
-- Current ticket: `T0054` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`
-- Recommended next step: ask Pabel/Roller to enable or confirm the `scheme` card method for Playground custom checkout, then implement T0055 to route paid new bookings directly into check-in/safety with a buy-entry progress bar.
+- Current branch: `codex/t0055-buy-entry-paid-continuation`
+- Current status: T0055 new-booking paid continuation is implemented locally. Buy-entry now has a compact five-step progress indicator, and approved paid new bookings route into the JumpYard Cloud check-in safety/QR path instead of the existing-booking add-ons/payment loop.
+- Current ticket: `T0055` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`
+- Recommended next step: wait for Pabel/Roller on card/scheme enablement, then run a public payment continuation smoke after T0055 is merged/deployed; keep T0056 staff production readiness as the next non-payment hardening ticket.
 
 ## Current Structure
 
@@ -179,24 +179,26 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0051` | Added new-booking payment execution wiring. | 2026-05-26 | Vendored Roller payment package `v217`, wired phone buy-entry drafts to the Roller/Adyen drop-in, kept raw JWT response-only/in-memory, made package bootstrap failures fail closed instead of spin indefinitely, and left public browser payment smoke pending allowlist confirmation. |
 | `T0052` | Added add-product payment execution wiring. | 2026-05-26 | Reused the T0051 Roller payment drop-in for separate linked add-product drafts, kept raw JWT response-only/in-memory, preserved the payment-pending fallback, and routed approved add-product payment back into the original booking check-in flow without using the legacy local payment screen. |
 | `T0053` | Added new-booking basket-before-payment flow. | 2026-05-26 | Phone buy-entry now collects mapped add-ons before contact/review and sends entry plus selected add-ons in one draft/payment request; existing-booking add-product flow remains separate. |
+| `T0054` | Public payment method smoke. | 2026-05-26 | Public Cloudflare smoke confirmed Swish can complete and produce paid booking `5063382`; card/scheme is missing from current Roller/Adyen Playground payment methods and is blocked externally. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0054` | Public payment method smoke. | Completed locally, not committed | T0053 is deployed publicly. Swish paid-booking smoke succeeded for booking `5063382`; card/scheme is missing from current Roller/Adyen Playground payment methods. |
+| `T0055` | New-booking paid continuation and progress bar. | Completed locally, not committed | Compact buy-entry progress is implemented, and paid new-booking continuation now starts/resumes the JumpYard Cloud check-in session and routes to safety/QR instead of the existing-booking add-ons/payment loop. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0055` | New-booking paid continuation and progress bar | After a paid new booking, route directly into safety/check-in instead of repeating add-ons/payment; add a buy-entry progress indicator with product, add-ons, payment, safety, and done. |
 | `T0056` | Staff production readiness | Replace pilot passcode auth with production staff identity/roles and harden handoff QR/token policy before production rollout. |
+| `Public paid-continuation smoke` | Prove T0055 on Cloudflare after merge/deploy | Use Swish or card when available, then confirm the paid new booking goes straight to safety/QR. |
 | `Manual integrated smoke pass` | Validate the current end-to-end flow together | Run a small number of guided test cases one at a time after the public payment blocker is cleared, or run non-payment check-in/staff tests meanwhile. |
 
 ## Validation Status
 
-- Automated root validation: `npm run validate` passed on 2026-05-26 for T0054 source-of-truth updates.
+- Automated root validation: `npm run validate` passed on 2026-05-26 for T0055 source-of-truth updates.
+- T0055 validation: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, local browser progress smoke at `http://localhost:3000/`, `npm run validate`, and `git diff --check` passed on 2026-05-26. Browser smoke confirmed compact progress labels `Entré`, `Tillägg`, `Betalning`, `Säkerhet`, and `Klar`, and advanced through `TIMESLOT`, `PRODUCT`, `QUANTITY`, `ADDONS`, and `CONTACT`. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings.
 - T0054 validation: public Cloudflare smoke confirmed T0053 flow order, Swish payment created paid booking `5063382`, JumpYard Cloud lookup returned `Paid`/`amountOwing=0`/`canCheckIn=true`, safe payment-config inspection found no `scheme` card method for the current Playground custom-checkout configuration, and `git diff --check` passed with CRLF notices only.
 - T0053 validation: `npm run validate`, `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, local browser flow smoke at `http://localhost:3000/`, and `git diff --check` passed on 2026-05-26. Browser smoke selected 60 min entry plus one socks add-on and reached review with both lines before draft/payment. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings.
 - T0052 validation: `npm run validate`, `cd jumpyard-checkin-phone && npm run lint`, `cd jumpyard-checkin-phone && npm run build`, source scan for raw JWT/logging, local browser smoke at `http://localhost:3000/`, and `git diff --check` passed on 2026-05-26. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings. Public browser card smoke is now unblocked by Pabel's allowlist confirmation and remains pending execution.
@@ -474,7 +476,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - AWS dev foundation is deployed. Lookup, session, webhook, safe redeem-planning, controlled dev redeem execution, booking quote/draft handlers, and existing-booking add-product quote/draft handlers are implemented.
 - Roller credentials secret in AWS has been populated for dev and was used by T0009 lookup smoke tests.
 - JumpYard Cloud lookup API now uses Aurora first and refreshes from Roller when local data is missing or unsafe. Other API business logic is still pending.
-- Phone app booking lookup now calls JumpYard Cloud for the first check-in step, carries non-visible lookup source/freshness metadata, uses today's Stockholm date by default, starts/resumes a JumpYard Cloud session after paid lookup, routes active ready sessions directly to QR, and marks new sessions ready for staff after safety attestation. Booking creation and payment UI behavior are still pending.
+- Phone app booking lookup now calls JumpYard Cloud for the first check-in step, carries non-visible lookup source/freshness metadata, uses today's Stockholm date by default, starts/resumes a JumpYard Cloud session after paid lookup, routes active ready sessions directly to QR, and marks new sessions ready for staff after safety attestation. Buy-entry can create one entry-plus-add-ons draft/payment flow and T0055 routes approved paid new bookings into safety/QR instead of the existing-booking loop.
 - Aurora schema exists in dev. T0012 writes normalized `/data/bookingitems` snapshots into `roller_bookings` and `roller_booking_items`, T0013 enriches booking item product names from `product_catalog_cache`, T0014 imports tickets plus customer contact data, T0016 live-refresh lookup can upsert refreshed booking/item/ticket data, and T0017 webhook enrichment can upsert refreshed booking/item/ticket data.
 - Booking index ingestion has started with Data API bookingitems, REST product catalog cache, tickets, booking payments, customer contact data, dev webhook event intake/enrichment, lookup-driven live refresh, real Roller Playground webhook delivery, and a local all-source daily-window backfill orchestrator.
 - Roller Data API `/data/bookingitems`, `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access, query params, paging shape, and modified-date behavior are confirmed in Playground for the T0008 seed window.
@@ -482,8 +484,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
 - Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, phone session resume routing is complete locally from T0029, staff auth replacement is deployed from T0047, and staff/admin mobile visual polish is complete locally from T0048.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
-- Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; T0050 confirms `/venues/me` payment settings are available, T0051 wires the approved payment package in the phone buy-entry flow, and T0052 reuses it for linked add-product drafts. The remaining blocker is public-origin allowlist confirmation plus actual browser payment smokes.
-- Existing-booking add-product linked-booking flow has been tested server-side in dev; phone UI wiring is still pending.
+- Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; T0050 confirms `/venues/me` payment settings are available, T0051 wires the approved payment package in the phone buy-entry flow, T0052 reuses it for linked add-product drafts, and T0054 confirmed public Swish payment can complete. The remaining blocker is Roller/Adyen enabling or confirming the card/scheme method for Playground custom checkout.
+- Existing-booking add-product linked-booking flow has been tested server-side in dev and wired in the phone UI, including the shared payment package path when JWT/config are present.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
 ## Open Questions
@@ -496,4 +498,4 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Which exact production auth header/signature and optional IP allowlisting should Roller webhook intake use beyond the confirmed Playground `x-roller-apikey` header?
 - Which real Roller redemption device name should JumpYard Cloud send, if any, before production check-in?
 - Which staff/admin authentication model should authorize final redeem in the pilot?
-- Is `https://jumpyard-check-in.pages.dev` confirmed allowlisted for Roller Playground payment testing, and do the public T0051/T0052 browser smokes complete with Adyen's Visa test card ending `1142`?
+- Will Roller/Adyen enable or confirm the `scheme` card method for Playground custom checkout so the Adyen Visa test card ending `1142` can be tested on `https://jumpyard-check-in.pages.dev`?

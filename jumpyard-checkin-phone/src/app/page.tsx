@@ -42,6 +42,14 @@ const STEP_ICONS: JumpyardIconName[] = [
     'success-check',
 ];
 
+const BUY_ENTRY_STEP_ICONS: JumpyardIconName[] = [
+    'admission-ticket',
+    'addons-bag',
+    'payment-card',
+    'safety-check',
+    'success-check',
+];
+
 function getStepIndex(state: FlowState): number {
     if (state === 'APP_SAFETY_ATTEST') return STEP_ORDER.indexOf('APP_SAFETY_VIDEO');
     if (state === 'APP_SKYRIDER_ATTEST' || state === 'APP_CONNECTED')
@@ -49,6 +57,13 @@ function getStepIndex(state: FlowState): number {
     if (state === 'APP_PRESENT') return STEP_ORDER.indexOf('APP_CONFIRM');
     const idx = STEP_ORDER.indexOf(state);
     return idx === -1 ? 0 : idx;
+}
+
+function getBuyEntryStepIndex(state: FlowState): number {
+    if (state === 'APP_CONFIRM' || state === 'APP_PRESENT') return 4;
+    if (state === 'APP_SAFETY_VIDEO' || state === 'APP_SAFETY_ATTEST') return 3;
+    if (state === 'APP_PAYMENT') return 2;
+    return 0;
 }
 
 function prePaymentBack(ctx: FlowContext): FlowState {
@@ -72,54 +87,59 @@ function getBackState(state: FlowState, ctx: FlowContext): FlowState | null {
     }
 }
 
-function ProgressBar({ state }: { state: FlowState }) {
+function ProgressBar({ state, buyEntryFlow }: { state: FlowState; buyEntryFlow: boolean }) {
     const { t } = useTranslation();
     if (state === 'APP_MOBILE' || state === 'KIOSK_CHOICE' || state === 'KIOSK_LOOKUP' || state === 'KIOSK_BUY') return null;
 
-    const labels = [t.progress.booking, t.progress.extras, t.progress.payment, t.progress.safety, t.progress.done];
-    const current = getStepIndex(state);
+    const labels = buyEntryFlow
+        ? [
+            t.buyProgress.entry,
+            t.buyProgress.addons,
+            t.buyProgress.payment,
+            t.buyProgress.safety,
+            t.buyProgress.done,
+        ]
+        : [t.progress.booking, t.progress.extras, t.progress.payment, t.progress.safety, t.progress.done];
+    const icons = buyEntryFlow ? BUY_ENTRY_STEP_ICONS : STEP_ICONS;
+    const current = buyEntryFlow ? getBuyEntryStepIndex(state) : getStepIndex(state);
     const pct = labels.length > 1 ? (current / (labels.length - 1)) * 100 : 0;
+    const gridTemplateColumns = `repeat(${labels.length}, minmax(0, 1fr))`;
 
     return (
         <div className="w-full max-w-md mx-auto mb-3 px-4">
-            {/* Track + circles */}
-            <div className="relative flex items-center justify-between" style={{ height: 32 }}>
-                {/* Grey baseline — spans between first and last circle centers */}
-                <div className="absolute top-1/2 left-[16px] right-[16px] h-0.5 -translate-y-1/2 bg-surface-strong" />
-                {/* Active overlay */}
+            <div className="relative">
+                <div className="absolute top-4 left-[10%] right-[10%] h-0.5 bg-surface-strong" />
                 <div
-                    className="absolute top-1/2 left-[16px] h-0.5 -translate-y-1/2 bg-primary transition-all duration-500"
-                    style={{ width: `calc(${pct}% - ${pct > 0 ? 32 * pct / 100 : 0}px)` }}
+                    className="absolute top-4 left-[10%] h-0.5 bg-primary transition-all duration-500"
+                    style={{ width: `calc(${pct * 0.8}%)` }}
                 />
-                {/* Circles */}
-                {labels.map((_, i) => (
-                    <div
-                        key={i}
-                        className={`relative z-10 w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300 ${
-                            i < current
-                                ? 'bg-white border-primary shadow-sm'
-                                : i === current
-                                ? 'bg-white border-primary shadow-sm ring-4 ring-primary/15'
-                                : 'bg-surface border-border opacity-45'
-                        }`}
-                    >
-                        <JumpyardIcon name={STEP_ICONS[i]} className="w-6 h-6" />
-                    </div>
-                ))}
-            </div>
-            {/* Labels row — separate so they don't affect circle/line alignment */}
-            <div className="flex justify-between mt-1">
-                {labels.map((label, i) => (
-                    <span
-                        key={i}
-                        className={`text-[9px] font-bold italic uppercase tracking-wider text-center transition-colors ${
-                            i <= current ? 'text-foreground' : 'text-muted'
-                        }`}
-                        style={{ width: 28 }}
-                    >
-                        {label}
-                    </span>
-                ))}
+                <div className="relative z-10 grid" style={{ gridTemplateColumns }}>
+                    {labels.map((label, i) => (
+                        <div
+                            key={i}
+                            className="flex min-w-0 flex-col items-center gap-1"
+                        >
+                            <div
+                                className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300 ${
+                                    i < current
+                                        ? 'bg-white border-primary shadow-sm'
+                                        : i === current
+                                        ? 'bg-white border-primary shadow-sm ring-4 ring-primary/15'
+                                        : 'bg-surface border-border opacity-45'
+                                }`}
+                            >
+                                <JumpyardIcon name={icons[i]} className="w-6 h-6" />
+                            </div>
+                            <span
+                                className={`w-full whitespace-nowrap text-center text-[9px] font-bold italic uppercase tracking-wider transition-colors ${
+                                    i <= current ? 'text-foreground' : 'text-muted'
+                                }`}
+                            >
+                                {label}
+                            </span>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );
@@ -212,6 +232,54 @@ function CheckInFlow() {
             }
 
             advance(bookingPatch);
+        }
+    };
+
+    const handlePaidNewBookingReady = async (booking: Booking) => {
+        const bookingAddons = booking.existingAddons ?? [];
+        const bookingPatch: Partial<FlowContext> = {
+            booking,
+            buyEntryFlow: true,
+            checkinSession: null,
+            existingAddons: bookingAddons,
+            selectedAddons: bookingAddons,
+            addonsTotal: 0,
+            paymentTotal: 0,
+            paymentCompleted: true,
+            baseProductId: booking.rollerUniqueId ?? booking.id,
+            baseProductLabel: booking.productLabel ?? null,
+            baseProductType: booking.productType ?? null,
+            baseDurationMinutes: booking.durationMinutes ?? 0,
+            baseUnitPrice: 0,
+            baseQuantity: booking.jumpers,
+            baseTotal: 0,
+        };
+
+        setAlreadyCheckedIn(false);
+        setSessionStartError(null);
+
+        if (!booking.paid) {
+            advance(bookingPatch);
+            return;
+        }
+
+        try {
+            const checkinSession = await startCheckInSession(booking);
+            const resumeState = getResumeState(checkinSession);
+            const nextCtx = { ...ctx, ...bookingPatch, checkinSession };
+
+            setAlreadyCheckedIn(isCompletedSession(checkinSession));
+            setCtx(nextCtx);
+            setState(resumeState ?? 'APP_SAFETY_VIDEO');
+            scrollToTop();
+        } catch (error) {
+            if (error instanceof CloudSessionError && error.reason === 'already_redeemed') {
+                routeAlreadyCheckedIn(bookingPatch);
+                return;
+            }
+
+            setSessionStartError(error instanceof CloudSessionError ? error.reason : 'session_failed');
+            advance({ ...bookingPatch, buyEntryFlow: false });
         }
     };
 
@@ -308,7 +376,7 @@ function CheckInFlow() {
             data-handoff-code={ctx.checkinSession?.handoffCode ?? ''}
             data-already-checked-in={String(alreadyCheckedIn)}
         >
-            <ProgressBar state={state} />
+            <ProgressBar state={state} buyEntryFlow={ctx.buyEntryFlow} />
 
             <div className="w-full max-w-md px-4 h-8 flex items-center">
                 {getBackState(state, ctx) && (
@@ -362,7 +430,7 @@ function CheckInFlow() {
                             key="park-buy"
                             onBack={() => { setState('KIOSK_CHOICE'); scrollToTop(); }}
                             onBookingReady={booking => {
-                                void handleExistingBookingFound(booking);
+                                void handlePaidNewBookingReady(booking);
                             }}
                         />
                     )}

@@ -944,7 +944,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0053` merged to main and `T0054` payment-method smoke/investigation. The old T0040 payment placeholder is superseded by the T0050+ payment sequence.
+Current implementation has progressed through `T0054` merged to main and `T0055` phone-flow continuation in progress. The old T0040 payment placeholder is superseded by the T0050+ payment sequence.
 
 Near-term sequence:
 
@@ -976,8 +976,8 @@ Near-term sequence:
 26. `T0051 New-booking payment execution`: completed and merged; integrates the Roller payment package/drop-in for new booking drafts, with public browser payment smoke pending allowlist confirmation.
 27. `T0052 Add-product payment execution`: completed and merged; reuses the proven payment execution path for separate linked add-product drafts.
 28. `T0053 New-booking basket before payment`: completed and merged; moves add-ons before contact/review/payment so one Roller draft/payment covers entry plus selected add-ons.
-29. `T0054 Public payment method smoke`: current ticket; confirms public Swish payment works, documents the missing card/scheme blocker, and keeps card collection inside Roller's approved package.
-30. `T0055 New-booking paid continuation`: next phone-flow ticket; after paid new booking, route into safety/QR instead of repeating add-ons/payment, and add a buy-entry progress indicator.
+29. `T0054 Public payment method smoke`: completed and merged; confirms public Swish payment works, documents the missing card/scheme blocker, and keeps card collection inside Roller's approved package.
+30. `T0055 New-booking paid continuation`: current phone-flow ticket; after paid new booking, route into safety/QR instead of repeating add-ons/payment, and add a buy-entry progress indicator.
 31. `T0056 Staff production readiness`: later separate ticket for production staff identity, roles, MFA/session policy, and audit ownership.
 
 ## Open Contract Questions
