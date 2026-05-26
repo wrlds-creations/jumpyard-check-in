@@ -128,7 +128,7 @@ Rules:
 | Booking detail | `GET /bookings/{uniqueId}` | Read | Confirmed | Booking reference is also accepted in Playground. Authoritative live lookup for existing booking flow. |
 | New booking cost | `POST /bookings/draft/costs` | Write-like calculation | Confirmed | Use for final pre-payment basket calculation. It applies pricing/discount logic better than product list display. |
 | Create draft booking | `POST /bookings/draft` | Write | Confirmed | T0030 confirmed Playground HTTP `201` with cost fields and a present `paymentJwt`. Recommended path for new booking/payment flow. Holds capacity through draft timer. |
-| Roller Payments custom checkout | Roller Payments library + returned `paymentJwt` | Frontend payment package | Confirmed docs, allowlist pending | Official docs describe passing the draft-booking JWT to Roller's payment library and Adyen drop-in. Pabel confirmed API authorization when API keys can be generated, `paymentSettings` from `GET /venues/me`, and Adyen Visa test card ending `1142`; `https://jumpyard-check-in.pages.dev` still needs allowlist confirmation before browser execution. |
+| Roller Payments custom checkout | Roller Payments library + returned `paymentJwt` | Frontend payment package | Confirmed, public smoke pending | Official docs describe passing the draft-booking JWT to Roller's payment library and Adyen drop-in. Pabel confirmed API authorization when API keys can be generated, `paymentSettings` from `GET /venues/me`, Adyen Visa test card ending `1142`, and allowlisting for `https://jumpyard-check-in.pages.dev`; public browser payment smokes are still pending. |
 | Publish zero-owing draft | `POST /bookings/draft/publish` | Write | Confirmed | Use when no payment remains due, such as full gift-card coverage. |
 | Create booking | `POST /bookings` | Write | Confirmed endpoint | Available, but draft booking is preferred for payment-led phone flow. |
 | Update existing booking | `PUT /bookings/{uniqueId}` | Write | Confirmed but not primary for pilot add-products | Adds/removes products and preserves same booking code, but payment-link UX can break return to the JumpYard PWA/check-in flow. |
@@ -678,6 +678,7 @@ Draft rules:
 - T0031 implemented this in the deployed booking Lambda.
 - `confirmDraft=true` and an idempotency key are required because this creates a Roller Playground draft booking.
 - First name, last name, email, and phone are required for the current server contract.
+- For the phone buy-entry path, `items[]` may contain the core entry product plus selected mapped add-ons so the guest pays once for the combined basket.
 - Draft creation holds capacity through Roller's draft timer.
 - Return the draft unique id, normalized costs, payment config from `GET /venues/me`, and the raw `paymentJwt` only in the API response.
 - Do not log, print, or persist the raw `paymentJwt`.
@@ -706,7 +707,7 @@ T0032 POC harness result:
 - `npm run roller:payment:poc` calls the deployed JumpYard Cloud quote endpoint and creates no Roller booking.
 - `npm run roller:payment:poc:apply-draft` is guarded by `ROLLER_PAYMENT_POC_ALLOW_DRAFT=I_UNDERSTAND_THIS_CREATES_PLAYGROUND_DRAFT_BOOKING`.
 - The harness reports only safe fields such as total, amount owing, draft unique id, JWT presence/part count, venue payment config availability, package URL host, and public origin host.
-- Full browser payment remains blocked until `https://jumpyard-check-in.pages.dev` is confirmed allowlisted and T0051 integrates the approved payment package/drop-in.
+- Full browser payment is now unblocked by Pabel's `https://jumpyard-check-in.pages.dev` allowlist confirmation; public payment smokes still need to run after the current phone flow is deployed.
 
 T0051 phone payment execution result:
 
@@ -716,6 +717,14 @@ T0051 phone payment execution result:
 - The component bootstraps the Roller package with `paymentSession.config` from `GET /venues/me.paymentSettings`, renders the Adyen drop-in into the buy-entry payment step, and handles approved/failed/received callbacks.
 - After approved payment, the phone app resolves the draft booking through JumpYard Cloud lookup so the normal check-in session path can continue. If the booking-created webhook or Roller lookup has not caught up yet, the UI shows a retryable sync state.
 - T0052 reuses the same payment component for add-product drafts.
+
+T0053 new-booking basket result:
+
+- The phone buy-entry flow now collects add-ons before contact, review, draft creation, and payment.
+- New bookings create one Roller draft containing the entry product plus selected mapped add-ons, then start one payment for that combined basket.
+- The flow order is `time -> entry product/quantity -> add-ons -> contact -> review -> one draft -> one payment`.
+- Stock add-ons such as socks, padlock, and coffee are included in the same draft payload with `requireAvailability=false`; the core entry product is still gated by the availability screen before selection.
+- Existing-booking add-products remain a separate linked add-on draft path and are not changed by T0053.
 
 T0033 phone pre-payment result:
 
@@ -933,7 +942,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0051` merged to main and `T0052` locally. The old T0040 payment placeholder is superseded by T0050-T0052.
+Current implementation has progressed through `T0052` merged to main and `T0053` locally. The old T0040 payment placeholder is superseded by T0050-T0053.
 
 Near-term sequence:
 
@@ -951,7 +960,7 @@ Near-term sequence:
 12. `T0037 Scheduled daily Data API sync`: completed in dev AWS; EventBridge invokes a dedicated data-sync Lambda daily, imports the previous modified-date window, refreshes products, and records health in `jumpyard.booking_seed_runs`.
 13. `T0038 SMS token/session link foundation`: create secure JumpYard Cloud links that start or resume check-in sessions without using raw booking numbers as authority.
 14. `T0039 SMS sending`: integrate the selected SMS provider and send check-in links from server-owned booking/session state.
-15. `T0040 Roller payment package/drop-in integration`: old placeholder; superseded by T0050-T0052.
+15. `T0040 Roller payment package/drop-in integration`: old placeholder; superseded by T0050-T0053.
 16. `T0041 Controlled SMS live smoke`: completed; sent one confirmed dev SMS through JumpYard Cloud and verified the Aurora audit trail.
 17. `T0042 SMS delivery diagnostics`: completed; configured SNS delivery status logs and identified SNS sandbox as the delivery blocker.
 18. `T0043 SNS sandbox phone verification`: completed; verified the test phone in SNS sandbox and proved one real SMS delivery path.
@@ -963,15 +972,16 @@ Near-term sequence:
 24. `T0049 Confirmed scheduled SMS sends`: completed and deployed; confirmed scheduled SMS remains disabled by default and requires a public HTTPS base URL plus explicit approval phrase.
 25. `T0050 Payment readiness/bootstrap`: completed and merged; documents the T0040 replacement, captures Pabel's answers, and adds safe readiness validation.
 26. `T0051 New-booking payment execution`: completed and merged; integrates the Roller payment package/drop-in for new booking drafts, with public browser payment smoke pending allowlist confirmation.
-27. `T0052 Add-product payment execution`: current local ticket; reuses the proven payment execution path for separate linked add-product drafts.
-28. `T0053 Staff production readiness`: later separate ticket for production staff identity, roles, MFA/session policy, and audit ownership.
+27. `T0052 Add-product payment execution`: completed and merged; reuses the proven payment execution path for separate linked add-product drafts.
+28. `T0053 New-booking basket before payment`: current local ticket; moves add-ons before contact/review/payment so one Roller draft/payment covers entry plus selected add-ons.
+29. `T0054 Staff production readiness`: later separate ticket for production staff identity, roles, MFA/session policy, and audit ownership.
 
 ## Open Contract Questions
 
 - How should published add-on bookings update `jumpyard.booking_links.linked_booking_reference` after payment/publish completes?
 - Should add-on product ids come from a server-owned add-on catalog endpoint before production/multi-venue rollout?
 - Which tenders work in the new add-on booking checkout flow: gift card, membership code, multi-visit value?
-- Is `https://jumpyard-check-in.pages.dev` confirmed allowlisted for Roller Playground payment testing? Pabel confirmed the payment docs, API authorization, `paymentSettings`, and Adyen Visa test card ending `1142`; allowlist confirmation is the remaining external prerequisite before T0051 browser payment execution.
+- Do the public T0051/T0052/T0053 payment smokes complete on `https://jumpyard-check-in.pages.dev` with Adyen's Visa test card ending `1142` now that Pabel has confirmed the domain allowlist?
 - What exact response shape should JumpYard expect from `POST /redemptions` for partial success/failure?
 - Which webhook event id should be used for idempotent webhook processing?
 - Which production Data API schedule, timezone, and backfill range should JumpYard use for the live morning booking seed?

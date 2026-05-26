@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, ArrowLeft, Check, CreditCard, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, CreditCard, Minus, Plus, RefreshCw } from 'lucide-react';
 import {
   CloudBookingError,
   createDraftBooking,
@@ -16,9 +16,9 @@ import {
   type NewBookingProduct,
   type NewBookingQuote,
 } from '@/flow/cloudClient';
-import type { Booking } from '@/flow/types';
+import type { Addon, AddonId, Booking } from '@/flow/types';
 import { useTranslation } from '@/context/LanguageContext';
-import { JumpyardIcon } from '@/components/JumpyardIcon';
+import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 
 interface BuyTicketsProps {
@@ -26,7 +26,38 @@ interface BuyTicketsProps {
   onBookingReady: (booking: Booking) => void;
 }
 
-type Step = 'TIMESLOT' | 'PRODUCT' | 'QUANTITY' | 'CONTACT' | 'REVIEW' | 'PAYMENT' | 'PENDING';
+type Step = 'TIMESLOT' | 'PRODUCT' | 'QUANTITY' | 'ADDONS' | 'CONTACT' | 'REVIEW' | 'PAYMENT' | 'PENDING';
+
+interface BuyAddonEntry {
+  id: AddonId;
+  label: string;
+  price: number;
+  unit: string;
+  maxPerGuest: number;
+  icon: JumpyardIconName;
+  rollerProductId: number;
+  requiresAvailability: boolean;
+}
+
+type AddonQuantityMap = Record<AddonId, number>;
+
+const BUY_ADDON_PRODUCTS: Record<AddonId, { rollerProductId: number | null; requiresAvailability: boolean }> = {
+  skyrider: { rollerProductId: 1765443, requiresAvailability: true },
+  connected: { rollerProductId: null, requiresAvailability: false },
+  coffee: { rollerProductId: 1765452, requiresAvailability: false },
+  extra_person: { rollerProductId: null, requiresAvailability: true },
+  lock: { rollerProductId: 1765441, requiresAvailability: false },
+  socks: { rollerProductId: 1765445, requiresAvailability: false },
+};
+
+const createEmptyAddonQty = (): AddonQuantityMap => ({
+  skyrider: 0,
+  connected: 0,
+  coffee: 0,
+  extra_person: 0,
+  lock: 0,
+  socks: 0,
+});
 
 function generateSlots(): string[] {
   const now = new Date();
@@ -68,6 +99,12 @@ function getCapacityLabel(product: NewBookingProduct | null, spotsAvailable: str
   return capacityRemaining === null ? spotsAvailable : `${capacityRemaining} ${spotsLeft}`;
 }
 
+function getJumperCount(product: NewBookingProduct | null, nextQuantity: number) {
+  return product?.type === 'family'
+    ? nextQuantity * Math.max(1, product.jumpersPerUnit)
+    : nextQuantity;
+}
+
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
@@ -103,6 +140,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<NewBookingProduct | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [addonQty, setAddonQty] = useState<AddonQuantityMap>(() => createEmptyAddonQty());
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -118,6 +156,51 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const entryProducts = selectedSlot?.products.filter((product) => product.type === 'entry') ?? [];
   const familyProducts = selectedSlot?.products.filter((product) => product.type === 'family') ?? [];
   const maxQuantity = getMaxQuantity(selectedProduct);
+  const jumperCount = getJumperCount(selectedProduct, quantity);
+  const buyAddons = useMemo<BuyAddonEntry[]>(
+    () =>
+      [
+        { id: 'skyrider', label: t.addons.products.skyriderLabel, price: 45, unit: t.addons.perJumper, maxPerGuest: 1, icon: 'zipline', ...BUY_ADDON_PRODUCTS.skyrider },
+        { id: 'socks', label: t.addons.products.socksLabel, price: 40, unit: t.addons.each, maxPerGuest: 4, icon: 'grip-socks', ...BUY_ADDON_PRODUCTS.socks },
+        { id: 'lock', label: t.addons.products.lockLabel, price: 40, unit: t.addons.each, maxPerGuest: 1, icon: 'padlock', ...BUY_ADDON_PRODUCTS.lock },
+        { id: 'coffee', label: t.addons.products.coffeeLabel, price: 35, unit: t.addons.each, maxPerGuest: 4, icon: 'drink-cup', ...BUY_ADDON_PRODUCTS.coffee },
+      ].filter((addon): addon is BuyAddonEntry => addon.rollerProductId !== null),
+    [t]
+  );
+  const selectedAddons: Addon[] = useMemo(
+    () =>
+      buyAddons.filter((addon) => addonQty[addon.id] > 0).map((addon) => ({
+        id: addon.id,
+        label: addon.label,
+        price: addon.price,
+        qty: addonQty[addon.id],
+        requiresAvailability: addon.requiresAvailability,
+        rollerProductId: addon.rollerProductId,
+      })),
+    [addonQty, buyAddons]
+  );
+  const addonsTotal = selectedAddons.reduce((total, addon) => total + addon.price * addon.qty, 0);
+  const entryTotal = (selectedProduct?.unitPrice ?? 0) * quantity;
+  const basketEstimateTotal = entryTotal + addonsTotal;
+  const shouldPrecheckBasketAvailability = selectedAddons.every((addon) => addon.requiresAvailability === true);
+  const basketLines = [
+    ...(selectedProduct
+      ? [
+          {
+            key: 'entry',
+            label: selectedProduct.label,
+            qty: quantity,
+            total: entryTotal,
+          },
+        ]
+      : []),
+    ...selectedAddons.map((addon) => ({
+      key: addon.id,
+      label: addon.label,
+      qty: addon.qty,
+      total: addon.price * addon.qty,
+    })),
+  ];
   const customerValid =
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
@@ -147,6 +230,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setAvailabilityError(null);
     setSelectedProduct(null);
     setQuantity(1);
+    setAddonQty(createEmptyAddonQty());
     setQuote(null);
     setDraft(null);
     setPaymentSyncError(null);
@@ -157,10 +241,35 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     if (max <= 0) return;
     setSelectedProduct(product);
     setQuantity(1);
+    setAddonQty(createEmptyAddonQty());
     setQuote(null);
     setDraft(null);
     setPaymentSyncError(null);
     setStep('QUANTITY');
+  };
+
+  const updateQuantity = (nextQuantity: number) => {
+    const clampedQuantity = Math.max(1, Math.min(maxQuantity || 1, nextQuantity));
+    const nextJumperCount = getJumperCount(selectedProduct, clampedQuantity);
+    setQuantity(clampedQuantity);
+    setAddonQty((current) => {
+      const next = { ...current };
+      for (const addon of buyAddons) {
+        next[addon.id] = Math.min(next[addon.id], Math.max(1, nextJumperCount * addon.maxPerGuest));
+      }
+      return next;
+    });
+    setQuote(null);
+    setDraft(null);
+    setPaymentSyncError(null);
+  };
+
+  const setOneAddon = (id: AddonId, nextQty: number) => {
+    setSubmitError(null);
+    setQuote(null);
+    setDraft(null);
+    setPaymentSyncError(null);
+    setAddonQty((current) => ({ ...current, [id]: Math.max(0, nextQty) }));
   };
 
   const buildCustomer = (): NewBookingCustomer => ({
@@ -179,6 +288,12 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
         quantity,
         startTime: selectedProduct.startTime,
       },
+      ...selectedAddons.map((addon) => ({
+        bookingDate: availability.date,
+        productId: Number(addon.rollerProductId),
+        quantity: addon.qty,
+        startTime: selectedProduct.startTime,
+      })),
     ];
   };
 
@@ -187,7 +302,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const result = await quoteNewBooking(buildCustomer(), buildItems());
+      const result = await quoteNewBooking(buildCustomer(), buildItems(), shouldPrecheckBasketAvailability);
       setQuote(result);
       setStep('REVIEW');
     } catch (error) {
@@ -202,10 +317,12 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const itemKey = basketLines.map((line) => `${line.key}-${line.qty}`).join(':');
       const result = await createDraftBooking(
         buildCustomer(),
         buildItems(),
-        `phone-draft:${selectedProduct.productId}:${selectedProduct.startTime}:${Date.now().toString(36)}`
+        `phone-draft:${selectedProduct.productId}:${selectedProduct.startTime}:${itemKey}:${Date.now().toString(36)}`,
+        shouldPrecheckBasketAvailability
       );
       setDraft(result);
       setPaymentSyncError(null);
@@ -246,7 +363,8 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       return;
     }
     if (step === 'REVIEW') setStep('CONTACT');
-    else if (step === 'CONTACT') setStep('QUANTITY');
+    else if (step === 'CONTACT') setStep('ADDONS');
+    else if (step === 'ADDONS') setStep('QUANTITY');
     else if (step === 'QUANTITY') setStep('PRODUCT');
     else if (step === 'PRODUCT') setStep('TIMESLOT');
     else onBack();
@@ -423,19 +541,19 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
 
             <div className="flex items-center justify-center gap-6 mb-2">
               <button
-                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                onClick={() => updateQuantity(quantity - 1)}
                 disabled={quantity <= 1}
                 className="w-12 h-12 rounded-full bg-surface-strong border border-border flex items-center justify-center text-foreground text-xl font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                -
+                <Minus size={20} />
               </button>
               <span className="text-4xl font-black italic text-foreground w-16 text-center">{quantity}</span>
               <button
-                onClick={() => quantity < maxQuantity && setQuantity(quantity + 1)}
+                onClick={() => updateQuantity(quantity + 1)}
                 disabled={quantity >= maxQuantity}
                 className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center text-xl font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                +
+                <Plus size={20} />
               </button>
             </div>
             <p className="text-[10px] text-muted uppercase font-bold italic tracking-wider mb-5">
@@ -454,12 +572,79 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             </div>
 
             <button
-              onClick={() => setStep('CONTACT')}
+              onClick={() => setStep('ADDONS')}
               className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
             >
               {t.common.continue} <Check size={18} />
             </button>
           </div>
+        </motion.div>
+      )}
+
+      {step === 'ADDONS' && selectedProduct && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="w-full flex flex-col"
+          style={{ minHeight: 'calc(100dvh - 160px)' }}
+        >
+          <div className="text-center mb-3">
+            <h2 className="text-xl font-black italic text-foreground uppercase mb-1">{t.addons.title}</h2>
+            <p className="text-muted text-xs">{t.addons.description}</p>
+          </div>
+
+          <div className="flex-1 flex flex-col gap-2 mb-4">
+            {buyAddons.map((addon) => {
+              const value = addonQty[addon.id];
+              const max = Math.max(1, jumperCount * addon.maxPerGuest);
+
+              return (
+                <div
+                  key={addon.id}
+                  className="bg-white border border-border rounded-xl p-3 flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <JumpyardIcon name={addon.icon} className="w-9 h-9 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-black italic text-foreground uppercase truncate">{addon.label}</p>
+                      <p className="text-[11px] text-muted">
+                        {formatMoney(addon.price)} - {addon.unit}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setOneAddon(addon.id, value - 1)}
+                      disabled={value <= 0}
+                      className="w-9 h-9 rounded-full bg-surface-strong border border-border flex items-center justify-center text-foreground disabled:opacity-30"
+                    >
+                      <Minus size={16} />
+                    </button>
+                    <span className="text-xl font-black italic text-foreground w-7 text-center">{value}</span>
+                    <button
+                      onClick={() => setOneAddon(addon.id, Math.min(max, value + 1))}
+                      disabled={value >= max}
+                      className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center disabled:opacity-30"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="bg-white border border-border p-3 rounded-xl mb-4 flex justify-between items-center px-4">
+            <span className="text-muted text-sm font-bold italic uppercase">{t.buy.total}</span>
+            <span className="text-xl font-black italic text-primary">{formatMoney(basketEstimateTotal)}</span>
+          </div>
+
+          <button
+            onClick={() => setStep('CONTACT')}
+            className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+          >
+            {t.common.continue} <Check size={18} />
+          </button>
         </motion.div>
       )}
 
@@ -556,11 +741,15 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             <p className="text-muted text-xs mb-5 text-center">{t.buy.reviewDesc}</p>
 
             <div className="bg-white border border-border rounded-xl p-4 mb-4">
-              <div className="flex justify-between gap-3 text-sm font-bold text-foreground mb-2">
-                <span>{selectedProduct.label}</span>
-                <span>{quantity} st</span>
+              <div className="space-y-2 mb-3">
+                {basketLines.map((line) => (
+                  <div key={line.key} className="flex justify-between gap-3 text-sm font-bold text-foreground">
+                    <span>{line.label}</span>
+                    <span>{line.qty} st - {formatMoney(line.total)}</span>
+                  </div>
+                ))}
               </div>
-              <div className="flex justify-between gap-3 text-xs text-muted">
+              <div className="flex justify-between gap-3 text-xs text-muted border-t border-border pt-3">
                 <span>{selectedProduct.startTime}</span>
                 <span>{formatMoney(quote.costs.total)}</span>
               </div>
