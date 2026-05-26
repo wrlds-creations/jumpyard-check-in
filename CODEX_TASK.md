@@ -1,15 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0048
+T0049
 
 ## Goal
-Polish the staff/admin handoff app for real staff use on phones and align its visual language with the JumpYard phone check-in app.
+Add a safe confirmed-send gate for scheduled booking-time SMS so dev can only move from planning to real unattended sends after the required public URL and SMS approvals are explicitly configured.
 
 ## Dependencies
-- T0047 completed and merged.
-- Staff auth endpoint is deployed in dev.
-- Existing staff list/detail/redeem behavior must remain unchanged.
+- T0048 completed and merged.
+- T0045 booking-time SMS trigger exists.
+- T0046 EventBridge schedule exists and currently runs in planning mode.
+- SNS sandbox limitations and public/mobile URL requirements are documented.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,25 +20,19 @@ Polish the staff/admin handoff app for real staff use on phones and align its vi
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- jumpyard-checkin-admin/src/app/page.tsx
-- jumpyard-checkin-admin/src/app/globals.css
-- jumpyard-checkin-admin/src/app/layout.tsx
-- jumpyard-checkin-admin/src/app/manifest.ts
-- jumpyard-checkin-admin/src/lib/adminApi.ts
-- jumpyard-checkin-admin/public/**
-- jumpyard-checkin-phone/src/app/layout.tsx
-- jumpyard-checkin-phone/src/app/globals.css
-- jumpyard-checkin-kiosk/src/app/layout.tsx
-- jumpyard-checkin-kiosk/src/app/globals.css
+- AWS_RESOURCES.md
+- infra/config/dev.json
+- infra/config/dev.example.json
+- infra/lib/config.ts
+- infra/lib/jumpyard-cloud-stack.ts
+- infra/lambda/session/index.js
 
 ## Do not touch
-- Phone app flow/components
-- Kiosk app flow/components
-- JumpYard Cloud Lambda/backend behavior
-- AWS resources or CDK
-- Aurora migrations
+- Phone app UI or flow
+- Staff/admin UI
+- Kiosk UI
 - Roller booking/payment/redeem logic
-- SMS logic
+- Aurora migrations
 - Production credentials
 - Live Roller config
 - `.env`
@@ -45,67 +40,55 @@ Polish the staff/admin handoff app for real staff use on phones and align its vi
 
 ## Requirements
 
-1. Improve staff/admin mobile ergonomics.
-   - The handoff app must fit phone-sized screens without horizontal overflow.
-   - Staff login, handoff search, QR scanner, waiting list, detail view, and redeem action must have usable tap targets.
-   - A selected handoff should be easy to review on a phone without requiring staff to scroll past the full waiting list first.
+1. Make the scheduled booking-time SMS configuration explicit.
+   - Add a configurable check-in SMS base URL instead of hardcoded scheduler/runtime localhost behavior.
+   - Keep dev defaulting to the local phone URL while real scheduled sends remain disabled.
 
-2. Align the admin app with the phone check-in visual language.
-   - Use the same JumpYard logo and approved icon style already used by the phone app.
-   - Do not use Google font imports or historical display-font overrides for the current check-in surfaces.
-   - Use the documented JumpYard system sans-serif stack consistently across admin, phone, and kiosk app shells.
-   - Use compatible colors, rounded corners, spacing, and italic/uppercase emphasis.
-   - Keep the result operational and staff-focused, not a marketing page.
+2. Add a confirmed scheduled-send safety gate.
+   - `confirmSend=true` for scheduled SMS must require an explicit approval phrase in config.
+   - `confirmSend=true` for scheduled SMS must require a public HTTPS check-in base URL.
+   - Unsafe confirmed scheduled config must fail before deploy/synth.
+   - Runtime scheduled events must also block confirmed sends when the approval phrase or public HTTPS URL is missing.
 
-3. Improve staff operation states.
-   - Keep staff auth session behavior from T0047 unchanged.
-   - Make loading, empty, error, scanner, selected, completed, and redeem states clear.
-   - Keep QR scan/paste/manual code paths available.
+3. Preserve manual protected SMS behavior.
+   - Existing token-protected `POST /v1/check-in/session-links/send-sms` behavior must not change.
+   - Existing token-protected `POST /v1/check-in/session-links/send-due-sms` manual planning/confirmed behavior must not change except for safe response metadata.
 
-4. Preserve the existing contracts.
-   - Do not change request payloads or response expectations for staff auth/list/detail/redeem.
-   - Do not add frontend secrets or dev redeem tokens.
-   - Do not call Roller directly from the admin app.
+4. Keep dev safe by default.
+   - `infra/config/dev.json` must keep scheduled `confirmSend=false`.
+   - T0049 must not send real unattended SMS unless the missing prerequisites are explicitly configured later.
 
 5. Document the result.
-   - Update source-of-truth docs with T0048 status and validation.
-   - Keep future production staff identity, public URL, and QR token hardening as follow-ups rather than widening this ticket.
+   - Update source-of-truth docs with the T0049 state, safety gate, validation, and next tickets.
+   - Update AWS resource notes for the changed scheduler/session configuration.
 
 ## Non-goals
-- Do not implement staff roles, Cognito, SSO, or MFA.
-- Do not change backend auth/session token policy.
-- Do not change phone check-in behavior.
-- Do not change SMS scheduling or delivery behavior.
-- Do not change payment or add-product flows.
-- Do not redeem a real Playground ticket during validation unless explicitly requested.
-- Do not create or modify AWS resources.
+- Do not request SNS production access or exit sandbox.
+- Do not configure a public hosting domain.
+- Do not send real unattended SMS in this ticket.
+- Do not add email sending.
+- Do not change guest-facing phone flow.
+- Do not change staff auth/redeem behavior.
+- Do not create or modify Aurora schema.
 
 ## Acceptance criteria
-- Admin app is visually aligned with the phone app's JumpYard design system.
-- Staff handoff UI is usable on phone-sized screens.
-- Staff login, list, detail, scanner, and redeem controls still render.
-- Historical display-font references are removed from source and source-of-truth docs.
-- No backend, AWS, Roller, SMS, or payment code is changed.
-- `npm --prefix jumpyard-checkin-admin run lint` passes.
-- `npm --prefix jumpyard-checkin-admin run build` passes.
-- Phone app shell font change builds/lints without changing flow behavior.
-- Kiosk app shell font change builds without changing flow behavior; any pre-existing kiosk lint failures outside the shell change are documented.
+- Scheduled SMS can still run in planning mode.
+- Confirmed scheduled sends require both the approval phrase and public HTTPS base URL.
+- Dev config remains planning-only.
+- CDK build and synth pass with safe dev config.
+- Session Lambda syntax validation passes.
 - `npm run validate` passes.
+- No app UI code is changed.
 
 ## Manual verification
-- Open `http://127.0.0.1:3002/` or `http://localhost:3002/`.
-- Confirm staff login screen fits a phone viewport.
-- Confirm authenticated handoff list/detail view fits a phone viewport.
-- Confirm QR scanner panel opens without breaking layout.
-- Confirm desktop layout still shows list and detail side by side.
+- Review `infra/config/dev.json` and confirm `confirmSend=false`.
+- Review scheduler payload in synthesized CDK output or code and confirm it carries the configured base URL and approval field.
+- Confirm the documented prerequisites before any future change to `confirmSend=true`.
 
 ## Automated validation
 Run:
-- `npm --prefix jumpyard-checkin-admin run lint`
-- `npm --prefix jumpyard-checkin-admin run build`
-- `npm --prefix jumpyard-checkin-phone run lint`
-- `npm --prefix jumpyard-checkin-phone run build`
-- `npm --prefix jumpyard-checkin-kiosk run lint`
-- `npm --prefix jumpyard-checkin-kiosk run build`
+- `node --check infra/lambda/session/index.js`
+- `npm --prefix infra run build`
+- `npm --prefix infra run synth:dev`
 - `npm run validate`
 - `git diff --check`

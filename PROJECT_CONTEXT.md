@@ -103,6 +103,8 @@ T0047 replaces the normal admin handoff temporary redeem-code flow with a first 
 
 T0048 polishes the staff/admin handoff app without changing backend behavior. The admin app now uses the same JumpYard icon asset style, system sans-serif font stack, red/neutral color tokens, rounded controls, and italic/uppercase emphasis as the check-in apps. It keeps QR scan/paste/manual code entry available and makes selected handoff detail appear before the waiting list on phone-sized screens so staff can review and redeem from a mobile device.
 
+T0049 adds and deploys the safe configuration path for confirmed scheduled booking-time SMS sends. Dev scheduled SMS still runs in planning mode with `confirmSend=false`, but the CDK config now makes the check-in SMS base URL explicit and blocks `confirmSend=true` unless an approval phrase and public HTTPS app URL are configured. The session Lambda also blocks EventBridge-shaped confirmed sends at runtime if those safeguards are missing. No real unattended SMS is enabled in dev by default.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -249,6 +251,7 @@ After T0007, the next tickets should proceed in this order:
 | `T0046 Scheduled booking-time SMS processing` | Run the booking-time SMS trigger from EventBridge without staff/admin manually calling it. | Completed in dev AWS; dev schedule runs every 5 minutes in planning mode with real sending still disabled until public/mobile URL and SMS production readiness are approved. |
 | `T0047 Staff auth replacement for temporary dev code` | Replace the normal admin handoff temporary redeem-code flow with server-owned staff login and short-lived staff tokens. | Completed locally and deployed to dev; production SSO/Cognito and roles remain follow-up work. |
 | `T0048 Staff operations polish` | Make the staff/admin handoff app mobile-friendly and visually aligned with the phone check-in app. | Completed locally; historical display-font imports were removed from check-in app shells, and no backend, AWS, Roller, SMS, or payment behavior changed. |
+| `T0049 Confirmed scheduled SMS sends` | Add the safe config/runtime gate required before scheduled booking-time SMS can send real messages unattended. | Completed and deployed to dev; dev remains planning-only until a public HTTPS app URL, approval phrase, SNS sender/sandbox policy, and messaging policy are approved. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
