@@ -1,0 +1,30 @@
+import { IPaymentRequest, IPaymentRequestHandlers, IPaymentResult, IPaymentDetail, IPaymentAction, IPaymentConfiguration } from '../payment.model';
+import { PaymentProvider } from '../payment-provider';
+export declare class PayPal extends PaymentProvider {
+    private readonly approvedCodes;
+    private readonly pendingCodes;
+    private readonly errorCodes;
+    private readonly cancelledCode;
+    private readonly guidService;
+    private payPalConfig;
+    private checkoutSessionId;
+    constructor(config: IPaymentConfiguration, actions: IPaymentAction);
+    get supportRecurringBilling(): boolean;
+    setup(paymentRequest: IPaymentRequest): Promise<any>;
+    hasRedirectResult(): boolean;
+    handleRedirect(handlers: IPaymentRequestHandlers): Promise<any>;
+    checkPaymentStatus(merchantReference: string, numberOfAttempts?: number): Promise<IPaymentResult>;
+    getPaymentDetail(numberOfAttempts?: number): Promise<IPaymentDetail | undefined>;
+    private handleApproval;
+    private storePaymentDetails;
+    private getResultForStatus;
+    private handlePendingPayment;
+    private getPaymentDetailFromStorage;
+    private handlePaymentResult;
+    private reset;
+    private clearPaymentDetailStorage;
+    private getPaymentStatus;
+    private getRequestOptions;
+    private createOrder;
+    private captureOrderPayment;
+}

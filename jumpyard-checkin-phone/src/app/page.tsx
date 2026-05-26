@@ -361,6 +361,9 @@ function CheckInFlow() {
                         <BuyTickets
                             key="park-buy"
                             onBack={() => { setState('KIOSK_CHOICE'); scrollToTop(); }}
+                            onBookingReady={booking => {
+                                void handleExistingBookingFound(booking);
+                            }}
                         />
                     )}
 

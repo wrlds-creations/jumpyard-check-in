@@ -1,0 +1,45 @@
+{
+  "name": "@roller/ecom-payments",
+  "version": "1.0.217",
+  "description": "Handles payment UI interactions for ECOM gateways",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npx tsc -p tsconfig.json",
+    "prebuild": "rimraf dist",
+    "test": "karma start",
+    "format": "prettier --ignore-path .gitignore --write \"src/**/*.ts\"",
+    "lint": "npx eslint \"src/**/*.ts\"",
+    "lint:fix": "npx eslint \"src/**/*.ts\" --fix"
+  },
+  "author": "Roller",
+  "dependencies": {
+    "@adyen/adyen-web": "5.71.2",
+    "@paypal/paypal-js": "5.1.6"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.14.1",
+    "@typescript-eslint/parser": "^7.14.1",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "prettier": "^3.3.0",
+    "typescript": "5.0.4"
+  },
+  "overrides": {
+    "semver": "5.7.2"
+  },
+  "volta": {
+    "node": "18.19.0"
+  }
+}
