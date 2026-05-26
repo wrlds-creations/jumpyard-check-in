@@ -15,6 +15,7 @@ import {
 import type { Addon, AddonId, Booking } from '@/flow/types';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
+import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 
 interface AddonsOfferProps {
     booking: Booking;
@@ -25,6 +26,7 @@ interface AddonsOfferProps {
         addonsTotal: number;
         skyriderSelected: boolean;
         connectedSelected: boolean;
+        paymentHandled?: boolean;
     }) => void;
     onPendingDone: () => void;
 }
@@ -41,7 +43,7 @@ interface CatalogEntry {
     requiresAvailability: boolean;
 }
 
-type Step = 'SELECT' | 'CONTACT' | 'REVIEW' | 'PENDING';
+type Step = 'SELECT' | 'CONTACT' | 'REVIEW' | 'PAYMENT' | 'PENDING';
 
 const ADDON_PRODUCTS: Record<AddonId, { rollerProductId: number | null; requiresAvailability: boolean }> = {
     skyrider: { rollerProductId: 1765443, requiresAvailability: true },
@@ -114,6 +116,18 @@ function normalizeStartTime(value?: string | null) {
     const match = value?.match(/^(\d{1,2}):(\d{2})/);
     if (!match) return null;
     return `${match[1].padStart(2, '0')}:${match[2]}`;
+}
+
+function canStartPayment(draft: AddProductDraftResult) {
+    const config = draft.paymentSession.config;
+    return Boolean(
+        draft.paymentSession.jwt?.trim() &&
+            draft.paymentSession.jwtPresent &&
+            config?.available &&
+            config.apiUrl &&
+            config.configurationId &&
+            config.integrationId
+    );
 }
 
 export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, onPendingDone }: AddonsOfferProps) => {
@@ -216,14 +230,19 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
 
     const requireAvailability = addedAddons.length > 0 && addedAddons.every((addon) => addon.requiresAvailability === true);
 
+    const completeAddons = (paymentHandled = false) => {
+        onContinue({
+            selectedAddons,
+            addonsTotal,
+            skyriderSelected: qty.skyrider > 0,
+            connectedSelected: qty.connected > 0,
+            paymentHandled,
+        });
+    };
+
     const handleSelectContinue = () => {
         if (addedAddons.length === 0) {
-            onContinue({
-                selectedAddons,
-                addonsTotal: 0,
-                skyriderSelected: qty.skyrider > 0,
-                connectedSelected: qty.connected > 0,
-            });
+            completeAddons(false);
             return;
         }
 
@@ -264,7 +283,7 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                 requireAvailability
             );
             setDraft(result);
-            setStep('PENDING');
+            setStep(canStartPayment(result) ? 'PAYMENT' : 'PENDING');
         } catch (error) {
             setSubmitError(error instanceof CloudBookingError ? error.message : t.addons.draftFailed);
         } finally {
@@ -274,7 +293,8 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
 
     const backFromInternalStep = () => {
         setSubmitError(null);
-        if (step === 'REVIEW') setStep('CONTACT');
+        if (step === 'PAYMENT') setStep('REVIEW');
+        else if (step === 'REVIEW') setStep('CONTACT');
         else if (step === 'CONTACT') setStep('SELECT');
         else setStep('SELECT');
     };
@@ -297,6 +317,31 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                 >
                     <ArrowLeft size={14} /> {t.common.back}
                 </button>
+            )}
+
+            {step === 'PAYMENT' && draft && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="w-full flex items-center justify-center"
+                    style={{ minHeight: 'calc(100dvh - 160px)' }}
+                >
+                    <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
+                        <h2 className="text-xl font-black italic text-foreground uppercase mb-2">{t.addons.paymentTitle}</h2>
+                        <p className="text-muted text-sm mb-5">
+                            {formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
+                        </p>
+
+                        <RollerPaymentDropIn
+                            amountLabel={formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
+                            paymentSession={draft.paymentSession}
+                            onApproved={() => {
+                                completeAddons(true);
+                            }}
+                            onFailed={() => undefined}
+                        />
+                    </div>
+                </motion.div>
             )}
 
             {step === 'SELECT' && (

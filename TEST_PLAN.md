@@ -533,3 +533,17 @@ Use this file to define validation for the current project or milestone.
 | Payment bootstrap failure | Missing package bootstrap configuration fails closed visibly. | Passed | Local payment screen no longer stays in an indefinite `Startar betalning` state when the Roller payment package returns no bootstrap configuration. |
 | Public browser payment smoke | Cloudflare URL renders the Roller/Adyen drop-in and accepts the Adyen Visa test card ending `1142`. | Blocked | Requires explicit confirmation that `https://jumpyard-check-in.pages.dev` is allowlisted by Roller. |
 | Approved payment continuation | Approved payment resolves the paid booking through JumpYard Cloud and continues into check-in. | Pending manual | Must be verified after allowlist confirmation and a successful Playground payment. |
+
+## T0052 Add-Product Payment Execution Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Raw JWT handling | Add-product draft JWT stays response-only and in-memory. | Passed | Source scan found JWT use only in the client response type, in-memory payment component, and payment readiness gate; no logging or rendering was added. |
+| Payment fallback | Add-product drafts without JWT/config keep the safe payment-pending fallback. | Passed | `AddonsOffer` only enters payment when JWT and config are present; otherwise it keeps the T0035 pending screen. |
+| Payment drop-in | Existing-booking add-products render the Roller payment drop-in when JWT/config are present. | Pending manual | Code path is wired; full card execution requires `https://jumpyard-check-in.pages.dev` allowlist confirmation. |
+| Approved add-product continuation | Approved add-product payment continues the original booking check-in path. | Pending manual | Code path skips legacy `APP_PAYMENT`; must be proven with a successful public card smoke after allowlisting. |
+| Root validation | `npm run validate` passes after T0052 updates. | Passed | Passed on 2026-05-26. |
+| Phone lint | `npm --prefix jumpyard-checkin-phone run lint` passes. | Passed with warnings | Passed with the pre-existing four `<img>` warnings. |
+| Phone build | `npm --prefix jumpyard-checkin-phone run build` passes. | Passed | Static export build passed; Next reported stale `baseline-browser-mapping` advisory warnings. |
+| Local browser smoke | Local phone app loads after T0052 wiring. | Passed | Browser check at `http://localhost:3000/` loaded `JumpYard Connected Entry`, rendered `KIOSK_CHOICE`, and reported no console errors. |
+| Diff whitespace | `git diff --check` passes. | Passed | Passed on 2026-05-26; line-ending notices are Git CRLF warnings only. |

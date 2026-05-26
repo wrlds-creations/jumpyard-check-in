@@ -644,6 +644,7 @@ export async function createAddProductDraft(
     draft: body.draft,
     paymentSession: {
       config: body.paymentSession.config,
+      jwt: body.paymentSession.jwt ?? null,
       jwtPresent: body.paymentSession.jwtPresent,
       jwtSummary: body.paymentSession.jwtSummary,
     },
