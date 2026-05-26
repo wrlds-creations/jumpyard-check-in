@@ -715,7 +715,7 @@ T0051 phone payment execution result:
 - The raw draft `paymentJwt` is used only in memory by the payment component and remains out of Aurora, logs, source, and visible DOM text.
 - The component bootstraps the Roller package with `paymentSession.config` from `GET /venues/me.paymentSettings`, renders the Adyen drop-in into the buy-entry payment step, and handles approved/failed/received callbacks.
 - After approved payment, the phone app resolves the draft booking through JumpYard Cloud lookup so the normal check-in session path can continue. If the booking-created webhook or Roller lookup has not caught up yet, the UI shows a retryable sync state.
-- Add-product drafts still stop at payment pending until T0052 reuses this payment execution path.
+- T0052 reuses the same payment component for add-product drafts.
 
 T0033 phone pre-payment result:
 
@@ -729,7 +729,10 @@ T0035 phone add-product result:
 - The existing-booking add-ons screen calls JumpYard Cloud add-product quote/draft endpoints instead of the old local/mock payment path.
 - The phone app collects first name, last name, email, and phone before creating an add-on draft because Roller draft booking requires customer fields.
 - Mapped Playground add-ons are currently JumpSocks `1765445`, Hänglås `1765441`, Bryggkaffe `1765452`, and SkyRider `1765443`; unmapped products are blocked in the phone UI until a server-owned catalog exists.
-- Stock-only selections such as socks-only or padlock-only create separate linked add-on drafts and stop at payment pending. They must not be routed into safety, QR, or ticket redemption as standalone check-in bookings.
+- T0052 phone add-product payment execution reuses the T0051 Roller payment package/drop-in when the separate add-on draft returns a response-only `paymentJwt` and venue payment config.
+- Missing JWT/config/package setup still stops at the safe payment-pending fallback.
+- Approved add-product payment continues the original booking's check-in flow and bypasses the old local/mock `APP_PAYMENT` screen.
+- Stock-only selections such as socks-only or padlock-only create separate linked add-on drafts. They must not be routed into safety, QR, or ticket redemption as standalone check-in bookings.
 
 ### `POST /v1/bookings/{bookingReference}/add-products/quote`
 
@@ -850,7 +853,7 @@ Rules:
 - Do not use same-booking `PUT /bookings/{uniqueId}` plus payment link as the primary pilot path.
 - Same-booking update remains a future option only if Roller confirms a reliable return path and JumpYard explicitly chooses that UX.
 - Stock/add-on products cannot be redeemed through the same ticket-level API path unless configured as ticket/session products.
-- T0035 phone UI treats add-product draft payment as unresolved. It does not publish the draft, collect card details, or continue as if the add-on was paid.
+- T0052 phone UI renders the Roller payment drop-in for add-product drafts when JWT/config are present, keeps the payment-pending fallback when blocked, and continues the original booking's check-in path only after the payment component reports an approved payment.
 
 ## Error Contract
 
@@ -930,7 +933,7 @@ Rules:
 
 ## Implementation Sequence
 
-Current implementation has progressed through `T0049` merged to main and `T0050` locally. The old T0040 payment placeholder is superseded by T0050-T0052.
+Current implementation has progressed through `T0051` merged to main and `T0052` locally. The old T0040 payment placeholder is superseded by T0050-T0052.
 
 Near-term sequence:
 
@@ -958,9 +961,9 @@ Near-term sequence:
 22. `T0047 Staff auth replacement`: completed; replaces the normal admin temporary redeem-code flow with staff login and short-lived staff tokens for staff list/detail/redeem.
 23. `T0048 Staff operations polish`: completed; admin handoff now uses JumpYard phone-app visual assets, the documented system sans-serif font stack, mobile-first layout, larger tap targets, and selected-detail-first behavior on phone-sized screens without changing backend contracts.
 24. `T0049 Confirmed scheduled SMS sends`: completed and deployed; confirmed scheduled SMS remains disabled by default and requires a public HTTPS base URL plus explicit approval phrase.
-25. `T0050 Payment readiness/bootstrap`: current local ticket; documents the T0040 replacement, captures Pabel's answers, and adds safe readiness validation.
-26. `T0051 New-booking payment execution`: completed locally; integrates the Roller payment package/drop-in for new booking drafts, with public browser payment smoke pending allowlist confirmation.
-27. `T0052 Add-product payment execution`: reuse the proven payment execution path for separate linked add-product drafts.
+25. `T0050 Payment readiness/bootstrap`: completed and merged; documents the T0040 replacement, captures Pabel's answers, and adds safe readiness validation.
+26. `T0051 New-booking payment execution`: completed and merged; integrates the Roller payment package/drop-in for new booking drafts, with public browser payment smoke pending allowlist confirmation.
+27. `T0052 Add-product payment execution`: current local ticket; reuses the proven payment execution path for separate linked add-product drafts.
 28. `T0053 Staff production readiness`: later separate ticket for production staff identity, roles, MFA/session policy, and audit ownership.
 
 ## Open Contract Questions

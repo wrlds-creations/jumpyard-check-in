@@ -399,13 +399,13 @@ function CheckInFlow() {
                             booking={ctx.booking}
                             guestCount={ctx.booking.jumpers}
                             existingAddons={ctx.existingAddons}
-                            onContinue={({ selectedAddons, addonsTotal, skyriderSelected, connectedSelected }) =>
+                            onContinue={({ selectedAddons, addonsTotal, skyriderSelected, connectedSelected, paymentHandled }) =>
                                 advance({
                                     selectedAddons,
                                     addonsTotal,
                                     skyriderSelected,
                                     connectedSelected,
-                                    paymentTotal: (ctx.baseTotal || 0) + addonsTotal,
+                                    paymentTotal: paymentHandled ? 0 : (ctx.baseTotal || 0) + addonsTotal,
                                 })
                             }
                             onPendingDone={() => {
