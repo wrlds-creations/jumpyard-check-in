@@ -15,6 +15,7 @@
     "roller:data:smoke": "node scripts/roller-data-api-smoke.js",
     "roller:payment:discover": "node scripts/roller-payment-discovery.js",
     "roller:payment:discover:apply-draft": "node scripts/roller-payment-discovery.js --apply-draft",
+    "roller:payment:readiness": "node scripts/roller-payment-readiness.js",
     "roller:payment:poc": "node scripts/roller-payment-package-poc.js",
     "roller:payment:poc:apply-draft": "node scripts/roller-payment-package-poc.js --apply-draft",
     "roller:seed:playground": "node scripts/roller-seed-playground.js",

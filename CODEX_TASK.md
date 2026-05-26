@@ -1,16 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0049
+T0050
 
 ## Goal
-Add a safe confirmed-send gate for scheduled booking-time SMS so dev can only move from planning to real unattended sends after the required public URL and SMS approvals are explicitly configured.
+Bootstrap the Roller Payments readiness path and document that the older T0040 payment placeholder is replaced by the T0050-T0052 payment execution sequence.
 
 ## Dependencies
-- T0048 completed and merged.
-- T0045 booking-time SMS trigger exists.
-- T0046 EventBridge schedule exists and currently runs in planning mode.
-- SNS sandbox limitations and public/mobile URL requirements are documented.
+- T0049 completed and merged.
+- Roller API access is re-enabled in Playground.
+- User has updated local `.env` and AWS Secrets Manager Roller credentials after the Playground refresh.
+- Pabel confirmed Roller Payments API authorization, payment docs location, Adyen test-card source, and the need to allowlist the public test domain.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -20,19 +20,18 @@ Add a safe confirmed-send gate for scheduled booking-time SMS so dev can only mo
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- AWS_RESOURCES.md
-- infra/config/dev.json
-- infra/config/dev.example.json
-- infra/lib/config.ts
-- infra/lib/jumpyard-cloud-stack.ts
-- infra/lambda/session/index.js
+- .env.example
+- package.json
+- scripts/roller-payment-readiness.js
+- Existing payment-readiness scripts only if needed
 
 ## Do not touch
 - Phone app UI or flow
 - Staff/admin UI
 - Kiosk UI
-- Roller booking/payment/redeem logic
+- Roller booking/payment/redeem Lambda behavior
 - Aurora migrations
+- AWS resources or CDK config
 - Production credentials
 - Live Roller config
 - `.env`
@@ -40,55 +39,67 @@ Add a safe confirmed-send gate for scheduled booking-time SMS so dev can only mo
 
 ## Requirements
 
-1. Make the scheduled booking-time SMS configuration explicit.
-   - Add a configurable check-in SMS base URL instead of hardcoded scheduler/runtime localhost behavior.
-   - Keep dev defaulting to the local phone URL while real scheduled sends remain disabled.
+1. Document the T0040 replacement.
+   - T0040 was the older payment placeholder and must no longer be used as the next active ticket.
+   - Forward payment work should use:
+     - T0050 Payment readiness/bootstrap
+     - T0051 New-booking payment execution
+     - T0052 Add-product payment execution
+   - Staff production readiness should remain a later separate ticket.
 
-2. Add a confirmed scheduled-send safety gate.
-   - `confirmSend=true` for scheduled SMS must require an explicit approval phrase in config.
-   - `confirmSend=true` for scheduled SMS must require a public HTTPS check-in base URL.
-   - Unsafe confirmed scheduled config must fail before deploy/synth.
-   - Runtime scheduled events must also block confirmed sends when the approval phrase or public HTTPS URL is missing.
+2. Capture the confirmed Roller/Pabel payment prerequisites.
+   - Payment docs root: `https://docs.roller.app/docs/roller-payments`
+   - Payment docs version-history page for readiness checks: `https://docs.roller.app/docs/roller-payments/egj77d29eagwv-version-history`
+   - Public test origin requested for allowlisting: `https://jumpyard-check-in.pages.dev`
+   - Test/fake card source: Adyen docs, Visa ending `1142`
+   - Payment settings source: `GET /venues/me` field `paymentSettings`
+   - Account authorization: confirmed if API keys can be generated for the venue.
 
-3. Preserve manual protected SMS behavior.
-   - Existing token-protected `POST /v1/check-in/session-links/send-sms` behavior must not change.
-   - Existing token-protected `POST /v1/check-in/session-links/send-due-sms` manual planning/confirmed behavior must not change except for safe response metadata.
+3. Add a safe local readiness command.
+   - Add `npm run roller:payment:readiness`.
+   - It must load local `.env` without printing secrets.
+   - It must reuse the Playground guard through the existing Roller client helper.
+   - It must call only safe read endpoints and public GETs.
+   - It must not create Roller bookings, drafts, payments, webhooks, AWS resources, or Aurora rows.
+   - It must report whether `/venues/me` exposes usable payment settings.
+   - It must report public-origin and allowlist readiness without pretending external allowlisting is complete.
 
-4. Keep dev safe by default.
-   - `infra/config/dev.json` must keep scheduled `confirmSend=false`.
-   - T0049 must not send real unattended SMS unless the missing prerequisites are explicitly configured later.
+4. Keep payment execution deferred.
+   - Do not add payment UI.
+   - Do not process test cards.
+   - Do not publish draft bookings.
+   - Do not wire the phone flow beyond the existing payment-pending state.
 
-5. Document the result.
-   - Update source-of-truth docs with the T0049 state, safety gate, validation, and next tickets.
-   - Update AWS resource notes for the changed scheduler/session configuration.
+5. Update source-of-truth docs.
+   - Update roadmap/current-state documents with T0050 and the clean T0051-T0053 sequence.
+   - Update follow-ups so payment blockers reflect the new Pabel answer and remaining allowlist/execution work.
+   - Update test plan with T0050 validation.
 
 ## Non-goals
-- Do not request SNS production access or exit sandbox.
-- Do not configure a public hosting domain.
-- Do not send real unattended SMS in this ticket.
-- Do not add email sending.
-- Do not change guest-facing phone flow.
-- Do not change staff auth/redeem behavior.
-- Do not create or modify Aurora schema.
+- Do not install or integrate the Roller payment package in the phone app.
+- Do not render Adyen/Roller payment drop-in UI.
+- Do not take a real or test payment.
+- Do not create or publish a Roller booking in this ticket.
+- Do not deploy AWS changes.
+- Do not change SMS, redeem, webhook, or staff-auth behavior.
 
 ## Acceptance criteria
-- Scheduled SMS can still run in planning mode.
-- Confirmed scheduled sends require both the approval phrase and public HTTPS base URL.
-- Dev config remains planning-only.
-- CDK build and synth pass with safe dev config.
-- Session Lambda syntax validation passes.
+- T0040 is documented as superseded by T0050-T0052.
+- `npm run roller:payment:readiness` exists.
+- The readiness command confirms Roller Playground auth and `/venues/me` payment-settings shape when credentials are valid.
+- The readiness command reports `https://jumpyard-check-in.pages.dev` as the intended public test origin.
+- The readiness command lists allowlist confirmation as pending until explicitly set.
 - `npm run validate` passes.
-- No app UI code is changed.
+- No app UI, Lambda behavior, AWS resources, or `.env` file is changed.
 
 ## Manual verification
-- Review `infra/config/dev.json` and confirm `confirmSend=false`.
-- Review scheduler payload in synthesized CDK output or code and confirm it carries the configured base URL and approval field.
-- Confirm the documented prerequisites before any future change to `confirmSend=true`.
+- Review the roadmap and confirm no future ticket sequence jumps back to T0040.
+- Confirm Pabel has allowlisted `https://jumpyard-check-in.pages.dev` before running browser payment execution in T0051.
+- Confirm the Adyen Visa test card ending `1142` is used only from official docs during payment testing, not committed into source.
 
 ## Automated validation
 Run:
-- `node --check infra/lambda/session/index.js`
-- `npm --prefix infra run build`
-- `npm --prefix infra run synth:dev`
+- `node --check scripts/roller-payment-readiness.js`
+- `npm run roller:payment:readiness`
 - `npm run validate`
 - `git diff --check`
