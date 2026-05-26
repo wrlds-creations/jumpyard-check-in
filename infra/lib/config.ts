@@ -2,6 +2,8 @@ import { App } from 'aws-cdk-lib';
 import * as fs from 'fs';
 import * as path from 'path';
 
+export const BOOKING_TIME_SMS_CONFIRMED_SEND_APPROVAL = 'I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS';
+
 export const REQUIRED_WRLDS_TAGS = [
   'WRLDS:Client',
   'WRLDS:Project',
@@ -21,6 +23,8 @@ export interface JumpYardCloudConfig {
   readonly awsAccount: string;
   readonly awsRegion: string;
   readonly bookingTimeSms: {
+    readonly checkinBaseUrl: string;
+    readonly confirmedSendApproval: string;
     readonly confirmSend: boolean;
     readonly leadMinutes: number;
     readonly limit: number;
@@ -40,6 +44,8 @@ interface RawConfig {
   readonly awsAccount?: unknown;
   readonly awsRegion?: unknown;
   readonly bookingTimeSms?: {
+    readonly checkinBaseUrl?: unknown;
+    readonly confirmedSendApproval?: unknown;
     readonly confirmSend?: unknown;
     readonly leadMinutes?: unknown;
     readonly limit?: unknown;
@@ -113,7 +119,13 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
 }
 
 function readBookingTimeSmsConfig(raw: RawConfig['bookingTimeSms']): JumpYardCloudConfig['bookingTimeSms'] {
-  return {
+  const config = {
+    checkinBaseUrl: readOptionalString(raw?.checkinBaseUrl, 'http://localhost:3000/', 'bookingTimeSms.checkinBaseUrl'),
+    confirmedSendApproval: readOptionalString(
+      raw?.confirmedSendApproval,
+      '',
+      'bookingTimeSms.confirmedSendApproval',
+    ),
     confirmSend: readOptionalBoolean(raw?.confirmSend, false, 'bookingTimeSms.confirmSend'),
     leadMinutes: readOptionalInteger(raw?.leadMinutes, 30, 0, 24 * 60, 'bookingTimeSms.leadMinutes'),
     limit: readOptionalInteger(raw?.limit, 10, 1, 10, 'bookingTimeSms.limit'),
@@ -121,6 +133,24 @@ function readBookingTimeSmsConfig(raw: RawConfig['bookingTimeSms']): JumpYardClo
     scheduleEnabled: readOptionalBoolean(raw?.scheduleEnabled, false, 'bookingTimeSms.scheduleEnabled'),
     windowMinutes: readOptionalInteger(raw?.windowMinutes, 10, 1, 180, 'bookingTimeSms.windowMinutes'),
   };
+
+  if (!isSafeCheckinBaseUrl(config.checkinBaseUrl)) {
+    throw new Error('bookingTimeSms.checkinBaseUrl must be a valid http or https URL.');
+  }
+
+  if (config.confirmSend) {
+    if (config.confirmedSendApproval !== BOOKING_TIME_SMS_CONFIRMED_SEND_APPROVAL) {
+      throw new Error(
+        `bookingTimeSms.confirmedSendApproval must equal ${BOOKING_TIME_SMS_CONFIRMED_SEND_APPROVAL} when confirmSend is true.`,
+      );
+    }
+
+    if (!isPublicHttpsCheckinBaseUrl(config.checkinBaseUrl)) {
+      throw new Error('bookingTimeSms.confirmSend=true requires a public https bookingTimeSms.checkinBaseUrl.');
+    }
+  }
+
+  return config;
 }
 
 function readRequiredTags(rawTags: Record<string, unknown> | undefined): Record<RequiredWrlDsTag, string> {
@@ -155,6 +185,15 @@ function readString(value: unknown, fieldName: string): string {
   return value.trim();
 }
 
+function readOptionalString(value: unknown, fallback: string, fieldName: string): string {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'string') {
+    throw new Error(`Config field ${fieldName} must be a string when supplied.`);
+  }
+
+  return value.trim();
+}
+
 function readOptionalBoolean(value: unknown, fallback: boolean, fieldName: string): boolean {
   if (value === undefined) return fallback;
   if (typeof value === 'boolean') return value;
@@ -174,4 +213,37 @@ function readOptionalInteger(
   }
 
   return value;
+}
+
+function isSafeCheckinBaseUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function isPublicHttpsCheckinBaseUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname.toLowerCase();
+    const privateIpv4 =
+      /^10\./.test(hostname) ||
+      /^127\./.test(hostname) ||
+      /^169\.254\./.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname) ||
+      /^192\.168\./.test(hostname);
+
+    return (
+      parsed.protocol === 'https:' &&
+      hostname !== 'localhost' &&
+      hostname !== '::1' &&
+      hostname !== '[::1]' &&
+      !hostname.endsWith('.local') &&
+      !privateIpv4
+    );
+  } catch {
+    return false;
+  }
 }

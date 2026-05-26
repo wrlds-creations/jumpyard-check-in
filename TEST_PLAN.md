@@ -500,3 +500,16 @@ Use this file to define validation for the current project or milestone.
 | Historical display font cleanup | Check-in app shells and docs use the documented system sans-serif stack without Google font imports. | Passed | Targeted search for the old font import names and Google font import path returned no source/doc matches. |
 | Phone shell visual check | Phone app uses the same system font stack after the shell change. | Passed | Browser checks at `390x844` and `1280x800` showed the documented font stack and no horizontal overflow on `http://localhost:3000/`. |
 | Contract preservation | Staff auth/list/detail/redeem request behavior is unchanged. | Passed | T0048 does not modify Lambda/backend code, AWS resources, Roller logic, SMS logic, payment logic, or phone/kiosk flow components. |
+
+## T0049 Confirmed Scheduled SMS Safety Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Session Lambda syntax | `node --check infra/lambda/session/index.js` passes. | Passed | Passed on 2026-05-25. |
+| Infra build | `npm --prefix infra run build` passes. | Passed | Confirms the new CDK config fields compile. |
+| Dev synth | `npm --prefix infra run synth:dev` passes with safe planning config. | Passed | Dev remains `confirmSend=false` with local URL allowed only for planning mode. |
+| Config safety gate | `confirmSend=true` requires approval phrase plus public HTTPS `checkinBaseUrl`. | Passed | Temp unsafe configs failed synth when approval phrase was missing and when approval phrase existed but URL was still `localhost`. |
+| Runtime safety gate | EventBridge-shaped confirmed sends block without approval phrase or public HTTPS URL. | Passed | Stubbed local Lambda smoke returned HTTP `409`, `booking_time_sms_blocked`, and `dryRun=true` before DB/SNS calls. |
+| Dev diff/deploy | Dev stack deploys only approved session Lambda and EventBridge payload changes. | Passed | Pre-deploy diff showed only session code plus booking-time SMS rule payload/description; deploy passed and post-deploy diff showed no differences. |
+| Root validation | `npm run validate` passes. | Passed | Confirms source-of-truth and AWS tag checks still pass. |
+| Post-credential-recovery integrated smoke | Today's Playground booking can flow through lookup, Aurora session, ready-for-staff, and staff handoff detail without redemption. | Passed | Booking `5063366` for `2026-05-26` returned `ready`, was `Paid`/`fresh` in Aurora with 4 tickets, created session `jycs_mpmg3swu_0c34710f`, reached handoff `JY8713`, and appeared in the staff-auth-protected handoff list/detail. |

@@ -9,6 +9,8 @@
   "bookingTimeSms": {
     "scheduleEnabled": false,
     "confirmSend": false,
+    "confirmedSendApproval": "",
+    "checkinBaseUrl": "http://localhost:3000/",
     "rateMinutes": 5,
     "leadMinutes": 30,
     "windowMinutes": 10,

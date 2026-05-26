@@ -23,6 +23,7 @@ const DEFAULT_SMS_TRIGGER_LEAD_MINUTES = 30;
 const DEFAULT_SMS_TRIGGER_WINDOW_MINUTES = 10;
 const MAX_SMS_TRIGGER_WINDOW_MINUTES = 180;
 const MAX_SMS_TRIGGER_LIMIT = 10;
+const SCHEDULED_SMS_CONFIRMED_SEND_APPROVAL = 'I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS';
 const TOKEN_BYTES = 32;
 
 const rdsClient = new RDSDataClient({});
@@ -689,6 +690,17 @@ async function handleSendDueSessionLinkSms(event, body, correlationId, options =
     });
   }
 
+  if (options.trustedScheduler && request.confirmSend) {
+    const confirmationError = validateConfirmedScheduledDueSmsRequest(request);
+    if (confirmationError) {
+      return jsonResponse(409, correlationId, {
+        status: 'booking_time_sms_blocked',
+        error: confirmationError,
+        trigger: buildDueSmsTriggerSummary(request, window, true),
+      });
+    }
+  }
+
   const candidates = await findDueSmsBookings({
     limit: request.limit,
     recentSinceAt: new Date(window.start.getTime() - 24 * 60 * 60 * 1000).toISOString(),
@@ -727,17 +739,7 @@ async function handleSendDueSessionLinkSms(event, body, correlationId, options =
   return jsonResponse(200, correlationId, {
     status,
     summary,
-    trigger: {
-      baseUrlConfigured: Boolean(request.baseUrl),
-      confirmSend: request.confirmSend,
-      dryRun: !request.confirmSend,
-      leadMinutes: request.leadMinutes,
-      limit: request.limit,
-      timezone: SMS_TRIGGER_TIME_ZONE,
-      windowEndAt: window.end.toISOString(),
-      windowMinutes: request.windowMinutes,
-      windowStartAt: window.start.toISOString(),
-    },
+    trigger: buildDueSmsTriggerSummary(request, window, false),
     items,
   });
 }
@@ -883,6 +885,7 @@ function normalizeSessionLinkSmsRequest(event, body) {
 function normalizeDueSessionLinkSmsRequest(body) {
   return {
     baseUrl: stringOrNull(body.baseUrl) || stringOrNull(body.checkinBaseUrl) || DEFAULT_SMS_BASE_URL,
+    confirmedSendApproval: stringOrNull(body.confirmedSendApproval),
     confirmSend: booleanFromValue(body.confirmSend),
     leadMinutes: clampInteger(body.leadMinutes, 0, 24 * 60, DEFAULT_SMS_TRIGGER_LEAD_MINUTES),
     limit: clampInteger(body.limit, 1, MAX_SMS_TRIGGER_LIMIT, MAX_SMS_TRIGGER_LIMIT),
@@ -986,6 +989,24 @@ function validateDueSessionLinkSmsRequest(request, window) {
 
   if (window.error) {
     return window.error;
+  }
+
+  return null;
+}
+
+function validateConfirmedScheduledDueSmsRequest(request) {
+  if (request.confirmedSendApproval !== SCHEDULED_SMS_CONFIRMED_SEND_APPROVAL) {
+    return {
+      code: 'scheduled_sms_confirmation_required',
+      message: 'Scheduled confirmed SMS sends require the explicit confirmedSendApproval safety phrase.',
+    };
+  }
+
+  if (!isPublicHttpsCheckinBaseUrl(request.baseUrl)) {
+    return {
+      code: 'public_https_base_url_required',
+      message: 'Scheduled confirmed SMS sends require a public HTTPS baseUrl for the check-in app.',
+    };
   }
 
   return null;
@@ -2300,6 +2321,7 @@ function normalizeScheduledDueSessionLinkSmsBody(event) {
 
   return {
     baseUrl: stringOrNull(detail.baseUrl) || DEFAULT_SMS_BASE_URL,
+    confirmedSendApproval: stringOrNull(detail.confirmedSendApproval),
     confirmSend: booleanFromValue(detail.confirmSend),
     correlationId: stringOrNull(event?.id) ? `eventbridge:${event.id}` : null,
     leadMinutes: detail.leadMinutes,
@@ -2496,10 +2518,49 @@ function buildDueSmsWindow(request) {
   return { end, start };
 }
 
+function buildDueSmsTriggerSummary(request, window, blocked) {
+  return {
+    baseUrlConfigured: Boolean(request.baseUrl),
+    confirmSend: request.confirmSend,
+    confirmedScheduledSend: request.confirmedSendApproval === SCHEDULED_SMS_CONFIRMED_SEND_APPROVAL,
+    dryRun: blocked || !request.confirmSend,
+    leadMinutes: request.leadMinutes,
+    limit: request.limit,
+    timezone: SMS_TRIGGER_TIME_ZONE,
+    windowEndAt: window.end.toISOString(),
+    windowMinutes: request.windowMinutes,
+    windowStartAt: window.start.toISOString(),
+  };
+}
+
 function isSafeCheckinBaseUrl(value) {
   try {
     const parsed = new URL(value);
     return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function isPublicHttpsCheckinBaseUrl(value) {
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname.toLowerCase();
+    const privateIpv4 =
+      /^10\./.test(hostname) ||
+      /^127\./.test(hostname) ||
+      /^169\.254\./.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname) ||
+      /^192\.168\./.test(hostname);
+
+    return (
+      parsed.protocol === 'https:' &&
+      hostname !== 'localhost' &&
+      hostname !== '::1' &&
+      hostname !== '[::1]' &&
+      !hostname.endsWith('.local') &&
+      !privateIpv4
+    );
   } catch {
     return false;
   }

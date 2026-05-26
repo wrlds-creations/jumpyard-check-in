@@ -284,6 +284,7 @@ Rules:
 - Recent real sends for the same booking/template are skipped to avoid duplicate reminders.
 - The endpoint caps each run to a small batch and returns only safe booking metadata plus masked destinations.
 - T0046 schedules this trigger through EventBridge for dev, but the scheduled config keeps `confirmSend=false` until public/mobile URL, consent, sandbox exit or verified-recipient policy, and production SMS rules are confirmed.
+- T0049 adds a separate confirmed scheduled-send guard: EventBridge confirmed sends require an explicit approval phrase and a public HTTPS check-in base URL before any SMS provider call can happen.
 
 ### Scheduled Booking-Time SMS Processing
 
@@ -297,10 +298,10 @@ Rules:
 
 - The schedule is an internal AWS invocation, not a public API endpoint.
 - Dev rule `jumpyard-check-in-dev-booking-time-sms-schedule` runs every 5 minutes.
-- The scheduled payload uses `leadMinutes=30`, `windowMinutes=10`, `limit=10`, and `confirmSend=false`.
+- The scheduled payload uses the configured `checkinBaseUrl`, `leadMinutes=30`, `windowMinutes=10`, `limit=10`, approval field, and `confirmSend=false` in dev.
 - Because `confirmSend=false`, scheduled runs plan candidates and send no SMS.
 - The public HTTP endpoint `POST /v1/check-in/session-links/send-due-sms` remains protected by the check-in link dev token.
-- Enabling unattended real SMS requires changing config to `confirmSend=true` in a later ticket after the public/mobile URL and production SMS prerequisites are approved.
+- Enabling unattended real SMS requires `confirmSend=true`, `confirmedSendApproval=I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS`, and a public HTTPS `checkinBaseUrl`; CDK config and Lambda runtime both block scheduled confirmed sends without those safeguards.
 
 ### `POST /v1/check-in/lookup`
 

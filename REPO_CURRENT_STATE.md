@@ -4,12 +4,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Snapshot
 
-- Date: 2026-05-25
-- Current branch: `codex/t0048-staff-ops-visual-polish`
-- Current status: T0048 staff operations polish completed locally; admin handoff is mobile-first, check-in app shells use the documented system sans-serif stack, and backend behavior is unchanged.
-- Current ticket: `T0048` completed locally, not yet committed or merged
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`
-- Recommended next ticket: `T0049 Confirmed scheduled SMS sends` only after public/mobile URL, SMS sender/sandbox, and messaging policy are approved; otherwise continue staff production readiness or `T0040` when Roller payment prerequisites arrive.
+- Date: 2026-05-26
+- Current branch: `codex/t0049-confirmed-scheduled-sms-sends`
+- Current status: T0049 confirmed scheduled SMS safety gate completed locally and deployed to dev; scheduled SMS still runs in planning mode with `confirmSend=false`; post-credential-recovery smoke passed with today's Playground booking `5063366`.
+- Current ticket: `T0049` completed locally and deployed to dev, not yet committed or merged
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`
+- Recommended next step: run a short guided integrated smoke pass one test case at a time, then continue `T0050 Staff production readiness` or `T0040` when Roller payment prerequisites arrive.
 
 ## Current Structure
 
@@ -169,24 +169,27 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0046` | Added scheduled booking-time SMS processing. | 2026-05-25 | EventBridge rule `jumpyard-check-in-dev-booking-time-sms-schedule` invokes the session Lambda every 5 minutes in dev planning mode with `confirmSend=false`; public due-SMS endpoint remains token-protected. |
 | `T0047` | Added staff auth replacement for temporary dev code. | 2026-05-25 | Normal admin handoff now uses JumpYard Cloud staff login and a short-lived staff token for list/detail/redeem; the lower-level direct redeem dev token remains for controlled internal/dev testing only. |
 | `T0048` | Polished staff/admin handoff UI. | 2026-05-25 | Admin handoff now uses JumpYard phone-app icons, the documented system sans-serif font stack, mobile-first selected-detail ordering, larger rounded tap targets, simplified handoff copy, fewer decorative icons, and clearer scanner/list/detail/redeem states without changing backend contracts. Historical display-font imports were removed from admin/phone/kiosk app shells. |
+| `T0049` | Added confirmed scheduled SMS safety gate. | 2026-05-25 | Dev scheduled booking-time SMS now has explicit `checkinBaseUrl` and `confirmedSendApproval` config fields, synth-time and runtime blocking for unsafe confirmed scheduled sends, and deployed EventBridge payload updates while keeping `confirmSend=false`. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0048` | Staff operations polish. | Completed locally | Admin UI polish aligns with the check-in apps and improves phone-sized handoff ergonomics; login copy now uses `Handoff`, `Kod`, and `Fortsätt`; admin/phone/kiosk shells now use the documented system sans-serif stack; no backend, AWS, Roller, SMS, or payment behavior changed. |
+| `T0049` | Confirmed scheduled SMS sends. | Completed locally and deployed to dev | Scheduled SMS remains planning-only in dev, but future real unattended sends now require an explicit approval phrase plus public HTTPS check-in URL at synth time and runtime. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
 | `T0040` | Roller payment package/drop-in integration | Blocked until Roller/Pabel provides package access, allowlisted HTTPS test origin, and fake/test card behavior. |
-| `T0049` | Confirmed scheduled SMS sends | Enable `confirmSend=true` only after public/mobile URL, SMS sender/sandbox, and messaging policy are approved. |
 | `T0050` | Staff production readiness | Replace pilot passcode auth with production staff identity/roles and harden handoff QR/token policy before production rollout. |
+| `Manual integrated smoke pass` | Validate the current end-to-end flow together | Run a small number of guided test cases one at a time before starting more feature work. |
 
 ## Validation Status
 
-- Automated root validation: `npm run validate` passed on 2026-05-25 during T0048.
+- Automated root validation: `npm run validate` passed on 2026-05-25 during T0049.
+- T0049 validation: `node --check infra/lambda/session/index.js`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, unsafe confirmed-send synth guards, runtime guard smoke, `npm run validate`, pre/post `npm --prefix infra run diff:dev`, `npm --prefix infra run deploy:dev`, and `git diff --check` passed.
+- T0049 post-credential-recovery smoke: new Playground booking `5063366` for `2026-05-26` returned `ready` from JumpYard Cloud, existed in Aurora as `Paid`/`fresh` with 4 tickets, started check-in session `jycs_mpmg3swu_0c34710f`, reached `ready_for_staff` with handoff `JY8713`, and appeared in the staff-auth-protected handoff list/detail without redeeming tickets.
 - T0048 validation: admin lint/build passed, phone lint/build passed with existing image optimization warnings, kiosk build passed, `npm run validate` passed, and `git diff --check` passed.
 - T0048 kiosk lint: `npm --prefix jumpyard-checkin-kiosk run lint` is still blocked by pre-existing component/context lint errors outside the shell font change.
 - T0048 browser validation: admin `http://127.0.0.1:3002/` and phone `http://localhost:3000/` both used the documented system sans-serif font stack and showed no horizontal overflow at `390x844` or `1280x800`.

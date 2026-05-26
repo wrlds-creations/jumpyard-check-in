@@ -22,6 +22,7 @@ interface JumpYardCloudStackProps extends StackProps {
 
 interface HandlerResources {
   readonly api: apigatewayv2.CfnApi;
+  readonly checkinSmsBaseUrl: string;
   readonly rollerCredentialsSecret: secretsmanager.Secret;
   readonly databaseClusterArn: string;
   readonly databaseSecret: secretsmanager.Secret;
@@ -262,6 +263,7 @@ export class JumpYardCloudStack extends Stack {
 
     const handlerResources: HandlerResources = {
       api,
+      checkinSmsBaseUrl: config.bookingTimeSms.checkinBaseUrl,
       rollerCredentialsSecret,
       databaseClusterArn,
       databaseSecret,
@@ -318,14 +320,16 @@ export class JumpYardCloudStack extends Stack {
       new events.Rule(this, 'BookingTimeSmsScheduleRule', {
         ruleName: `${config.resourcePrefix}-booking-time-sms-schedule`,
         description:
-          'Runs the dev booking-time SMS trigger on a fixed cadence. Real sends are controlled by config.bookingTimeSms.confirmSend.',
+          'Runs the dev booking-time SMS trigger on a fixed cadence. Real sends require config confirmation and a public HTTPS check-in URL.',
         schedule: events.Schedule.rate(Duration.minutes(config.bookingTimeSms.rateMinutes)),
         targets: [
           new targets.LambdaFunction(sessionHandler, {
             event: events.RuleTargetInput.fromObject({
               source: 'jumpyard.booking-time-sms-scheduler',
               detail: {
+                baseUrl: config.bookingTimeSms.checkinBaseUrl,
                 confirmSend: config.bookingTimeSms.confirmSend,
+                confirmedSendApproval: config.bookingTimeSms.confirmedSendApproval,
                 leadMinutes: config.bookingTimeSms.leadMinutes,
                 limit: config.bookingTimeSms.limit,
                 trigger: 'scheduled_booking_time_sms',
@@ -471,7 +475,7 @@ export class JumpYardCloudStack extends Stack {
     }
 
     if (handlerName === 'session') {
-      environment.CHECKIN_SMS_BASE_URL = 'http://localhost:3000/';
+      environment.CHECKIN_SMS_BASE_URL = resources.checkinSmsBaseUrl;
       environment.CHECKIN_LINK_DEV_TOKEN_SECRET_ARN = resources.checkinLinkDevTokenSecret.secretArn;
       environment.SMS_PROVIDER = 'aws_sns';
       environment.SMS_SENDER_ID = 'JumpYard';
