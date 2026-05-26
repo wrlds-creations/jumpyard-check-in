@@ -86,6 +86,7 @@ export interface FlowContext {
   token: string | null;
   booking: Booking | null;
   checkinSession: CheckInSession | null;
+  buyEntryFlow: boolean;
 
   safetyVideoSeenAt: string | null;
   safetyAttestedAt: string | null;

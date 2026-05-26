@@ -558,6 +558,16 @@ Use this file to define validation for the current project or milestone.
 | Raw secret/JWT handling | Payment investigation does not print secrets, access tokens, raw JWTs, or full card numbers. | Passed | Only safe status, booking reference, method names, and boolean summaries were inspected. |
 | Root validation | Source-of-truth docs validate after T0054 updates. | Passed | `npm run validate` passed on 2026-05-26. |
 
+## T0055 New-Booking Paid Continuation Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Phone lint | Phone app lint passes after buy-entry progress/routing changes. | Passed with warnings | `npm --prefix jumpyard-checkin-phone run lint` passed with the pre-existing four `<img>` warnings. |
+| Phone build | Phone app builds after buy-entry progress/routing changes. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed on 2026-05-26. |
+| Buy-entry progress start | Clicking `Köp entré` shows a compact progress indicator from the time-selection step. | Passed | Browser verification showed labels `Entré`, `Tillägg`, `Betalning`, `Säkerhet`, and `Klar`. |
+| Buy-entry progress advances | Time, product, quantity, add-ons, and contact steps update the progress state. | Passed | Browser verification advanced from `TIMESLOT` to `PRODUCT`, `QUANTITY`, `ADDONS`, and `CONTACT` without horizontal overflow in the current browser viewport. |
+| Paid new-booking continuation | Approved new-booking payment should start/resume a JumpYard Cloud check-in session and route to safety/QR instead of existing-booking add-ons/payment. | Code validated | The route is implemented in `handlePaidNewBookingReady`; full public payment continuation should be re-smoked after the next deploy because card is still externally blocked and Swish requires manual action. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

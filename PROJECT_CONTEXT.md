@@ -260,8 +260,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0051 New-booking payment execution` | Integrate the Roller Payments package/drop-in for new booking drafts created through the existing phone buy-entry flow. | Completed and merged with package `v217` vendored and phone buy-entry wired; public end-to-end payment smoke is now unblocked by Pabel's allowlist confirmation and still needs execution. |
 | `T0052 Add-product payment execution` | Reuse the same payment execution path for separate linked add-product drafts. | Completed and merged; existing-booking add-product drafts now use the shared Roller payment component when JWT/config are present. |
 | `T0053 New-booking basket before payment` | Move add-ons before contact/review/payment in the phone buy-entry flow. | Completed and merged; one Roller draft/payment now represents entry plus selected mapped add-ons. |
-| `T0054 Public payment method smoke` | Confirm public payment-package behavior, explain Swish success, and lock the missing card/scheme blocker. | Current ticket; no app/backend/AWS changes expected unless Roller/Adyen configuration changes. |
-| `T0055 New-booking paid continuation` | After a paid new booking, route directly into the check-in/safety/QR path and add a buy-entry progress bar. | Next phone-flow ticket after card-method status is locked. |
+| `T0054 Public payment method smoke` | Confirm public payment-package behavior, explain Swish success, and lock the missing card/scheme blocker. | Completed and merged; Swish works publicly, while card/scheme needs Roller/Adyen configuration. |
+| `T0055 New-booking paid continuation` | After a paid new booking, route directly into the check-in/safety/QR path and add a buy-entry progress bar. | Current ticket; phone-flow only, no AWS/backend/payment-package changes. |
 | `T0056 Staff production readiness` | Replace pilot staff auth with the production-ready staff identity/session/role model. | Separate from payment and SMS; follows the immediate payment/phone-flow tickets. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
@@ -492,6 +492,15 @@ T0054 confirmed the public payment-package behavior after Pabel's allowlist:
 - Roller's public ecom payment configuration currently returns no `scheme` card method for this Playground configuration, and the rendered payment UI exposes Swish/Google Pay but no card fields.
 - Card entry with the Adyen Visa test card ending `1142` therefore needs Roller/Adyen configuration help, specifically enabling or confirming the card/scheme payment method for Playground custom checkout.
 
+T0055 confirms the new-booking paid continuation direction:
+
+- the `Köp entré` path shows a compact buy-entry progress indicator from the first time-selection screen
+- the visible buy-entry progress path is entry, add-ons, payment, safety, done
+- time, ticket selection, and jumper quantity are grouped under entry; contact and summary are grouped under payment; safety and the final QR handoff/done screen remain visible as their own final steps
+- after approved payment and paid booking lookup, a new buy-entry booking starts or resumes the JumpYard Cloud check-in session and continues to safety instead of returning through the existing-booking summary/add-ons/payment loop
+- ready-for-staff sessions still route directly to QR, and completed/redeemed sessions still show already checked in
+- existing-booking lookup remains on the existing booking-summary path
+
 ## Non-Goals For Current Ticket
 
 - Do not use Aurora lookup data as final authority before future write-critical actions such as redeem or add-on booking creation.
@@ -499,7 +508,7 @@ T0054 confirmed the public payment-package behavior after Pabel's allowlist:
 - Do not rely on automatic Roller webhook delivery in production until production auth, IP allowlisting, and environment registration are explicitly scoped.
 - Do not write to Roller Live/production.
 - Do not create staging or production AWS resources.
-- Do not add phone payment UI, production payment logic, or real payment processing.
+- Do not add production payment rollout or change the approved Roller payment package integration.
 - Do not wire phone UI to redeem.
 - Do not expose the T0021 dev redeem token to frontend code or browser config.
 - Do not add a public demo button to the phone check-in UI.

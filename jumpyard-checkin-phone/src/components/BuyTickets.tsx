@@ -28,6 +28,14 @@ interface BuyTicketsProps {
 
 type Step = 'TIMESLOT' | 'PRODUCT' | 'QUANTITY' | 'ADDONS' | 'CONTACT' | 'REVIEW' | 'PAYMENT' | 'PENDING';
 
+const BUY_PROGRESS_ICONS: JumpyardIconName[] = [
+  'admission-ticket',
+  'addons-bag',
+  'payment-card',
+  'safety-check',
+  'success-check',
+];
+
 interface BuyAddonEntry {
   id: AddonId;
   label: string;
@@ -127,6 +135,62 @@ function canStartPayment(draft: NewBookingDraftResult) {
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getBuyProgressIndex(step: Step) {
+  if (step === 'ADDONS') return 1;
+  if (step === 'CONTACT' || step === 'REVIEW' || step === 'PAYMENT' || step === 'PENDING') return 2;
+  return 0;
+}
+
+function BuyEntryProgress({ step }: { step: Step }) {
+  const { t } = useTranslation();
+  const labels = [
+    t.buyProgress.entry,
+    t.buyProgress.addons,
+    t.buyProgress.payment,
+    t.buyProgress.safety,
+    t.buyProgress.done,
+  ];
+  const current = getBuyProgressIndex(step);
+  const pct = labels.length > 1 ? (current / (labels.length - 1)) * 100 : 0;
+  const gridTemplateColumns = `repeat(${labels.length}, minmax(0, 1fr))`;
+
+  return (
+    <div className="w-full mb-3" data-buy-progress-step={step}>
+      <div className="relative">
+        <div className="absolute top-4 left-[10%] right-[10%] h-0.5 bg-surface-strong" />
+        <div
+          className="absolute top-4 left-[10%] h-0.5 bg-primary transition-all duration-500"
+          style={{ width: `calc(${pct * 0.8}%)` }}
+        />
+        <div className="relative z-10 grid" style={{ gridTemplateColumns }}>
+          {labels.map((label, index) => (
+            <div key={label} className="flex min-w-0 flex-col items-center gap-1">
+              <div
+                className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300 ${
+                  index < current
+                    ? 'bg-white border-primary shadow-sm'
+                    : index === current
+                      ? 'bg-white border-primary shadow-sm ring-4 ring-primary/15'
+                      : 'bg-surface border-border opacity-45'
+                }`}
+              >
+                <JumpyardIcon name={BUY_PROGRESS_ICONS[index]} className="w-6 h-6" />
+              </div>
+              <span
+                className={`w-full whitespace-nowrap text-center text-[8px] font-bold italic uppercase leading-tight transition-colors ${
+                  index <= current ? 'text-foreground' : 'text-muted'
+                }`}
+              >
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
@@ -414,6 +478,8 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
     >
+      <BuyEntryProgress step={step} />
+
       <button
         onClick={backFromStep}
         className="mb-4 flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
