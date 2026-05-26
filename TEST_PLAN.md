@@ -515,3 +515,21 @@ Use this file to define validation for the current project or milestone.
 | Dev diff/deploy | Dev stack deploys only approved session Lambda and EventBridge payload changes. | Passed | Pre-deploy diff showed only session code plus booking-time SMS rule payload/description; deploy passed and post-deploy diff showed no differences. |
 | Root validation | `npm run validate` passes. | Passed | Confirms source-of-truth and AWS tag checks still pass. |
 | Post-credential-recovery integrated smoke | Today's Playground booking can flow through lookup, Aurora session, ready-for-staff, and staff handoff detail without redemption. | Passed | Booking `5063366` for `2026-05-26` returned `ready`, was `Paid`/`fresh` in Aurora with 4 tickets, created session `jycs_mpmg3swu_0c34710f`, reached handoff `JY8713`, and appeared in the staff-auth-protected handoff list/detail. |
+
+## T0051 New-Booking Payment Execution Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Official package source | Roller-approved payment package is taken from the Version History download. | Passed | Vendored `@roller/ecom-payments` package `1.0.217` from the official `v217` package; downloaded archive/temp files are not committed. |
+| Phone dependency install | Phone package manifest and lockfile include the Roller package and required Adyen/PayPal dependencies. | Passed | `npm install` completed after adding `file:vendor/ecom-payments`; npm audit reports 7 newly surfaced dependency vulnerabilities from the payment dependency tree. |
+| Raw JWT handling | Raw `paymentJwt` remains response-only and is not persisted/logged/rendered. | Passed | Source scan found JWT use only in the booking Lambda response, phone in-memory payment component, and safe presence/summary fields; no `console.*` logging in the payment component. |
+| Root validation | `npm run validate` passes after T0051 source-of-truth updates. | Passed | Passed on 2026-05-26. |
+| Payment readiness | `npm run roller:payment:readiness` reports current external state without writes. | Passed with blocker | `/venues/me.paymentSettings` is available and public origin returns HTTP 200; blocker remains `public_origin_allowlist_confirmation`. |
+| Phone production audit | `npm audit --omit=dev` documents current production dependency risk. | Warning | Reports advisories through `next@16.0.8` and bundled `postcss`; npm suggests non-major `next@16.2.6`. Tracked as `FU-043` because framework upgrade is outside T0051. |
+| Phone lint | `cd jumpyard-checkin-phone && npm run lint` passes after payment wiring. | Passed with warnings | Passed with the pre-existing four `<img>` warnings. Vendor package is ignored by ESLint so Roller-approved package source is not rewritten. |
+| Phone build | `cd jumpyard-checkin-phone && npm run build` passes after payment wiring. | Passed | Static export build passed; Next reported stale `baseline-browser-mapping` advisory warnings. |
+| Diff whitespace | `git diff --check` passes. | Passed | Passed on 2026-05-26; line-ending warnings are Git CRLF notices only. |
+| Local browser smoke | Local phone app loads after T0051 wiring. | Passed | Browser check at `http://127.0.0.1:3000/` loaded `JumpYard Connected Entry`, showed buy-entry copy, and had no console errors. |
+| Payment bootstrap failure | Missing package bootstrap configuration fails closed visibly. | Passed | Local payment screen no longer stays in an indefinite `Startar betalning` state when the Roller payment package returns no bootstrap configuration. |
+| Public browser payment smoke | Cloudflare URL renders the Roller/Adyen drop-in and accepts the Adyen Visa test card ending `1142`. | Blocked | Requires explicit confirmation that `https://jumpyard-check-in.pages.dev` is allowlisted by Roller. |
+| Approved payment continuation | Approved payment resolves the paid booking through JumpYard Cloud and continues into check-in. | Pending manual | Must be verified after allowlist confirmation and a successful Playground payment. |

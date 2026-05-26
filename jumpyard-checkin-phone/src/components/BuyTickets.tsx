@@ -7,6 +7,7 @@ import {
   CloudBookingError,
   createDraftBooking,
   getNewBookingAvailability,
+  lookupBooking,
   quoteNewBooking,
   type NewBookingAvailability,
   type NewBookingCustomer,
@@ -15,14 +16,17 @@ import {
   type NewBookingProduct,
   type NewBookingQuote,
 } from '@/flow/cloudClient';
+import type { Booking } from '@/flow/types';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon } from '@/components/JumpyardIcon';
+import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 
 interface BuyTicketsProps {
   onBack: () => void;
+  onBookingReady: (booking: Booking) => void;
 }
 
-type Step = 'TIMESLOT' | 'PRODUCT' | 'QUANTITY' | 'CONTACT' | 'REVIEW' | 'PENDING';
+type Step = 'TIMESLOT' | 'PRODUCT' | 'QUANTITY' | 'CONTACT' | 'REVIEW' | 'PAYMENT' | 'PENDING';
 
 function generateSlots(): string[] {
   const now = new Date();
@@ -72,7 +76,23 @@ function isValidPhone(value: string) {
   return value.replace(/\D/g, '').length >= 6;
 }
 
-export const BuyTickets = ({ onBack }: BuyTicketsProps) => {
+function canStartPayment(draft: NewBookingDraftResult) {
+  const config = draft.paymentSession.config;
+  return Boolean(
+    draft.paymentSession.jwt?.trim() &&
+      draft.paymentSession.jwtPresent &&
+      config?.available &&
+      config.apiUrl &&
+      config.configurationId &&
+      config.integrationId
+  );
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const { t } = useTranslation();
   const slots = useMemo(() => generateSlots(), []);
 
@@ -91,6 +111,8 @@ export const BuyTickets = ({ onBack }: BuyTicketsProps) => {
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [paymentSyncing, setPaymentSyncing] = useState(false);
+  const [paymentSyncError, setPaymentSyncError] = useState<string | null>(null);
 
   const selectedSlot = availability?.slots.find((slot) => slot.startTime === selectedTime) ?? null;
   const entryProducts = selectedSlot?.products.filter((product) => product.type === 'entry') ?? [];
@@ -127,6 +149,7 @@ export const BuyTickets = ({ onBack }: BuyTicketsProps) => {
     setQuantity(1);
     setQuote(null);
     setDraft(null);
+    setPaymentSyncError(null);
   };
 
   const handleProductSelect = (product: NewBookingProduct) => {
@@ -136,6 +159,7 @@ export const BuyTickets = ({ onBack }: BuyTicketsProps) => {
     setQuantity(1);
     setQuote(null);
     setDraft(null);
+    setPaymentSyncError(null);
     setStep('QUANTITY');
   };
 
@@ -184,7 +208,8 @@ export const BuyTickets = ({ onBack }: BuyTicketsProps) => {
         `phone-draft:${selectedProduct.productId}:${selectedProduct.startTime}:${Date.now().toString(36)}`
       );
       setDraft(result);
-      setStep('PENDING');
+      setPaymentSyncError(null);
+      setStep(canStartPayment(result) ? 'PAYMENT' : 'PENDING');
     } catch (error) {
       setSubmitError(error instanceof CloudBookingError ? error.message : t.buy.draftFailed);
     } finally {
@@ -192,8 +217,31 @@ export const BuyTickets = ({ onBack }: BuyTicketsProps) => {
     }
   };
 
+  const resolvePaidDraftBooking = async () => {
+    const identifier = draft?.draft.uniqueId ?? draft?.draft.bookingReference;
+    if (!identifier || paymentSyncing) return;
+
+    setPaymentSyncing(true);
+    setPaymentSyncError(null);
+    try {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        try {
+          const booking = await lookupBooking(identifier);
+          onBookingReady(booking);
+          return;
+        } catch {
+          await wait(2000);
+        }
+      }
+
+      setPaymentSyncError(t.buy.paymentSyncFailed);
+    } finally {
+      setPaymentSyncing(false);
+    }
+  };
+
   const backFromStep = () => {
-    if (step === 'PENDING') {
+    if (step === 'PAYMENT' || step === 'PENDING') {
       onBack();
       return;
     }
@@ -243,6 +291,7 @@ export const BuyTickets = ({ onBack }: BuyTicketsProps) => {
       className="w-full max-w-md mx-auto px-4"
       data-prepayment-status={draft?.prepayment?.status ?? ''}
       data-prepayment-draft-id={draft?.prepayment?.prepaymentDraftId ?? ''}
+      data-payment-syncing={String(paymentSyncing)}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
@@ -531,6 +580,48 @@ export const BuyTickets = ({ onBack }: BuyTicketsProps) => {
             >
               {submitting ? t.buy.creating : t.buy.createDraft} {!submitting && <Check size={18} />}
             </button>
+          </div>
+        </motion.div>
+      )}
+
+      {step === 'PAYMENT' && draft && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="w-full flex items-center justify-center"
+          style={{ minHeight: 'calc(100dvh - 160px)' }}
+        >
+          <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
+            <h2 className="text-xl font-black italic text-foreground uppercase mb-2">{t.buy.paymentTitle}</h2>
+            <p className="text-muted text-sm mb-5">
+              {formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
+            </p>
+
+            <RollerPaymentDropIn
+              amountLabel={formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
+              paymentSession={draft.paymentSession}
+              onApproved={() => {
+                void resolvePaidDraftBooking();
+              }}
+              onFailed={() => undefined}
+            />
+
+            {paymentSyncing && (
+              <p className="mt-4 text-xs text-muted font-bold italic uppercase">{t.buy.paymentSyncing}</p>
+            )}
+
+            {paymentSyncError && (
+              <>
+                <p className="mt-4 text-sm text-danger font-bold italic">{paymentSyncError}</p>
+                <button
+                  onClick={() => void resolvePaidDraftBooking()}
+                  disabled={paymentSyncing}
+                  className="mt-3 w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-sm py-3 rounded-xl transition-all active:scale-[0.98]"
+                >
+                  {t.buy.paymentRetrySync}
+                </button>
+              </>
+            )}
           </div>
         </motion.div>
       )}

@@ -190,6 +190,7 @@ export interface NewBookingDraftResult {
     itemCount: number;
   };
   paymentSession: {
+    jwt?: string | null;
     jwtPresent: boolean;
     jwtSummary?: {
       present: boolean;
@@ -556,6 +557,7 @@ export async function createDraftBooking(
     draft: body.draft,
     paymentSession: {
       config: body.paymentSession.config,
+      jwt: body.paymentSession.jwt ?? null,
       jwtPresent: body.paymentSession.jwtPresent,
       jwtSummary: body.paymentSession.jwtSummary,
     },

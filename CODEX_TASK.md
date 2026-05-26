@@ -1,16 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0050
+T0051
 
 ## Goal
-Bootstrap the Roller Payments readiness path and document that the older T0040 payment placeholder is replaced by the T0050-T0052 payment execution sequence.
+Integrate Roller Payments package execution for new booking drafts in the phone buy-entry flow.
 
 ## Dependencies
-- T0049 completed and merged.
-- Roller API access is re-enabled in Playground.
-- User has updated local `.env` and AWS Secrets Manager Roller credentials after the Playground refresh.
-- Pabel confirmed Roller Payments API authorization, payment docs location, Adyen test-card source, and the need to allowlist the public test domain.
+- T0050 completed and merged.
+- Roller Playground API credentials are valid locally and in AWS.
+- Pabel confirmed Roller Payments API authorization, `GET /venues/me.paymentSettings`, official package docs, Adyen test-card source, and public-origin allowlisting requirement.
+- Public test origin `https://jumpyard-check-in.pages.dev` has been requested for allowlisting. If confirmation is not yet received, implementation must remain safe and report the blocker instead of pretending payment is fully proven.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -20,18 +20,25 @@ Bootstrap the Roller Payments readiness path and document that the older T0040 p
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - JUMPYARD_CLOUD_CONTRACT.md
-- .env.example
-- package.json
-- scripts/roller-payment-readiness.js
-- Existing payment-readiness scripts only if needed
+- jumpyard-checkin-phone/package.json
+- jumpyard-checkin-phone/package-lock.json
+- jumpyard-checkin-phone/eslint.config.mjs
+- jumpyard-checkin-phone/vendor/ecom-payments/**
+- jumpyard-checkin-phone/src/app/globals.css
+- jumpyard-checkin-phone/src/app/page.tsx
+- jumpyard-checkin-phone/src/components/BuyTickets.tsx
+- jumpyard-checkin-phone/src/components/RollerPaymentDropIn.tsx
+- jumpyard-checkin-phone/src/context/LanguageContext.tsx
+- jumpyard-checkin-phone/src/flow/cloudClient.ts
 
 ## Do not touch
-- Phone app UI or flow
 - Staff/admin UI
-- Kiosk UI
-- Roller booking/payment/redeem Lambda behavior
+- Kiosk UI outside the phone buy-entry route
+- Add-product payment execution
+- Existing booking check-in/redeem behavior
 - Aurora migrations
 - AWS resources or CDK config
+- Roller webhook registration
 - Production credentials
 - Live Roller config
 - `.env`
@@ -39,67 +46,61 @@ Bootstrap the Roller Payments readiness path and document that the older T0040 p
 
 ## Requirements
 
-1. Document the T0040 replacement.
-   - T0040 was the older payment placeholder and must no longer be used as the next active ticket.
-   - Forward payment work should use:
-     - T0050 Payment readiness/bootstrap
-     - T0051 New-booking payment execution
-     - T0052 Add-product payment execution
-   - Staff production readiness should remain a later separate ticket.
+1. Vendor the official Roller Payments package.
+   - Use the current Roller-approved Version History package `v217`.
+   - Keep only the package files needed for `@roller/ecom-payments`; do not commit downloaded archives or temp files.
+   - Add dependencies through the phone app package manifest/lockfile.
 
-2. Capture the confirmed Roller/Pabel payment prerequisites.
-   - Payment docs root: `https://docs.roller.app/docs/roller-payments`
-   - Payment docs version-history page for readiness checks: `https://docs.roller.app/docs/roller-payments/egj77d29eagwv-version-history`
-   - Public test origin requested for allowlisting: `https://jumpyard-check-in.pages.dev`
-   - Test/fake card source: Adyen docs, Visa ending `1142`
-   - Payment settings source: `GET /venues/me` field `paymentSettings`
-   - Account authorization: confirmed if API keys can be generated for the venue.
+2. Wire new booking drafts into the payment package.
+   - Use the existing `POST /v1/bookings/draft` response.
+   - Pass the response-only `paymentJwt` to the Roller payment package.
+   - Use `paymentSession.config` from `GET /venues/me.paymentSettings`.
+   - Do not store, log, print, or render the raw `paymentJwt`.
+   - Keep frontend Roller usage limited to the official payment package/JWT flow, not direct Roller REST credentials or general Roller API calls.
 
-3. Add a safe local readiness command.
-   - Add `npm run roller:payment:readiness`.
-   - It must load local `.env` without printing secrets.
-   - It must reuse the Playground guard through the existing Roller client helper.
-   - It must call only safe read endpoints and public GETs.
-   - It must not create Roller bookings, drafts, payments, webhooks, AWS resources, or Aurora rows.
-   - It must report whether `/venues/me` exposes usable payment settings.
-   - It must report public-origin and allowlist readiness without pretending external allowlisting is complete.
+3. Add phone UI payment execution for buy-entry only.
+   - After a new booking draft is created, render the Roller/Adyen drop-in when JWT and payment config are present.
+   - Keep the existing payment-pending fallback when JWT/config/package setup is unavailable.
+   - On approved payment, attempt to resolve the newly paid booking through JumpYard Cloud lookup and continue into the normal check-in path.
+   - If lookup lags behind Roller/webhook sync, show a retryable sync message.
 
-4. Keep payment execution deferred.
-   - Do not add payment UI.
-   - Do not process test cards.
-   - Do not publish draft bookings.
-   - Do not wire the phone flow beyond the existing payment-pending state.
+4. Keep add-product payment deferred.
+   - Do not wire `createAddProductDraft` into the payment drop-in in this ticket.
+   - Document T0052 as the follow-up that reuses the proven payment execution path for add-product drafts.
 
 5. Update source-of-truth docs.
-   - Update roadmap/current-state documents with T0050 and the clean T0051-T0053 sequence.
-   - Update follow-ups so payment blockers reflect the new Pabel answer and remaining allowlist/execution work.
-   - Update test plan with T0050 validation.
+   - Record that T0051 installs and wires the approved package but full public browser payment still depends on allowlist confirmation and real card smoke.
+   - Update the test plan with package syntax/build validation and manual browser payment test expectations.
 
 ## Non-goals
-- Do not install or integrate the Roller payment package in the phone app.
-- Do not render Adyen/Roller payment drop-in UI.
-- Do not take a real or test payment.
-- Do not create or publish a Roller booking in this ticket.
-- Do not deploy AWS changes.
-- Do not change SMS, redeem, webhook, or staff-auth behavior.
+- Do not implement add-product payment execution.
+- Do not publish draft bookings manually outside Roller Payments.
+- Do not add a hosted payment-link fallback.
+- Do not create or change AWS resources.
+- Do not change staff auth, SMS, webhook, redeem, or Data API behavior.
+- Do not commit test card numbers into source beyond referencing the official Adyen docs source.
 
 ## Acceptance criteria
-- T0040 is documented as superseded by T0050-T0052.
-- `npm run roller:payment:readiness` exists.
-- The readiness command confirms Roller Playground auth and `/venues/me` payment-settings shape when credentials are valid.
-- The readiness command reports `https://jumpyard-check-in.pages.dev` as the intended public test origin.
-- The readiness command lists allowlist confirmation as pending until explicitly set.
+- Phone app includes the Roller-approved `@roller/ecom-payments` package `v217`.
+- New booking draft responses keep raw `paymentJwt` response-only and available only to the in-memory payment component.
+- Buy-entry flow renders the payment drop-in when payment config and JWT are available.
+- Approved payment attempts to resolve the paid booking through JumpYard Cloud and continue into check-in.
+- Missing/blocked payment setup shows a safe fallback and does not lose the draft state.
+- Add-product payment remains unchanged and deferred to T0052.
 - `npm run validate` passes.
-- No app UI, Lambda behavior, AWS resources, or `.env` file is changed.
+- `cd jumpyard-checkin-phone && npm run lint` passes.
+- `cd jumpyard-checkin-phone && npm run build` passes or any blocker is documented.
 
 ## Manual verification
-- Review the roadmap and confirm no future ticket sequence jumps back to T0040.
-- Confirm Pabel has allowlisted `https://jumpyard-check-in.pages.dev` before running browser payment execution in T0051.
-- Confirm the Adyen Visa test card ending `1142` is used only from official docs during payment testing, not committed into source.
+- Confirm `https://jumpyard-check-in.pages.dev` is allowlisted before expecting the browser payment drop-in to complete end-to-end.
+- Create a new booking from the phone buy-entry flow on the public Cloudflare URL.
+- Use the Adyen official test-card docs and the Visa card ending `1142`.
+- Confirm the payment package renders without exposing Roller credentials or the raw JWT.
+- Confirm an approved payment resolves the booking through JumpYard Cloud or shows the retryable sync message while webhook/lookup catches up.
 
 ## Automated validation
 Run:
-- `node --check scripts/roller-payment-readiness.js`
-- `npm run roller:payment:readiness`
 - `npm run validate`
+- `cd jumpyard-checkin-phone && npm run lint`
+- `cd jumpyard-checkin-phone && npm run build`
 - `git diff --check`

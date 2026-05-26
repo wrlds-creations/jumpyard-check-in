@@ -708,6 +708,15 @@ T0032 POC harness result:
 - The harness reports only safe fields such as total, amount owing, draft unique id, JWT presence/part count, venue payment config availability, package URL host, and public origin host.
 - Full browser payment remains blocked until `https://jumpyard-check-in.pages.dev` is confirmed allowlisted and T0051 integrates the approved payment package/drop-in.
 
+T0051 phone payment execution result:
+
+- The phone buy-entry flow vendors Roller's approved `@roller/ecom-payments` package `v217` from the official Version History download.
+- The frontend still calls JumpYard Cloud for availability, quote, and draft creation. It does not receive Roller client credentials and does not call general Roller REST APIs.
+- The raw draft `paymentJwt` is used only in memory by the payment component and remains out of Aurora, logs, source, and visible DOM text.
+- The component bootstraps the Roller package with `paymentSession.config` from `GET /venues/me.paymentSettings`, renders the Adyen drop-in into the buy-entry payment step, and handles approved/failed/received callbacks.
+- After approved payment, the phone app resolves the draft booking through JumpYard Cloud lookup so the normal check-in session path can continue. If the booking-created webhook or Roller lookup has not caught up yet, the UI shows a retryable sync state.
+- Add-product drafts still stop at payment pending until T0052 reuses this payment execution path.
+
 T0033 phone pre-payment result:
 
 - `POST /v1/bookings/availability` is deployed and returns normalized Roller Playground availability for phone jump-entry products.
@@ -950,7 +959,7 @@ Near-term sequence:
 23. `T0048 Staff operations polish`: completed; admin handoff now uses JumpYard phone-app visual assets, the documented system sans-serif font stack, mobile-first layout, larger tap targets, and selected-detail-first behavior on phone-sized screens without changing backend contracts.
 24. `T0049 Confirmed scheduled SMS sends`: completed and deployed; confirmed scheduled SMS remains disabled by default and requires a public HTTPS base URL plus explicit approval phrase.
 25. `T0050 Payment readiness/bootstrap`: current local ticket; documents the T0040 replacement, captures Pabel's answers, and adds safe readiness validation.
-26. `T0051 New-booking payment execution`: next payment ticket; integrate the Roller payment package/drop-in for new booking drafts after public-origin allowlisting is confirmed.
+26. `T0051 New-booking payment execution`: completed locally; integrates the Roller payment package/drop-in for new booking drafts, with public browser payment smoke pending allowlist confirmation.
 27. `T0052 Add-product payment execution`: reuse the proven payment execution path for separate linked add-product drafts.
 28. `T0053 Staff production readiness`: later separate ticket for production staff identity, roles, MFA/session policy, and audit ownership.
 

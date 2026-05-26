@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-26
-- Current branch: `codex/t0050-payment-package-bootstrap`
-- Current status: T0050 payment readiness/bootstrap completed locally; old T0040 payment placeholder is superseded by T0050-T0052; readiness confirms Roller Playground `/venues/me` payment settings and public Cloudflare origin reachability, with public-origin allowlist confirmation still pending.
-- Current ticket: `T0050` completed locally, not yet committed or merged
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`
-- Recommended next step: wait for Pabel's allowlist confirmation for `https://jumpyard-check-in.pages.dev`, then run `T0051 New-booking payment execution`.
+- Current branch: `codex/t0051-new-booking-payment-execution`
+- Current status: T0051 new-booking payment execution completed locally; phone buy-entry vendors Roller's approved `@roller/ecom-payments` `v217` package and renders the payment drop-in for new booking drafts when a response-only `paymentJwt` and payment config are present. Payment package bootstrap failures fail closed into a visible unavailable state instead of an indefinite spinner. Public end-to-end payment smoke still waits for Roller allowlist confirmation for `https://jumpyard-check-in.pages.dev`.
+- Current ticket: `T0051` completed locally, not yet committed or merged
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`
+- Recommended next step: confirm Roller allowlisting for `https://jumpyard-check-in.pages.dev`, run a public browser payment smoke for T0051, then implement `T0052 Add-product payment execution`.
 
 ## Current Structure
 
@@ -64,9 +64,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- package-lock.json
 |   `-- tsconfig.json
 |-- jumpyard-checkin-phone/
+|   |-- vendor/ecom-payments/
 |   |-- src/app/page.tsx
 |   |-- src/components/BookingSummary.tsx
 |   |-- src/components/ConfirmationScreen.tsx
+|   |-- src/components/RollerPaymentDropIn.tsx
 |   |-- src/components/SafetyAttest.tsx
 |   |-- src/context/LanguageContext.tsx
 |   |-- src/flow/cloudClient.ts
@@ -173,25 +175,27 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0048` | Polished staff/admin handoff UI. | 2026-05-25 | Admin handoff now uses JumpYard phone-app icons, the documented system sans-serif font stack, mobile-first selected-detail ordering, larger rounded tap targets, simplified handoff copy, fewer decorative icons, and clearer scanner/list/detail/redeem states without changing backend contracts. Historical display-font imports were removed from admin/phone/kiosk app shells. |
 | `T0049` | Added confirmed scheduled SMS safety gate. | 2026-05-25 | Dev scheduled booking-time SMS now has explicit `checkinBaseUrl` and `confirmedSendApproval` config fields, synth-time and runtime blocking for unsafe confirmed scheduled sends, and deployed EventBridge payload updates while keeping `confirmSend=false`. |
 | `T0050` | Added payment readiness/bootstrap. | 2026-05-26 | Added `npm run roller:payment:readiness`, documented Pabel's payment answers, set `https://jumpyard-check-in.pages.dev` as the intended public test origin, and superseded the old T0040 placeholder with T0050-T0052. |
+| `T0051` | Added new-booking payment execution wiring. | 2026-05-26 | Vendored Roller payment package `v217`, wired phone buy-entry drafts to the Roller/Adyen drop-in, kept raw JWT response-only/in-memory, made package bootstrap failures fail closed instead of spin indefinitely, and left public browser payment smoke pending allowlist confirmation. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0050` | Payment readiness/bootstrap. | Completed locally, not deployed | Readiness checks pass except for the expected external allowlist confirmation; no payment UI, booking writes, AWS changes, or Aurora writes were added. |
+| `T0051` | New-booking payment execution. | Completed locally, not deployed | Phone app package/UI changes only; no AWS deploy yet and public payment smoke still waits for Roller allowlisting. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0051` | New-booking payment execution | Start after Pabel confirms `https://jumpyard-check-in.pages.dev` is allowlisted; integrate the Roller payment package/drop-in for new booking drafts. |
-| `T0052` | Add-product payment execution | Reuse the T0051 payment execution path for separate linked add-product drafts. |
+| `Public T0051 payment smoke` | Verify new-booking browser payment on Cloudflare | Run after Pabel confirms `https://jumpyard-check-in.pages.dev` is allowlisted; use the official Adyen Visa test card ending `1142`. |
+| `T0052` | Add-product payment execution | Reuse the T0051 payment execution path for separate linked add-product drafts after the new-booking path is proven. |
 | `T0053` | Staff production readiness | Replace pilot passcode auth with production staff identity/roles and harden handoff QR/token policy before production rollout. |
 | `Manual integrated smoke pass` | Validate the current end-to-end flow together | Run a small number of guided test cases one at a time before or after T0051 depending on allowlist timing. |
 
 ## Validation Status
 
 - Automated root validation: `npm run validate` passed on 2026-05-26 during T0050.
+- T0051 validation: `npm run validate`, `npm run roller:payment:readiness`, `cd jumpyard-checkin-phone && npm run lint`, `cd jumpyard-checkin-phone && npm run build`, source scan for raw JWT/logging, local browser smoke at `http://127.0.0.1:3000/`, and `git diff --check` passed on 2026-05-26. Readiness still reports blocker `public_origin_allowlist_confirmation`; `npm audit --omit=dev` warns on existing `next@16.0.8`/`postcss` advisories and is tracked as `FU-043`. A local payment bootstrap spinner was fixed so missing package configuration becomes a visible unavailable state.
 - T0050 validation: `node --check scripts/roller-payment-readiness.js`, `npm run roller:payment:readiness`, `npm run validate`, and `git diff --check` passed. Readiness reported Roller `/venues/me` HTTP `200`, `paymentSettings` available, public origin HTTP `200`, Roller docs HTTP `200`, and blocker `public_origin_allowlist_confirmation`.
 - T0049 validation: `node --check infra/lambda/session/index.js`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, unsafe confirmed-send synth guards, runtime guard smoke, `npm run validate`, pre/post `npm --prefix infra run diff:dev`, `npm --prefix infra run deploy:dev`, and `git diff --check` passed.
 - T0049 post-credential-recovery smoke: new Playground booking `5063366` for `2026-05-26` returned `ready` from JumpYard Cloud, existed in Aurora as `Paid`/`fresh` with 4 tickets, started check-in session `jycs_mpmg3swu_0c34710f`, reached `ready_for_staff` with handoff `JY8713`, and appeared in the staff-auth-protected handoff list/detail without redeeming tickets.
@@ -473,7 +477,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
 - Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, phone session resume routing is complete locally from T0029, staff auth replacement is deployed from T0047, and staff/admin mobile visual polish is complete locally from T0048.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
-- Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; T0050 confirms `/venues/me` payment settings are available and the remaining blocker before T0051 is public-origin allowlist confirmation plus payment package/drop-in implementation.
+- Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; T0050 confirms `/venues/me` payment settings are available and T0051 wires the approved payment package in the phone buy-entry flow. The remaining blocker is public-origin allowlist confirmation plus an actual browser payment smoke.
 - Existing-booking add-product linked-booking flow has been tested server-side in dev; phone UI wiring is still pending.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
@@ -487,4 +491,4 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Which exact production auth header/signature and optional IP allowlisting should Roller webhook intake use beyond the confirmed Playground `x-roller-apikey` header?
 - Which real Roller redemption device name should JumpYard Cloud send, if any, before production check-in?
 - Which staff/admin authentication model should authorize final redeem in the pilot?
-- Is `https://jumpyard-check-in.pages.dev` confirmed allowlisted for Roller Playground payment testing, and what exact browser package import shape should T0051 use from the Roller Payments docs?
+- Is `https://jumpyard-check-in.pages.dev` confirmed allowlisted for Roller Playground payment testing, and does the public T0051 browser smoke complete with Adyen's Visa test card ending `1142`?
