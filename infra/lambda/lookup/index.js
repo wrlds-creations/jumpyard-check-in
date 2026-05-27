@@ -35,6 +35,7 @@ exports.handler = async (event) => {
 
     const localResult = await getLocalBooking(request);
     if (localResult.status === 'found' && shouldUseLocalBooking(localResult.booking)) {
+      await reconcilePrepaymentDraftFromPaidBooking(localResult.booking, 'aurora_local_lookup');
       const eligibility = evaluateEligibility(localResult.booking, request);
 
       return jsonResponse(200, correlationId, {
@@ -78,6 +79,7 @@ exports.handler = async (event) => {
     const products = await getProductCatalogBestEffort(config, token);
     const booking = normalizeBooking(bookingResult.body, products);
     await upsertLiveBooking(booking, config.env, request.venueId);
+    await reconcilePrepaymentDraftFromPaidBooking(booking, 'roller_live_lookup');
     const eligibility = evaluateEligibility(booking, request);
 
     return jsonResponse(200, correlationId, {
@@ -844,6 +846,74 @@ async function upsertLiveTicket(rollerUniqueId, bookingItemKey, item, ticket) {
   );
 }
 
+async function reconcilePrepaymentDraftFromPaidBooking(booking, source) {
+  if (!booking?.rollerUniqueId || !booking.bookingReference || !isPaymentSettled(booking)) return [];
+
+  const result = await executeStatement(
+    `UPDATE jumpyard.prepayment_booking_drafts
+     SET status = 'published',
+         amount_owing_cents = COALESCE(:amountOwingCents, 0),
+         total_cents = COALESCE(:totalCents, total_cents),
+         updated_at = now()
+     WHERE roller_draft_unique_id = :rollerUniqueId
+       AND status IN ('payment_pending', 'payment_blocked')
+     RETURNING prepayment_draft_id, flow_type`,
+    [
+      stringParameter('rollerUniqueId', booking.rollerUniqueId),
+      intParameter('amountOwingCents', currencyToCents(booking.amountOwing)),
+      intParameter('totalCents', currencyToCents(booking.total)),
+    ],
+  );
+
+  const updatedDrafts = mappedRows(result);
+  for (const draft of updatedDrafts) {
+    await recordPrepaymentDraftPublishedEvent(booking, draft, source);
+  }
+
+  return updatedDrafts;
+}
+
+async function recordPrepaymentDraftPublishedEvent(booking, draft, source) {
+  const draftId = stringOrNull(draft.prepayment_draft_id);
+  if (!draftId) return;
+
+  await executeStatement(
+    `INSERT INTO jumpyard.event_log (
+      event_id,
+      correlation_id,
+      event_type,
+      subject_ref,
+      summary,
+      event_payload
+    )
+    VALUES (
+      :eventId,
+      :correlationId,
+      'prepayment_draft.published',
+      :subjectRef,
+      :summary,
+      CAST(:eventPayload AS jsonb)
+    )
+    ON CONFLICT (event_id) DO NOTHING`,
+    [
+      stringParameter('eventId', `prepayment-draft-published:${draftId}`),
+      stringParameter('correlationId', createCorrelationId()),
+      stringParameter('subjectRef', booking.bookingReference || booking.rollerUniqueId),
+      stringParameter('summary', 'Marked pre-payment draft as published after paid Roller booking confirmation.'),
+      stringParameter(
+        'eventPayload',
+        JSON.stringify({
+          bookingReference: booking.bookingReference,
+          flowType: stringOrNull(draft.flow_type),
+          prepaymentDraftId: draftId,
+          rollerUniqueId: booking.rollerUniqueId,
+          source,
+        }),
+      ),
+    ],
+  );
+}
+
 function localBookingItemKey(rollerUniqueId, item) {
   const keySource =
     item.bookingItemId ||
@@ -1018,6 +1088,16 @@ function hashString(value) {
 function isTombstoned(status) {
   const normalized = String(status ?? '').toLowerCase();
   return normalized === 'cancelled' || normalized === 'deleted';
+}
+
+function isPaymentSettled(booking) {
+  const status = String(booking.paymentStatus ?? booking.status ?? '').toLowerCase().replace(/\s+/g, '');
+  if (status.includes('pending') || status.includes('unpaid') || status.includes('partial')) return false;
+
+  const amountOwing = numberOrNull(booking.amountOwing);
+  if (amountOwing !== null && amountOwing > 0) return false;
+
+  return status === 'paid' || status === 'paidinfull' || status === 'nopaymentrequired';
 }
 
 function classifyError(error) {

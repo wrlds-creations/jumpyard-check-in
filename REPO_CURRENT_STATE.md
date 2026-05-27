@@ -4,12 +4,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Snapshot
 
-- Date: 2026-05-26
-- Current branch: `codex/t0055-buy-entry-paid-continuation`
-- Current status: T0055 new-booking paid continuation is implemented locally. Buy-entry now has a compact five-step progress indicator, and approved paid new bookings route into the JumpYard Cloud check-in safety/QR path instead of the existing-booking add-ons/payment loop.
-- Current ticket: `T0055` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`
-- Recommended next step: wait for Pabel/Roller on card/scheme enablement, then run a public payment continuation smoke after T0055 is merged/deployed; keep T0056 staff production readiness as the next non-payment hardening ticket.
+- Date: 2026-05-27
+- Current branch: `codex/t0056-payment-draft-status-reconciliation`
+- Current status: T0056 is implemented, deployed to dev, and smoke-tested. Lookup and webhook enrichment now reconcile settled Roller booking snapshots back to matching `jumpyard.prepayment_booking_drafts` rows so paid/published drafts do not stay locally `payment_pending`.
+- Current ticket: `T0056` completed locally and deployed to dev, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`
+- Recommended next step: commit/push/merge T0056 when reviewed, then use T0057 for staff production readiness or a short integrated regression pass before deeper production hardening.
 
 ## Current Structure
 
@@ -89,6 +89,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `npm --prefix infra run diff:dev` | Review AWS dev changes before deploy. | Must show only approved ticket-scoped resources/code changes. If CDK cannot read the SSO profile directly, export temporary profile credentials into the shell process before running CDK. |
 | `npm --prefix infra run deploy:dev` | Deploy the approved dev foundation. | Run only after account `376129878018` and region `eu-north-1` are verified. |
 | `node --check infra/lambda/booking/index.js` | Confirm booking Lambda JavaScript syntax. | Added in T0031. |
+| `node --check infra/lambda/lookup/index.js` | Confirm lookup Lambda JavaScript syntax. | Used by T0056 payment draft reconciliation. |
+| `node --check infra/lambda/webhook/index.js` | Confirm webhook Lambda JavaScript syntax. | Used by T0056 payment draft reconciliation. |
 | `npm --prefix infra run register:webhook:dev` | Dry-run Roller Playground booking webhook registration for the dev endpoint. | Reads AWS SSM/Secrets Manager config, validates Playground, and does not print secrets. |
 | `npm --prefix infra run register:webhook:dev:apply` | Register the Roller Playground booking webhook for the dev endpoint. | Requires `ROLLER_WEBHOOK_REGISTER_ALLOW_WRITE=I_UNDERSTAND_THIS_REGISTERS_PLAYGROUND_WEBHOOK`; creates no duplicate when the webhook already exists. |
 | `npm --prefix infra run migrate:dev:status` | Show applied/pending Aurora migrations for dev. | Uses Aurora Data API and the `/jumpyard-check-in-dev/aurora/admin` secret; does not print secrets. |
@@ -180,24 +182,28 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0052` | Added add-product payment execution wiring. | 2026-05-26 | Reused the T0051 Roller payment drop-in for separate linked add-product drafts, kept raw JWT response-only/in-memory, preserved the payment-pending fallback, and routed approved add-product payment back into the original booking check-in flow without using the legacy local payment screen. |
 | `T0053` | Added new-booking basket-before-payment flow. | 2026-05-26 | Phone buy-entry now collects mapped add-ons before contact/review and sends entry plus selected add-ons in one draft/payment request; existing-booking add-product flow remains separate. |
 | `T0054` | Public payment method smoke. | 2026-05-26 | Public Cloudflare smoke confirmed Swish can complete and produce paid booking `5063382`; card/scheme is missing from current Roller/Adyen Playground payment methods and is blocked externally. |
+| `T0055` | Added new-booking paid continuation and buy-entry progress. | 2026-05-26 | Paid new-booking continuation starts/resumes the JumpYard Cloud check-in session and routes to safety/QR instead of the existing-booking summary/add-ons/payment loop. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0055` | New-booking paid continuation and progress bar. | Completed locally, not committed | Compact buy-entry progress is implemented, and paid new-booking continuation now starts/resumes the JumpYard Cloud check-in session and routes to safety/QR instead of the existing-booking add-ons/payment loop. |
+| `T0056` | Payment draft status reconciliation. | Completed locally and deployed to dev, not committed | Lookup and webhook enrichment mark matching local prepayment drafts `published` after an authoritative settled Roller booking snapshot, and write a safe event-log row. Smoke with booking `5063394` passed. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0056` | Staff production readiness | Replace pilot passcode auth with production staff identity/roles and harden handoff QR/token policy before production rollout. |
-| `Public paid-continuation smoke` | Prove T0055 on Cloudflare after merge/deploy | Use Swish or card when available, then confirm the paid new booking goes straight to safety/QR. |
-| `Manual integrated smoke pass` | Validate the current end-to-end flow together | Run a small number of guided test cases one at a time after the public payment blocker is cleared, or run non-payment check-in/staff tests meanwhile. |
+| `T0057` | Staff production readiness | Replace pilot passcode auth with production staff identity/roles and harden handoff QR/token policy before production rollout. |
+| `Integrated smoke pass` | Validate the current end-to-end flow together | Run a small number of guided test cases one at a time across buy-entry, safety/QR, staff handoff, and redeem after T0056 is deployed. |
 
 ## Validation Status
 
-- Automated root validation: `npm run validate` passed on 2026-05-26 for T0055 source-of-truth updates.
+- Automated root validation: `npm run validate` passed on 2026-05-27 for T0056 source-of-truth updates.
+- T0056 validation: `node --check infra/lambda/lookup/index.js`, `node --check infra/lambda/webhook/index.js`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, `npm run validate`, and `git diff --check` passed on 2026-05-27. `git diff --check` reported CRLF notices only.
+- T0056 AWS preflight/deploy: account `376129878018` and region `eu-north-1` were verified with short-lived credentials exported from the existing `wrlds-dev` SSO profile. Pre-deploy diff showed only `LookupHandler` and `WebhookHandler` Lambda code asset changes, deploy passed, and post-deploy diff showed no differences.
+- T0056 dev smoke: lookup for known paid booking `5063394` returned `found`/`ready`, Roller unique id `abec3317-1dc1-4b44-917b-5b52ae104d69`, `paymentStatus=Paid`, and `amountOwing=0`. Aurora row `jypd_835161973ab34210ac` changed to `published`, `amount_owing_cents=0`, and `event_log` contains `prepayment_draft.published`.
+- T0055 validation: public Cloudflare smoke after merge created paid booking `5063394`, started/resumed a JumpYard Cloud session, and routed the phone flow to safety. The matching local prepayment draft still showed `payment_pending`, which is the T0056 reconciliation target.
 - T0055 validation: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, local browser progress smoke at `http://localhost:3000/`, `npm run validate`, and `git diff --check` passed on 2026-05-26. Browser smoke confirmed compact progress labels `Entré`, `Tillägg`, `Betalning`, `Säkerhet`, and `Klar`, and advanced through `TIMESLOT`, `PRODUCT`, `QUANTITY`, `ADDONS`, and `CONTACT`. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings.
 - T0054 validation: public Cloudflare smoke confirmed T0053 flow order, Swish payment created paid booking `5063382`, JumpYard Cloud lookup returned `Paid`/`amountOwing=0`/`canCheckIn=true`, safe payment-config inspection found no `scheme` card method for the current Playground custom-checkout configuration, and `git diff --check` passed with CRLF notices only.
 - T0053 validation: `npm run validate`, `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, local browser flow smoke at `http://localhost:3000/`, and `git diff --check` passed on 2026-05-26. Browser smoke selected 60 min entry plus one socks add-on and reached review with both lines before draft/payment. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings.

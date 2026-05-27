@@ -421,6 +421,7 @@ async function enrichWebhookEvent(intake, correlationId) {
     }
 
     await upsertWebhookBooking(booking, config.env, null);
+    await reconcilePrepaymentDraftFromPaidBooking(booking, 'roller_webhook_enrichment');
     await updateWebhookEventStatus(intake.eventId, 'processed', null, true);
     await persistEnrichmentEventLog(intake, correlationId, booking, products.status);
 
@@ -1007,6 +1008,74 @@ async function upsertWebhookTicket(rollerUniqueId, bookingItemKey, item, ticket)
   );
 }
 
+async function reconcilePrepaymentDraftFromPaidBooking(booking, source) {
+  if (!booking?.rollerUniqueId || !booking.bookingReference || !isPaymentSettled(booking)) return [];
+
+  const result = await executeStatement(
+    `UPDATE jumpyard.prepayment_booking_drafts
+     SET status = 'published',
+         amount_owing_cents = COALESCE(:amountOwingCents, 0),
+         total_cents = COALESCE(:totalCents, total_cents),
+         updated_at = now()
+     WHERE roller_draft_unique_id = :rollerUniqueId
+       AND status IN ('payment_pending', 'payment_blocked')
+     RETURNING prepayment_draft_id, flow_type`,
+    [
+      stringParameter('rollerUniqueId', booking.rollerUniqueId),
+      intParameter('amountOwingCents', currencyToCents(booking.amountOwing)),
+      intParameter('totalCents', currencyToCents(booking.total)),
+    ],
+  );
+
+  const updatedDrafts = mappedRows(result);
+  for (const draft of updatedDrafts) {
+    await recordPrepaymentDraftPublishedEvent(booking, draft, source);
+  }
+
+  return updatedDrafts;
+}
+
+async function recordPrepaymentDraftPublishedEvent(booking, draft, source) {
+  const draftId = stringOrNull(draft.prepayment_draft_id);
+  if (!draftId) return;
+
+  await executeStatement(
+    `INSERT INTO jumpyard.event_log (
+      event_id,
+      correlation_id,
+      event_type,
+      subject_ref,
+      summary,
+      event_payload
+    )
+    VALUES (
+      :eventId,
+      :correlationId,
+      'prepayment_draft.published',
+      :subjectRef,
+      :summary,
+      CAST(:eventPayload AS jsonb)
+    )
+    ON CONFLICT (event_id) DO NOTHING`,
+    [
+      stringParameter('eventId', `prepayment-draft-published:${draftId}`),
+      stringParameter('correlationId', createCorrelationId()),
+      stringParameter('subjectRef', booking.bookingReference || booking.rollerUniqueId),
+      stringParameter('summary', 'Marked pre-payment draft as published after paid Roller booking confirmation.'),
+      stringParameter(
+        'eventPayload',
+        JSON.stringify({
+          bookingReference: booking.bookingReference,
+          flowType: stringOrNull(draft.flow_type),
+          prepaymentDraftId: draftId,
+          rollerUniqueId: booking.rollerUniqueId,
+          source,
+        }),
+      ),
+    ],
+  );
+}
+
 function localBookingItemKey(rollerUniqueId, item) {
   const keySource =
     item.bookingItemId ||
@@ -1067,6 +1136,28 @@ function intParameter(name, value) {
     : { name, value: { longValue: Number(value) } };
 }
 
+function mappedRows(result) {
+  const columns = (result.columnMetadata ?? []).map((column) => column.name);
+  return (result.records ?? []).map((record) => {
+    const row = {};
+    for (let index = 0; index < record.length; index += 1) {
+      row[columns[index] ?? String(index)] = fieldToJsValue(record[index]);
+    }
+    return row;
+  });
+}
+
+function fieldToJsValue(field) {
+  if (!field || field.isNull) return null;
+  if (field.stringValue !== undefined) return field.stringValue;
+  if (field.longValue !== undefined) return Number(field.longValue);
+  if (field.doubleValue !== undefined) return Number(field.doubleValue);
+  if (field.booleanValue !== undefined) return Boolean(field.booleanValue);
+  if (field.blobValue !== undefined) return field.blobValue;
+  if (field.arrayValue !== undefined) return field.arrayValue;
+  return null;
+}
+
 function firstString(values, fallback = null) {
   for (const value of values) {
     if (value !== undefined && value !== null && value !== '') {
@@ -1119,6 +1210,16 @@ function hashString(value) {
 function isTombstoned(status) {
   const normalized = String(status ?? '').toLowerCase();
   return normalized === 'cancelled' || normalized === 'deleted';
+}
+
+function isPaymentSettled(booking) {
+  const status = String(booking.paymentStatus ?? booking.status ?? '').toLowerCase().replace(/\s+/g, '');
+  if (status.includes('pending') || status.includes('unpaid') || status.includes('partial')) return false;
+
+  const amountOwing = numberOrNull(booking.amountOwing);
+  if (amountOwing !== null && amountOwing > 0) return false;
+
+  return status === 'paid' || status === 'paidinfull' || status === 'nopaymentrequired';
 }
 
 function createCorrelationId() {

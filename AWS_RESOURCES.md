@@ -343,6 +343,17 @@ T0047 staff auth deploy notes:
 - Dev-token handling: the old direct redeem dev-token path remains only for controlled lower-level dev testing; the normal admin handoff UI no longer asks for it.
 - Production note: this is a pilot/dev auth slice, not final Cognito/SSO/role-based staff identity.
 
+T0056 payment draft reconciliation deploy notes:
+
+- Changed resources: `jumpyard-check-in-dev-stack-lookup` and `jumpyard-check-in-dev-stack-webhook` Lambda code only.
+- Behavior: when lookup or webhook enrichment sees a settled Roller booking snapshot, the matching `jumpyard.prepayment_booking_drafts` row is marked `published`, amount owing is set to zero, and a safe idempotent `prepayment_draft.published` event is written.
+- Roller calls: lookup/webhook continue to use existing read-only Roller booking refresh paths.
+- Roller writes: none.
+- Aurora schema changes: none; T0056 uses the existing `published` draft status.
+- Secret/JWT handling: no raw `paymentJwt`, access token, client secret, or full contact PII is persisted or logged.
+- Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-05-27; post-deploy `npm --prefix infra run diff:dev` showed no differences.
+- Dev smoke result: lookup for paid booking `5063394` updated draft `jypd_835161973ab34210ac` to `published`, set `amount_owing_cents=0`, and wrote `prepayment_draft.published` to `jumpyard.event_log`.
+
 Confirmed T0006 dev target:
 
 | Field | Value |

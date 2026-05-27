@@ -568,6 +568,21 @@ Use this file to define validation for the current project or milestone.
 | Buy-entry progress advances | Time, product, quantity, add-ons, and contact steps update the progress state. | Passed | Browser verification advanced from `TIMESLOT` to `PRODUCT`, `QUANTITY`, `ADDONS`, and `CONTACT` without horizontal overflow in the current browser viewport. |
 | Paid new-booking continuation | Approved new-booking payment should start/resume a JumpYard Cloud check-in session and route to safety/QR instead of existing-booking add-ons/payment. | Code validated | The route is implemented in `handlePaidNewBookingReady`; full public payment continuation should be re-smoked after the next deploy because card is still externally blocked and Swish requires manual action. |
 
+## T0056 Payment Draft Status Reconciliation Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Lookup syntax | `node --check infra/lambda/lookup/index.js` passes. | Passed | Passed on 2026-05-27. |
+| Webhook syntax | `node --check infra/lambda/webhook/index.js` passes. | Passed | Passed on 2026-05-27. |
+| Infra build/synth | `npm --prefix infra run build` and `npm --prefix infra run synth:dev` pass. | Passed | Passed on 2026-05-27. CDK synth reported the existing CDK notice `37949`. |
+| Root validation | `npm run validate` passes after source-of-truth updates. | Passed | Passed on 2026-05-27. |
+| Diff whitespace | `git diff --check` passes. | Passed with CRLF notices | Passed on 2026-05-27; output contains Git line-ending notices only. |
+| AWS preflight | `aws sts get-caller-identity --profile wrlds-dev` verifies the dev account before deploy. | Passed | Short-lived credentials exported from the existing `wrlds-dev` SSO profile verified account `376129878018`, region `eu-north-1`, without printing secret values in docs. |
+| Dev diff/deploy | CDK diff/deploy changes only lookup and webhook Lambda code. | Passed | Pre-deploy diff showed only `LookupHandler` and `WebhookHandler` code assets; deploy passed; post-deploy diff showed no differences. |
+| Paid draft reconciliation | A settled Roller booking matching a prepayment draft updates the draft to `published`. | Passed | Lookup smoke for booking `5063394` returned `Paid`, amount owing `0`, and updated draft `jypd_835161973ab34210ac` to `published` with `amount_owing_cents=0`. |
+| Event log | Reconciliation writes one safe idempotent `prepayment_draft.published` event. | Passed | Aurora query found event type `prepayment_draft.published` for booking `5063394`. |
+| Pending draft safety | Pending/unpaid/partial Roller snapshots do not publish local draft state. | Passed | Post-smoke draft status summary still showed `payment_pending` rows alongside the one published draft. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
