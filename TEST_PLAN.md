@@ -583,6 +583,21 @@ Use this file to define validation for the current project or milestone.
 | Event log | Reconciliation writes one safe idempotent `prepayment_draft.published` event. | Passed | Aurora query found event type `prepayment_draft.published` for booking `5063394`. |
 | Pending draft safety | Pending/unpaid/partial Roller snapshots do not publish local draft state. | Passed | Post-smoke draft status summary still showed `payment_pending` rows alongside the one published draft. |
 
+## T0057 Integrated Smoke Test
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Ticket numbering | Project docs identify T0057 as integrated smoke test and T0058 as stack production readiness. | Passed | `CODEX_TASK.md`, `PROJECT_CONTEXT.md`, and `REPO_CURRENT_STATE.md` were updated. |
+| Lookup/payment state | Known paid booking `5063394` returns ready from JumpYard Cloud and its prepayment draft remains `published`. | Passed | Dev lookup returned `found`/`ready`, `Paid`, amount owing `0`; Aurora draft `jypd_835161973ab34210ac` remained `published`. |
+| Historical smoke booking redeemability | Existing paid smoke booking should be redeemable only when it is valid for today's date. | Blocked as expected | Booking `5063394` reached ready-for-staff but Roller rejected redeem with `Ticket is not valid for this date` because its visit date is `2026-05-26`. |
+| Mixed add-on basket redeemability | Mixed entry plus add-on baskets should not send non-redeemable add-on tickets to Roller redeem. | Follow-up required | Booking `5063419` reached ready-for-staff, but Roller rejected redeem with `Product type not accepted` for add-on ticket ids. Tracked in `FU-054`. |
+| Session handoff | A paid today's booking can start a check-in session and be marked ready for staff. | Passed | Entry-only booking `5063420` started session `jycs_mpns6nvd_bc6ab155` and reached handoff `JY2947`. |
+| Staff auth/list/detail | Staff-auth-protected endpoints can read the ready handoff session. | Passed | Staff auth returned `authenticated` without printing token/passcode; list contained the session before redeem and detail returned booking `5063420` with one selected ticket. |
+| Staff redeem | Staff-confirmed redeem succeeds for a redeemable today's entry-only booking. | Passed | Staff redeem returned `redeemed` with one redeemed ticket; no Roller Live calls were made. |
+| Final Aurora state | Session/ticket state reflects the final smoke outcome. | Passed | Aurora shows session `redeemed`, handoff `completed`, safety `completed`, one selected ticket, and one redeemed ticket for booking `5063420`; the session left the active ready list. |
+| Browser smoke | Phone and staff/admin apps load enough to verify the shells. | Passed | Public phone app loaded with buy-entry and booking lookup copy; local admin app was temporarily started on `127.0.0.1:3002`, rendered the handoff shell, then was stopped. |
+| Root validation | `npm run validate` passes after smoke docs are updated. | Passed | `npm run validate` and `git diff --check` passed on 2026-05-27; diff check reported CRLF notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
