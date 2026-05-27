@@ -1,94 +1,86 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0056
+T0057
 
 ## Goal
-Reconcile paid Roller draft bookings back to JumpYard Cloud prepayment draft state.
+Run a focused integrated smoke test across the current JumpYard check-in flow.
 
 ## Dependencies
-- T0055 completed and merged.
-- T0054 public Swish smoke confirmed that Roller can publish a paid Playground booking after payment.
-- The public T0055 smoke created paid Roller booking `5063394`, while its local `prepayment_booking_drafts` row stayed `payment_pending`.
+- T0056 completed, deployed to dev, and merged to `main`.
+- Known paid Playground booking `5063394` exists from the public T0055/T0056 smoke.
+- Dev JumpYard Cloud API is deployed in AWS account `376129878018`, region `eu-north-1`.
+- Staff auth exists from T0047.
 
 ## Allowed areas
 - CODEX_TASK.md
 - PROJECT_CONTEXT.md
-- DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
-- AWS_RESOURCES.md
 - TEST_PLAN.md
-- infra/lambda/lookup/index.js
-- infra/lambda/webhook/index.js
+- AWS_RESOURCES.md only if AWS resource behavior/status is discovered during smoke verification
 
 ## Do not touch
-- Phone UI
-- Staff/admin UI
-- Kiosk UI
+- App source code
+- UI files
 - Payment package vendor files
-- Aurora migrations or schema unless existing statuses are insufficient
 - Package dependencies
+- Aurora migrations or schema
+- CDK infrastructure definitions
 - Production credentials
 - Live Roller config
 - `.env`
-- SMS behavior
-- Staff authentication behavior
 - Unrelated local assets or deliverables
 
 ## Requirements
 
-1. Reconcile paid new-booking draft state from lookup.
-   - When `POST /v1/check-in/lookup` sees a settled Roller booking snapshot that matches a local prepayment draft, update the matching draft state.
-   - Match by `prepayment_booking_drafts.roller_draft_unique_id = roller_bookings.roller_unique_id`.
-   - Use the existing `published` status instead of adding a new schema status.
+1. Lock ticket numbering.
+   - T0057 is now `Integrated smoke test`.
+   - T0058 is now `Stack production readiness`.
 
-2. Reconcile paid draft state from webhook enrichment.
-   - When Roller booking webhook enrichment fetches a settled booking snapshot, update the matching local prepayment draft state.
-   - This must work for both new-booking drafts and linked add-product drafts.
+2. Run an integrated happy-path smoke using dev/Playground only.
+   - Confirm lookup for a paid Playground booking through JumpYard Cloud.
+   - Confirm the local prepayment draft state is already reconciled to `published`.
+   - Start or resume the JumpYard Cloud check-in session.
+   - Mark the session ready for staff.
+   - Authenticate through staff auth.
+   - Confirm staff handoff list/detail can see the ready session.
+   - Execute staff-confirmed redeem if the chosen booking/session is still redeemable.
+   - Confirm the session leaves the active ready list after successful redeem.
 
-3. Keep pending and unsafe states unchanged.
-   - Do not mark a draft published when Roller still reports unpaid, pending, partial payment, or positive amount owing.
-   - Do not treat Aurora-only pending state as payment truth.
+3. Run a minimal browser smoke.
+   - Confirm the phone app loads.
+   - Confirm the staff/admin app loads enough to show the handoff/login shell.
+   - Do not change UI behavior or styling.
 
-4. Keep payment secrets safe.
-   - Do not persist, log, print, or render raw `paymentJwt` values.
-   - Store only safe lifecycle metadata and event-log summaries.
-
-5. Add safe observability.
-   - Write an idempotent `event_log` row when a prepayment draft is marked `published`.
-   - The event payload must contain only safe ids/status metadata, not raw Roller payloads or contact PII.
+4. Keep the smoke safe.
+   - Do not print staff passcodes, staff tokens, Roller secrets, access tokens, raw payment JWTs, full phone numbers, or full email addresses.
+   - Use only Playground/dev resources.
+   - Do not touch Roller Live.
 
 ## Non-goals
-- Do not fix Roller/Adyen card method configuration.
-- Do not change the payment UI.
-- Do not add a new payment webhook endpoint.
-- Do not implement payment refunds, gift cards, memberships, or discounts.
-- Do not change existing-booking add-product UX.
-- Do not create a new Aurora migration unless the existing status values cannot represent the lifecycle.
-- Do not write to Roller Live/production.
+- Do not build new app behavior.
+- Do not fix card/scheme payment configuration.
+- Do not create new paid bookings unless the existing smoke booking cannot be used.
+- Do not add new AWS resources.
+- Do not enable production/staging resources.
+- Do not change staff auth implementation.
+- Do not change SMS scheduling or sending behavior.
 
 ## Acceptance criteria
-- A paid Roller booking that originated from `prepayment_booking_drafts` changes the matching local draft from `payment_pending` or `payment_blocked` to `published`.
-- Matching drafts have `amount_owing_cents=0` when the authoritative Roller snapshot is settled.
-- The reconciliation works from lookup and webhook enrichment paths.
-- Pending/unpaid Roller snapshots do not change local draft status to `published`.
-- `event_log` records a safe `prepayment_draft.published` event.
+- Source-of-truth docs show T0057 as integrated smoke test and T0058 as stack production readiness.
+- The selected paid booking can be looked up through JumpYard Cloud.
+- The selected paid booking can create/resume a check-in session and reach ready-for-staff.
+- Staff-auth-protected list/detail can read the ready session.
+- Staff-confirmed redeem succeeds or a clear documented blocker explains why redeem was not executed.
+- Aurora confirms the final session and ticket state after the smoke.
 - `npm run validate` passes.
-- Infra build/synth passes.
 
 ## Manual verification
-- Deploy the lookup/webhook Lambda changes to dev if validation passes.
-- Trigger lookup for known paid Playground booking `5063394`.
-- In Aurora, confirm the matching `jumpyard.prepayment_booking_drafts` row is `published`.
-- In Aurora, confirm a `jumpyard.event_log` row with event type `prepayment_draft.published` exists.
-- Confirm no raw `paymentJwt`, access token, or secret is printed during verification.
+- Review the smoke output in `TEST_PLAN.md`.
+- Confirm no secret values, raw JWTs, or full PII were recorded.
 
 ## Automated validation
 Run:
-- `node --check infra/lambda/lookup/index.js`
-- `node --check infra/lambda/webhook/index.js`
-- `npm --prefix infra run build`
-- `npm --prefix infra run synth:dev`
 - `npm run validate`
 - `git diff --check`

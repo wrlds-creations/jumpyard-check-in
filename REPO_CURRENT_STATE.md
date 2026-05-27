@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-27
-- Current branch: `codex/t0056-payment-draft-status-reconciliation`
-- Current status: T0056 is implemented, deployed to dev, and smoke-tested. Lookup and webhook enrichment now reconcile settled Roller booking snapshots back to matching `jumpyard.prepayment_booking_drafts` rows so paid/published drafts do not stay locally `payment_pending`.
-- Current ticket: `T0056` completed locally and deployed to dev, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`
-- Recommended next step: commit/push/merge T0056 when reviewed, then use T0057 for staff production readiness or a short integrated regression pass before deeper production hardening.
+- Current branch: `codex/t0057-integrated-smoke-test`
+- Current status: T0057 integrated smoke test is complete locally and not committed. T0056 is merged to `main`, deployed to dev, and smoke-tested.
+- Current ticket: `T0057` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`
+- Recommended next step: start T0058 stack production readiness.
 
 ## Current Structure
 
@@ -183,19 +183,21 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0053` | Added new-booking basket-before-payment flow. | 2026-05-26 | Phone buy-entry now collects mapped add-ons before contact/review and sends entry plus selected add-ons in one draft/payment request; existing-booking add-product flow remains separate. |
 | `T0054` | Public payment method smoke. | 2026-05-26 | Public Cloudflare smoke confirmed Swish can complete and produce paid booking `5063382`; card/scheme is missing from current Roller/Adyen Playground payment methods and is blocked externally. |
 | `T0055` | Added new-booking paid continuation and buy-entry progress. | 2026-05-26 | Paid new-booking continuation starts/resumes the JumpYard Cloud check-in session and routes to safety/QR instead of the existing-booking summary/add-ons/payment loop. |
+| `T0056` | Reconciled payment draft status after Roller settlement. | 2026-05-27 | Lookup and webhook enrichment mark matching local prepayment drafts `published` after an authoritative settled Roller booking snapshot; PR #59 merged to `main`. |
+| `T0057` | Ran integrated dev/Playground smoke test. | 2026-05-27 | Entry-only booking `5063420` completed lookup, session, ready-for-staff, staff auth/list/detail, staff-confirmed redeem, and final Aurora state; mixed entry plus add-on booking `5063419` exposed a redeem eligibility follow-up. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0056` | Payment draft status reconciliation. | Completed locally and deployed to dev, not committed | Lookup and webhook enrichment mark matching local prepayment drafts `published` after an authoritative settled Roller booking snapshot, and write a safe event-log row. Smoke with booking `5063394` passed. |
+| `T0057` | Integrated smoke test. | Completed locally, not committed | Focused dev/Playground smoke across lookup, payment-draft reconciliation, session start, ready-for-staff, staff auth, staff detail, staff redeem, and final Aurora state. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0057` | Staff production readiness | Replace pilot passcode auth with production staff identity/roles and harden handoff QR/token policy before production rollout. |
-| `Integrated smoke pass` | Validate the current end-to-end flow together | Run a small number of guided test cases one at a time across buy-entry, safety/QR, staff handoff, and redeem after T0056 is deployed. |
+| `T0058` | Stack production readiness | Audit dev AWS stack, deployment config, environment separation, secrets, observability, rollback posture, and production cutover prerequisites before any staging/live setup. |
+| `T0059` | Card/scheme payment smoke | Run Adyen card test once Roller/Adyen exposes the `scheme` method in Playground custom checkout. |
 
 ## Validation Status
 
@@ -203,6 +205,10 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0056 validation: `node --check infra/lambda/lookup/index.js`, `node --check infra/lambda/webhook/index.js`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, `npm run validate`, and `git diff --check` passed on 2026-05-27. `git diff --check` reported CRLF notices only.
 - T0056 AWS preflight/deploy: account `376129878018` and region `eu-north-1` were verified with short-lived credentials exported from the existing `wrlds-dev` SSO profile. Pre-deploy diff showed only `LookupHandler` and `WebhookHandler` Lambda code asset changes, deploy passed, and post-deploy diff showed no differences.
 - T0056 dev smoke: lookup for known paid booking `5063394` returned `found`/`ready`, Roller unique id `abec3317-1dc1-4b44-917b-5b52ae104d69`, `paymentStatus=Paid`, and `amountOwing=0`. Aurora row `jypd_835161973ab34210ac` changed to `published`, `amount_owing_cents=0`, and `event_log` contains `prepayment_draft.published`.
+- T0057 integrated smoke: booking `5063394` still looks up as `Paid`/`ready` with draft `jypd_835161973ab34210ac` already `published`.
+- T0057 redeemable happy path: protected Playground seed booking `5063420` for `2026-05-27` completed lookup, session `jycs_mpns6nvd_bc6ab155`, handoff `JY2947`, staff auth/list/detail, staff-confirmed redeem, and Aurora final state `sessionStatus=redeemed`, `handoffStatus=completed`, `selectedTicketCount=1`, `redeemedTicketCount=1`.
+- T0057 browser smoke: public phone app `https://jumpyard-check-in.pages.dev` loaded with buy-entry and booking lookup copy; local admin app was temporarily started on `127.0.0.1:3002`, rendered the handoff shell, and was stopped after verification.
+- T0057 finding: mixed entry plus JumpSocks booking `5063419` reached ready-for-staff, but staff redeem was rejected by Roller with `Product type not accepted` because selected tickets included non-redeemable add-on tickets.
 - T0055 validation: public Cloudflare smoke after merge created paid booking `5063394`, started/resumed a JumpYard Cloud session, and routed the phone flow to safety. The matching local prepayment draft still showed `payment_pending`, which is the T0056 reconciliation target.
 - T0055 validation: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, local browser progress smoke at `http://localhost:3000/`, `npm run validate`, and `git diff --check` passed on 2026-05-26. Browser smoke confirmed compact progress labels `Entré`, `Tillägg`, `Betalning`, `Säkerhet`, and `Klar`, and advanced through `TIMESLOT`, `PRODUCT`, `QUANTITY`, `ADDONS`, and `CONTACT`. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings.
 - T0054 validation: public Cloudflare smoke confirmed T0053 flow order, Swish payment created paid booking `5063382`, JumpYard Cloud lookup returned `Paid`/`amountOwing=0`/`canCheckIn=true`, safe payment-config inspection found no `scheme` card method for the current Playground custom-checkout configuration, and `git diff --check` passed with CRLF notices only.

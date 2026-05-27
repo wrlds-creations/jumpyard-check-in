@@ -263,7 +263,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0054 Public payment method smoke` | Confirm public payment-package behavior, explain Swish success, and lock the missing card/scheme blocker. | Completed and merged; Swish works publicly, while card/scheme needs Roller/Adyen configuration. |
 | `T0055 New-booking paid continuation` | After a paid new booking, route directly into the check-in/safety/QR path and add a buy-entry progress bar. | Completed and merged; phone-flow only, no AWS/backend/payment-package changes. |
 | `T0056 Payment draft status reconciliation` | Mark local prepayment draft rows as `published` after Roller confirms the paid/published booking through lookup or webhook enrichment. | Completed locally and deployed to dev; backend lifecycle reconciliation only. |
-| `T0057 Staff production readiness` | Replace pilot staff auth with the production-ready staff identity/session/role model. | Next candidate; separate from payment and SMS. |
+| `T0057 Integrated smoke test` | Run a focused end-to-end dev/Playground smoke across lookup, payment reconciliation, session, safety handoff, staff auth, staff detail, and redeem. | Completed locally; test/documentation only. |
+| `T0058 Stack production readiness` | Audit the dev AWS stack, deployment config, environment separation, secrets, observability, rollback posture, and production cutover prerequisites before any staging/live setup. | Next hardening candidate; separate from payment and SMS. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -511,16 +512,23 @@ T0056 reconciles the server-side prepayment draft lifecycle after Roller payment
 - raw payment JWTs remain response-only and are never persisted or logged
 - dev smoke with paid booking `5063394` updated draft `jypd_835161973ab34210ac` to `published` and wrote a safe `prepayment_draft.published` event
 
+T0057 is the integrated smoke-test checkpoint before more production hardening:
+
+- no new app or AWS behavior should be built in this ticket
+- the primary happy path should use dev/Playground only
+- the smoke verified lookup, local payment-draft reconciliation, session start, ready-for-staff handoff, staff auth, staff detail, staff-confirmed redeem, and final Aurora state for today's entry-only Playground booking `5063420`
+- the smoke also found that mixed entry plus stock/add-on bookings can select non-redeemable add-on tickets and fail Roller redeem with `Product type not accepted`
+- smoke records use safe ids/statuses only and avoid secrets, raw JWTs, full phone numbers, and full email addresses
+- T0058 is reserved for stack production readiness after this test checkpoint
+
 ## Non-Goals For Current Ticket
 
+- Do not build new app behavior or change UI files.
 - Do not fix Roller/Adyen card method configuration.
-- Do not change the payment UI or payment package vendor files.
-- Do not add a new payment webhook endpoint.
-- Do not change Aurora schema unless existing draft statuses are insufficient.
-- Do not treat Aurora-only pending state as payment truth.
+- Do not change payment, SMS, staff auth, redeem, webhook, Data API, or CDK implementation.
+- Do not change Aurora schema.
 - Do not write to Roller Live/production.
 - Do not create staging or production AWS resources.
-- Do not change SMS, staff auth, redeem, phone UI, staff/admin UI, or kiosk UI behavior.
 
 ## Open Questions
 
