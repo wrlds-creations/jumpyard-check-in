@@ -598,6 +598,21 @@ Use this file to define validation for the current project or milestone.
 | Browser smoke | Phone and staff/admin apps load enough to verify the shells. | Passed | Public phone app loaded with buy-entry and booking lookup copy; local admin app was temporarily started on `127.0.0.1:3002`, rendered the handoff shell, then was stopped. |
 | Root validation | `npm run validate` passes after smoke docs are updated. | Passed | `npm run validate` and `git diff --check` passed on 2026-05-27; diff check reported CRLF notices only. |
 
+## T0058 Stack Production Readiness Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| AWS identity preflight | Read-only AWS checks use account `376129878018` and region `eu-north-1`. | Passed | `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`; `aws configure get region --profile wrlds-dev` returned `eu-north-1`. |
+| Stack read-only check | Current dev stack can be inspected without resource changes. | Passed | CloudFormation reported stack `jumpyard-check-in-dev-stack` status `UPDATE_COMPLETE` with API, Aurora, Roller secret, and raw payload bucket outputs. |
+| API exposure audit | Current API auth/CORS posture is documented before staging/live. | Passed | `get-routes` reported `AuthorizationType=NONE` for HTTP API routes; `get-api` confirmed CORS `AllowOrigins=['*']`. |
+| Observability audit | Missing production alarms are documented. | Passed | `describe-alarms --alarm-name-prefix jumpyard-check-in-dev` returned an empty list. |
+| Aurora posture audit | Current dev database safety posture is documented. | Passed | RDS reported Aurora PostgreSQL `16.13`, encrypted storage, Data API enabled, deletion protection on, 7-day backup retention, and status `available`. |
+| SMS sandbox audit | Current SNS production blocker is documented. | Passed | `aws sns get-sms-sandbox-account-status` returned `IsInSandbox=true`. |
+| Infra build | `npm --prefix infra run build` passes. | Passed | Passed on 2026-05-27; no AWS resources were changed. |
+| Dev synth | `npm --prefix infra run synth:dev` passes. | Passed | Passed on 2026-05-27; CDK emitted the existing notice `37949`, and no deploy was run. |
+| Root validation | `npm run validate` passes. | Passed | Passed on 2026-05-27 after T0058 source-of-truth updates. |
+| Diff whitespace | `git diff --check` passes. | Passed with CRLF notices | Passed on 2026-05-27; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

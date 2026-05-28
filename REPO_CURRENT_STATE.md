@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-27
-- Current branch: `codex/t0057-integrated-smoke-test`
-- Current status: T0057 integrated smoke test is complete locally and not committed. T0056 is merged to `main`, deployed to dev, and smoke-tested.
-- Current ticket: `T0057` completed locally, not committed
+- Current branch: `codex/t0058-stack-production-readiness`
+- Current status: T0058 stack production readiness audit is complete locally and not committed. T0057 is merged to `main` through PR #60.
+- Current ticket: `T0058` completed locally, not committed
 - Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`
-- Recommended next step: start T0058 stack production readiness.
+- Recommended next step: commit/merge T0058 when approved, then start T0059 redeem eligibility filter.
 
 ## Current Structure
 
@@ -190,14 +190,16 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0057` | Integrated smoke test. | Completed locally, not committed | Focused dev/Playground smoke across lookup, payment-draft reconciliation, session start, ready-for-staff, staff auth, staff detail, staff redeem, and final Aurora state. |
+| `T0058` | Stack production readiness audit. | Completed locally, not committed | Docs-only audit of dev AWS posture, production blockers, and recommended follow-up ticket order before staging/live. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0058` | Stack production readiness | Audit dev AWS stack, deployment config, environment separation, secrets, observability, rollback posture, and production cutover prerequisites before any staging/live setup. |
-| `T0059` | Card/scheme payment smoke | Run Adyen card test once Roller/Adyen exposes the `scheme` method in Playground custom checkout. |
+| `T0059` | Redeem eligibility filter | Fix `FU-054` so staff redeem sends only Roller-redeemable ticket ids and mixed add-on bookings do not fail the whole redeem call. |
+| `T0060` | API security and observability hardening | Address the top T0058 blockers: route auth strategy, CORS/origin policy, throttling, WAF/edge decision, alarms, dashboards, and operational diagnostics. |
+| `T0061` | Environment and cutover plan | Define staging/live config, secret ownership, deployment/rollback runbook, live backfill, webhook registration, and cutover checklist before any non-dev stack is created. |
+| `Deferred` | Card/scheme payment smoke | Wait for Pabel/Roller to enable or confirm the `scheme` card method before testing the Adyen Visa card path. |
 
 ## Validation Status
 
@@ -209,6 +211,9 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0057 redeemable happy path: protected Playground seed booking `5063420` for `2026-05-27` completed lookup, session `jycs_mpns6nvd_bc6ab155`, handoff `JY2947`, staff auth/list/detail, staff-confirmed redeem, and Aurora final state `sessionStatus=redeemed`, `handoffStatus=completed`, `selectedTicketCount=1`, `redeemedTicketCount=1`.
 - T0057 browser smoke: public phone app `https://jumpyard-check-in.pages.dev` loaded with buy-entry and booking lookup copy; local admin app was temporarily started on `127.0.0.1:3002`, rendered the handoff shell, and was stopped after verification.
 - T0057 finding: mixed entry plus JumpSocks booking `5063419` reached ready-for-staff, but staff redeem was rejected by Roller with `Product type not accepted` because selected tickets included non-redeemable add-on tickets.
+- T0058 read-only AWS audit: account `376129878018`, region `eu-north-1`, stack `UPDATE_COMPLETE`, API `m0uo5g4mde`, Aurora `available`, SNS SMS sandbox `true`, and zero `jumpyard-check-in-dev*` CloudWatch alarms were confirmed without changing resources.
+- T0058 readiness result: dev is suitable for Playground development and controlled smoke tests, but staging/live is blocked by environment split, production auth/API guardrails, observability alarms, SMS production readiness, secrets lifecycle, retention/cutover, and deployment rollback runbooks.
+- T0058 validation: `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, `npm run validate`, and `git diff --check` passed on 2026-05-27. `git diff --check` reported CRLF notices only.
 - T0055 validation: public Cloudflare smoke after merge created paid booking `5063394`, started/resumed a JumpYard Cloud session, and routed the phone flow to safety. The matching local prepayment draft still showed `payment_pending`, which is the T0056 reconciliation target.
 - T0055 validation: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, local browser progress smoke at `http://localhost:3000/`, `npm run validate`, and `git diff --check` passed on 2026-05-26. Browser smoke confirmed compact progress labels `Entré`, `Tillägg`, `Betalning`, `Säkerhet`, and `Klar`, and advanced through `TIMESLOT`, `PRODUCT`, `QUANTITY`, `ADDONS`, and `CONTACT`. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings.
 - T0054 validation: public Cloudflare smoke confirmed T0053 flow order, Swish payment created paid booking `5063382`, JumpYard Cloud lookup returned `Paid`/`amountOwing=0`/`canCheckIn=true`, safe payment-config inspection found no `scheme` card method for the current Playground custom-checkout configuration, and `git diff --check` passed with CRLF notices only.
@@ -498,6 +503,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
 - Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; T0050 confirms `/venues/me` payment settings are available, T0051 wires the approved payment package in the phone buy-entry flow, T0052 reuses it for linked add-product drafts, and T0054 confirmed public Swish payment can complete. The remaining blocker is Roller/Adyen enabling or confirming the card/scheme method for Playground custom checkout.
 - Existing-booking add-product linked-booking flow has been tested server-side in dev and wired in the phone UI, including the shared payment package path when JWT/config are present.
+- T0058 production-readiness audit is docs-only and made no AWS changes. The main staging/live blockers are production environment config, public API protection, observability/alarms, SMS sandbox/consent/sender readiness, dev-token replacement, data retention, deployment rollback, and live backfill/cutover.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
 ## Open Questions
