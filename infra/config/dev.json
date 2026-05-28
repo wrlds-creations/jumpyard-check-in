@@ -30,8 +30,10 @@
   "guestEmail": {
     "provider": "aws_ses",
     "checkinBaseUrl": "https://jumpyard-check-in.pages.dev/",
-    "fromAddress": "",
-    "replyToAddresses": []
+    "fromAddress": "love@wrlds.com",
+    "replyToAddresses": [
+      "love@wrlds.com"
+    ]
   },
   "tags": {
     "WRLDS:Client": "JumpYard",

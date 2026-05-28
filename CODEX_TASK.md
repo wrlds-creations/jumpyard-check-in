@@ -1,15 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0066
+T0067
 
 ## Goal
-Complete the dev guest email path as far as current AWS SES setup allows, with public check-in links, safe provider diagnostics, branded email content, and explicit SES readiness blockers.
+Run the first real SES-backed dev email smoke for a JumpYard check-in link, using the approved test address `love@wrlds.com`.
 
 ## Dependencies
 - T0063 added the protected email link route, Aurora `email_deliveries`, SES-ready send code, and dry-run preview.
-- T0064 moved SMS/email completion ahead of broader production-readiness work.
-- T0065 confirmed the SMS leg and public `jy_token` link behavior.
+- T0066 confirmed email dry-run/audit behavior and failed closed when no SES sender identity existed.
+- User approved `love@wrlds.com` as the test email address for T0067.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,13 +19,13 @@ Complete the dev guest email path as far as current AWS SES setup allows, with p
 - FOLLOWUPS.md
 - AWS_RESOURCES.md
 - TEST_PLAN.md
-- infra/lambda/session/index.js
+- infra/config/dev.json, only if the SES email identity is verified and a dev sender/reply-to config is required for the smoke
 
 ## Do not touch
 - Phone UI design
 - Admin UI design
-- CDK infrastructure definitions
 - Aurora migrations
+- Lambda business logic unless the smoke exposes a ticket-scoped blocker
 - Package dependencies
 - Roller payment flow
 - Redeem flow
@@ -38,39 +38,40 @@ Complete the dev guest email path as far as current AWS SES setup allows, with p
 
 ## Requirements
 
-1. Keep email sends server-owned and guarded.
-   - Keep `POST /v1/check-in/session-links/send-email` protected by the check-in link dev token.
-   - Do not expose raw tokens, full URLs, full email addresses, or raw email body in logs.
-   - Keep guest email independent from phone app frontend secrets.
+1. Verify AWS and SES state.
+   - Confirm AWS account `376129878018` and region `eu-north-1`.
+   - Confirm SES account sending status and sandbox/production status.
+   - Check whether `love@wrlds.com` is an SES identity.
 
-2. Improve email operational diagnostics.
-   - Return safe provider metadata for email planning/sending responses.
-   - Indicate whether a sender address is configured.
-   - Indicate whether reply-to is configured.
-   - Keep provider errors redacted.
+2. Create or verify the dev SES email identity if needed.
+   - Use only the user-approved address `love@wrlds.com`.
+   - Apply WRLDS tags if an SES identity is created.
+   - Do not attempt sandbox exit.
+   - Do not create a production domain identity.
 
-3. Improve email guest copy.
-   - Use the booking start time when available.
-   - Keep the HTML email button-based so the public check-in link is hidden behind the CTA.
-   - Keep the opaque `jy_token` link model.
+3. Configure dev sender only after identity verification.
+   - Use `love@wrlds.com` as the dev sender/reply-to only after SES reports the identity as verified.
+   - Deploy only the required dev config/session Lambda environment change.
 
-4. Verify current SES readiness.
-   - Confirm AWS account and region.
-   - Confirm SES sending status, sandbox/production access, quota, and configured identities.
-   - Do not create or verify a sender/domain unless explicitly approved with the exact sender/domain.
+4. Run a real protected email smoke when SES verification is complete.
+   - Use booking `5063420` unless a safer current booking is required.
+   - Use public base URL `https://jumpyard-check-in.pages.dev/`.
+   - Send to `love@wrlds.com`.
+   - Keep the request protected by the check-in link dev token.
+   - Do not print raw check-in tokens, full links, secrets, or raw email body.
+   - Confirm `jumpyard.email_deliveries` records a sent row.
 
-5. Run safe deployed email smoke tests if AWS credentials are available.
-   - Dry-run against a known booking using the public `https://jumpyard-check-in.pages.dev/` base URL.
-   - Confirm Aurora records a planned email delivery row.
-   - Confirm a real send remains blocked when no verified SES sender is configured.
+5. If verification is still pending, stop safely.
+   - Document that T0067 is blocked on clicking the SES verification email.
+   - Do not configure a sender or attempt a confirmed send while identity status is pending.
 
 6. Update source-of-truth docs.
-   - Document what works after T0066.
-   - Keep remaining email production blockers explicit: verified SES sender/domain, SES sandbox exit or verified recipient policy, branding/reply-to, consent/unsubscribe wording, and unified booking-time messaging.
+   - Document SES identity status and any smoke result.
+   - Keep production blockers separate from dev smoke: domain sender, SES sandbox/recipient policy, consent/unsubscribe, branding, and unified booking-time messaging.
 
 ## Non-goals
 - Do not enable unattended scheduled email sends.
-- Do not create or verify SES sender/domain identities without explicit sender/domain approval.
+- Do not implement unified booking-time SMS+email orchestration in T0067.
 - Do not exit SES sandbox.
 - Do not create staging or production AWS resources.
 - Do not change SMS scheduling behavior.
@@ -78,25 +79,23 @@ Complete the dev guest email path as far as current AWS SES setup allows, with p
 - Do not change payment, redeem, webhook, or Data API behavior.
 
 ## Acceptance criteria
-- `node --check infra/lambda/session/index.js` passes.
-- `npm --prefix infra run build` passes.
-- `npm --prefix infra run synth:dev` passes.
-- Dev deploy updates only the approved session Lambda code if AWS credentials are available.
-- Email dry-run returns `email_planned` with safe diagnostics and no raw token/full URL/full email address.
-- `jumpyard.email_deliveries` contains the dry-run row.
-- Confirmed send fails closed while SES sender is not configured.
-- SES readiness status is documented.
+- AWS account and region are verified.
+- SES identity `love@wrlds.com` exists and its verification state is documented.
+- If verified, dev config uses the verified address, deploy succeeds, and a confirmed email smoke is accepted by SES.
+- If pending, T0067 is safely blocked with clear next action.
+- No raw token/full URL/full email body/secrets are printed or committed.
 - `npm run validate` passes.
 - `git diff --check` passes.
 
 ## Manual verification
-Review the dry-run preview shape and confirm the email CTA copy/link model is acceptable before configuring a real SES sender.
+Open the AWS SES verification email sent to `love@wrlds.com` and click the verification link before expecting a real email smoke to pass.
 
 ## Automated validation
 Run:
-- node --check infra/lambda/session/index.js
-- npm --prefix infra run build
-- npm --prefix infra run synth:dev
-- npm --prefix infra run deploy:dev, if AWS credentials are available
+- aws sts get-caller-identity --profile wrlds-dev
+- aws sesv2 get-email-identity --email-identity love@wrlds.com --profile wrlds-dev --region eu-north-1
+- npm --prefix infra run build, if dev config changes
+- npm --prefix infra run synth:dev, if dev config changes
+- npm --prefix infra run deploy:dev, if dev config changes and AWS credentials are available
 - npm run validate
 - git diff --check

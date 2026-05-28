@@ -722,6 +722,18 @@ Use this file to define validation for the current project or milestone.
 | Post-deploy diff | Deployed dev stack matches the local CDK template. | Passed | `npm --prefix infra run diff:dev` showed no differences after deploy. |
 | Diff whitespace | `git diff --check` passes. | Passed with CRLF notices | Passed on 2026-05-28; output contains Git line-ending notices only. |
 
+## T0067 Real SES Email Smoke Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| AWS identity preflight | Work targets the approved dev account and region. | Passed | `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`; region is `eu-north-1`. |
+| SES account state | SES can send only within current sandbox constraints. | Passed | `SendingEnabled=true`, `ProductionAccessEnabled=false`, max 200 emails per day, max send rate 1/second. |
+| SES identity creation | User-approved test identity exists for real dev email smoke. | Passed | Created SES email identity `love@wrlds.com` with WRLDS tags; SES reports `VerificationStatus=SUCCESS` and `VerifiedForSendingStatus=true`. |
+| Dev sender config | Dev sender/reply-to uses the verified identity only after verification. | Passed | `infra/config/dev.json` now sets `guestEmail.fromAddress` and `guestEmail.replyToAddresses` to `love@wrlds.com`; CDK diff showed only session Lambda environment changes. |
+| Dev deploy | Session Lambda receives verified SES sender config. | Passed | `npx cdk deploy -c config=./config/dev.json --require-approval never` passed on 2026-05-28. |
+| Confirmed email smoke | SES accepts a protected email send to `love@wrlds.com`. | Passed | Booking `5063420` returned `email_sent`; Aurora recorded sent deliveries `jyem_mppo8w07_296c1a5e` and `jyem_mppo99gl_3c888240` with provider message ids present. |
+| Aurora audit row | Confirmed real sends are recorded without full recipient or link. | Passed | Latest rows use masked destination `l***@w***.com`, `dry_run=false`, provider `aws_ses`, and no raw token/full URL output. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
