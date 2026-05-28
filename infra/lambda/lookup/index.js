@@ -451,6 +451,7 @@ async function getRollerAccessToken(config) {
       client_secret: config.clientSecret,
     }),
   });
+  emitRollerApiMetric({ method: 'POST', operation: 'oauth_token', status: response.status, ok: response.ok });
 
   if (!response.ok) {
     const error = new Error(`Roller token request failed with HTTP ${response.status}.`);
@@ -483,6 +484,7 @@ async function getBookingDetail(config, token, identifier) {
       authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
     },
   });
+  emitRollerApiMetric({ method: 'GET', operation: 'get_booking_detail', status: response.status, ok: response.ok });
 
   if (response.status === 404) {
     return { ok: false, status: 404, body: null };
@@ -511,6 +513,7 @@ async function getProductCatalogBestEffort(config, token) {
         authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
       },
     });
+    emitRollerApiMetric({ method: 'GET', operation: 'list_products', status: response.status, ok: response.ok });
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -971,6 +974,50 @@ function buildRollerUrl(baseUrl, endpointPath) {
   const parsedBaseUrl = new URL(baseUrl);
   const basePath = parsedBaseUrl.pathname.replace(/\/$/, '');
   return new URL(`${basePath}${endpointPath}`, parsedBaseUrl.origin);
+}
+
+function emitRollerApiMetric({ method, operation, status, ok }) {
+  const statusCode = Number.isInteger(status) ? status : 0;
+  const metricValues = {
+    RollerApiCallCount: 1,
+  };
+  const metrics = [{ Name: 'RollerApiCallCount', Unit: 'Count' }];
+
+  if (!ok) {
+    metricValues.RollerApiErrorCount = 1;
+    metrics.push({ Name: 'RollerApiErrorCount', Unit: 'Count' });
+  }
+
+  console.log(
+    JSON.stringify({
+      _aws: {
+        Timestamp: Date.now(),
+        CloudWatchMetrics: [
+          {
+            Namespace: 'JumpYard/Cloud',
+            Dimensions: [
+              ['Environment'],
+              ['Environment', 'Handler'],
+              ['Environment', 'Handler', 'Operation', 'Method'],
+            ],
+            Metrics: metrics,
+          },
+        ],
+      },
+      Environment: sanitizeMetricValue(process.env.RESOURCE_PREFIX || 'unknown'),
+      Handler: sanitizeMetricValue(process.env.JUMPYARD_HANDLER || 'lookup'),
+      Operation: sanitizeMetricValue(operation || 'unknown'),
+      Method: sanitizeMetricValue(method || 'UNKNOWN'),
+      StatusCode: statusCode,
+      Ok: Boolean(ok),
+      ...metricValues,
+    }),
+  );
+}
+
+function sanitizeMetricValue(value) {
+  const sanitized = String(value).replace(/[^A-Za-z0-9_.:/-]/g, '_').slice(0, 100);
+  return sanitized || 'unknown';
 }
 
 async function executeStatement(sql, parameters = []) {

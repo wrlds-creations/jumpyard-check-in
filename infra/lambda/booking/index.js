@@ -1064,6 +1064,7 @@ async function getRollerAccessToken(config) {
       client_secret: config.clientSecret,
     }),
   });
+  emitRollerApiMetric({ method: 'POST', operation: 'oauth_token', status: response.status, ok: response.ok });
 
   if (!response.ok) {
     const error = new Error(`Roller token request failed with HTTP ${response.status}.`);
@@ -1098,6 +1099,12 @@ async function postRollerJson(config, token, endpointPath, payload) {
     },
     body: JSON.stringify(payload),
   });
+  emitRollerApiMetric({
+    method: 'POST',
+    operation: rollerOperationFromEndpointPath(endpointPath, 'POST'),
+    status: response.status,
+    ok: response.ok,
+  });
   const text = await response.text();
   const body = parseJsonOrNull(text);
 
@@ -1115,6 +1122,12 @@ async function getRollerJson(config, token, endpointPath) {
       accept: 'application/json',
       authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
     },
+  });
+  emitRollerApiMetric({
+    method: 'GET',
+    operation: rollerOperationFromEndpointPath(endpointPath, 'GET'),
+    status: response.status,
+    ok: response.ok,
   });
   const text = await response.text();
   const body = parseJsonOrNull(text);
@@ -1471,6 +1484,7 @@ async function getVenuePaymentConfig(config, token) {
       authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
     },
   });
+  emitRollerApiMetric({ method: 'GET', operation: 'get_venue_detail', status: response.status, ok: response.ok });
   const text = await response.text();
   const body = parseJsonOrNull(text);
 
@@ -1962,6 +1976,60 @@ function buildRollerUrl(baseUrl, endpointPath) {
   const parsedBaseUrl = new URL(baseUrl);
   const basePath = parsedBaseUrl.pathname.replace(/\/$/, '');
   return new URL(`${basePath}${endpointPath}`, parsedBaseUrl.origin);
+}
+
+function emitRollerApiMetric({ method, operation, status, ok }) {
+  const statusCode = Number.isInteger(status) ? status : 0;
+  const metricValues = {
+    RollerApiCallCount: 1,
+  };
+  const metrics = [{ Name: 'RollerApiCallCount', Unit: 'Count' }];
+
+  if (!ok) {
+    metricValues.RollerApiErrorCount = 1;
+    metrics.push({ Name: 'RollerApiErrorCount', Unit: 'Count' });
+  }
+
+  console.log(
+    JSON.stringify({
+      _aws: {
+        Timestamp: Date.now(),
+        CloudWatchMetrics: [
+          {
+            Namespace: 'JumpYard/Cloud',
+            Dimensions: [
+              ['Environment'],
+              ['Environment', 'Handler'],
+              ['Environment', 'Handler', 'Operation', 'Method'],
+            ],
+            Metrics: metrics,
+          },
+        ],
+      },
+      Environment: sanitizeMetricValue(process.env.RESOURCE_PREFIX || 'unknown'),
+      Handler: sanitizeMetricValue(process.env.JUMPYARD_HANDLER || 'booking'),
+      Operation: sanitizeMetricValue(operation || 'unknown'),
+      Method: sanitizeMetricValue(method || 'UNKNOWN'),
+      StatusCode: statusCode,
+      Ok: Boolean(ok),
+      ...metricValues,
+    }),
+  );
+}
+
+function rollerOperationFromEndpointPath(endpointPath, method) {
+  const path = String(endpointPath || '').split('?')[0];
+  if (path === '/bookings/draft/costs') return 'create_draft_costs';
+  if (path === '/bookings/draft') return method === 'POST' ? 'create_draft_booking' : 'get_draft_booking';
+  if (path === '/product-availability') return 'get_product_availability';
+  if (path === '/venues/me') return 'get_venue_detail';
+  if (/^\/bookings\/[^/]+$/.test(path)) return 'get_booking_detail';
+  return method === 'POST' ? 'roller_post' : 'roller_get';
+}
+
+function sanitizeMetricValue(value) {
+  const sanitized = String(value).replace(/[^A-Za-z0-9_.:/-]/g, '_').slice(0, 100);
+  return sanitized || 'unknown';
 }
 
 function isQuoteRoute(routeKey, event) {

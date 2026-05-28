@@ -2,6 +2,15 @@
   "awsAccount": "376129878018",
   "awsRegion": "eu-north-1",
   "resourcePrefix": "jumpyard-check-in-dev",
+  "api": {
+    "allowedCorsOrigins": [
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://localhost:3002",
+      "http://127.0.0.1:3002",
+      "https://jumpyard-check-in.pages.dev"
+    ]
+  },
   "roller": {
     "environment": "playground",
     "baseUrl": "https://api.play.roller.app"
