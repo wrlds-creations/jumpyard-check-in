@@ -705,6 +705,23 @@ Use this file to define validation for the current project or milestone.
 | Post-deploy diff | Deployed dev stack matches the local CDK template. | Passed | `npm --prefix infra run diff:dev` showed no differences after deploy. |
 | Diff whitespace | `git diff --check` passes. | Passed with CRLF notices | Passed on 2026-05-28; output contains Git line-ending notices only. |
 
+## T0066 Guest Email Completion Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Session Lambda syntax | Email diagnostic/copy changes parse successfully. | Passed | `node --check infra/lambda/session/index.js` passed on 2026-05-28. |
+| Infra build | CDK TypeScript still compiles after session Lambda packaging changes. | Passed | `npm --prefix infra run build` passed on 2026-05-28. |
+| Infra synth | Dev stack synthesizes before deploy. | Passed | `npm --prefix infra run synth:dev` passed on 2026-05-28. |
+| SES readiness | Current AWS SES state is known before any real email send. | Passed | Account `376129878018`, region `eu-north-1`, has `SendingEnabled=true`, `ProductionAccessEnabled=false`, max 200 emails per day, max send rate 1/second, and no email identities. |
+| Dev diff/deploy | Dev deploy changes only the session Lambda code asset. | Passed | Pre-deploy diff showed only `SessionHandler` code, and deploy passed. |
+| Email dry-run smoke | Protected manual email dry-run creates a safe audit row without sending email. | Passed | Booking `5063420` returned `email_planned`, delivery `jyem_mppic9ea_01a07299`, provider `aws_ses`, `fromAddressConfigured=false`, `replyToConfigured=false`, and masked destination only. |
+| Aurora audit row | Dry-run email is recorded in `jumpyard.email_deliveries`. | Passed | Delivery `jyem_mppic9ea_01a07299` has status `planned`, `dry_run=true`, provider `aws_ses`, and template `checkin_email_v1`. |
+| Confirmed-send guard | Real email sends fail closed until a verified sender/domain is configured. | Passed | Confirmed send returned HTTP `400` with `email_sender_not_configured`. |
+| Email preview safety | Dry-run preview avoids exposing the raw `jy_token` URL. | Passed | Preview text contains `[check-in-link]`, and subject includes the booking start time: `Dags att checka in kl 10:30`. |
+| Root validation | Source-of-truth docs validate after T0066 updates. | Passed | `npm run validate` passed on 2026-05-28. |
+| Post-deploy diff | Deployed dev stack matches the local CDK template. | Passed | `npm --prefix infra run diff:dev` showed no differences after deploy. |
+| Diff whitespace | `git diff --check` passes. | Passed with CRLF notices | Passed on 2026-05-28; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
