@@ -656,6 +656,30 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs validate after T0061 updates. | Passed | `npm run validate` passed on 2026-05-28. |
 | Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-28; output contains Git line-ending notices only. |
 
+## T0062 Route Auth And WAF Boundary Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Route inventory | Every current CDK route is represented in the protection boundary document. | Passed | `rg` comparison found 19 CDK route declarations and 19 documented routes in `API_PROTECTION_BOUNDARY.md`. |
+| Trust boundary | Each route has a target guest, staff, internal, webhook, or legacy/dev-only boundary. | Passed | Docs-only validation. |
+| Roadmap | `REPO_CURRENT_STATE.md` locks the next production-readiness ticket roadmap. | Passed | Includes T0063 through T0070 plus deferred card/scheme smoke. |
+| No AWS changes | T0062 makes no CDK or AWS resource changes. | Passed | Docs-only ticket. |
+| Root validation | Source-of-truth docs validate after T0062 updates. | Passed | `npm run validate` passed on 2026-05-28. |
+| Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-28; output contains Git line-ending notices only. |
+
+## T0063 Guest Messaging And Email Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Session Lambda syntax | Email route changes parse successfully. | Passed | `node --check infra/lambda/session/index.js` passed on 2026-05-28. |
+| Infra build | CDK config and stack changes type-check. | Passed | `npm --prefix infra run build` passed. |
+| Infra synth | Dev stack synthesizes with email config and route. | Passed | `npm --prefix infra run synth:dev` passed. |
+| Migration | `0007 email deliveries` applies to dev Aurora. | Passed | `npm --prefix infra run migrate:dev` applied `0007 email deliveries`. |
+| Deploy | Dev deploy adds email route and session Lambda updates only. | Passed | `npm --prefix infra run deploy:dev` added the email route, session Lambda env/IAM/code, and public SMS base URL target. |
+| Email dry-run | Protected email route creates an email token and audit row without sending. | Passed | Booking `5063420` returned `email_planned`, delivery `jyem_mppbtp9i_5e98ee13`, masked destination only, and Aurora row status `planned`. |
+| Confirmed-send guard | Confirmed email fails closed without configured SES sender. | Passed | Confirmed-send smoke returned HTTP `400` with `email_sender_not_configured`. |
+| SMS safety | Scheduled booking-time SMS stays planning-only. | Passed | `bookingTimeSms.confirmSend=false`; SMS public-URL dry-run returned `sms_planned` for masked destination `+46*****9508`. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

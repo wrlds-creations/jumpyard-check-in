@@ -21,11 +21,17 @@
     "scheduleEnabled": true,
     "confirmSend": false,
     "confirmedSendApproval": "",
-    "checkinBaseUrl": "http://localhost:3000/",
+    "checkinBaseUrl": "https://jumpyard-check-in.pages.dev/",
     "rateMinutes": 5,
     "leadMinutes": 30,
     "windowMinutes": 10,
     "limit": 10
+  },
+  "guestEmail": {
+    "provider": "aws_ses",
+    "checkinBaseUrl": "https://jumpyard-check-in.pages.dev/",
+    "fromAddress": "",
+    "replyToAddresses": []
   },
   "tags": {
     "WRLDS:Client": "JumpYard",
