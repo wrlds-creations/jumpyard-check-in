@@ -642,6 +642,20 @@ Use this file to define validation for the current project or milestone.
 | Non-write API smoke | Availability endpoint still reads Roller through JumpYard Cloud without creating a booking. | Passed | `POST /v1/bookings/availability` for `2026-05-28` `10:00` returned `status=available`, source `roller`, and `wroteBooking=false`. |
 | Roller API call metrics | Roller outbound calls emit safe metrics. | Passed | Booking Lambda logs showed embedded metrics for `oauth_token` and `get_product_availability`, with no secrets, tokens, raw payloads, full phones, or full emails. |
 
+## T0061 API Gateway Protection Boundary Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Infra build | CDK TypeScript compiles after config and stack throttling changes. | Passed | `npm --prefix infra run build` passed on 2026-05-28. |
+| Dev synth | Dev stack synthesizes with API Gateway stage throttling and throttled-request metric resources. | Passed | `npm --prefix infra run synth:dev` passed on 2026-05-28; CDK emitted the existing notice `37949`. |
+| AWS preflight | Deploy uses the approved dev account and region. | Passed | `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`; region is `eu-north-1`. |
+| Dev diff/deploy | CDK diff/deploy changes only T0061 approved API protection resources. | Passed | Pre-deploy diff showed `$default` stage route settings, API throttled request metric filter, one CloudWatch alarm, and dashboard updates; deploy passed; post-deploy diff showed no differences. |
+| Stage throttling | API Gateway `$default` stage has default throttling. | Passed | `get-stage` returned `DetailedMetricsEnabled=true`, `ThrottlingRateLimit=25`, and `ThrottlingBurstLimit=50`. |
+| Throttle metric and alarm | Throttled requests are visible through CloudWatch. | Passed | Metric filter on `/aws/apigateway/jumpyard-check-in-dev-api-access` writes `JumpYard/Cloud` metric `ApiThrottledRequestCount`; alarm `jumpyard-check-in-dev-api-throttled-requests` exists. |
+| Non-write API smoke | Availability endpoint still reads Roller through JumpYard Cloud after throttling. | Passed | `POST /v1/bookings/availability` returned HTTP `200`, source `roller`, and `wroteBooking=false`. |
+| Root validation | Source-of-truth docs validate after T0061 updates. | Passed | `npm run validate` passed on 2026-05-28. |
+| Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-28; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
