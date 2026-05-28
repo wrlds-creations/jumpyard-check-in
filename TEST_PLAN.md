@@ -628,6 +628,20 @@ Use this file to define validation for the current project or milestone.
 | Mixed staff redeem | Staff-confirmed redeem succeeds for selected entry tickets and does not redeem add-on tickets. | Passed | Staff redeem succeeded for tickets `5063419-21529629` and `5063419-21529630`; Aurora shows `5063419-21529631` and `5063419-21529632` still unredeemed. The booking was dated 2026-05-27, so the smoke supplied that booking-date redemption timestamp. |
 | Entry-only smoke | Entry-only booking still keeps its redeemable ticket id and remains redeemable. | Passed | Booking `5063394` plan selected 1 ticket, excluded 0, and remained `ready`; already-redeemed entry-only bookings still block as `already_redeemed` with no exclusions. |
 
+## T0060 API Security And Observability Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Lambda syntax | Roller-calling Lambda files parse after metric instrumentation. | Passed | `node --check` passed for lookup, booking, redeem, webhook, and data-sync on 2026-05-28. |
+| Infra build | CDK TypeScript compiles after API/CORS/CloudWatch changes. | Passed | `npm --prefix infra run build` passed on 2026-05-28. |
+| Dev synth | Dev stack synthesizes with explicit CORS, dashboard, alarms, and access logs. | Passed | `npm --prefix infra run synth:dev` passed on 2026-05-28; CDK emitted the existing notice `37949`. |
+| AWS preflight | Deploy uses the approved dev account and region. | Passed | `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`; region is `eu-north-1`. |
+| Dev diff/deploy | CDK diff/deploy changes only T0060 approved resources and Lambda metric code. | Passed | Pre-deploy diff showed explicit CORS, API access log group, dashboard, alarms, and Lambda code/env updates; deploy passed; post-deploy diff showed no differences. |
+| CORS allow-list | Cloudflare Pages origin is allowed and wildcard is removed. | Passed | `get-api` returned the explicit allowed origins; `curl.exe OPTIONS` returned `204` and `access-control-allow-origin: https://jumpyard-check-in.pages.dev`. |
+| Dashboard and alarms | CloudWatch dashboard and alarms exist. | Passed | `get-dashboard jumpyard-check-in-dev-ops` succeeded; `describe-alarms --alarm-name-prefix jumpyard-check-in-dev` returned 16 alarms. |
+| Non-write API smoke | Availability endpoint still reads Roller through JumpYard Cloud without creating a booking. | Passed | `POST /v1/bookings/availability` for `2026-05-28` `10:00` returned `status=available`, source `roller`, and `wroteBooking=false`. |
+| Roller API call metrics | Roller outbound calls emit safe metrics. | Passed | Booking Lambda logs showed embedded metrics for `oauth_token` and `get_product_availability`, with no secrets, tokens, raw payloads, full phones, or full emails. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

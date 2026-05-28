@@ -20,6 +20,9 @@ export const REQUIRED_WRLDS_TAGS = [
 type RequiredWrlDsTag = (typeof REQUIRED_WRLDS_TAGS)[number];
 
 export interface JumpYardCloudConfig {
+  readonly api: {
+    readonly allowedCorsOrigins: readonly string[];
+  };
   readonly awsAccount: string;
   readonly awsRegion: string;
   readonly bookingTimeSms: {
@@ -41,6 +44,9 @@ export interface JumpYardCloudConfig {
 }
 
 interface RawConfig {
+  readonly api?: {
+    readonly allowedCorsOrigins?: unknown;
+  };
   readonly awsAccount?: unknown;
   readonly awsRegion?: unknown;
   readonly bookingTimeSms?: {
@@ -73,6 +79,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   }
 
   const raw = JSON.parse(fs.readFileSync(absoluteConfigPath, 'utf8')) as RawConfig;
+  const api = readApiConfig(raw.api);
   const tags = readRequiredTags(raw.tags);
   const awsAccount = readString(raw.awsAccount, 'awsAccount');
   const awsRegion = readString(raw.awsRegion, 'awsRegion');
@@ -106,6 +113,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   }
 
   return {
+    api,
     awsAccount,
     awsRegion,
     bookingTimeSms,
@@ -116,6 +124,51 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     },
     tags,
   };
+}
+
+function readApiConfig(raw: RawConfig['api']): JumpYardCloudConfig['api'] {
+  const allowedCorsOrigins = readCorsOrigins(raw?.allowedCorsOrigins, 'api.allowedCorsOrigins');
+
+  return {
+    allowedCorsOrigins,
+  };
+}
+
+function readCorsOrigins(value: unknown, fieldName: string): readonly string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`Config field ${fieldName} must be a non-empty array of explicit origins.`);
+  }
+
+  const origins = value.map((origin, index) => normalizeCorsOrigin(origin, `${fieldName}[${index}]`));
+  const uniqueOrigins = Array.from(new Set(origins));
+
+  if (uniqueOrigins.includes('*')) {
+    throw new Error(`Config field ${fieldName} must not include wildcard origins.`);
+  }
+
+  return uniqueOrigins;
+}
+
+function normalizeCorsOrigin(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`Config field ${fieldName} must be a non-empty string.`);
+  }
+
+  const trimmed = value.trim().replace(/\/$/, '');
+
+  try {
+    const parsed = new URL(trimmed);
+    const hasPathOrQuery =
+      parsed.pathname !== '/' || parsed.search.length > 0 || parsed.hash.length > 0 || trimmed.endsWith('/');
+
+    if (!['http:', 'https:'].includes(parsed.protocol) || hasPathOrQuery) {
+      throw new Error('invalid origin');
+    }
+
+    return parsed.origin;
+  } catch {
+    throw new Error(`Config field ${fieldName} must be an explicit http(s) origin without path or wildcard.`);
+  }
 }
 
 function readBookingTimeSmsConfig(raw: RawConfig['bookingTimeSms']): JumpYardCloudConfig['bookingTimeSms'] {

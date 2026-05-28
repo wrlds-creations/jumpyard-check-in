@@ -1,15 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0059
+T0060
 
 ## Goal
-Filter staff-confirmed Roller redemption to only send Roller-redeemable ticket ids, so stock/add-on tickets do not fail the whole check-in.
+Add the first API security and observability hardening slice for JumpYard Cloud dev, including API call visibility.
 
 ## Dependencies
-- T0057 integrated smoke found mixed entry plus stock/add-on bookings can include non-redeemable add-on ticket ids.
-- T0058 stack production-readiness audit is merged to `main`.
-- Roller remains the source of truth for final redeem.
+- T0058 production-readiness audit identified public API/CORS and observability as staging/live blockers.
+- T0059 redeem eligibility filter is merged to `main`.
+- AWS dev stack remains the implementation target.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -17,17 +17,23 @@ Filter staff-confirmed Roller redemption to only send Roller-redeemable ticket i
 - DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
-- TEST_PLAN.md
 - AWS_RESOURCES.md
+- TEST_PLAN.md
+- infra/config/dev.json
+- infra/config/dev.example.json
+- infra/lib/config.ts
+- infra/lib/jumpyard-cloud-stack.ts
+- infra/lambda/lookup/index.js
+- infra/lambda/booking/index.js
 - infra/lambda/redeem/index.js
-- infra/lambda/session/index.js
+- infra/lambda/webhook/index.js
+- infra/lambda/data-sync/index.js
 
 ## Do not touch
 - UI files
 - Payment package vendor files
 - Package dependencies
 - Aurora migrations or schema
-- CDK infrastructure definitions
 - Production credentials
 - Live Roller config
 - `.env`
@@ -35,60 +41,67 @@ Filter staff-confirmed Roller redemption to only send Roller-redeemable ticket i
 
 ## Requirements
 
-1. Add server-side redeem eligibility classification.
-   - Use normalized product metadata from Aurora booking tickets, booking items, and product catalog cache where available.
-   - Treat Roller-redeemable products as pass/session/party-package/membership style products.
-   - Exclude stock/add-on/retail/gift-card/fee style products from `POST /redemptions`.
-   - Do not classify by fragile product display names such as socks or padlocks.
+1. Tighten dev API CORS from wildcard to an explicit allow-list.
+   - Include local phone/admin dev origins.
+   - Include the current Cloudflare Pages origin.
+   - Keep the config environment-specific.
 
-2. Apply the filter before creating or redeeming check-in sessions.
-   - New sessions should select only redeemable ticket ids when mixed bookings include add-on tickets.
-   - Final redeem must re-apply the filter after the required Roller refresh.
-   - Existing sessions that already contain add-on ticket ids must still be protected before Roller redeem.
+2. Add CloudWatch observability for JumpYard Cloud dev.
+   - Create an operational dashboard for API, Lambda, queue, and Roller outbound API activity.
+   - Add alarms for API 5xx, high API 4xx, Lambda errors, Lambda throttles, DLQ messages, and Roller outbound API errors.
+   - Keep alarm missing-data behavior safe for dev.
 
-3. Preserve safety and audit behavior.
-   - Keep payment, date, freshness, already-redeemed, idempotency, and staff-auth checks.
-   - Keep the final Roller REST refresh before any confirmed redemption write.
-   - Include safe counts/ids in redeem plans without printing secrets or raw Roller payloads.
+3. Add API call tracking.
+   - Track API Gateway inbound request volume through CloudWatch metrics.
+   - Track outbound Roller API calls from Lambda handlers using safe CloudWatch metrics.
+   - Do not log secrets, access tokens, payment JWTs, raw Roller payloads, full phone numbers, or full emails.
 
 4. Update source-of-truth documentation.
-   - Update FU-054 with T0059 status; mark it resolved only after dev deploy/smoke confirms the fix.
-   - Add validation notes for mixed bookings and entry-only bookings.
-   - Update recommended next ticket.
+   - Document new observability resources and where to inspect them in AWS.
+   - Update current ticket status and recommended next ticket.
+   - Keep T0058 readiness notes consistent with the new state.
 
-5. Deploy only approved dev Lambda code if validation is clean.
+5. Deploy only approved dev infrastructure/Lambda changes if validation is clean.
    - Read AWS_RESOURCES.md and use the AWS infrastructure workflow.
    - Confirm AWS account `376129878018` and region `eu-north-1`.
-   - Deploy only the scoped dev Lambda code changes.
+   - Review CDK diff before deploy.
 
 ## Non-goals
+- Do not add staging or production AWS resources.
+- Do not add WAF, Cognito, SSO, or API Gateway authorizers yet.
 - Do not change app UI.
-- Do not create, edit, or pay Roller bookings.
-- Do not add new AWS resources.
-- Do not change Aurora schema.
-- Do not change product configuration in Roller.
-- Do not implement production auth or staging/live resources.
+- Do not change Roller business behavior.
+- Do not change payment, SMS, webhook, Data API, session, or redeem flow semantics.
+- Do not create Aurora schema changes.
 - Do not touch Roller Live.
 
 ## Acceptance criteria
-- Mixed entry plus stock/add-on sessions do not send stock/add-on ticket ids to Roller `POST /redemptions`.
-- Entry-only bookings still keep their redeemable ticket ids.
-- `POST /redemptions` receives at most 10 redeemable ticket ids.
-- Existing safety/payment/date/freshness/staff-auth gates still apply.
-- FU-054 is updated with T0059 status and any remaining deploy/smoke gap.
+- CORS no longer uses `allowOrigins=['*']` for the dev stack.
+- AWS has a JumpYard Cloud operational dashboard for dev.
+- AWS has CloudWatch alarms for the agreed dev failure signals.
+- Roller outbound calls emit safe count/error metrics.
+- `npm --prefix infra run build` passes.
+- `npm --prefix infra run synth:dev` passes.
+- `npm --prefix infra run deploy:dev` passes after clean diff review.
 - `npm run validate` passes.
-- Relevant Lambda syntax/build/synth validation passes.
+- `git diff --check` passes.
 
 ## Manual verification
-- Use a mixed Playground booking with entry plus stock/add-on tickets and confirm the redeem plan excludes add-on ticket ids.
-- Use an entry-only Playground booking and confirm it remains redeemable.
-- Confirm no raw secrets, payment JWTs, full phone numbers, or full emails are printed.
+- Open CloudWatch dashboard `jumpyard-check-in-dev-ops` in AWS.
+- Confirm API request counts, Lambda metrics, DLQ metrics, and Roller API call/error widgets exist.
+- Confirm CloudWatch alarms with prefix `jumpyard-check-in-dev` exist.
+- Confirm no metric/log output contains secrets, raw payment JWTs, full phone numbers, or full emails.
 
 ## Automated validation
 Run:
+- `node --check infra/lambda/lookup/index.js`
+- `node --check infra/lambda/booking/index.js`
 - `node --check infra/lambda/redeem/index.js`
-- `node --check infra/lambda/session/index.js`
+- `node --check infra/lambda/webhook/index.js`
+- `node --check infra/lambda/data-sync/index.js`
 - `npm --prefix infra run build`
 - `npm --prefix infra run synth:dev`
+- `npm --prefix infra run diff:dev`
+- `npm --prefix infra run deploy:dev`
 - `npm run validate`
 - `git diff --check`

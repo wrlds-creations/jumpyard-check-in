@@ -1,5 +1,6 @@
 import { Stack, StackProps, Tags, CfnOutput, Duration, RemovalPolicy, ArnFormat } from 'aws-cdk-lib';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cr from 'aws-cdk-lib/custom-resources';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -36,6 +37,18 @@ interface HandlerResources {
   readonly staffAuthSecret: secretsmanager.Secret;
   readonly checkinLinkDevTokenSecret: secretsmanager.Secret;
   readonly resourcePrefix: string;
+}
+
+interface ObservabilityResources {
+  readonly api: apigatewayv2.CfnApi;
+  readonly bookingHandler: lambda.Function;
+  readonly dataSyncHandler: lambda.Function;
+  readonly deadLetterQueue: sqs.Queue;
+  readonly lookupHandler: lambda.Function;
+  readonly redeemHandler: lambda.Function;
+  readonly rollerOperationsQueue: sqs.Queue;
+  readonly sessionHandler: lambda.Function;
+  readonly webhookHandler: lambda.Function;
 }
 
 export class JumpYardCloudStack extends Stack {
@@ -250,13 +263,31 @@ export class JumpYardCloudStack extends Stack {
           'x-jumpyard-staff-token',
         ],
         allowMethods: ['GET', 'OPTIONS', 'POST'],
-        allowOrigins: ['*'],
+        allowOrigins: [...config.api.allowedCorsOrigins],
         maxAge: 300,
       },
     });
 
+    const apiAccessLogGroup = new logs.LogGroup(this, 'HttpApiAccessLogGroup', {
+      logGroupName: `/aws/apigateway/${config.resourcePrefix}-api-access`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
     new apigatewayv2.CfnStage(this, 'DefaultStage', {
       apiId: api.ref,
+      accessLogSettings: {
+        destinationArn: apiAccessLogGroup.logGroupArn,
+        format: JSON.stringify({
+          requestId: '$context.requestId',
+          routeKey: '$context.routeKey',
+          status: '$context.status',
+          integrationStatus: '$context.integrationStatus',
+          responseLatency: '$context.responseLatency',
+          integrationLatency: '$context.integrationLatency',
+          error: '$context.error.message',
+        }),
+      },
       autoDeploy: true,
       stageName: '$default',
     });
@@ -362,6 +393,18 @@ export class JumpYardCloudStack extends Stack {
     this.addRoute(api, webhookHandler, 'POST /v1/roller/webhooks/bookings');
     this.addRoute(api, webhookHandler, 'POST /v1/roller/webhooks/redemptions');
 
+    this.addOperationalObservability(config, {
+      api,
+      bookingHandler,
+      dataSyncHandler,
+      deadLetterQueue,
+      lookupHandler,
+      redeemHandler,
+      rollerOperationsQueue,
+      sessionHandler,
+      webhookHandler,
+    });
+
     new CfnOutput(this, 'ApiEndpoint', {
       value: api.attrApiEndpoint,
     });
@@ -377,6 +420,196 @@ export class JumpYardCloudStack extends Stack {
     new CfnOutput(this, 'OperationalDatabaseClusterArn', {
       value: databaseClusterArn,
     });
+  }
+
+  private addOperationalObservability(config: JumpYardCloudConfig, resources: ObservabilityResources): void {
+    const period = Duration.minutes(5);
+    const lambdaHandlers = [
+      { id: 'Lookup', name: 'lookup', fn: resources.lookupHandler },
+      { id: 'Booking', name: 'booking', fn: resources.bookingHandler },
+      { id: 'Redeem', name: 'redeem', fn: resources.redeemHandler },
+      { id: 'Session', name: 'session', fn: resources.sessionHandler },
+      { id: 'Webhook', name: 'webhook', fn: resources.webhookHandler },
+      { id: 'DataSync', name: 'data-sync', fn: resources.dataSyncHandler },
+    ];
+
+    const apiMetric = (metricName: string, statistic: string) =>
+      new cloudwatch.Metric({
+        namespace: 'AWS/ApiGateway',
+        metricName,
+        dimensionsMap: {
+          ApiId: resources.api.ref,
+          Stage: '$default',
+        },
+        statistic,
+        period,
+      });
+
+    const rollerApiCalls = new cloudwatch.Metric({
+      namespace: 'JumpYard/Cloud',
+      metricName: 'RollerApiCallCount',
+      dimensionsMap: {
+        Environment: config.resourcePrefix,
+      },
+      statistic: 'Sum',
+      period,
+    });
+
+    const rollerApiErrors = new cloudwatch.Metric({
+      namespace: 'JumpYard/Cloud',
+      metricName: 'RollerApiErrorCount',
+      dimensionsMap: {
+        Environment: config.resourcePrefix,
+      },
+      statistic: 'Sum',
+      period,
+    });
+
+    const dashboard = new cloudwatch.Dashboard(this, 'OperationsDashboard', {
+      dashboardName: `${config.resourcePrefix}-ops`,
+    });
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'API requests and errors',
+        left: [
+          apiMetric('Count', 'Sum').with({ label: 'requests' }),
+          apiMetric('4xx', 'Sum').with({ label: '4xx' }),
+          apiMetric('5xx', 'Sum').with({ label: '5xx' }),
+        ],
+        width: 12,
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'API latency p95',
+        left: [
+          apiMetric('Latency', 'p95').with({ label: 'latency' }),
+          apiMetric('IntegrationLatency', 'p95').with({ label: 'integration latency' }),
+        ],
+        width: 12,
+      }),
+    );
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Lambda invocations',
+        left: lambdaHandlers.map((handler) =>
+          handler.fn.metricInvocations({ statistic: 'Sum', period }).with({ label: handler.name }),
+        ),
+        width: 12,
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Lambda errors and throttles',
+        left: lambdaHandlers.map((handler) =>
+          handler.fn.metricErrors({ statistic: 'Sum', period }).with({ label: `${handler.name} errors` }),
+        ),
+        right: lambdaHandlers.map((handler) =>
+          handler.fn.metricThrottles({ statistic: 'Sum', period }).with({ label: `${handler.name} throttles` }),
+        ),
+        width: 12,
+      }),
+    );
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Lambda duration p95',
+        left: lambdaHandlers.map((handler) =>
+          handler.fn.metricDuration({ statistic: 'p95', period }).with({ label: handler.name }),
+        ),
+        width: 12,
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Queues',
+        left: [
+          resources.rollerOperationsQueue
+            .metricApproximateNumberOfMessagesVisible({ statistic: 'Maximum', period })
+            .with({ label: 'roller ops visible' }),
+          resources.deadLetterQueue
+            .metricApproximateNumberOfMessagesVisible({ statistic: 'Maximum', period })
+            .with({ label: 'dlq visible' }),
+        ],
+        width: 12,
+      }),
+    );
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Roller outbound API calls',
+        left: [rollerApiCalls.with({ label: 'calls' })],
+        right: [rollerApiErrors.with({ label: 'errors' })],
+        width: 12,
+      }),
+      new cloudwatch.SingleValueWidget({
+        title: 'Last 5 minutes',
+        metrics: [
+          apiMetric('Count', 'Sum').with({ label: 'API requests' }),
+          rollerApiCalls.with({ label: 'Roller calls' }),
+          rollerApiErrors.with({ label: 'Roller errors' }),
+        ],
+        width: 12,
+      }),
+    );
+
+    new cloudwatch.Alarm(this, 'Api5xxAlarm', {
+      alarmName: `${config.resourcePrefix}-api-5xx`,
+      metric: apiMetric('5xx', 'Sum'),
+      threshold: 1,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    new cloudwatch.Alarm(this, 'ApiHigh4xxAlarm', {
+      alarmName: `${config.resourcePrefix}-api-high-4xx`,
+      metric: apiMetric('4xx', 'Sum'),
+      threshold: 25,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    new cloudwatch.Alarm(this, 'RollerApiErrorsAlarm', {
+      alarmName: `${config.resourcePrefix}-roller-api-errors`,
+      metric: rollerApiErrors,
+      threshold: 1,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    new cloudwatch.Alarm(this, 'RollerOpsDlqVisibleAlarm', {
+      alarmName: `${config.resourcePrefix}-roller-ops-dlq-visible`,
+      metric: resources.deadLetterQueue.metricApproximateNumberOfMessagesVisible({ statistic: 'Maximum', period }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    for (const handler of lambdaHandlers) {
+      new cloudwatch.Alarm(this, `${handler.id}ErrorsAlarm`, {
+        alarmName: `${config.resourcePrefix}-${handler.name}-lambda-errors`,
+        metric: handler.fn.metricErrors({ statistic: 'Sum', period }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+
+      new cloudwatch.Alarm(this, `${handler.id}ThrottlesAlarm`, {
+        alarmName: `${config.resourcePrefix}-${handler.name}-lambda-throttles`,
+        metric: handler.fn.metricThrottles({ statistic: 'Sum', period }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+    }
   }
 
   private configureSmsDeliveryStatusLogging(config: JumpYardCloudConfig): void {
@@ -464,6 +697,7 @@ export class JumpYardCloudStack extends Stack {
       RAW_PAYLOAD_BUCKET_NAME: resources.rawPayloadBucket.bucketName,
       ROLLER_OPERATIONS_QUEUE_URL: resources.rollerOperationsQueue.queueUrl,
       EVENT_BUS_NAME: resources.eventBus.eventBusName,
+      RESOURCE_PREFIX: resources.resourcePrefix,
     };
 
     if (handlerName === 'data-sync') {
