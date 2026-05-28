@@ -4,12 +4,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Snapshot
 
-- Date: 2026-05-27
-- Current branch: `codex/t0058-stack-production-readiness`
-- Current status: T0058 stack production readiness audit is complete locally and not committed. T0057 is merged to `main` through PR #60.
-- Current ticket: `T0058` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`
-- Recommended next step: commit/merge T0058 when approved, then start T0059 redeem eligibility filter.
+- Date: 2026-05-28
+- Current branch: `codex/t0059-redeem-eligibility-filter`
+- Current status: T0059 redeem eligibility filter is complete locally and deployed to dev. Changes are not committed.
+- Current ticket: `T0059` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`
+- Recommended next step: commit/merge T0059 when approved, then start T0060 API security and observability hardening.
 
 ## Current Structure
 
@@ -185,25 +185,25 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0055` | Added new-booking paid continuation and buy-entry progress. | 2026-05-26 | Paid new-booking continuation starts/resumes the JumpYard Cloud check-in session and routes to safety/QR instead of the existing-booking summary/add-ons/payment loop. |
 | `T0056` | Reconciled payment draft status after Roller settlement. | 2026-05-27 | Lookup and webhook enrichment mark matching local prepayment drafts `published` after an authoritative settled Roller booking snapshot; PR #59 merged to `main`. |
 | `T0057` | Ran integrated dev/Playground smoke test. | 2026-05-27 | Entry-only booking `5063420` completed lookup, session, ready-for-staff, staff auth/list/detail, staff-confirmed redeem, and final Aurora state; mixed entry plus add-on booking `5063419` exposed a redeem eligibility follow-up. |
+| `T0058` | Audited stack production readiness. | 2026-05-27 | Docs-only readiness audit merged through PR #61; staging/live remain blocked by environment split, auth/API guardrails, observability, SMS, secrets lifecycle, retention/cutover, and rollback runbooks. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0058` | Stack production readiness audit. | Completed locally, not committed | Docs-only audit of dev AWS posture, production blockers, and recommended follow-up ticket order before staging/live. |
+| `T0059` | Redeem eligibility filter. | Completed locally, not committed | Session and redeem Lambdas filter selected ticket ids by structured redeemable product metadata; dev deploy and mixed booking smoke passed. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0059` | Redeem eligibility filter | Fix `FU-054` so staff redeem sends only Roller-redeemable ticket ids and mixed add-on bookings do not fail the whole redeem call. |
 | `T0060` | API security and observability hardening | Address the top T0058 blockers: route auth strategy, CORS/origin policy, throttling, WAF/edge decision, alarms, dashboards, and operational diagnostics. |
 | `T0061` | Environment and cutover plan | Define staging/live config, secret ownership, deployment/rollback runbook, live backfill, webhook registration, and cutover checklist before any non-dev stack is created. |
 | `Deferred` | Card/scheme payment smoke | Wait for Pabel/Roller to enable or confirm the `scheme` card method before testing the Adyen Visa card path. |
 
 ## Validation Status
 
-- Automated root validation: `npm run validate` passed on 2026-05-27 for T0056 source-of-truth updates.
+- Automated root validation: `npm run validate` passed on 2026-05-28 for T0059 source-of-truth updates.
 - T0056 validation: `node --check infra/lambda/lookup/index.js`, `node --check infra/lambda/webhook/index.js`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, `npm run validate`, and `git diff --check` passed on 2026-05-27. `git diff --check` reported CRLF notices only.
 - T0056 AWS preflight/deploy: account `376129878018` and region `eu-north-1` were verified with short-lived credentials exported from the existing `wrlds-dev` SSO profile. Pre-deploy diff showed only `LookupHandler` and `WebhookHandler` Lambda code asset changes, deploy passed, and post-deploy diff showed no differences.
 - T0056 dev smoke: lookup for known paid booking `5063394` returned `found`/`ready`, Roller unique id `abec3317-1dc1-4b44-917b-5b52ae104d69`, `paymentStatus=Paid`, and `amountOwing=0`. Aurora row `jypd_835161973ab34210ac` changed to `published`, `amount_owing_cents=0`, and `event_log` contains `prepayment_draft.published`.
@@ -214,6 +214,10 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0058 read-only AWS audit: account `376129878018`, region `eu-north-1`, stack `UPDATE_COMPLETE`, API `m0uo5g4mde`, Aurora `available`, SNS SMS sandbox `true`, and zero `jumpyard-check-in-dev*` CloudWatch alarms were confirmed without changing resources.
 - T0058 readiness result: dev is suitable for Playground development and controlled smoke tests, but staging/live is blocked by environment split, production auth/API guardrails, observability alarms, SMS production readiness, secrets lifecycle, retention/cutover, and deployment rollback runbooks.
 - T0058 validation: `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, `npm run validate`, and `git diff --check` passed on 2026-05-27. `git diff --check` reported CRLF notices only.
+- T0059 validation: `node --check infra/lambda/redeem/index.js`, `node --check infra/lambda/session/index.js`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, `npm run validate`, and `git diff --check` passed on 2026-05-28.
+- T0059 deploy: AWS preflight confirmed account `376129878018` and region `eu-north-1`; pre-deploy diff showed only `RedeemHandler` and `SessionHandler` Lambda code assets; `npm --prefix infra run deploy:dev` passed; post-deploy diff showed no differences.
+- T0059 mixed booking smoke: booking `5063419` plan selected entry tickets `5063419-21529629` and `5063419-21529630`, excluded add-on tickets `5063419-21529631` and `5063419-21529632`, and a new session selected only the two entry tickets. Staff-confirmed Playground redeem succeeded for the two entry tickets using the booking-date redemption timestamp; Aurora shows the two add-on tickets still unredeemed.
+- T0059 entry-only regression: booking `5063394` plan selected one ticket, excluded zero, and remained ready; already-redeemed entry-only bookings `5063420` and `5032454` stayed blocked as `already_redeemed` with one selected ticket and zero excluded tickets.
 - T0055 validation: public Cloudflare smoke after merge created paid booking `5063394`, started/resumed a JumpYard Cloud session, and routed the phone flow to safety. The matching local prepayment draft still showed `payment_pending`, which is the T0056 reconciliation target.
 - T0055 validation: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, local browser progress smoke at `http://localhost:3000/`, `npm run validate`, and `git diff --check` passed on 2026-05-26. Browser smoke confirmed compact progress labels `Entré`, `Tillägg`, `Betalning`, `Säkerhet`, and `Klar`, and advanced through `TIMESLOT`, `PRODUCT`, `QUANTITY`, `ADDONS`, and `CONTACT`. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings.
 - T0054 validation: public Cloudflare smoke confirmed T0053 flow order, Swish payment created paid booking `5063382`, JumpYard Cloud lookup returned `Paid`/`amountOwing=0`/`canCheckIn=true`, safe payment-config inspection found no `scheme` card method for the current Playground custom-checkout configuration, and `git diff --check` passed with CRLF notices only.

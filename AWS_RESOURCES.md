@@ -14,6 +14,14 @@ T0058 production-readiness audit notes:
 - API Gateway routes currently have `AuthorizationType=NONE` and rely on Lambda/application-level checks where implemented; CORS is still wildcard.
 - Dev is appropriate for Playground development and smoke testing, but staging/live must wait for the readiness gate documented in `PROJECT_CONTEXT.md`, `DECISIONS.md`, and `FOLLOWUPS.md`.
 
+T0059 redeem eligibility notes:
+
+- AWS resources changed: existing Lambda code only.
+- Changed resources: `jumpyard-check-in-dev-stack-session` and `jumpyard-check-in-dev-stack-redeem`.
+- Behavior: new sessions and final staff redeem exclude stock/add-on/retail/gift-card/fee ticket ids from Roller `POST /redemptions` while keeping pass/session/party-package/membership ticket ids.
+- Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-05-28; post-deploy `npm --prefix infra run diff:dev` showed no differences.
+- Dev smoke: mixed booking `5063419` selected only entry tickets `5063419-21529629` and `5063419-21529630`; staff-confirmed Playground redeem succeeded for those two tickets, and add-on tickets `5063419-21529631` and `5063419-21529632` remained unredeemed in Aurora.
+
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
 T0006 deploy notes:
