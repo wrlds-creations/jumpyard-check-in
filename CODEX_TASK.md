@@ -1,15 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0058
+T0059
 
 ## Goal
-Audit the current dev AWS stack and repository posture for production readiness before any staging/live setup.
+Filter staff-confirmed Roller redemption to only send Roller-redeemable ticket ids, so stock/add-on tickets do not fail the whole check-in.
 
 ## Dependencies
-- T0057 completed and merged to `main`.
-- Current AWS dev stack exists in account `376129878018`, region `eu-north-1`.
-- Payment card/scheme work is paused until Pabel/Roller replies.
+- T0057 integrated smoke found mixed entry plus stock/add-on bookings can include non-redeemable add-on ticket ids.
+- T0058 stack production-readiness audit is merged to `main`.
+- Roller remains the source of truth for final redeem.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,9 +19,10 @@ Audit the current dev AWS stack and repository posture for production readiness 
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - AWS_RESOURCES.md
+- infra/lambda/redeem/index.js
+- infra/lambda/session/index.js
 
 ## Do not touch
-- App source code
 - UI files
 - Payment package vendor files
 - Package dependencies
@@ -34,61 +35,60 @@ Audit the current dev AWS stack and repository posture for production readiness 
 
 ## Requirements
 
-1. Audit production-readiness posture for the current dev stack.
-   - Environment separation and naming.
-   - Secrets and parameter ownership.
-   - Data storage, retention, and PII posture.
-   - Public API exposure and auth boundaries.
-   - Webhook security and retry posture.
-   - SMS readiness and sandbox/consent blockers.
-   - Observability, alarms, logs, and operational diagnostics.
-   - Rollback, migration, and deployment safety.
-   - Backfill/sync/cutover requirements.
+1. Add server-side redeem eligibility classification.
+   - Use normalized product metadata from Aurora booking tickets, booking items, and product catalog cache where available.
+   - Treat Roller-redeemable products as pass/session/party-package/membership style products.
+   - Exclude stock/add-on/retail/gift-card/fee style products from `POST /redemptions`.
+   - Do not classify by fragile product display names such as socks or padlocks.
 
-2. Produce a clear readiness result.
-   - Mark each area as ready, partially ready, blocked, or deferred.
-   - List concrete blockers before staging/live.
-   - List recommended next tickets in a practical order.
-   - Keep payment card/scheme as waiting on Pabel/Roller, not active work.
+2. Apply the filter before creating or redeeming check-in sessions.
+   - New sessions should select only redeemable ticket ids when mixed bookings include add-on tickets.
+   - Final redeem must re-apply the filter after the required Roller refresh.
+   - Existing sessions that already contain add-on ticket ids must still be protected before Roller redeem.
 
-3. Use AWS work rules safely.
-   - Read `AWS_RESOURCES.md`.
-   - Use `skills/aws-project-infrastructure/`.
-   - Do not create, change, deploy, or delete AWS resources.
-   - If AWS credentials are available, read only identity/diff/synth state.
-   - If AWS credentials are unavailable or expired, document that as a validation gap.
+3. Preserve safety and audit behavior.
+   - Keep payment, date, freshness, already-redeemed, idempotency, and staff-auth checks.
+   - Keep the final Roller REST refresh before any confirmed redemption write.
+   - Include safe counts/ids in redeem plans without printing secrets or raw Roller payloads.
 
-4. Keep output safe.
-   - Do not print staff passcodes, staff tokens, Roller secrets, access tokens, raw payment JWTs, full phone numbers, or full email addresses.
-   - Use only docs, IaC inspection, and safe validation commands.
-   - Do not touch Roller Live.
+4. Update source-of-truth documentation.
+   - Update FU-054 with T0059 status; mark it resolved only after dev deploy/smoke confirms the fix.
+   - Add validation notes for mixed bookings and entry-only bookings.
+   - Update recommended next ticket.
+
+5. Deploy only approved dev Lambda code if validation is clean.
+   - Read AWS_RESOURCES.md and use the AWS infrastructure workflow.
+   - Confirm AWS account `376129878018` and region `eu-north-1`.
+   - Deploy only the scoped dev Lambda code changes.
 
 ## Non-goals
-- Do not build new app behavior.
-- Do not fix card/scheme payment configuration.
-- Do not create bookings, drafts, payments, or redemptions.
+- Do not change app UI.
+- Do not create, edit, or pay Roller bookings.
 - Do not add new AWS resources.
-- Do not enable production/staging resources.
-- Do not change staff auth implementation.
-- Do not change SMS scheduling or sending behavior.
-- Do not change infra/CDK code.
+- Do not change Aurora schema.
+- Do not change product configuration in Roller.
+- Do not implement production auth or staging/live resources.
+- Do not touch Roller Live.
 
 ## Acceptance criteria
-- Source-of-truth docs show T0058 as stack production readiness.
-- A production-readiness matrix exists in project docs.
-- Staging/live blockers are clear and ticketed as followups or next tickets.
-- AWS resources are not changed.
-- App/source behavior is not changed.
-- Payment card/scheme remains parked until Pabel/Roller replies.
+- Mixed entry plus stock/add-on sessions do not send stock/add-on ticket ids to Roller `POST /redemptions`.
+- Entry-only bookings still keep their redeemable ticket ids.
+- `POST /redemptions` receives at most 10 redeemable ticket ids.
+- Existing safety/payment/date/freshness/staff-auth gates still apply.
+- FU-054 is updated with T0059 status and any remaining deploy/smoke gap.
 - `npm run validate` passes.
+- Relevant Lambda syntax/build/synth validation passes.
 
 ## Manual verification
-- Review the T0058 readiness matrix and confirm it matches the intended production path.
-- Confirm no AWS resource changes were deployed.
+- Use a mixed Playground booking with entry plus stock/add-on tickets and confirm the redeem plan excludes add-on ticket ids.
+- Use an entry-only Playground booking and confirm it remains redeemable.
+- Confirm no raw secrets, payment JWTs, full phone numbers, or full emails are printed.
 
 ## Automated validation
 Run:
-- `npm run validate`
-- `git diff --check`
+- `node --check infra/lambda/redeem/index.js`
+- `node --check infra/lambda/session/index.js`
 - `npm --prefix infra run build`
 - `npm --prefix infra run synth:dev`
+- `npm run validate`
+- `git diff --check`

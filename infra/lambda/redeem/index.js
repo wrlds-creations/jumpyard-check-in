@@ -5,6 +5,29 @@ const crypto = require('crypto');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const MAX_REDEEM_TICKETS = 10;
+const REDEEMABLE_PRODUCT_KEYS = new Set([
+  'membership',
+  'partypackage',
+  'pass',
+  'recurringpass',
+  'recurringsession',
+  'recurringsessions',
+  'sessionpass',
+  'standardpass',
+]);
+const NON_REDEEMABLE_PRODUCT_KEYS = new Set([
+  'addon',
+  'addproduct',
+  'beverage',
+  'fee',
+  'food',
+  'foodbeverage',
+  'giftcard',
+  'merchandise',
+  'retail',
+  'stock',
+  'stockproduct',
+]);
 const REDEEM_TOKEN_HEADERS = [
   'x-jumpyard-redeem-token',
   'x-api-key',
@@ -722,7 +745,18 @@ async function getRedeemContext(identifier) {
              'productId', t.product_id,
              'bookingDate', t.booking_date::text,
              'redeemStatusLastSeen', t.redeem_status_last_seen,
-             'lastSeenFromRollerAt', t.last_seen_from_roller_at::text
+             'lastSeenFromRollerAt', t.last_seen_from_roller_at::text,
+             'ticketProductType', t.ticket_summary ->> 'productType',
+             'ticketProductSubType', t.ticket_summary ->> 'productSubType',
+             'ticketSource', t.ticket_summary ->> 'source',
+             'itemProductType', item.item_summary ->> 'productType',
+             'itemProductSubType', item.item_summary ->> 'productSubType',
+             'itemParentType', item.item_summary ->> 'parentType',
+             'productCatalogType', product.summary ->> 'productType',
+             'productCatalogSubType', product.summary ->> 'productSubType',
+             'productCatalogParentType', product.summary ->> 'parentType',
+             'productName', COALESCE(item.product_name, product.summary ->> 'name'),
+             'parentProductName', COALESCE(item.parent_product_name, product.summary ->> 'parentProductName')
            )
            ORDER BY t.ticket_id
          ) FILTER (WHERE t.ticket_id IS NOT NULL),
@@ -731,6 +765,26 @@ async function getRedeemContext(identifier) {
      FROM jumpyard.roller_bookings AS b
      LEFT JOIN jumpyard.roller_booking_tickets AS t
        ON t.roller_unique_id = b.roller_unique_id
+     LEFT JOIN jumpyard.roller_booking_items AS item
+       ON item.roller_unique_id = b.roller_unique_id
+      AND (
+        item.booking_item_key = t.booking_item_key
+        OR (t.booking_item_id IS NOT NULL AND item.booking_item_id = t.booking_item_id)
+        OR (
+          t.booking_item_key IS NULL
+          AND t.booking_item_id IS NULL
+          AND t.product_id IS NOT NULL
+          AND item.product_id = t.product_id
+        )
+      )
+     LEFT JOIN LATERAL (
+       SELECT pc.summary
+       FROM jumpyard.product_catalog_cache AS pc
+       WHERE pc.roller_env = b.roller_env
+         AND pc.summary ->> 'id' = COALESCE(NULLIF(t.product_id, ''), NULLIF(item.product_id, ''))
+       ORDER BY pc.fetched_at DESC
+       LIMIT 1
+     ) AS product ON true
      WHERE b.booking_reference = :identifier
         OR b.roller_unique_id = :identifier
      GROUP BY
@@ -757,9 +811,20 @@ async function getRedeemContext(identifier) {
     bookingDate: stringOrNull(ticket.bookingDate),
     bookingItemId: stringOrNull(ticket.bookingItemId),
     lastSeenFromRollerAt: stringOrNull(ticket.lastSeenFromRollerAt),
+    parentProductName: stringOrNull(ticket.parentProductName),
     productId: stringOrNull(ticket.productId),
+    productCatalogParentType: stringOrNull(ticket.productCatalogParentType),
+    productCatalogSubType: stringOrNull(ticket.productCatalogSubType),
+    productCatalogType: stringOrNull(ticket.productCatalogType),
+    productName: stringOrNull(ticket.productName),
     redeemStatusLastSeen: stringOrNull(ticket.redeemStatusLastSeen),
     ticketId: stringOrNull(ticket.ticketId),
+    ticketProductSubType: stringOrNull(ticket.ticketProductSubType),
+    ticketProductType: stringOrNull(ticket.ticketProductType),
+    ticketSource: stringOrNull(ticket.ticketSource),
+    itemParentType: stringOrNull(ticket.itemParentType),
+    itemProductSubType: stringOrNull(ticket.itemProductSubType),
+    itemProductType: stringOrNull(ticket.itemProductType),
   }));
 
   return {
@@ -785,43 +850,55 @@ async function getRedeemContext(identifier) {
 function evaluateRedeemContext(context, request) {
   const booking = context.booking;
   const selectedTickets = selectTickets(context.tickets, request.ticketIds);
-  const selectedTicketIds = selectedTickets.map((ticket) => ticket.ticketId).filter(Boolean);
+  const { excludedTickets, redeemableTickets } = splitRedeemableTickets(selectedTickets);
+  const selectedTicketIds = redeemableTickets.map((ticket) => ticket.ticketId).filter(Boolean);
 
   if (booking.isTombstoned || isInactiveBookingStatus(booking.bookingStatus)) {
-    return blocked('booking_not_active', 'The booking is cancelled, deleted, or otherwise inactive.', selectedTicketIds);
+    return blocked('booking_not_active', 'The booking is cancelled, deleted, or otherwise inactive.', selectedTicketIds, excludedTickets);
   }
 
   if (booking.freshnessStatus !== 'fresh') {
-    return blocked('booking_not_fresh', 'The local booking snapshot is not fresh enough for redemption.', selectedTicketIds);
+    return blocked('booking_not_fresh', 'The local booking snapshot is not fresh enough for redemption.', selectedTicketIds, excludedTickets);
   }
 
   if (!isPaymentComplete(booking)) {
-    return blocked('payment_required', 'The booking is not fully paid and cannot be redeemed yet.', selectedTicketIds);
+    return blocked('payment_required', 'The booking is not fully paid and cannot be redeemed yet.', selectedTicketIds, excludedTickets);
   }
 
   if (request.expectedDate && !bookingMatchesExpectedDate(booking, context.tickets, request.expectedDate)) {
-    return blocked('wrong_date', 'The booking is not valid for the expected check-in date.', selectedTicketIds);
+    return blocked('wrong_date', 'The booking is not valid for the expected check-in date.', selectedTicketIds, excludedTickets);
   }
 
   if (request.ticketIds.length > 0 && selectedTickets.length !== request.ticketIds.length) {
-    return blocked('unknown_ticket', 'One or more requested ticket ids were not found on the booking.', selectedTicketIds);
+    return blocked('unknown_ticket', 'One or more requested ticket ids were not found on the booking.', selectedTicketIds, excludedTickets);
   }
 
   if (selectedTicketIds.length === 0) {
-    return blocked('no_redeemable_tickets', 'The booking does not have local ticket ids to redeem.', selectedTicketIds);
+    return blocked('no_redeemable_tickets', 'The booking does not have local redeemable ticket ids.', selectedTicketIds, excludedTickets);
   }
 
   if (selectedTicketIds.length > MAX_REDEEM_TICKETS) {
-    return blocked('too_many_tickets', `Roller accepts at most ${MAX_REDEEM_TICKETS} ticket redemptions per call.`, selectedTicketIds);
+    return blocked(
+      'too_many_tickets',
+      `Roller accepts at most ${MAX_REDEEM_TICKETS} ticket redemptions per call.`,
+      selectedTicketIds,
+      excludedTickets,
+    );
   }
 
-  const locallyUsedTicket = selectedTickets.find((ticket) => isUsedRedeemStatus(ticket.redeemStatusLastSeen));
+  const locallyUsedTicket = redeemableTickets.find((ticket) => isUsedRedeemStatus(ticket.redeemStatusLastSeen));
   if (locallyUsedTicket) {
-    return blocked('already_redeemed', 'At least one selected ticket is already marked redeemed locally.', selectedTicketIds);
+    return blocked(
+      'already_redeemed',
+      'At least one selected ticket is already marked redeemed locally.',
+      selectedTicketIds,
+      excludedTickets,
+    );
   }
 
   return {
     canRedeem: true,
+    excludedTicketIds: excludedTickets.map((ticket) => ticket.ticketId).filter(Boolean),
     message: null,
     reason: 'ready',
     selectedTicketIds,
@@ -834,9 +911,63 @@ function selectTickets(tickets, requestedTicketIds) {
   return tickets.filter((ticket) => requested.has(ticket.ticketId));
 }
 
-function blocked(reason, message, selectedTicketIds) {
+function splitRedeemableTickets(tickets) {
+  const redeemableTickets = [];
+  const excludedTickets = [];
+
+  for (const ticket of tickets) {
+    const eligibility = getTicketRedeemEligibility(ticket);
+    if (eligibility.redeemable) {
+      redeemableTickets.push(ticket);
+    } else {
+      excludedTickets.push({
+        ...ticket,
+        redeemEligibilityReason: eligibility.reason,
+      });
+    }
+  }
+
+  return { excludedTickets, redeemableTickets };
+}
+
+function getTicketRedeemEligibility(ticket) {
+  const markers = [
+    ticket.ticketProductType,
+    ticket.ticketProductSubType,
+    ticket.itemProductType,
+    ticket.itemProductSubType,
+    ticket.itemParentType,
+    ticket.productCatalogType,
+    ticket.productCatalogSubType,
+    ticket.productCatalogParentType,
+  ].map(productKey).filter(Boolean);
+
+  const nonRedeemableMarker = markers.find((marker) => NON_REDEEMABLE_PRODUCT_KEYS.has(marker));
+  if (nonRedeemableMarker) {
+    return { reason: `non_redeemable_product_type:${nonRedeemableMarker}`, redeemable: false };
+  }
+
+  if (markers.some((marker) => REDEEMABLE_PRODUCT_KEYS.has(marker))) {
+    return { reason: 'redeemable_product_type', redeemable: true };
+  }
+
+  const sourceKey = productKey(ticket.ticketSource);
+  if (sourceKey?.includes('dataapi') && sourceKey.includes('tickets')) {
+    return { reason: 'data_api_ticket_source', redeemable: true };
+  }
+
+  return { reason: 'unknown_product_type', redeemable: false };
+}
+
+function productKey(value) {
+  const normalized = String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '').trim();
+  return normalized || null;
+}
+
+function blocked(reason, message, selectedTicketIds, excludedTickets = []) {
   return {
     canRedeem: false,
+    excludedTicketIds: excludedTickets.map((ticket) => ticket.ticketId).filter(Boolean),
     message,
     reason,
     selectedTicketIds,
@@ -852,6 +983,8 @@ function buildRedeemPlan(context, decision, rollerWrite) {
     reason: decision.reason,
     requiresConfirmation: !rollerWrite,
     rollerWrite,
+    excludedTicketIds: decision.excludedTicketIds ?? [],
+    excludedTicketCount: (decision.excludedTicketIds ?? []).length,
     selectedTicketIds: decision.selectedTicketIds,
     ticketCount: decision.selectedTicketIds.length,
   };

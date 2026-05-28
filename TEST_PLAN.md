@@ -613,6 +613,21 @@ Use this file to define validation for the current project or milestone.
 | Root validation | `npm run validate` passes. | Passed | Passed on 2026-05-27 after T0058 source-of-truth updates. |
 | Diff whitespace | `git diff --check` passes. | Passed with CRLF notices | Passed on 2026-05-27; output contains Git line-ending notices only. |
 
+## T0059 Redeem Eligibility Filter Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Redeem Lambda syntax | `node --check infra/lambda/redeem/index.js` passes. | Passed | Passed locally on 2026-05-28. |
+| Session Lambda syntax | `node --check infra/lambda/session/index.js` passes. | Passed | Passed locally on 2026-05-28. |
+| Infra build | `npm --prefix infra run build` passes. | Passed | Passed locally on 2026-05-28. |
+| Dev synth | `npm --prefix infra run synth:dev` passes. | Passed | Passed locally on 2026-05-28; CDK emitted the existing notice `37949`. |
+| AWS preflight | Account `376129878018` and region `eu-north-1` are verified before deploy. | Passed | Passed on 2026-05-28 after AWS SSO refresh. |
+| Dev diff/deploy | CDK diff/deploy changes only the scoped Lambda code. | Passed | Pre-deploy diff showed only `RedeemHandler` and `SessionHandler` code assets; deploy passed; post-deploy diff showed no differences. |
+| Mixed booking plan | Mixed entry plus stock/add-on booking excludes add-on ticket ids before Roller redeem. | Passed | Booking `5063419` plan selected 2 entry tickets and excluded 2 add-on tickets. |
+| Mixed session selection | A new mixed-booking check-in session stores only redeemable selected ticket ids. | Passed | New session `jycs_mpp5x4k4_a7351d4b` stored only the two entry ticket ids for booking `5063419`. |
+| Mixed staff redeem | Staff-confirmed redeem succeeds for selected entry tickets and does not redeem add-on tickets. | Passed | Staff redeem succeeded for tickets `5063419-21529629` and `5063419-21529630`; Aurora shows `5063419-21529631` and `5063419-21529632` still unredeemed. The booking was dated 2026-05-27, so the smoke supplied that booking-date redemption timestamp. |
+| Entry-only smoke | Entry-only booking still keeps its redeemable ticket id and remains redeemable. | Passed | Booking `5063394` plan selected 1 ticket, excluded 0, and remained `ready`; already-redeemed entry-only bookings still block as `already_redeemed` with no exclusions. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

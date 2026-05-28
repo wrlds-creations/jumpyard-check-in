@@ -264,7 +264,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0055 New-booking paid continuation` | After a paid new booking, route directly into the check-in/safety/QR path and add a buy-entry progress bar. | Completed and merged; phone-flow only, no AWS/backend/payment-package changes. |
 | `T0056 Payment draft status reconciliation` | Mark local prepayment draft rows as `published` after Roller confirms the paid/published booking through lookup or webhook enrichment. | Completed locally and deployed to dev; backend lifecycle reconciliation only. |
 | `T0057 Integrated smoke test` | Run a focused end-to-end dev/Playground smoke across lookup, payment reconciliation, session, safety handoff, staff auth, staff detail, and redeem. | Completed and merged through PR #60; test/documentation only. |
-| `T0058 Stack production readiness` | Audit the dev AWS stack, deployment config, environment separation, secrets, observability, rollback posture, and production cutover prerequisites before any staging/live setup. | Current audit ticket; docs-only, no AWS changes. |
+| `T0058 Stack production readiness` | Audit the dev AWS stack, deployment config, environment separation, secrets, observability, rollback posture, and production cutover prerequisites before any staging/live setup. | Completed and merged through PR #61; docs-only, no AWS changes. |
+| `T0059 Redeem eligibility filter` | Filter check-in session selection and final redeem so Roller receives only redeemable pass/session/party-package/membership ticket ids, not stock/add-on ticket ids. | Completed locally and deployed to dev; mixed booking smoke redeemed only entry tickets and left add-on tickets unredeemed. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -527,6 +528,8 @@ T0058 audits the current dev stack for staging/live readiness before any new env
 - AWS read-only checks confirmed account `376129878018`, region `eu-north-1`, stack status `UPDATE_COMPLETE`, API endpoint `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`, Aurora status `available`, and SNS SMS sandbox mode still enabled
 - the dev stack is suitable for Playground development and controlled smoke tests, but it is not ready to copy directly to staging/live
 - payment card/scheme remains parked on Roller/Adyen configuration until Pabel/Roller confirms the missing method
+
+T0059 implements the `FU-054` redeem eligibility fix. Session creation now selects only Roller-redeemable ticket ids when a mixed booking has entry plus stock/add-on tickets, and final staff redeem re-applies the same filter after the required Roller refresh before calling `POST /redemptions`. The classifier uses structured product type metadata from Aurora tickets, booking items, and product catalog cache instead of fragile display-name rules. Dev smoke for mixed booking `5063419` selected and redeemed only entry tickets `5063419-21529629` and `5063419-21529630`, while add-on tickets `5063419-21529631` and `5063419-21529632` remained unredeemed.
 
 ## T0058 Production Readiness Matrix
 
