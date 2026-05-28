@@ -22,6 +22,8 @@ type RequiredWrlDsTag = (typeof REQUIRED_WRLDS_TAGS)[number];
 export interface JumpYardCloudConfig {
   readonly api: {
     readonly allowedCorsOrigins: readonly string[];
+    readonly throttlingBurstLimit: number;
+    readonly throttlingRateLimit: number;
   };
   readonly awsAccount: string;
   readonly awsRegion: string;
@@ -46,6 +48,8 @@ export interface JumpYardCloudConfig {
 interface RawConfig {
   readonly api?: {
     readonly allowedCorsOrigins?: unknown;
+    readonly throttlingBurstLimit?: unknown;
+    readonly throttlingRateLimit?: unknown;
   };
   readonly awsAccount?: unknown;
   readonly awsRegion?: unknown;
@@ -128,9 +132,13 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
 
 function readApiConfig(raw: RawConfig['api']): JumpYardCloudConfig['api'] {
   const allowedCorsOrigins = readCorsOrigins(raw?.allowedCorsOrigins, 'api.allowedCorsOrigins');
+  const throttlingBurstLimit = readOptionalInteger(raw?.throttlingBurstLimit, 50, 1, 5000, 'api.throttlingBurstLimit');
+  const throttlingRateLimit = readOptionalInteger(raw?.throttlingRateLimit, 25, 1, 10000, 'api.throttlingRateLimit');
 
   return {
     allowedCorsOrigins,
+    throttlingBurstLimit,
+    throttlingRateLimit,
   };
 }
 

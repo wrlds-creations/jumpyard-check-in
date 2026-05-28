@@ -41,6 +41,7 @@ interface HandlerResources {
 
 interface ObservabilityResources {
   readonly api: apigatewayv2.CfnApi;
+  readonly apiAccessLogGroup: logs.LogGroup;
   readonly bookingHandler: lambda.Function;
   readonly dataSyncHandler: lambda.Function;
   readonly deadLetterQueue: sqs.Queue;
@@ -289,6 +290,11 @@ export class JumpYardCloudStack extends Stack {
         }),
       },
       autoDeploy: true,
+      defaultRouteSettings: {
+        detailedMetricsEnabled: true,
+        throttlingBurstLimit: config.api.throttlingBurstLimit,
+        throttlingRateLimit: config.api.throttlingRateLimit,
+      },
       stageName: '$default',
     });
 
@@ -395,6 +401,7 @@ export class JumpYardCloudStack extends Stack {
 
     this.addOperationalObservability(config, {
       api,
+      apiAccessLogGroup,
       bookingHandler,
       dataSyncHandler,
       deadLetterQueue,
@@ -465,6 +472,21 @@ export class JumpYardCloudStack extends Stack {
       period,
     });
 
+    const throttledRequestMetric = new cloudwatch.Metric({
+      namespace: 'JumpYard/Cloud',
+      metricName: 'ApiThrottledRequestCount',
+      statistic: 'Sum',
+      period,
+    });
+
+    new logs.MetricFilter(this, 'ApiThrottledRequestMetricFilter', {
+      logGroup: resources.apiAccessLogGroup,
+      filterPattern: logs.FilterPattern.stringValue('$.status', '=', '429'),
+      metricNamespace: 'JumpYard/Cloud',
+      metricName: 'ApiThrottledRequestCount',
+      metricValue: '1',
+    });
+
     const dashboard = new cloudwatch.Dashboard(this, 'OperationsDashboard', {
       dashboardName: `${config.resourcePrefix}-ops`,
     });
@@ -476,6 +498,7 @@ export class JumpYardCloudStack extends Stack {
           apiMetric('Count', 'Sum').with({ label: 'requests' }),
           apiMetric('4xx', 'Sum').with({ label: '4xx' }),
           apiMetric('5xx', 'Sum').with({ label: '5xx' }),
+          throttledRequestMetric.with({ label: '429 throttled' }),
         ],
         width: 12,
       }),
@@ -542,6 +565,7 @@ export class JumpYardCloudStack extends Stack {
         title: 'Last 5 minutes',
         metrics: [
           apiMetric('Count', 'Sum').with({ label: 'API requests' }),
+          throttledRequestMetric.with({ label: 'API throttles' }),
           rollerApiCalls.with({ label: 'Roller calls' }),
           rollerApiErrors.with({ label: 'Roller errors' }),
         ],
@@ -563,6 +587,16 @@ export class JumpYardCloudStack extends Stack {
       alarmName: `${config.resourcePrefix}-api-high-4xx`,
       metric: apiMetric('4xx', 'Sum'),
       threshold: 25,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    new cloudwatch.Alarm(this, 'ApiThrottledRequestsAlarm', {
+      alarmName: `${config.resourcePrefix}-api-throttled-requests`,
+      metric: throttledRequestMetric,
+      threshold: 1,
       evaluationPeriods: 1,
       datapointsToAlarm: 1,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
