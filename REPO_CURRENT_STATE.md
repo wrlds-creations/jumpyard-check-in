@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-28
-- Current branch: `codex/t0063-guest-messaging-email`
-- Current status: T0063 guest messaging verification and email service foundation is deployed to dev. Changes are not committed.
-- Current ticket: `T0063` completed locally and deployed, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`
-- Recommended next step: review/commit/merge T0062 and T0063 changes when approved, then start T0064 environment and cutover plan or T0065 alarm notifications/runbooks.
+- Current branch: `codex/t0064-messaging-roadmap`
+- Current status: T0064 messaging-first roadmap update is docs-only and completed locally, not committed.
+- Current ticket: `T0064` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`
+- Recommended next step: review/commit/merge T0064 when approved, then start T0065 guest SMS completion.
 
 ## Current Structure
 
@@ -191,27 +191,30 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0059` | Added redeem eligibility filter. | 2026-05-28 | Merged through PR #62; session and redeem Lambdas filter selected ticket ids by structured redeemable product metadata, and dev smoke redeemed only entry tickets in mixed booking `5063419`. |
 | `T0060` | Added API security and observability hardening. | 2026-05-28 | Merged through PR #63; dev CORS is explicit, API access logs are enabled, CloudWatch dashboard/alarms are deployed, and Roller-calling Lambdas emit safe outbound API metrics. |
 | `T0061` | Added API Gateway stage throttling and throttle visibility. | 2026-05-28 | Merged through PR #64; dev `$default` stage throttling is rate `25` requests/second and burst `50`, detailed metrics remain enabled, API 429s are counted in CloudWatch, and alarm `jumpyard-check-in-dev-api-throttled-requests` exists. |
-| `T0062` | Documented route auth and WAF/edge boundary design. | 2026-05-28 | Completed locally, not committed; `API_PROTECTION_BOUNDARY.md` classifies current routes and target staging/live route protection. |
-| `T0063` | Added guest messaging verification and email service foundation. | 2026-05-28 | Completed locally and deployed to dev, not committed; adds protected email link route, `email_deliveries`, SES-ready dry-run path, and public messaging base URL. |
+| `T0062` | Documented route auth and WAF/edge boundary design. | 2026-05-28 | Merged to `main` through PR #65 with T0063; `API_PROTECTION_BOUNDARY.md` classifies current routes and target staging/live route protection. |
+| `T0063` | Added guest messaging verification and email service foundation. | 2026-05-28 | Merged to `main` through PR #65; adds protected email link route, `email_deliveries`, SES-ready dry-run path, and public messaging base URL. |
+| `T0064` | Reordered roadmap so SMS and email completion come first. | 2026-05-28 | Docs-only update; no app code, Lambda code, AWS resources, Roller config, or credentials changed. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0063` | Guest messaging verification and email service foundation. | Completed locally and deployed, not committed | Dev has protected `POST /v1/check-in/session-links/send-email`, `jumpyard.email_deliveries`, email dry-run/preview, SES sender guard for confirmed sends, and public base URL config for future guest messaging links. |
+| `T0064` | Messaging-first roadmap update. | Completed locally, not committed | Near-term tickets are reordered so guest SMS completion, guest email completion, and unified booking-time guest messaging happen before environment/cutover and broader production-readiness work. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0064` | Environment and cutover plan | Define staging/live config, secret ownership, deployment/rollback runbook, live backfill, webhook registration, and cutover checklist before any non-dev stack is created. |
-| `T0065` | Alarm notifications and runbooks | Connect CloudWatch alarms to a notification path, document operator actions, and define dashboard/runbook usage for dev-to-staging readiness. |
-| `T0066` | Secrets and dev-token replacement | Replace or isolate dev-only passcodes/shared tokens, define secret owners and rotation cadence, and prepare separate staging/live secret values. |
-| `T0067` | SMS production readiness | Decide sender identity, sandbox exit or verified-recipient policy, consent/unsubscribe text, delivery monitoring, and confirmed-send rules before unattended SMS. |
-| `T0068` | Route auth and WAF implementation | Implement the T0062 boundary in infrastructure after the environment and identity choices are approved. |
-| `T0069` | Data retention and PII policy | Lock retention, deletion/export, masking/hash, Aurora backup, event-log, and raw-payload policy before production data. |
-| `T0070` | Deployment and rollback runbook | Define CI/CD identity, preflight gates, migration backup/restore, CDK diff approval, smoke tests, rollback criteria, and ownership. |
-| `T0071` | Live backfill and cutover rehearsal | Rehearse initial live backfill, daily sync, webhook registration order, freshness checks, replay/reconciliation, and go/no-go checklist. |
+| `T0065` | Guest SMS completion | Make SMS operationally complete before broader readiness: confirmed manual smoke, booking-time rules, sender/sandbox policy, consent/unsubscribe copy, delivery diagnostics, and failure behavior. |
+| `T0066` | Guest email completion | Configure/verify the SES sender or domain, decide reply-to/branding/consent text, run a confirmed email smoke, and document email delivery diagnostics. |
+| `T0067` | Unified booking-time guest messaging | Make SMS and email work together from booking time windows with idempotency, audit rows, safe retry/failure handling, and clear dry-run versus confirmed-send controls. |
+| `T0068` | Environment and cutover plan | Define staging/live config, secret ownership, deployment/rollback runbook, live backfill, webhook registration, and cutover checklist before any non-dev stack is created. |
+| `T0069` | Alarm notifications and runbooks | Connect CloudWatch alarms to a notification path, document operator actions, and define dashboard/runbook usage for dev-to-staging readiness. |
+| `T0070` | Secrets and dev-token replacement | Replace or isolate dev-only passcodes/shared tokens, define secret owners and rotation cadence, and prepare separate staging/live secret values. |
+| `T0071` | Route auth and WAF implementation | Implement the T0062 boundary in infrastructure after the environment and identity choices are approved. |
+| `T0072` | Data retention and PII policy | Lock retention, deletion/export, masking/hash, Aurora backup, event-log, and raw-payload policy before production data. |
+| `T0073` | Deployment and rollback runbook | Define CI/CD identity, preflight gates, migration backup/restore, CDK diff approval, smoke tests, rollback criteria, and ownership. |
+| `T0074` | Live backfill and cutover rehearsal | Rehearse initial live backfill, daily sync, webhook registration order, freshness checks, replay/reconciliation, and go/no-go checklist. |
 | `Deferred` | Card/scheme payment smoke | Wait for Pabel/Roller to enable or confirm the `scheme` card method before testing the Adyen Visa card path. |
 
 ## Validation Status
@@ -249,6 +252,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0063 Aurora verification: latest `jumpyard.email_deliveries` row has delivery `jyem_mppbtp9i_5e98ee13`, booking `5063420`, status `planned`, `dry_run=true`, provider `aws_ses`, and template `checkin_email_v1`.
 - T0063 confirmed-send guard: confirmed email request returned HTTP `400` with `email_sender_not_configured` because no SES sender identity is configured yet.
 - T0063 SMS safety smoke: protected SMS dry-run with public base URL returned `sms_planned`, delivery `jysms_mppbz4gm_e52cdd54`, provider `aws_sns`, and masked destination `+46*****9508`; dev scheduled SMS remains `confirmSend=false`.
+- T0064 roadmap result: docs now prioritize guest SMS completion, guest email completion, and unified booking-time guest messaging before environment/cutover, alarm runbooks, dev-token replacement, route auth/WAF, retention, deployment rollback, and live backfill/cutover rehearsal.
+- T0064 validation: `npm run validate` and `git diff --check` passed on 2026-05-28. `git diff --check` reported CRLF notices only.
 - T0055 validation: public Cloudflare smoke after merge created paid booking `5063394`, started/resumed a JumpYard Cloud session, and routed the phone flow to safety. The matching local prepayment draft still showed `payment_pending`, which is the T0056 reconciliation target.
 - T0055 validation: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, local browser progress smoke at `http://localhost:3000/`, `npm run validate`, and `git diff --check` passed on 2026-05-26. Browser smoke confirmed compact progress labels `Entré`, `Tillägg`, `Betalning`, `Säkerhet`, and `Klar`, and advanced through `TIMESLOT`, `PRODUCT`, `QUANTITY`, `ADDONS`, and `CONTACT`. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings.
 - T0054 validation: public Cloudflare smoke confirmed T0053 flow order, Swish payment created paid booking `5063382`, JumpYard Cloud lookup returned `Paid`/`amountOwing=0`/`canCheckIn=true`, safe payment-config inspection found no `scheme` card method for the current Playground custom-checkout configuration, and `git diff --check` passed with CRLF notices only.
@@ -538,7 +543,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
 - Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; T0050 confirms `/venues/me` payment settings are available, T0051 wires the approved payment package in the phone buy-entry flow, T0052 reuses it for linked add-product drafts, and T0054 confirmed public Swish payment can complete. The remaining blocker is Roller/Adyen enabling or confirming the card/scheme method for Playground custom checkout.
 - Existing-booking add-product linked-booking flow has been tested server-side in dev and wired in the phone UI, including the shared payment package path when JWT/config are present.
-- T0058 production-readiness audit is docs-only and made no AWS changes. T0060 added the first dev CORS/observability hardening, T0061 added dev API Gateway stage throttling plus 429 visibility, T0062 documented the route boundary, and T0063 added email dry-run/audit support, but the main staging/live blockers still include production environment config, route auth/WAF implementation, alarm notification/runbooks, SMS sandbox/consent/sender readiness, SES sender/domain verification, dev-token replacement, data retention, deployment rollback, and live backfill/cutover.
+- T0058 production-readiness audit is docs-only and made no AWS changes. T0060 added the first dev CORS/observability hardening, T0061 added dev API Gateway stage throttling plus 429 visibility, T0062 documented the route boundary, T0063 added email dry-run/audit support, and T0064 moved guest SMS/email completion ahead of broader staging/live readiness. The main staging/live blockers still include production environment config, route auth/WAF implementation, alarm notification/runbooks, SMS sandbox/consent/sender readiness, SES sender/domain verification, dev-token replacement, data retention, deployment rollback, and live backfill/cutover.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
 ## Open Questions

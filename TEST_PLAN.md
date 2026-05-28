@@ -680,6 +680,15 @@ Use this file to define validation for the current project or milestone.
 | Confirmed-send guard | Confirmed email fails closed without configured SES sender. | Passed | Confirmed-send smoke returned HTTP `400` with `email_sender_not_configured`. |
 | SMS safety | Scheduled booking-time SMS stays planning-only. | Passed | `bookingTimeSms.confirmSend=false`; SMS public-URL dry-run returned `sms_planned` for masked destination `+46*****9508`. |
 
+## T0064 Messaging-First Roadmap Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Roadmap order | Guest SMS, guest email, and unified guest messaging are listed before environment/cutover work. | Passed | `REPO_CURRENT_STATE.md`, `PROJECT_CONTEXT.md`, and `FOLLOWUPS.md` now put T0065-T0067 messaging work before T0068+ readiness work. |
+| No implementation changes | T0064 changes source-of-truth docs only. | Passed | Only source-of-truth docs were edited for T0064; unrelated local asset/package changes remain outside this ticket. |
+| Root validation | `npm run validate` passes after docs updates. | Passed | Passed on 2026-05-28. |
+| Diff whitespace | `git diff --check` passes. | Passed with CRLF notices | Passed on 2026-05-28; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
