@@ -1,15 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0063
+T0064
 
 ## Goal
-Verify guest messaging with the public check-in URL and add the server-owned email delivery foundation.
+Reorder the near-term roadmap so guest SMS and email are finished before broader staging/live readiness work.
 
 ## Dependencies
-- T0038/T0039 created opaque check-in links and SMS delivery audit rows.
-- T0049 keeps unattended scheduled SMS sends disabled unless explicit safety config is present.
-- T0062 classified `session-links` messaging routes as internal operations routes before staging/live.
+- T0062 documented the route trust boundary.
+- T0063 added the email delivery foundation and public guest messaging base URL.
+- User explicitly chose to prioritize working SMS and email before the next production-readiness tickets.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,85 +19,67 @@ Verify guest messaging with the public check-in URL and add the server-owned ema
 - FOLLOWUPS.md
 - AWS_RESOURCES.md
 - TEST_PLAN.md
-- API_PROTECTION_BOUNDARY.md
-- infra/config/dev.json
-- infra/config/dev.example.json
-- infra/lib/config.ts
-- infra/lib/jumpyard-cloud-stack.ts
-- infra/lambda/session/index.js
-- infra/migrations/
 
 ## Do not touch
+- App source code
 - UI files
-- App source code outside the session Lambda
-- Roller payment flow
-- Redeem flow
-- Webhook registration
-- Data API importer behavior
+- Lambda code
+- CDK code
+- Aurora migrations
+- Package dependencies
+- Roller config
+- AWS resources
 - Production credentials
-- Live Roller config
 - `.env`
 - Unrelated local assets or deliverables
 
 ## Requirements
 
-1. Keep booking-time SMS automation safe.
-   - Use the public Cloudflare check-in URL in dev config for future links.
-   - Keep unattended scheduled sends disabled with `confirmSend=false`.
-   - Do not send real SMS unless explicitly confirmed outside this ticket.
+1. Document that the next implementation work should complete guest messaging first.
+   - SMS completion comes before environment/cutover planning.
+   - Email completion comes before environment/cutover planning.
+   - Unified booking-time guest messaging comes before broader staging/live hardening.
 
-2. Add an email delivery foundation using the same check-in token model as SMS.
-   - Create a `POST /v1/check-in/session-links/send-email` route.
-   - Require the existing check-in link dev token for the route.
-   - Create an opaque `jy_token` link with channel `email`.
-   - Store only token hashes and masked/hashed destinations.
-   - Never log or persist raw tokens or full check-in URLs.
+2. Lock the near-term ticket order:
+   - T0065 Guest SMS completion.
+   - T0066 Guest email completion.
+   - T0067 Unified booking-time guest messaging.
+   - T0068 Environment and cutover plan.
+   - Later production-readiness tickets after messaging is proven.
 
-3. Add email audit storage.
-   - Add a versioned Aurora migration for `jumpyard.email_deliveries`.
-   - Track delivery id, booking ids, token hash, provider, destination hash/mask, template, subject, status, dry-run flag, provider message id, safe errors, and timestamps.
+3. Update follow-ups and project context so this does not get lost.
+   - SMS sandbox/sender/consent work should point to T0065.
+   - SES sender/domain verification should point to T0066.
+   - Combined SMS plus email scheduling should point to T0067.
+   - Route auth/WAF and other production-readiness work should remain planned, but not before messaging.
 
-4. Add provider-ready AWS SES support without forcing a real send.
-   - Configure SES provider env for the session Lambda.
-   - Add IAM permission for SES send on the session Lambda.
-   - Fail confirmed sends unless a verified sender is configured.
-   - Allow dry-run/preview without a verified SES sender.
-
-5. Update source-of-truth docs.
-   - Document that SMS and email use the same opaque link/session resolution pattern.
-   - Document that no SES sender identity exists yet in dev unless verified later.
-   - Mark guest email messaging follow-up as implemented to foundation level.
+4. Document that this ticket is docs-only.
+   - No AWS resources are created or changed.
+   - No app behavior changes.
+   - No real SMS or email sends.
 
 ## Non-goals
-- Do not create a SES sender/domain identity without confirmed sender details.
-- Do not enable real unattended SMS.
-- Do not send real email in this ticket.
-- Do not add email UI to the phone app.
-- Do not change staff/admin auth.
-- Do not create staging or production AWS resources.
-- Do not touch Roller Live.
+- Do not send SMS.
+- Do not send email.
+- Do not verify SES identities.
+- Do not exit SNS sandbox.
+- Do not change scheduled sends.
+- Do not implement route auth/WAF.
+- Do not create staging or production stacks.
+- Do not change payment, redeem, webhook, Data API, or UI behavior.
 
 ## Acceptance criteria
-- Email delivery route exists in CDK and session Lambda routing.
-- Dry-run email planning creates an email token and `email_deliveries` audit row.
-- Confirmed email send fails closed if SES sender is not configured.
-- Dev scheduled SMS remains planning-only.
-- Public check-in base URL is configured for guest messaging links in dev.
+- Source-of-truth docs list guest SMS/email as the next priority.
+- T0065, T0066, and T0067 are clearly defined before environment/cutover work.
+- Followups point to the new ticket owners.
+- `REPO_CURRENT_STATE.md` recommends T0065 as the next implementation ticket.
 - `npm run validate` passes.
-- `node --check infra/lambda/session/index.js` passes.
-- `npm --prefix infra run build` passes.
-- `npm --prefix infra run synth:dev` passes.
-- Dev migration, deploy, and dry-run email smoke pass if AWS credentials are available.
+- `git diff --check` passes.
 
 ## Manual verification
-Use the protected email route in dry-run mode for a known booking, confirm the response returns only masked destination data, then query Aurora for the matching `jumpyard.email_deliveries` row.
+Read `REPO_CURRENT_STATE.md`, `PROJECT_CONTEXT.md`, and `FOLLOWUPS.md` and confirm a new Codex session would work on SMS/email before environment/cutover work.
 
 ## Automated validation
 Run:
-- node --check infra/lambda/session/index.js
-- npm --prefix infra run build
-- npm --prefix infra run synth:dev
-- npm --prefix infra run migrate:dev
-- npm --prefix infra run deploy:dev
 - npm run validate
 - git diff --check

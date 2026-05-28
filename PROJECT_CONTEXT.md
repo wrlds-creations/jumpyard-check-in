@@ -540,6 +540,8 @@ T0062 documents the production route boundary before implementing authorizers, W
 
 T0063 adds the guest email messaging foundation next to the existing SMS link flow. JumpYard Cloud now supports a protected `POST /v1/check-in/session-links/send-email` route that creates the same opaque `jy_token` check-in link with channel `email`, writes safe audit rows to `jumpyard.email_deliveries`, supports dry-run preview without a verified sender, and fails closed for confirmed sends until an AWS SES sender/domain is configured. Dev scheduled SMS remains planning-only with `confirmSend=false`, while guest messaging base URLs now point at the public Cloudflare check-in app.
 
+T0064 reorders the near-term roadmap after user direction: finish guest SMS and email before environment/cutover and broader staging/live readiness work. The next implementation tickets are T0065 guest SMS completion, T0066 guest email completion, and T0067 unified booking-time guest messaging. Environment/cutover, alarm runbooks, dev-token replacement, route auth/WAF, retention, rollback, and live backfill remain important, but they move after the messaging path is proven end to end.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
@@ -549,7 +551,7 @@ T0063 adds the guest email messaging foundation next to the existing SMS link fl
 | Data storage, retention, and PII | Partial | Aurora is encrypted, deletion-protected, backed up for 7 days, and stores structured email/phone plus masks/hashes; S3 raw bucket is encrypted, versioned, retained, and has 30-day lifecycle. | Lock retention/deletion/export policy for PII, event logs, snapshots, and any raw payload/archive use. |
 | Public API exposure and auth | Partial | T0060 replaced wildcard CORS with explicit dev origins. T0061 added dev API Gateway stage throttling and 429 visibility. T0062 classifies every route boundary and documents the target live posture. API Gateway routes still have `AuthorizationType=NONE`; app-level tokens/staff auth protect only selected routes. | Implement the T0062 boundary with production auth, WAF or equivalent edge controls, route-specific limits, internal-only operations routes, and guest/staff public boundary rules. |
 | Webhook security and retries | Partial | Playground webhook id `238` uses `x-roller-apikey`; Lambda stores idempotent events and can enrich from Roller REST. | Confirm production auth/signature/IP allowlisting and decide whether enrichment must move async before live traffic. |
-| SMS/email readiness | Blocked | EventBridge due-SMS schedule exists but dev config keeps `confirmSend=false`; SNS account is still sandboxed. T0063 adds SES-ready email dry-run/audit support, but no SES sender identity is verified yet. | Approve sender identities, consent/unsubscribe policy, public URL, SNS sandbox exit or verified-recipient policy, SES sender/domain verification, and monitoring. |
+| SMS/email readiness | In focus | EventBridge due-SMS schedule exists but dev config keeps `confirmSend=false`; SNS account is still sandboxed. T0063 adds SES-ready email dry-run/audit support, but no SES sender identity is verified yet. T0064 moves SMS/email completion ahead of broader production-readiness work. | Complete T0065 SMS, T0066 email, and T0067 unified booking-time messaging before environment/cutover tickets. |
 | Observability and alarms | Partial | T0060 added dashboard `jumpyard-check-in-dev-ops`, API/Lambda/DLQ/Roller API alarms, API Gateway access logs, and safe Roller outbound call metrics. T0061 added API throttling visibility and a 429 alarm. | Add notification routing, runbooks, Aurora health, scheduler-specific health, SMS failure metrics, webhook failure metrics, and production thresholds. |
 | Rollback, migration, and deployment safety | Partial | CDK synth/build works; Aurora migrations are versioned; dev deploys have been manual and scoped. | Add release/runbook, preflight gates, rollback/restore plan, CI/CD identity, migration backup policy, and post-deploy smoke checklist. |
 | Backfill, sync, and cutover | Partial | Daily Data API sync runs at `02:00 UTC`; manual backfill command exists; webhooks and lookup refresh update Aurora. | Define live backfill range, cutover order, webhook registration plan, freshness SLAs, and replay/reconciliation procedure. |
@@ -559,8 +561,8 @@ T0063 adds the guest email messaging foundation next to the existing SMS link fl
 
 - Do not build new app behavior or change UI files.
 - Do not fix Roller/Adyen card method configuration.
-- Do not enable real unattended SMS or real email sends in T0063.
-- Do not change payment, staff auth, redeem, webhook, or Data API behavior in T0063.
+- Do not enable real unattended SMS or real email sends in T0064.
+- Do not change payment, staff auth, redeem, webhook, Data API, SMS, or email behavior in T0064.
 - Do not write to Roller Live/production.
 - Do not create staging or production AWS resources.
 

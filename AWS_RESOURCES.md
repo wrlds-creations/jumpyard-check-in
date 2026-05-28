@@ -62,6 +62,12 @@ T0063 guest messaging and email foundation notes:
 - SES account check in `eu-north-1` showed sending enabled but no email identities configured at T0063 start.
 - Dev booking-time SMS remains planning-only with `confirmSend=false`; the dev check-in link base URL is now `https://jumpyard-check-in.pages.dev/`.
 
+T0064 messaging-first roadmap notes:
+
+- AWS resources changed: none.
+- No CDK, Lambda, Aurora migration, AWS config, Roller config, secrets, or deployed resource was changed.
+- Roadmap order changed only in source-of-truth docs: T0065 guest SMS completion, T0066 guest email completion, and T0067 unified booking-time guest messaging now come before T0068+ environment/cutover and broader production-readiness work.
+
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
 T0006 deploy notes:
