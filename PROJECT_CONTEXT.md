@@ -263,8 +263,8 @@ After T0007, the next tickets should proceed in this order:
 | `T0054 Public payment method smoke` | Confirm public payment-package behavior, explain Swish success, and lock the missing card/scheme blocker. | Completed and merged; Swish works publicly, while card/scheme needs Roller/Adyen configuration. |
 | `T0055 New-booking paid continuation` | After a paid new booking, route directly into the check-in/safety/QR path and add a buy-entry progress bar. | Completed and merged; phone-flow only, no AWS/backend/payment-package changes. |
 | `T0056 Payment draft status reconciliation` | Mark local prepayment draft rows as `published` after Roller confirms the paid/published booking through lookup or webhook enrichment. | Completed locally and deployed to dev; backend lifecycle reconciliation only. |
-| `T0057 Integrated smoke test` | Run a focused end-to-end dev/Playground smoke across lookup, payment reconciliation, session, safety handoff, staff auth, staff detail, and redeem. | Completed locally; test/documentation only. |
-| `T0058 Stack production readiness` | Audit the dev AWS stack, deployment config, environment separation, secrets, observability, rollback posture, and production cutover prerequisites before any staging/live setup. | Next hardening candidate; separate from payment and SMS. |
+| `T0057 Integrated smoke test` | Run a focused end-to-end dev/Playground smoke across lookup, payment reconciliation, session, safety handoff, staff auth, staff detail, and redeem. | Completed and merged through PR #60; test/documentation only. |
+| `T0058 Stack production readiness` | Audit the dev AWS stack, deployment config, environment separation, secrets, observability, rollback posture, and production cutover prerequisites before any staging/live setup. | Current audit ticket; docs-only, no AWS changes. |
 
 Deterministic Playground test bookings means fixed, repeatable test scenarios rather than random data. The seed tool should create known cases such as paid-ready, pending-payment, wrong-date, already-redeemed, SkyRider/add-on, and stock/add-on routing scenarios. It must be protected, server-side, Playground-only, and never part of the public phone UI.
 
@@ -520,6 +520,28 @@ T0057 is the integrated smoke-test checkpoint before more production hardening:
 - the smoke also found that mixed entry plus stock/add-on bookings can select non-redeemable add-on tickets and fail Roller redeem with `Product type not accepted`
 - smoke records use safe ids/statuses only and avoid secrets, raw JWTs, full phone numbers, and full email addresses
 - T0058 is reserved for stack production readiness after this test checkpoint
+
+T0058 audits the current dev stack for staging/live readiness before any new environment is created:
+
+- no AWS resources were created, changed, deployed, or deleted
+- AWS read-only checks confirmed account `376129878018`, region `eu-north-1`, stack status `UPDATE_COMPLETE`, API endpoint `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`, Aurora status `available`, and SNS SMS sandbox mode still enabled
+- the dev stack is suitable for Playground development and controlled smoke tests, but it is not ready to copy directly to staging/live
+- payment card/scheme remains parked on Roller/Adyen configuration until Pabel/Roller confirms the missing method
+
+## T0058 Production Readiness Matrix
+
+| Area | Result | Evidence | Before staging/live |
+|---|---|---|---|
+| Environment separation and naming | Partial | Only `infra/config/dev.json` and `infra/config/dev.example.json` exist; stack and resources are dev-prefixed and Playground-only. | Add reviewed staging/live config, names, tags, domains, and Roller environment split. |
+| Secrets and parameters | Partial | Secrets Manager holds Roller creds, webhook token, redeem dev token, check-in link token, staff auth, and Aurora admin; SSM holds Playground env/base URL. | Replace dev tokens/passcode patterns, define rotation/ownership, and separate live secrets. |
+| Data storage, retention, and PII | Partial | Aurora is encrypted, deletion-protected, backed up for 7 days, and stores structured email/phone plus masks/hashes; S3 raw bucket is encrypted, versioned, retained, and has 30-day lifecycle. | Lock retention/deletion/export policy for PII, event logs, snapshots, and any raw payload/archive use. |
+| Public API exposure and auth | Blocked | API Gateway HTTP routes have `AuthorizationType=NONE` and CORS `allowOrigins=['*']`; app-level tokens/staff auth protect some routes. | Define production auth, CORS origins, rate limits, WAF/API protection, and guest/staff boundary rules. |
+| Webhook security and retries | Partial | Playground webhook id `238` uses `x-roller-apikey`; Lambda stores idempotent events and can enrich from Roller REST. | Confirm production auth/signature/IP allowlisting and decide whether enrichment must move async before live traffic. |
+| SMS readiness | Blocked | EventBridge due-SMS schedule exists but dev config keeps `confirmSend=false`; SNS account is still sandboxed. | Approve sender, consent/unsubscribe policy, public URL, sandbox exit or verified-recipient policy, and monitoring. |
+| Observability and alarms | Blocked | Lambda log groups and SNS delivery logs exist; `describe-alarms` found no `jumpyard-check-in-dev*` CloudWatch alarms. | Add alarms/dashboards for API errors, Lambda errors/duration, scheduler failures, Aurora health, SQS/DLQ, SMS failures, and webhook failures. |
+| Rollback, migration, and deployment safety | Partial | CDK synth/build works; Aurora migrations are versioned; dev deploys have been manual and scoped. | Add release/runbook, preflight gates, rollback/restore plan, CI/CD identity, migration backup policy, and post-deploy smoke checklist. |
+| Backfill, sync, and cutover | Partial | Daily Data API sync runs at `02:00 UTC`; manual backfill command exists; webhooks and lookup refresh update Aurora. | Define live backfill range, cutover order, webhook registration plan, freshness SLAs, and replay/reconciliation procedure. |
+| Payment production readiness | Deferred | Swish works publicly; card/scheme is absent from current Roller/Adyen Playground methods. | Wait for Pabel/Roller before card smoke or card-specific production readiness. |
 
 ## Non-Goals For Current Ticket
 

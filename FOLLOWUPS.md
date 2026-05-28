@@ -41,6 +41,12 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-052` | `T0053` | Phone UX | Add a buy-entry progress bar later, visually matching the existing booked-check-in progress indicator, so the new buy-entry path stays clear even though it no longer starts on the original first screen. Final visible steps are entry, add-ons, payment, safety, and done. | Medium | `T0055` | Done |
 | `FU-053` | `T0054` | Phone UX | After successful new-booking payment, do not route the guest back into a booking summary path where they can repeat add-ons/payment. The next phone-flow ticket should route directly into the new booking check-in continuation and show a compact buy-entry progress bar. | High | `T0055` | Done |
 | `FU-054` | `T0057` | Redeem eligibility | Mixed entry plus stock/add-on bookings can select non-redeemable add-on ticket ids for staff redeem; filter or mark Roller-redeemable ticket ids before sending `POST /redemptions` so add-ons such as JumpSocks do not fail the whole staff-confirmed redeem. | High | `TBD` | Open |
+| `FU-055` | `T0058` | Environment readiness | Create reviewed staging/live CDK config, naming, domains, WRLDS tags, Roller environment split, and account/region preflight before any non-dev stack is created. | High | `TBD` | Open |
+| `FU-056` | `T0058` | Observability | Add production-grade CloudWatch alarms, dashboards, metric filters, and operational runbooks for API Gateway, Lambdas, EventBridge schedules, Aurora, SQS/DLQ, webhook failures, SMS delivery failures, and Data API sync health. | High | `TBD` | Open |
+| `FU-057` | `T0058` | API security | Define and implement production API protection: allowed origins, route auth strategy, throttling/rate limits, WAF or equivalent edge controls, and safe guest/staff public boundary rules. | High | `TBD` | Open |
+| `FU-058` | `T0058` | Secrets lifecycle | Replace dev-only shared tokens/passcodes before production, define secret owners and rotation cadence, and separate live Roller/staff/webhook/SMS secrets from dev. | High | `TBD` | Open |
+| `FU-059` | `T0058` | Deployment safety | Add a deployment and rollback runbook covering CI/CD identity, preflight checks, CDK diff approval, migration backup/restore, post-deploy smoke, and rollback criteria. | High | `TBD` | Open |
+| `FU-060` | `T0058` | Cutover plan | Define live initial backfill range, Data API daily sync window, webhook registration order, freshness SLA, replay/reconciliation procedure, and cutover checklist. | High | `TBD` | Open |
 
 ## Resolved Followups
 

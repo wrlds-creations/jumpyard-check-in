@@ -1,24 +1,24 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0057
+T0058
 
 ## Goal
-Run a focused integrated smoke test across the current JumpYard check-in flow.
+Audit the current dev AWS stack and repository posture for production readiness before any staging/live setup.
 
 ## Dependencies
-- T0056 completed, deployed to dev, and merged to `main`.
-- Known paid Playground booking `5063394` exists from the public T0055/T0056 smoke.
-- Dev JumpYard Cloud API is deployed in AWS account `376129878018`, region `eu-north-1`.
-- Staff auth exists from T0047.
+- T0057 completed and merged to `main`.
+- Current AWS dev stack exists in account `376129878018`, region `eu-north-1`.
+- Payment card/scheme work is paused until Pabel/Roller replies.
 
 ## Allowed areas
 - CODEX_TASK.md
 - PROJECT_CONTEXT.md
+- DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
 - TEST_PLAN.md
-- AWS_RESOURCES.md only if AWS resource behavior/status is discovered during smoke verification
+- AWS_RESOURCES.md
 
 ## Do not touch
 - App source code
@@ -34,53 +34,61 @@ Run a focused integrated smoke test across the current JumpYard check-in flow.
 
 ## Requirements
 
-1. Lock ticket numbering.
-   - T0057 is now `Integrated smoke test`.
-   - T0058 is now `Stack production readiness`.
+1. Audit production-readiness posture for the current dev stack.
+   - Environment separation and naming.
+   - Secrets and parameter ownership.
+   - Data storage, retention, and PII posture.
+   - Public API exposure and auth boundaries.
+   - Webhook security and retry posture.
+   - SMS readiness and sandbox/consent blockers.
+   - Observability, alarms, logs, and operational diagnostics.
+   - Rollback, migration, and deployment safety.
+   - Backfill/sync/cutover requirements.
 
-2. Run an integrated happy-path smoke using dev/Playground only.
-   - Confirm lookup for a paid Playground booking through JumpYard Cloud.
-   - Confirm the local prepayment draft state is already reconciled to `published`.
-   - Start or resume the JumpYard Cloud check-in session.
-   - Mark the session ready for staff.
-   - Authenticate through staff auth.
-   - Confirm staff handoff list/detail can see the ready session.
-   - Execute staff-confirmed redeem if the chosen booking/session is still redeemable.
-   - Confirm the session leaves the active ready list after successful redeem.
+2. Produce a clear readiness result.
+   - Mark each area as ready, partially ready, blocked, or deferred.
+   - List concrete blockers before staging/live.
+   - List recommended next tickets in a practical order.
+   - Keep payment card/scheme as waiting on Pabel/Roller, not active work.
 
-3. Run a minimal browser smoke.
-   - Confirm the phone app loads.
-   - Confirm the staff/admin app loads enough to show the handoff/login shell.
-   - Do not change UI behavior or styling.
+3. Use AWS work rules safely.
+   - Read `AWS_RESOURCES.md`.
+   - Use `skills/aws-project-infrastructure/`.
+   - Do not create, change, deploy, or delete AWS resources.
+   - If AWS credentials are available, read only identity/diff/synth state.
+   - If AWS credentials are unavailable or expired, document that as a validation gap.
 
-4. Keep the smoke safe.
+4. Keep output safe.
    - Do not print staff passcodes, staff tokens, Roller secrets, access tokens, raw payment JWTs, full phone numbers, or full email addresses.
-   - Use only Playground/dev resources.
+   - Use only docs, IaC inspection, and safe validation commands.
    - Do not touch Roller Live.
 
 ## Non-goals
 - Do not build new app behavior.
 - Do not fix card/scheme payment configuration.
-- Do not create new paid bookings unless the existing smoke booking cannot be used.
+- Do not create bookings, drafts, payments, or redemptions.
 - Do not add new AWS resources.
 - Do not enable production/staging resources.
 - Do not change staff auth implementation.
 - Do not change SMS scheduling or sending behavior.
+- Do not change infra/CDK code.
 
 ## Acceptance criteria
-- Source-of-truth docs show T0057 as integrated smoke test and T0058 as stack production readiness.
-- The selected paid booking can be looked up through JumpYard Cloud.
-- The selected paid booking can create/resume a check-in session and reach ready-for-staff.
-- Staff-auth-protected list/detail can read the ready session.
-- Staff-confirmed redeem succeeds or a clear documented blocker explains why redeem was not executed.
-- Aurora confirms the final session and ticket state after the smoke.
+- Source-of-truth docs show T0058 as stack production readiness.
+- A production-readiness matrix exists in project docs.
+- Staging/live blockers are clear and ticketed as followups or next tickets.
+- AWS resources are not changed.
+- App/source behavior is not changed.
+- Payment card/scheme remains parked until Pabel/Roller replies.
 - `npm run validate` passes.
 
 ## Manual verification
-- Review the smoke output in `TEST_PLAN.md`.
-- Confirm no secret values, raw JWTs, or full PII were recorded.
+- Review the T0058 readiness matrix and confirm it matches the intended production path.
+- Confirm no AWS resource changes were deployed.
 
 ## Automated validation
 Run:
 - `npm run validate`
 - `git diff --check`
+- `npm --prefix infra run build`
+- `npm --prefix infra run synth:dev`

@@ -6,6 +6,14 @@ All AWS resources created for this project must be represented here if they are 
 
 JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0006` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev booking endpoint reads Roller Playground availability, quotes costs, creates Roller Playground draft bookings server-side, persists safe pre-payment draft rows, and creates separate linked add-product draft bookings for existing bookings, the dev webhook endpoint records and enriches Roller webhook intake events, the dev data-sync Lambda is scheduled by EventBridge for daily Roller Data API reconciliation, the dev redeem endpoint plans/audits redemption, supports controlled Playground redemption behind a dev token, and exposes staff-confirmed session redeem protected by T0047 staff auth, the dev session endpoint creates/resumes server-owned check-in sessions, exposes staff-auth-protected handoff list/detail routes, creates/resolves hashed check-in session links with safe booking summaries for phone resume, can dry-run or explicitly send those links through AWS SNS, can plan booking-time SMS candidates from Aurora before any confirmed send, and is invoked by a dev EventBridge booking-time SMS schedule in planning mode with a T0049 config/runtime guard for future confirmed sends, SNS SMS delivery diagnostics are configured for dev, the real Roller Playground booking webhook is registered, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, webhook-enriched records, scheduled sync run rows, session rows, check-in token hashes, SMS delivery audit rows, pre-payment draft rows, booking links, idempotency rows, event logs, and redeem attempt audit rows.
 
+T0058 production-readiness audit notes:
+
+- AWS resources changed: none.
+- Read-only AWS validation confirmed stack `jumpyard-check-in-dev-stack` status `UPDATE_COMPLETE`, API `m0uo5g4mde`, Aurora cluster `jumpyard-check-in-dev-aurora` status `available`, and SNS SMS sandbox status `IsInSandbox=true`.
+- `aws cloudwatch describe-alarms --alarm-name-prefix jumpyard-check-in-dev` returned no CloudWatch alarms.
+- API Gateway routes currently have `AuthorizationType=NONE` and rely on Lambda/application-level checks where implemented; CORS is still wildcard.
+- Dev is appropriate for Playground development and smoke testing, but staging/live must wait for the readiness gate documented in `PROJECT_CONTEXT.md`, `DECISIONS.md`, and `FOLLOWUPS.md`.
+
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
 T0006 deploy notes:
@@ -419,7 +427,7 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`.
 
 | Table | Purpose |
 |---|---|
-| `schema_migrations` | Tracks applied SQL migrations. Applied through `0005 add product draft links`. |
+| `schema_migrations` | Tracks applied SQL migrations. Applied through `0006 sms deliveries`. |
 | `roller_bookings` | Latest normalized Roller booking snapshot from seed, webhook enrichment, or live refresh. T0016 and T0017 can upsert refreshed booking rows. |
 | `roller_booking_items` | Normalized booking item/product rows. T0016 and T0017 can upsert refreshed item rows. |
 | `roller_booking_tickets` | Ticket ids and redeem readiness context from `/data/tickets`, lookup live refresh, or webhook enrichment. |
