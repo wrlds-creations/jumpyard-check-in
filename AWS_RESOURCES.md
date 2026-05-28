@@ -4,7 +4,7 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0006` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev booking endpoint reads Roller Playground availability, quotes costs, creates Roller Playground draft bookings server-side, persists safe pre-payment draft rows, and creates separate linked add-product draft bookings for existing bookings, the dev webhook endpoint records and enriches Roller webhook intake events, the dev data-sync Lambda is scheduled by EventBridge for daily Roller Data API reconciliation, the dev redeem endpoint plans/audits redemption, supports controlled Playground redemption behind a dev token, and exposes staff-confirmed session redeem protected by T0047 staff auth, the dev session endpoint creates/resumes server-owned check-in sessions, exposes staff-auth-protected handoff list/detail routes, creates/resolves hashed check-in session links with safe booking summaries for phone resume, can dry-run or explicitly send those links through AWS SNS, can plan booking-time SMS candidates from Aurora before any confirmed send, and is invoked by a dev EventBridge booking-time SMS schedule in planning mode with a T0049 config/runtime guard for future confirmed sends, SNS SMS delivery diagnostics are configured for dev, the real Roller Playground booking webhook is registered, dev API CORS uses explicit allowed origins, API Gateway stage throttling is configured for dev, CloudWatch dashboard/alarms/API access logs are deployed for dev observability, safe Roller outbound API call counters and API throttled request counters are emitted through CloudWatch, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, webhook-enriched records, scheduled sync run rows, session rows, check-in token hashes, SMS delivery audit rows, pre-payment draft rows, booking links, idempotency rows, event logs, and redeem attempt audit rows.
+JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0007` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev booking endpoint reads Roller Playground availability, quotes costs, creates Roller Playground draft bookings server-side, persists safe pre-payment draft rows, and creates separate linked add-product draft bookings for existing bookings, the dev webhook endpoint records and enriches Roller webhook intake events, the dev data-sync Lambda is scheduled by EventBridge for daily Roller Data API reconciliation, the dev redeem endpoint plans/audits redemption, supports controlled Playground redemption behind a dev token, and exposes staff-confirmed session redeem protected by T0047 staff auth, the dev session endpoint creates/resumes server-owned check-in sessions, exposes staff-auth-protected handoff list/detail routes, creates/resolves hashed check-in session links with safe booking summaries for phone resume, can dry-run or explicitly send those links through AWS SNS, can plan booking-time SMS candidates from Aurora before any confirmed send, can dry-run SES-backed check-in email links with safe audit rows, and is invoked by a dev EventBridge booking-time SMS schedule in planning mode with a T0049 config/runtime guard for future confirmed sends, SNS SMS delivery diagnostics are configured for dev, the real Roller Playground booking webhook is registered, dev API CORS uses explicit allowed origins, API Gateway stage throttling is configured for dev, CloudWatch dashboard/alarms/API access logs are deployed for dev observability, safe Roller outbound API call counters and API throttled request counters are emitted through CloudWatch, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, webhook-enriched records, scheduled sync run rows, session rows, check-in token hashes, SMS delivery audit rows, email delivery audit rows, pre-payment draft rows, booking links, idempotency rows, event logs, and redeem attempt audit rows.
 
 T0058 production-readiness audit notes:
 
@@ -42,6 +42,25 @@ T0061 API protection boundary notes:
 - New alarm: `jumpyard-check-in-dev-api-throttled-requests`.
 - Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-05-28; post-deploy `npm --prefix infra run diff:dev` showed no differences.
 - Smoke: `POST /v1/bookings/availability` returned HTTP `200` after throttling was enabled, without creating a booking.
+
+T0062 route auth and WAF/edge boundary notes:
+
+- AWS resources changed: none.
+- T0062 is documentation/design only; no CDK implementation, deploy, authorizer, WAF, CloudFront, custom domain, Lambda code, Aurora schema, or package dependency was changed.
+- New source-of-truth file: `API_PROTECTION_BOUNDARY.md`.
+- Route inventory is classified by trust boundary: guest public, guest token, guest write, staff auth entry, staff protected, internal operations, Roller webhook, and legacy/dev-only.
+- Later implementation should apply route-specific limits, API-boundary staff identity, internal-only protection for operations routes, and WAF or equivalent edge controls before staging/live exposure.
+
+T0063 guest messaging and email foundation notes:
+
+- AWS resources changed: API Gateway route, session Lambda code/environment/IAM, and dev Aurora schema migration `0007`.
+- Added route: `POST /v1/check-in/session-links/send-email`.
+- Added Aurora table: `jumpyard.email_deliveries`.
+- Email sends use the same `jumpyard.checkin_tokens` opaque `jy_token` model as SMS, with channel `email`.
+- Dry-run email planning works without a verified SES sender and records masked/hashed destination details only.
+- Confirmed email sends fail closed until `guestEmail.fromAddress` is configured with a verified SES sender/domain.
+- SES account check in `eu-north-1` showed sending enabled but no email identities configured at T0063 start.
+- Dev booking-time SMS remains planning-only with `confirmSend=false`; the dev check-in link base URL is now `https://jumpyard-check-in.pages.dev/`.
 
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
@@ -408,13 +427,13 @@ Confirmed T0006 dev target:
 | Resource Name | AWS Service | Environment | Region | Managed By | Notes |
 |---|---|---|---|---|---|
 | `jumpyard-check-in-dev-stack` | CloudFormation | `dev` | `eu-north-1` | `cdk` | `CREATE_COMPLETE`. |
-| `m0uo5g4mde` | API Gateway HTTP API | `dev` | `eu-north-1` | `cdk` | Endpoint `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`; lookup, booking availability/quote/draft, existing-booking add-product quote/draft, session, check-in session link, staff auth/handoff, webhook, and redeem routes are implemented; CORS uses explicit dev origins; `$default` stage throttling is rate `25` requests/second and burst `50`. |
+| `m0uo5g4mde` | API Gateway HTTP API | `dev` | `eu-north-1` | `cdk` | Endpoint `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`; lookup, booking availability/quote/draft, existing-booking add-product quote/draft, session, check-in session link, SMS/email link, staff auth/handoff, webhook, and redeem routes are implemented; CORS uses explicit dev origins; `$default` stage throttling is rate `25` requests/second and burst `50`. |
 | `jumpyard-check-in-dev-ops` | CloudWatch Dashboard | `dev` | `eu-north-1` | `cdk` | T0060 operations dashboard for API requests/errors/latency, Lambda metrics, SQS/DLQ metrics, and Roller outbound API call/error metrics. |
 | `jumpyard-check-in-dev-*` CloudWatch alarms | CloudWatch Alarms | `dev` | `eu-north-1` | `cdk` | T0060 alarms for API 5xx, high API 4xx, Roller API errors, Roller ops DLQ messages, and Lambda errors/throttles; T0061 adds API throttled request alarm `jumpyard-check-in-dev-api-throttled-requests`. |
 | `jumpyard-check-in-dev-stack-lookup` | Lambda | `dev` | `eu-north-1` | `cdk` | T0016 lookup handler; reads Aurora first, refreshes from Roller Playground only when needed, and returns normalized phone-flow lookup response. |
 | `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | T0034 booking handler; reads Roller Playground availability, quotes Roller Playground draft costs, creates confirmed Playground draft bookings behind idempotency, creates separate linked add-product draft bookings for existing bookings, persists safe pre-payment draft rows, returns safe payment config and response-only `paymentJwt`, and writes safe audit rows. |
 | `jumpyard-check-in-dev-stack-redeem` | Lambda | `dev` | `eu-north-1` | `cdk` | T0047 redeem handler; plans/validates server-side redemption from Aurora, requires a dev token for lower-level direct confirmed writes, refreshes live Roller state before write, supports staff-auth-protected session redeem, marks completed sessions, and records attempt audit. |
-| `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0049 session handler; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, issues staff auth tokens, protects staff handoff list/detail, creates/resolves hashed check-in session links with safe booking summaries for phone resume, dry-runs or explicitly sends SMS links through AWS SNS, plans booking-time SMS candidates from Aurora, and blocks scheduled confirmed SMS sends unless the approval phrase and public HTTPS URL are present. |
+| `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0063 session handler; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, issues staff auth tokens, protects staff handoff list/detail, creates/resolves hashed check-in session links with safe booking summaries for phone resume, dry-runs or explicitly sends SMS links through AWS SNS, dry-runs or explicitly sends email links through SES when a verified sender is configured, plans booking-time SMS candidates from Aurora, and blocks scheduled confirmed SMS sends unless the approval phrase and public HTTPS URL are present. |
 | `jumpyard-check-in-dev-sns-sms-delivery-status` | IAM Role | `dev` | `eu-north-1` | `cdk` | Allows Amazon SNS to write SMS delivery status logs for JumpYard Cloud dev diagnostics. |
 | `SmsDeliveryStatusAttributes` | CloudFormation Custom Resource | `dev` | `eu-north-1` | `cdk` | Sets dev SNS SMS attributes for transactional SMS and 100% delivery status sampling. |
 | SNS SMS sandbox phone `+46*****9508` | Amazon SNS SMS sandbox | `dev` | `eu-north-1` | AWS CLI/manual verification | Verified test destination for dev SMS delivery while the account remains in SMS sandbox. |
@@ -460,7 +479,7 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`.
 
 | Table | Purpose |
 |---|---|
-| `schema_migrations` | Tracks applied SQL migrations. Applied through `0006 sms deliveries`. |
+| `schema_migrations` | Tracks applied SQL migrations. Applied through `0007 email deliveries`. |
 | `roller_bookings` | Latest normalized Roller booking snapshot from seed, webhook enrichment, or live refresh. T0016 and T0017 can upsert refreshed booking rows. |
 | `roller_booking_items` | Normalized booking item/product rows. T0016 and T0017 can upsert refreshed item rows. |
 | `roller_booking_tickets` | Ticket ids and redeem readiness context from `/data/tickets`, lookup live refresh, or webhook enrichment. |
@@ -469,6 +488,7 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`.
 | `checkin_sessions` | Server-owned guest check-in session state, selected ticket ids, safety status, handoff status/code, expiry, and ready-for-staff state. |
 | `prepayment_booking_drafts` | Safe Roller draft booking metadata for new-booking and add-product pre-payment flows, including status, selected item summary, totals, structured guest email/phone, masked/hash contact fields, add-product original booking link fields, and JWT/config presence flags without storing raw `paymentJwt`. |
 | `checkin_tokens` | SMS/link/open token state. |
+| `email_deliveries` | Email link delivery audit rows with masked/hashed destination values and no raw token/full URL storage. |
 | `checkin_attempts` | Check-in and redeem attempt audit. |
 | `handoff_sessions` | Staff handoff, safety, and band-pairing state. |
 | `booking_links` | Internal links between original bookings and separate add-on bookings. |

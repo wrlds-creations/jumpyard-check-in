@@ -1,15 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0061
+T0063
 
 ## Goal
-Add the first API Gateway protection boundary for JumpYard Cloud dev without changing app behavior.
+Verify guest messaging with the public check-in URL and add the server-owned email delivery foundation.
 
 ## Dependencies
-- T0060 added explicit CORS, API access logs, CloudWatch dashboard/alarms, and Roller outbound API call metrics.
-- T0058 production-readiness audit identified public API protection as a staging/live blocker.
-- AWS dev stack remains the implementation target.
+- T0038/T0039 created opaque check-in links and SMS delivery audit rows.
+- T0049 keeps unattended scheduled SMS sends disabled unless explicit safety config is present.
+- T0062 classified `session-links` messaging routes as internal operations routes before staging/live.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,84 +19,85 @@ Add the first API Gateway protection boundary for JumpYard Cloud dev without cha
 - FOLLOWUPS.md
 - AWS_RESOURCES.md
 - TEST_PLAN.md
+- API_PROTECTION_BOUNDARY.md
 - infra/config/dev.json
 - infra/config/dev.example.json
 - infra/lib/config.ts
 - infra/lib/jumpyard-cloud-stack.ts
+- infra/lambda/session/index.js
+- infra/migrations/
 
 ## Do not touch
 - UI files
-- Payment package vendor files
-- Package dependencies
-- Aurora migrations or schema
+- App source code outside the session Lambda
+- Roller payment flow
+- Redeem flow
+- Webhook registration
+- Data API importer behavior
 - Production credentials
 - Live Roller config
 - `.env`
-- Lambda business logic
 - Unrelated local assets or deliverables
 
 ## Requirements
 
-1. Add environment-specific API Gateway stage throttling for dev.
-   - Configure a default request rate limit.
-   - Configure a default burst limit.
-   - Keep values in config, not hardcoded.
+1. Keep booking-time SMS automation safe.
+   - Use the public Cloudflare check-in URL in dev config for future links.
+   - Keep unattended scheduled sends disabled with `confirmSend=false`.
+   - Do not send real SMS unless explicitly confirmed outside this ticket.
 
-2. Add throttling visibility.
-   - Count HTTP 429 throttled API responses from API Gateway access logs.
-   - Add throttled requests to the existing CloudWatch dashboard.
-   - Add a CloudWatch alarm for throttled requests.
-   - Do not log request bodies, secrets, raw payment JWTs, full phone numbers, or full emails.
+2. Add an email delivery foundation using the same check-in token model as SMS.
+   - Create a `POST /v1/check-in/session-links/send-email` route.
+   - Require the existing check-in link dev token for the route.
+   - Create an opaque `jy_token` link with channel `email`.
+   - Store only token hashes and masked/hashed destinations.
+   - Never log or persist raw tokens or full check-in URLs.
 
-3. Keep the guest/staff flow unchanged.
-   - Do not add API Gateway authorizers yet.
-   - Do not change existing app-level tokens, staff auth, webhook token handling, SMS behavior, payment behavior, or redeem behavior.
-   - Do not add WAF in this ticket; keep WAF/edge controls as a later production-readiness step if needed.
+3. Add email audit storage.
+   - Add a versioned Aurora migration for `jumpyard.email_deliveries`.
+   - Track delivery id, booking ids, token hash, provider, destination hash/mask, template, subject, status, dry-run flag, provider message id, safe errors, and timestamps.
 
-4. Update source-of-truth documentation.
-   - Document the new API Gateway throttling settings.
-   - Document the new CloudWatch metric/alarm.
-   - Update current ticket status and recommended next ticket.
+4. Add provider-ready AWS SES support without forcing a real send.
+   - Configure SES provider env for the session Lambda.
+   - Add IAM permission for SES send on the session Lambda.
+   - Fail confirmed sends unless a verified sender is configured.
+   - Allow dry-run/preview without a verified SES sender.
 
-5. Deploy only approved dev infrastructure changes if validation is clean.
-   - Read AWS_RESOURCES.md and use the AWS infrastructure workflow.
-   - Confirm AWS account `376129878018` and region `eu-north-1`.
-   - Review CDK diff before deploy.
+5. Update source-of-truth docs.
+   - Document that SMS and email use the same opaque link/session resolution pattern.
+   - Document that no SES sender identity exists yet in dev unless verified later.
+   - Mark guest email messaging follow-up as implemented to foundation level.
 
 ## Non-goals
-- Do not add staging or production AWS resources.
-- Do not add WAF, Cognito, SSO, Lambda authorizers, or JWT authorizers yet.
-- Do not change app UI.
-- Do not change Roller business behavior.
-- Do not change payment, SMS, webhook, Data API, session, or redeem flow semantics.
-- Do not create Aurora schema changes.
+- Do not create a SES sender/domain identity without confirmed sender details.
+- Do not enable real unattended SMS.
+- Do not send real email in this ticket.
+- Do not add email UI to the phone app.
+- Do not change staff/admin auth.
+- Do not create staging or production AWS resources.
 - Do not touch Roller Live.
 
 ## Acceptance criteria
-- Dev API Gateway `$default` stage has configured throttling.
-- Dev API Gateway detailed metrics remain enabled.
-- Throttled requests are counted through a safe CloudWatch metric.
-- CloudWatch dashboard includes throttled request visibility.
-- CloudWatch alarm `jumpyard-check-in-dev-api-throttled-requests` exists.
+- Email delivery route exists in CDK and session Lambda routing.
+- Dry-run email planning creates an email token and `email_deliveries` audit row.
+- Confirmed email send fails closed if SES sender is not configured.
+- Dev scheduled SMS remains planning-only.
+- Public check-in base URL is configured for guest messaging links in dev.
+- `npm run validate` passes.
+- `node --check infra/lambda/session/index.js` passes.
 - `npm --prefix infra run build` passes.
 - `npm --prefix infra run synth:dev` passes.
-- `npm --prefix infra run deploy:dev` passes after clean diff review.
-- `npm run validate` passes.
-- `git diff --check` passes.
+- Dev migration, deploy, and dry-run email smoke pass if AWS credentials are available.
 
 ## Manual verification
-- Open API Gateway -> `m0uo5g4mde` -> Stages -> `$default`.
-- Confirm default route throttling is rate `25` and burst `50`.
-- Open CloudWatch dashboard `jumpyard-check-in-dev-ops`.
-- Confirm API throttled request metric is visible.
-- Open CloudWatch alarms and confirm `jumpyard-check-in-dev-api-throttled-requests` exists.
+Use the protected email route in dry-run mode for a known booking, confirm the response returns only masked destination data, then query Aurora for the matching `jumpyard.email_deliveries` row.
 
 ## Automated validation
 Run:
-- `npm --prefix infra run build`
-- `npm --prefix infra run synth:dev`
-- `npm --prefix infra run diff:dev`
-- `npm --prefix infra run deploy:dev`
-- `npm --prefix infra run diff:dev`
-- `npm run validate`
-- `git diff --check`
+- node --check infra/lambda/session/index.js
+- npm --prefix infra run build
+- npm --prefix infra run synth:dev
+- npm --prefix infra run migrate:dev
+- npm --prefix infra run deploy:dev
+- npm run validate
+- git diff --check

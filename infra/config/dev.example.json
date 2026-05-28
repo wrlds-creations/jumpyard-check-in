@@ -27,6 +27,12 @@
     "windowMinutes": 10,
     "limit": 10
   },
+  "guestEmail": {
+    "provider": "aws_ses",
+    "checkinBaseUrl": "http://localhost:3000/",
+    "fromAddress": "",
+    "replyToAddresses": []
+  },
   "tags": {
     "WRLDS:Client": "JumpYard",
     "WRLDS:Project": "JumpYard Next",

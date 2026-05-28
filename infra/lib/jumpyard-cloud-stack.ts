@@ -23,6 +23,9 @@ interface JumpYardCloudStackProps extends StackProps {
 
 interface HandlerResources {
   readonly api: apigatewayv2.CfnApi;
+  readonly checkinEmailBaseUrl: string;
+  readonly checkinEmailFromAddress: string;
+  readonly checkinEmailReplyToAddresses: readonly string[];
   readonly checkinSmsBaseUrl: string;
   readonly rollerCredentialsSecret: secretsmanager.Secret;
   readonly databaseClusterArn: string;
@@ -300,6 +303,9 @@ export class JumpYardCloudStack extends Stack {
 
     const handlerResources: HandlerResources = {
       api,
+      checkinEmailBaseUrl: config.guestEmail.checkinBaseUrl,
+      checkinEmailFromAddress: config.guestEmail.fromAddress,
+      checkinEmailReplyToAddresses: config.guestEmail.replyToAddresses,
       checkinSmsBaseUrl: config.bookingTimeSms.checkinBaseUrl,
       rollerCredentialsSecret,
       databaseClusterArn,
@@ -383,6 +389,7 @@ export class JumpYardCloudStack extends Stack {
     this.addRoute(api, sessionHandler, 'POST /v1/staff/auth/login');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-sms');
+    this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-email');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-due-sms');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/resolve');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions');
@@ -743,8 +750,12 @@ export class JumpYardCloudStack extends Stack {
     }
 
     if (handlerName === 'session') {
+      environment.CHECKIN_EMAIL_BASE_URL = resources.checkinEmailBaseUrl;
       environment.CHECKIN_SMS_BASE_URL = resources.checkinSmsBaseUrl;
       environment.CHECKIN_LINK_DEV_TOKEN_SECRET_ARN = resources.checkinLinkDevTokenSecret.secretArn;
+      environment.EMAIL_FROM_ADDRESS = resources.checkinEmailFromAddress;
+      environment.EMAIL_PROVIDER = 'aws_ses';
+      environment.EMAIL_REPLY_TO_ADDRESSES = resources.checkinEmailReplyToAddresses.join(',');
       environment.SMS_PROVIDER = 'aws_sns';
       environment.SMS_SENDER_ID = 'JumpYard';
       environment.STAFF_AUTH_SECRET_ARN = resources.staffAuthSecret.secretArn;
@@ -801,6 +812,12 @@ exports.handler = async () => ({
       fn.addToRolePolicy(
         new iam.PolicyStatement({
           actions: ['sns:Publish'],
+          resources: ['*'],
+        }),
+      );
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['ses:SendEmail'],
           resources: ['*'],
         }),
       );

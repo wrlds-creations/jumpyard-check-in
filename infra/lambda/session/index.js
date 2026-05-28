@@ -38,9 +38,14 @@ const NON_REDEEMABLE_PRODUCT_KEYS = new Set([
   'stockproduct',
 ]);
 const CHECKIN_SMS_TEMPLATE = 'checkin_link_v1';
+const CHECKIN_EMAIL_TEMPLATE = 'checkin_email_v1';
 const DEFAULT_SMS_BASE_URL = process.env.CHECKIN_SMS_BASE_URL || null;
+const DEFAULT_EMAIL_BASE_URL = process.env.CHECKIN_EMAIL_BASE_URL || DEFAULT_SMS_BASE_URL;
 const SMS_PROVIDER = process.env.SMS_PROVIDER || 'aws_sns';
 const SMS_SENDER_ID = process.env.SMS_SENDER_ID || '';
+const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER || 'aws_ses';
+const EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS || '';
+const EMAIL_REPLY_TO_ADDRESSES = parseEmailAddressList(process.env.EMAIL_REPLY_TO_ADDRESSES);
 const SMS_TRIGGER_TIME_ZONE = 'Europe/Stockholm';
 const DEFAULT_SMS_TRIGGER_LEAD_MINUTES = 30;
 const DEFAULT_SMS_TRIGGER_WINDOW_MINUTES = 10;
@@ -56,6 +61,8 @@ const snsClient = new SNSClient({});
 let cachedCheckinLinkDevToken = null;
 let cachedStaffAuthConfig = null;
 let cachedStaffAuthConfigExpiresAt = 0;
+let cachedSesClient = null;
+let cachedSendEmailCommand = null;
 
 exports.handler = async (event) => {
   let correlationId = getHeader(event, 'x-correlation-id') || createCorrelationId();
@@ -89,6 +96,10 @@ exports.handler = async (event) => {
 
     if (isSendSessionLinkSmsRoute(routeKey, event)) {
       return handleSendSessionLinkSms(event, body, correlationId);
+    }
+
+    if (isSendSessionLinkEmailRoute(routeKey, event)) {
+      return handleSendSessionLinkEmail(event, body, correlationId);
     }
 
     if (isSendDueSessionLinkSmsRoute(routeKey, event)) {
@@ -689,6 +700,221 @@ async function handleSendSessionLinkSms(event, body, correlationId, options = {}
   }
 }
 
+async function handleSendSessionLinkEmail(event, body, correlationId) {
+  const auth = await verifyCheckinLinkDevToken(event);
+  if (!auth.ok) {
+    return jsonResponse(401, correlationId, {
+      status: 'unauthorized',
+      error: {
+        code: auth.code,
+        message: 'Check-in email sending requires the JumpYard Cloud development token.',
+      },
+    });
+  }
+
+  const request = normalizeSessionLinkEmailRequest(event, body);
+  const validationError = validateSessionLinkEmailRequest(request);
+  if (validationError) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: validationError,
+    });
+  }
+
+  const context = await getBookingContext(request.identifier);
+  if (!context) {
+    return jsonResponse(404, correlationId, {
+      status: 'not_found',
+      error: {
+        code: 'booking_not_found',
+        message: 'No local JumpYard Cloud booking snapshot was found for the supplied identifier.',
+      },
+    });
+  }
+
+  const destination = request.email
+    ? buildEmailDestination(request.email, 'request')
+    : await findEmailDestinationForBooking(context.booking.rollerUniqueId);
+  if (!destination) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: 'email_destination_missing',
+        message: 'No email address was found for this booking. Provide email for dev testing.',
+      },
+    });
+  }
+
+  const requestHash = hashJson({
+    baseUrl: request.baseUrl,
+    bookingReference: context.booking.bookingReference,
+    destinationHash: destination.hash,
+    dryRun: request.dryRun,
+    operation: 'checkin_email_send',
+    ttlMinutes: request.ttlMinutes,
+  });
+  const idempotency = await reserveIdempotencyKey('checkin_email_send', request.idempotencyKey, requestHash);
+  if (!idempotency.ok || idempotency.replayed) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: idempotency.ok ? 'idempotency_key_replayed' : 'idempotency_key_reused',
+        message: idempotency.ok
+          ? 'The supplied idempotency key has already been used for this email request.'
+          : 'The supplied idempotency key has already been used for a different email request.',
+      },
+    });
+  }
+
+  const link = await createSessionLinkToken({
+    channel: 'email',
+    context,
+    ttlMinutes: request.ttlMinutes,
+  });
+  const checkinUrl = buildCheckinUrl(request.baseUrl, link.token);
+  const emailMessage = buildCheckinEmailMessage({
+    booking: context.booking,
+    checkinUrl,
+  });
+  const deliveryId = createEmailDeliveryId();
+
+  if (request.dryRun) {
+    await recordEmailDelivery({
+      booking: context.booking,
+      deliveryId,
+      destination,
+      dryRun: true,
+      provider: EMAIL_PROVIDER,
+      status: 'planned',
+      subject: emailMessage.subject,
+      tokenHash: link.tokenHash,
+    });
+    await completeIdempotencyKey(request.idempotencyKey, 'succeeded', `email_delivery:${deliveryId}`);
+    await writeEventLog({
+      booking: context.booking,
+      correlationId,
+      eventType: 'checkin.email_planned',
+      payload: {
+        deliveryId,
+        destinationMasked: destination.masked,
+        dryRun: true,
+        provider: EMAIL_PROVIDER,
+        tokenHashPrefix: link.tokenHash.slice(0, 12),
+      },
+      summary: 'Check-in email planned in dry-run mode.',
+    });
+
+    return jsonResponse(201, correlationId, {
+      status: 'email_planned',
+      email: {
+        bookingReference: context.booking.bookingReference,
+        deliveryId,
+        destinationMasked: destination.masked,
+        dryRun: true,
+        expiresAt: link.expiresAt,
+        preview: request.includePreview ? buildCheckinEmailPreview(context.booking) : null,
+        provider: EMAIL_PROVIDER,
+        rollerUniqueId: context.booking.rollerUniqueId,
+      },
+    });
+  }
+
+  try {
+    const providerMessageId = await sendEmailWithSes({
+      destinationEmail: destination.email,
+      html: emailMessage.html,
+      subject: emailMessage.subject,
+      text: emailMessage.text,
+    });
+    await recordEmailDelivery({
+      booking: context.booking,
+      deliveryId,
+      destination,
+      dryRun: false,
+      provider: EMAIL_PROVIDER,
+      providerMessageId,
+      status: 'sent',
+      subject: emailMessage.subject,
+      tokenHash: link.tokenHash,
+    });
+    await markSessionLinkSent(link.tokenHash);
+    await completeIdempotencyKey(request.idempotencyKey, 'succeeded', `email_delivery:${deliveryId}`);
+    await writeEventLog({
+      booking: context.booking,
+      correlationId,
+      eventType: 'checkin.email_sent',
+      payload: {
+        deliveryId,
+        destinationMasked: destination.masked,
+        dryRun: false,
+        provider: EMAIL_PROVIDER,
+        providerMessageId,
+        tokenHashPrefix: link.tokenHash.slice(0, 12),
+      },
+      summary: 'Check-in email sent.',
+    });
+
+    return jsonResponse(200, correlationId, {
+      status: 'email_sent',
+      email: {
+        bookingReference: context.booking.bookingReference,
+        deliveryId,
+        destinationMasked: destination.masked,
+        dryRun: false,
+        expiresAt: link.expiresAt,
+        provider: EMAIL_PROVIDER,
+        providerMessageId,
+        rollerUniqueId: context.booking.rollerUniqueId,
+      },
+    });
+  } catch (error) {
+    const safeError = safeEmailProviderError(error, destination.email);
+    await recordEmailDelivery({
+      booking: context.booking,
+      deliveryId,
+      destination,
+      dryRun: false,
+      errorCode: safeError.code,
+      errorSummary: safeError.message,
+      provider: EMAIL_PROVIDER,
+      status: 'failed',
+      subject: emailMessage.subject,
+      tokenHash: link.tokenHash,
+    });
+    await completeIdempotencyKey(request.idempotencyKey, 'failed', `email_delivery:${deliveryId}`);
+    await writeEventLog({
+      booking: context.booking,
+      correlationId,
+      eventType: 'checkin.email_failed',
+      payload: {
+        deliveryId,
+        destinationMasked: destination.masked,
+        dryRun: false,
+        errorCode: safeError.code,
+        provider: EMAIL_PROVIDER,
+        tokenHashPrefix: link.tokenHash.slice(0, 12),
+      },
+      summary: 'Check-in email failed before provider confirmation.',
+    });
+
+    return jsonResponse(502, correlationId, {
+      status: 'email_failed',
+      error: {
+        code: safeError.code,
+        message: 'The email provider did not confirm delivery acceptance.',
+      },
+      email: {
+        bookingReference: context.booking.bookingReference,
+        deliveryId,
+        destinationMasked: destination.masked,
+        dryRun: false,
+        provider: EMAIL_PROVIDER,
+        rollerUniqueId: context.booking.rollerUniqueId,
+      },
+    });
+  }
+}
+
 async function handleSendDueSessionLinkSms(event, body, correlationId, options = {}) {
   if (!options.trustedScheduler) {
     const auth = await verifyCheckinLinkDevToken(event);
@@ -905,6 +1131,22 @@ function normalizeSessionLinkSmsRequest(event, body) {
   };
 }
 
+function normalizeSessionLinkEmailRequest(event, body) {
+  const confirmSend = booleanFromValue(body.confirmSend);
+  const explicitDryRun = body.dryRun === undefined ? null : booleanFromValue(body.dryRun);
+
+  return {
+    baseUrl: stringOrNull(body.baseUrl) || stringOrNull(body.checkinBaseUrl) || DEFAULT_EMAIL_BASE_URL,
+    confirmSend,
+    dryRun: confirmSend ? (explicitDryRun ?? false) : true,
+    email: stringOrNull(body.email) || stringOrNull(body.to) || stringOrNull(body.toEmail),
+    idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
+    identifier: stringOrNull(body.identifier) || stringOrNull(body.bookingReference) || stringOrNull(body.rollerUniqueId),
+    includePreview: body.includePreview === true,
+    ttlMinutes: normalizeTtlMinutes(body.ttlMinutes, body.ttlHours),
+  };
+}
+
 function normalizeDueSessionLinkSmsRequest(body) {
   return {
     baseUrl: stringOrNull(body.baseUrl) || stringOrNull(body.checkinBaseUrl) || DEFAULT_SMS_BASE_URL,
@@ -997,6 +1239,54 @@ function validateSessionLinkSmsRequest(request) {
       code: 'phone_number_invalid',
       message: 'phoneNumber must be E.164 or a Swedish mobile number such as 0700000000.',
     };
+  }
+
+  return null;
+}
+
+function validateSessionLinkEmailRequest(request) {
+  if (!request.identifier) {
+    return {
+      code: 'identifier_required',
+      message: 'bookingReference, rollerUniqueId, or identifier is required.',
+    };
+  }
+
+  if (!request.idempotencyKey) {
+    return {
+      code: 'idempotency_key_required',
+      message: 'idempotencyKey or x-idempotency-key is required.',
+    };
+  }
+
+  if (!request.baseUrl || !isSafeCheckinBaseUrl(request.baseUrl)) {
+    return {
+      code: 'base_url_invalid',
+      message: 'baseUrl must be a valid http or https URL for the check-in app.',
+    };
+  }
+
+  if (request.email && !normalizeEmailAddress(request.email)) {
+    return {
+      code: 'email_invalid',
+      message: 'email must be a valid email address.',
+    };
+  }
+
+  if (request.confirmSend) {
+    if (!normalizeEmailAddress(EMAIL_FROM_ADDRESS)) {
+      return {
+        code: 'email_sender_not_configured',
+        message: 'EMAIL_FROM_ADDRESS must be configured with a verified SES sender before confirmed email sends.',
+      };
+    }
+
+    if (!isPublicHttpsCheckinBaseUrl(request.baseUrl)) {
+      return {
+        code: 'public_https_base_url_required',
+        message: 'Confirmed email sends require a public HTTPS baseUrl for the check-in app.',
+      };
+    }
   }
 
   return null;
@@ -1265,6 +1555,49 @@ async function findSmsDestinationForBooking(rollerUniqueId) {
     ...destination,
     hash: stringOrNull(row.contact_number_hash) || destination.hash,
     masked: stringOrNull(row.contact_number_masked) || destination.masked,
+  };
+}
+
+async function findEmailDestinationForBooking(rollerUniqueId) {
+  if (!rollerUniqueId) return null;
+
+  const result = await executeStatement(
+    `SELECT
+       gp.email,
+       gp.email_hash,
+       gp.email_masked
+     FROM (
+       SELECT
+         1 AS priority,
+         ticket.roller_customer_id
+       FROM jumpyard.roller_booking_tickets AS ticket
+       WHERE ticket.roller_unique_id = :rollerUniqueId
+         AND ticket.roller_customer_id IS NOT NULL
+       UNION ALL
+       SELECT
+         2 AS priority,
+         booking.normalized_summary ->> 'bookingCustomerId' AS roller_customer_id
+       FROM jumpyard.roller_bookings AS booking
+       WHERE booking.roller_unique_id = :rollerUniqueId
+         AND booking.normalized_summary ->> 'bookingCustomerId' IS NOT NULL
+     ) AS contact_candidate
+     INNER JOIN jumpyard.guest_profiles AS gp
+       ON gp.roller_customer_id = contact_candidate.roller_customer_id
+     WHERE gp.email IS NOT NULL
+     ORDER BY contact_candidate.priority ASC, gp.updated_at DESC
+     LIMIT 1`,
+    [stringParameter('rollerUniqueId', rollerUniqueId)],
+  );
+  const row = firstMappedRow(result);
+  if (!row) return null;
+
+  const destination = buildEmailDestination(row.email, 'guest_profile');
+  if (!destination) return null;
+
+  return {
+    ...destination,
+    hash: stringOrNull(row.email_hash) || destination.hash,
+    masked: stringOrNull(row.email_masked) || destination.masked,
   };
 }
 
@@ -1748,6 +2081,80 @@ async function recordSmsDelivery({
   );
 }
 
+async function recordEmailDelivery({
+  booking,
+  deliveryId,
+  destination,
+  dryRun,
+  errorCode = null,
+  errorSummary = null,
+  provider,
+  providerMessageId = null,
+  status,
+  subject,
+  tokenHash,
+}) {
+  const sentAt = status === 'sent' ? new Date().toISOString() : null;
+  const failedAt = status === 'failed' ? new Date().toISOString() : null;
+
+  await executeStatement(
+    `INSERT INTO jumpyard.email_deliveries (
+       email_delivery_id,
+       roller_unique_id,
+       booking_reference,
+       token_hash,
+       provider,
+       destination_hash,
+       destination_masked,
+       message_template,
+       subject,
+       status,
+       dry_run,
+       provider_message_id,
+       error_code,
+       error_summary,
+       sent_at,
+       failed_at
+     )
+     VALUES (
+       :deliveryId,
+       :rollerUniqueId,
+       :bookingReference,
+       :tokenHash,
+       :provider,
+       :destinationHash,
+       :destinationMasked,
+       :messageTemplate,
+       :subject,
+       :status,
+       :dryRun,
+       :providerMessageId,
+       :errorCode,
+       :errorSummary,
+       CAST(:sentAt AS timestamptz),
+       CAST(:failedAt AS timestamptz)
+     )`,
+    [
+      stringParameter('deliveryId', deliveryId),
+      stringParameter('rollerUniqueId', booking.rollerUniqueId),
+      stringParameter('bookingReference', booking.bookingReference),
+      stringParameter('tokenHash', tokenHash),
+      stringParameter('provider', provider),
+      stringParameter('destinationHash', destination.hash),
+      stringParameter('destinationMasked', destination.masked),
+      stringParameter('messageTemplate', CHECKIN_EMAIL_TEMPLATE),
+      stringParameter('subject', subject),
+      stringParameter('status', status),
+      booleanParameter('dryRun', dryRun),
+      stringParameter('providerMessageId', providerMessageId),
+      stringParameter('errorCode', errorCode),
+      stringParameter('errorSummary', errorSummary),
+      stringParameter('sentAt', sentAt),
+      stringParameter('failedAt', failedAt),
+    ],
+  );
+}
+
 async function sendSmsWithSns({ message, phoneNumber }) {
   if (SMS_PROVIDER !== 'aws_sns') {
     const error = new Error('Unsupported SMS provider.');
@@ -1777,6 +2184,72 @@ async function sendSmsWithSns({ message, phoneNumber }) {
   );
 
   return response.MessageId || null;
+}
+
+async function sendEmailWithSes({ destinationEmail, html, subject, text }) {
+  if (EMAIL_PROVIDER !== 'aws_ses') {
+    const error = new Error('Unsupported email provider.');
+    error.code = 'email_provider_unsupported';
+    throw error;
+  }
+
+  const fromAddress = normalizeEmailAddress(EMAIL_FROM_ADDRESS);
+  if (!fromAddress) {
+    const error = new Error('Email sender address is not configured.');
+    error.code = 'email_sender_not_configured';
+    throw error;
+  }
+
+  const { client, SendEmailCommand } = getSesClient();
+  const commandInput = {
+    Content: {
+      Simple: {
+        Body: {
+          Html: {
+            Charset: 'UTF-8',
+            Data: html,
+          },
+          Text: {
+            Charset: 'UTF-8',
+            Data: text,
+          },
+        },
+        Subject: {
+          Charset: 'UTF-8',
+          Data: subject,
+        },
+      },
+    },
+    Destination: {
+      ToAddresses: [destinationEmail],
+    },
+    FromEmailAddress: fromAddress,
+  };
+  if (EMAIL_REPLY_TO_ADDRESSES.length > 0) {
+    commandInput.ReplyToAddresses = EMAIL_REPLY_TO_ADDRESSES;
+  }
+
+  const command = new SendEmailCommand(commandInput);
+
+  const response = await client.send(command);
+  return response.MessageId || null;
+}
+
+function getSesClient() {
+  if (cachedSesClient && cachedSendEmailCommand) {
+    return { client: cachedSesClient, SendEmailCommand: cachedSendEmailCommand };
+  }
+
+  try {
+    const { SESv2Client, SendEmailCommand } = require('@aws-sdk/client-sesv2');
+    cachedSesClient = new SESv2Client({});
+    cachedSendEmailCommand = SendEmailCommand;
+    return { client: cachedSesClient, SendEmailCommand };
+  } catch {
+    const error = new Error('SESv2 AWS SDK client is not available in the Lambda runtime.');
+    error.code = 'email_provider_module_missing';
+    throw error;
+  }
 }
 
 function evaluateStartContext(context, request) {
@@ -2512,6 +2985,13 @@ function isSendSessionLinkSmsRoute(routeKey, event) {
   );
 }
 
+function isSendSessionLinkEmailRoute(routeKey, event) {
+  return (
+    routeKey === 'POST /v1/check-in/session-links/send-email' ||
+    event?.rawPath === '/v1/check-in/session-links/send-email'
+  );
+}
+
 function isSendDueSessionLinkSmsRoute(routeKey, event) {
   return (
     routeKey === 'POST /v1/check-in/session-links/send-due-sms' ||
@@ -2697,6 +3177,75 @@ function buildCheckinSmsMessage(checkinUrl) {
   return `JumpYard: Din incheckning ar redo. Oppna: ${checkinUrl}`;
 }
 
+function buildCheckinEmailMessage({ booking, checkinUrl }) {
+  const bookingReference = booking.bookingReference || '';
+  const safeBookingReference = escapeHtml(bookingReference);
+  const safeCheckinUrl = escapeHtml(checkinUrl);
+  const subject = 'Dags att checka in hos JumpYard';
+  const text = [
+    'Hej!',
+    '',
+    'Din hopptid hos JumpYard narmar sig.',
+    `Checka in har: ${checkinUrl}`,
+    '',
+    bookingReference ? `Bokning: ${bookingReference}` : null,
+    '',
+    'Vi ses snart.',
+    'JumpYard',
+  ]
+    .filter((line) => line !== null)
+    .join('\n');
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f5f5;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+            <tr>
+              <td style="padding:28px 24px 8px 24px;">
+                <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#e7193f;">JumpYard</p>
+                <h1 style="margin:0;font-size:28px;line-height:1.1;font-weight:900;font-style:italic;color:#111827;">Dags att checka in</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:14px 24px 4px 24px;">
+                <p style="margin:0;font-size:16px;line-height:1.55;color:#374151;">Din hopptid narmar sig. Checka in innan du kommer fram sa gar handoffen snabbare i parken.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 24px;">
+                <a href="${safeCheckinUrl}" style="display:block;background:#ed1745;color:#ffffff;text-decoration:none;text-align:center;border-radius:14px;padding:16px 20px;font-size:18px;font-weight:900;font-style:italic;">CHECKA IN</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 24px 26px 24px;">
+                <p style="margin:0;font-size:13px;line-height:1.45;color:#6b7280;">${safeBookingReference ? `Bokning: ${safeBookingReference}. ` : ''}Lanken ar personlig och ska inte delas vidare.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  return { html, subject, text };
+}
+
+function buildCheckinEmailPreview(booking) {
+  const message = buildCheckinEmailMessage({
+    booking,
+    checkinUrl: '[check-in-link]',
+  });
+
+  return {
+    html: message.html,
+    subject: message.subject,
+    text: message.text,
+  };
+}
+
 function buildSmsDestination(value, source) {
   const phoneNumber = normalizePhoneForSms(value);
   if (!phoneNumber) return null;
@@ -2705,6 +3254,18 @@ function buildSmsDestination(value, source) {
     hash: hashString(phoneNumber),
     masked: maskPhoneNumber(phoneNumber),
     phoneNumber,
+    source,
+  };
+}
+
+function buildEmailDestination(value, source) {
+  const email = normalizeEmailAddress(value);
+  if (!email) return null;
+
+  return {
+    email,
+    hash: hashString(email),
+    masked: maskEmailAddress(email),
     source,
   };
 }
@@ -2720,10 +3281,45 @@ function normalizePhoneForSms(value) {
   return /^\+[1-9]\d{7,14}$/.test(normalized) ? normalized : null;
 }
 
+function normalizeEmailAddress(value) {
+  const raw = stringOrNull(value);
+  if (!raw) return null;
+
+  const normalized = raw.toLowerCase();
+  if (normalized.length > 254) return null;
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? normalized : null;
+}
+
 function maskPhoneNumber(phoneNumber) {
   const value = String(phoneNumber);
   if (value.length <= 7) return '***';
   return `${value.slice(0, 3)}*****${value.slice(-4)}`;
+}
+
+function maskEmailAddress(email) {
+  const [localPart, domainPart] = String(email).split('@');
+  if (!localPart || !domainPart) return '***';
+  const domainSections = domainPart.split('.');
+  const domainName = domainSections.shift() || '';
+  const suffix = domainSections.length > 0 ? `.${domainSections.join('.')}` : '';
+  return `${localPart.slice(0, 1)}***@${domainName.slice(0, 1)}***${suffix}`;
+}
+
+function parseEmailAddressList(value) {
+  return String(value ?? '')
+    .split(',')
+    .map((item) => normalizeEmailAddress(item))
+    .filter(Boolean);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function booleanFromValue(value) {
@@ -2736,10 +3332,22 @@ function createSmsDeliveryId() {
   return `jysms_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
+function createEmailDeliveryId() {
+  return `jyem_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
+}
+
 function safeSmsProviderError(error, phoneNumber) {
   const code = stringOrNull(error?.code) || stringOrNull(error?.name) || 'sms_provider_error';
   const rawMessage = stringOrNull(error?.message) || 'SMS provider request failed.';
   const message = rawMessage.replaceAll(String(phoneNumber), '[redacted_phone]').slice(0, 240);
+
+  return { code, message };
+}
+
+function safeEmailProviderError(error, email) {
+  const code = stringOrNull(error?.code) || stringOrNull(error?.name) || 'email_provider_error';
+  const rawMessage = stringOrNull(error?.message) || 'Email provider request failed.';
+  const message = rawMessage.replaceAll(String(email), '[redacted_email]').slice(0, 240);
 
   return { code, message };
 }

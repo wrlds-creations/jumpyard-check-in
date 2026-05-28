@@ -536,6 +536,10 @@ T0060 closes the first dev observability gap from the T0058 readiness audit. Dev
 
 T0061 adds the first API Gateway protection boundary in dev. The `$default` stage now has environment-configured throttling with rate `25` requests/second and burst `50`, detailed route metrics stay enabled, API access logs feed a safe `JumpYard/Cloud` metric named `ApiThrottledRequestCount`, the operations dashboard includes throttled request visibility, and alarm `jumpyard-check-in-dev-api-throttled-requests` detects any HTTP `429` throttling. This protects the public API edge from accidental or abusive bursts without changing guest, staff, Roller, SMS, payment, webhook, session, or redeem behavior.
 
+T0062 documents the production route boundary before implementing authorizers, WAF, CloudFront, custom domains, or route-specific limits. `API_PROTECTION_BOUNDARY.md` classifies every current JumpYard Cloud route as guest public, guest token, guest write, staff auth entry, staff protected, internal operations, Roller webhook, or legacy/dev-only. The key decision is that guest PWA routes can remain reachable but bounded, staff routes need API-boundary identity before staging/live, internal operations routes should not remain generally public, and Roller webhooks need production verification plus optional allowlisting.
+
+T0063 adds the guest email messaging foundation next to the existing SMS link flow. JumpYard Cloud now supports a protected `POST /v1/check-in/session-links/send-email` route that creates the same opaque `jy_token` check-in link with channel `email`, writes safe audit rows to `jumpyard.email_deliveries`, supports dry-run preview without a verified sender, and fails closed for confirmed sends until an AWS SES sender/domain is configured. Dev scheduled SMS remains planning-only with `confirmSend=false`, while guest messaging base URLs now point at the public Cloudflare check-in app.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
@@ -543,9 +547,9 @@ T0061 adds the first API Gateway protection boundary in dev. The `$default` stag
 | Environment separation and naming | Partial | Only `infra/config/dev.json` and `infra/config/dev.example.json` exist; stack and resources are dev-prefixed and Playground-only. | Add reviewed staging/live config, names, tags, domains, and Roller environment split. |
 | Secrets and parameters | Partial | Secrets Manager holds Roller creds, webhook token, redeem dev token, check-in link token, staff auth, and Aurora admin; SSM holds Playground env/base URL. | Replace dev tokens/passcode patterns, define rotation/ownership, and separate live secrets. |
 | Data storage, retention, and PII | Partial | Aurora is encrypted, deletion-protected, backed up for 7 days, and stores structured email/phone plus masks/hashes; S3 raw bucket is encrypted, versioned, retained, and has 30-day lifecycle. | Lock retention/deletion/export policy for PII, event logs, snapshots, and any raw payload/archive use. |
-| Public API exposure and auth | Partial | T0060 replaced wildcard CORS with explicit dev origins. T0061 added dev API Gateway stage throttling and 429 visibility. API Gateway routes still have `AuthorizationType=NONE`; app-level tokens/staff auth protect only selected routes. | Define production auth, WAF/API protection, route-specific limits, and guest/staff public boundary rules. |
+| Public API exposure and auth | Partial | T0060 replaced wildcard CORS with explicit dev origins. T0061 added dev API Gateway stage throttling and 429 visibility. T0062 classifies every route boundary and documents the target live posture. API Gateway routes still have `AuthorizationType=NONE`; app-level tokens/staff auth protect only selected routes. | Implement the T0062 boundary with production auth, WAF or equivalent edge controls, route-specific limits, internal-only operations routes, and guest/staff public boundary rules. |
 | Webhook security and retries | Partial | Playground webhook id `238` uses `x-roller-apikey`; Lambda stores idempotent events and can enrich from Roller REST. | Confirm production auth/signature/IP allowlisting and decide whether enrichment must move async before live traffic. |
-| SMS readiness | Blocked | EventBridge due-SMS schedule exists but dev config keeps `confirmSend=false`; SNS account is still sandboxed. | Approve sender, consent/unsubscribe policy, public URL, sandbox exit or verified-recipient policy, and monitoring. |
+| SMS/email readiness | Blocked | EventBridge due-SMS schedule exists but dev config keeps `confirmSend=false`; SNS account is still sandboxed. T0063 adds SES-ready email dry-run/audit support, but no SES sender identity is verified yet. | Approve sender identities, consent/unsubscribe policy, public URL, SNS sandbox exit or verified-recipient policy, SES sender/domain verification, and monitoring. |
 | Observability and alarms | Partial | T0060 added dashboard `jumpyard-check-in-dev-ops`, API/Lambda/DLQ/Roller API alarms, API Gateway access logs, and safe Roller outbound call metrics. T0061 added API throttling visibility and a 429 alarm. | Add notification routing, runbooks, Aurora health, scheduler-specific health, SMS failure metrics, webhook failure metrics, and production thresholds. |
 | Rollback, migration, and deployment safety | Partial | CDK synth/build works; Aurora migrations are versioned; dev deploys have been manual and scoped. | Add release/runbook, preflight gates, rollback/restore plan, CI/CD identity, migration backup policy, and post-deploy smoke checklist. |
 | Backfill, sync, and cutover | Partial | Daily Data API sync runs at `02:00 UTC`; manual backfill command exists; webhooks and lookup refresh update Aurora. | Define live backfill range, cutover order, webhook registration plan, freshness SLAs, and replay/reconciliation procedure. |
@@ -555,8 +559,8 @@ T0061 adds the first API Gateway protection boundary in dev. The `$default` stag
 
 - Do not build new app behavior or change UI files.
 - Do not fix Roller/Adyen card method configuration.
-- Do not change payment, SMS, staff auth, redeem, webhook, Data API, or CDK implementation.
-- Do not change Aurora schema.
+- Do not enable real unattended SMS or real email sends in T0063.
+- Do not change payment, staff auth, redeem, webhook, or Data API behavior in T0063.
 - Do not write to Roller Live/production.
 - Do not create staging or production AWS resources.
 

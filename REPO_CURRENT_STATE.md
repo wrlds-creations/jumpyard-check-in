@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-28
-- Current branch: `codex/t0061-api-protection-boundary`
-- Current status: T0061 API Gateway protection boundary is complete locally and deployed to dev. Changes are not committed.
-- Current ticket: `T0061` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`
-- Recommended next step: commit/merge T0061 when approved, then start T0062 route auth/WAF boundary design or T0063 environment and cutover plan.
+- Current branch: `codex/t0063-guest-messaging-email`
+- Current status: T0063 guest messaging verification and email service foundation is deployed to dev. Changes are not committed.
+- Current ticket: `T0063` completed locally and deployed, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`
+- Recommended next step: review/commit/merge T0062 and T0063 changes when approved, then start T0064 environment and cutover plan or T0065 alarm notifications/runbooks.
 
 ## Current Structure
 
@@ -22,6 +22,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |-- CODEX_TASK.md
 |-- JUMPYARD_CLOUD_CONTRACT.md
 |-- BOOKING_INDEX_INGESTION_CONTRACT.md
+|-- API_PROTECTION_BOUNDARY.md
 |-- REPO_CURRENT_STATE.md
 |-- FOLLOWUPS.md
 |-- AWS_RESOURCES.md
@@ -58,6 +59,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- migrations/0004_prepayment_booking_drafts.sql
 |   |-- migrations/0005_add_product_draft_links.sql
 |   |-- migrations/0006_sms_deliveries.sql
+|   |-- migrations/0007_email_deliveries.sql
 |   |-- scripts/run-migrations.ts
 |   |-- cdk.json
 |   |-- package.json
@@ -188,19 +190,28 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0058` | Audited stack production readiness. | 2026-05-27 | Docs-only readiness audit merged through PR #61; staging/live remain blocked by environment split, auth/API guardrails, observability, SMS, secrets lifecycle, retention/cutover, and rollback runbooks. |
 | `T0059` | Added redeem eligibility filter. | 2026-05-28 | Merged through PR #62; session and redeem Lambdas filter selected ticket ids by structured redeemable product metadata, and dev smoke redeemed only entry tickets in mixed booking `5063419`. |
 | `T0060` | Added API security and observability hardening. | 2026-05-28 | Merged through PR #63; dev CORS is explicit, API access logs are enabled, CloudWatch dashboard/alarms are deployed, and Roller-calling Lambdas emit safe outbound API metrics. |
+| `T0061` | Added API Gateway stage throttling and throttle visibility. | 2026-05-28 | Merged through PR #64; dev `$default` stage throttling is rate `25` requests/second and burst `50`, detailed metrics remain enabled, API 429s are counted in CloudWatch, and alarm `jumpyard-check-in-dev-api-throttled-requests` exists. |
+| `T0062` | Documented route auth and WAF/edge boundary design. | 2026-05-28 | Completed locally, not committed; `API_PROTECTION_BOUNDARY.md` classifies current routes and target staging/live route protection. |
+| `T0063` | Added guest messaging verification and email service foundation. | 2026-05-28 | Completed locally and deployed to dev, not committed; adds protected email link route, `email_deliveries`, SES-ready dry-run path, and public messaging base URL. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0061` | API Gateway protection boundary. | Completed locally, deployed to dev, not committed | Dev `$default` stage throttling is rate `25` requests/second and burst `50`, detailed metrics are enabled, API `429` throttles are counted through CloudWatch Logs metric filter, dashboard `jumpyard-check-in-dev-ops` shows throttles, and alarm `jumpyard-check-in-dev-api-throttled-requests` exists. |
+| `T0063` | Guest messaging verification and email service foundation. | Completed locally and deployed, not committed | Dev has protected `POST /v1/check-in/session-links/send-email`, `jumpyard.email_deliveries`, email dry-run/preview, SES sender guard for confirmed sends, and public base URL config for future guest messaging links. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0062` | Route auth and WAF boundary design | Decide the production boundary for public guest routes, staff routes, webhook routes, internal routes, API Gateway authorizers, WAF/edge controls, and route-specific rate limits before staging/live exposure. |
-| `T0063` | Environment and cutover plan | Define staging/live config, secret ownership, deployment/rollback runbook, live backfill, webhook registration, and cutover checklist before any non-dev stack is created. |
+| `T0064` | Environment and cutover plan | Define staging/live config, secret ownership, deployment/rollback runbook, live backfill, webhook registration, and cutover checklist before any non-dev stack is created. |
+| `T0065` | Alarm notifications and runbooks | Connect CloudWatch alarms to a notification path, document operator actions, and define dashboard/runbook usage for dev-to-staging readiness. |
+| `T0066` | Secrets and dev-token replacement | Replace or isolate dev-only passcodes/shared tokens, define secret owners and rotation cadence, and prepare separate staging/live secret values. |
+| `T0067` | SMS production readiness | Decide sender identity, sandbox exit or verified-recipient policy, consent/unsubscribe text, delivery monitoring, and confirmed-send rules before unattended SMS. |
+| `T0068` | Route auth and WAF implementation | Implement the T0062 boundary in infrastructure after the environment and identity choices are approved. |
+| `T0069` | Data retention and PII policy | Lock retention, deletion/export, masking/hash, Aurora backup, event-log, and raw-payload policy before production data. |
+| `T0070` | Deployment and rollback runbook | Define CI/CD identity, preflight gates, migration backup/restore, CDK diff approval, smoke tests, rollback criteria, and ownership. |
+| `T0071` | Live backfill and cutover rehearsal | Rehearse initial live backfill, daily sync, webhook registration order, freshness checks, replay/reconciliation, and go/no-go checklist. |
 | `Deferred` | Card/scheme payment smoke | Wait for Pabel/Roller to enable or confirm the `scheme` card method before testing the Adyen Visa card path. |
 
 ## Validation Status
@@ -228,6 +239,16 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0061 deploy: AWS preflight confirmed account `376129878018` and region `eu-north-1`; pre-deploy diff showed only API Gateway stage throttling, a CloudWatch Logs metric filter, one CloudWatch alarm, and dashboard updates; `npm --prefix infra run deploy:dev` passed; post-deploy diff showed no differences.
 - T0061 AWS verification: API Gateway `$default` stage has `DetailedMetricsEnabled=true`, `ThrottlingBurstLimit=50`, and `ThrottlingRateLimit=25`; CloudWatch Logs metric filter `ApiThrottledRequestMetricFilter...` writes `JumpYard/Cloud` metric `ApiThrottledRequestCount`; alarm `jumpyard-check-in-dev-api-throttled-requests` exists.
 - T0061 smoke: `POST /v1/bookings/availability` returned HTTP `200` after throttling was enabled, with source `roller` and `wroteBooking=false`.
+- T0062 validation: route inventory comparison found 19 CDK route declarations and 19 documented routes; `npm run validate` and `git diff --check` passed on 2026-05-28. `git diff --check` reported CRLF notices only.
+- T0062 roadmap adjustment: user chose to postpone the environment/cutover plan and prioritize guest messaging verification plus email service foundation as T0063.
+- T0062 AWS/resource result: no AWS resources, app code, Lambda code, CDK code, Aurora schema, package dependencies, or Roller config were changed.
+- T0063 validation: `node --check infra/lambda/session/index.js`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, `npm run validate`, and `git diff --check` passed on 2026-05-28. `git diff --check` reported CRLF notices only.
+- T0063 AWS preflight: account `376129878018`, region `eu-north-1`; SES sending is enabled but `list-email-identities` returned no verified identities.
+- T0063 migration/deploy: `npm --prefix infra run migrate:dev` applied `0007 email deliveries`; pre-deploy diff showed one email route, session Lambda code/env/IAM, and SMS base URL target update; `npm --prefix infra run deploy:dev` passed; post-deploy diff showed no differences.
+- T0063 email dry-run smoke: protected route `POST /v1/check-in/session-links/send-email` for booking `5063420` returned `email_planned`, delivery `jyem_mppbtp9i_5e98ee13`, provider `aws_ses`, masked destination `l***@e***.com`, and preview text with `[check-in-link]` placeholder instead of a raw token URL.
+- T0063 Aurora verification: latest `jumpyard.email_deliveries` row has delivery `jyem_mppbtp9i_5e98ee13`, booking `5063420`, status `planned`, `dry_run=true`, provider `aws_ses`, and template `checkin_email_v1`.
+- T0063 confirmed-send guard: confirmed email request returned HTTP `400` with `email_sender_not_configured` because no SES sender identity is configured yet.
+- T0063 SMS safety smoke: protected SMS dry-run with public base URL returned `sms_planned`, delivery `jysms_mppbz4gm_e52cdd54`, provider `aws_sns`, and masked destination `+46*****9508`; dev scheduled SMS remains `confirmSend=false`.
 - T0055 validation: public Cloudflare smoke after merge created paid booking `5063394`, started/resumed a JumpYard Cloud session, and routed the phone flow to safety. The matching local prepayment draft still showed `payment_pending`, which is the T0056 reconciliation target.
 - T0055 validation: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, local browser progress smoke at `http://localhost:3000/`, `npm run validate`, and `git diff --check` passed on 2026-05-26. Browser smoke confirmed compact progress labels `Entré`, `Tillägg`, `Betalning`, `Säkerhet`, and `Klar`, and advanced through `TIMESLOT`, `PRODUCT`, `QUANTITY`, `ADDONS`, and `CONTACT`. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings.
 - T0054 validation: public Cloudflare smoke confirmed T0053 flow order, Swish payment created paid booking `5063382`, JumpYard Cloud lookup returned `Paid`/`amountOwing=0`/`canCheckIn=true`, safe payment-config inspection found no `scheme` card method for the current Playground custom-checkout configuration, and `git diff --check` passed with CRLF notices only.
@@ -513,11 +534,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Roller Data API `/data/bookingitems`, `/data/tickets`, `/data/bookingpayments`, and `/data/customers` access, query params, paging shape, and modified-date behavior are confirmed in Playground for the T0008 seed window.
 - Webhook retry behavior, response handling, booking event names, Playground auth header `x-roller-apikey`, and dev webhook registration are confirmed. Exact production auth/signature and IP allowlisting choice remain open.
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
-- Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, phone session resume routing is complete locally from T0029, staff auth replacement is deployed from T0047, and staff/admin mobile visual polish is complete locally from T0048.
+- Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, phone session resume routing is complete locally from T0029, staff auth replacement is deployed from T0047, staff/admin mobile visual polish is complete locally from T0048, and guest SMS/email link foundations both use the same opaque `jy_token` session-resolution model.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
 - Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; T0050 confirms `/venues/me` payment settings are available, T0051 wires the approved payment package in the phone buy-entry flow, T0052 reuses it for linked add-product drafts, and T0054 confirmed public Swish payment can complete. The remaining blocker is Roller/Adyen enabling or confirming the card/scheme method for Playground custom checkout.
 - Existing-booking add-product linked-booking flow has been tested server-side in dev and wired in the phone UI, including the shared payment package path when JWT/config are present.
-- T0058 production-readiness audit is docs-only and made no AWS changes. T0060 added the first dev CORS/observability hardening, and T0061 added dev API Gateway stage throttling plus 429 visibility, but the main staging/live blockers still include production environment config, route auth/WAF boundary, alarm notification/runbooks, SMS sandbox/consent/sender readiness, dev-token replacement, data retention, deployment rollback, and live backfill/cutover.
+- T0058 production-readiness audit is docs-only and made no AWS changes. T0060 added the first dev CORS/observability hardening, T0061 added dev API Gateway stage throttling plus 429 visibility, T0062 documented the route boundary, and T0063 added email dry-run/audit support, but the main staging/live blockers still include production environment config, route auth/WAF implementation, alarm notification/runbooks, SMS sandbox/consent/sender readiness, SES sender/domain verification, dev-token replacement, data retention, deployment rollback, and live backfill/cutover.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
 ## Open Questions

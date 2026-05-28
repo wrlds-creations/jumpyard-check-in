@@ -37,6 +37,12 @@ export interface JumpYardCloudConfig {
     readonly scheduleEnabled: boolean;
     readonly windowMinutes: number;
   };
+  readonly guestEmail: {
+    readonly checkinBaseUrl: string;
+    readonly fromAddress: string;
+    readonly provider: string;
+    readonly replyToAddresses: readonly string[];
+  };
   readonly resourcePrefix: string;
   readonly roller: {
     readonly environment: string;
@@ -63,6 +69,12 @@ interface RawConfig {
     readonly scheduleEnabled?: unknown;
     readonly windowMinutes?: unknown;
   };
+  readonly guestEmail?: {
+    readonly checkinBaseUrl?: unknown;
+    readonly fromAddress?: unknown;
+    readonly provider?: unknown;
+    readonly replyToAddresses?: unknown;
+  };
   readonly resourcePrefix?: unknown;
   readonly roller?: {
     readonly environment?: unknown;
@@ -88,6 +100,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   const awsAccount = readString(raw.awsAccount, 'awsAccount');
   const awsRegion = readString(raw.awsRegion, 'awsRegion');
   const bookingTimeSms = readBookingTimeSmsConfig(raw.bookingTimeSms);
+  const guestEmail = readGuestEmailConfig(raw.guestEmail);
   const resourcePrefix = readString(raw.resourcePrefix, 'resourcePrefix');
   const rollerEnvironment = readString(raw.roller?.environment, 'roller.environment');
   const rollerBaseUrl = readString(raw.roller?.baseUrl, 'roller.baseUrl');
@@ -121,6 +134,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     awsAccount,
     awsRegion,
     bookingTimeSms,
+    guestEmail,
     resourcePrefix,
     roller: {
       environment: rollerEnvironment,
@@ -214,6 +228,35 @@ function readBookingTimeSmsConfig(raw: RawConfig['bookingTimeSms']): JumpYardClo
   return config;
 }
 
+function readGuestEmailConfig(raw: RawConfig['guestEmail']): JumpYardCloudConfig['guestEmail'] {
+  const config = {
+    checkinBaseUrl: readOptionalString(raw?.checkinBaseUrl, 'http://localhost:3000/', 'guestEmail.checkinBaseUrl'),
+    fromAddress: readOptionalString(raw?.fromAddress, '', 'guestEmail.fromAddress'),
+    provider: readOptionalString(raw?.provider, 'aws_ses', 'guestEmail.provider'),
+    replyToAddresses: readOptionalStringArray(raw?.replyToAddresses, 'guestEmail.replyToAddresses'),
+  };
+
+  if (config.provider !== 'aws_ses') {
+    throw new Error('guestEmail.provider must be aws_ses for the T0063 email foundation.');
+  }
+
+  if (!isSafeCheckinBaseUrl(config.checkinBaseUrl)) {
+    throw new Error('guestEmail.checkinBaseUrl must be a valid http or https URL.');
+  }
+
+  if (config.fromAddress && !isEmailLike(config.fromAddress)) {
+    throw new Error('guestEmail.fromAddress must be a valid email address when supplied.');
+  }
+
+  for (const replyToAddress of config.replyToAddresses) {
+    if (!isEmailLike(replyToAddress)) {
+      throw new Error('guestEmail.replyToAddresses must contain valid email addresses when supplied.');
+    }
+  }
+
+  return config;
+}
+
 function readRequiredTags(rawTags: Record<string, unknown> | undefined): Record<RequiredWrlDsTag, string> {
   if (!rawTags) {
     throw new Error('Config is missing required WRLDS tags.');
@@ -261,6 +304,15 @@ function readOptionalBoolean(value: unknown, fallback: boolean, fieldName: strin
   throw new Error(`Config field ${fieldName} must be a boolean when supplied.`);
 }
 
+function readOptionalStringArray(value: unknown, fieldName: string): readonly string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new Error(`Config field ${fieldName} must be an array of strings when supplied.`);
+  }
+
+  return value.map((item, index) => readString(item, `${fieldName}[${index}]`));
+}
+
 function readOptionalInteger(
   value: unknown,
   fallback: number,
@@ -274,6 +326,10 @@ function readOptionalInteger(
   }
 
   return value;
+}
+
+function isEmailLike(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 function isSafeCheckinBaseUrl(value: string): boolean {
