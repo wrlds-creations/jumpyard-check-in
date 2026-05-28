@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-28
-- Current branch: `codex/t0065-guest-sms-completion`
-- Current status: T0065 guest SMS completion is implemented, deployed to dev, and smoke-tested locally, not committed.
-- Current ticket: `T0065` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`
-- Recommended next step: review/commit/merge T0065 when approved, then start T0066 guest email completion.
+- Current branch: `codex/t0066-guest-email-completion`
+- Current status: T0066 guest email completion is implemented, deployed to dev, and smoke-tested locally, not committed.
+- Current ticket: `T0066` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`
+- Recommended next step: review/commit/merge T0066 when approved, then start T0067 unified booking-time guest messaging.
 
 ## Current Structure
 
@@ -195,19 +195,19 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0062` | Documented route auth and WAF/edge boundary design. | 2026-05-28 | Merged to `main` through PR #65 with T0063; `API_PROTECTION_BOUNDARY.md` classifies current routes and target staging/live route protection. |
 | `T0063` | Added guest messaging verification and email service foundation. | 2026-05-28 | Merged to `main` through PR #65; adds protected email link route, `email_deliveries`, SES-ready dry-run path, and public messaging base URL. |
 | `T0064` | Reordered roadmap so SMS and email completion come first. | 2026-05-28 | Merged to `main` through PR #66; no app code, Lambda code, AWS resources, Roller config, or credentials changed. |
-| `T0065` | Completed dev guest SMS path. | 2026-05-28 | Session Lambda SMS responses now include safe sender/provider diagnostics, SMS copy uses booking start time when available, confirmed public-URL SNS smoke to the verified sandbox phone succeeded, and `jy_token` links now show already-checked-in state for redeemed bookings instead of manual lookup fallback. |
+| `T0065` | Completed dev guest SMS path. | 2026-05-28 | Merged to `main` through PR #67; session Lambda SMS responses now include safe sender/provider diagnostics, SMS copy uses booking start time when available, confirmed public-URL SNS smoke to the verified sandbox phone succeeded, and `jy_token` links now show already-checked-in state for redeemed bookings instead of manual lookup fallback. |
+| `T0066` | Completed dev guest email path as far as current SES setup allows. | 2026-05-28 | Session Lambda email responses now include safe sender/reply-to diagnostics, email copy uses booking start time when available, dry-run with public URL creates Aurora audit state, and confirmed sends fail closed because SES has no verified sender/domain identity. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0065` | Guest SMS completion. | Completed locally, not committed | Dev SMS now sends a public check-in link to the verified sandbox phone, records Aurora audit state, confirms SNS delivery status, and fixes already-redeemed `jy_token` routing while scheduled SMS remains planning-only. |
+| `T0066` | Guest email completion. | Completed locally, not committed | Dev email dry-run now uses public check-in links, records Aurora audit state, returns safe SES sender/reply-to diagnostics, and blocks confirmed sends until a verified SES sender/domain is configured. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0066` | Guest email completion | Configure/verify the SES sender or domain, decide reply-to/branding/consent text, run a confirmed email smoke, and document email delivery diagnostics. |
 | `T0067` | Unified booking-time guest messaging | Make SMS and email work together from booking time windows with idempotency, audit rows, safe retry/failure handling, and clear dry-run versus confirmed-send controls. |
 | `T0068` | Environment and cutover plan | Define staging/live config, secret ownership, deployment/rollback runbook, live backfill, webhook registration, and cutover checklist before any non-dev stack is created. |
 | `T0069` | Alarm notifications and runbooks | Connect CloudWatch alarms to a notification path, document operator actions, and define dashboard/runbook usage for dev-to-staging readiness. |
@@ -261,6 +261,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0065 Aurora/SNS verification: `jumpyard.sms_deliveries` contains delivery `jysms_mppg15lj_7c660ef2` with status `sent`, `dry_run=false`, and CloudWatch SNS delivery status reports `SUCCESS` with provider response `Message has been accepted by phone.`
 - T0065 `jy_token` routing verification: local phone app opened an active token for booking `5063394` directly to `APP_BOOKING`; an already-redeemed token for booking `5063420` opened `APP_PRESENT` with `REDAN INCHECKAD`; an invalid token still fell back to `KIOSK_LOOKUP`.
 - T0065 post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
+- T0066 validation: `node --check infra/lambda/session/index.js`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, and AWS SES readiness checks passed on 2026-05-28 before deploy.
+- T0066 deploy: AWS preflight confirmed account `376129878018` and region `eu-north-1`; pre-deploy diff showed only the `SessionHandler` Lambda code asset changing; `npm --prefix infra run deploy:dev` passed.
+- T0066 SES readiness: `aws sesv2 get-account` returned `SendingEnabled=true`, `ProductionAccessEnabled=false`, max 200 emails per 24 hours, max send rate 1 email/second; `list-email-identities` returned no identities.
+- T0066 email dry-run smoke: protected `POST /v1/check-in/session-links/send-email` for booking `5063420` used public base URL `https://jumpyard-check-in.pages.dev/`, returned `email_planned`, delivery `jyem_mppic9ea_01a07299`, provider `aws_ses`, `fromAddressConfigured=false`, `replyToConfigured=false`, and masked destination `t0***@example.invalid`.
+- T0066 Aurora verification: `jumpyard.email_deliveries` contains delivery `jyem_mppic9ea_01a07299` with status `planned`, `dry_run=true`, provider `aws_ses`, and template `checkin_email_v1`.
+- T0066 confirmed-send guard: confirmed email request returned HTTP `400` with `email_sender_not_configured`, which is expected until a verified SES sender/domain is configured.
 - T0055 validation: public Cloudflare smoke after merge created paid booking `5063394`, started/resumed a JumpYard Cloud session, and routed the phone flow to safety. The matching local prepayment draft still showed `payment_pending`, which is the T0056 reconciliation target.
 - T0055 validation: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, local browser progress smoke at `http://localhost:3000/`, `npm run validate`, and `git diff --check` passed on 2026-05-26. Browser smoke confirmed compact progress labels `Entré`, `Tillägg`, `Betalning`, `Säkerhet`, and `Klar`, and advanced through `TIMESLOT`, `PRODUCT`, `QUANTITY`, `ADDONS`, and `CONTACT`. Phone lint still reports the pre-existing four `<img>` warnings, and Next build still reports stale `baseline-browser-mapping` advisory warnings.
 - T0054 validation: public Cloudflare smoke confirmed T0053 flow order, Swish payment created paid booking `5063382`, JumpYard Cloud lookup returned `Paid`/`amountOwing=0`/`canCheckIn=true`, safe payment-config inspection found no `scheme` card method for the current Playground custom-checkout configuration, and `git diff --check` passed with CRLF notices only.

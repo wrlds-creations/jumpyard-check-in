@@ -80,6 +80,17 @@ T0065 guest SMS completion notes:
 - SNS verification: CloudWatch delivery status reported `SUCCESS` with provider response `Message has been accepted by phone.`
 - Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-05-28 for SMS diagnostics and again for the `jy_token` fallback fix; post-deploy `npm --prefix infra run diff:dev` showed no differences.
 
+T0066 guest email completion notes:
+
+- AWS resources changed: existing session Lambda code only.
+- Changed resource: `jumpyard-check-in-dev-stack-session`.
+- Behavior: protected email planning/sending responses now include safe `fromAddressConfigured` and `replyToConfigured` diagnostics, and email subject/body include the booking start time when Aurora has it.
+- SES status: account `376129878018`, region `eu-north-1`, has sending enabled, `ProductionAccessEnabled=false`, max 200 emails per 24 hours, max send rate 1 email/second, and no configured email identities.
+- Dry-run smoke: booking `5063420` used public base URL `https://jumpyard-check-in.pages.dev/`, returned `email_planned`, delivery `jyem_mppic9ea_01a07299`, masked destination `t0***@example.invalid`, provider `aws_ses`, `fromAddressConfigured=false`, `replyToConfigured=false`, and preview subject `Dags att checka in kl 10:30`.
+- Aurora verification: `jumpyard.email_deliveries` row `jyem_mppic9ea_01a07299` has status `planned`, `dry_run=true`, provider `aws_ses`, destination masked, and template `checkin_email_v1`.
+- Confirmed-send guard: a confirmed email request returned HTTP `400` with `email_sender_not_configured`, so real sends remain blocked until a verified SES sender/domain is explicitly approved and configured.
+- Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-05-28; pre-deploy diff showed only the `SessionHandler` Lambda code asset changing.
+
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
 T0006 deploy notes:
@@ -451,7 +462,7 @@ Confirmed T0006 dev target:
 | `jumpyard-check-in-dev-stack-lookup` | Lambda | `dev` | `eu-north-1` | `cdk` | T0016 lookup handler; reads Aurora first, refreshes from Roller Playground only when needed, and returns normalized phone-flow lookup response. |
 | `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | T0034 booking handler; reads Roller Playground availability, quotes Roller Playground draft costs, creates confirmed Playground draft bookings behind idempotency, creates separate linked add-product draft bookings for existing bookings, persists safe pre-payment draft rows, returns safe payment config and response-only `paymentJwt`, and writes safe audit rows. |
 | `jumpyard-check-in-dev-stack-redeem` | Lambda | `dev` | `eu-north-1` | `cdk` | T0047 redeem handler; plans/validates server-side redemption from Aurora, requires a dev token for lower-level direct confirmed writes, refreshes live Roller state before write, supports staff-auth-protected session redeem, marks completed sessions, and records attempt audit. |
-| `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0065 session handler; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, issues staff auth tokens, protects staff handoff list/detail, creates/resolves hashed check-in session links with safe booking summaries for phone resume, dry-runs or explicitly sends SMS links through AWS SNS with safe provider/Sender ID diagnostics, dry-runs or explicitly sends email links through SES when a verified sender is configured, plans booking-time SMS candidates from Aurora, and blocks scheduled confirmed SMS sends unless the approval phrase and public HTTPS URL are present. |
+| `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0066 session handler; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, issues staff auth tokens, protects staff handoff list/detail, creates/resolves hashed check-in session links with safe booking summaries for phone resume, dry-runs or explicitly sends SMS links through AWS SNS with safe provider/Sender ID diagnostics, dry-runs or explicitly sends email links through SES with safe sender/reply-to diagnostics when a verified sender is configured, plans booking-time SMS candidates from Aurora, and blocks scheduled confirmed SMS sends unless the approval phrase and public HTTPS URL are present. |
 | `jumpyard-check-in-dev-sns-sms-delivery-status` | IAM Role | `dev` | `eu-north-1` | `cdk` | Allows Amazon SNS to write SMS delivery status logs for JumpYard Cloud dev diagnostics. |
 | `SmsDeliveryStatusAttributes` | CloudFormation Custom Resource | `dev` | `eu-north-1` | `cdk` | Sets dev SNS SMS attributes for transactional SMS and 100% delivery status sampling. |
 | SNS SMS sandbox phone `+46*****9508` | Amazon SNS SMS sandbox | `dev` | `eu-north-1` | AWS CLI/manual verification | Verified test destination for dev SMS delivery while the account remains in SMS sandbox. |

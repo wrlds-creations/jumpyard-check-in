@@ -787,6 +787,7 @@ async function handleSendSessionLinkEmail(event, body, correlationId) {
     ttlMinutes: request.ttlMinutes,
   });
   const checkinUrl = buildCheckinUrl(request.baseUrl, link.token);
+  const providerDiagnostics = getEmailProviderDiagnostics();
   const emailMessage = buildCheckinEmailMessage({
     booking: context.booking,
     checkinUrl,
@@ -813,7 +814,9 @@ async function handleSendSessionLinkEmail(event, body, correlationId) {
         deliveryId,
         destinationMasked: destination.masked,
         dryRun: true,
+        fromAddressConfigured: providerDiagnostics.fromAddressConfigured,
         provider: EMAIL_PROVIDER,
+        replyToConfigured: providerDiagnostics.replyToConfigured,
         tokenHashPrefix: link.tokenHash.slice(0, 12),
       },
       summary: 'Check-in email planned in dry-run mode.',
@@ -829,6 +832,8 @@ async function handleSendSessionLinkEmail(event, body, correlationId) {
         expiresAt: link.expiresAt,
         preview: request.includePreview ? buildCheckinEmailPreview(context.booking) : null,
         provider: EMAIL_PROVIDER,
+        fromAddressConfigured: providerDiagnostics.fromAddressConfigured,
+        replyToConfigured: providerDiagnostics.replyToConfigured,
         rollerUniqueId: context.booking.rollerUniqueId,
       },
     });
@@ -862,8 +867,10 @@ async function handleSendSessionLinkEmail(event, body, correlationId) {
         deliveryId,
         destinationMasked: destination.masked,
         dryRun: false,
+        fromAddressConfigured: providerDiagnostics.fromAddressConfigured,
         provider: EMAIL_PROVIDER,
         providerMessageId,
+        replyToConfigured: providerDiagnostics.replyToConfigured,
         tokenHashPrefix: link.tokenHash.slice(0, 12),
       },
       summary: 'Check-in email sent.',
@@ -878,7 +885,9 @@ async function handleSendSessionLinkEmail(event, body, correlationId) {
         dryRun: false,
         expiresAt: link.expiresAt,
         provider: EMAIL_PROVIDER,
+        fromAddressConfigured: providerDiagnostics.fromAddressConfigured,
         providerMessageId,
+        replyToConfigured: providerDiagnostics.replyToConfigured,
         rollerUniqueId: context.booking.rollerUniqueId,
       },
     });
@@ -906,7 +915,9 @@ async function handleSendSessionLinkEmail(event, body, correlationId) {
         destinationMasked: destination.masked,
         dryRun: false,
         errorCode: safeError.code,
+        fromAddressConfigured: providerDiagnostics.fromAddressConfigured,
         provider: EMAIL_PROVIDER,
+        replyToConfigured: providerDiagnostics.replyToConfigured,
         tokenHashPrefix: link.tokenHash.slice(0, 12),
       },
       summary: 'Check-in email failed before provider confirmation.',
@@ -923,7 +934,9 @@ async function handleSendSessionLinkEmail(event, body, correlationId) {
         deliveryId,
         destinationMasked: destination.masked,
         dryRun: false,
+        fromAddressConfigured: providerDiagnostics.fromAddressConfigured,
         provider: EMAIL_PROVIDER,
+        replyToConfigured: providerDiagnostics.replyToConfigured,
         rollerUniqueId: context.booking.rollerUniqueId,
       },
     });
@@ -2209,6 +2222,14 @@ function getSmsProviderDiagnostics() {
   };
 }
 
+function getEmailProviderDiagnostics() {
+  return {
+    provider: EMAIL_PROVIDER,
+    fromAddressConfigured: Boolean(normalizeEmailAddress(EMAIL_FROM_ADDRESS)),
+    replyToConfigured: EMAIL_REPLY_TO_ADDRESSES.length > 0,
+  };
+}
+
 async function sendEmailWithSes({ destinationEmail, html, subject, text }) {
   if (EMAIL_PROVIDER !== 'aws_ses') {
     const error = new Error('Unsupported email provider.');
@@ -3216,11 +3237,13 @@ function buildCheckinEmailMessage({ booking, checkinUrl }) {
   const bookingReference = booking.bookingReference || '';
   const safeBookingReference = escapeHtml(bookingReference);
   const safeCheckinUrl = escapeHtml(checkinUrl);
-  const subject = 'Dags att checka in hos JumpYard';
+  const timeText = buildSmsBookingTimeText(booking);
+  const intro = timeText ? `Din hopptid ${timeText} narmar sig.` : 'Din hopptid hos JumpYard narmar sig.';
+  const subject = timeText ? `Dags att checka in ${timeText}` : 'Dags att checka in hos JumpYard';
   const text = [
     'Hej!',
     '',
-    'Din hopptid hos JumpYard narmar sig.',
+    intro,
     `Checka in har: ${checkinUrl}`,
     '',
     bookingReference ? `Bokning: ${bookingReference}` : null,
@@ -3245,7 +3268,7 @@ function buildCheckinEmailMessage({ booking, checkinUrl }) {
             </tr>
             <tr>
               <td style="padding:14px 24px 4px 24px;">
-                <p style="margin:0;font-size:16px;line-height:1.55;color:#374151;">Din hopptid narmar sig. Checka in innan du kommer fram sa gar handoffen snabbare i parken.</p>
+                <p style="margin:0;font-size:16px;line-height:1.55;color:#374151;">${escapeHtml(intro)} Checka in innan du kommer fram sa gar handoffen snabbare i parken.</p>
               </td>
             </tr>
             <tr>
