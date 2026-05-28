@@ -689,6 +689,22 @@ Use this file to define validation for the current project or milestone.
 | Root validation | `npm run validate` passes after docs updates. | Passed | Passed on 2026-05-28. |
 | Diff whitespace | `git diff --check` passes. | Passed with CRLF notices | Passed on 2026-05-28; output contains Git line-ending notices only. |
 
+## T0065 Guest SMS Completion Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Session Lambda syntax | SMS diagnostic/copy changes parse successfully. | Passed | `node --check infra/lambda/session/index.js` passed on 2026-05-28. |
+| Infra build | CDK TypeScript still compiles after session Lambda packaging changes. | Passed | `npm --prefix infra run build` passed on 2026-05-28. |
+| Infra synth | Dev stack synthesizes before deploy. | Passed | `npm --prefix infra run synth:dev` passed on 2026-05-28. |
+| Dev diff/deploy | Dev deploy changes only the session Lambda code asset. | Passed | AWS account `376129878018`, region `eu-north-1`; diff showed only `SessionHandler` code, and deploy passed. |
+| Confirmed SMS smoke | Protected manual SMS send succeeds only to the verified sandbox test phone. | Passed | Booking `5063420` returned `sms_sent`, delivery `jysms_mppg15lj_7c660ef2`, provider `aws_sns`, provider message id present, sender ID configured/requested, and masked destination only. |
+| Aurora audit row | Confirmed send is recorded in `jumpyard.sms_deliveries`. | Passed | Delivery `jysms_mppg15lj_7c660ef2` has status `sent`, `dry_run=false`, provider `aws_sns`, and provider message id present. |
+| SNS delivery status | Provider delivery status is checked after SNS publish acceptance. | Passed | CloudWatch SNS delivery status reported `SUCCESS` with provider response `Message has been accepted by phone.` |
+| Scheduled SMS safety | T0065 does not enable unattended scheduled SMS sends. | Passed | Dev EventBridge booking-time SMS remains configured with `confirmSend=false`. |
+| Root validation | Source-of-truth docs validate after T0065 updates. | Passed | `npm run validate` passed on 2026-05-28. |
+| Post-deploy diff | Deployed dev stack matches the local CDK template. | Passed | `npm --prefix infra run diff:dev` showed no differences after deploy. |
+| Diff whitespace | `git diff --check` passes. | Passed with CRLF notices | Passed on 2026-05-28; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

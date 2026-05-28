@@ -363,6 +363,21 @@ export async function resolveCheckInSessionLink(token: string): Promise<CheckInS
     throw new CloudSessionError('network_error', 'Could not reach JumpYard Cloud.');
   }
 
+  if (!response.ok && body?.error?.code === 'already_redeemed' && body.booking) {
+    return {
+      booking: toBooking(body.booking, 'ready', body.source),
+      checkinSession: {
+        checkinSessionId: '',
+        status: 'completed',
+        handoffStatus: 'completed',
+        handoffCode: null,
+        safetyStatus: 'completed',
+        completedAt: null,
+        expiresAt: null,
+      },
+    };
+  }
+
   if (!response.ok || !body?.session || !body.booking) {
     throw createSessionError(body, response.status);
   }

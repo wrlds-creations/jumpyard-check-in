@@ -160,6 +160,7 @@ async function handleStartSession(event, body, correlationId) {
 
   const decision = evaluateStartContext(context, request);
   if (!decision.canStart) {
+    const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
     await writeEventLog({
       booking: context.booking,
       correlationId,
@@ -178,6 +179,7 @@ async function handleStartSession(event, body, correlationId) {
         message: decision.message,
       },
       sessionPlan: buildSessionPlan(context, decision),
+      ...(bookingResponse ? bookingResponse : {}),
     });
   }
 
@@ -566,8 +568,9 @@ async function handleSendSessionLinkSms(event, body, correlationId, options = {}
     ttlMinutes: request.ttlMinutes,
   });
   const checkinUrl = buildCheckinUrl(request.baseUrl, link.token);
-  const message = buildCheckinSmsMessage(checkinUrl);
+  const message = buildCheckinSmsMessage({ booking: context.booking, checkinUrl });
   const deliveryId = createSmsDeliveryId();
+  const providerDiagnostics = getSmsProviderDiagnostics();
 
   if (request.dryRun) {
     await recordSmsDelivery({
@@ -589,6 +592,8 @@ async function handleSendSessionLinkSms(event, body, correlationId, options = {}
         destinationMasked: destination.masked,
         dryRun: true,
         provider: SMS_PROVIDER,
+        senderIdConfigured: providerDiagnostics.senderIdConfigured,
+        senderIdRequested: providerDiagnostics.senderIdRequested,
         tokenHashPrefix: link.tokenHash.slice(0, 12),
       },
       summary: 'Check-in SMS planned in dry-run mode.',
@@ -603,6 +608,8 @@ async function handleSendSessionLinkSms(event, body, correlationId, options = {}
         dryRun: true,
         expiresAt: link.expiresAt,
         provider: SMS_PROVIDER,
+        senderIdConfigured: providerDiagnostics.senderIdConfigured,
+        senderIdRequested: providerDiagnostics.senderIdRequested,
         rollerUniqueId: context.booking.rollerUniqueId,
       },
     });
@@ -635,6 +642,8 @@ async function handleSendSessionLinkSms(event, body, correlationId, options = {}
         dryRun: false,
         provider: SMS_PROVIDER,
         providerMessageId,
+        senderIdConfigured: providerDiagnostics.senderIdConfigured,
+        senderIdRequested: providerDiagnostics.senderIdRequested,
         tokenHashPrefix: link.tokenHash.slice(0, 12),
       },
       summary: 'Check-in SMS sent.',
@@ -650,6 +659,8 @@ async function handleSendSessionLinkSms(event, body, correlationId, options = {}
         expiresAt: link.expiresAt,
         provider: SMS_PROVIDER,
         providerMessageId,
+        senderIdConfigured: providerDiagnostics.senderIdConfigured,
+        senderIdRequested: providerDiagnostics.senderIdRequested,
         rollerUniqueId: context.booking.rollerUniqueId,
       },
     });
@@ -677,6 +688,8 @@ async function handleSendSessionLinkSms(event, body, correlationId, options = {}
         dryRun: false,
         errorCode: safeError.code,
         provider: SMS_PROVIDER,
+        senderIdConfigured: providerDiagnostics.senderIdConfigured,
+        senderIdRequested: providerDiagnostics.senderIdRequested,
         tokenHashPrefix: link.tokenHash.slice(0, 12),
       },
       summary: 'Check-in SMS failed before provider confirmation.',
@@ -694,6 +707,8 @@ async function handleSendSessionLinkSms(event, body, correlationId, options = {}
         destinationMasked: destination.masked,
         dryRun: false,
         provider: SMS_PROVIDER,
+        senderIdConfigured: providerDiagnostics.senderIdConfigured,
+        senderIdRequested: providerDiagnostics.senderIdRequested,
         rollerUniqueId: context.booking.rollerUniqueId,
       },
     });
@@ -2186,6 +2201,14 @@ async function sendSmsWithSns({ message, phoneNumber }) {
   return response.MessageId || null;
 }
 
+function getSmsProviderDiagnostics() {
+  return {
+    provider: SMS_PROVIDER,
+    senderIdConfigured: Boolean(SMS_SENDER_ID),
+    senderIdRequested: /^[A-Za-z0-9]{1,11}$/.test(SMS_SENDER_ID),
+  };
+}
+
 async function sendEmailWithSes({ destinationEmail, html, subject, text }) {
   if (EMAIL_PROVIDER !== 'aws_ses') {
     const error = new Error('Unsupported email provider.');
@@ -2871,6 +2894,8 @@ function mapDueSmsSendResponse(candidate, sendResponse, plannedItem) {
     providerMessageIdPresent: Boolean(sms.providerMessageId),
     reason: body.status === 'sms_sent' ? 'sent' : 'planned',
     rollerUniqueId: candidate.rollerUniqueId,
+    senderIdConfigured: sms.senderIdConfigured === true,
+    senderIdRequested: sms.senderIdRequested === true,
     startTime: candidate.startTime,
   };
 }
@@ -3173,8 +3198,18 @@ function buildCheckinUrl(baseUrl, token) {
   return parsed.toString();
 }
 
-function buildCheckinSmsMessage(checkinUrl) {
-  return `JumpYard: Din incheckning ar redo. Oppna: ${checkinUrl}`;
+function buildCheckinSmsMessage({ booking, checkinUrl }) {
+  const timeText = buildSmsBookingTimeText(booking);
+  const intro = timeText ? `Din hopptid ${timeText} narmar sig.` : 'Din incheckning ar redo.';
+  return `JumpYard: ${intro} Checka in: ${checkinUrl}`;
+}
+
+function buildSmsBookingTimeText(booking) {
+  const startTime = stringOrNull(booking?.startTime);
+  if (!startTime) return null;
+
+  const time = startTime.length >= 5 ? startTime.slice(0, 5) : startTime;
+  return time ? `kl ${time}` : null;
 }
 
 function buildCheckinEmailMessage({ booking, checkinUrl }) {
