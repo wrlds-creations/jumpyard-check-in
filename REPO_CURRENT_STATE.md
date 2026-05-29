@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-29
-- Current branch: `codex/t0072-guest-message-sender-readiness`
-- Current status: T0072 verified guest SMS/email sender readiness; docs are awaiting review/commit.
-- Current ticket: `T0072` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`
-- Recommended next step: run T0073 Unified booking-time message smoke.
+- Current branch: `codex/t0073-booking-time-message-smoke`
+- Current status: T0073 controlled unified booking-time SMS/email smoke completed; docs are awaiting review/commit.
+- Current ticket: `T0073` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`
+- Recommended next step: run T0074 SMS production unlock.
 
 ## Current Structure
 
@@ -204,18 +204,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0070` | Ran integrated dev smoke test. | 2026-05-29 | Fresh paid Playground booking `5100836` completed lookup, session start, ready-for-staff, staff auth/detail, staff-confirmed redeem, and local completed session/ticket state. A leftover retry session for `5100835` was redeemed as cleanup. |
 | `T0071` | Verified Data API and webhook health. | 2026-05-29 | Dev daily Data API rule is enabled and latest scheduled run succeeded; manual current-day sync succeeded; recent Roller webhook events for `5100835` and `5100836` are processed; lookup for `5100836` reads fresh Aurora data. |
 | `T0072` | Verified guest SMS/email sender readiness. | 2026-05-29 | SNS remains sandboxed with one verified test phone; SES remains sandboxed with only `love@wrlds.com` verified; schedule still runs unified SMS/email planning with `confirmSend=false`; unattended sends remain blocked. |
+| `T0073` | Ran controlled unified booking-time message smoke. | 2026-05-29 | Scoped Playground booking `5100877` was synced into Aurora; unified planning found SMS and email; controlled confirmed send wrote sent Aurora audit rows for both channels; SNS accepted the SMS, and the user confirmed SMS plus email receipt. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0072` | Guest SMS/email sender readiness. | Completed locally, not committed | Verification-only ticket. SMS/email sender state, sandbox blockers, schedule safety, audit rows, and monitoring gaps were confirmed without changing runtime behavior. |
+| `T0073` | Controlled unified booking-time SMS/email smoke. | Completed locally, not committed | Verification-only ticket. The unified due-message processor planned and then sent both SMS and email for one approved test booking without changing runtime behavior or enabling unattended sends. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0073` | Controlled unified booking-time message smoke | Run a controlled due-booking SMS plus email smoke through the unified processor using approved test destinations, public URLs, correct sender diagnostics, Aurora audit rows, and provider status checks. |
 | `T0074` | SMS production unlock | Work with the user on SNS sandbox exit or recipient policy, sender display/brand registration, consent text, and the exact AWS/provider steps needed so real guest phone numbers can receive booking-time SMS without pre-registration. |
 | `T0075` | Email production unlock | Work with the user on SES production access, production sender/domain choice, DKIM/SPF/DMARC/custom MAIL FROM as needed, reply-to/branding/consent/unsubscribe copy, and deliverability basics so real guest email addresses can receive booking-time email without pre-verification. |
 | `T0076` | Enable unattended booking-time sends | After SMS and email unlock gates pass, change dev/staging config deliberately from planning-only to confirmed scheduled sends, test a booking created with normal phone/email, and verify 30-minute-before delivery without manual triggering. |
@@ -227,6 +227,15 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Validation Status
 
+- T0073 AWS preflight: `aws sts get-caller-identity --profile wrlds-dev --region eu-north-1` returned account `376129878018`, and region is `eu-north-1`.
+- T0073 scoped booking: created paid Roller Playground booking `5100877` for `2026-05-29 15:30` with approved test SMS/email destinations only.
+- T0073 Aurora refresh: manual Data API sync for `2026-05-29 -> 2026-05-30` succeeded with 4 bookingitems, 4 tickets, 4 payments, 5 customers, 491 products, and 4 booking upserts.
+- T0073 unified planning: protected `POST /v1/check-in/session-links/send-due-messages` with `confirmSend=false` planned one SMS and one email for booking `5100877`, using masked destinations only.
+- T0073 controlled confirmed send: protected `confirmSend=true` processed one SMS delivery `jysms_mpqwyxay_e7fe6d3c` and one email delivery `jyem_mpqwyxox_94ea00f5`, both recorded in Aurora as `sent`, `dry_run=false`, with provider message ids present.
+- T0073 provider status: SNS delivery log reported `Message has been accepted by phone`; SES acceptance is represented by the stored SES provider message id because no SES delivery-event stream is configured.
+- T0073 manual confirmation: user confirmed SMS and email arrived; current text is acceptable for now but needs copy polish before broader guest rollout.
+- T0073 schedule safety: EventBridge booking-time messaging remains `confirmSend=false`, so unattended scheduled sends are still disabled.
+- T0073 final validation: `npm run validate` and `git diff --check` passed on 2026-05-29; `git diff --check` reported CRLF line-ending notices only.
 - T0072 AWS preflight: `aws sts get-caller-identity --profile wrlds-dev --region eu-north-1` returned account `376129878018`, and region is `eu-north-1`.
 - T0072 SMS readiness: SNS SMS sandbox is still enabled, one masked test recipient is verified, `DefaultSMSType=Transactional`, monthly spend limit is `1`, delivery-status success sampling is `100`, and a delivery-status role is configured. The session Lambda requests `SMS_SENDER_ID=JumpYard`, but no account `DefaultSenderID` is set, so actual handset sender display must be verified in T0073.
 - T0072 email readiness: SES sending is enabled but `ProductionAccessEnabled=false`; quota is 200 messages per 24 hours and 1 message per second; only email identity `love@wrlds.com` is verified; no domain identity, DKIM signing, or custom MAIL FROM setup exists.

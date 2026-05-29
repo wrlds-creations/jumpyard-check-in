@@ -139,6 +139,18 @@ T0072 guest SMS/email sender readiness notes:
 - Delivery audit state: Aurora contains safe aggregate history for planned/sent SMS and email rows without raw tokens, full URLs, full phone numbers, or full email addresses.
 - Observability gap: session Lambda alarms are `OK`, but there are not yet channel-specific SMS/email delivery alarms or runbooks, and SNS delivery status log groups have provider-managed/unset retention. Track this before enabling unattended visitor-facing sends.
 
+T0073 controlled unified booking-time message smoke notes:
+
+- AWS resources changed: none.
+- Existing resources used: `jumpyard-check-in-dev-stack-data-sync`, protected route `POST /v1/check-in/session-links/send-due-messages`, Aurora delivery audit tables, SES identity `love@wrlds.com`, SNS SMS sandbox verified test recipient, and SNS delivery status log group.
+- Scoped Playground data: paid booking `5100877` was created for `2026-05-29 15:30` with only approved test contact destinations; raw secrets, raw `jy_token` links, full phone numbers, and full email addresses were not printed or stored in docs.
+- Aurora refresh: manual invoke of `jumpyard-check-in-dev-stack-data-sync` for `2026-05-29 -> 2026-05-30` succeeded and made the booking visible to the due-message processor.
+- Unified processor result: planning mode found the booking for both `sms` and `email`; one controlled `confirmSend=true` run sent both channels using public base URL `https://jumpyard-check-in.pages.dev/`.
+- Audit result: Aurora recorded SMS delivery `jysms_mpqwyxay_e7fe6d3c` and email delivery `jyem_mpqwyxox_94ea00f5` as `sent`, `dry_run=false`, with provider message ids present and masked destinations only.
+- Provider result: SNS delivery status reported `Message has been accepted by phone` for the SMS. SES acceptance is represented by the stored SES provider message id; no SES delivery-event stream is configured yet.
+- Manual receipt result: the user confirmed both SMS and email arrived; current text is acceptable for now but should be polished before broader guest rollout.
+- Schedule safety: the EventBridge booking-time messaging rule still keeps `confirmSend=false`, so unattended scheduled sends remain disabled.
+
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
 T0006 deploy notes:

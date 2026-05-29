@@ -812,6 +812,25 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs validate after T0072 updates. | Passed | `npm run validate` passed on 2026-05-29. |
 | Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-29; output contains Git line-ending notices only. |
 
+## T0073 Controlled Unified Booking-Time Message Smoke Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| AWS identity | Verify dev AWS target before smoke. | Passed | `aws sts get-caller-identity --profile wrlds-dev --region eu-north-1` returned account `376129878018`; region is `eu-north-1`. |
+| Scoped Playground booking | Use one paid today's booking with approved test destinations only. | Passed | Created booking `5100877` for `2026-05-29 15:30`, product `1765860`, total `200`, with masked/approved phone and email only. |
+| Aurora refresh | Existing sync path makes the booking visible to the due-message processor. | Passed | Manual invoke of `jumpyard-check-in-dev-stack-data-sync` for `2026-05-29 -> 2026-05-30` succeeded with 4 bookingitems, 4 tickets, 4 payments, 5 customers, 491 products, and 4 booking upserts. |
+| Unified planning | Protected due-message route finds both SMS and email without sending. | Passed | `POST /v1/check-in/session-links/send-due-messages` with `confirmSend=false`, `now=2026-05-29T15:00:00+02:00`, `leadMinutes=30`, and `windowMinutes=10` planned one SMS and one email for booking `5100877`. |
+| Controlled confirmed send | Protected due-message route sends both channels once. | Passed | Same route with `confirmSend=true` returned `sent=2`, no failures, and masked destinations only. |
+| Aurora SMS audit | Sent SMS is recorded without raw token/full phone/full URL. | Passed | `jumpyard.sms_deliveries` row `jysms_mpqwyxay_e7fe6d3c` is `sent`, `dry_run=false`, provider `aws_sns`, provider message id present, and destination masked. |
+| Aurora email audit | Sent email is recorded without raw token/full email/full URL. | Passed | `jumpyard.email_deliveries` row `jyem_mpqwyxox_94ea00f5` is `sent`, `dry_run=false`, provider `aws_ses`, provider message id present, and destination masked. |
+| SMS provider status | SNS delivery status confirms provider acceptance. | Passed | CloudWatch SNS delivery status reported `Message has been accepted by phone` with dwell time 55 ms. |
+| SES provider status | SES accepts the send and returns a provider message id. | Passed | Aurora stores a SES provider message id; no SES delivery-event stream is configured yet. |
+| Manual receipt | User confirms real SMS and email were received. | Passed | User confirmed both SMS and email arrived; text is acceptable for now but needs copy polish before broader guest rollout. |
+| Scheduled-send safety | T0073 does not enable unattended sends. | Passed | EventBridge booking-time messaging rule still uses `confirmSend=false`; T0073 used only a protected manual confirmed smoke. |
+| Implementation scope | T0073 does not change runtime behavior. | Passed | No app code, Lambda code, CDK code, migration, package dependency, secret, or AWS resource changed. |
+| Root validation | Source-of-truth docs validate after T0073 updates. | Passed | `npm run validate` passed on 2026-05-29. |
+| Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-29; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
