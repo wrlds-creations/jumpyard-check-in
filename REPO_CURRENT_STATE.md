@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-29
-- Current branch: `codex/t0071-data-api-webhook-health`
-- Current status: T0071 verified dev Data API daily sync and Roller webhook health; docs are awaiting review/commit.
-- Current ticket: `T0071` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`
-- Recommended next step: run T0072 Guest SMS/email sender readiness.
+- Current branch: `codex/t0072-guest-message-sender-readiness`
+- Current status: T0072 verified guest SMS/email sender readiness; docs are awaiting review/commit.
+- Current ticket: `T0072` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`
+- Recommended next step: run T0073 Unified booking-time message smoke.
 
 ## Current Structure
 
@@ -203,30 +203,36 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0069` | Locked the stabilization roadmap. | 2026-05-29 | Docs-only ticket; keeps full dev-flow proof, Data API/webhook checks, and guest SMS/email verification ahead of broader staging/live readiness work. |
 | `T0070` | Ran integrated dev smoke test. | 2026-05-29 | Fresh paid Playground booking `5100836` completed lookup, session start, ready-for-staff, staff auth/detail, staff-confirmed redeem, and local completed session/ticket state. A leftover retry session for `5100835` was redeemed as cleanup. |
 | `T0071` | Verified Data API and webhook health. | 2026-05-29 | Dev daily Data API rule is enabled and latest scheduled run succeeded; manual current-day sync succeeded; recent Roller webhook events for `5100835` and `5100836` are processed; lookup for `5100836` reads fresh Aurora data. |
+| `T0072` | Verified guest SMS/email sender readiness. | 2026-05-29 | SNS remains sandboxed with one verified test phone; SES remains sandboxed with only `love@wrlds.com` verified; schedule still runs unified SMS/email planning with `confirmSend=false`; unattended sends remain blocked. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0071` | Data API and webhook health verification. | Completed locally, not committed | Verification-only ticket. Daily Data API sync, manual current-day sync, recent webhook processing, Aurora freshness, and lookup-from-Aurora were confirmed without changing runtime behavior. |
+| `T0072` | Guest SMS/email sender readiness. | Completed locally, not committed | Verification-only ticket. SMS/email sender state, sandbox blockers, schedule safety, audit rows, and monitoring gaps were confirmed without changing runtime behavior. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0072` | Guest SMS/email sender readiness | Decide and verify the practical dev-to-production sender path: SNS sandbox/exit or provider policy, SES sender/domain, sender branding, reply-to, consent/unsubscribe copy, and right-sender checks. |
-| `T0073` | Unified booking-time message smoke | Run controlled due-booking SMS plus email smoke through the unified processor using approved test destinations, public URLs, correct sender diagnostics, Aurora audit rows, and provider status checks. |
-| `T0074` | Add-product and payment flow smoke | Re-test create booking and existing-booking add-product flows with current payment constraints, verify separate linked drafts, and keep card/scheme smoke deferred until Roller enables the missing card method. |
-| `T0075` | Environment and cutover plan | Define staging/live config, secret ownership, deployment/rollback runbook, live backfill, webhook registration, and cutover checklist before any non-dev stack is created. |
-| `T0076` | Alarm notifications and runbooks | Connect CloudWatch alarms to a notification path, document operator actions, and define dashboard/runbook usage for dev-to-staging readiness. |
-| `T0077` | Production auth, dev-token replacement, and route protection | Replace or isolate dev-only passcodes/shared tokens, implement the T0062 route boundary, and prepare WAF/edge/internal-route protections for staging/live. |
-| `T0078` | Data retention and PII policy | Lock retention, deletion/export, masking/hash, Aurora backup, event-log, and raw-payload policy before production data. |
-| `T0079` | Deployment and rollback runbook | Define CI/CD identity, preflight gates, migration backup/restore, CDK diff approval, smoke tests, rollback criteria, and ownership. |
-| `T0080` | Live backfill and cutover rehearsal | Rehearse initial live backfill, daily sync, webhook registration order, freshness checks, replay/reconciliation, and go/no-go checklist. |
+| `T0073` | Controlled unified booking-time message smoke | Run a controlled due-booking SMS plus email smoke through the unified processor using approved test destinations, public URLs, correct sender diagnostics, Aurora audit rows, and provider status checks. |
+| `T0074` | SMS production unlock | Work with the user on SNS sandbox exit or recipient policy, sender display/brand registration, consent text, and the exact AWS/provider steps needed so real guest phone numbers can receive booking-time SMS without pre-registration. |
+| `T0075` | Email production unlock | Work with the user on SES production access, production sender/domain choice, DKIM/SPF/DMARC/custom MAIL FROM as needed, reply-to/branding/consent/unsubscribe copy, and deliverability basics so real guest email addresses can receive booking-time email without pre-verification. |
+| `T0076` | Enable unattended booking-time sends | After SMS and email unlock gates pass, change dev/staging config deliberately from planning-only to confirmed scheduled sends, test a booking created with normal phone/email, and verify 30-minute-before delivery without manual triggering. |
+| `T0077` | Messaging monitoring and runbooks | Add channel-specific SMS/email alarms, delivery-failure dashboards, log retention decisions, and operator runbooks before unattended sends are treated as production-ready. |
+| `T0078` | Add-product and payment flow smoke | Re-test create booking and existing-booking add-product flows with current payment constraints, verify separate linked drafts, and keep card/scheme smoke deferred until Roller enables the missing card method. |
+| `T0079` | Environment and cutover plan | Define staging/live config, secret ownership, deployment/rollback runbook, live backfill, webhook registration, and cutover checklist before any non-dev stack is created. |
+| `T0080` | Production auth, route protection, retention, and cutover rehearsal | Replace or isolate dev-only passcodes/shared tokens, implement the T0062 route boundary, lock PII retention, and rehearse live backfill/cutover before production traffic. |
 | `Deferred` | Card/scheme payment smoke | Wait for Pabel/Roller to enable or confirm the `scheme` card method before testing the Adyen Visa card path. |
 
 ## Validation Status
 
+- T0072 AWS preflight: `aws sts get-caller-identity --profile wrlds-dev --region eu-north-1` returned account `376129878018`, and region is `eu-north-1`.
+- T0072 SMS readiness: SNS SMS sandbox is still enabled, one masked test recipient is verified, `DefaultSMSType=Transactional`, monthly spend limit is `1`, delivery-status success sampling is `100`, and a delivery-status role is configured. The session Lambda requests `SMS_SENDER_ID=JumpYard`, but no account `DefaultSenderID` is set, so actual handset sender display must be verified in T0073.
+- T0072 email readiness: SES sending is enabled but `ProductionAccessEnabled=false`; quota is 200 messages per 24 hours and 1 message per second; only email identity `love@wrlds.com` is verified; no domain identity, DKIM signing, or custom MAIL FROM setup exists.
+- T0072 schedule safety: EventBridge rule `jumpyard-check-in-dev-booking-time-sms-schedule` invokes unified channels `sms` and `email` every 5 minutes with `confirmSend=false`, so scheduled runs remain planning-only.
+- T0072 audit/monitoring: Aurora has safe planned/sent aggregate rows for SMS and email; session Lambda alarms are `OK`; channel-specific SMS/email alarms and runbooks are still open follow-ups.
+- T0072 final validation: `npm run validate` and `git diff --check` passed on 2026-05-29; `git diff --check` reported CRLF line-ending notices only.
 - T0071 AWS preflight: `aws sts get-caller-identity --profile wrlds-dev --region eu-north-1` returned account `376129878018`, and region is `eu-north-1`.
 - T0071 Data API schedule: EventBridge rule `jumpyard-check-in-dev-data-api-daily-sync` is `ENABLED`, runs `cron(0 2 * * ? *)`, targets `jumpyard-check-in-dev-stack-data-sync`, and latest scheduled run `2026-05-28 -> 2026-05-29` succeeded.
 - T0071 manual Data API sync: Lambda invoke for `2026-05-29 -> 2026-05-30` succeeded in about 31 seconds with 2 bookingitems, 2 tickets, 2 payments, 2 customers, 491 products, and 2 booking upserts.

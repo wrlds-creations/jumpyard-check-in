@@ -794,6 +794,24 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs validate after T0071 updates. | Passed | `npm run validate` passed on 2026-05-29. |
 | Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-29; output contains Git line-ending notices only. |
 
+## T0072 Guest SMS/Email Sender Readiness Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| AWS identity | Verify dev AWS target before inspection. | Passed | `aws sts get-caller-identity --profile wrlds-dev --region eu-north-1` returned account `376129878018`; region is `eu-north-1`. |
+| SNS sandbox state | Confirm whether unrestricted SMS sending is available. | Passed with blocker | `aws sns get-sms-sandbox-account-status` returned `IsInSandbox=true`, so dev SMS can only reach verified sandbox recipients until sandbox exit or a verified-recipient policy is approved. |
+| SNS verified recipients | Confirm test-recipient readiness without full phone output. | Passed | SNS sandbox list has one verified masked test recipient and zero pending recipients. |
+| SNS SMS attributes | Confirm current SMS delivery diagnostics and sender posture. | Partial | `DefaultSMSType=Transactional`, `MonthlySpendLimit=1`, delivery-status IAM role is configured, and success sampling is `100`; no `DefaultSenderID` attribute is set. |
+| Session SMS config | Confirm Lambda requests the intended sender/base URL. | Partial | Session Lambda env requests `SMS_SENDER_ID=JumpYard` and dev config uses `https://jumpyard-check-in.pages.dev/`; actual handset sender display still needs T0073 controlled smoke. |
+| SES account state | Confirm whether unrestricted email sending is available. | Passed with blocker | SES has `SendingEnabled=true` and `ProductionAccessEnabled=false`, max 200 messages per day, max send rate 1/second. |
+| SES identity state | Confirm dev sender readiness. | Partial | Only `love@wrlds.com` is verified for dev sending; no production domain identity, DKIM signing, or custom MAIL FROM setup exists. |
+| Booking-time schedule safety | Confirm unattended real sends remain disabled. | Passed | EventBridge rule `jumpyard-check-in-dev-booking-time-sms-schedule` invokes unified channels `sms` and `email` every 5 minutes with `confirmSend=false`. |
+| Delivery audit state | Confirm safe SMS/email audit rows exist. | Passed | Aurora aggregates show planned/sent SMS and email rows without printing raw tokens, full URLs, full phone numbers, or full email addresses. |
+| Alarm/log posture | Confirm monitoring baseline and gaps. | Partial | Session Lambda alarms are `OK`; SNS delivery log groups exist, but no channel-specific SMS/email delivery alarms or runbooks exist yet. Follow-ups `FU-068` and `FU-069` track the gaps. |
+| Implementation scope | T0072 does not change runtime behavior. | Passed | No app code, Lambda code, CDK code, migration, package dependency, secret, or AWS resource changed. |
+| Root validation | Source-of-truth docs validate after T0072 updates. | Passed | `npm run validate` passed on 2026-05-29. |
+| Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-29; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

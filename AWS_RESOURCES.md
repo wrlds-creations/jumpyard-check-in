@@ -129,6 +129,16 @@ T0071 Data API and webhook health verification notes:
 - Aurora health: row counts after T0071 were 23 bookings, 31 booking items, 38 tickets, 10 payments, 26 guest profiles, 13 seed runs, and 19 webhook events.
 - Alarms reviewed: data-sync Lambda errors/throttles, webhook Lambda errors/throttles, and Roller API errors are `OK`.
 
+T0072 guest SMS/email sender readiness notes:
+
+- AWS resources changed: none.
+- Reviewed resources: SNS SMS sandbox/account attributes, SES account/identity state, EventBridge rule `jumpyard-check-in-dev-booking-time-sms-schedule`, Lambda `jumpyard-check-in-dev-stack-session` environment, Aurora delivery audit tables, and CloudWatch alarms/log groups.
+- SMS readiness: SNS SMS sandbox is still enabled, one masked test recipient is verified, `DefaultSMSType=Transactional`, monthly spend limit is `1`, delivery-status success sampling is `100`, and an SNS delivery-status IAM role is configured. The session Lambda requests sender id `JumpYard`, but the account has no `DefaultSenderID` attribute; actual handset sender display must be confirmed in a controlled T0073 smoke before relying on the brand display.
+- Email readiness: SES sending is enabled but `ProductionAccessEnabled=false`, current quota is 200 messages per 24 hours and 1 message per second, and only email identity `love@wrlds.com` is verified for dev testing. No production sender domain identity, DKIM signing, or custom MAIL FROM setup is in place.
+- Schedule safety: the existing booking-time EventBridge rule still invokes the unified SMS/email processor every 5 minutes with channels `sms` and `email`, but the payload keeps `confirmSend=false`; no unattended real SMS or email sends are enabled in dev.
+- Delivery audit state: Aurora contains safe aggregate history for planned/sent SMS and email rows without raw tokens, full URLs, full phone numbers, or full email addresses.
+- Observability gap: session Lambda alarms are `OK`, but there are not yet channel-specific SMS/email delivery alarms or runbooks, and SNS delivery status log groups have provider-managed/unset retention. Track this before enabling unattended visitor-facing sends.
+
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
 T0006 deploy notes:
