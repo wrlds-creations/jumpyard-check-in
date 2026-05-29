@@ -52,6 +52,7 @@ const DEFAULT_SMS_TRIGGER_WINDOW_MINUTES = 10;
 const MAX_SMS_TRIGGER_WINDOW_MINUTES = 180;
 const MAX_SMS_TRIGGER_LIMIT = 10;
 const SCHEDULED_SMS_CONFIRMED_SEND_APPROVAL = 'I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS';
+const BOOKING_TIME_MESSAGE_CHANNELS = new Set(['sms', 'email']);
 const TOKEN_BYTES = 32;
 
 const rdsClient = new RDSDataClient({});
@@ -72,10 +73,10 @@ exports.handler = async (event) => {
     const body = parseBody(event);
     correlationId = stringOrNull(body.correlationId) || correlationId;
 
-    if (isScheduledDueSessionLinkSmsEvent(event)) {
-      const scheduledBody = normalizeScheduledDueSessionLinkSmsBody(event);
+    if (isScheduledDueSessionLinkMessagingEvent(event)) {
+      const scheduledBody = normalizeScheduledDueSessionLinkMessagingBody(event);
       const scheduledCorrelationId = stringOrNull(scheduledBody.correlationId) || correlationId;
-      return handleSendDueSessionLinkSms(event, scheduledBody, scheduledCorrelationId, { trustedScheduler: true });
+      return handleSendDueSessionLinkMessages(event, scheduledBody, scheduledCorrelationId, { trustedScheduler: true });
     }
 
     if (isStaffAuthLoginRoute(routeKey, event)) {
@@ -104,6 +105,10 @@ exports.handler = async (event) => {
 
     if (isSendDueSessionLinkSmsRoute(routeKey, event)) {
       return handleSendDueSessionLinkSms(event, body, correlationId);
+    }
+
+    if (isSendDueSessionLinkMessagesRoute(routeKey, event)) {
+      return handleSendDueSessionLinkMessages(event, body, correlationId);
     }
 
     if (isResolveSessionLinkRoute(routeKey, event)) {
@@ -944,6 +949,14 @@ async function handleSendSessionLinkEmail(event, body, correlationId) {
 }
 
 async function handleSendDueSessionLinkSms(event, body, correlationId, options = {}) {
+  return handleSendDueSessionLinkMessages(event, body, correlationId, {
+    ...options,
+    channels: ['sms'],
+    legacySmsResponse: true,
+  });
+}
+
+async function handleSendDueSessionLinkMessages(event, body, correlationId, options = {}) {
   if (!options.trustedScheduler) {
     const auth = await verifyCheckinLinkDevToken(event);
     if (!auth.ok) {
@@ -951,15 +964,15 @@ async function handleSendDueSessionLinkSms(event, body, correlationId, options =
         status: 'unauthorized',
         error: {
           code: auth.code,
-          message: 'Booking-time SMS sending requires the JumpYard Cloud development token.',
+          message: 'Booking-time guest messaging requires the JumpYard Cloud development token.',
         },
       });
     }
   }
 
-  const request = normalizeDueSessionLinkSmsRequest(body);
+  const request = normalizeDueSessionLinkMessagingRequest(body, options.channels || null);
   const window = buildDueSmsWindow(request);
-  const validationError = validateDueSessionLinkSmsRequest(request, window);
+  const validationError = validateDueSessionLinkMessagingRequest(request, window);
   if (validationError) {
     return jsonResponse(400, correlationId, {
       status: 'invalid_request',
@@ -968,17 +981,17 @@ async function handleSendDueSessionLinkSms(event, body, correlationId, options =
   }
 
   if (options.trustedScheduler && request.confirmSend) {
-    const confirmationError = validateConfirmedScheduledDueSmsRequest(request);
+    const confirmationError = validateConfirmedScheduledDueMessagingRequest(request);
     if (confirmationError) {
       return jsonResponse(409, correlationId, {
-        status: 'booking_time_sms_blocked',
+        status: options.legacySmsResponse ? 'booking_time_sms_blocked' : 'booking_time_messages_blocked',
         error: confirmationError,
         trigger: buildDueSmsTriggerSummary(request, window, true),
       });
     }
   }
 
-  const candidates = await findDueSmsBookings({
+  const candidates = await findDueMessagingBookings({
     limit: request.limit,
     recentSinceAt: new Date(window.start.getTime() - 24 * 60 * 60 * 1000).toISOString(),
     windowEndAt: window.end.toISOString(),
@@ -987,31 +1000,42 @@ async function handleSendDueSessionLinkSms(event, body, correlationId, options =
 
   const items = [];
   for (const candidate of candidates) {
-    const item = await planDueSmsCandidate({ candidate, request, window });
+    const context = await getBookingContext(candidate.bookingReference);
+    const decision = context
+      ? evaluateStartContext(context, {
+          expectedDate: candidate.bookingDate,
+          ticketIds: [],
+        })
+      : null;
 
-    if (request.confirmSend && item.action === 'send_ready') {
-      const sendResponse = await handleSendSessionLinkSms(
-        event,
-        {
-          baseUrl: request.baseUrl,
-          bookingReference: candidate.bookingReference,
-          confirmSend: true,
-          dryRun: false,
-          idempotencyKey: createDueSmsIdempotencyKey(window, candidate),
-          ttlMinutes: request.ttlMinutes,
-        },
-        correlationId,
-        options,
-      );
-      items.push(mapDueSmsSendResponse(candidate, sendResponse, item));
-      continue;
+    for (const channel of request.channels) {
+      const item = planDueMessageCandidate({ candidate, channel, context, decision, request, window });
+
+      if (request.confirmSend && item.action === 'send_ready') {
+        const sendResponse = await sendDueMessageChannel(event, {
+          candidate,
+          channel,
+          correlationId,
+          options,
+          request,
+          window,
+        });
+        items.push(mapDueMessageSendResponse(channel, candidate, sendResponse, item));
+        continue;
+      }
+
+      items.push(item);
     }
-
-    items.push(item);
   }
 
-  const summary = summarizeDueSmsItems(items);
-  const status = request.confirmSend ? 'booking_time_sms_processed' : 'booking_time_sms_planned';
+  const summary = summarizeDueMessageItems(items);
+  const status = options.legacySmsResponse
+    ? request.confirmSend
+      ? 'booking_time_sms_processed'
+      : 'booking_time_sms_planned'
+    : request.confirmSend
+      ? 'booking_time_messages_processed'
+      : 'booking_time_messages_planned';
 
   return jsonResponse(200, correlationId, {
     status,
@@ -1176,13 +1200,22 @@ function normalizeSessionLinkEmailRequest(event, body) {
 }
 
 function normalizeDueSessionLinkSmsRequest(body) {
+  return normalizeDueSessionLinkMessagingRequest(body, ['sms']);
+}
+
+function normalizeDueSessionLinkMessagingRequest(body, forcedChannels = null) {
+  const baseUrl = stringOrNull(body.baseUrl) || stringOrNull(body.checkinBaseUrl);
+
   return {
-    baseUrl: stringOrNull(body.baseUrl) || stringOrNull(body.checkinBaseUrl) || DEFAULT_SMS_BASE_URL,
+    baseUrl: baseUrl || DEFAULT_SMS_BASE_URL,
+    channels: forcedChannels || normalizeDueMessageChannels(body.channels),
     confirmedSendApproval: stringOrNull(body.confirmedSendApproval),
     confirmSend: booleanFromValue(body.confirmSend),
+    emailBaseUrl: stringOrNull(body.emailBaseUrl) || baseUrl || DEFAULT_EMAIL_BASE_URL,
     leadMinutes: clampInteger(body.leadMinutes, 0, 24 * 60, DEFAULT_SMS_TRIGGER_LEAD_MINUTES),
     limit: clampInteger(body.limit, 1, MAX_SMS_TRIGGER_LIMIT, MAX_SMS_TRIGGER_LIMIT),
     now: stringOrNull(body.now),
+    smsBaseUrl: stringOrNull(body.smsBaseUrl) || baseUrl || DEFAULT_SMS_BASE_URL,
     ttlMinutes: normalizeTtlMinutes(body.ttlMinutes, body.ttlHours),
     windowEndAt: stringOrNull(body.windowEndAt),
     windowMinutes: clampInteger(body.windowMinutes, 1, MAX_SMS_TRIGGER_WINDOW_MINUTES, DEFAULT_SMS_TRIGGER_WINDOW_MINUTES),
@@ -1321,10 +1354,36 @@ function validateSessionLinkEmailRequest(request) {
 }
 
 function validateDueSessionLinkSmsRequest(request, window) {
-  if (!request.baseUrl || !isSafeCheckinBaseUrl(request.baseUrl)) {
+  return validateDueSessionLinkMessagingRequest(request, window);
+}
+
+function validateDueSessionLinkMessagingRequest(request, window) {
+  if (!request.channels.length) {
+    return {
+      code: 'channels_required',
+      message: 'At least one channel is required.',
+    };
+  }
+
+  const invalidChannels = request.channels.filter((channel) => !BOOKING_TIME_MESSAGE_CHANNELS.has(channel));
+  if (invalidChannels.length) {
+    return {
+      code: 'channels_invalid',
+      message: 'channels may only contain sms and email.',
+    };
+  }
+
+  if (request.channels.includes('sms') && (!request.smsBaseUrl || !isSafeCheckinBaseUrl(request.smsBaseUrl))) {
     return {
       code: 'base_url_invalid',
-      message: 'baseUrl must be a valid http or https URL for the check-in app.',
+      message: 'smsBaseUrl or baseUrl must be a valid http or https URL for the check-in app.',
+    };
+  }
+
+  if (request.channels.includes('email') && (!request.emailBaseUrl || !isSafeCheckinBaseUrl(request.emailBaseUrl))) {
+    return {
+      code: 'base_url_invalid',
+      message: 'emailBaseUrl or baseUrl must be a valid http or https URL for the check-in app.',
     };
   }
 
@@ -1336,17 +1395,35 @@ function validateDueSessionLinkSmsRequest(request, window) {
 }
 
 function validateConfirmedScheduledDueSmsRequest(request) {
+  return validateConfirmedScheduledDueMessagingRequest(request);
+}
+
+function validateConfirmedScheduledDueMessagingRequest(request) {
   if (request.confirmedSendApproval !== SCHEDULED_SMS_CONFIRMED_SEND_APPROVAL) {
     return {
-      code: 'scheduled_sms_confirmation_required',
-      message: 'Scheduled confirmed SMS sends require the explicit confirmedSendApproval safety phrase.',
+      code: 'scheduled_messaging_confirmation_required',
+      message: 'Scheduled confirmed guest messaging requires the explicit confirmedSendApproval safety phrase.',
     };
   }
 
-  if (!isPublicHttpsCheckinBaseUrl(request.baseUrl)) {
+  if (request.channels.includes('sms') && !isPublicHttpsCheckinBaseUrl(request.smsBaseUrl)) {
     return {
       code: 'public_https_base_url_required',
-      message: 'Scheduled confirmed SMS sends require a public HTTPS baseUrl for the check-in app.',
+      message: 'Scheduled confirmed SMS sends require a public HTTPS smsBaseUrl or baseUrl for the check-in app.',
+    };
+  }
+
+  if (request.channels.includes('email') && !isPublicHttpsCheckinBaseUrl(request.emailBaseUrl)) {
+    return {
+      code: 'public_https_base_url_required',
+      message: 'Scheduled confirmed email sends require a public HTTPS emailBaseUrl or baseUrl for the check-in app.',
+    };
+  }
+
+  if (request.channels.includes('email') && !normalizeEmailAddress(EMAIL_FROM_ADDRESS)) {
+    return {
+      code: 'email_sender_not_configured',
+      message: 'Scheduled confirmed email sends require EMAIL_FROM_ADDRESS to be configured with a verified SES sender.',
     };
   }
 
@@ -1629,7 +1706,7 @@ async function findEmailDestinationForBooking(rollerUniqueId) {
   };
 }
 
-async function findDueSmsBookings({ limit, recentSinceAt, windowEndAt, windowStartAt }) {
+async function findDueMessagingBookings({ limit, recentSinceAt, windowEndAt, windowStartAt }) {
   const result = await executeStatement(
     `WITH due_bookings AS (
        SELECT
@@ -1654,9 +1731,12 @@ async function findDueSmsBookings({ limit, recentSinceAt, windowEndAt, windowSta
      )
      SELECT
        due_bookings.*,
-       destination.contact_number,
-       destination.contact_number_hash,
-       destination.contact_number_masked,
+       sms_destination.contact_number AS sms_contact_number,
+       sms_destination.contact_number_hash AS sms_contact_number_hash,
+       sms_destination.contact_number_masked AS sms_contact_number_masked,
+       email_destination.email AS email,
+       email_destination.email_hash AS email_hash,
+       email_destination.email_masked AS email_masked,
        EXISTS (
          SELECT 1
          FROM jumpyard.sms_deliveries AS sent
@@ -1666,7 +1746,17 @@ async function findDueSmsBookings({ limit, recentSinceAt, windowEndAt, windowSta
            AND sent.dry_run IS FALSE
            AND sent.created_at >= CAST(:recentSinceAt AS timestamptz)
          LIMIT 1
-       ) AS already_sent_recently
+       ) AS sms_already_sent_recently,
+       EXISTS (
+         SELECT 1
+         FROM jumpyard.email_deliveries AS sent
+         WHERE sent.roller_unique_id = due_bookings.roller_unique_id
+           AND sent.message_template = :emailMessageTemplate
+           AND sent.status = 'sent'
+           AND sent.dry_run IS FALSE
+           AND sent.created_at >= CAST(:recentSinceAt AS timestamptz)
+         LIMIT 1
+       ) AS email_already_sent_recently
      FROM due_bookings
      LEFT JOIN LATERAL (
        SELECT
@@ -1694,47 +1784,76 @@ async function findDueSmsBookings({ limit, recentSinceAt, windowEndAt, windowSta
          AND gp.contact_number IS NOT NULL
        ORDER BY contact_candidate.priority ASC, gp.updated_at DESC NULLS LAST
        LIMIT 1
-     ) AS destination ON true
+     ) AS sms_destination ON true
+     LEFT JOIN LATERAL (
+       SELECT
+         gp.email,
+         gp.email_hash,
+         gp.email_masked
+       FROM (
+         SELECT
+           1 AS priority,
+           ticket.roller_customer_id
+         FROM jumpyard.roller_booking_tickets AS ticket
+         WHERE ticket.roller_unique_id = due_bookings.roller_unique_id
+           AND ticket.roller_customer_id IS NOT NULL
+         UNION ALL
+         SELECT
+           2 AS priority,
+           booking.normalized_summary ->> 'bookingCustomerId' AS roller_customer_id
+         FROM jumpyard.roller_bookings AS booking
+         WHERE booking.roller_unique_id = due_bookings.roller_unique_id
+           AND booking.normalized_summary ->> 'bookingCustomerId' IS NOT NULL
+       ) AS contact_candidate
+       INNER JOIN jumpyard.guest_profiles AS gp
+         ON gp.roller_customer_id = contact_candidate.roller_customer_id
+       WHERE gp.email IS NOT NULL
+       ORDER BY contact_candidate.priority ASC, gp.updated_at DESC NULLS LAST
+       LIMIT 1
+     ) AS email_destination ON true
      ORDER BY due_bookings.booking_start_at ASC, due_bookings.booking_reference ASC`,
     [
       stringParameter('windowStartAt', windowStartAt),
       stringParameter('windowEndAt', windowEndAt),
       stringParameter('recentSinceAt', recentSinceAt),
       stringParameter('messageTemplate', CHECKIN_SMS_TEMPLATE),
+      stringParameter('emailMessageTemplate', CHECKIN_EMAIL_TEMPLATE),
     ],
   );
 
-  return mappedRows(result).map(mapDueSmsBookingRow);
+  return mappedRows(result).map(mapDueMessagingBookingRow);
 }
 
-async function planDueSmsCandidate({ candidate, request, window }) {
+function planDueMessageCandidate({ candidate, channel, context, decision, request, window }) {
+  const destination = candidate.destinations[channel] ?? null;
+  const alreadySentRecently = candidate.alreadySentRecently[channel] === true;
   const base = {
     action: request.confirmSend ? 'send_ready' : 'planned',
     bookingDate: candidate.bookingDate,
     bookingReference: candidate.bookingReference,
     bookingStartAt: candidate.bookingStartAt,
-    destinationMasked: candidate.destination?.masked ?? null,
+    channel,
+    destinationMasked: destination?.masked ?? null,
     rollerUniqueId: candidate.rollerUniqueId,
     startTime: candidate.startTime,
   };
 
-  if (!candidate.destination) {
+  if (!destination) {
     return {
       ...base,
       action: 'skipped',
-      reason: 'sms_destination_missing',
+      reason: `${channel}_destination_missing`,
     };
   }
 
-  if (candidate.alreadySentRecently) {
+  if (alreadySentRecently) {
     return {
       ...base,
       action: 'skipped',
-      reason: 'sms_already_sent_recently',
+      reason: `${channel}_already_sent_recently`,
     };
   }
 
-  const context = await getBookingContext(candidate.bookingReference);
   if (!context) {
     return {
       ...base,
@@ -1743,10 +1862,6 @@ async function planDueSmsCandidate({ candidate, request, window }) {
     };
   }
 
-  const decision = evaluateStartContext(context, {
-    expectedDate: candidate.bookingDate,
-    ticketIds: [],
-  });
   if (!decision.canStart) {
     return {
       ...base,
@@ -1757,10 +1872,42 @@ async function planDueSmsCandidate({ candidate, request, window }) {
 
   return {
     ...base,
-    idempotencyKeyPrefix: createDueSmsIdempotencyKey(window, candidate).slice(0, 32),
+    idempotencyKeyPrefix: createDueMessageIdempotencyKey(window, candidate, channel).slice(0, 32),
     reason: request.confirmSend ? 'ready_to_send' : 'ready_to_plan',
     ticketCount: decision.selectedTicketIds.length,
   };
+}
+
+async function sendDueMessageChannel(event, { candidate, channel, correlationId, options, request, window }) {
+  const baseRequest = {
+    bookingReference: candidate.bookingReference,
+    confirmSend: true,
+    dryRun: false,
+    idempotencyKey: createDueMessageIdempotencyKey(window, candidate, channel),
+    ttlMinutes: request.ttlMinutes,
+  };
+
+  if (channel === 'sms') {
+    return handleSendSessionLinkSms(
+      event,
+      {
+        ...baseRequest,
+        baseUrl: request.smsBaseUrl,
+      },
+      correlationId,
+      options,
+    );
+  }
+
+  return handleSendSessionLinkEmail(
+    event,
+    {
+      ...baseRequest,
+      baseUrl: request.emailBaseUrl,
+    },
+    correlationId,
+    options,
+  );
 }
 
 async function findReadyStaffSessions(request) {
@@ -2867,33 +3014,46 @@ function mapSessionRow(row) {
   };
 }
 
-function mapDueSmsBookingRow(row) {
-  const destination = buildSmsDestination(row.contact_number, 'guest_profile');
+function mapDueMessagingBookingRow(row) {
+  const smsDestination = buildSmsDestination(row.sms_contact_number, 'guest_profile');
+  const emailDestination = buildEmailDestination(row.email, 'guest_profile');
 
   return {
-    alreadySentRecently: Boolean(row.already_sent_recently),
+    alreadySentRecently: {
+      email: Boolean(row.email_already_sent_recently),
+      sms: Boolean(row.sms_already_sent_recently),
+    },
     amountOwingCents: numberOrNull(row.amount_owing_cents),
     bookingDate: stringOrNull(row.booking_date),
     bookingReference: stringOrNull(row.booking_reference),
     bookingStartAt: stringOrNull(row.booking_start_at),
     bookingStatus: stringOrNull(row.booking_status),
-    destination: destination
-      ? {
-          ...destination,
-          hash: stringOrNull(row.contact_number_hash) || destination.hash,
-          masked: stringOrNull(row.contact_number_masked) || destination.masked,
-        }
-      : null,
+    destinations: {
+      email: emailDestination
+        ? {
+            ...emailDestination,
+            hash: stringOrNull(row.email_hash) || emailDestination.hash,
+            masked: stringOrNull(row.email_masked) || emailDestination.masked,
+          }
+        : null,
+      sms: smsDestination
+        ? {
+            ...smsDestination,
+            hash: stringOrNull(row.sms_contact_number_hash) || smsDestination.hash,
+            masked: stringOrNull(row.sms_contact_number_masked) || smsDestination.masked,
+          }
+        : null,
+    },
     paymentStatus: stringOrNull(row.payment_status),
     rollerUniqueId: stringOrNull(row.roller_unique_id),
     startTime: stringOrNull(row.start_time),
   };
 }
 
-function mapDueSmsSendResponse(candidate, sendResponse, plannedItem) {
+function mapDueMessageSendResponse(channel, candidate, sendResponse, plannedItem) {
   const body = parseJsonObject(sendResponse?.body);
   const success = Number(sendResponse?.statusCode) >= 200 && Number(sendResponse?.statusCode) < 300;
-  const sms = body.sms ?? {};
+  const delivery = body[channel] ?? {};
 
   if (!success) {
     return {
@@ -2905,66 +3065,98 @@ function mapDueSmsSendResponse(candidate, sendResponse, plannedItem) {
   }
 
   return {
-    action: body.status === 'sms_sent' ? 'sent' : 'planned',
+    action: body.status === `${channel}_sent` ? 'sent' : 'planned',
     bookingDate: candidate.bookingDate,
     bookingReference: candidate.bookingReference,
     bookingStartAt: candidate.bookingStartAt,
-    deliveryId: stringOrNull(sms.deliveryId),
-    destinationMasked: stringOrNull(sms.destinationMasked) || candidate.destination?.masked || null,
-    provider: stringOrNull(sms.provider),
-    providerMessageIdPresent: Boolean(sms.providerMessageId),
-    reason: body.status === 'sms_sent' ? 'sent' : 'planned',
+    channel,
+    deliveryId: stringOrNull(delivery.deliveryId),
+    destinationMasked: stringOrNull(delivery.destinationMasked) || candidate.destinations[channel]?.masked || null,
+    fromAddressConfigured: delivery.fromAddressConfigured === true ? true : undefined,
+    provider: stringOrNull(delivery.provider),
+    providerMessageIdPresent: Boolean(delivery.providerMessageId),
+    reason: body.status === `${channel}_sent` ? 'sent' : 'planned',
+    replyToConfigured: delivery.replyToConfigured === true ? true : undefined,
     rollerUniqueId: candidate.rollerUniqueId,
-    senderIdConfigured: sms.senderIdConfigured === true,
-    senderIdRequested: sms.senderIdRequested === true,
+    senderIdConfigured: delivery.senderIdConfigured === true ? true : undefined,
+    senderIdRequested: delivery.senderIdRequested === true ? true : undefined,
     startTime: candidate.startTime,
   };
 }
 
-function summarizeDueSmsItems(items) {
-  return items.reduce(
+function summarizeDueMessageItems(items) {
+  const summary = items.reduce(
     (summary, item) => {
       summary.total += 1;
       if (item.action === 'planned' || item.action === 'send_ready') summary.planned += 1;
       if (item.action === 'sent') summary.sent += 1;
       if (item.action === 'skipped') summary.skipped += 1;
       if (item.action === 'failed') summary.failed += 1;
+      if (summary.byChannel[item.channel]) {
+        summary.byChannel[item.channel].total += 1;
+        if (item.action === 'planned' || item.action === 'send_ready') summary.byChannel[item.channel].planned += 1;
+        if (item.action === 'sent') summary.byChannel[item.channel].sent += 1;
+        if (item.action === 'skipped') summary.byChannel[item.channel].skipped += 1;
+        if (item.action === 'failed') summary.byChannel[item.channel].failed += 1;
+      }
       return summary;
     },
-    { failed: 0, planned: 0, sent: 0, skipped: 0, total: 0 },
+    {
+      byChannel: {
+        email: { failed: 0, planned: 0, sent: 0, skipped: 0, total: 0 },
+        sms: { failed: 0, planned: 0, sent: 0, skipped: 0, total: 0 },
+      },
+      failed: 0,
+      planned: 0,
+      sent: 0,
+      skipped: 0,
+      total: 0,
+    },
   );
+
+  return summary;
 }
 
 function createDueSmsIdempotencyKey(window, candidate) {
+  return createDueMessageIdempotencyKey(window, candidate, 'sms');
+}
+
+function createDueMessageIdempotencyKey(window, candidate, channel) {
+  const destination = candidate.destinations?.[channel] ?? candidate.destination ?? null;
   const seed = [
-    'booking-time-sms',
+    `booking-time-${channel}`,
     window.start.toISOString(),
     window.end.toISOString(),
     candidate.bookingReference,
-    candidate.destination?.hash?.slice(0, 16) || 'no-destination',
+    destination?.hash?.slice(0, 16) || 'no-destination',
   ].join(':');
 
-  return `booking-time-sms:${hashString(seed).slice(0, 48)}`;
+  return `booking-time-${channel}:${hashString(seed).slice(0, 48)}`;
 }
 
-function isScheduledDueSessionLinkSmsEvent(event) {
+function isScheduledDueSessionLinkMessagingEvent(event) {
+  const trigger = stringOrNull(event?.detail?.trigger);
   return (
-    stringOrNull(event?.source) === 'jumpyard.booking-time-sms-scheduler' &&
-    stringOrNull(event?.detail?.trigger) === 'scheduled_booking_time_sms'
+    ['jumpyard.booking-time-sms-scheduler', 'jumpyard.booking-time-messaging-scheduler'].includes(
+      stringOrNull(event?.source),
+    ) && ['scheduled_booking_time_sms', 'scheduled_booking_time_messaging'].includes(trigger)
   );
 }
 
-function normalizeScheduledDueSessionLinkSmsBody(event) {
+function normalizeScheduledDueSessionLinkMessagingBody(event) {
   const detail = event?.detail ?? {};
 
   return {
     baseUrl: stringOrNull(detail.baseUrl) || DEFAULT_SMS_BASE_URL,
+    channels: detail.channels,
     confirmedSendApproval: stringOrNull(detail.confirmedSendApproval),
     confirmSend: booleanFromValue(detail.confirmSend),
     correlationId: stringOrNull(event?.id) ? `eventbridge:${event.id}` : null,
+    emailBaseUrl: stringOrNull(detail.emailBaseUrl) || DEFAULT_EMAIL_BASE_URL,
     leadMinutes: detail.leadMinutes,
     limit: detail.limit,
     now: stringOrNull(detail.now),
+    smsBaseUrl: stringOrNull(detail.smsBaseUrl) || DEFAULT_SMS_BASE_URL,
     ttlMinutes: detail.ttlMinutes,
     windowEndAt: stringOrNull(detail.windowEndAt),
     windowMinutes: detail.windowMinutes,
@@ -3045,6 +3237,13 @@ function isSendDueSessionLinkSmsRoute(routeKey, event) {
   );
 }
 
+function isSendDueSessionLinkMessagesRoute(routeKey, event) {
+  return (
+    routeKey === 'POST /v1/check-in/session-links/send-due-messages' ||
+    event?.rawPath === '/v1/check-in/session-links/send-due-messages'
+  );
+}
+
 function isResolveSessionLinkRoute(routeKey, event) {
   return (
     routeKey === 'POST /v1/check-in/session-links/resolve' ||
@@ -3103,6 +3302,18 @@ function normalizeSafetyStatus(value) {
 
 function normalizeSessionLinkChannel(value) {
   return stringOrNull(value)?.toLowerCase() || 'sms';
+}
+
+function normalizeDueMessageChannels(value) {
+  const rawValues = Array.isArray(value)
+    ? value
+    : stringOrNull(value)
+      ? stringOrNull(value)
+          .split(',')
+          .map((entry) => entry.trim())
+      : ['sms', 'email'];
+
+  return [...new Set(rawValues.map((entry) => stringOrNull(entry)?.toLowerCase()).filter(Boolean))];
 }
 
 function normalizeTtlMinutes(ttlMinutesValue, ttlHoursValue) {
@@ -3166,11 +3377,14 @@ function buildDueSmsWindow(request) {
 function buildDueSmsTriggerSummary(request, window, blocked) {
   return {
     baseUrlConfigured: Boolean(request.baseUrl),
+    channels: request.channels,
     confirmSend: request.confirmSend,
     confirmedScheduledSend: request.confirmedSendApproval === SCHEDULED_SMS_CONFIRMED_SEND_APPROVAL,
     dryRun: blocked || !request.confirmSend,
+    emailBaseUrlConfigured: Boolean(request.emailBaseUrl),
     leadMinutes: request.leadMinutes,
     limit: request.limit,
+    smsBaseUrlConfigured: Boolean(request.smsBaseUrl),
     timezone: SMS_TRIGGER_TIME_ZONE,
     windowEndAt: window.end.toISOString(),
     windowMinutes: request.windowMinutes,

@@ -363,19 +363,22 @@ export class JumpYardCloudStack extends Stack {
       new events.Rule(this, 'BookingTimeSmsScheduleRule', {
         ruleName: `${config.resourcePrefix}-booking-time-sms-schedule`,
         description:
-          'Runs the dev booking-time SMS trigger on a fixed cadence. Real sends require config confirmation and a public HTTPS check-in URL.',
+          'Runs the dev booking-time guest messaging trigger on a fixed cadence. Real sends require config confirmation and a public HTTPS check-in URL.',
         schedule: events.Schedule.rate(Duration.minutes(config.bookingTimeSms.rateMinutes)),
         targets: [
           new targets.LambdaFunction(sessionHandler, {
             event: events.RuleTargetInput.fromObject({
-              source: 'jumpyard.booking-time-sms-scheduler',
+              source: 'jumpyard.booking-time-messaging-scheduler',
               detail: {
                 baseUrl: config.bookingTimeSms.checkinBaseUrl,
+                channels: ['sms', 'email'],
                 confirmSend: config.bookingTimeSms.confirmSend,
                 confirmedSendApproval: config.bookingTimeSms.confirmedSendApproval,
+                emailBaseUrl: config.guestEmail.checkinBaseUrl,
                 leadMinutes: config.bookingTimeSms.leadMinutes,
                 limit: config.bookingTimeSms.limit,
-                trigger: 'scheduled_booking_time_sms',
+                smsBaseUrl: config.bookingTimeSms.checkinBaseUrl,
+                trigger: 'scheduled_booking_time_messaging',
                 windowMinutes: config.bookingTimeSms.windowMinutes,
               },
             }),
@@ -391,6 +394,7 @@ export class JumpYardCloudStack extends Stack {
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-sms');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-email');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-due-sms');
+    this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-due-messages');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/resolve');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions');
     this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff');

@@ -1,15 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0067
+T0068
 
 ## Goal
-Run the first real SES-backed dev email smoke for a JumpYard check-in link, using the approved test address `love@wrlds.com`.
+Unify booking-time guest messaging so one server-side processor can plan and send both SMS and email check-in links before the booked jump time.
 
 ## Dependencies
-- T0063 added the protected email link route, Aurora `email_deliveries`, SES-ready send code, and dry-run preview.
-- T0066 confirmed email dry-run/audit behavior and failed closed when no SES sender identity existed.
-- User approved `love@wrlds.com` as the test email address for T0067.
+- T0045 added booking-time SMS planning.
+- T0046/T0049 added the dev EventBridge schedule in safe planning mode.
+- T0065 confirmed manual protected SMS delivery to the verified SNS sandbox phone.
+- T0067 confirmed real SES-backed dev email delivery from verified sender `love@wrlds.com`.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,18 +20,18 @@ Run the first real SES-backed dev email smoke for a JumpYard check-in link, usin
 - FOLLOWUPS.md
 - AWS_RESOURCES.md
 - TEST_PLAN.md
-- infra/config/dev.json, only if the SES email identity is verified and a dev sender/reply-to config is required for the smoke
+- infra/lambda/session/index.js
+- infra/lib/jumpyard-cloud-stack.ts
 
 ## Do not touch
 - Phone UI design
 - Admin UI design
-- Aurora migrations
-- Lambda business logic unless the smoke exposes a ticket-scoped blocker
-- Package dependencies
-- Roller payment flow
+- Payment flow
 - Redeem flow
-- Webhook registration
+- Roller webhook registration
 - Data API importer behavior
+- Aurora migrations
+- Package dependencies
 - Production credentials
 - Live Roller config
 - `.env`
@@ -38,64 +39,70 @@ Run the first real SES-backed dev email smoke for a JumpYard check-in link, usin
 
 ## Requirements
 
-1. Verify AWS and SES state.
-   - Confirm AWS account `376129878018` and region `eu-north-1`.
-   - Confirm SES account sending status and sandbox/production status.
-   - Check whether `love@wrlds.com` is an SES identity.
+1. Add a unified booking-time messaging processor.
+   - It must use the same Aurora due-booking window as the existing booking-time SMS path.
+   - It must support channels `sms`, `email`, or both.
+   - It must keep the legacy `send-due-sms` route working for SMS-only compatibility.
 
-2. Create or verify the dev SES email identity if needed.
-   - Use only the user-approved address `love@wrlds.com`.
-   - Apply WRLDS tags if an SES identity is created.
-   - Do not attempt sandbox exit.
-   - Do not create a production domain identity.
+2. Add a protected unified route.
+   - Add `POST /v1/check-in/session-links/send-due-messages`.
+   - Require the same check-in link dev token for public/manual calls.
+   - Return safe booking metadata, channel status, and masked destinations only.
+   - Never return raw check-in tokens, full check-in URLs, full phone numbers, full email addresses, secrets, or raw message bodies.
 
-3. Configure dev sender only after identity verification.
-   - Use `love@wrlds.com` as the dev sender/reply-to only after SES reports the identity as verified.
-   - Deploy only the required dev config/session Lambda environment change.
+3. Reuse the existing channel senders.
+   - SMS must reuse the audited `send-sms` path and `jumpyard.sms_deliveries`.
+   - Email must reuse the audited `send-email` path and `jumpyard.email_deliveries`.
+   - Both channels must keep existing dry-run-first behavior and duplicate/recent-send guards.
 
-4. Run a real protected email smoke when SES verification is complete.
-   - Use booking `5063420` unless a safer current booking is required.
-   - Use public base URL `https://jumpyard-check-in.pages.dev/`.
-   - Send to `love@wrlds.com`.
-   - Keep the request protected by the check-in link dev token.
-   - Do not print raw check-in tokens, full links, secrets, or raw email body.
-   - Confirm `jumpyard.email_deliveries` records a sent row.
+4. Update the dev schedule safely.
+   - The existing EventBridge schedule may invoke the unified processor with both `sms` and `email`.
+   - Dev config must remain planning-only with `confirmSend=false`.
+   - Scheduled confirmed sends must still fail closed unless the explicit approval phrase and public HTTPS app URLs are configured.
 
-5. If verification is still pending, stop safely.
-   - Document that T0067 is blocked on clicking the SES verification email.
-   - Do not configure a sender or attempt a confirmed send while identity status is pending.
+5. Deploy and smoke test in dev.
+   - Verify AWS account `376129878018` and region `eu-north-1`.
+   - Deploy only the route/session Lambda/EventBridge payload changes.
+   - Run a protected planning smoke through the new unified route.
+   - Run an internal scheduled-event planning smoke without a public dev token.
+   - Confirm the legacy SMS route still works.
 
 6. Update source-of-truth docs.
-   - Document SES identity status and any smoke result.
-   - Keep production blockers separate from dev smoke: domain sender, SES sandbox/recipient policy, consent/unsubscribe, branding, and unified booking-time messaging.
+   - Document that T0068 unifies SMS and email orchestration.
+   - Keep production blockers separate: SNS sandbox exit, SES production sender/domain, consent/unsubscribe, sender branding, and production environment cutover.
 
 ## Non-goals
-- Do not enable unattended scheduled email sends.
-- Do not implement unified booking-time SMS+email orchestration in T0067.
-- Do not exit SES sandbox.
+- Do not enable unattended real SMS or email sends.
+- Do not exit SNS or SES sandbox.
 - Do not create staging or production AWS resources.
-- Do not change SMS scheduling behavior.
+- Do not change message copy beyond what is needed for the unified processor.
 - Do not write to Roller Live/production.
 - Do not change payment, redeem, webhook, or Data API behavior.
 
 ## Acceptance criteria
-- AWS account and region are verified.
-- SES identity `love@wrlds.com` exists and its verification state is documented.
-- If verified, dev config uses the verified address, deploy succeeds, and a confirmed email smoke is accepted by SES.
-- If pending, T0067 is safely blocked with clear next action.
-- No raw token/full URL/full email body/secrets are printed or committed.
+- `POST /v1/check-in/session-links/send-due-messages` exists in dev.
+- The new route plans both SMS and email channels from one due-booking processor.
+- The existing `send-due-sms` route still returns the SMS-only response shape.
+- EventBridge invokes the unified processor with both channels but remains planning-only in dev.
+- No raw token/full URL/full message body/secrets/full contact values are returned or logged intentionally.
+- `node --check infra/lambda/session/index.js` passes.
+- `npm --prefix infra run build` passes.
+- `npm --prefix infra run synth:dev` passes.
+- Post-deploy `cdk diff` shows no differences.
 - `npm run validate` passes.
 - `git diff --check` passes.
 
 ## Manual verification
-Open the AWS SES verification email sent to `love@wrlds.com` and click the verification link before expecting a real email smoke to pass.
+Use the protected unified route in planning mode for a known Playground booking-time window and confirm the response shows separate channel rows for `sms` and `email`.
 
 ## Automated validation
 Run:
 - aws sts get-caller-identity --profile wrlds-dev
-- aws sesv2 get-email-identity --email-identity love@wrlds.com --profile wrlds-dev --region eu-north-1
-- npm --prefix infra run build, if dev config changes
-- npm --prefix infra run synth:dev, if dev config changes
-- npm --prefix infra run deploy:dev, if dev config changes and AWS credentials are available
+- aws configure get region --profile wrlds-dev
+- node --check infra/lambda/session/index.js
+- npm --prefix infra run build
+- npm --prefix infra run synth:dev
+- npm --prefix infra run diff:dev
+- npm --prefix infra run deploy:dev
 - npm run validate
 - git diff --check
