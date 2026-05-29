@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-29
-- Current branch: `codex/t0069-stabilization-roadmap`
-- Current status: T0069 locks the next roadmap so SMS/email, data sync, webhook, check-in, staff handoff/redeem, and add-product flows are verified together before broader staging/live production-readiness implementation.
-- Current ticket: `T0069` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`
-- Recommended next step: run T0070 integrated dev smoke test before starting production-readiness implementation.
+- Current branch: `codex/t0070-integrated-dev-smoke`
+- Current status: T0070 integrated dev smoke passed for the existing-booking check-in path and is awaiting review/commit.
+- Current ticket: `T0070` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`
+- Recommended next step: run T0071 Data API and webhook health verification.
 
 ## Current Structure
 
@@ -201,18 +201,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0067` | Ran first real SES-backed dev email smoke. | 2026-05-28 | SES identity `love@wrlds.com` is verified and tagged; dev config uses it as sender/reply-to; protected confirmed email smoke for booking `5063420` wrote sent Aurora rows and SES provider message ids. |
 | `T0068` | Unified booking-time guest messaging. | 2026-05-29 | Merged through PR #70; adds `POST /v1/check-in/session-links/send-due-messages`, keeps `send-due-sms` as SMS-only compatibility, and changes the dev EventBridge booking-time payload to plan both SMS and email from one processor without enabling real unattended sends. |
 | `T0069` | Locked the stabilization roadmap. | 2026-05-29 | Docs-only ticket; keeps full dev-flow proof, Data API/webhook checks, and guest SMS/email verification ahead of broader staging/live readiness work. |
+| `T0070` | Ran integrated dev smoke test. | 2026-05-29 | Fresh paid Playground booking `5100836` completed lookup, session start, ready-for-staff, staff auth/detail, staff-confirmed redeem, and local completed session/ticket state. A leftover retry session for `5100835` was redeemed as cleanup. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0069` | Stabilization roadmap before production readiness. | Completed locally, not committed | Docs-only lock: T0070-T0074 verify the system together before staging/live cutover, runbooks, auth/WAF, retention, and live backfill work. |
+| `T0070` | Integrated dev smoke test. | Completed locally, not committed | Verification-only ticket. The main existing-booking check-in path passed end to end in dev/Playground; no app/Lambda/CDK behavior changed. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0070` | Integrated dev smoke test | Prove the happy path together in dev/Playground: lookup, Aurora state, session resume, safety, staff handoff, staff redeem, and final Aurora/Roller state. |
 | `T0071` | Data API and webhook health verification | Confirm daily Data API sync health, manual backfill expectations, webhook-created/updated booking enrichment, Aurora freshness, and failure visibility before relying on automation. |
 | `T0072` | Guest SMS/email sender readiness | Decide and verify the practical dev-to-production sender path: SNS sandbox/exit or provider policy, SES sender/domain, sender branding, reply-to, consent/unsubscribe copy, and right-sender checks. |
 | `T0073` | Unified booking-time message smoke | Run controlled due-booking SMS plus email smoke through the unified processor using approved test destinations, public URLs, correct sender diagnostics, Aurora audit rows, and provider status checks. |
@@ -227,6 +227,10 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Validation Status
 
+- T0070 integrated smoke: fresh paid Roller Playground booking `5100836` for `2026-05-29 10:30` looked up through JumpYard Cloud as `found/ready` from `aurora:booking_reference`, started session `jycs_mpqo1mlo_177e4e06`, marked handoff `JY2024` ready for staff, staff-authenticated, staff-confirm redeemed one ticket, and final staff detail showed session `redeemed`, handoff `completed`, and one local redeemed ticket.
+- T0070 cleanup: earlier retry session `jycs_mpqo02zt_3e4329f9` for booking `5100835` was staff-redeemed as cleanup; the staff ready list then returned count `0`.
+- T0070 observation: Roller `GET /bookings/5100836` returned HTTP `200` after redeem, but the booking-detail ticket object did not expose a clear redeemed status field. The authoritative Roller write was the successful staff-confirmed `POST /redemptions` path, and local Aurora staff detail reflected the redeemed state.
+- T0070 final validation: `npm run validate` and `git diff --check` passed on 2026-05-29; `git diff --check` reported CRLF line-ending notices only.
 - T0069 docs validation: `npm run validate` and `git diff --check` passed on 2026-05-29; `git diff --check` reported CRLF line-ending notices only.
 - T0068 syntax/build/synth: `node --check infra/lambda/session/index.js`, `npm --prefix infra run build`, and `npm --prefix infra run synth:dev` passed on 2026-05-28.
 - T0068 AWS preflight/deploy: account `376129878018` and region `eu-north-1` were verified. CDK diff showed only the new `send-due-messages` route, session Lambda code asset, and EventBridge booking-time payload/description changes; deploy passed and post-deploy diff showed no differences.

@@ -552,6 +552,8 @@ T0068 unifies booking-time guest messaging. JumpYard Cloud now has a protected `
 
 T0069 locks the next roadmap before broader staging/live readiness work. The team should first prove the current dev/Playground system as one integrated flow: Data API refresh, webhook enrichment, Aurora freshness, guest SMS/email messaging, phone check-in, staff handoff/redeem, and add-product/payment behavior. Environment/cutover, alarm runbooks, production auth/WAF, retention, deployment rollback, and live backfill remain required, but they should follow the stabilization tickets rather than starting immediately after T0068.
 
+T0070 runs the first post-roadmap integrated dev smoke for the existing-booking check-in path. A fresh paid Roller Playground booking `5100836` for `2026-05-29` was created, found through JumpYard Cloud lookup from Aurora, started as a check-in session `jycs_mpqo1mlo_177e4e06`, marked `ready_for_staff`, staff-authenticated, staff-confirm redeemed, and ended with local session status `redeemed`, handoff status `completed`, and one local redeemed ticket. A leftover smoke retry session for booking `5100835` was also staff-redeemed as cleanup, leaving the staff ready list empty.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
