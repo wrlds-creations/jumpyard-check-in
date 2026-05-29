@@ -759,6 +759,23 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs validate after T0069 updates. | Passed | `npm run validate` passed on 2026-05-29. |
 | Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-29; output contains Git line-ending notices only. |
 
+## T0070 Integrated Dev Smoke Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Fresh Playground booking | Create a scoped paid Playground booking for today's smoke. | Passed | Created booking `5100836` for `2026-05-29 10:30`, Roller unique id `4b1cc599-e36e-4d39-848d-56f8fd65e617`, without printing secrets, raw tokens, full phone, or full email. |
+| JumpYard lookup | Lookup returns found and ready through JumpYard Cloud. | Passed | `POST /v1/check-in/lookup` returned `found`, eligibility reason `ready`, source `jumpyard_cloud`, and lookup path `aurora:booking_reference`. |
+| Session start | Check-in session starts or resumes for the booking. | Passed | `POST /v1/check-in/sessions` returned session `jycs_mpqo1mlo_177e4e06` with one selected redeemable ticket. |
+| Ready for staff | Guest safety handoff can mark the session ready. | Passed | `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff` returned handoff `JY2024` with status `ready_for_staff`. |
+| Staff auth and detail | Staff auth works and can read the session detail. | Passed | `POST /v1/staff/auth/login` authenticated with the current dev staff passcode, and staff detail returned the same session. |
+| Staff-confirmed redeem | Staff-confirmed redeem succeeds for selected redeemable tickets. | Passed | `POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem` returned `redeemed` with one redeemed ticket. |
+| Aurora final state | Local session and selected tickets reflect completion. | Passed | Final staff detail returned session status `redeemed`, handoff status `completed`, and one local ticket with redeemed status. |
+| Roller post-redeem read | Roller booking detail remains readable after redeem. | Partial | `GET /bookings/5100836` returned HTTP `200`, but the returned ticket object exposed only `ticketId` plus location data, not a clear redeemed status field. Follow-up `FU-066` tracks the best Roller-side verification path. |
+| Cleanup | No retry smoke session remains waiting in staff list. | Passed | Earlier retry session `jycs_mpqo02zt_3e4329f9` for booking `5100835` was staff-redeemed as cleanup; staff ready list returned count `0`. |
+| Implementation scope | T0070 does not change runtime behavior. | Passed | Only source-of-truth docs were updated; no app code, Lambda code, CDK code, migration, package dependency, secret, or AWS resource changed. |
+| Root validation | Source-of-truth docs validate after T0070 updates. | Passed | `npm run validate` passed on 2026-05-29. |
+| Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-29; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

@@ -110,6 +110,14 @@ T0068 unified booking-time messaging notes:
 - Deploy result: CDK deploy passed on 2026-05-28; post-deploy diff showed no differences.
 - Smokes: protected unified route, legacy SMS route, and direct scheduled-event invoke all returned planning-mode responses with masked destinations only.
 
+T0070 integrated dev smoke notes:
+
+- AWS resources changed: none.
+- Existing dev API Gateway, session Lambda, redeem Lambda, staff auth, Aurora tables, and Roller Playground integration were used without CDK, Lambda, migration, config, or secret changes.
+- Main smoke: fresh paid Playground booking `5100836` completed JumpYard Cloud lookup, session start, ready-for-staff handoff `JY2024`, staff auth, staff-confirmed redeem, and local completed session/ticket state.
+- Cleanup: retry booking/session `5100835` / `jycs_mpqo02zt_3e4329f9` was staff-redeemed so the staff ready list returned count `0`.
+- Roller writes: only scoped Playground booking creation and Playground ticket redemption for smoke data; no Roller Live/production writes.
+
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
 T0006 deploy notes:
