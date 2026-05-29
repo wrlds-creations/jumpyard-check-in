@@ -749,6 +749,16 @@ Use this file to define validation for the current project or milestone.
 | Scheduled event smoke | EventBridge-shaped payload runs internally without public dev-token auth. | Passed | Direct Lambda invoke with `scheduled_booking_time_messaging` returned planning results for `sms` and `email` with `confirmSend=false`. |
 | Real unattended sends | Schedule must not send real SMS or email in dev. | Passed | Dev EventBridge payload keeps `confirmSend=false`; no confirmed scheduled sends were enabled. |
 
+## T0069 Stabilization Roadmap Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Roadmap gate | Stabilization and full-flow proof appear before broader production-readiness tickets. | Passed | `REPO_CURRENT_STATE.md` puts T0070-T0074 before environment/cutover, runbooks, production auth/WAF, retention, and live backfill work. |
+| Follow-up ownership | Open follow-ups point to the reordered future tickets. | Passed | SMS/email follow-ups point to T0072/T0073; production-readiness follow-ups point to T0075-T0080. |
+| No implementation changes | T0069 changes source-of-truth docs only. | Passed | No app code, Lambda code, CDK resources, AWS config, Roller config, package dependencies, or credentials were changed. |
+| Root validation | Source-of-truth docs validate after T0069 updates. | Passed | `npm run validate` passed on 2026-05-29. |
+| Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-29; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
