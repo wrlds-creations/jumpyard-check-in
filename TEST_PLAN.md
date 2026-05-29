@@ -776,6 +776,24 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs validate after T0070 updates. | Passed | `npm run validate` passed on 2026-05-29. |
 | Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-29; output contains Git line-ending notices only. |
 
+## T0071 Data API And Webhook Health Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| AWS identity | Verify dev AWS target before inspection. | Passed | `aws sts get-caller-identity --profile wrlds-dev --region eu-north-1` returned account `376129878018`; region is `eu-north-1`. |
+| Scheduled Data API rule | Daily sync rule exists and is enabled. | Passed | `jumpyard-check-in-dev-data-api-daily-sync` is `ENABLED`, uses `cron(0 2 * * ? *)`, and targets `jumpyard-check-in-dev-stack-data-sync`. |
+| Latest scheduled run | Latest daily Data API run succeeded. | Passed | `booking_seed_runs` latest scheduled row for `2026-05-28 -> 2026-05-29` is `succeeded`, finished at `2026-05-29 02:00:38 UTC`, with 2 bookingitems, 2 tickets, 491 products, and no error summary. |
+| Prior failure visibility | Previous Data API failure is visible. | Passed | `booking_seed_runs` contains three `2026-05-26` failures for `2026-05-25 -> 2026-05-26` with safe error summary `HTTP 403`; current runs recovered after Roller API access was re-enabled. Follow-up `FU-067` tracks a runbook. |
+| Manual current-day sync | Manual dev-only sync can refresh today's modified window. | Passed | Invoked `jumpyard-check-in-dev-stack-data-sync` for `2026-05-29 -> 2026-05-30`; status `succeeded`, duration about 31 seconds, with 2 bookingitems, 2 tickets, 2 payments, 2 customers, 491 products, and 2 booking upserts. |
+| Aurora table health | Expected local snapshot tables contain rows. | Passed | Counts after sync: 23 bookings, 31 booking items, 38 tickets, 10 payments, 26 guest profiles, 13 seed runs, and 19 webhook events. |
+| Recent booking freshness | Recent smoke bookings have fresh local rows. | Passed | Bookings `5100835` and `5100836` are `Paid`, `fresh`, `source_last_updated_by=scheduled_data_api_sync`, each with 1 item, 1 ticket, and 1 payment row. |
+| Webhook processing | Recent real Roller webhook events are processed. | Passed | Booking `Created` events for `5100835` and `5100836` are `processed`, each with one enrichment attempt, processed timestamps, and no error summary. |
+| Lookup from Aurora | App lookup can use the fresh Aurora row. | Passed | `POST /v1/check-in/lookup` for `5100836` returned `found`, `ready`, source `jumpyard_cloud`, lookup path `aurora:booking_reference`, `freshnessStatus=fresh`, and `refreshedFromRoller=false`. |
+| Alarm state | Relevant dev alarms are not firing. | Passed | Data-sync Lambda errors/throttles, webhook Lambda errors/throttles, and Roller API error alarms are `OK`. |
+| Implementation scope | T0071 does not change runtime behavior. | Passed | No app code, Lambda code, CDK code, migration, package dependency, secret, or AWS resource changed. |
+| Root validation | Source-of-truth docs validate after T0071 updates. | Passed | `npm run validate` passed on 2026-05-29. |
+| Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-29; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

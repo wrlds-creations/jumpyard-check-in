@@ -118,6 +118,17 @@ T0070 integrated dev smoke notes:
 - Cleanup: retry booking/session `5100835` / `jycs_mpqo02zt_3e4329f9` was staff-redeemed so the staff ready list returned count `0`.
 - Roller writes: only scoped Playground booking creation and Playground ticket redemption for smoke data; no Roller Live/production writes.
 
+T0071 Data API and webhook health verification notes:
+
+- AWS resources changed: none.
+- Reviewed resources: EventBridge rule `jumpyard-check-in-dev-data-api-daily-sync`, Lambda `jumpyard-check-in-dev-stack-data-sync`, Aurora tables, webhook events, and CloudWatch alarms.
+- Schedule: the dev Data API rule is `ENABLED`, runs `cron(0 2 * * ? *)`, and targets the data-sync Lambda with input `{"source":"eventbridge.daily"}`.
+- Latest scheduled Data API run: `2026-05-28 -> 2026-05-29` succeeded at `2026-05-29 02:00 UTC` with 2 bookingitems, 2 tickets, 0 payments, 0 customers, 491 products, and 1 booking upsert.
+- Manual T0071 current-day sync: Lambda invoke for `2026-05-29 -> 2026-05-30` succeeded with 2 bookingitems, 2 tickets, 2 payments, 2 customers, 491 products, and 2 booking upserts.
+- Webhook health: recent Roller booking `Created` events for `5100835` and `5100836` are `processed` with one enrichment attempt and no error summary.
+- Aurora health: row counts after T0071 were 23 bookings, 31 booking items, 38 tickets, 10 payments, 26 guest profiles, 13 seed runs, and 19 webhook events.
+- Alarms reviewed: data-sync Lambda errors/throttles, webhook Lambda errors/throttles, and Roller API errors are `OK`.
+
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
 T0006 deploy notes:
