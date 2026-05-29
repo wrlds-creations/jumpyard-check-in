@@ -831,6 +831,22 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs validate after T0073 updates. | Passed | `npm run validate` passed on 2026-05-29. |
 | Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-29; output contains Git line-ending notices only. |
 
+## T0074 SMS Production Unlock Preparation Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| AWS identity | Verify dev AWS target before SMS production-readiness inspection. | Passed | `aws sts get-caller-identity --profile wrlds-dev --region eu-north-1` returned account `376129878018`; region is `eu-north-1`. |
+| SNS sandbox state | Confirm whether arbitrary guest phone numbers can receive SMS. | Passed with blocker | `aws sns get-sms-sandbox-account-status` returned `IsInSandbox=true`, so unverified guest phone numbers still cannot receive SMS. |
+| SNS SMS attributes | Confirm current SMS account attributes and diagnostics. | Passed | `DefaultSMSType=Transactional`, `MonthlySpendLimit=1`, `DeliveryStatusSuccessSamplingRate=100`, and delivery-status IAM role configured. No `DefaultSenderID` is set. |
+| End User Messaging tier | Confirm AWS End User Messaging SMS production access state. | Passed with blocker | `aws pinpoint-sms-voice-v2 describe-account-attributes` returned `ACCOUNT_TIER=SANDBOX`. |
+| Sender IDs and pools | Confirm whether sender-display resources already exist. | Passed with blocker | `describe-sender-ids` returned no sender IDs and `describe-pools` returned no pools. |
+| Official AWS docs review | Confirm production unlock path from primary sources. | Passed | Reviewed official AWS docs for SMS sandbox production access and AWS End User Messaging SMS production access; docs require a support request with use case, countries, app URL, opt-in/consent, message samples, and volume expectations. |
+| Support case draft | Prepare the request content without submitting it. | Passed | `PROJECT_CONTEXT.md` now contains a draft AWS Support request with placeholders for expected volume, peak rate, opt-out/support text, final copy, and approval to submit. |
+| Implementation scope | T0074 changes no runtime behavior. | Passed | No app code, Lambda code, CDK code, migration, package dependency, secret, AWS resource, or Roller config changed. |
+| Scheduled-send safety | T0074 does not enable unattended sends. | Passed | EventBridge booking-time messaging remains `confirmSend=false`; no support case or Sender ID registration was submitted. |
+| Root validation | Source-of-truth docs validate after T0074 updates. | Passed | `npm run validate` passed on 2026-05-29. |
+| Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-29; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

@@ -151,6 +151,16 @@ T0073 controlled unified booking-time message smoke notes:
 - Manual receipt result: the user confirmed both SMS and email arrived; current text is acceptable for now but should be polished before broader guest rollout.
 - Schedule safety: the EventBridge booking-time messaging rule still keeps `confirmSend=false`, so unattended scheduled sends remain disabled.
 
+T0074 SMS production unlock preparation notes:
+
+- AWS resources changed: none.
+- Read-only checks reviewed: AWS identity, SNS SMS sandbox status, SNS SMS attributes, AWS End User Messaging SMS account attributes, sender IDs, and pools.
+- Current SMS state: AWS account `376129878018`, region `eu-north-1`, SNS SMS sandbox `IsInSandbox=true`, AWS End User Messaging SMS `ACCOUNT_TIER=SANDBOX`, no End User Messaging sender IDs, and no End User Messaging pools.
+- SNS attributes: `DefaultSMSType=Transactional`, `MonthlySpendLimit=1`, `DeliveryStatusSuccessSamplingRate=100`, and delivery status role `jumpyard-check-in-dev-sns-sms-delivery-status`.
+- Official AWS production-access path: request production SMS access/sandbox exit through AWS Support with use case, website/app URL, countries, message type, opt-in/consent, sample messages, and volume/rate expectations.
+- Sender/display implication: T0074 prepares the sender/display goal `JumpYard`, but no Sender ID is registered or changed. Actual sender display remains dependent on AWS/provider approval and country support.
+- Safety: no AWS Support case was submitted, no sender resources were created, no SMS attributes were changed, and the booking-time EventBridge rule still keeps `confirmSend=false`.
+
 T0003 proposed the target JumpYard Cloud architecture only. T0004 added the CDK TypeScript foundation in `infra/`. T0005 defined the booking index ingestion contract only. T0006 deployed the foundation to AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-dev-stack`. T0007 added and applied the first Aurora schema migration.
 
 T0006 deploy notes:
