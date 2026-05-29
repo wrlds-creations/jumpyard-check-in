@@ -1,16 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0073
+T0074
 
 ## Goal
-Run a controlled unified booking-time SMS and email smoke test through the existing due-booking processor.
+Prepare the SMS production unlock path so real guest phone numbers can receive booking-time SMS without SNS sandbox pre-verification.
 
 ## Dependencies
-- T0072 completed.
+- T0073 completed and merged.
+- Controlled SMS delivery to the verified sandbox test phone was confirmed.
 - Dev AWS stack exists and targets Roller Playground.
-- A verified SNS sandbox test phone exists.
-- A verified SES dev test email identity exists.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -39,58 +38,60 @@ Run a controlled unified booking-time SMS and email smoke test through the exist
 
 ## Requirements
 
-1. Create or identify one scoped paid Roller Playground booking for today.
-   - Use the verified test phone and verified test email only.
-   - Do not print full phone numbers, full email addresses, raw tokens, access tokens, client secrets, or raw check-in links.
+1. Confirm current SMS production-readiness state with read-only checks.
+   - Confirm AWS account and region.
+   - Confirm SNS SMS sandbox state.
+   - Confirm AWS End User Messaging SMS account tier.
+   - Confirm whether sender IDs or pools already exist.
+   - Confirm current SMS spend and delivery diagnostic settings.
 
-2. Refresh Aurora with existing sync/webhook paths.
-   - Use the deployed Data API sync or existing webhook/lookup path as needed.
-   - Confirm the booking is visible to the due-message processor from Aurora.
+2. Review official AWS SMS production-access guidance.
+   - Use official AWS documentation only for current sandbox/production-access facts.
+   - Document the required AWS Support case inputs.
+   - Document Sweden sender ID support and sender-display implications.
 
-3. Run the unified booking-time message processor.
-   - First run planning mode with `confirmSend=false`.
-   - Then run one controlled confirmed send with `confirmSend=true`.
-   - Use public HTTPS check-in base URL `https://jumpyard-check-in.pages.dev/`.
-   - Keep the normal unattended EventBridge schedule in planning mode.
+3. Prepare the production unlock request package.
+   - Draft the AWS Support case content for sandbox exit.
+   - List the user/company inputs still needed before submission.
+   - Keep estimated volume, legal/business contact details, and final message copy as placeholders unless already confirmed.
 
-4. Verify safe delivery state.
-   - Confirm both SMS and email delivery audit rows exist in Aurora.
-   - Confirm provider message ids are stored.
-   - Check SMS provider delivery status if available.
-   - Document whether handset sender display still needs manual/user confirmation.
+4. Preserve safety.
+   - Do not submit an AWS Support case in this ticket.
+   - Do not request or register Sender IDs.
+   - Do not change account SMS attributes.
+   - Do not enable unattended scheduled sends.
+   - Do not create, change, deploy, or delete AWS resources.
 
 5. Update source-of-truth docs.
-   - Update `PROJECT_CONTEXT.md` with the controlled smoke result.
-   - Update `REPO_CURRENT_STATE.md` with T0073 status and next ticket.
-   - Update `TEST_PLAN.md` with the exact safe verification result.
-   - Update `AWS_RESOURCES.md` with meaningful AWS operational state.
-   - Update `FOLLOWUPS.md` for any remaining production-readiness gaps.
+   - Update `PROJECT_CONTEXT.md` with the SMS unlock plan.
+   - Update `DECISIONS.md` if a meaningful sender/unlock decision is made.
+   - Update `REPO_CURRENT_STATE.md` with T0074 status and next step.
+   - Update `TEST_PLAN.md` with the read-only validation result.
+   - Update `AWS_RESOURCES.md` with current SMS operational state.
+   - Update `FOLLOWUPS.md` with the remaining external/user actions.
 
 ## Non-goals
-- Do not enable unattended scheduled SMS or email sends.
-- Do not request SNS SMS sandbox exit.
-- Do not request SES production access.
-- Do not add or verify new sender identities.
-- Do not create, change, deploy, or delete AWS resources.
-- Do not change Lambda/app/CDK behavior.
-- Do not change SES identities, SNS sandbox numbers, sender IDs, domains, DKIM, or MAIL FROM.
+- Do not leave SNS SMS sandbox in this ticket.
+- Do not submit AWS Support cases.
+- Do not create or register a Sender ID.
+- Do not enable real unattended SMS or email sends.
+- Do not modify SMS/email message templates in code.
 - Do not test payment flows.
-- Do not create Roller Live/production data.
-- Do not implement fixes discovered during verification.
+- Do not write to Roller Live/production.
+- Do not create staging or production AWS resources.
 
 ## Acceptance criteria
-- A scoped today's Playground booking is used for the smoke.
-- Unified planning finds the booking for both SMS and email.
-- Controlled confirmed send processes both SMS and email.
-- Aurora audit rows show sent SMS and email with provider message ids.
-- SMS provider delivery status is checked if available.
-- No secrets, raw tokens, full URLs, full phone numbers, or full email addresses are printed or committed.
-- The normal EventBridge schedule remains `confirmSend=false`.
+- Current SMS sandbox and sender-resource state is known and documented.
+- AWS official production-access requirements are summarized with source links.
+- AWS Support case draft exists in source-of-truth docs.
+- Remaining user inputs are explicit.
+- Unattended scheduled sends remain disabled.
+- No AWS resources, Lambda code, CDK config, app code, or package dependencies were changed.
 - `npm run validate` passes.
 - `git diff --check` passes.
 
 ## Manual verification
-Confirm on the test phone and test mailbox whether the SMS and email were received and whether the SMS sender display looks acceptable. The machine validation can confirm provider acceptance, but handset display is still a user-visible check.
+Review the prepared AWS Support request content and confirm the missing business details, expected monthly SMS volume, final sender text, and whether WRLDS should submit the case now or wait.
 
 ## Automated validation
 Run:

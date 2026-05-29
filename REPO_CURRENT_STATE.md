@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-29
-- Current branch: `codex/t0073-booking-time-message-smoke`
-- Current status: T0073 controlled unified booking-time SMS/email smoke completed; docs are awaiting review/commit.
-- Current ticket: `T0073` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`
-- Recommended next step: run T0074 SMS production unlock.
+- Current branch: `codex/t0074-sms-production-unlock`
+- Current status: T0074 SMS production unlock preparation completed locally; docs are awaiting review/commit.
+- Current ticket: `T0074` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`
+- Recommended next step: confirm missing SMS production-access details, then run T0075 Email production unlock or submit the SMS support request when approved.
 
 ## Current Structure
 
@@ -205,18 +205,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0071` | Verified Data API and webhook health. | 2026-05-29 | Dev daily Data API rule is enabled and latest scheduled run succeeded; manual current-day sync succeeded; recent Roller webhook events for `5100835` and `5100836` are processed; lookup for `5100836` reads fresh Aurora data. |
 | `T0072` | Verified guest SMS/email sender readiness. | 2026-05-29 | SNS remains sandboxed with one verified test phone; SES remains sandboxed with only `love@wrlds.com` verified; schedule still runs unified SMS/email planning with `confirmSend=false`; unattended sends remain blocked. |
 | `T0073` | Ran controlled unified booking-time message smoke. | 2026-05-29 | Scoped Playground booking `5100877` was synced into Aurora; unified planning found SMS and email; controlled confirmed send wrote sent Aurora audit rows for both channels; SNS accepted the SMS, and the user confirmed SMS plus email receipt. |
+| `T0074` | Prepared SMS production unlock package. | 2026-05-29 | Read-only AWS checks confirmed SNS and AWS End User Messaging SMS remain sandboxed with no sender IDs or pools; docs now contain the AWS Support case draft and missing user inputs. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0073` | Controlled unified booking-time SMS/email smoke. | Completed locally, not committed | Verification-only ticket. The unified due-message processor planned and then sent both SMS and email for one approved test booking without changing runtime behavior or enabling unattended sends. |
+| `T0074` | SMS production unlock preparation. | Completed locally, not committed | Documentation/readiness ticket. Current SMS sandbox/sender state is known, AWS Support request content is drafted, and no production-access request or AWS change was submitted. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0074` | SMS production unlock | Work with the user on SNS sandbox exit or recipient policy, sender display/brand registration, consent text, and the exact AWS/provider steps needed so real guest phone numbers can receive booking-time SMS without pre-registration. |
 | `T0075` | Email production unlock | Work with the user on SES production access, production sender/domain choice, DKIM/SPF/DMARC/custom MAIL FROM as needed, reply-to/branding/consent/unsubscribe copy, and deliverability basics so real guest email addresses can receive booking-time email without pre-verification. |
 | `T0076` | Enable unattended booking-time sends | After SMS and email unlock gates pass, change dev/staging config deliberately from planning-only to confirmed scheduled sends, test a booking created with normal phone/email, and verify 30-minute-before delivery without manual triggering. |
 | `T0077` | Messaging monitoring and runbooks | Add channel-specific SMS/email alarms, delivery-failure dashboards, log retention decisions, and operator runbooks before unattended sends are treated as production-ready. |
@@ -227,6 +227,14 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Validation Status
 
+- T0074 AWS preflight: `aws sts get-caller-identity --profile wrlds-dev --region eu-north-1` returned account `376129878018`, and region is `eu-north-1`.
+- T0074 SNS sandbox state: `aws sns get-sms-sandbox-account-status` returned `IsInSandbox=true`; unverified guest phone numbers still cannot receive SMS.
+- T0074 SNS SMS attributes: `DefaultSMSType=Transactional`, `MonthlySpendLimit=1`, `DeliveryStatusSuccessSamplingRate=100`, and delivery-status IAM role are configured; no `DefaultSenderID` is set.
+- T0074 AWS End User Messaging SMS state: account tier is `SANDBOX`, and read-only checks found no sender IDs and no pools.
+- T0074 official docs review: AWS production SMS access requires a support request with use case, website/app URL, target countries, message type, opt-in/consent, sample message copy, and volume/rate expectations.
+- T0074 support package: `PROJECT_CONTEXT.md` contains a draft AWS Support case; user still needs to confirm expected monthly volume, peak rate, final transactional copy, opt-in/consent wording, opt-out/support wording, and approval to submit.
+- T0074 safety: no AWS Support case was submitted, no sender resources were created, no SMS attributes were changed, and EventBridge booking-time messaging remains `confirmSend=false`.
+- T0074 final validation: `npm run validate` and `git diff --check` passed on 2026-05-29; `git diff --check` reported CRLF line-ending notices only.
 - T0073 AWS preflight: `aws sts get-caller-identity --profile wrlds-dev --region eu-north-1` returned account `376129878018`, and region is `eu-north-1`.
 - T0073 scoped booking: created paid Roller Playground booking `5100877` for `2026-05-29 15:30` with approved test SMS/email destinations only.
 - T0073 Aurora refresh: manual Data API sync for `2026-05-29 -> 2026-05-30` succeeded with 4 bookingitems, 4 tickets, 4 payments, 5 customers, 491 products, and 4 booking upserts.

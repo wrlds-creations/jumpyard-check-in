@@ -560,7 +560,28 @@ T0072 verifies guest SMS/email sender readiness without changing AWS resources o
 
 T0073 proves the controlled unified booking-time guest message smoke. A scoped paid Roller Playground booking `5100877` for `2026-05-29 15:30` was created with only the verified test phone and verified dev email, then refreshed into Aurora by invoking the existing Data API sync for `2026-05-29 -> 2026-05-30`. The protected `POST /v1/check-in/session-links/send-due-messages` route first planned both channels and then processed one controlled `confirmSend=true` run with public base URL `https://jumpyard-check-in.pages.dev/`. Aurora recorded sent SMS delivery `jysms_mpqwyxay_e7fe6d3c` and sent email delivery `jyem_mpqwyxox_94ea00f5`, both with provider message ids present, and SNS delivery status reported `Message has been accepted by phone`. The user manually confirmed that both SMS and email arrived, and that the current message text is acceptable for now but needs copy polish before broader use. The normal EventBridge schedule remains planning-only with `confirmSend=false`; this does not unlock unattended sends to real guest phone/email yet.
 
-The post-T0073 guest messaging roadmap is locked in this order: T0074 unlocks SMS for real guest phone numbers by resolving SNS sandbox/sender policy and sender display; T0075 unlocks email for real guest addresses through SES production access and sender-domain deliverability setup; T0076 deliberately enables unattended 30-minute-before booking-time sends only after those gates pass; T0077 adds channel-specific monitoring and runbooks. Broader environment/cutover, production auth, retention, and live backfill work follows after this messaging gate.
+T0074 prepares the SMS production unlock path without changing AWS resources. Read-only checks confirmed AWS account `376129878018`, region `eu-north-1`, SNS SMS sandbox `IsInSandbox=true`, AWS End User Messaging SMS `ACCOUNT_TIER=SANDBOX`, no sender IDs, no pools, SNS transactional SMS, monthly spend limit `1`, and 100 percent SNS SMS delivery-status sampling. Official AWS docs require an AWS Support production-access/sandbox-exit request before sending to unverified guest numbers, and the AWS End User Messaging SMS country table lists Sweden as supporting Sender IDs. Primary sources reviewed: `https://docs.aws.amazon.com/sns/latest/dg/sns-sms-sandbox-moving-to-production.html`, `https://docs.aws.amazon.com/sms-voice/latest/userguide/getting-started.html`, `https://docs.aws.amazon.com/sms-voice/latest/userguide/sender-id-request.html`, and `https://docs.aws.amazon.com/sms-voice/latest/userguide/phone-numbers-sms-by-country.html`. The T0074 support-case draft should request transactional booking/check-in SMS for Sweden, public app URL `https://jumpyard-check-in.pages.dev/`, and sender/display goal `JumpYard`, but it still needs user-confirmed business details, estimated monthly volume, final message copy, opt-in/consent wording, and whether WRLDS submits now or waits. No support case is submitted in T0074, and scheduled guest messaging remains `confirmSend=false`.
+
+T0074 AWS Support case draft:
+
+```text
+Subject: Request production SMS access for JumpYard check-in transactional messages
+
+Account/Region: 376129878018, eu-north-1
+Use case: Transactional booking-time check-in reminders for JumpYard visitors. The guest has a Roller booking and receives a link to complete check-in before arrival.
+Application URL: https://jumpyard-check-in.pages.dev/
+Countries: Sweden first. Add other countries later only when approved.
+Message type: Transactional, not marketing.
+Sender/display goal: JumpYard where supported.
+Example SMS: Hej {firstName}, din hopptid börjar kl {time}. Checka in här: {secureLink}
+Opt-in/consent: Customer provides phone number as part of the booking/check-in process and receives operational service messages about that booking. Final wording to be confirmed.
+Opt-out/support: TBD before production rollout.
+Expected volume: TBD by JumpYard/WRLDS before submission.
+Peak rate: TBD by JumpYard/WRLDS before submission.
+Data handling: Links use opaque JumpYard Cloud tokens; no Roller credentials or raw guest data are exposed in the frontend.
+```
+
+The post-T0074 guest messaging roadmap is locked in this order: T0075 unlocks email for real guest addresses through SES production access and sender-domain deliverability setup; T0076 deliberately enables unattended 30-minute-before booking-time sends only after SMS and email gates pass; T0077 adds channel-specific monitoring and runbooks. Broader environment/cutover, production auth, retention, and live backfill work follows after this messaging gate.
 
 ## T0058 Production Readiness Matrix
 
@@ -571,7 +592,7 @@ The post-T0073 guest messaging roadmap is locked in this order: T0074 unlocks SM
 | Data storage, retention, and PII | Partial | Aurora is encrypted, deletion-protected, backed up for 7 days, and stores structured email/phone plus masks/hashes; S3 raw bucket is encrypted, versioned, retained, and has 30-day lifecycle. | Lock retention/deletion/export policy for PII, event logs, snapshots, and any raw payload/archive use. |
 | Public API exposure and auth | Partial | T0060 replaced wildcard CORS with explicit dev origins. T0061 added dev API Gateway stage throttling and 429 visibility. T0062 classifies every route boundary and documents the target live posture. API Gateway routes still have `AuthorizationType=NONE`; app-level tokens/staff auth protect only selected routes. | Implement the T0062 boundary with production auth, WAF or equivalent edge controls, route-specific limits, internal-only operations routes, and guest/staff public boundary rules. |
 | Webhook security and retries | Partial | Playground webhook id `238` uses `x-roller-apikey`; Lambda stores idempotent events and can enrich from Roller REST. | Confirm production auth/signature/IP allowlisting and decide whether enrichment must move async before live traffic. |
-| SMS/email readiness | In focus | EventBridge booking-time messaging schedule exists but dev config keeps `confirmSend=false`; SNS account is still sandboxed. T0065 confirmed manual SMS delivery to the verified sandbox phone using the public Cloudflare check-in URL. T0067 confirmed SES real-email delivery acceptance for verified dev identity `love@wrlds.com`. T0068 unified booking-time planning for SMS and email. T0072 confirmed SMS/email are still controlled-smoke ready only, not unattended-send ready. T0073 confirmed the unified due-message processor can send both SMS and email for one due booking to approved destinations. | Before visitor-facing unattended sends: SMS production still needs sandbox/recipient policy, actual sender display confirmation, consent/unsubscribe wording, and production sender decisions. Email production still needs a verified domain or production from-address, recipient/sandbox policy, final sender/reply-to/consent text, DKIM/custom MAIL FROM where appropriate, and deliverability work. |
+| SMS/email readiness | In focus | EventBridge booking-time messaging schedule exists but dev config keeps `confirmSend=false`; SNS account is still sandboxed. T0065 confirmed manual SMS delivery to the verified sandbox phone using the public Cloudflare check-in URL. T0067 confirmed SES real-email delivery acceptance for verified dev identity `love@wrlds.com`. T0068 unified booking-time planning for SMS and email. T0072 confirmed SMS/email are still controlled-smoke ready only, not unattended-send ready. T0073 confirmed the unified due-message processor can send both SMS and email for one due booking to approved destinations. T0074 prepares the SMS production-access support package but does not submit it. | Before visitor-facing unattended sends: SMS production still needs AWS production access/sandbox exit, sender-display confirmation, final transactional copy, consent/support wording, expected volume, and any sender ID/provider setup. Email production still needs a verified domain or production from-address, recipient/sandbox policy, final sender/reply-to/consent text, DKIM/custom MAIL FROM where appropriate, and deliverability work. |
 | Observability and alarms | Partial | T0060 added dashboard `jumpyard-check-in-dev-ops`, API/Lambda/DLQ/Roller API alarms, API Gateway access logs, and safe Roller outbound call metrics. T0061 added API throttling visibility and a 429 alarm. | Add notification routing, runbooks, Aurora health, scheduler-specific health, SMS failure metrics, webhook failure metrics, and production thresholds. |
 | Rollback, migration, and deployment safety | Partial | CDK synth/build works; Aurora migrations are versioned; dev deploys have been manual and scoped. | Add release/runbook, preflight gates, rollback/restore plan, CI/CD identity, migration backup policy, and post-deploy smoke checklist. |
 | Backfill, sync, and cutover | Partial | Daily Data API sync runs at `02:00 UTC`; manual backfill command exists; webhooks and lookup refresh update Aurora. | Define live backfill range, cutover order, webhook registration plan, freshness SLAs, and replay/reconciliation procedure. |
@@ -581,9 +602,9 @@ The post-T0073 guest messaging roadmap is locked in this order: T0074 unlocks SM
 
 - Do not build new app behavior or change UI files.
 - Do not fix Roller/Adyen card method configuration.
-- Do not enable real unattended SMS or email sends in T0073.
-- Do not create or verify more SES sender/domain identities in T0073.
-- Do not change payment, staff auth, redeem, webhook, or Data API behavior in T0073.
+- Do not enable real unattended SMS or email sends in T0074.
+- Do not submit AWS Support cases or request Sender IDs in T0074.
+- Do not change payment, staff auth, redeem, webhook, or Data API behavior in T0074.
 - Do not write to Roller Live/production.
 - Do not create staging or production AWS resources.
 
