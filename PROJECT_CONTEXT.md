@@ -554,6 +554,8 @@ T0069 locks the next roadmap before broader staging/live readiness work. The tea
 
 T0070 runs the first post-roadmap integrated dev smoke for the existing-booking check-in path. A fresh paid Roller Playground booking `5100836` for `2026-05-29` was created, found through JumpYard Cloud lookup from Aurora, started as a check-in session `jycs_mpqo1mlo_177e4e06`, marked `ready_for_staff`, staff-authenticated, staff-confirm redeemed, and ended with local session status `redeemed`, handoff status `completed`, and one local redeemed ticket. A leftover smoke retry session for booking `5100835` was also staff-redeemed as cleanup, leaving the staff ready list empty.
 
+T0071 verifies Data API and webhook health after the integrated smoke. The dev EventBridge rule `jumpyard-check-in-dev-data-api-daily-sync` is enabled at `02:00 UTC` and targets `jumpyard-check-in-dev-stack-data-sync`. The latest scheduled run for `2026-05-28 -> 2026-05-29` succeeded, a manual current-day sync for `2026-05-29 -> 2026-05-30` succeeded with bookingitems, tickets, payments, customers, and products, and Aurora shows bookings `5100835` and `5100836` as fresh with item/ticket/payment rows. Recent Roller Playground booking webhooks for those bookings are `processed`, and lookup for `5100836` is served from `jumpyard_cloud` via `aurora:booking_reference` without a Roller refresh.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
