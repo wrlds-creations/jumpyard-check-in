@@ -684,7 +684,7 @@ Use this file to define validation for the current project or milestone.
 
 | Scenario | Expected Result | Status | Notes |
 |---|---|---|---|
-| Roadmap order | Guest SMS, guest email, and unified guest messaging are listed before environment/cutover work. | Passed | `REPO_CURRENT_STATE.md`, `PROJECT_CONTEXT.md`, and `FOLLOWUPS.md` now put T0065-T0067 messaging work before T0068+ readiness work. |
+| Roadmap order | Guest SMS, guest email, and unified guest messaging are listed before environment/cutover work. | Passed | `REPO_CURRENT_STATE.md`, `PROJECT_CONTEXT.md`, and `FOLLOWUPS.md` now put T0065-T0068 messaging work before broader readiness work. |
 | No implementation changes | T0064 changes source-of-truth docs only. | Passed | Only source-of-truth docs were edited for T0064; unrelated local asset/package changes remain outside this ticket. |
 | Root validation | `npm run validate` passes after docs updates. | Passed | Passed on 2026-05-28. |
 | Diff whitespace | `git diff --check` passes. | Passed with CRLF notices | Passed on 2026-05-28; output contains Git line-ending notices only. |
@@ -733,6 +733,21 @@ Use this file to define validation for the current project or milestone.
 | Dev deploy | Session Lambda receives verified SES sender config. | Passed | `npx cdk deploy -c config=./config/dev.json --require-approval never` passed on 2026-05-28. |
 | Confirmed email smoke | SES accepts a protected email send to `love@wrlds.com`. | Passed | Booking `5063420` returned `email_sent`; Aurora recorded sent deliveries `jyem_mppo8w07_296c1a5e` and `jyem_mppo99gl_3c888240` with provider message ids present. |
 | Aurora audit row | Confirmed real sends are recorded without full recipient or link. | Passed | Latest rows use masked destination `l***@w***.com`, `dry_run=false`, provider `aws_ses`, and no raw token/full URL output. |
+
+## T0068 Unified Booking-Time Messaging Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Session Lambda syntax | Unified messaging code parses successfully. | Passed | `node --check infra/lambda/session/index.js` passed on 2026-05-28. |
+| Infra build | CDK stack compiles with the new unified route and EventBridge payload. | Passed | `npm --prefix infra run build` passed. |
+| Infra synth | Dev stack synthesizes with the unified booking-time messaging route. | Passed | `npm --prefix infra run synth:dev` passed. |
+| CDK diff | AWS changes are scoped to the session Lambda, new route, and EventBridge payload. | Passed | Diff added `POST /v1/check-in/session-links/send-due-messages`, changed the session Lambda code asset, and updated the existing schedule payload to channels `sms` and `email`. |
+| Dev deploy | Dev stack deploys the unified route and schedule payload. | Passed | `npx cdk deploy -c config=./config/dev.json --require-approval never` passed on 2026-05-28. |
+| Post-deploy diff | Deployed dev stack matches local CDK. | Passed | Post-deploy diff showed no differences. |
+| Unified planning smoke | Protected unified route plans both channels without sending. | Passed | `POST /v1/check-in/session-links/send-due-messages` returned `booking_time_messages_planned` with separate `sms` and `email` channel summaries and masked destinations only. |
+| Legacy SMS smoke | Existing due-SMS route still works. | Passed | `POST /v1/check-in/session-links/send-due-sms` returned `booking_time_sms_planned` with only the `sms` channel. |
+| Scheduled event smoke | EventBridge-shaped payload runs internally without public dev-token auth. | Passed | Direct Lambda invoke with `scheduled_booking_time_messaging` returned planning results for `sms` and `email` with `confirmSend=false`. |
+| Real unattended sends | Schedule must not send real SMS or email in dev. | Passed | Dev EventBridge payload keeps `confirmSend=false`; no confirmed scheduled sends were enabled. |
 
 ## T0053 New-Booking Basket Before Payment Validation
 

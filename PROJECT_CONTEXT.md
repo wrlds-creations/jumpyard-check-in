@@ -548,6 +548,8 @@ T0066 completes the dev guest email path as far as the current AWS SES setup all
 
 T0067 completes the first real SES-backed dev email smoke. AWS SES identity `love@wrlds.com` was created in account `376129878018`, region `eu-north-1`, with WRLDS tags after user approval to use that address for email testing, then verified successfully. Dev config now uses `love@wrlds.com` as the SES sender and reply-to address. Confirmed protected email smoke for booking `5063420` used public base URL `https://jumpyard-check-in.pages.dev/`; SES accepted two test sends to masked destination `l***@w***.com`, and Aurora recorded sent delivery rows `jyem_mppo8w07_296c1a5e` and `jyem_mppo99gl_3c888240`.
 
+T0068 unifies booking-time guest messaging. JumpYard Cloud now has a protected `POST /v1/check-in/session-links/send-due-messages` route and the existing EventBridge booking-time schedule invokes the same due-booking processor for both `sms` and `email` channels in planning mode. The legacy `send-due-sms` route remains compatible as SMS-only. Dev remains safe: `confirmSend=false` means the schedule plans candidates without sending real SMS or email, and confirmed scheduled sends still require the explicit approval phrase plus public HTTPS app URLs.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
@@ -557,7 +559,7 @@ T0067 completes the first real SES-backed dev email smoke. AWS SES identity `lov
 | Data storage, retention, and PII | Partial | Aurora is encrypted, deletion-protected, backed up for 7 days, and stores structured email/phone plus masks/hashes; S3 raw bucket is encrypted, versioned, retained, and has 30-day lifecycle. | Lock retention/deletion/export policy for PII, event logs, snapshots, and any raw payload/archive use. |
 | Public API exposure and auth | Partial | T0060 replaced wildcard CORS with explicit dev origins. T0061 added dev API Gateway stage throttling and 429 visibility. T0062 classifies every route boundary and documents the target live posture. API Gateway routes still have `AuthorizationType=NONE`; app-level tokens/staff auth protect only selected routes. | Implement the T0062 boundary with production auth, WAF or equivalent edge controls, route-specific limits, internal-only operations routes, and guest/staff public boundary rules. |
 | Webhook security and retries | Partial | Playground webhook id `238` uses `x-roller-apikey`; Lambda stores idempotent events and can enrich from Roller REST. | Confirm production auth/signature/IP allowlisting and decide whether enrichment must move async before live traffic. |
-| SMS/email readiness | In focus | EventBridge due-SMS schedule exists but dev config keeps `confirmSend=false`; SNS account is still sandboxed. T0065 confirmed manual SMS delivery to the verified sandbox phone using the public Cloudflare check-in URL. T0067 confirmed SES real-email delivery acceptance for verified dev identity `love@wrlds.com`. | Complete unified booking-time messaging before environment/cutover tickets; SMS production still needs sandbox/recipient policy, consent/unsubscribe wording, and production sender decisions. Email production still needs a verified domain or production from-address, recipient/sandbox policy, and final sender/reply-to/consent text. |
+| SMS/email readiness | In focus | EventBridge booking-time messaging schedule exists but dev config keeps `confirmSend=false`; SNS account is still sandboxed. T0065 confirmed manual SMS delivery to the verified sandbox phone using the public Cloudflare check-in URL. T0067 confirmed SES real-email delivery acceptance for verified dev identity `love@wrlds.com`. T0068 unified booking-time planning for SMS and email. | Before visitor-facing unattended sends: SMS production still needs sandbox/recipient policy, consent/unsubscribe wording, and production sender decisions. Email production still needs a verified domain or production from-address, recipient/sandbox policy, final sender/reply-to/consent text, and deliverability work. |
 | Observability and alarms | Partial | T0060 added dashboard `jumpyard-check-in-dev-ops`, API/Lambda/DLQ/Roller API alarms, API Gateway access logs, and safe Roller outbound call metrics. T0061 added API throttling visibility and a 429 alarm. | Add notification routing, runbooks, Aurora health, scheduler-specific health, SMS failure metrics, webhook failure metrics, and production thresholds. |
 | Rollback, migration, and deployment safety | Partial | CDK synth/build works; Aurora migrations are versioned; dev deploys have been manual and scoped. | Add release/runbook, preflight gates, rollback/restore plan, CI/CD identity, migration backup policy, and post-deploy smoke checklist. |
 | Backfill, sync, and cutover | Partial | Daily Data API sync runs at `02:00 UTC`; manual backfill command exists; webhooks and lookup refresh update Aurora. | Define live backfill range, cutover order, webhook registration plan, freshness SLAs, and replay/reconciliation procedure. |
@@ -567,9 +569,9 @@ T0067 completes the first real SES-backed dev email smoke. AWS SES identity `lov
 
 - Do not build new app behavior or change UI files.
 - Do not fix Roller/Adyen card method configuration.
-- Do not enable real unattended SMS or real email sends in T0067.
-- Do not create or verify SES sender/domain identities beyond the user-approved dev test address `love@wrlds.com` in T0067.
-- Do not change payment, staff auth, redeem, webhook, Data API, or SMS scheduling behavior in T0067.
+- Do not enable real unattended SMS or real email sends in T0068.
+- Do not create or verify more SES sender/domain identities in T0068.
+- Do not change payment, staff auth, redeem, webhook, or Data API behavior in T0068.
 - Do not write to Roller Live/production.
 - Do not create staging or production AWS resources.
 

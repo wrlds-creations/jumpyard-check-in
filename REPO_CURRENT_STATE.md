@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-05-28
-- Current branch: `codex/t0067-real-email-smoke`
-- Current status: T0067 real SES email smoke is implemented, deployed to dev, and smoke-tested locally, not committed.
-- Current ticket: `T0067` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`
-- Recommended next step: review/commit/merge T0067, then start T0068 unified booking-time guest messaging.
+- Current branch: `codex/t0068-unified-booking-time-messaging`
+- Current status: T0068 unified booking-time guest messaging is implemented, deployed to dev, smoke-tested, and awaiting review/commit.
+- Current ticket: `T0068` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`
+- Recommended next step: review/commit/merge T0068, then start T0069 guest messaging production readiness.
 
 ## Current Structure
 
@@ -117,6 +117,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | Deployed `POST /v1/bookings/availability` | Load Roller Playground product availability through JumpYard Cloud. | Used by the phone buy-entry flow; the frontend still never calls Roller directly. |
 | Deployed `POST /v1/check-in/session-links/send-sms` | Manually create and send guest check-in SMS links. | Protected by the check-in link dev token; confirmed sends return safe provider diagnostics and still respect SNS sandbox limits. |
 | Deployed `POST /v1/check-in/session-links/send-due-sms` | Plan or manually confirm booking-time SMS sends from Aurora booking time windows. | Protected by the check-in link dev token; planning mode sends no SMS, and confirmed sends still respect SNS sandbox limits. |
+| Deployed `POST /v1/check-in/session-links/send-due-messages` | Plan or manually confirm booking-time guest messages for SMS and email from one due-booking processor. | Protected by the check-in link dev token for manual calls; EventBridge invokes it internally in planning mode with `confirmSend=false`. |
 | `npm run roller:seed:playground` | Plan deterministic Roller Playground seed bookings. | Dry-run by default; no booking writes. |
 | `npm run roller:seed:playground:apply` | Create deterministic Roller Playground seed bookings. | Writes only when `ROLLER_SEED_ALLOW_WRITE=I_UNDERSTAND_THIS_WRITES_PLAYGROUND_BOOKINGS` is set and the Playground guard passes. |
 | Read-only `GET /bookings/{bookingReference}` | Verify known Playground booking lookup behavior. | Run through the existing Roller client helper; do not print secrets or raw PII. |
@@ -198,30 +199,36 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0065` | Completed dev guest SMS path. | 2026-05-28 | Merged to `main` through PR #67; session Lambda SMS responses now include safe sender/provider diagnostics, SMS copy uses booking start time when available, confirmed public-URL SNS smoke to the verified sandbox phone succeeded, and `jy_token` links now show already-checked-in state for redeemed bookings instead of manual lookup fallback. |
 | `T0066` | Completed dev guest email path as far as current SES setup allows. | 2026-05-28 | Merged to `main` through PR #68; session Lambda email responses now include safe sender/reply-to diagnostics, email copy uses booking start time when available, dry-run with public URL creates Aurora audit state, and confirmed sends fail closed because SES has no verified sender/domain identity. |
 | `T0067` | Ran first real SES-backed dev email smoke. | 2026-05-28 | SES identity `love@wrlds.com` is verified and tagged; dev config uses it as sender/reply-to; protected confirmed email smoke for booking `5063420` wrote sent Aurora rows and SES provider message ids. |
+| `T0068` | Unified booking-time guest messaging. | 2026-05-28 | Adds `POST /v1/check-in/session-links/send-due-messages`, keeps `send-due-sms` as SMS-only compatibility, and changes the dev EventBridge booking-time payload to plan both SMS and email from one processor without enabling real unattended sends. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0067` | Real SES email smoke. | Completed locally, not committed | SES identity `love@wrlds.com` is verified, dev sender/reply-to config was deployed, and protected confirmed smoke sent real email for booking `5063420`. |
+| `T0068` | Unified booking-time guest messaging. | Completed locally, not committed | New unified route and EventBridge payload are deployed; planning smokes show channel-level SMS/email results without sending real messages. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0068` | Unified booking-time guest messaging | Make SMS and email work together from booking time windows with idempotency, audit rows, safe retry/failure handling, and clear dry-run versus confirmed-send controls. |
-| `T0069` | Environment and cutover plan | Define staging/live config, secret ownership, deployment/rollback runbook, live backfill, webhook registration, and cutover checklist before any non-dev stack is created. |
-| `T0070` | Alarm notifications and runbooks | Connect CloudWatch alarms to a notification path, document operator actions, and define dashboard/runbook usage for dev-to-staging readiness. |
-| `T0071` | Secrets and dev-token replacement | Replace or isolate dev-only passcodes/shared tokens, define secret owners and rotation cadence, and prepare separate staging/live secret values. |
-| `T0072` | Route auth and WAF implementation | Implement the T0062 boundary in infrastructure after the environment and identity choices are approved. |
-| `T0073` | Data retention and PII policy | Lock retention, deletion/export, masking/hash, Aurora backup, event-log, and raw-payload policy before production data. |
-| `T0074` | Deployment and rollback runbook | Define CI/CD identity, preflight gates, migration backup/restore, CDK diff approval, smoke tests, rollback criteria, and ownership. |
-| `T0075` | Live backfill and cutover rehearsal | Rehearse initial live backfill, daily sync, webhook registration order, freshness checks, replay/reconciliation, and go/no-go checklist. |
+| `T0069` | Guest messaging production readiness | Decide SMS sender/sandbox exit, SES domain/sender, email deliverability, consent/unsubscribe copy, and production monitoring before unattended visitor-facing sends. |
+| `T0070` | Environment and cutover plan | Define staging/live config, secret ownership, deployment/rollback runbook, live backfill, webhook registration, and cutover checklist before any non-dev stack is created. |
+| `T0071` | Alarm notifications and runbooks | Connect CloudWatch alarms to a notification path, document operator actions, and define dashboard/runbook usage for dev-to-staging readiness. |
+| `T0072` | Secrets and dev-token replacement | Replace or isolate dev-only passcodes/shared tokens, define secret owners and rotation cadence, and prepare separate staging/live secret values. |
+| `T0073` | Route auth and WAF implementation | Implement the T0062 boundary in infrastructure after the environment and identity choices are approved. |
+| `T0074` | Data retention and PII policy | Lock retention, deletion/export, masking/hash, Aurora backup, event-log, and raw-payload policy before production data. |
+| `T0075` | Deployment and rollback runbook | Define CI/CD identity, preflight gates, migration backup/restore, CDK diff approval, smoke tests, rollback criteria, and ownership. |
+| `T0076` | Live backfill and cutover rehearsal | Rehearse initial live backfill, daily sync, webhook registration order, freshness checks, replay/reconciliation, and go/no-go checklist. |
 | `Deferred` | Card/scheme payment smoke | Wait for Pabel/Roller to enable or confirm the `scheme` card method before testing the Adyen Visa card path. |
 
 ## Validation Status
 
-- Automated root validation: `npm run validate` passed on 2026-05-28 for T0061 source-of-truth updates.
+- T0068 syntax/build/synth: `node --check infra/lambda/session/index.js`, `npm --prefix infra run build`, and `npm --prefix infra run synth:dev` passed on 2026-05-28.
+- T0068 AWS preflight/deploy: account `376129878018` and region `eu-north-1` were verified. CDK diff showed only the new `send-due-messages` route, session Lambda code asset, and EventBridge booking-time payload/description changes; deploy passed and post-deploy diff showed no differences.
+- T0068 unified route smoke: protected `POST /v1/check-in/session-links/send-due-messages` planning mode returned `booking_time_messages_planned` with separate `sms` and `email` channel results and masked destinations only.
+- T0068 legacy route smoke: protected `POST /v1/check-in/session-links/send-due-sms` still returned `booking_time_sms_planned` with SMS-only channel results.
+- T0068 scheduled-event smoke: direct Lambda invoke with EventBridge-shaped `scheduled_booking_time_messaging` payload returned planning results for both channels without public dev-token auth and with `confirmSend=false`.
+- T0068 final validation: `npm run validate` and `git diff --check` passed on 2026-05-28; `git diff --check` reported CRLF line-ending notices only.
 - T0056 validation: `node --check infra/lambda/lookup/index.js`, `node --check infra/lambda/webhook/index.js`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, `npm run validate`, and `git diff --check` passed on 2026-05-27. `git diff --check` reported CRLF notices only.
 - T0056 AWS preflight/deploy: account `376129878018` and region `eu-north-1` were verified with short-lived credentials exported from the existing `wrlds-dev` SSO profile. Pre-deploy diff showed only `LookupHandler` and `WebhookHandler` Lambda code asset changes, deploy passed, and post-deploy diff showed no differences.
 - T0056 dev smoke: lookup for known paid booking `5063394` returned `found`/`ready`, Roller unique id `abec3317-1dc1-4b44-917b-5b52ae104d69`, `paymentStatus=Paid`, and `amountOwing=0`. Aurora row `jypd_835161973ab34210ac` changed to `published`, `amount_owing_cents=0`, and `event_log` contains `prepayment_draft.published`.
