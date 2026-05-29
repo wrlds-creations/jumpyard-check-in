@@ -1,16 +1,14 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0068
+T0069
 
 ## Goal
-Unify booking-time guest messaging so one server-side processor can plan and send both SMS and email check-in links before the booked jump time.
+Lock the near-term stabilization roadmap before broader staging/live production-readiness work.
 
 ## Dependencies
-- T0045 added booking-time SMS planning.
-- T0046/T0049 added the dev EventBridge schedule in safe planning mode.
-- T0065 confirmed manual protected SMS delivery to the verified SNS sandbox phone.
-- T0067 confirmed real SES-backed dev email delivery from verified sender `love@wrlds.com`.
+- T0068 completed unified booking-time guest messaging.
+- User direction: do not move straight into environment/cutover, runbooks, production auth, WAF, retention, or live backfill until SMS/email and the full dev flow are proven together.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -18,19 +16,19 @@ Unify booking-time guest messaging so one server-side processor can plan and sen
 - DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
-- AWS_RESOURCES.md
 - TEST_PLAN.md
-- infra/lambda/session/index.js
-- infra/lib/jumpyard-cloud-stack.ts
 
 ## Do not touch
-- Phone UI design
-- Admin UI design
-- Payment flow
-- Redeem flow
-- Roller webhook registration
-- Data API importer behavior
-- Aurora migrations
+- App source code
+- UI files
+- Admin app
+- Phone app
+- Payment code
+- SMS/email Lambda code
+- Data API importer code
+- Webhook code
+- Redeem code
+- AWS resources
 - Package dependencies
 - Production credentials
 - Live Roller config
@@ -39,70 +37,46 @@ Unify booking-time guest messaging so one server-side processor can plan and sen
 
 ## Requirements
 
-1. Add a unified booking-time messaging processor.
-   - It must use the same Aurora due-booking window as the existing booking-time SMS path.
-   - It must support channels `sms`, `email`, or both.
-   - It must keep the legacy `send-due-sms` route working for SMS-only compatibility.
+1. Lock the stabilization gate.
+   - Document that the next tickets must prove the current dev/Playground system end to end before production-readiness implementation starts.
+   - The gate must include Data API refresh, webhook update, SMS/email sends, check-in, staff handoff/redeem, and add-product/payment behavior.
 
-2. Add a protected unified route.
-   - Add `POST /v1/check-in/session-links/send-due-messages`.
-   - Require the same check-in link dev token for public/manual calls.
-   - Return safe booking metadata, channel status, and masked destinations only.
-   - Never return raw check-in tokens, full check-in URLs, full phone numbers, full email addresses, secrets, or raw message bodies.
+2. Reorder the confirmed ticket roadmap.
+   - Put integrated dev smoke, Data API/webhook health, and SMS/email sender verification before environment/cutover work.
+   - Move environment/cutover, runbooks, dev-token replacement, route auth/WAF, retention/PII, and live backfill/cutover rehearsal after the stabilization tickets.
+   - Keep card/scheme payment smoke deferred until Roller/Pabel confirms the missing card payment method.
 
-3. Reuse the existing channel senders.
-   - SMS must reuse the audited `send-sms` path and `jumpyard.sms_deliveries`.
-   - Email must reuse the audited `send-email` path and `jumpyard.email_deliveries`.
-   - Both channels must keep existing dry-run-first behavior and duplicate/recent-send guards.
+3. Update follow-ups.
+   - Make each open production-readiness follow-up point to the correct later ticket after the roadmap reorder.
+   - Keep SMS/email follow-ups before broader production-readiness tickets.
 
-4. Update the dev schedule safely.
-   - The existing EventBridge schedule may invoke the unified processor with both `sms` and `email`.
-   - Dev config must remain planning-only with `confirmSend=false`.
-   - Scheduled confirmed sends must still fail closed unless the explicit approval phrase and public HTTPS app URLs are configured.
-
-5. Deploy and smoke test in dev.
-   - Verify AWS account `376129878018` and region `eu-north-1`.
-   - Deploy only the route/session Lambda/EventBridge payload changes.
-   - Run a protected planning smoke through the new unified route.
-   - Run an internal scheduled-event planning smoke without a public dev token.
-   - Confirm the legacy SMS route still works.
-
-6. Update source-of-truth docs.
-   - Document that T0068 unifies SMS and email orchestration.
-   - Keep production blockers separate: SNS sandbox exit, SES production sender/domain, consent/unsubscribe, sender branding, and production environment cutover.
+4. Update source-of-truth docs.
+   - Update `PROJECT_CONTEXT.md` with the T0069 roadmap decision.
+   - Add a decision in `DECISIONS.md` that stabilization and full-flow proof come before production-readiness implementation.
+   - Update `REPO_CURRENT_STATE.md` with T0069 status and the new confirmed next-ticket sequence.
+   - Update `TEST_PLAN.md` with docs-only validation for T0069.
 
 ## Non-goals
-- Do not enable unattended real SMS or email sends.
-- Do not exit SNS or SES sandbox.
-- Do not create staging or production AWS resources.
-- Do not change message copy beyond what is needed for the unified processor.
+- Do not implement SMS/email code changes.
+- Do not enable unattended real sends.
+- Do not create staging/live AWS resources.
+- Do not change payment behavior.
+- Do not change webhook, Data API, redeem, phone, or admin behavior.
 - Do not write to Roller Live/production.
-- Do not change payment, redeem, webhook, or Data API behavior.
 
 ## Acceptance criteria
-- `POST /v1/check-in/session-links/send-due-messages` exists in dev.
-- The new route plans both SMS and email channels from one due-booking processor.
-- The existing `send-due-sms` route still returns the SMS-only response shape.
-- EventBridge invokes the unified processor with both channels but remains planning-only in dev.
-- No raw token/full URL/full message body/secrets/full contact values are returned or logged intentionally.
-- `node --check infra/lambda/session/index.js` passes.
-- `npm --prefix infra run build` passes.
-- `npm --prefix infra run synth:dev` passes.
-- Post-deploy `cdk diff` shows no differences.
+- `REPO_CURRENT_STATE.md` clearly shows T0070-T0074 as stabilization/verification tickets before production-readiness tickets.
+- Production-readiness tickets are still preserved and renumbered after the stabilization gate.
+- `PROJECT_CONTEXT.md` and `DECISIONS.md` explain why the roadmap is ordered this way.
+- `FOLLOWUPS.md` points open production-readiness items at the correct future tickets.
+- No app code or AWS resources are changed.
 - `npm run validate` passes.
 - `git diff --check` passes.
 
 ## Manual verification
-Use the protected unified route in planning mode for a known Playground booking-time window and confirm the response shows separate channel rows for `sms` and `email`.
+Open `REPO_CURRENT_STATE.md` and confirm a new Codex session sees the next work as stabilization/full-flow proof before broader staging/live readiness.
 
 ## Automated validation
 Run:
-- aws sts get-caller-identity --profile wrlds-dev
-- aws configure get region --profile wrlds-dev
-- node --check infra/lambda/session/index.js
-- npm --prefix infra run build
-- npm --prefix infra run synth:dev
-- npm --prefix infra run diff:dev
-- npm --prefix infra run deploy:dev
 - npm run validate
 - git diff --check

@@ -550,6 +550,8 @@ T0067 completes the first real SES-backed dev email smoke. AWS SES identity `lov
 
 T0068 unifies booking-time guest messaging. JumpYard Cloud now has a protected `POST /v1/check-in/session-links/send-due-messages` route and the existing EventBridge booking-time schedule invokes the same due-booking processor for both `sms` and `email` channels in planning mode. The legacy `send-due-sms` route remains compatible as SMS-only. Dev remains safe: `confirmSend=false` means the schedule plans candidates without sending real SMS or email, and confirmed scheduled sends still require the explicit approval phrase plus public HTTPS app URLs.
 
+T0069 locks the next roadmap before broader staging/live readiness work. The team should first prove the current dev/Playground system as one integrated flow: Data API refresh, webhook enrichment, Aurora freshness, guest SMS/email messaging, phone check-in, staff handoff/redeem, and add-product/payment behavior. Environment/cutover, alarm runbooks, production auth/WAF, retention, deployment rollback, and live backfill remain required, but they should follow the stabilization tickets rather than starting immediately after T0068.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
