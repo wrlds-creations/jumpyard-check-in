@@ -587,12 +587,25 @@ export async function createDraftBooking(
 
 export async function quoteAddProducts(
   bookingReference: string,
-  customer: NewBookingCustomer,
+  customer: NewBookingCustomer | null,
   items: NewBookingItemRequest[],
   requireAvailability: boolean
 ): Promise<NewBookingQuote> {
   let response: Response;
   let body: AddProductQuoteResponse | null = null;
+  const payload: {
+    correlationId: string;
+    customer?: NewBookingCustomer;
+    items: NewBookingItemRequest[];
+    name: string;
+    requireAvailability: boolean;
+  } = {
+    correlationId: `phone_addon_quote_${Date.now().toString(36)}`,
+    items,
+    name: `Add-on for ${bookingReference}`,
+    requireAvailability,
+  };
+  if (customer) payload.customer = customer;
 
   try {
     response = await fetch(`${getApiBaseUrl()}/v1/bookings/${encodeURIComponent(bookingReference)}/add-products/quote`, {
@@ -600,13 +613,7 @@ export async function quoteAddProducts(
       headers: {
         'content-type': 'application/json',
       },
-      body: JSON.stringify({
-        correlationId: `phone_addon_quote_${Date.now().toString(36)}`,
-        customer,
-        items,
-        name: `Add-on for ${bookingReference}`,
-        requireAvailability,
-      }),
+      body: JSON.stringify(payload),
     });
     body = await parseBookingResponse<AddProductQuoteResponse>(response);
   } catch (error) {
@@ -623,13 +630,32 @@ export async function quoteAddProducts(
 
 export async function createAddProductDraft(
   bookingReference: string,
-  customer: NewBookingCustomer,
+  customer: NewBookingCustomer | null,
   items: NewBookingItemRequest[],
   idempotencyKey: string,
   requireAvailability: boolean
 ): Promise<AddProductDraftResult> {
   let response: Response;
   let body: AddProductDraftResponse | null = null;
+  const payload: {
+    confirmDraft: boolean;
+    correlationId: string;
+    customer?: NewBookingCustomer;
+    idempotencyKey: string;
+    items: NewBookingItemRequest[];
+    name: string;
+    requireAvailability: boolean;
+    sendConfirmations: boolean;
+  } = {
+    confirmDraft: true,
+    correlationId: `phone_addon_draft_${Date.now().toString(36)}`,
+    idempotencyKey,
+    items,
+    name: `Add-on for ${bookingReference}`,
+    requireAvailability,
+    sendConfirmations: false,
+  };
+  if (customer) payload.customer = customer;
 
   try {
     response = await fetch(`${getApiBaseUrl()}/v1/bookings/${encodeURIComponent(bookingReference)}/add-products`, {
@@ -638,16 +664,7 @@ export async function createAddProductDraft(
         'content-type': 'application/json',
         'x-idempotency-key': idempotencyKey,
       },
-      body: JSON.stringify({
-        confirmDraft: true,
-        correlationId: `phone_addon_draft_${Date.now().toString(36)}`,
-        customer,
-        idempotencyKey,
-        items,
-        name: `Add-on for ${bookingReference}`,
-        requireAvailability,
-        sendConfirmations: false,
-      }),
+      body: JSON.stringify(payload),
     });
     body = await parseBookingResponse<AddProductDraftResponse>(response);
   } catch (error) {

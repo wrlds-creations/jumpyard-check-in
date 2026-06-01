@@ -753,7 +753,7 @@ Use this file to define validation for the current project or milestone.
 
 | Scenario | Expected Result | Status | Notes |
 |---|---|---|---|
-| Roadmap gate | Stabilization and full-flow proof appear before broader production-readiness tickets. | Passed | `REPO_CURRENT_STATE.md` now puts the T0075-T0081 core-flow gate before environment/cutover, runbooks, production auth/WAF, retention, and live backfill work. |
+| Roadmap gate | Stabilization and full-flow proof appear before broader production-readiness tickets. | Passed | `REPO_CURRENT_STATE.md` now puts the T0075-T0082 core-flow gate before environment/cutover, runbooks, production auth/WAF, retention, and live backfill work. |
 | Follow-up ownership | Open follow-ups point to the reordered future tickets. | Passed | SMS/email follow-ups point to T0072/T0073; production-readiness follow-ups point to T0075-T0080. |
 | No implementation changes | T0069 changes source-of-truth docs only. | Passed | No app code, Lambda code, CDK resources, AWS config, Roller config, package dependencies, or credentials were changed. |
 | Root validation | Source-of-truth docs validate after T0069 updates. | Passed | `npm run validate` passed on 2026-05-29. |
@@ -895,6 +895,22 @@ Use this file to define validation for the current project or milestone.
 | Original flow continuation | Approved add-product payment should continue the original check-in flow. | Passed | After `Betala 45,00 kr`, the phone app left add-product payment and showed the original booking safety-video step. |
 | Scope safety | T0078 must not redeem tickets, change AWS resources, or expose secrets/PII. | Passed | No staff/admin redeem was performed, no AWS resources changed, and output stayed to safe booking/draft/link identifiers only. |
 | Direct Aurora readback | Read-only Aurora state should be checked where practical. | Blocked | Local AWS SSO token for profile `wrlds-dev` had expired, so direct database readback was deferred. The safe API response still proved linked draft metadata. |
+
+## T0079 Existing-Booking Add-Product UX Polish Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Backend syntax | Booking Lambda should parse after add-product contact-resolution changes. | Passed | `node --check infra/lambda/booking/index.js` passed locally. |
+| Phone lint | Phone app should lint after add-product UX changes. | Passed with warnings | `npm --prefix jumpyard-checkin-phone run lint` passed with the pre-existing four `<img>` warnings. |
+| Phone build | Phone app should build after add-product UX changes. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed; Next reported only the existing stale `baseline-browser-mapping` advisory. |
+| Root validation | Source-of-truth docs should validate after T0079 updates. | Passed | `npm run validate` passed. |
+| Diff whitespace | Diff whitespace check should pass. | Passed with CRLF notices | `git diff --check` passed; output contains Git line-ending notices only. |
+| Local browser sanity | Phone app should load locally after UI changes. | Passed | In-app browser loaded `http://localhost:3000/?codexSmoke=t0079-local` and showed the expected start choices. |
+| Server-side contact reuse | Add-product quote/draft can omit `customer` and resolve original booking contact server-side. | Code validated | T0079 routes add-product quote/draft through `resolveAddProductCustomer`; it combines Roller booking detail and Aurora `guest_profiles` and fails closed if required contact fields are missing. |
+| Visible contact step | Existing-booking add-products should not ask the guest to re-enter contact details. | Code validated | Phone add-product flow now quotes directly after add-on selection and sends no `customer` payload for add-product quote/draft calls. |
+| Payment-approved confirmation | Approved add-product payment should show a brief confirmation before continuing. | Code validated | `AddonsOffer` now shows an `APPROVED` state for about 1.2 seconds before continuing the original safety/check-in flow. |
+| Postal-code scope | T0079 should not change Roller/Adyen postal-code behavior. | Passed by code review | No payment-package, Adyen field, or Roller postal-code configuration was changed. |
+| Public deployed smoke | Public Cloudflare and deployed Lambda should be checked after merge/deploy. | Pending | T0079 has local code validation only until the branch is merged/deployed and the booking Lambda is updated in dev AWS. |
 
 ## T0053 New-Booking Basket Before Payment Validation
 

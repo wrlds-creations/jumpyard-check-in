@@ -8,7 +8,6 @@ import {
     createAddProductDraft,
     quoteAddProducts,
     type AddProductDraftResult,
-    type NewBookingCustomer,
     type NewBookingItemRequest,
     type NewBookingQuote,
 } from '@/flow/cloudClient';
@@ -43,7 +42,7 @@ interface CatalogEntry {
     requiresAvailability: boolean;
 }
 
-type Step = 'SELECT' | 'CONTACT' | 'REVIEW' | 'PAYMENT' | 'PENDING';
+type Step = 'SELECT' | 'REVIEW' | 'PAYMENT' | 'APPROVED' | 'PENDING';
 
 const ADDON_PRODUCTS: Record<AddonId, { rollerProductId: number | null; requiresAvailability: boolean }> = {
     skyrider: { rollerProductId: 1765443, requiresAvailability: true },
@@ -93,14 +92,6 @@ function Counter({
 function formatMoney(value: number | null | undefined) {
     if (value === null || value === undefined) return '-';
     return `${Math.round(value)} kr`;
-}
-
-function isValidEmail(value: string) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
-function isValidPhone(value: string) {
-    return value.replace(/\D/g, '').length >= 6;
 }
 
 function getVenueToday() {
@@ -154,10 +145,6 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
 
     const [step, setStep] = useState<Step>('SELECT');
     const [qty, setQty] = useState<Record<AddonId, number>>(() => ({ ...minQty }));
-    const [firstName, setFirstName] = useState('');
-    const [lastName, setLastName] = useState('');
-    const [email, setEmail] = useState('');
-    const [phone, setPhone] = useState('');
     const [quote, setQuote] = useState<NewBookingQuote | null>(null);
     const [draft, setDraft] = useState<AddProductDraftResult | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -201,19 +188,6 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
         [addedAddons]
     );
 
-    const customerValid =
-        firstName.trim().length > 0 &&
-        lastName.trim().length > 0 &&
-        isValidEmail(email) &&
-        isValidPhone(phone);
-
-    const buildCustomer = (): NewBookingCustomer => ({
-        email: email.trim(),
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        phone: phone.trim(),
-    });
-
     const buildItems = (): NewBookingItemRequest[] => {
         const bookingDate = booking.date ?? getVenueToday();
         const startTime = normalizeStartTime(booking.time) ?? '09:00';
@@ -251,15 +225,15 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
             return;
         }
 
-        setStep('CONTACT');
+        void goToReview();
     };
 
     const goToReview = async () => {
-        if (!customerValid || submitting) return;
+        if (submitting) return;
         setSubmitting(true);
         setSubmitError(null);
         try {
-            const result = await quoteAddProducts(booking.id, buildCustomer(), buildItems(), requireAvailability);
+            const result = await quoteAddProducts(booking.id, null, buildItems(), requireAvailability);
             setQuote(result);
             setStep('REVIEW');
         } catch (error) {
@@ -277,7 +251,7 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
             const itemKey = addedAddons.map((addon) => `${addon.id}-${addon.qty}`).join(':');
             const result = await createAddProductDraft(
                 booking.id,
-                buildCustomer(),
+                null,
                 buildItems(),
                 `phone-add-product:${booking.id}:${itemKey}:${Date.now().toString(36)}`,
                 requireAvailability
@@ -293,9 +267,8 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
 
     const backFromInternalStep = () => {
         setSubmitError(null);
-        if (step === 'PAYMENT') setStep('REVIEW');
-        else if (step === 'REVIEW') setStep('CONTACT');
-        else if (step === 'CONTACT') setStep('SELECT');
+        if (step === 'PAYMENT' || step === 'APPROVED') setStep('REVIEW');
+        else if (step === 'REVIEW') setStep('SELECT');
         else setStep('SELECT');
     };
 
@@ -336,7 +309,8 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                             amountLabel={formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
                             paymentSession={draft.paymentSession}
                             onApproved={() => {
-                                completeAddons(true);
+                                setStep('APPROVED');
+                                window.setTimeout(() => completeAddons(true), 1200);
                             }}
                             onFailed={() => undefined}
                         />
@@ -428,84 +402,13 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
 
                         <button
                             onClick={handleSelectContinue}
-                            className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm"
+                            disabled={submitting}
+                            className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm disabled:opacity-40 disabled:hover:bg-primary disabled:hover:text-white disabled:hover:border-transparent"
                         >
-                            {t.common.continue}
+                            {submitting ? t.buy.quoting : t.common.continue}
                         </button>
                     </div>
                 </>
-            )}
-
-            {step === 'CONTACT' && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full bg-surface border border-border p-5 rounded-2xl">
-                    <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">{t.addons.contactTitle}</h2>
-                    <p className="text-muted text-xs mb-5 text-center">{t.addons.contactDesc}</p>
-
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                        <label>
-                            <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest block mb-1">
-                                {t.buy.firstNameLabel}
-                            </span>
-                            <input
-                                type="text"
-                                value={firstName}
-                                onChange={(event) => setFirstName(event.target.value)}
-                                autoComplete="given-name"
-                                className="w-full bg-white border border-border rounded-xl px-3 py-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
-                            />
-                        </label>
-                        <label>
-                            <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest block mb-1">
-                                {t.buy.lastNameLabel}
-                            </span>
-                            <input
-                                type="text"
-                                value={lastName}
-                                onChange={(event) => setLastName(event.target.value)}
-                                autoComplete="family-name"
-                                className="w-full bg-white border border-border rounded-xl px-3 py-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
-                            />
-                        </label>
-                    </div>
-
-                    <label className="block mb-3">
-                        <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
-                            <JumpyardIcon name="email-confirmed" className="w-5 h-5" /> {t.buy.emailLabel}
-                        </span>
-                        <input
-                            type="email"
-                            value={email}
-                            onChange={(event) => setEmail(event.target.value)}
-                            placeholder={t.buy.emailPlaceholder}
-                            autoComplete="email"
-                            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
-                        />
-                    </label>
-
-                    <label className="block mb-5">
-                        <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest block mb-1">
-                            {t.buy.phoneLabel}
-                        </span>
-                        <input
-                            type="tel"
-                            value={phone}
-                            onChange={(event) => setPhone(event.target.value)}
-                            placeholder={t.buy.phonePlaceholder}
-                            autoComplete="tel"
-                            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
-                        />
-                    </label>
-
-                    {submitError && <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>}
-
-                    <button
-                        onClick={() => void goToReview()}
-                        disabled={!customerValid || submitting}
-                        className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
-                    >
-                        {submitting ? t.buy.quoting : t.common.continue} {!submitting && <Check size={18} />}
-                    </button>
-                </motion.div>
             )}
 
             {step === 'REVIEW' && quote && (
@@ -536,6 +439,23 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                     >
                         {submitting ? t.buy.creating : t.addons.createDraft} {!submitting && <Check size={18} />}
                     </button>
+                </motion.div>
+            )}
+
+            {step === 'APPROVED' && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="w-full flex items-center justify-center"
+                    style={{ minHeight: 'calc(100dvh - 160px)' }}
+                >
+                    <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
+                        <div className="w-14 h-14 rounded-full bg-success/10 border border-success/25 mx-auto mb-4 flex items-center justify-center">
+                            <Check size={30} className="text-success" />
+                        </div>
+                        <h2 className="text-xl font-black italic text-foreground uppercase mb-2">{t.addons.paymentApprovedTitle}</h2>
+                        <p className="text-muted text-sm">{t.addons.paymentApprovedDesc}</p>
+                    </div>
                 </motion.div>
             )}
 

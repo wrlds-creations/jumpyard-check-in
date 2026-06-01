@@ -212,6 +212,8 @@ const sv = {
     reviewDesc: 'Priset hämtas direkt från bokningssystemet.',
     createDraft: 'Reservera tillägg',
     paymentTitle: 'Betala tillägg',
+    paymentApprovedTitle: 'Betalning klar',
+    paymentApprovedDesc: 'Tillägget är betalt. Vi fortsätter check-in.',
     pendingTitle: 'Betalning väntar',
     pendingDesc: 'Tillägget är reserverat som en separat Playground-bokning. Betalningssteget kopplas in när Roller-betalningen är godkänd.',
     products: {
@@ -523,6 +525,8 @@ const en: typeof sv = {
     reviewDesc: 'The price comes directly from the booking system.',
     createDraft: 'Reserve add-on',
     paymentTitle: 'Pay add-on',
+    paymentApprovedTitle: 'Payment complete',
+    paymentApprovedDesc: 'The add-on is paid. We are continuing check-in.',
     pendingTitle: 'Payment pending',
     pendingDesc: 'The add-on is reserved as a separate Playground booking. Payment is connected when Roller payment access is approved.',
     products: {
