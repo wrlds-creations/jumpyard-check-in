@@ -494,7 +494,7 @@ T0054 confirmed the public payment-package behavior after Pabel's allowlist:
 - JumpYard Cloud lookup returned booking `5063382` as `Paid`, amount owing `0`, and `canCheckIn=true`.
 - The phone app does not filter out card payment methods; it passes the Roller payment package the payment JWT and public venue payment config.
 - Roller's public ecom payment configuration returned no `scheme` card method during T0054, and the rendered payment UI exposed Swish/Google Pay but no card fields.
-- Pabel confirmed on 2026-06-01 that the Playground payment integration issue is fixed and card payments should now show up; T0075 owns the public card smoke with the Adyen Visa test card ending `1142`.
+- Pabel confirmed on 2026-06-01 that the Playground payment integration issue is fixed and card payments should now show up; T0075 confirmed the public card smoke, and T0076 confirmed the full card-paid new-booking flow.
 
 T0055 confirms the new-booking paid continuation direction:
 
@@ -528,7 +528,7 @@ T0058 audits the current dev stack for staging/live readiness before any new env
 - no AWS resources were created, changed, deployed, or deleted
 - AWS read-only checks confirmed account `376129878018`, region `eu-north-1`, stack status `UPDATE_COMPLETE`, API endpoint `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`, Aurora status `available`, and SNS SMS sandbox mode still enabled
 - the dev stack is suitable for Playground development and controlled smoke tests, but it is not ready to copy directly to staging/live
-- payment card/scheme was parked on Roller/Adyen configuration until Pabel confirmed on 2026-06-01 that the Playground issue is fixed; T0075 owns the verification
+- payment card/scheme was parked on Roller/Adyen configuration until Pabel confirmed on 2026-06-01 that the Playground issue is fixed; T0075 and T0076 now confirm the card path through the public new-booking flow
 
 T0059 implements the `FU-054` redeem eligibility fix. Session creation now selects only Roller-redeemable ticket ids when a mixed booking has entry plus stock/add-on tickets, and final staff redeem re-applies the same filter after the required Roller refresh before calling `POST /redemptions`. The classifier uses structured product type metadata from Aurora tickets, booking items, and product catalog cache instead of fragile display-name rules. Dev smoke for mixed booking `5063419` selected and redeemed only entry tickets `5063419-21529629` and `5063419-21529630`, while add-on tickets `5063419-21529631` and `5063419-21529632` remained unredeemed.
 
@@ -583,6 +583,8 @@ Data handling: Links use opaque JumpYard Cloud tokens; no Roller credentials or 
 
 On 2026-06-01 Pabel confirmed that Roller fixed the Playground payment integration challenge and that card payments should now show up. T0075 confirmed the fix: the public checkout at `https://jumpyard-check-in.pages.dev` rendered `Kortbetalning`, the Adyen Visa test card ending `1142` submitted through the vendored Roller payment package, and the phone flow reached the safety-video step. The current payment-method list is controlled by Roller/Adyen configuration, not JumpYard filtering; after the card fix the rendered methods are card, Delbetalning, and Google Pay, while Swish is no longer visible and Apple Pay still needs Roller/Pabel confirmation. The near-term roadmap is therefore re-ordered to prove core guest flows before continuing SMS/email production unlock. T0076 proves the full new-booking purchase flow, T0077 proves the paid existing-booking check-in path, T0078 proves existing-booking add-product payment, T0079 polishes staff handoff/redeem, T0080 re-checks Data API/webhook/Aurora sync, and T0081 runs a full integrated flow rehearsal. SMS/email production unlock resumes after that core-flow gate.
 
+T0076 confirmed the public new-booking guest path end-to-end on `https://jumpyard-check-in.pages.dev`: buy entry, choose time, choose 60 min entry, skip add-ons, fill contact, review the basket before payment, pay by card with the Adyen Visa test card ending `1142`, continue through the safety video and all safety confirmations, and reach the ready-for-staff QR/handoff screen. The successful smoke used booking-time `11:00` and produced handoff code `JY4704`. The phone app called JumpYard Cloud for availability, quote, draft creation, lookup, session creation, and ready-for-staff state; the frontend still did not call Roller REST directly or handle Roller credentials. A short `404` lookup retry immediately after payment was observed before the paid Roller booking became visible through the normal lookup path, then the flow continued successfully. Direct Aurora readback could not be performed in this ticket because the local AWS SSO token for profile `wrlds-dev` had expired.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
@@ -596,15 +598,15 @@ On 2026-06-01 Pabel confirmed that Roller fixed the Playground payment integrati
 | Observability and alarms | Partial | T0060 added dashboard `jumpyard-check-in-dev-ops`, API/Lambda/DLQ/Roller API alarms, API Gateway access logs, and safe Roller outbound call metrics. T0061 added API throttling visibility and a 429 alarm. | Add notification routing, runbooks, Aurora health, scheduler-specific health, SMS failure metrics, webhook failure metrics, and production thresholds. |
 | Rollback, migration, and deployment safety | Partial | CDK synth/build works; Aurora migrations are versioned; dev deploys have been manual and scoped. | Add release/runbook, preflight gates, rollback/restore plan, CI/CD identity, migration backup policy, and post-deploy smoke checklist. |
 | Backfill, sync, and cutover | Partial | Daily Data API sync runs at `02:00 UTC`; manual backfill command exists; webhooks and lookup refresh update Aurora. | Define live backfill range, cutover order, webhook registration plan, freshness SLAs, and replay/reconciliation procedure. |
-| Payment production readiness | In focus | Swish works publicly; Pabel confirmed on 2026-06-01 that the Playground payment integration issue is fixed; T0075 confirmed card renders and the Adyen Visa test card ending `1142` reaches safety. Existing JumpYard code uses Roller's approved payment package with response-only `paymentJwt`. | T0076-T0078 must now prove the whole new-booking and add-product flows around this payment path. Do not build a custom card form or bypass the Roller package. |
+| Payment production readiness | In focus | Swish worked publicly in T0054; Pabel confirmed on 2026-06-01 that the Playground payment integration issue is fixed; T0075 confirmed card renders; T0076 confirmed the full card-paid new-booking flow reaches ready-for-staff. Existing JumpYard code uses Roller's approved payment package with response-only `paymentJwt`. | T0077-T0078 must now prove existing-booking check-in and add-product payment around this payment path. Do not build a custom card form or bypass the Roller package. |
 
 ## Non-Goals For Current Ticket
 
-- Do not build new app behavior or change UI files.
-- Do not fix Roller/Adyen card method configuration.
-- Do not enable real unattended SMS or email sends in T0074.
-- Do not submit AWS Support cases or request Sender IDs in T0074.
-- Do not change payment, staff auth, redeem, webhook, or Data API behavior in T0074.
+- Do not build new app behavior or change UI files unless a T0076 smoke blocker is found.
+- Do not fix Roller/Adyen payment-method configuration.
+- Do not enable real unattended SMS or email sends.
+- Do not submit AWS Support cases or request Sender IDs.
+- Do not change staff auth, redeem, webhook, Data API importer code, CDK infrastructure, or Aurora migrations.
 - Do not write to Roller Live/production.
 - Do not create staging or production AWS resources.
 
@@ -613,7 +615,7 @@ On 2026-06-01 Pabel confirmed that Roller fixed the Playground payment integrati
 | Question | Why It Matters | Owner | Status |
 |---|---|---|---|
 | Which Roller Playground write scopes are enabled for create booking, draft booking, payment, and redemption? | Needed before booking/payment work. Draft booking creation is confirmed through T0030/T0031/T0032/T0033/T0034; Pabel confirmed Roller Payments API authorization when API keys can be generated. | `T0050/T0051` | `Partially answered` |
-| Does Roller Playground support an in-app payment flow from draft booking `paymentJwt`, including documented test/fake card numbers and any domain allow-listing requirements? | Determines whether F1 can complete payment inside the JumpYard PWA or must use a hosted fallback. Pabel confirmed the docs, `paymentSettings`, Adyen test card ending `1142`, and that `https://jumpyard-check-in.pages.dev` is allowlisted. T0054 confirmed Swish works publicly, and Pabel confirmed on 2026-06-01 that the card-payment issue is fixed. | `T0075` | `Ready for card smoke verification` |
+| Does Roller Playground support an in-app payment flow from draft booking `paymentJwt`, including documented test/fake card numbers and any domain allow-listing requirements? | Determines whether F1 can complete payment inside the JumpYard PWA or must use a hosted fallback. Pabel confirmed the docs, `paymentSettings`, Adyen test card ending `1142`, and that `https://jumpyard-check-in.pages.dev` is allowlisted. T0054 confirmed Swish worked publicly, T0075 confirmed card rendering/payment, and T0076 confirmed the full card-paid new-booking flow. | `T0076` | `Answered for new-booking card flow` |
 | What is the best field or internal model for linking an original booking to a separate add-on booking? | T0034 selected `jumpyard.booking_links` with `add_on_group_id` plus add-product draft metadata in `jumpyard.prepayment_booking_drafts`. | `T0034` | `Answered for step 1` |
 | Which products need reconfiguration from stock/add-on to ticket/session products for API-driven redemption? | Stock/add-on products are excluded from Roller ticket redemption webhook/API flow. | `TBD` | `Open` |
 | Which Roller Data API endpoints and date ranges should power tickets, payments, and customers ingestion? | Required after bookingitems ingestion. | `T0036` | `Open` |

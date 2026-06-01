@@ -861,6 +861,18 @@ Use this file to define validation for the current project or milestone.
 | Browser card smoke | Public checkout should approve the Adyen Visa test card ending `1142`. | Passed | Playwright with installed Chrome selected 60 min entry at `10:00`, filled the secure Adyen card iframes with the test Visa ending `1142`, submitted `Betala 200,00 kr`, and reached the phone safety-video step without request failures. |
 | Payment method list | Available payment methods should come from Roller/Adyen configuration, not JumpYard filtering. | Follow-up open | Current public drop-in renders `Kortbetalning`, `Delbetalning`, and `Google Pay`; Swish no longer appears after the card fix. `FU-071` tracks Roller/Pabel confirmation for Swish and Apple Pay enablement. |
 
+## T0076 New-Booking Full Purchase Flow Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Public checkout flow order | Guest chooses time, entry, optional add-ons, contact, and review before payment. | Passed | Public Cloudflare smoke selected 60 min entry at `11:00`, skipped add-ons, filled contact details, and saw the basket review before draft/payment. |
+| Card payment | Roller payment drop-in accepts the approved Playground test card. | Passed | Secure Adyen iframes accepted the Visa test card ending `1142`; the app did not own raw card fields. |
+| Post-payment continuation | Paid new booking continues into the phone safety/check-in flow. | Passed | After payment, lookup briefly returned `404`, then succeeded through the normal JumpYard Cloud path; the flow created/resumed the check-in session. |
+| Safety gate | Guest can complete the safety video and required confirmations. | Passed | Browser smoke clicked video play, continued after the video step, and completed all six safety confirmations. |
+| QR/handoff state | Final page shows ready-for-staff state and handoff code. | Passed | Final state showed ready-for-staff with handoff/backup code `JY4704` and one armband item. |
+| Direct Aurora readback | Read-only Aurora state should be checked where practical. | Blocked | Local AWS SSO token for profile `wrlds-dev` had expired, so direct database readback was deferred. Browser/API flow proof still passed. |
+| Payment method follow-up | Swish/Apple Pay visibility should not block the card-paid core flow. | Follow-up open | `FU-071` tracks Roller/Pabel confirmation; T0076 used card because card is the currently confirmed method. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
