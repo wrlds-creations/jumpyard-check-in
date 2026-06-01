@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-01
-- Current branch: `codex/t0075-card-payment-unblock`
-- Current status: T0075 card payment unblock/readiness completed locally; card now renders and the Adyen Visa test-card smoke reaches the safety step.
-- Current ticket: `T0075` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`
-- Recommended next step: commit/merge T0075, then run T0076 new-booking full purchase flow to verify the full guest path after approved payment.
+- Current branch: `codex/t0076-new-booking-full-purchase-flow`
+- Current status: T0076 full new-booking purchase flow completed locally; public card payment reaches ready-for-staff QR/handoff.
+- Current ticket: `T0076` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`
+- Recommended next step: commit/merge T0076, then run T0077 existing-booking happy path.
 
 ## Current Structure
 
@@ -207,19 +207,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0073` | Ran controlled unified booking-time message smoke. | 2026-05-29 | Scoped Playground booking `5100877` was synced into Aurora; unified planning found SMS and email; controlled confirmed send wrote sent Aurora audit rows for both channels; SNS accepted the SMS, and the user confirmed SMS plus email receipt. |
 | `T0074` | Prepared SMS production unlock package. | 2026-05-29 | Read-only AWS checks confirmed SNS and AWS End User Messaging SMS remain sandboxed with no sender IDs or pools; docs now contain the AWS Support case draft and missing user inputs. |
 | `T0075` | Verified card payment unblock. | 2026-06-01 | Pabel's Roller Playground fix is confirmed in the public checkout: card payment renders, Adyen Visa test card ending `1142` submits, and the phone flow reaches the safety-video step. |
+| `T0076` | Verified full new-booking purchase flow. | 2026-06-01 | Public Cloudflare smoke completed buy-entry, time/product/add-ons/contact/review, card payment with Adyen Visa ending `1142`, safety video/rules, and ready-for-staff QR/handoff code `JY4704`. Completed locally, not committed. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0075` | Card payment unblock/readiness. | Completed locally, not committed | Card method is visible on the public checkout, the Adyen Visa test-card smoke reached safety, and diagnostics confirm the vendored Roller payment package/readiness path is green. |
+| `T0076` | New-booking full purchase flow. | Completed locally, not committed | Public checkout completed one full card-paid new-booking flow to ready-for-staff handoff code `JY4704`; direct Aurora readback is pending renewed AWS SSO. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0075` | Card payment unblock/readiness | Verify card method rendering and Adyen Visa test-card payment on the public allowlisted Playground checkout after Pabel's fix. |
-| `T0076` | New-booking full purchase flow | Prove the guest can buy entry with the correct order: time, entry, add-ons, contact, review, one draft/payment, safety, QR/handoff. |
 | `T0077` | Existing-booking happy path | Prove a paid existing Roller booking can be found from Aurora, resume server-owned check-in state, complete safety, show QR, and avoid repeating completed steps. |
 | `T0078` | Existing-booking add-product payment flow | Prove add-ons on an existing booking create a separate linked add-on draft, pay through the same Roller package path, and continue the original check-in flow. |
 | `T0079` | Staff handoff and redeem polish | Re-test QR scan/manual code, staff login, redeem only redeemable tickets, and clear states for already redeemed, unpaid, or non-redeemable cases. |
@@ -230,6 +229,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Validation Status
 
+- T0076 branch setup: branch `codex/t0076-new-booking-full-purchase-flow` was created from updated `main` after T0075 was merged.
+- T0076 public browser smoke: `https://jumpyard-check-in.pages.dev` completed the new-booking path with 60 min entry at `11:00`, no add-ons, contact entry, basket review before payment, Adyen Visa test card ending `1142`, safety video, six safety confirmations, and final ready-for-staff QR/handoff state.
+- T0076 payment/server path: captured public API flow included JumpYard Cloud availability, quote, draft creation, post-payment lookup, session creation, and ready-for-staff calls; frontend did not call Roller REST directly or receive Roller credentials.
+- T0076 final handoff: successful smoke reached `REDO FOR PERSONAL`/ready-for-staff with handoff/backup code `JY4704` and one armband item.
+- T0076 lookup timing: a short `404` lookup retry occurred immediately after payment before the paid booking became visible; the following lookup succeeded and the flow continued to handoff.
+- T0076 Aurora readback: direct read-only Aurora verification was not completed because the local AWS SSO token for profile `wrlds-dev` had expired.
 - T0075 branch setup: branch `codex/t0075-card-payment-unblock` was created successfully after permissions changed.
 - T0075 payment readiness: `ROLLER_PAYMENT_ALLOWLIST_CONFIRMED=true npm.cmd run roller:payment:readiness -- --json` returned `ready_for_payment_implementation`, with venue payment settings available, docs reachable, public origin reachable, and no blockers.
 - T0075 payment POC: `ROLLER_PAYMENT_PUBLIC_ORIGIN=https://jumpyard-check-in.pages.dev ROLLER_PAYMENT_TEST_CARD_CONFIRMED=true npm.cmd run roller:payment:poc -- --json` returned `ready_for_browser_payment_test`; the script now recognizes the vendored `@roller/ecom-payments` package `1.0.217`.
@@ -614,7 +619,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
 - Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, phone session resume routing is complete locally from T0029, staff auth replacement is deployed from T0047, staff/admin mobile visual polish is complete locally from T0048, and guest SMS/email link foundations both use the same opaque `jy_token` session-resolution model.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
-- Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; T0050 confirms `/venues/me` payment settings are available, T0051 wires the approved payment package in the phone buy-entry flow, T0052 reuses it for linked add-product drafts, and T0054 confirmed public Swish payment can complete. Pabel confirmed on 2026-06-01 that the Playground payment integration issue is fixed and card payments should now show up; T0075 owns the card smoke.
+- Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; T0050 confirms `/venues/me` payment settings are available, T0051 wires the approved payment package in the phone buy-entry flow, T0052 reuses it for linked add-product drafts, and T0054 confirmed public Swish payment could complete. Pabel confirmed on 2026-06-01 that the Playground payment integration issue is fixed; T0075 confirmed card smoke, and T0076 confirmed the full card-paid new-booking flow to ready-for-staff handoff.
 - Existing-booking add-product linked-booking flow has been tested server-side in dev and wired in the phone UI, including the shared payment package path when JWT/config are present.
 - T0058 production-readiness audit is docs-only and made no AWS changes. T0060 added the first dev CORS/observability hardening, T0061 added dev API Gateway stage throttling plus 429 visibility, T0062 documented the route boundary, T0063 added email dry-run/audit support, and T0064 moved guest SMS/email completion ahead of broader staging/live readiness. The main staging/live blockers still include production environment config, route auth/WAF implementation, alarm notification/runbooks, SMS sandbox/consent/sender readiness, SES sender/domain verification, dev-token replacement, data retention, deployment rollback, and live backfill/cutover.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
