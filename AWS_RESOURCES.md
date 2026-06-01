@@ -354,6 +354,15 @@ T0034 add-product draft step 1 deploy notes:
 - Payment JWT handling: raw `paymentJwt` is response-only and is not persisted in Aurora; Aurora stores only `payment_jwt_present`.
 - Deployed smoke: quote for original `5032210` and product `1765860` returned total `200` with `wroteBooking=false`; draft created Roller draft `18e85e91-9a53-4afd-a951-75d1a41eaf9f`, prepayment draft `jypd_2a5ad290e9c34eadaa`, and booking link `jyl_cf14c98651b4451aba`.
 
+T0082 add-product contact-resolution deploy notes:
+
+- Changed resource: `jumpyard-check-in-dev-stack-booking`
+- AWS resources changed: existing booking Lambda code only.
+- Behavior: no-customer existing-booking add-product draft creation can now reuse original JumpYard-created booking contact values stored in `jumpyard.prepayment_booking_drafts`, while still using Roller customer id plus Aurora `guest_profiles` when available.
+- Safety: if required email/phone values cannot be resolved server-side, the draft path still fails closed; raw `paymentJwt`, access tokens, and full contact values are not persisted or printed.
+- Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-06-01; pre-deploy diff showed only `BookingHandler` Lambda code, and post-deploy `npm --prefix infra run diff:dev` showed no differences.
+- Dev smoke: no-customer add-product draft for original booking `5100965` created Roller draft `45ee1b0e-ab69-4e31-832f-d956af599365`, prepayment draft `jypd_7d8379902449415aab`, add-on group `jyao_f93769db16d840678e`, and booking link `jyl_7e8eac4758424c24bc`; Aurora shows `payment_pending`, `total_cents=4500`, and `payment_jwt_present=true`.
+
 T0037 scheduled Data API sync deploy notes:
 
 - Added resource: `jumpyard-check-in-dev-stack-data-sync`
@@ -530,7 +539,7 @@ Confirmed T0006 dev target:
 | `jumpyard-check-in-dev-ops` | CloudWatch Dashboard | `dev` | `eu-north-1` | `cdk` | T0060 operations dashboard for API requests/errors/latency, Lambda metrics, SQS/DLQ metrics, and Roller outbound API call/error metrics. |
 | `jumpyard-check-in-dev-*` CloudWatch alarms | CloudWatch Alarms | `dev` | `eu-north-1` | `cdk` | T0060 alarms for API 5xx, high API 4xx, Roller API errors, Roller ops DLQ messages, and Lambda errors/throttles; T0061 adds API throttled request alarm `jumpyard-check-in-dev-api-throttled-requests`. |
 | `jumpyard-check-in-dev-stack-lookup` | Lambda | `dev` | `eu-north-1` | `cdk` | T0016 lookup handler; reads Aurora first, refreshes from Roller Playground only when needed, and returns normalized phone-flow lookup response. |
-| `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | T0034 booking handler; reads Roller Playground availability, quotes Roller Playground draft costs, creates confirmed Playground draft bookings behind idempotency, creates separate linked add-product draft bookings for existing bookings, persists safe pre-payment draft rows, returns safe payment config and response-only `paymentJwt`, and writes safe audit rows. |
+| `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | T0082 booking handler; reads Roller Playground availability, quotes Roller Playground draft costs, creates confirmed Playground draft bookings behind idempotency, creates separate linked add-product draft bookings for existing bookings, resolves original booking contact server-side for no-customer add-product drafts, persists safe pre-payment draft rows, returns safe payment config and response-only `paymentJwt`, and writes safe audit rows. |
 | `jumpyard-check-in-dev-stack-redeem` | Lambda | `dev` | `eu-north-1` | `cdk` | T0047 redeem handler; plans/validates server-side redemption from Aurora, requires a dev token for lower-level direct confirmed writes, refreshes live Roller state before write, supports staff-auth-protected session redeem, marks completed sessions, and records attempt audit. |
 | `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0068 session handler config; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, issues staff auth tokens, protects staff handoff list/detail, creates/resolves hashed check-in session links with safe booking summaries for phone resume, dry-runs or explicitly sends SMS links through AWS SNS with safe provider/Sender ID diagnostics, dry-runs or explicitly sends email links through SES with safe sender/reply-to diagnostics using verified dev sender `love@wrlds.com`, plans booking-time SMS/email candidates from Aurora through one processor, and blocks scheduled confirmed sends unless the approval phrase and public HTTPS URL are present. |
 | `love@wrlds.com` | Amazon SES email identity | `dev` | `eu-north-1` | manual AWS CLI | T0067 verified dev test identity for real email smoke; created with WRLDS tags and verified for sending. Do not use as production sender/domain. |
