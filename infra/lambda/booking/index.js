@@ -402,6 +402,15 @@ async function handleAddProductQuote(event, body, correlationId) {
     });
   }
 
+  const customerResult = resolveAddProductCustomer(request, original);
+  if (!customerResult.ok) {
+    return jsonResponse(customerResult.statusCode, correlationId, {
+      status: customerResult.status,
+      error: customerResult.error,
+    });
+  }
+  request.customer = customerResult.customer;
+
   const availabilityError = request.requireAvailability ? await validateItemsAvailable(config, token, request.items) : null;
   if (availabilityError) {
     return jsonResponse(409, correlationId, {
@@ -411,7 +420,7 @@ async function handleAddProductQuote(event, body, correlationId) {
   }
 
   const payload = buildRollerBookingPayload(request, {
-    customer: request.customer || buildQuoteCustomer(),
+    customer: request.customer,
     externalIdPrefix: 'JY-AQ',
   });
   const rollerResult = await postRollerJson(config, token, '/bookings/draft/costs', payload);
@@ -495,7 +504,7 @@ async function handleAddProductDraft(event, body, correlationId) {
   }
 
   const request = normalizeAddProductDraftRequest(event, body, bookingReference);
-  const validationError = validateDraftRequest(request);
+  const validationError = validateAddProductDraftRequest(request);
   if (validationError) {
     return jsonResponse(400, correlationId, {
       status: 'invalid_request',
@@ -512,6 +521,15 @@ async function handleAddProductDraft(event, body, correlationId) {
       error: original.error,
     });
   }
+
+  const customerResult = resolveAddProductCustomer(request, original);
+  if (!customerResult.ok) {
+    return jsonResponse(customerResult.statusCode, correlationId, {
+      status: customerResult.status,
+      error: customerResult.error,
+    });
+  }
+  request.customer = customerResult.customer;
 
   const requestHash = hashJson({
     customer: maskCustomerForHash(request.customer),
@@ -701,12 +719,26 @@ function normalizeAddProductQuoteRequest(body, bookingReference) {
 }
 
 function normalizeAddProductDraftRequest(event, body, bookingReference) {
-  const request = normalizeDraftRequest(event, body);
-  request.flowType = 'add_product';
-  request.originalBookingReference = bookingReference;
-  request.name = request.name || `Add-on for ${bookingReference}`;
-  request.comments = request.comments || `JumpYard add-product draft for original booking ${bookingReference}`;
-  return request;
+  return {
+    capacityReservationId: stringOrNull(body.capacityReservationId),
+    comments: stringOrNull(body.comments) || `JumpYard add-product draft for original booking ${bookingReference}`,
+    companyId: numberOrNull(body.companyId),
+    confirmDraft: body.confirmDraft === true,
+    correlationId: stringOrNull(body.correlationId),
+    customer: body.customer ? normalizeCustomer(body.customer, false) : null,
+    customerPaysFees: body.customerPaysFees === true,
+    discounts: normalizeDiscounts(body.discounts, body.discountCodes),
+    externalId: stringOrNull(body.externalId),
+    flowType: 'add_product',
+    giftCards: normalizeGiftCards(body.giftCards),
+    idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
+    items: normalizeItems(body.items),
+    name: stringOrNull(body.name) || `Add-on for ${bookingReference}`,
+    originalBookingReference: bookingReference,
+    requireAvailability: body.requireAvailability === true,
+    sendConfirmations: body.sendConfirmations === true,
+    venueId: stringOrNull(body.venueId),
+  };
 }
 
 function normalizeAvailabilityRequest(body) {
@@ -818,6 +850,29 @@ function validateDraftRequest(request) {
 
   const customerError = validateCustomer(request.customer);
   if (customerError) return customerError;
+
+  return validateItems(request.items);
+}
+
+function validateAddProductDraftRequest(request) {
+  if (!request.idempotencyKey) {
+    return {
+      code: 'idempotency_key_required',
+      message: 'idempotencyKey or x-idempotency-key is required.',
+    };
+  }
+
+  if (!request.confirmDraft) {
+    return {
+      code: 'confirm_draft_required',
+      message: 'confirmDraft=true is required before creating a Roller Playground draft booking.',
+    };
+  }
+
+  if (hasAnyCustomerField(request.customer)) {
+    const customerError = validateCustomer(request.customer);
+    if (customerError) return customerError;
+  }
 
   return validateItems(request.items);
 }
@@ -1199,6 +1254,9 @@ async function resolveOriginalBookingContext(config, token, bookingReference) {
     };
   }
 
+  const localCustomer = await findLocalOriginalBookingCustomer(original.rollerUniqueId, original.bookingReference);
+  original.customer = mergeOriginalBookingCustomer(original.customer, localCustomer, original.bookingName);
+
   return {
     ok: true,
     ...original,
@@ -1216,6 +1274,7 @@ async function findLocalOriginalBooking(bookingReference) {
        payment_status,
        booking_date::text AS booking_date,
        start_time::text AS start_time,
+       normalized_summary ->> 'bookingCustomerId' AS booking_customer_id,
        freshness_status
      FROM jumpyard.roller_bookings
      WHERE booking_reference = :bookingReference
@@ -1226,22 +1285,143 @@ async function findLocalOriginalBooking(bookingReference) {
   return firstMappedRow(result);
 }
 
+async function findLocalOriginalBookingCustomer(rollerUniqueId, bookingReference) {
+  if (!rollerUniqueId && !bookingReference) return null;
+
+  const result = await executeStatement(
+    `WITH contact_candidate AS (
+       SELECT
+         1 AS priority,
+         ticket.roller_customer_id
+       FROM jumpyard.roller_booking_tickets AS ticket
+       WHERE ticket.roller_unique_id = :rollerUniqueId
+         AND ticket.roller_customer_id IS NOT NULL
+       UNION ALL
+       SELECT
+         2 AS priority,
+         booking.normalized_summary ->> 'bookingCustomerId' AS roller_customer_id
+       FROM jumpyard.roller_bookings AS booking
+       WHERE (booking.roller_unique_id = :rollerUniqueId OR booking.booking_reference = :bookingReference)
+         AND booking.normalized_summary ->> 'bookingCustomerId' IS NOT NULL
+     )
+     SELECT
+       gp.email,
+       gp.contact_number AS phone
+     FROM contact_candidate
+     INNER JOIN jumpyard.guest_profiles AS gp
+       ON gp.roller_customer_id = contact_candidate.roller_customer_id
+     WHERE gp.email IS NOT NULL
+        OR gp.contact_number IS NOT NULL
+     ORDER BY contact_candidate.priority ASC, gp.updated_at DESC
+     LIMIT 1`,
+    [stringParameter('rollerUniqueId', rollerUniqueId), stringParameter('bookingReference', bookingReference)],
+  );
+
+  const row = firstMappedRow(result);
+  if (!row) return null;
+
+  return {
+    email: stringOrNull(row.email),
+    phone: stringOrNull(row.phone),
+  };
+}
+
 function normalizeOriginalBookingContext(body, bookingReference, localBooking) {
   const booking = body?.booking && typeof body.booking === 'object' ? body.booking : body;
   const items = Array.isArray(booking?.items) ? booking.items : [];
   const firstItem = items[0] ?? {};
 
   return {
+    bookingName: stringOrNull(booking?.name ?? booking?.bookingName ?? booking?.title),
     bookingDate: stringOrNull(booking?.bookingDate ?? firstItem.bookingDate ?? localBooking?.booking_date),
     bookingReference:
       stringOrNull(booking?.bookingReference ?? booking?.reference ?? booking?.bookingId) ||
       stringOrNull(localBooking?.booking_reference) ||
       bookingReference,
     bookingStatus: stringOrNull(booking?.status ?? booking?.bookingStatus ?? localBooking?.booking_status),
+    customer: normalizeOriginalBookingCustomer(booking),
     localFreshnessStatus: stringOrNull(localBooking?.freshness_status),
     paymentStatus: stringOrNull(booking?.paymentStatus ?? booking?.status ?? booking?.bookingStatus ?? localBooking?.payment_status),
     rollerUniqueId: stringOrNull(booking?.uniqueId ?? booking?.id ?? booking?.bookingUniqueId ?? localBooking?.roller_unique_id),
     startTime: stringOrNull(booking?.startTime ?? firstItem.startTime ?? firstItem.sessionStartTime ?? localBooking?.start_time),
+  };
+}
+
+function normalizeOriginalBookingCustomer(booking) {
+  const candidates = [
+    booking?.customer,
+    booking?.bookingCustomer,
+    booking?.bookingHolder,
+    booking?.guest,
+    booking?.contact,
+    booking?.primaryContact,
+    booking?.holder,
+    booking?.customerDetails,
+    Array.isArray(booking?.contacts) ? booking.contacts[0] : null,
+    booking,
+  ].filter(isPlainObject);
+
+  const customer = {
+    email: null,
+    firstName: null,
+    lastName: null,
+    phone: null,
+  };
+  let fullName = null;
+
+  for (const candidate of candidates) {
+    customer.firstName =
+      customer.firstName || firstObjectString(candidate, ['firstName', 'first_name', 'givenName', 'given_name']);
+    customer.lastName =
+      customer.lastName || firstObjectString(candidate, ['lastName', 'last_name', 'familyName', 'family_name', 'surname']);
+    customer.email = customer.email || firstObjectString(candidate, ['email', 'emailAddress', 'email_address']);
+    customer.phone =
+      customer.phone ||
+      firstObjectString(candidate, ['phone', 'phoneNumber', 'phone_number', 'mobile', 'mobilePhone', 'contactNumber']);
+    fullName =
+      fullName ||
+      firstObjectString(candidate, ['fullName', 'full_name', 'customerName', 'bookingHolderName', 'name', 'bookingName']);
+  }
+
+  const nameParts = splitCustomerName(fullName);
+  return {
+    email: customer.email,
+    firstName: customer.firstName || nameParts.firstName,
+    lastName: customer.lastName || nameParts.lastName,
+    phone: customer.phone,
+  };
+}
+
+function mergeOriginalBookingCustomer(primary, fallback, fallbackName) {
+  const nameParts = splitCustomerName(fallbackName);
+
+  return {
+    email: stringOrNull(primary?.email) || stringOrNull(fallback?.email),
+    firstName: stringOrNull(primary?.firstName) || nameParts.firstName,
+    lastName: stringOrNull(primary?.lastName) || nameParts.lastName,
+    phone: stringOrNull(primary?.phone) || stringOrNull(fallback?.phone),
+  };
+}
+
+function resolveAddProductCustomer(request, original) {
+  const customer = hasAnyCustomerField(request.customer) ? request.customer : original.customer;
+  const customerError = validateCustomer(customer);
+  if (customerError) {
+    return {
+      ok: false,
+      status: 'blocked',
+      statusCode: 409,
+      error: {
+        code: 'original_booking_contact_unresolved',
+        message:
+          'Original booking contact could not be resolved server-side. Refresh Roller customer data or ask staff before creating add-products.',
+      },
+    };
+  }
+
+  return {
+    customer,
+    ok: true,
   };
 }
 
@@ -2089,6 +2269,39 @@ function getHeader(event, name) {
 function stringOrNull(value) {
   if (value === undefined || value === null || value === '') return null;
   return String(value).trim() || null;
+}
+
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function firstObjectString(object, keys) {
+  if (!isPlainObject(object)) return null;
+
+  for (const key of keys) {
+    const value = stringOrNull(object[key]);
+    if (value) return value;
+  }
+
+  return null;
+}
+
+function splitCustomerName(value) {
+  const name = stringOrNull(value);
+  if (!name) return { firstName: null, lastName: null };
+
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return { firstName: null, lastName: null };
+
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  };
+}
+
+function hasAnyCustomerField(customer) {
+  if (!isPlainObject(customer)) return false;
+  return ['firstName', 'lastName', 'email', 'phone'].some((field) => Boolean(stringOrNull(customer[field])));
 }
 
 function numberOrNull(value) {

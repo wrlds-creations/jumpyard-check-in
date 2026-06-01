@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-01
-- Current branch: `codex/t0078-add-product-payment-flow`
-- Current status: T0078 existing-booking add-product card payment completed locally; add-product creates a separate linked draft and returns to the original safety flow after approved payment.
-- Current ticket: `T0078` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`
-- Recommended next step: commit/merge T0078, then run T0079 staff handoff and redeem polish.
+- Current branch: `codex/t0079-add-product-ux-polish`
+- Current status: T0079 existing-booking add-product UX polish completed locally; add-products reuse original booking contact server-side and show a short payment-approved confirmation before continuing.
+- Current ticket: `T0079` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`
+- Recommended next step: commit/merge T0079, then run T0080 staff handoff and redeem polish.
 
 ## Current Structure
 
@@ -209,26 +209,30 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0075` | Verified card payment unblock. | 2026-06-01 | Pabel's Roller Playground fix is confirmed in the public checkout: card payment renders, Adyen Visa test card ending `1142` submits, and the phone flow reaches the safety-video step. |
 | `T0076` | Verified full new-booking purchase flow. | 2026-06-01 | Public Cloudflare smoke completed buy-entry, time/product/add-ons/contact/review, card payment with Adyen Visa ending `1142`, safety video/rules, and ready-for-staff QR/handoff code `JY4704`; merged through PR #78. |
 | `T0077` | Verified paid existing-booking happy path. | 2026-06-01 | Public existing-booking lookup for paid booking `5100930` resumed directly to ready-for-staff QR/handoff code `JY4704`; merged through PR #79. |
-| `T0078` | Verified existing-booking add-product payment flow. | 2026-06-01 | Public existing-booking add-product smoke for paid booking `5100926` selected one `Strumpor`, created a separate linked add-on draft, paid by card with Adyen Visa ending `1142`, and continued to safety video; completed locally, not committed. |
+| `T0078` | Verified existing-booking add-product payment flow. | 2026-06-01 | Public existing-booking add-product smoke for paid booking `5100926` selected one `Strumpor`, created a separate linked add-on draft, paid by card with Adyen Visa ending `1142`, and continued to safety video; merged through PR #80. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0078` | Existing-booking add-product payment flow. | Completed locally, not committed | Public add-product smoke for paid booking `5100926` creates a separate linked add-on draft and reaches the safety-video continuation after card payment. |
+| `T0079` | Existing-booking add-product UX polish. | Completed locally, not committed | Add-product quote/draft can omit visible contact fields and safely reuse original booking contact server-side; approved add-product payment shows a short confirmation before continuing. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0079` | Staff handoff and redeem polish | Re-test QR scan/manual code, staff login, redeem only redeemable tickets, and clear states for already redeemed, unpaid, or non-redeemable cases. |
-| `T0080` | Data sync/webhook verification | Re-check daily Data API sync, webhook enrichment, Aurora freshness, and lookup behavior after the payment/add-product smokes. |
-| `T0081` | Full integrated flow rehearsal | Run a small end-to-end rehearsal of the three target flows before returning to production readiness. |
-| `T0082` | SMS/email production unlock | Resume SES/SNS production unlock, sender/domain setup, and unattended booking-time sends after the core app flows are proven. |
-| `T0083` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
+| `T0080` | Staff handoff and redeem polish | Re-test QR scan/manual code, staff login, redeem only redeemable tickets, and clear states for already redeemed, unpaid, or non-redeemable cases. |
+| `T0081` | Data sync/webhook verification | Re-check daily Data API sync, webhook enrichment, Aurora freshness, and lookup behavior after the payment/add-product smokes. |
+| `T0082` | Full integrated flow rehearsal | Run a small end-to-end rehearsal of the three target flows before returning to production readiness. |
+| `T0083` | SMS/email production unlock | Resume SES/SNS production unlock, sender/domain setup, and unattended booking-time sends after the core app flows are proven. |
+| `T0084` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
 ## Validation Status
 
+- T0079 branch setup: branch `codex/t0079-add-product-ux-polish` was created from updated `main` after T0078 was merged through PR #80.
+- T0079 backend behavior: existing-booking add-product quote/draft requests can omit `customer`; JumpYard Cloud resolves the original booking contact from Roller detail plus Aurora `guest_profiles` and fails closed if first name, last name, email, or phone cannot be resolved.
+- T0079 phone behavior: the existing-booking add-product flow skips the visible contact form, quotes directly after add-on selection, sends no customer payload for add-product quote/draft, and shows a short payment-approved confirmation before continuing to the original safety/check-in path.
+- T0079 validation: `node --check infra/lambda/booking/index.js`, `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, `npm run validate`, and `git diff --check` passed. Phone lint still reports only the pre-existing `<img>` warnings; local browser sanity loaded `http://localhost:3000/?codexSmoke=t0079-local`.
 - T0078 branch setup: branch `codex/t0078-add-product-payment-flow` was created from updated `main` after T0077 was merged.
 - T0078 public add-product smoke: `https://jumpyard-check-in.pages.dev` used paid existing booking `5100926`, entered the add-ons step, selected one `Strumpor`, collected add-on contact details, showed server quote `45 kr`, and created a separate linked add-on draft.
 - T0078 linked-draft proof: the safe API response used `mode='separate_draft_booking'`, original booking `5100926`, Roller draft unique id `fe892301-95b7-490a-b4ad-dff311cfdd7f`, add-on group `jyao_32bbe440269649e7af`, link `jyl_77074c7ce26047b3b0`, and prepayment draft `jypd_529c13ed3a8a4d83a1`.
@@ -633,7 +637,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, phone session resume routing is complete locally from T0029, staff auth replacement is deployed from T0047, staff/admin mobile visual polish is complete locally from T0048, and guest SMS/email link foundations both use the same opaque `jy_token` session-resolution model.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
 - Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; T0050 confirms `/venues/me` payment settings are available, T0051 wires the approved payment package in the phone buy-entry flow, T0052 reuses it for linked add-product drafts, and T0054 confirmed public Swish payment could complete. Pabel confirmed on 2026-06-01 that the Playground payment integration issue is fixed; T0075 confirmed card smoke, and T0076 confirmed the full card-paid new-booking flow to ready-for-staff handoff.
-- Existing-booking add-product linked-booking flow has been tested server-side in dev and wired in the phone UI, including the shared payment package path when JWT/config are present.
+- Existing-booking add-product linked-booking flow has been tested server-side in dev and wired in the phone UI, including the shared payment package path when JWT/config are present. T0079 removes the guest-facing duplicate contact form for add-products; JumpYard Cloud now resolves the original booking contact server-side and fails closed if that contact is missing.
 - T0058 production-readiness audit is docs-only and made no AWS changes. T0060 added the first dev CORS/observability hardening, T0061 added dev API Gateway stage throttling plus 429 visibility, T0062 documented the route boundary, T0063 added email dry-run/audit support, and T0064 moved guest SMS/email completion ahead of broader staging/live readiness. The main staging/live blockers still include production environment config, route auth/WAF implementation, alarm notification/runbooks, SMS sandbox/consent/sender readiness, SES sender/domain verification, dev-token replacement, data retention, deployment rollback, and live backfill/cutover.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
 
