@@ -753,7 +753,7 @@ Use this file to define validation for the current project or milestone.
 
 | Scenario | Expected Result | Status | Notes |
 |---|---|---|---|
-| Roadmap gate | Stabilization and full-flow proof appear before broader production-readiness tickets. | Passed | `REPO_CURRENT_STATE.md` puts T0070-T0074 before environment/cutover, runbooks, production auth/WAF, retention, and live backfill work. |
+| Roadmap gate | Stabilization and full-flow proof appear before broader production-readiness tickets. | Passed | `REPO_CURRENT_STATE.md` now puts the T0075-T0081 core-flow gate before environment/cutover, runbooks, production auth/WAF, retention, and live backfill work. |
 | Follow-up ownership | Open follow-ups point to the reordered future tickets. | Passed | SMS/email follow-ups point to T0072/T0073; production-readiness follow-ups point to T0075-T0080. |
 | No implementation changes | T0069 changes source-of-truth docs only. | Passed | No app code, Lambda code, CDK resources, AWS config, Roller config, package dependencies, or credentials were changed. |
 | Root validation | Source-of-truth docs validate after T0069 updates. | Passed | `npm run validate` passed on 2026-05-29. |
@@ -872,6 +872,17 @@ Use this file to define validation for the current project or milestone.
 | QR/handoff state | Final page shows ready-for-staff state and handoff code. | Passed | Final state showed ready-for-staff with handoff/backup code `JY4704` and one armband item. |
 | Direct Aurora readback | Read-only Aurora state should be checked where practical. | Blocked | Local AWS SSO token for profile `wrlds-dev` had expired, so direct database readback was deferred. Browser/API flow proof still passed. |
 | Payment method follow-up | Swish/Apple Pay visibility should not block the card-paid core flow. | Follow-up open | `FU-071` tracks Roller/Pabel confirmation; T0076 used card because card is the currently confirmed method. |
+
+## T0077 Existing-Booking Happy Path Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Paid booking fixture | A paid booking for today's operating date is available for lookup. | Passed | Read-only Roller Data API lookup found booking `5100930`, status `Paid`, booking date `2026-06-01`, session start `11:00`. |
+| Existing-booking lookup | Guest can enter a booking reference and find the booking through JumpYard Cloud. | Passed | Public browser smoke used the existing-booking path on `https://jumpyard-check-in.pages.dev/?codexSmoke=t0077-existing-5100930` and entered `5100930`. |
+| No repeat payment | Paid existing booking should not ask the guest to pay again. | Passed | The app resumed to the existing ready-for-staff QR/handoff state instead of showing payment. |
+| Ready-session resume | A booking already ready for staff should not repeat completed safety steps. | Passed | Booking `5100930` resumed directly to ready-for-staff because T0076 already completed safety for this session. |
+| QR/handoff state | Final page shows the server-owned handoff code. | Passed | Final state showed handoff/backup code `JY4704` and one armband item. |
+| Staff redeem | T0077 should not redeem tickets. | Passed | No staff/admin redeem action was performed. |
 
 ## T0053 New-Booking Basket Before Payment Validation
 
