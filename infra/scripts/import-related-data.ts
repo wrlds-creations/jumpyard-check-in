@@ -130,6 +130,8 @@ interface CustomerRecord {
   customerId?: unknown;
   email?: unknown;
   flags?: unknown;
+  firstName?: unknown;
+  lastName?: unknown;
   modifiedDate?: unknown;
 }
 
@@ -566,6 +568,8 @@ function normalizeCustomer(record: CustomerRecord): NormalizedCustomer | null {
       acceptMarketingSms: booleanOrNull(record.acceptMarketingSMS ?? record.acceptMarketingSms),
       createdDate: timestampOrNull(record.createdDate),
       flagCount: Array.isArray(record.flags) ? record.flags.length : 0,
+      firstName: stringOrNull(record.firstName),
+      lastName: stringOrNull(record.lastName),
       source: SOURCE_CUSTOMERS,
     },
     modifiedDate: timestampOrNull(record.modifiedDate),

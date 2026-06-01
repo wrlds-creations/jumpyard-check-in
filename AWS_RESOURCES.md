@@ -363,6 +363,17 @@ T0082 add-product contact-resolution deploy notes:
 - Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-06-01; pre-deploy diff showed only `BookingHandler` Lambda code, and post-deploy `npm --prefix infra run diff:dev` showed no differences.
 - Dev smoke: no-customer add-product draft for original booking `5100965` created Roller draft `45ee1b0e-ab69-4e31-832f-d956af599365`, prepayment draft `jypd_7d8379902449415aab`, add-on group `jyao_f93769db16d840678e`, and booking link `jyl_7e8eac4758424c24bc`; Aurora shows `payment_pending`, `total_cents=4500`, and `payment_jwt_present=true`.
 
+T0083 staff handoff identity/search deploy notes:
+
+- Changed resources: `jumpyard-check-in-dev-stack-session`, `jumpyard-check-in-dev-stack-booking`, and `jumpyard-check-in-dev-stack-data-sync`
+- AWS resources changed: existing Lambda code only; no new AWS resources were created.
+- Aurora schema changed: migration `0008 prepayment draft customer names` added `customer_first_name` and `customer_last_name` to `jumpyard.prepayment_booking_drafts` and backfilled matched draft rows from `guest_profiles`.
+- Behavior: staff-authenticated handoff list/detail routes now return limited guest identity fields with stored first/last name when available and masked email/phone, and the list route supports backend search by handoff code, booking reference, stored name, email, and phone.
+- Behavior: booking Lambda stores first/last name for new prepayment draft rows; data-sync stores Roller Data API `/data/customers` first/last name in `guest_profiles.latest_booking_context`.
+- Safety: raw email and raw phone are used only server-side for search and are not returned in the staff API response; public guest APIs/UI were not changed.
+- Deploy result: staged `npm --prefix infra run deploy:dev` runs passed on 2026-06-01; CDK diffs were limited to `DataSyncHandler`, `BookingHandler`, and `SessionHandler` Lambda code, and final post-deploy `npm --prefix infra run diff:dev` showed no differences.
+- Dev smoke: controlled ready-for-staff session for booking `5100965` validated booking reference, first-name, derived last-name, and masked-contact search, and confirmed raw `email`/`phone` response fields were absent.
+
 T0037 scheduled Data API sync deploy notes:
 
 - Added resource: `jumpyard-check-in-dev-stack-data-sync`
@@ -539,15 +550,15 @@ Confirmed T0006 dev target:
 | `jumpyard-check-in-dev-ops` | CloudWatch Dashboard | `dev` | `eu-north-1` | `cdk` | T0060 operations dashboard for API requests/errors/latency, Lambda metrics, SQS/DLQ metrics, and Roller outbound API call/error metrics. |
 | `jumpyard-check-in-dev-*` CloudWatch alarms | CloudWatch Alarms | `dev` | `eu-north-1` | `cdk` | T0060 alarms for API 5xx, high API 4xx, Roller API errors, Roller ops DLQ messages, and Lambda errors/throttles; T0061 adds API throttled request alarm `jumpyard-check-in-dev-api-throttled-requests`. |
 | `jumpyard-check-in-dev-stack-lookup` | Lambda | `dev` | `eu-north-1` | `cdk` | T0016 lookup handler; reads Aurora first, refreshes from Roller Playground only when needed, and returns normalized phone-flow lookup response. |
-| `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | T0082 booking handler; reads Roller Playground availability, quotes Roller Playground draft costs, creates confirmed Playground draft bookings behind idempotency, creates separate linked add-product draft bookings for existing bookings, resolves original booking contact server-side for no-customer add-product drafts, persists safe pre-payment draft rows, returns safe payment config and response-only `paymentJwt`, and writes safe audit rows. |
+| `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | T0083 booking handler; reads Roller Playground availability, quotes Roller Playground draft costs, creates confirmed Playground draft bookings behind idempotency, creates separate linked add-product draft bookings for existing bookings, resolves original booking contact server-side for no-customer add-product drafts, persists safe pre-payment draft rows including first/last name for staff-only handoff use, returns safe payment config and response-only `paymentJwt`, and writes safe audit rows. |
 | `jumpyard-check-in-dev-stack-redeem` | Lambda | `dev` | `eu-north-1` | `cdk` | T0047 redeem handler; plans/validates server-side redemption from Aurora, requires a dev token for lower-level direct confirmed writes, refreshes live Roller state before write, supports staff-auth-protected session redeem, marks completed sessions, and records attempt audit. |
-| `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0068 session handler config; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, issues staff auth tokens, protects staff handoff list/detail, creates/resolves hashed check-in session links with safe booking summaries for phone resume, dry-runs or explicitly sends SMS links through AWS SNS with safe provider/Sender ID diagnostics, dry-runs or explicitly sends email links through SES with safe sender/reply-to diagnostics using verified dev sender `love@wrlds.com`, plans booking-time SMS/email candidates from Aurora through one processor, and blocks scheduled confirmed sends unless the approval phrase and public HTTPS URL are present. |
+| `jumpyard-check-in-dev-stack-session` | Lambda | `dev` | `eu-north-1` | `cdk` | T0083 session handler; creates/resumes Aurora-backed check-in sessions, marks sessions ready for staff, issues staff auth tokens, protects staff handoff list/detail, returns staff-only limited guest identity/search fields with masked contact data, creates/resolves hashed check-in session links with safe booking summaries for phone resume, dry-runs or explicitly sends SMS links through AWS SNS with safe provider/Sender ID diagnostics, dry-runs or explicitly sends email links through SES with safe sender/reply-to diagnostics using verified dev sender `love@wrlds.com`, plans booking-time SMS/email candidates from Aurora through one processor, and blocks scheduled confirmed sends unless the approval phrase and public HTTPS URL are present. |
 | `love@wrlds.com` | Amazon SES email identity | `dev` | `eu-north-1` | manual AWS CLI | T0067 verified dev test identity for real email smoke; created with WRLDS tags and verified for sending. Do not use as production sender/domain. |
 | `jumpyard-check-in-dev-sns-sms-delivery-status` | IAM Role | `dev` | `eu-north-1` | `cdk` | Allows Amazon SNS to write SMS delivery status logs for JumpYard Cloud dev diagnostics. |
 | `SmsDeliveryStatusAttributes` | CloudFormation Custom Resource | `dev` | `eu-north-1` | `cdk` | Sets dev SNS SMS attributes for transactional SMS and 100% delivery status sampling. |
 | SNS SMS sandbox phone `+46*****9508` | Amazon SNS SMS sandbox | `dev` | `eu-north-1` | AWS CLI/manual verification | Verified test destination for dev SMS delivery while the account remains in SMS sandbox. |
 | `jumpyard-check-in-dev-stack-webhook` | Lambda | `dev` | `eu-north-1` | `cdk` | T0018 webhook handler; accepts Roller Playground `x-roller-apikey`, validates a dev token, stores idempotent metadata, refreshes booking detail from Roller Playground, and upserts Aurora booking/item/ticket snapshots. |
-| `jumpyard-check-in-dev-stack-data-sync` | Lambda | `dev` | `eu-north-1` | `cdk` | T0037 scheduled sync handler; imports Roller Data API modified-date windows and product cache data into Aurora, records run health, and performs no Roller writes. |
+| `jumpyard-check-in-dev-stack-data-sync` | Lambda | `dev` | `eu-north-1` | `cdk` | T0083 scheduled sync handler; imports Roller Data API modified-date windows and product cache data into Aurora, stores customer first/last name in `guest_profiles.latest_booking_context`, records run health, and performs no Roller writes. |
 | Roller Playground webhook `238` | Roller Webhooks API | `dev`/Playground | External | Roller | Posts booking `Created`, `Updated`, and `Cancelled` events with `tickets=true` to the dev JumpYard Cloud webhook endpoint. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-lookup` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-booking` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
@@ -588,14 +599,14 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`.
 
 | Table | Purpose |
 |---|---|
-| `schema_migrations` | Tracks applied SQL migrations. Applied through `0007 email deliveries`. |
+| `schema_migrations` | Tracks applied SQL migrations. Applied through `0008 prepayment draft customer names`. |
 | `roller_bookings` | Latest normalized Roller booking snapshot from seed, webhook enrichment, or live refresh. T0016 and T0017 can upsert refreshed booking rows. |
 | `roller_booking_items` | Normalized booking item/product rows. T0016 and T0017 can upsert refreshed item rows. |
 | `roller_booking_tickets` | Ticket ids and redeem readiness context from `/data/tickets`, lookup live refresh, or webhook enrichment. |
 | `roller_booking_payments` | Payment rows or summaries needed for check-in/payment decisions from `/data/bookingpayments`. |
-| `guest_profiles` | Structured guest email/phone contact state plus masked/hash values for SMS/readiness and late enrichment. |
+| `guest_profiles` | Structured guest email/phone contact state plus masked/hash values for SMS/readiness and late enrichment; T0083 also keeps customer first/last name inside `latest_booking_context` for staff-only handoff identity. |
 | `checkin_sessions` | Server-owned guest check-in session state, selected ticket ids, safety status, handoff status/code, expiry, and ready-for-staff state. |
-| `prepayment_booking_drafts` | Safe Roller draft booking metadata for new-booking and add-product pre-payment flows, including status, selected item summary, totals, structured guest email/phone, masked/hash contact fields, add-product original booking link fields, and JWT/config presence flags without storing raw `paymentJwt`. |
+| `prepayment_booking_drafts` | Safe Roller draft booking metadata for new-booking and add-product pre-payment flows, including status, selected item summary, totals, structured guest first/last name, structured guest email/phone, masked/hash contact fields, add-product original booking link fields, and JWT/config presence flags without storing raw `paymentJwt`. |
 | `checkin_tokens` | SMS/link/open token state. |
 | `email_deliveries` | Email link delivery audit rows with masked/hashed destination values and no raw token/full URL storage. |
 | `checkin_attempts` | Check-in and redeem attempt audit. |

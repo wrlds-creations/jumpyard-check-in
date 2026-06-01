@@ -1235,11 +1235,20 @@ function normalizeStaffListRequest(event) {
   const query = event?.queryStringParameters ?? {};
   const limit = Math.min(Math.max(numberOrNull(query.limit) ?? 25, 1), 50);
   const includeExpired = ['1', 'true', 'yes'].includes(String(query.includeExpired ?? '').toLowerCase());
+  const searchQuery = normalizeStaffSearchQuery(query.q ?? query.query ?? query.search);
 
   return {
     includeExpired,
     limit,
+    searchQuery,
   };
+}
+
+function normalizeStaffSearchQuery(value) {
+  const query = stringOrNull(value);
+  if (!query) return null;
+
+  return query.toLowerCase().slice(0, 96);
 }
 
 function normalizeStaffAuthLoginRequest(body) {
@@ -1914,7 +1923,7 @@ async function findReadyStaffSessions(request) {
   const expiryClause = request.includeExpired ? '' : 'AND cs.expires_at > now()';
 
   const result = await executeStatement(
-    `WITH session_rows AS (
+    `WITH session_base AS (
        SELECT
          cs.checkin_session_id,
          cs.roller_unique_id,
@@ -1937,14 +1946,126 @@ async function findReadyStaffSessions(request) {
          b.booking_date::text AS booking_date,
          b.start_time::text AS start_time,
          b.end_time::text AS end_time,
-         b.freshness_status
+         b.freshness_status,
+         COALESCE(
+           NULLIF(b.normalized_summary ->> 'bookingName', ''),
+           NULLIF(b.normalized_summary ->> 'name', ''),
+           NULLIF(trim(concat_ws(' ', guest_identity.first_name, guest_identity.last_name)), '')
+         ) AS guest_name,
+         guest_identity.email_masked AS guest_email_masked,
+         guest_identity.phone_masked AS guest_phone_masked,
+         lower(
+           concat_ws(
+             ' ',
+             cs.checkin_session_id,
+             cs.handoff_code,
+             cs.booking_reference,
+             cs.roller_unique_id,
+             b.booking_reference,
+             COALESCE(b.normalized_summary ->> 'bookingName', ''),
+             COALESCE(b.normalized_summary ->> 'name', ''),
+             COALESCE(guest_identity.first_name, ''),
+             COALESCE(guest_identity.last_name, ''),
+             COALESCE(guest_identity.email, ''),
+             COALESCE(guest_identity.email_masked, ''),
+             COALESCE(guest_identity.phone, ''),
+             COALESCE(guest_identity.phone_masked, '')
+           )
+         ) AS staff_search_text
        FROM jumpyard.checkin_sessions AS cs
        LEFT JOIN jumpyard.roller_bookings AS b
          ON b.roller_unique_id = cs.roller_unique_id
+       LEFT JOIN LATERAL (
+         SELECT
+           contact_source.email,
+           contact_source.email_masked,
+           contact_source.first_name,
+           contact_source.last_name,
+           contact_source.phone,
+           contact_source.phone_masked
+         FROM (
+           SELECT
+             0 AS priority,
+             draft.customer_email AS email,
+             draft.customer_email_masked AS email_masked,
+             COALESCE(NULLIF(draft.customer_first_name, ''), profile.first_name) AS first_name,
+             COALESCE(NULLIF(draft.customer_last_name, ''), profile.last_name) AS last_name,
+             draft.customer_phone AS phone,
+             draft.customer_phone_masked AS phone_masked,
+             draft.updated_at
+           FROM jumpyard.prepayment_booking_drafts AS draft
+           LEFT JOIN LATERAL (
+             SELECT
+               gp.latest_booking_context ->> 'firstName' AS first_name,
+               gp.latest_booking_context ->> 'lastName' AS last_name
+             FROM jumpyard.guest_profiles AS gp
+             WHERE (
+                 draft.customer_email_hash IS NOT NULL
+                 AND gp.email_hash = draft.customer_email_hash
+               )
+                OR (
+                  draft.customer_phone_hash IS NOT NULL
+                  AND gp.contact_number_hash = draft.customer_phone_hash
+                )
+             ORDER BY gp.updated_at DESC NULLS LAST
+             LIMIT 1
+           ) AS profile ON true
+           WHERE draft.roller_draft_unique_id = cs.roller_unique_id
+             AND (
+               draft.customer_email IS NOT NULL
+               OR draft.customer_email_masked IS NOT NULL
+               OR draft.customer_first_name IS NOT NULL
+               OR draft.customer_last_name IS NOT NULL
+               OR profile.first_name IS NOT NULL
+               OR profile.last_name IS NOT NULL
+               OR draft.customer_phone IS NOT NULL
+               OR draft.customer_phone_masked IS NOT NULL
+             )
+           UNION ALL
+           SELECT
+             contact_candidate.priority + 1 AS priority,
+             gp.email,
+             gp.email_masked,
+             gp.latest_booking_context ->> 'firstName' AS first_name,
+             gp.latest_booking_context ->> 'lastName' AS last_name,
+             gp.contact_number AS phone,
+             gp.contact_number_masked AS phone_masked,
+             gp.updated_at
+           FROM (
+             SELECT
+               1 AS priority,
+               ticket.roller_customer_id
+             FROM jumpyard.roller_booking_tickets AS ticket
+             WHERE ticket.roller_unique_id = cs.roller_unique_id
+               AND ticket.roller_customer_id IS NOT NULL
+             UNION ALL
+             SELECT
+               2 AS priority,
+               b.normalized_summary ->> 'bookingCustomerId' AS roller_customer_id
+             WHERE b.normalized_summary ->> 'bookingCustomerId' IS NOT NULL
+           ) AS contact_candidate
+           INNER JOIN jumpyard.guest_profiles AS gp
+             ON gp.roller_customer_id = contact_candidate.roller_customer_id
+         WHERE gp.email IS NOT NULL
+            OR gp.email_masked IS NOT NULL
+            OR (gp.latest_booking_context ->> 'firstName') IS NOT NULL
+            OR (gp.latest_booking_context ->> 'lastName') IS NOT NULL
+            OR gp.contact_number IS NOT NULL
+            OR gp.contact_number_masked IS NOT NULL
+         ) AS contact_source
+         ORDER BY contact_source.priority ASC, contact_source.updated_at DESC NULLS LAST
+         LIMIT 1
+       ) AS guest_identity ON true
        WHERE cs.handoff_status = 'ready_for_staff'
          AND cs.status = 'ready_for_staff'
          ${expiryClause}
-       ORDER BY cs.ready_for_staff_at DESC NULLS LAST, cs.updated_at DESC
+     ),
+     session_rows AS (
+       SELECT *
+       FROM session_base
+       WHERE CAST(:searchQuery AS text) IS NULL
+          OR position(CAST(:searchQuery AS text) in staff_search_text) > 0
+       ORDER BY ready_for_staff_at DESC NULLS LAST, updated_at DESC
        LIMIT ${request.limit}
      )
      SELECT
@@ -1961,6 +2082,7 @@ async function findReadyStaffSessions(request) {
        )::int AS ticket_count
      FROM session_rows
      ORDER BY session_rows.ready_for_staff_at DESC NULLS LAST, session_rows.updated_at DESC`,
+    [stringParameter('searchQuery', request.searchQuery)],
   );
 
   return mappedRows(result).map(mapStaffSessionSummaryRow);
@@ -1991,6 +2113,13 @@ async function findStaffSessionDetail(checkinSessionId) {
        b.start_time::text AS start_time,
        b.end_time::text AS end_time,
        b.freshness_status,
+       COALESCE(
+         NULLIF(b.normalized_summary ->> 'bookingName', ''),
+         NULLIF(b.normalized_summary ->> 'name', ''),
+         NULLIF(trim(concat_ws(' ', guest_identity.first_name, guest_identity.last_name)), '')
+       ) AS guest_name,
+       guest_identity.email_masked AS guest_email_masked,
+       guest_identity.phone_masked AS guest_phone_masked,
        (
          SELECT COUNT(*)
          FROM jumpyard.roller_booking_items AS item
@@ -2004,6 +2133,77 @@ async function findStaffSessionDetail(checkinSessionId) {
      FROM jumpyard.checkin_sessions AS cs
      LEFT JOIN jumpyard.roller_bookings AS b
        ON b.roller_unique_id = cs.roller_unique_id
+     LEFT JOIN LATERAL (
+       SELECT
+         contact_source.email_masked,
+         contact_source.first_name,
+         contact_source.last_name,
+         contact_source.phone_masked
+       FROM (
+         SELECT
+           0 AS priority,
+           draft.customer_email_masked AS email_masked,
+           COALESCE(NULLIF(draft.customer_first_name, ''), profile.first_name) AS first_name,
+           COALESCE(NULLIF(draft.customer_last_name, ''), profile.last_name) AS last_name,
+           draft.customer_phone_masked AS phone_masked,
+           draft.updated_at
+         FROM jumpyard.prepayment_booking_drafts AS draft
+         LEFT JOIN LATERAL (
+           SELECT
+             gp.latest_booking_context ->> 'firstName' AS first_name,
+             gp.latest_booking_context ->> 'lastName' AS last_name
+           FROM jumpyard.guest_profiles AS gp
+           WHERE (
+               draft.customer_email_hash IS NOT NULL
+               AND gp.email_hash = draft.customer_email_hash
+             )
+              OR (
+                draft.customer_phone_hash IS NOT NULL
+                AND gp.contact_number_hash = draft.customer_phone_hash
+              )
+           ORDER BY gp.updated_at DESC NULLS LAST
+           LIMIT 1
+         ) AS profile ON true
+         WHERE draft.roller_draft_unique_id = cs.roller_unique_id
+           AND (
+             draft.customer_email_masked IS NOT NULL
+             OR draft.customer_first_name IS NOT NULL
+             OR draft.customer_last_name IS NOT NULL
+             OR profile.first_name IS NOT NULL
+             OR profile.last_name IS NOT NULL
+             OR draft.customer_phone_masked IS NOT NULL
+           )
+         UNION ALL
+         SELECT
+           contact_candidate.priority + 1 AS priority,
+           gp.email_masked,
+           gp.latest_booking_context ->> 'firstName' AS first_name,
+           gp.latest_booking_context ->> 'lastName' AS last_name,
+           gp.contact_number_masked AS phone_masked,
+           gp.updated_at
+         FROM (
+           SELECT
+             1 AS priority,
+             ticket.roller_customer_id
+           FROM jumpyard.roller_booking_tickets AS ticket
+           WHERE ticket.roller_unique_id = cs.roller_unique_id
+             AND ticket.roller_customer_id IS NOT NULL
+           UNION ALL
+           SELECT
+             2 AS priority,
+             b.normalized_summary ->> 'bookingCustomerId' AS roller_customer_id
+           WHERE b.normalized_summary ->> 'bookingCustomerId' IS NOT NULL
+         ) AS contact_candidate
+         INNER JOIN jumpyard.guest_profiles AS gp
+           ON gp.roller_customer_id = contact_candidate.roller_customer_id
+       WHERE gp.email_masked IS NOT NULL
+          OR (gp.latest_booking_context ->> 'firstName') IS NOT NULL
+          OR (gp.latest_booking_context ->> 'lastName') IS NOT NULL
+          OR gp.contact_number_masked IS NOT NULL
+       ) AS contact_source
+       ORDER BY contact_source.priority ASC, contact_source.updated_at DESC NULLS LAST
+       LIMIT 1
+     ) AS guest_identity ON true
      WHERE cs.checkin_session_id = :checkinSessionId
      LIMIT 1`,
     [stringParameter('checkinSessionId', checkinSessionId)],
@@ -2732,6 +2932,7 @@ function mapStaffSessionSummaryRow(row) {
   if (!row) return null;
 
   const selectedTicketIds = parseJsonArray(row.selected_ticket_ids).map(stringOrNull).filter(Boolean);
+  const guest = mapStaffGuestIdentity(row);
 
   return {
     booking: {
@@ -2754,6 +2955,7 @@ function mapStaffSessionSummaryRow(row) {
     },
     createdAt: stringOrNull(row.created_at),
     expiresAt: stringOrNull(row.expires_at),
+    guest,
     handoffCode: stringOrNull(row.handoff_code),
     handoffStatus: stringOrNull(row.handoff_status),
     isExpired: isExpired(row.expires_at),
@@ -2765,6 +2967,16 @@ function mapStaffSessionSummaryRow(row) {
     updatedAt: stringOrNull(row.updated_at),
     visitDate: stringOrNull(row.visit_date),
   };
+}
+
+function mapStaffGuestIdentity(row) {
+  const guest = {
+    emailMasked: stringOrNull(row.guest_email_masked),
+    name: stringOrNull(row.guest_name),
+    phoneMasked: stringOrNull(row.guest_phone_masked),
+  };
+
+  return guest.emailMasked || guest.name || guest.phoneMasked ? guest : null;
 }
 
 async function createSession({ booking, idempotencyKey, selectedTicketIds, sourceLookupRef, visitDate }) {
