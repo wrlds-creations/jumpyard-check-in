@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-01
-- Current branch: `codex/t0079-add-product-ux-polish`
-- Current status: T0079 existing-booking add-product UX polish completed locally; add-products reuse original booking contact server-side and show a short payment-approved confirmation before continuing.
-- Current ticket: `T0079` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`
-- Recommended next step: commit/merge T0079, then run T0080 staff handoff and redeem polish.
+- Current branch: `codex/t0080-data-webhook-aurora-verification`
+- Current status: T0080 data/webhook/Aurora verification completed locally; daily sync, Aurora seed runs, recent webhook enrichment, recent lookup freshness, and T0079 no-customer add-product quote behavior are healthy in dev.
+- Current ticket: `T0080` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`
+- Recommended next step: commit/merge T0080, then run T0081 full integrated flow rehearsal.
 
 ## Current Structure
 
@@ -210,21 +210,21 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0076` | Verified full new-booking purchase flow. | 2026-06-01 | Public Cloudflare smoke completed buy-entry, time/product/add-ons/contact/review, card payment with Adyen Visa ending `1142`, safety video/rules, and ready-for-staff QR/handoff code `JY4704`; merged through PR #78. |
 | `T0077` | Verified paid existing-booking happy path. | 2026-06-01 | Public existing-booking lookup for paid booking `5100930` resumed directly to ready-for-staff QR/handoff code `JY4704`; merged through PR #79. |
 | `T0078` | Verified existing-booking add-product payment flow. | 2026-06-01 | Public existing-booking add-product smoke for paid booking `5100926` selected one `Strumpor`, created a separate linked add-on draft, paid by card with Adyen Visa ending `1142`, and continued to safety video; merged through PR #80. |
+| `T0079` | Polished existing-booking add-product UX. | 2026-06-01 | Existing-booking add-products no longer ask guests to re-enter contact details when original booking contact can be resolved server-side; approved add-product payment briefly confirms before safety continuation; merged through PR #81. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0079` | Existing-booking add-product UX polish. | Completed locally, not committed | Add-product quote/draft can omit visible contact fields and safely reuse original booking contact server-side; approved add-product payment shows a short confirmation before continuing. |
+| `T0080` | Data sync, webhook, Aurora, and lookup verification. | Completed locally, not committed | Dev daily Data API schedule is enabled and healthy, latest seed runs succeeded, recent smoke bookings are fresh in Aurora, recent webhooks are processed, public lookups return from Aurora, and a no-customer add-product quote confirms T0079 backend behavior is deployed. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0080` | Staff handoff and redeem polish | Re-test QR scan/manual code, staff login, redeem only redeemable tickets, and clear states for already redeemed, unpaid, or non-redeemable cases. |
-| `T0081` | Data sync/webhook verification | Re-check daily Data API sync, webhook enrichment, Aurora freshness, and lookup behavior after the payment/add-product smokes. |
-| `T0082` | Full integrated flow rehearsal | Run a small end-to-end rehearsal of the three target flows before returning to production readiness. |
-| `T0083` | SMS/email production unlock | Resume SES/SNS production unlock, sender/domain setup, and unattended booking-time sends after the core app flows are proven. |
+| `T0081` | Full integrated flow rehearsal | Run a small end-to-end rehearsal of the three target flows: new booking purchase/check-in, existing booking check-in/staff handoff, and existing booking add-product payment/continuation. |
+| `T0082` | Guest messaging production unlock | Resume SES/SNS production unlock, sender/domain setup, SMS sandbox exit planning, and unattended booking-time sends after the core app flows are proven. |
+| `T0083` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, SMS/email, and staff redeem failures before wider rollout. |
 | `T0084` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
 ## Validation Status

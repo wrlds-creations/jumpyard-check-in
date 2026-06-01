@@ -59,6 +59,7 @@ Use this file for out-of-scope findings, deferred improvements, and future ticke
 | `FU-070` | `T0073` | Guest message copy polish | T0073 confirmed SMS and email delivery, and the current text is acceptable for controlled dev testing. Before broader guest rollout, refine SMS and email wording, tone, sender/context copy, and link language for the real JumpYard visitor journey. | Medium | `T0082` | Open |
 | `FU-071` | `T0075` | Payment methods | After Pabel's card-payment fix, the public payment drop-in renders `Kortbetalning`, `Delbetalning`, and `Google Pay`, but Swish no longer appears even though T0054 proved Swish could complete before the card fix. Ask Roller/Pabel to confirm whether Swish and Apple Pay are enabled for this Playground venue/payment configuration and whether card, Swish, and Apple Pay can be active together. | Medium | `Pabel/Roller` | Open |
 | `FU-072` | `T0079` | Payment UX | Confirm later whether Roller/Adyen postal-code collection can or should be hidden or locale-adjusted for the Swedish checkout. T0079 intentionally leaves postal-code behavior unchanged. | Medium | `Pabel/Roller` | Open |
+| `FU-073` | `T0080` | AWS access | Local AWS SSO for profile `wrlds-dev` expired during T0080. User-assisted `aws sso login --profile wrlds-dev` restored access and T0080 read-only checks completed; repeat the same login step if future AWS checks fail with expired SSO. | High | `User/Codex` | Done |
 
 ## Resolved Followups
 

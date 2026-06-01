@@ -910,7 +910,23 @@ Use this file to define validation for the current project or milestone.
 | Visible contact step | Existing-booking add-products should not ask the guest to re-enter contact details. | Code validated | Phone add-product flow now quotes directly after add-on selection and sends no `customer` payload for add-product quote/draft calls. |
 | Payment-approved confirmation | Approved add-product payment should show a brief confirmation before continuing. | Code validated | `AddonsOffer` now shows an `APPROVED` state for about 1.2 seconds before continuing the original safety/check-in flow. |
 | Postal-code scope | T0079 should not change Roller/Adyen postal-code behavior. | Passed by code review | No payment-package, Adyen field, or Roller postal-code configuration was changed. |
-| Public deployed smoke | Public Cloudflare and deployed Lambda should be checked after merge/deploy. | Pending | T0079 has local code validation only until the branch is merged/deployed and the booking Lambda is updated in dev AWS. |
+| Public deployed smoke | Public Cloudflare and deployed Lambda should be checked after merge/deploy. | Passed for backend | T0080 confirmed the deployed dev booking Lambda accepts an add-product quote without `customer` for booking `5100926` and resolves original contact server-side. Full browser rehearsal remains T0081. |
+
+## T0080 Data/Webhook/Aurora Verification
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| AWS identity | Local profile should confirm dev account and region before read-only AWS checks. | Passed | `aws sso login --profile wrlds-dev` succeeded with user-assisted browser login; `aws sts get-caller-identity` returned account `376129878018` in `eu-north-1`. |
+| EventBridge Data API rule | Daily sync rule should be read and confirmed enabled. | Passed | `jumpyard-check-in-dev-data-api-daily-sync` is `ENABLED`, uses `cron(0 2 * * ? *)`, and targets `jumpyard-check-in-dev-stack-data-sync` with input `{"source":"eventbridge.daily"}`. |
+| Aurora seed runs | Latest `jumpyard.booking_seed_runs` rows should be queried directly. | Passed | Latest scheduled run `2026-05-31 -> 2026-06-01` succeeded at `2026-06-01 02:00 UTC`, refreshed 491 products, enriched 33 product names, and had no error summary. Prior two scheduled runs also succeeded. |
+| Webhook events | Recent `jumpyard.roller_webhook_events` rows should be queried directly. | Passed | Recent `Created` webhook events for `5100930`, `5100926`, and `5100877` are `processed`, each with one enrichment attempt and no error summary. |
+| Public lookup for existing booking | Known recent booking should return from JumpYard Cloud/Aurora. | Passed | `POST /v1/check-in/lookup` for `5100930` returned `found`, `ready`, `source.system=jumpyard_cloud`, `lookupPath=aurora:booking_reference`, `freshnessStatus=fresh`, and `refreshedFromRoller=false`. |
+| Public lookup for add-product fixture | Known add-product smoke booking should return from JumpYard Cloud/Aurora. | Passed | `POST /v1/check-in/lookup` for `5100926` returned `found`, `ready`, `source.system=jumpyard_cloud`, `lookupPath=aurora:booking_reference`, `freshnessStatus=fresh`, and `refreshedFromRoller=false`. |
+| Public lookup for messaging fixture | Known messaging smoke booking should return from JumpYard Cloud/Aurora. | Passed | `POST /v1/check-in/lookup` for `5100877` returned `found`, `ready`, `source.system=jumpyard_cloud`, `lookupPath=aurora:booking_reference`, `freshnessStatus=fresh`, and `refreshedFromRoller=false`. |
+| Aurora smoke booking rows | Recent smoke bookings should have local item/ticket context. | Passed | Aurora rows for `5100930`, `5100926`, and `5100877` are `Paid`, `fresh`, and each has one booking item plus one ticket. The 2026-05-29 messaging fixture has one payment row; today's webhook/live-lookup fixtures currently have no Data API payment row yet. |
+| Add-product draft row | Successful linked add-product payment should be visible as published. | Passed | Add-product draft `jypd_529c13ed3a8a4d83a1` for original booking `5100926` is `published`, `flow_type=add_product`, `amount_owing_cents=0`, and `payment_jwt_present=true`; retry drafts for `5100927`-`5100929` remain `payment_pending` as expected. |
+| Backend deploy check | T0079 no-customer add-product quote should work in deployed dev. | Passed | Safe no-write quote for booking `5100926` omitted `customer`, returned `status=quoted`, `amountOwing=45`, mode `separate_draft_booking`, and `wroteBooking=false`. |
+| Relevant alarms | Data sync, webhook, and Roller API alarms should be OK. | Passed | CloudWatch alarms `jumpyard-check-in-dev-data-sync-lambda-errors`, `jumpyard-check-in-dev-data-sync-lambda-throttles`, `jumpyard-check-in-dev-webhook-lambda-errors`, `jumpyard-check-in-dev-webhook-lambda-throttles`, and `jumpyard-check-in-dev-roller-api-errors` are `OK`. |
 
 ## T0053 New-Booking Basket Before Payment Validation
 
