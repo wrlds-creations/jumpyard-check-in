@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-01
-- Current branch: `codex/t0080-data-webhook-aurora-verification`
-- Current status: T0080 data/webhook/Aurora verification completed locally; daily sync, Aurora seed runs, recent webhook enrichment, recent lookup freshness, and T0079 no-customer add-product quote behavior are healthy in dev.
-- Current ticket: `T0080` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`
-- Recommended next step: commit/merge T0080, then run T0081 full integrated flow rehearsal.
+- Current branch: `codex/t0081-integrated-flow-rehearsal`
+- Current status: T0081 integrated rehearsal completed locally. New card-paid booking, webhook/Aurora freshness, ready-for-staff, staff auth/detail, and staff-confirmed redeem passed; post-T0079 add-product without visible contact re-entry is blocked at confirmed draft creation because full original customer details are not resolved.
+- Current ticket: `T0081` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`
+- Recommended next step: commit/merge T0081, then run T0082 add-product contact-resolution fix and linked add-product payment re-test.
 
 ## Current Structure
 
@@ -211,24 +211,31 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0077` | Verified paid existing-booking happy path. | 2026-06-01 | Public existing-booking lookup for paid booking `5100930` resumed directly to ready-for-staff QR/handoff code `JY4704`; merged through PR #79. |
 | `T0078` | Verified existing-booking add-product payment flow. | 2026-06-01 | Public existing-booking add-product smoke for paid booking `5100926` selected one `Strumpor`, created a separate linked add-on draft, paid by card with Adyen Visa ending `1142`, and continued to safety video; merged through PR #80. |
 | `T0079` | Polished existing-booking add-product UX. | 2026-06-01 | Existing-booking add-products no longer ask guests to re-enter contact details when original booking contact can be resolved server-side; approved add-product payment briefly confirms before safety continuation; merged through PR #81. |
+| `T0080` | Verified Data API, webhook, Aurora, and lookup health. | 2026-06-01 | Daily Data API schedule is enabled and healthy, recent seed runs succeeded, recent smoke bookings are fresh in Aurora, recent webhooks are processed, public lookups return from Aurora, and deployed no-customer add-product quote returns safely; merged through PR #82. |
+| `T0081` | Ran integrated Playground flow rehearsal. | 2026-06-01 | New card-paid booking `5100963` reached ready-for-staff handoff `JY7597`, staff-confirmed redeem succeeded for ticket `5100963-21683812`, and Aurora/webhook readback was fresh. Add-product quote/no-contact UX worked, but confirmed add-product draft creation failed closed with `customer.firstName is required`; T0082 must fix original-customer resolution before linked add-product payment can be re-passed. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0080` | Data sync, webhook, Aurora, and lookup verification. | Completed locally, not committed | Dev daily Data API schedule is enabled and healthy, latest seed runs succeeded, recent smoke bookings are fresh in Aurora, recent webhooks are processed, public lookups return from Aurora, and a no-customer add-product quote confirms T0079 backend behavior is deployed. |
+| `T0081` | Full integrated flow rehearsal. | Completed locally, not committed | New booking plus payment/safety/staff redeem passed; add-product quote and no-contact UI passed; add-product confirmed draft creation is blocked by unresolved original customer details and tracked for T0082. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0081` | Full integrated flow rehearsal | Run a small end-to-end rehearsal of the three target flows: new booking purchase/check-in, existing booking check-in/staff handoff, and existing booking add-product payment/continuation. |
-| `T0082` | Guest messaging production unlock | Resume SES/SNS production unlock, sender/domain setup, SMS sandbox exit planning, and unattended booking-time sends after the core app flows are proven. |
-| `T0083` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, SMS/email, and staff redeem failures before wider rollout. |
-| `T0084` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
+| `T0082` | Add-product contact-resolution fix | Preserve the no-duplicate-contact UX, but make confirmed add-product draft creation resolve or carry full original booking customer details server-side, then re-run linked add-product payment. |
+| `T0083` | Guest messaging production unlock | Resume SES/SNS production unlock, sender/domain setup, SMS sandbox exit planning, and unattended booking-time sends after the core add-product blocker is fixed. |
+| `T0084` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, SMS/email, and staff redeem failures before wider rollout. |
+| `T0085` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
 ## Validation Status
 
+- T0081 branch setup: branch `codex/t0081-integrated-flow-rehearsal` was created from updated `main` after T0080 was merged through PR #82.
+- T0081 new-booking smoke: public Cloudflare buy-entry flow created paid Playground booking `5100963` for `2026-06-01 14:00`, completed card payment with Adyen Visa ending `1142`, completed safety video and safety rules, and reached ready-for-staff session `jycs_mpv4s30n_b9f8b58c` with handoff `JY7597`.
+- T0081 staff redeem smoke: staff login with the dev passcode returned a short-lived token, staff list/detail found booking `5100963`, and staff-confirmed redeem returned HTTP `200` with Roller status code `200`, redeemed ticket `5100963-21683812`, session status `redeemed`, and handoff status `completed`.
+- T0081 Aurora/webhook readback: bookings `5100963` and `5100965` are `Paid`, `fresh`, and present in `jumpyard.roller_bookings`; their `Created` webhook events are `processed`; ticket `5100963-21683812` is locally marked `redeemed`, while `5100965-21683813` remains unredeemed for future testing.
+- T0081 add-product blocker: public existing-booking add-product flow skipped visible contact fields and quote returned `45 kr`, but `RESERVERA TILLÄGG` failed closed with `customer.firstName is required for Roller draft booking creation` for old booking `5100926` and fresh paid booking `5100965`. Direct API confirmed quote succeeds but confirmed create fails without full resolved customer data.
 - T0079 branch setup: branch `codex/t0079-add-product-ux-polish` was created from updated `main` after T0078 was merged through PR #80.
 - T0079 backend behavior: existing-booking add-product quote/draft requests can omit `customer`; JumpYard Cloud resolves the original booking contact from Roller detail plus Aurora `guest_profiles` and fails closed if first name, last name, email, or phone cannot be resolved.
 - T0079 phone behavior: the existing-booking add-product flow skips the visible contact form, quotes directly after add-on selection, sends no customer payload for add-product quote/draft, and shows a short payment-approved confirmation before continuing to the original safety/check-in path.
