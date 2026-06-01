@@ -1254,7 +1254,11 @@ async function resolveOriginalBookingContext(config, token, bookingReference) {
     };
   }
 
-  const localCustomer = await findLocalOriginalBookingCustomer(original.rollerUniqueId, original.bookingReference);
+  const localCustomer = await findLocalOriginalBookingCustomer(
+    original.rollerUniqueId,
+    original.bookingReference,
+    original.rollerCustomerId,
+  );
   original.customer = mergeOriginalBookingCustomer(original.customer, localCustomer, original.bookingName);
 
   return {
@@ -1285,11 +1289,16 @@ async function findLocalOriginalBooking(bookingReference) {
   return firstMappedRow(result);
 }
 
-async function findLocalOriginalBookingCustomer(rollerUniqueId, bookingReference) {
-  if (!rollerUniqueId && !bookingReference) return null;
+async function findLocalOriginalBookingCustomer(rollerUniqueId, bookingReference, rollerCustomerId) {
+  if (!rollerUniqueId && !bookingReference && !rollerCustomerId) return null;
 
   const result = await executeStatement(
     `WITH contact_candidate AS (
+       SELECT
+         0 AS priority,
+         CAST(:rollerCustomerId AS text) AS roller_customer_id
+       WHERE CAST(:rollerCustomerId AS text) IS NOT NULL
+       UNION ALL
        SELECT
          1 AS priority,
          ticket.roller_customer_id
@@ -1303,27 +1312,51 @@ async function findLocalOriginalBookingCustomer(rollerUniqueId, bookingReference
        FROM jumpyard.roller_bookings AS booking
        WHERE (booking.roller_unique_id = :rollerUniqueId OR booking.booking_reference = :bookingReference)
          AND booking.normalized_summary ->> 'bookingCustomerId' IS NOT NULL
+     ),
+     contact_source AS (
+       SELECT
+         0 AS priority,
+         draft.customer_email AS email,
+         draft.customer_phone AS phone,
+         draft.updated_at
+       FROM jumpyard.prepayment_booking_drafts AS draft
+       WHERE draft.roller_draft_unique_id = :rollerUniqueId
+         AND (draft.customer_email IS NOT NULL OR draft.customer_phone IS NOT NULL)
+       UNION ALL
+       SELECT
+         contact_candidate.priority + 1 AS priority,
+         gp.email,
+         gp.contact_number AS phone,
+         gp.updated_at
+       FROM contact_candidate
+       INNER JOIN jumpyard.guest_profiles AS gp
+         ON gp.roller_customer_id = contact_candidate.roller_customer_id
+       WHERE gp.email IS NOT NULL
+          OR gp.contact_number IS NOT NULL
      )
      SELECT
-       gp.email,
-       gp.contact_number AS phone
-     FROM contact_candidate
-     INNER JOIN jumpyard.guest_profiles AS gp
-       ON gp.roller_customer_id = contact_candidate.roller_customer_id
-     WHERE gp.email IS NOT NULL
-        OR gp.contact_number IS NOT NULL
-     ORDER BY contact_candidate.priority ASC, gp.updated_at DESC
-     LIMIT 1`,
-    [stringParameter('rollerUniqueId', rollerUniqueId), stringParameter('bookingReference', bookingReference)],
+       email,
+       phone
+     FROM contact_source
+     ORDER BY priority ASC, updated_at DESC
+     LIMIT 5`,
+    [
+      stringParameter('rollerUniqueId', rollerUniqueId),
+      stringParameter('bookingReference', bookingReference),
+      stringParameter('rollerCustomerId', rollerCustomerId),
+    ],
   );
 
-  const row = firstMappedRow(result);
-  if (!row) return null;
+  const rows = mappedRows(result);
+  if (rows.length === 0) return null;
 
-  return {
-    email: stringOrNull(row.email),
-    phone: stringOrNull(row.phone),
-  };
+  return rows.reduce(
+    (contact, row) => ({
+      email: contact.email || stringOrNull(row.email),
+      phone: contact.phone || stringOrNull(row.phone),
+    }),
+    { email: null, phone: null },
+  );
 }
 
 function normalizeOriginalBookingContext(body, bookingReference, localBooking) {
@@ -1342,6 +1375,7 @@ function normalizeOriginalBookingContext(body, bookingReference, localBooking) {
     customer: normalizeOriginalBookingCustomer(booking),
     localFreshnessStatus: stringOrNull(localBooking?.freshness_status),
     paymentStatus: stringOrNull(booking?.paymentStatus ?? booking?.status ?? booking?.bookingStatus ?? localBooking?.payment_status),
+    rollerCustomerId: stringOrNull(booking?.customerId ?? booking?.customer?.id ?? localBooking?.booking_customer_id),
     rollerUniqueId: stringOrNull(booking?.uniqueId ?? booking?.id ?? booking?.bookingUniqueId ?? localBooking?.roller_unique_id),
     startTime: stringOrNull(booking?.startTime ?? firstItem.startTime ?? firstItem.sessionStartTime ?? localBooking?.start_time),
   };

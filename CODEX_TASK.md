@@ -1,18 +1,14 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0081
+T0082
 
 ## Goal
-Run a focused integrated Playground rehearsal of the core guest/staff flows after T0080 confirmed data freshness.
+Fix existing-booking add-product draft creation so it can reuse the original booking contact server-side without showing duplicate contact fields to the guest.
 
 ## Dependencies
-- T0080 completed and merged.
-- Public Cloudflare check-in app is available.
-- Dev JumpYard Cloud API is available.
-- Dev staff/admin app can be run locally if needed.
-- Roller Playground card payment path is available.
-- AWS dev read access is available for verification.
+- T0079 completed: guest-facing add-product contact re-entry is removed.
+- T0081 completed: integrated rehearsal confirmed the add-product quote path works, but confirmed draft creation fails when customer details are not resolved.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -20,83 +16,83 @@ Run a focused integrated Playground rehearsal of the core guest/staff flows afte
 - DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
+- AWS_RESOURCES.md
 - TEST_PLAN.md
+- infra/lambda/booking/index.js
 
 Operational verification may use:
-- Public check-in app `https://jumpyard-check-in.pages.dev`
-- Local admin app if already available or easy to start
 - Dev JumpYard Cloud API
 - Dev Aurora read-only queries
-- Roller Playground writes for scoped smoke bookings/drafts only
-- Staff-confirmed redeem for a dedicated smoke booking only
+- Roller Playground add-product draft creation for one scoped smoke booking
+- AWS CDK deploy for the existing booking Lambda code only
 
 ## Do not touch
-- App source code
-- UI files
-- Lambda code
-- CDK infrastructure
+- Phone UI files
+- Admin UI files
+- Assets
+- Deliverables
 - Aurora migrations
+- CDK resource definitions unless required for the booking Lambda code deploy
 - Package dependencies
-- AWS resources
 - Production credentials
 - Roller Live
 - `.env`
-- Assets/deliverables
 
 ## Requirements
 
-1. Rehearse the new-booking purchase/check-in flow:
-   - buy entry through the public phone app
-   - complete card payment with the approved Playground test card
-   - continue into safety/check-in
-   - reach ready-for-staff QR/handoff state
+1. Keep the existing no-duplicate-contact add-product UX contract:
+   - the phone app does not need to send `customer` for existing-booking add-products
+   - JumpYard Cloud must resolve contact server-side
+   - JumpYard Cloud must fail closed if required contact details cannot be resolved
 
-2. Rehearse the existing-booking check-in/staff handoff flow:
-   - use a known paid existing booking or the booking created in this rehearsal
-   - confirm lookup uses JumpYard Cloud
-   - confirm ready-for-staff session is visible to staff/admin
-   - perform staff-confirmed redeem only on a dedicated smoke booking
+2. Improve server-side contact resolution for add-product drafts:
+   - use the original Roller booking/customer id when available
+   - use Aurora `guest_profiles` when available
+   - reuse safe original new-booking draft contact data stored in `prepayment_booking_drafts` when the original booking was created by JumpYard Cloud
+   - use the Roller booking name only for first/last name fallback, not for email/phone invention
 
-3. Rehearse the existing-booking add-product flow:
-   - select a mapped add-on for a paid existing booking
-   - confirm no duplicate visible contact entry is required
-   - quote and pay the linked add-on draft
-   - confirm the add-product draft is linked/published in Aurora
-   - confirm the original check-in continuation still works
+3. Preserve sensitive-data rules:
+   - do not log or persist raw `paymentJwt`
+   - do not print full customer email or phone values during validation
+   - do not commit secrets
 
-4. Verify data after the rehearsal:
-   - Aurora booking/session/draft rows where practical
-   - processed webhook events where practical
-   - no unsafe Roller Live or production writes
+4. Deploy only the existing dev booking Lambda code change after AWS preflight confirms:
+   - account `376129878018`
+   - region `eu-north-1`
+   - approved `infra/config/dev.json` tags
 
-5. Update source-of-truth docs with:
-   - smoke booking references and safe identifiers
-   - passed/failed scenarios
-   - blockers or follow-ups
-   - next recommended ticket
+5. Verify the fix:
+   - syntax/build/synth pass
+   - pre-deploy diff is scoped to the booking Lambda code
+   - deploy succeeds
+   - post-deploy diff shows no differences
+   - a no-customer add-product draft smoke creates a linked Playground draft and Aurora link row
 
 ## Non-goals
-- Do not build new functionality.
-- Do not change UI copy/design.
-- Do not deploy AWS changes.
-- Do not send SMS/email.
-- Do not submit AWS support cases.
-- Do not change payment-provider configuration.
-- Do not test Roller Live.
+- Do not change the guest-facing add-product UI.
+- Do not change payment UI.
+- Do not redeem tickets.
+- Do not implement staff handoff improvements.
+- Do not create new AWS resources.
+- Do not create Aurora migrations.
+- Do not change SMS/email behavior.
+- Do not write to Roller Live.
 
 ## Acceptance criteria
-- New-booking purchase/check-in is either passed or a clear blocker is documented.
-- Existing-booking staff handoff/redeem is either passed or a clear blocker is documented.
-- Existing-booking add-product payment/continuation is either passed or a clear blocker is documented.
-- Aurora/webhook readback is documented where available.
-- No source/runtime files are changed.
+- Add-product confirmed draft creation no longer fails with missing `customer.firstName` for a fresh JumpYard-created paid booking that has stored original contact data.
+- Aurora stores the linked add-product draft metadata and booking link.
+- Raw `paymentJwt`, access tokens, and full contact PII are not printed or persisted.
 - `npm run validate` passes.
-- `git diff --check` passes, ignoring existing CRLF-only warnings if present.
+- `npm --prefix infra run diff:dev` shows no differences after deploy.
 
 ## Manual verification
-Use the browser and AWS/Aurora read-only checks to confirm the integrated flows.
+Use a fresh paid Playground booking created through the public phone app, then create an add-product draft without resending customer details. Confirm the draft/link in Aurora using safe identifiers only.
 
 ## Automated validation
 Run:
+- node --check infra/lambda/booking/index.js
+- npm --prefix infra run build
+- npm --prefix infra run synth:dev
+- npm --prefix infra run diff:dev
 - npm run validate
 - git diff --check

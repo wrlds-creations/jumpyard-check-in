@@ -944,6 +944,20 @@ Use this file to define validation for the current project or milestone.
 | Add-product confirmed draft | Add-product draft should be created and paid without duplicate contact entry. | Blocked | `RESERVERA TILLÄGG` failed with `customer.firstName is required for Roller draft booking creation` for `5100965`; direct API confirmed quote succeeds but confirmed create fails without full resolved customer data. Tracked as `FU-074`/T0082. |
 | Legacy add-product contact gap | Older bookings without full customer context should fail closed. | Confirmed | Booking `5100926` also failed closed at confirmed add-product draft creation with `customer.firstName is required`, matching the intended no-invented-contact safety behavior. |
 
+## T0082 Add-Product Contact Resolution
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Booking Lambda syntax | Booking Lambda should parse after contact-resolution changes. | Passed | `node --check infra/lambda/booking/index.js` passed. |
+| Infra build | CDK TypeScript should compile after Lambda code changes. | Passed | `npm --prefix infra run build` passed. |
+| Infra synth | Dev stack should synthesize with approved config. | Passed | `npm --prefix infra run synth:dev` passed after AWS preflight confirmed account `376129878018`, region `eu-north-1`. |
+| Deploy scope | Pre-deploy CDK diff should be limited to booking Lambda code. | Passed | `npm --prefix infra run diff:dev` showed only `BookingHandler` Lambda code before deploy. |
+| Dev deploy | Existing booking Lambda code should deploy without resource changes. | Passed | `npm --prefix infra run deploy:dev` passed. |
+| Post-deploy diff | Dev stack should match local CDK after deploy. | Passed | `npm --prefix infra run diff:dev` showed no differences after deploy. |
+| No-customer add-product draft | Confirmed draft creation should succeed without a guest-supplied `customer` payload when original contact exists server-side. | Passed | `POST /v1/bookings/5100965/add-products` created add-on draft `jypd_7d8379902449415aab`, link `jyl_7e8eac4758424c24bc`, and add-on group `jyao_f93769db16d840678e` without printing raw JWT or full contact values. |
+| Aurora linked draft readback | Safe add-product draft/link rows should exist in Aurora. | Passed | `jumpyard.prepayment_booking_drafts` shows `flow_type=add_product`, `status=payment_pending`, `total_cents=4500`, and `payment_jwt_present=true`; `jumpyard.booking_links` shows `link_type=add_product_draft` for the same add-on group. |
+| Browser payment re-test | Full public add-product card payment should be re-run after backend fix. | Deferred | Payment UI was not changed in T0082; T0078 already proved the linked add-product card payment path before contact removal, and T0082 proves the server-side draft blocker is resolved. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
