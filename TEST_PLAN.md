@@ -847,6 +847,20 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs validate after T0074 updates. | Passed | `npm run validate` passed on 2026-05-29. |
 | Diff whitespace | Diff whitespace check passes. | Passed with CRLF notices | `git diff --check` passed on 2026-05-29; output contains Git line-ending notices only. |
 
+## T0075 Card Payment Unblock Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Pabel confirmation | Roller confirms the Playground payment integration issue is fixed. | Passed | Pabel replied on 2026-06-01 that the challenge with the Playground payment integration is fixed and card payments should now show up. |
+| Existing implementation path | Phone payment still uses Roller's approved payment package and response-only draft `paymentJwt`. | Passed by code review | `RollerPaymentDropIn` imports `@roller/ecom-payments`, bootstraps with safe payment settings, passes the raw JWT only in memory, and does not collect card data in JumpYard-owned fields. |
+| Direct frontend Roller calls | Frontend must not call generic Roller REST APIs or receive Roller credentials. | Passed by code review | Phone payment uses the Roller payment package's public payment-session calls, while quote/draft creation still goes through JumpYard Cloud. |
+| Local branch setup | Ticket branch should be created before work. | Passed | Branch `codex/t0075-card-payment-unblock` was created after permissions changed. Older unrelated local asset/package changes remain unstaged outside T0075. |
+| Automated payment readiness | Safe readiness script should confirm payment prerequisites. | Passed | `ROLLER_PAYMENT_ALLOWLIST_CONFIRMED=true npm.cmd run roller:payment:readiness -- --json` returned `ready_for_payment_implementation`, with no blockers and safe output only. |
+| Payment POC diagnostics | POC should recognize the currently vendored Roller payment package. | Passed | `npm.cmd run roller:payment:poc -- --json` returned `ready_for_browser_payment_test`; script now reports vendored `@roller/ecom-payments` version `1.0.217` instead of requiring an old package URL. |
+| Browser card visibility | Public checkout should render card payment. | Passed | In-app browser and Playwright both showed `Kortbetalning` plus card brand icons on `https://jumpyard-check-in.pages.dev`. |
+| Browser card smoke | Public checkout should approve the Adyen Visa test card ending `1142`. | Passed | Playwright with installed Chrome selected 60 min entry at `10:00`, filled the secure Adyen card iframes with the test Visa ending `1142`, submitted `Betala 200,00 kr`, and reached the phone safety-video step without request failures. |
+| Payment method list | Available payment methods should come from Roller/Adyen configuration, not JumpYard filtering. | Follow-up open | Current public drop-in renders `Kortbetalning`, `Delbetalning`, and `Google Pay`; Swish no longer appears after the card fix. `FU-071` tracks Roller/Pabel confirmation for Swish and Apple Pay enablement. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
