@@ -958,6 +958,27 @@ Use this file to define validation for the current project or milestone.
 | Aurora linked draft readback | Safe add-product draft/link rows should exist in Aurora. | Passed | `jumpyard.prepayment_booking_drafts` shows `flow_type=add_product`, `status=payment_pending`, `total_cents=4500`, and `payment_jwt_present=true`; `jumpyard.booking_links` shows `link_type=add_product_draft` for the same add-on group. |
 | Browser payment re-test | Full public add-product card payment should be re-run after backend fix. | Deferred | Payment UI was not changed in T0082; T0078 already proved the linked add-product card payment path before contact removal, and T0082 proves the server-side draft blocker is resolved. |
 
+## T0083 Staff Handoff Identity/Search
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Session Lambda syntax | Session Lambda should parse after staff identity/search changes. | Passed | `node --check infra/lambda/session/index.js` passed. |
+| Booking Lambda syntax | Booking Lambda should parse after draft-name persistence changes. | Passed | `node --check infra/lambda/booking/index.js` passed. |
+| Data sync Lambda syntax | Data sync Lambda should parse after customer first/last import changes. | Passed | `node --check infra/lambda/data-sync/index.js` passed. |
+| Admin build | Staff/admin app should compile after API contract and UI changes. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. |
+| Infra build | CDK TypeScript should compile after Lambda code changes. | Passed | `npm --prefix infra run build` passed. |
+| Customer name source | Roller Data API should provide first and last name where available. | Passed | Read-only `/data/customers` shape check confirmed `firstName` and `lastName` fields are available; validation did not print full PII. |
+| Related-data backfill | Today's customer rows should be refreshed into Aurora. | Passed | Scoped related-data import for `2026-06-01 -> 2026-06-02` upserted 11 tickets, 13 payments, and 11 customers without printing raw PII. |
+| Aurora migration | Existing draft rows can store customer first/last name. | Passed | `npm --prefix infra run migrate:dev` applied `0008 prepayment draft customer names` and backfilled matched draft rows. |
+| Infra synth | Dev stack should synthesize with approved config. | Passed | `npm --prefix infra run synth:dev` passed after AWS preflight confirmed account `376129878018`, region `eu-north-1`. |
+| Deploy scope | Pre-deploy CDK diff should be limited to scoped Lambda code. | Passed | Staged `npm --prefix infra run diff:dev` runs showed only `DataSyncHandler`, `BookingHandler`, and `SessionHandler` Lambda code changes. |
+| Dev deploy | Existing Lambda code should deploy without resource-shape changes. | Passed | `npm --prefix infra run deploy:dev` passed for the scoped Lambda code changes. |
+| Post-deploy diff | Dev stack should match local CDK after deploy. | Passed | `npm --prefix infra run diff:dev` showed no differences after deploy. |
+| Staff search smoke | Staff-authenticated list should search a ready handoff by safe identifiers. | Passed | Controlled ready-for-staff session for booking `5100965` was created without redeeming. Search by booking reference, first name, derived last-name value, and stored masked contact matched the session. |
+| PII boundary | Staff API should not return raw email or raw phone fields. | Passed | Smoke response contained masked contact presence and confirmed raw `email`/`phone` fields were not returned. |
+| Name availability | Staff UI should show booking/customer name when Aurora stores it. | Passed | Staff API smoke for `5100965` returned a two-part guest name and matched searches by first name plus derived last-name value without returning raw contact fields. |
+| Ticket row readability | Staff UI should not lead ticket rows with opaque Roller item ids. | Passed | Admin build passed after ticket rows were changed to show product name first and ticket id as secondary context. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

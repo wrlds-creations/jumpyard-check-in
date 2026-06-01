@@ -17,6 +17,12 @@ export interface StaffSessionCounts {
   tickets: number;
 }
 
+export interface StaffGuestIdentity {
+  emailMasked: string | null;
+  name: string | null;
+  phoneMasked: string | null;
+}
+
 export interface StaffSessionSummary {
   booking: StaffBookingSummary;
   bookingReference: string | null;
@@ -25,6 +31,7 @@ export interface StaffSessionSummary {
   counts: StaffSessionCounts;
   createdAt: string | null;
   expiresAt: string | null;
+  guest: StaffGuestIdentity | null;
   handoffCode: string | null;
   handoffStatus: string | null;
   isExpired: boolean;
@@ -152,8 +159,13 @@ export async function loginStaff(passcode: string): Promise<StaffAuthSession> {
   };
 }
 
-export async function listReadyStaffSessions(staffToken: string): Promise<StaffSessionSummary[]> {
-  const response = await fetch(`${getApiBaseUrl()}/v1/staff/check-in/sessions`, {
+export async function listReadyStaffSessions(staffToken: string, query?: string): Promise<StaffSessionSummary[]> {
+  const params = new URLSearchParams();
+  const trimmedQuery = query?.trim();
+  if (trimmedQuery) params.set("q", trimmedQuery);
+
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  const response = await fetch(`${getApiBaseUrl()}/v1/staff/check-in/sessions${suffix}`, {
     headers: {
       accept: "application/json",
       authorization: `Bearer ${staffToken}`,

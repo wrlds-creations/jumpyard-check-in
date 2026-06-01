@@ -104,6 +104,14 @@ function getDisplayCode(session: StaffSessionSummary) {
   return session.handoffCode ?? session.bookingReference ?? session.checkinSessionId;
 }
 
+function getGuestDisplayName(session: StaffSessionSummary) {
+  return session.guest?.name ?? session.guest?.emailMasked ?? session.guest?.phoneMasked ?? "Gäst";
+}
+
+function getGuestContactLine(session: StaffSessionSummary) {
+  return [session.guest?.emailMasked, session.guest?.phoneMasked].filter(Boolean).join(" · ");
+}
+
 function searchableText(session: StaffSessionSummary) {
   return [
     session.handoffCode,
@@ -111,6 +119,9 @@ function searchableText(session: StaffSessionSummary) {
     session.checkinSessionId,
     session.rollerUniqueId,
     session.visitDate,
+    session.guest?.name,
+    session.guest?.emailMasked,
+    session.guest?.phoneMasked,
   ]
     .filter(Boolean)
     .join(" ")
@@ -235,7 +246,11 @@ function SessionRow({
           </span>
           <div className="min-w-0">
             <p className="truncate text-2xl font-black italic uppercase leading-none text-foreground">{getDisplayCode(session)}</p>
-            <p className="mt-1 text-sm italic text-foreground/65">Bokning {session.bookingReference ?? "-"}</p>
+            <p className="mt-1 truncate text-sm font-black italic text-foreground">{getGuestDisplayName(session)}</p>
+            <p className="mt-1 truncate text-xs text-foreground/60">Bokning {session.bookingReference ?? "-"}</p>
+            {getGuestContactLine(session) && (
+              <p className="mt-1 truncate text-xs text-foreground/55">{getGuestContactLine(session)}</p>
+            )}
           </div>
         </div>
         <span className="rounded-full bg-success/10 px-3 py-1 text-[11px] font-black uppercase text-success">
@@ -298,32 +313,40 @@ function ItemRows({ items }: { items: StaffBookingItem[] }) {
   );
 }
 
-function TicketRows({ tickets }: { tickets: StaffBookingTicket[] }) {
+function TicketRows({ items, tickets }: { items: StaffBookingItem[]; tickets: StaffBookingTicket[] }) {
   if (tickets.length === 0) {
     return <p className="rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground/65">Inga biljetter.</p>;
   }
 
+  const itemsById = new Map(items.map((item) => [item.bookingItemId, item]));
+
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
-      {tickets.map((ticket) => (
-        <div key={ticket.ticketId ?? ticket.customTicketId ?? "ticket"} className="grid gap-3 border-b border-border px-4 py-3 last:border-b-0 sm:grid-cols-[1fr_118px_108px]">
-          <div className="flex min-w-0 items-center gap-3">
-            <StaffIcon name="booking-card" className="h-7 w-7 shrink-0" />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-black italic text-foreground">{ticket.ticketId ?? ticket.customTicketId ?? "-"}</p>
-              <p className="truncate text-xs text-foreground/60">Item {ticket.bookingItemId ?? "-"}</p>
+      {tickets.map((ticket) => {
+        const item = ticket.bookingItemId ? itemsById.get(ticket.bookingItemId) : null;
+        const productName = item?.parentProductName ?? item?.productName ?? "Biljett";
+        const ticketCode = ticket.customTicketId ?? ticket.ticketId ?? "-";
+
+        return (
+          <div key={ticket.ticketId ?? ticket.customTicketId ?? "ticket"} className="grid gap-3 border-b border-border px-4 py-3 last:border-b-0 sm:grid-cols-[1fr_118px_108px]">
+            <div className="flex min-w-0 items-center gap-3">
+              <StaffIcon name="booking-card" className="h-7 w-7 shrink-0" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black italic text-foreground">{productName}</p>
+                <p className="truncate text-xs text-foreground/60">Ticket {ticketCode}</p>
+              </div>
             </div>
+            <span
+              className={`w-fit rounded-full px-3 py-1 text-[11px] font-black uppercase ${
+                ticket.selectedForCheckIn ? "bg-primary/10 text-primary" : "bg-surface text-muted"
+              }`}
+            >
+              {ticket.selectedForCheckIn ? "Vald" : "Ej vald"}
+            </span>
+            <p className="text-sm text-foreground/65">{statusLabel(ticket.redeemStatusLastSeen) ?? "-"}</p>
           </div>
-          <span
-            className={`w-fit rounded-full px-3 py-1 text-[11px] font-black uppercase ${
-              ticket.selectedForCheckIn ? "bg-primary/10 text-primary" : "bg-surface text-muted"
-            }`}
-          >
-            {ticket.selectedForCheckIn ? "Vald" : "Ej vald"}
-          </span>
-          <p className="text-sm text-foreground/65">{statusLabel(ticket.redeemStatusLastSeen) ?? "-"}</p>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -399,7 +422,8 @@ function DetailPanel({
         </div>
       </div>
 
-      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5">
+        <InfoTile icon={<StaffIcon name="profile" className="h-7 w-7" />} label="Gäst" value={getGuestDisplayName(detail)} />
         <InfoTile icon={<StaffIcon name="booking-card" className="h-7 w-7" />} label="Bokning" value={detail.bookingReference ?? "-"} />
         <InfoTile icon={<CalendarDays size={20} />} label="Datum" value={formatDate(detail.visitDate)} />
         <InfoTile
@@ -409,6 +433,14 @@ function DetailPanel({
         />
         <InfoTile icon={<StaffIcon name="safety-check" className="h-7 w-7" />} label="Säkerhet" value={statusLabel(detail.safetyStatus)} />
       </div>
+
+      {getGuestContactLine(detail) && (
+        <div className="px-4 pb-4">
+          <div className="rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground/65">
+            Kontakt: {getGuestContactLine(detail)}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 p-4 pt-0 xl:grid-cols-[1fr_1fr]">
         <section>
@@ -424,7 +456,7 @@ function DetailPanel({
             <StaffIcon name="visitor-wristband" className="h-7 w-7" />
             <h3 className="text-base font-black italic uppercase text-foreground">Biljetter</h3>
           </div>
-          <TicketRows tickets={detail.tickets} />
+          <TicketRows items={detail.items} tickets={detail.tickets} />
         </section>
       </div>
 
@@ -532,7 +564,7 @@ export default function Home() {
     setError("");
 
     try {
-      const nextSessions = await listReadyStaffSessions(auth.auth.token);
+      const nextSessions = await listReadyStaffSessions(auth.auth.token, query);
       const nextSelectedId =
         selectedId && nextSessions.some((session) => session.checkinSessionId === selectedId)
           ? selectedId
@@ -547,7 +579,7 @@ export default function Home() {
       setError(loadError instanceof Error ? loadError.message : "Kunde inte hämta handovers.");
       setState("error");
     }
-  }, [auth, selectedId]);
+  }, [auth, query, selectedId]);
 
   const openHandoffPayload = useCallback(
     (value: string) => {
@@ -582,6 +614,15 @@ export default function Home() {
     [selectSession, sessions]
   );
 
+  const handleSearchSubmit = useCallback(() => {
+    if (parseHandoffPayload(query)) {
+      openHandoffPayload(query);
+      return;
+    }
+
+    void refreshSessions();
+  }, [openHandoffPayload, query, refreshSessions]);
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       const storedAuth = readStoredStaffAuth();
@@ -600,9 +641,9 @@ export default function Home() {
 
   useEffect(() => {
     if (!auth) return;
-    const timeoutId = window.setTimeout(() => void refreshSessions(), 0);
+    const timeoutId = window.setTimeout(() => void refreshSessions(), query.trim() ? 250 : 0);
     return () => window.clearTimeout(timeoutId);
-  }, [auth, refreshSessions]);
+  }, [auth, query, refreshSessions]);
 
   useEffect(() => {
     if (!scannerOpen) return;
@@ -781,6 +822,7 @@ export default function Home() {
   const filteredSessions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return sessions;
+    if (normalized.includes("@")) return sessions;
     return sessions.filter((session) => searchableText(session).includes(normalized));
   }, [query, sessions]);
 
@@ -891,7 +933,7 @@ export default function Home() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") openHandoffPayload(query);
+                  if (event.key === "Enter") handleSearchSubmit();
                 }}
                 placeholder="Sök eller skanna QR"
                 className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm font-bold outline-none placeholder:text-foreground/35"
@@ -902,7 +944,7 @@ export default function Home() {
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => openHandoffPayload(query)}
+                onClick={handleSearchSubmit}
                 disabled={!query.trim()}
                 data-testid="handoff-open-code"
                 className="flex min-h-12 items-center justify-center rounded-2xl border border-border bg-white px-3 text-sm font-black italic uppercase text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:bg-surface disabled:text-foreground/40"

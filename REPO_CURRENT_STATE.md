@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-01
-- Current branch: `codex/t0082-add-product-contact-resolution`
-- Current status: T0082 implemented and deployed. Existing-booking add-product draft creation can now reuse server-side original contact data for JumpYard-created bookings without showing duplicate guest contact fields; one no-customer add-product draft smoke created a linked Playground draft and Aurora link row.
-- Current ticket: `T0082` ready for review/merge.
+- Current branch: `codex/t0083-staff-identity-search`
+- Current status: T0083 implemented and deployed. Staff-authenticated handoff list/detail now returns limited guest identity fields, supports backend search over booking/code/contact/name fields, the admin queue/detail shows names and masked contact only, and ticket rows now lead with product names instead of raw Roller item ids.
+- Current ticket: `T0083` ready for review/merge.
 - Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`
-- Recommended next step: improve staff handoff data/search/UI in T0083-T0085, polish guest/admin UI in T0086, deploy staff admin through Cloudflare in T0087, then resume guest messaging production unlock and broader production-readiness work.
+- Recommended next step: continue staff handoff UI/redeem polish in T0084-T0085, polish guest/admin UI in T0086, deploy staff admin through Cloudflare in T0087, add real-time guest-name enrichment in T0088, then resume guest messaging production unlock and broader production-readiness work.
 
 ## Current Structure
 
@@ -60,6 +60,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- migrations/0005_add_product_draft_links.sql
 |   |-- migrations/0006_sms_deliveries.sql
 |   |-- migrations/0007_email_deliveries.sql
+|   |-- migrations/0008_prepayment_draft_customer_names.sql
 |   |-- scripts/run-migrations.ts
 |   |-- cdk.json
 |   |-- package.json
@@ -214,25 +215,26 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0080` | Verified Data API, webhook, Aurora, and lookup health. | 2026-06-01 | Daily Data API schedule is enabled and healthy, recent seed runs succeeded, recent smoke bookings are fresh in Aurora, recent webhooks are processed, public lookups return from Aurora, and deployed no-customer add-product quote returns safely; merged through PR #82. |
 | `T0081` | Ran integrated Playground flow rehearsal. | 2026-06-01 | New card-paid booking `5100963` reached ready-for-staff handoff `JY7597`, staff-confirmed redeem succeeded for ticket `5100963-21683812`, and Aurora/webhook readback was fresh. Add-product quote/no-contact UX worked, but confirmed add-product draft creation failed closed with `customer.firstName is required`; T0082 must fix original-customer resolution before linked add-product payment can be re-passed. |
 | `T0082` | Fixed add-product contact resolution. | 2026-06-01 | Booking Lambda now reuses original new-booking draft contact data plus Roller customer id/Aurora guest profiles for no-customer add-product drafts; deployed booking Lambda code only; no-customer smoke for original booking `5100965` created linked add-on draft `jypd_7d8379902449415aab` and link `jyl_7e8eac4758424c24bc`. |
+| `T0083` | Added staff handoff identity/search data. | 2026-06-01 | Session Lambda now returns staff-only guest identity fields with masked contact values and supports staff search over code, booking reference, stored first/last name, email, and phone; booking/data-sync capture customer names; admin queue/detail displays safe identity fields and product-first ticket rows. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0082` | Add-product contact-resolution fix. | Complete, ready for review | Deployed to dev and smoke-tested through the API/Aurora path; public browser payment re-test can be done in the next integrated test pass. |
+| `T0083` | Staff handoff identity/search data. | Complete, ready for review | Applied migration `0008`, deployed booking/session/data-sync code changes, and smoke-tested controlled ready session booking `5100965`; name search works and raw contact fields were not returned. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0083` | Staff handoff identity and search data | Show the booking/customer name in the authenticated staff handoff surface and support staff search by booking code, name, and email without exposing that PII in public guest UI. |
 | `T0084` | Staff handoff one-page queue/detail UX | Rebuild staff handoff as one operational page: search/QR at top, live queue below, click/scan opens a compact summary with products to hand out and a clear staff check-in/redeem button. |
 | `T0085` | Staff handoff redeem confirmation polish | After staff check-in/redeem, show a large green success confirmation, then return to the queue/search screen; verify the flow on phone-sized staff screens. |
 | `T0086` | Guest/admin UI polish pass | Clean up remaining visual inconsistencies before broader testing: remove the unnecessary backup-code box from the guest ready-for-staff screen, fix remaining incorrect fonts, and align check-in/admin UI details with the approved JumpYard style. |
 | `T0087` | Staff admin Cloudflare deployment | Make the staff/admin app available through a Cloudflare URL and verify the login, queue, QR/search, detail, and redeem flow works outside local `localhost`. |
-| `T0088` | Guest messaging production unlock | Resume SES/SNS production unlock, sender/domain setup, SMS sandbox exit planning, and unattended booking-time sends after the core add-product, staff handoff, UI, and staff-admin deployment blockers are fixed. |
-| `T0089` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, SMS/email, and staff redeem failures before wider rollout. |
-| `T0090` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
+| `T0088` | Real-time guest-name enrichment | Investigate and implement the best same-day name path for non-JumpYard-created bookings: webhook-triggered booking detail, customer references, possible REST/Data API fallback, and `guest_profiles` update without exposing raw PII. |
+| `T0089` | Guest messaging production unlock | Resume SES/SNS production unlock, sender/domain setup, SMS sandbox exit planning, and unattended booking-time sends after the core add-product, staff handoff, UI, staff-admin deployment, and real-time name enrichment blockers are fixed. |
+| `T0090` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
+| `T0091` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
 ## Validation Status
 
@@ -245,6 +247,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0082 backend fix: `infra/lambda/booking/index.js` now passes Roller `customerId` into local contact resolution, reads original JumpYard-created booking contact from `jumpyard.prepayment_booking_drafts`, and merges email/phone from Aurora guest profiles without inventing missing contact values.
 - T0082 deploy: AWS preflight confirmed account `376129878018`, region `eu-north-1`, and approved dev tags. Pre-deploy CDK diff showed only `BookingHandler` Lambda code; deploy passed; post-deploy diff showed no differences.
 - T0082 no-customer draft smoke: `POST /v1/bookings/5100965/add-products` with no `customer` payload created Roller Playground draft `45ee1b0e-ab69-4e31-832f-d956af599365`, prepayment draft `jypd_7d8379902449415aab`, add-on group `jyao_f93769db16d840678e`, and link `jyl_7e8eac4758424c24bc`; Aurora shows status `payment_pending`, total `4500` cents, and `payment_jwt_present=true`.
+- T0083 branch setup: branch `codex/t0083-staff-identity-search` was created from updated `main` after T0082 was merged and pushed.
+- T0083 backend/UI fix: `infra/lambda/session/index.js` adds staff-only guest identity mapping and backend search for handoff list; `infra/lambda/booking/index.js` stores first/last name on new prepayment drafts; `infra/lambda/data-sync/index.js` and `infra/scripts/import-related-data.ts` store Roller Data API customer first/last names in `guest_profiles.latest_booking_context`; `jumpyard-checkin-admin/src/lib/adminApi.ts` and `jumpyard-checkin-admin/src/app/page.tsx` show safe identity data, send search text to JumpYard Cloud, and show product names before ticket ids.
+- T0083 migration/backfill: `npm --prefix infra run migrate:dev` applied `0008 prepayment draft customer names`, adding `customer_first_name` and `customer_last_name` to `jumpyard.prepayment_booking_drafts` and backfilling matched rows from `guest_profiles` where possible.
+- T0083 deploy: AWS preflight confirmed account `376129878018`, region `eu-north-1`, and approved dev tags. CDK diffs were limited to `DataSyncHandler`, `BookingHandler`, and `SessionHandler` Lambda code over the staged deploys; deploys passed; final post-deploy diff showed no differences.
+- T0083 staff API smoke: controlled ready-for-staff session for booking `5100965` was created without redeeming; staff search by booking reference, first name, derived last-name value, and masked contact found it, and the response included name plus masked email/phone flags while confirming raw `email`/`phone` fields were not returned.
 - T0079 branch setup: branch `codex/t0079-add-product-ux-polish` was created from updated `main` after T0078 was merged through PR #80.
 - T0079 backend behavior: existing-booking add-product quote/draft requests can omit `customer`; JumpYard Cloud resolves the original booking contact from Roller detail plus Aurora `guest_profiles` and fails closed if first name, last name, email, or phone cannot be resolved.
 - T0079 phone behavior: the existing-booking add-product flow skips the visible contact form, quotes directly after add-on selection, sends no customer payload for add-product quote/draft, and shows a short payment-approved confirmation before continuing to the original safety/check-in path.
