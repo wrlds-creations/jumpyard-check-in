@@ -4,12 +4,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Snapshot
 
-- Date: 2026-05-29
-- Current branch: `codex/t0074-sms-production-unlock`
-- Current status: T0074 SMS production unlock preparation completed locally; docs are awaiting review/commit.
-- Current ticket: `T0074` completed locally, not committed
+- Date: 2026-06-01
+- Current branch: `codex/t0075-card-payment-unblock`
+- Current status: T0075 card payment unblock/readiness completed locally; card now renders and the Adyen Visa test-card smoke reaches the safety step.
+- Current ticket: `T0075` completed locally, not committed
 - Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`
-- Recommended next step: confirm missing SMS production-access details, then run T0075 Email production unlock or submit the SMS support request when approved.
+- Recommended next step: commit/merge T0075, then run T0076 new-booking full purchase flow to verify the full guest path after approved payment.
 
 ## Current Structure
 
@@ -206,27 +206,36 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0072` | Verified guest SMS/email sender readiness. | 2026-05-29 | SNS remains sandboxed with one verified test phone; SES remains sandboxed with only `love@wrlds.com` verified; schedule still runs unified SMS/email planning with `confirmSend=false`; unattended sends remain blocked. |
 | `T0073` | Ran controlled unified booking-time message smoke. | 2026-05-29 | Scoped Playground booking `5100877` was synced into Aurora; unified planning found SMS and email; controlled confirmed send wrote sent Aurora audit rows for both channels; SNS accepted the SMS, and the user confirmed SMS plus email receipt. |
 | `T0074` | Prepared SMS production unlock package. | 2026-05-29 | Read-only AWS checks confirmed SNS and AWS End User Messaging SMS remain sandboxed with no sender IDs or pools; docs now contain the AWS Support case draft and missing user inputs. |
+| `T0075` | Verified card payment unblock. | 2026-06-01 | Pabel's Roller Playground fix is confirmed in the public checkout: card payment renders, Adyen Visa test card ending `1142` submits, and the phone flow reaches the safety-video step. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0074` | SMS production unlock preparation. | Completed locally, not committed | Documentation/readiness ticket. Current SMS sandbox/sender state is known, AWS Support request content is drafted, and no production-access request or AWS change was submitted. |
+| `T0075` | Card payment unblock/readiness. | Completed locally, not committed | Card method is visible on the public checkout, the Adyen Visa test-card smoke reached safety, and diagnostics confirm the vendored Roller payment package/readiness path is green. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0075` | Email production unlock | Work with the user on SES production access, production sender/domain choice, DKIM/SPF/DMARC/custom MAIL FROM as needed, reply-to/branding/consent/unsubscribe copy, and deliverability basics so real guest email addresses can receive booking-time email without pre-verification. |
-| `T0076` | Enable unattended booking-time sends | After SMS and email unlock gates pass, change dev/staging config deliberately from planning-only to confirmed scheduled sends, test a booking created with normal phone/email, and verify 30-minute-before delivery without manual triggering. |
-| `T0077` | Messaging monitoring and runbooks | Add channel-specific SMS/email alarms, delivery-failure dashboards, log retention decisions, and operator runbooks before unattended sends are treated as production-ready. |
-| `T0078` | Add-product and payment flow smoke | Re-test create booking and existing-booking add-product flows with current payment constraints, verify separate linked drafts, and keep card/scheme smoke deferred until Roller enables the missing card method. |
-| `T0079` | Environment and cutover plan | Define staging/live config, secret ownership, deployment/rollback runbook, live backfill, webhook registration, and cutover checklist before any non-dev stack is created. |
-| `T0080` | Production auth, route protection, retention, and cutover rehearsal | Replace or isolate dev-only passcodes/shared tokens, implement the T0062 route boundary, lock PII retention, and rehearse live backfill/cutover before production traffic. |
-| `Deferred` | Card/scheme payment smoke | Wait for Pabel/Roller to enable or confirm the `scheme` card method before testing the Adyen Visa card path. |
+| `T0075` | Card payment unblock/readiness | Verify card method rendering and Adyen Visa test-card payment on the public allowlisted Playground checkout after Pabel's fix. |
+| `T0076` | New-booking full purchase flow | Prove the guest can buy entry with the correct order: time, entry, add-ons, contact, review, one draft/payment, safety, QR/handoff. |
+| `T0077` | Existing-booking happy path | Prove a paid existing Roller booking can be found from Aurora, resume server-owned check-in state, complete safety, show QR, and avoid repeating completed steps. |
+| `T0078` | Existing-booking add-product payment flow | Prove add-ons on an existing booking create a separate linked add-on draft, pay through the same Roller package path, and continue the original check-in flow. |
+| `T0079` | Staff handoff and redeem polish | Re-test QR scan/manual code, staff login, redeem only redeemable tickets, and clear states for already redeemed, unpaid, or non-redeemable cases. |
+| `T0080` | Data sync/webhook verification | Re-check daily Data API sync, webhook enrichment, Aurora freshness, and lookup behavior after the payment/add-product smokes. |
+| `T0081` | Full integrated flow rehearsal | Run a small end-to-end rehearsal of the three target flows before returning to production readiness. |
+| `T0082` | SMS/email production unlock | Resume SES/SNS production unlock, sender/domain setup, and unattended booking-time sends after the core app flows are proven. |
+| `T0083` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
 ## Validation Status
 
+- T0075 branch setup: branch `codex/t0075-card-payment-unblock` was created successfully after permissions changed.
+- T0075 payment readiness: `ROLLER_PAYMENT_ALLOWLIST_CONFIRMED=true npm.cmd run roller:payment:readiness -- --json` returned `ready_for_payment_implementation`, with venue payment settings available, docs reachable, public origin reachable, and no blockers.
+- T0075 payment POC: `ROLLER_PAYMENT_PUBLIC_ORIGIN=https://jumpyard-check-in.pages.dev ROLLER_PAYMENT_TEST_CARD_CONFIRMED=true npm.cmd run roller:payment:poc -- --json` returned `ready_for_browser_payment_test`; the script now recognizes the vendored `@roller/ecom-payments` package `1.0.217`.
+- T0075 public browser smoke: `https://jumpyard-check-in.pages.dev` rendered `Kortbetalning`, selected 60 min entry at `10:00`, filled the Adyen Visa test card ending `1142`, submitted `Betala 200,00 kr`, and reached the phone safety-video step with no captured request failures.
+- T0075 in-app browser note: Codex in-app browser can verify card rendering but cannot type into Adyen cross-origin secure iframes; the actual card-entry smoke used Playwright with installed Chrome.
+- T0075 payment-method follow-up: current public drop-in renders card, Delbetalning, and Google Pay; Swish is not visible after the card fix, and `FU-071` tracks Pabel/Roller confirmation for Swish and Apple Pay.
 - T0074 AWS preflight: `aws sts get-caller-identity --profile wrlds-dev --region eu-north-1` returned account `376129878018`, and region is `eu-north-1`.
 - T0074 SNS sandbox state: `aws sns get-sms-sandbox-account-status` returned `IsInSandbox=true`; unverified guest phone numbers still cannot receive SMS.
 - T0074 SNS SMS attributes: `DefaultSMSType=Transactional`, `MonthlySpendLimit=1`, `DeliveryStatusSuccessSamplingRate=100`, and delivery-status IAM role are configured; no `DefaultSenderID` is set.
@@ -605,7 +614,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Already-redeemed Playground data now exists from T0021 controlled redeem booking `5032454`; a broader deterministic already-redeemed seed scenario is still deferred.
 - Staff handoff/redeem flow design is documented in T0022, server-owned session/handoff API skeleton is deployed from T0023, phone session-start wiring is complete from T0024, phone ready-for-staff wiring is complete from T0025, the first staff/admin handoff list/detail is complete from T0026, staff-confirmed redeem is deployed from T0027, QR/paste lookup polish is complete from T0028, phone session resume routing is complete locally from T0029, staff auth replacement is deployed from T0047, staff/admin mobile visual polish is complete locally from T0048, and guest SMS/email link foundations both use the same opaque `jy_token` session-resolution model.
 - Roller `POST /redemptions` has been executed once through the protected dev path against Playground booking `5032454`.
-- Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; T0050 confirms `/venues/me` payment settings are available, T0051 wires the approved payment package in the phone buy-entry flow, T0052 reuses it for linked add-product drafts, and T0054 confirmed public Swish payment can complete. The remaining blocker is Roller/Adyen enabling or confirming the card/scheme method for Playground custom checkout.
+- Roller `POST /bookings/draft` has been executed through the protected T0030 discovery path, deployed T0031 JumpYard Cloud draft endpoint, and guarded T0032 POC harness against Playground and returned costs plus `paymentJwt`; T0050 confirms `/venues/me` payment settings are available, T0051 wires the approved payment package in the phone buy-entry flow, T0052 reuses it for linked add-product drafts, and T0054 confirmed public Swish payment can complete. Pabel confirmed on 2026-06-01 that the Playground payment integration issue is fixed and card payments should now show up; T0075 owns the card smoke.
 - Existing-booking add-product linked-booking flow has been tested server-side in dev and wired in the phone UI, including the shared payment package path when JWT/config are present.
 - T0058 production-readiness audit is docs-only and made no AWS changes. T0060 added the first dev CORS/observability hardening, T0061 added dev API Gateway stage throttling plus 429 visibility, T0062 documented the route boundary, T0063 added email dry-run/audit support, and T0064 moved guest SMS/email completion ahead of broader staging/live readiness. The main staging/live blockers still include production environment config, route auth/WAF implementation, alarm notification/runbooks, SMS sandbox/consent/sender readiness, SES sender/domain verification, dev-token replacement, data retention, deployment rollback, and live backfill/cutover.
 - `aws-cdk-lib` currently carries a moderate bundled dependency audit warning; a dependency fix should be evaluated separately from T0007.
@@ -620,4 +629,4 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - Which exact production auth header/signature and optional IP allowlisting should Roller webhook intake use beyond the confirmed Playground `x-roller-apikey` header?
 - Which real Roller redemption device name should JumpYard Cloud send, if any, before production check-in?
 - Which staff/admin authentication model should authorize final redeem in the pilot?
-- Will Roller/Adyen enable or confirm the `scheme` card method for Playground custom checkout so the Adyen Visa test card ending `1142` can be tested on `https://jumpyard-check-in.pages.dev`?
+- Does the public checkout now render and approve the Adyen Visa test card ending `1142` after Pabel's 2026-06-01 Playground payment fix?

@@ -1,15 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0074
+T0075
 
 ## Goal
-Prepare the SMS production unlock path so real guest phone numbers can receive booking-time SMS without SNS sandbox pre-verification.
+Verify and unblock Roller Playground card payments in the JumpYard phone checkout after Roller enabled card methods for the Playground payment integration.
 
 ## Dependencies
-- T0073 completed and merged.
-- Controlled SMS delivery to the verified sandbox test phone was confirmed.
-- Dev AWS stack exists and targets Roller Playground.
+- T0074 completed and merged.
+- Pabel confirmed on 2026-06-01 that the Playground payment integration issue is fixed and card payments should now show up.
+- Public test origin `https://jumpyard-check-in.pages.dev` is allowlisted for Roller Payments testing.
+- Existing Roller payment package/drop-in wiring exists from T0051-T0054.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -17,20 +18,19 @@ Prepare the SMS production unlock path so real guest phone numbers can receive b
 - DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
-- AWS_RESOURCES.md
 - TEST_PLAN.md
+- jumpyard-checkin-phone payment UI files only if the smoke exposes a payment UI issue
+- Existing payment validation scripts only if needed for safer diagnostics
 
 ## Do not touch
-- App source code
-- UI files
-- Payment implementation
-- SMS/email Lambda code
+- SMS/email production unlock work
 - Data API importer code
 - Webhook code
 - Redeem code
+- Staff/admin app unless explicitly needed for verification
 - CDK infrastructure code
 - Aurora migrations
-- Package dependencies
+- AWS resources
 - Production credentials
 - Live Roller config
 - `.env`
@@ -38,62 +38,53 @@ Prepare the SMS production unlock path so real guest phone numbers can receive b
 
 ## Requirements
 
-1. Confirm current SMS production-readiness state with read-only checks.
-   - Confirm AWS account and region.
-   - Confirm SNS SMS sandbox state.
-   - Confirm AWS End User Messaging SMS account tier.
-   - Confirm whether sender IDs or pools already exist.
-   - Confirm current SMS spend and delivery diagnostic settings.
+1. Re-scope the near-term roadmap so payment/card verification comes before email/SMS production unlock.
+   - Document why: core purchase/check-in flows should be proven before invitation messaging work continues.
+   - Keep email/SMS production unlock as later tickets.
 
-2. Review official AWS SMS production-access guidance.
-   - Use official AWS documentation only for current sandbox/production-access facts.
-   - Document the required AWS Support case inputs.
-   - Document Sweden sender ID support and sender-display implications.
+2. Confirm the current payment implementation path.
+   - New booking uses JumpYard Cloud quote/draft endpoints.
+   - Draft response returns `paymentJwt` only to the frontend response.
+   - Frontend uses the approved Roller payment package/drop-in.
+   - Frontend must not receive Roller client credentials or call generic Roller REST APIs.
 
-3. Prepare the production unlock request package.
-   - Draft the AWS Support case content for sandbox exit.
-   - List the user/company inputs still needed before submission.
-   - Keep estimated volume, legal/business contact details, and final message copy as placeholders unless already confirmed.
+3. Attempt a safe card payment smoke for a Playground booking.
+   - Use the public allowlisted origin.
+   - Use the Adyen/Roller test Visa ending `1142`.
+   - Do not print or persist full card number, raw payment JWT, access tokens, or Roller secrets.
+   - If browser/network automation is blocked locally, document the blocker and exact manual smoke still needed.
 
-4. Preserve safety.
-   - Do not submit an AWS Support case in this ticket.
-   - Do not request or register Sender IDs.
-   - Do not change account SMS attributes.
-   - Do not enable unattended scheduled sends.
-   - Do not create, change, deploy, or delete AWS resources.
-
-5. Update source-of-truth docs.
-   - Update `PROJECT_CONTEXT.md` with the SMS unlock plan.
-   - Update `DECISIONS.md` if a meaningful sender/unlock decision is made.
-   - Update `REPO_CURRENT_STATE.md` with T0074 status and next step.
-   - Update `TEST_PLAN.md` with the read-only validation result.
-   - Update `AWS_RESOURCES.md` with current SMS operational state.
-   - Update `FOLLOWUPS.md` with the remaining external/user actions.
+4. Update source-of-truth docs.
+   - Update `PROJECT_CONTEXT.md` with Pabel's card-payment fix and the new flow-first roadmap.
+   - Update `DECISIONS.md` with the payment-before-messaging sequencing decision.
+   - Update `REPO_CURRENT_STATE.md` with T0075 status and next tickets.
+   - Update `FOLLOWUPS.md` to move card/scheme payment from external blocker to active verification.
+   - Update `TEST_PLAN.md` with the T0075 validation result.
 
 ## Non-goals
-- Do not leave SNS SMS sandbox in this ticket.
+- Do not build a custom card form.
+- Do not bypass Roller's approved payment package.
+- Do not store raw payment JWTs or card data.
+- Do not test Roller Live/production.
+- Do not enable unattended SMS or email sends.
 - Do not submit AWS Support cases.
-- Do not create or register a Sender ID.
-- Do not enable real unattended SMS or email sends.
-- Do not modify SMS/email message templates in code.
-- Do not test payment flows.
-- Do not write to Roller Live/production.
-- Do not create staging or production AWS resources.
+- Do not create, change, deploy, or delete AWS resources.
 
 ## Acceptance criteria
-- Current SMS sandbox and sender-resource state is known and documented.
-- AWS official production-access requirements are summarized with source links.
-- AWS Support case draft exists in source-of-truth docs.
-- Remaining user inputs are explicit.
-- Unattended scheduled sends remain disabled.
-- No AWS resources, Lambda code, CDK config, app code, or package dependencies were changed.
-- `npm run validate` passes.
+- T0075 is documented as the active ticket.
+- Pabel's confirmation is recorded.
+- The next-ticket roadmap prioritizes the core booking/payment/check-in flows before email/SMS production unlock.
+- The existing card payment path is verified as using the Roller package/JWT exception, not direct Roller frontend API calls.
+- Card smoke result is recorded as passed, blocked, or manual-pending with exact reason.
+- `npm run validate` passes if local execution is available.
 - `git diff --check` passes.
 
 ## Manual verification
-Review the prepared AWS Support request content and confirm the missing business details, expected monthly SMS volume, final sender text, and whether WRLDS should submit the case now or wait.
+On `https://jumpyard-check-in.pages.dev`, start a new buy-entry flow, select a valid time/product/quantity/add-ons/contact details, reach payment, confirm that card is visible, and test the Adyen Visa test card ending `1142`. Confirm whether payment approves, creates a paid Roller Playground booking, and continues into JumpYard safety/check-in.
 
 ## Automated validation
-Run:
+Run where local network/tooling permits:
 - npm run validate
+- npm run roller:payment:readiness
+- npm run roller:payment:poc
 - git diff --check

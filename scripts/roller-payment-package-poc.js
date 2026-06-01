@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+const fs = require('fs');
+const path = require('path');
 const { loadLocalEnv } = require('./roller-client');
 
 const DEFAULT_API_BASE_URL = 'https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com';
@@ -229,6 +231,28 @@ async function runDraft(config) {
 
 async function checkPaymentPackage(config) {
   if (!config.packageUrl) {
+    const vendoredPackagePath = path.join(
+      __dirname,
+      '..',
+      'jumpyard-checkin-phone',
+      'vendor',
+      'ecom-payments',
+      'package.json',
+    );
+
+    if (fs.existsSync(vendoredPackagePath)) {
+      const packageJson = parseJsonOrNull(fs.readFileSync(vendoredPackagePath, 'utf8')) ?? {};
+
+      return {
+        configured: true,
+        name: stringOrNull(packageJson.name),
+        ready: true,
+        source: 'vendored',
+        status: 'vendored_package_available',
+        version: stringOrNull(packageJson.version),
+      };
+    }
+
     return {
       configured: false,
       ready: false,
