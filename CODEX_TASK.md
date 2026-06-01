@@ -1,15 +1,18 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0080
+T0081
 
 ## Goal
-Verify that Roller Data API sync, webhook enrichment, Aurora freshness, and lookup behavior are healthy after the payment/add-product smokes.
+Run a focused integrated Playground rehearsal of the core guest/staff flows after T0080 confirmed data freshness.
 
 ## Dependencies
-- T0079 completed and merged.
-- AWS dev access available.
-- Roller Playground API access available.
+- T0080 completed and merged.
+- Public Cloudflare check-in app is available.
+- Dev JumpYard Cloud API is available.
+- Dev staff/admin app can be run locally if needed.
+- Roller Playground card payment path is available.
+- AWS dev read access is available for verification.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -18,6 +21,14 @@ Verify that Roller Data API sync, webhook enrichment, Aurora freshness, and look
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
 - TEST_PLAN.md
+
+Operational verification may use:
+- Public check-in app `https://jumpyard-check-in.pages.dev`
+- Local admin app if already available or easy to start
+- Dev JumpYard Cloud API
+- Dev Aurora read-only queries
+- Roller Playground writes for scoped smoke bookings/drafts only
+- Staff-confirmed redeem for a dedicated smoke booking only
 
 ## Do not touch
 - App source code
@@ -34,52 +45,56 @@ Verify that Roller Data API sync, webhook enrichment, Aurora freshness, and look
 
 ## Requirements
 
-1. Verify dev AWS identity/account/region.
+1. Rehearse the new-booking purchase/check-in flow:
+   - buy entry through the public phone app
+   - complete card payment with the approved Playground test card
+   - continue into safety/check-in
+   - reach ready-for-staff QR/handoff state
 
-2. Verify the daily Roller Data API EventBridge rule:
-   - It exists.
-   - It is enabled.
-   - It targets the dev data-sync Lambda.
+2. Rehearse the existing-booking check-in/staff handoff flow:
+   - use a known paid existing booking or the booking created in this rehearsal
+   - confirm lookup uses JumpYard Cloud
+   - confirm ready-for-staff session is visible to staff/admin
+   - perform staff-confirmed redeem only on a dedicated smoke booking
 
-3. Check latest `jumpyard.booking_seed_runs` status for scheduled/manual Data API sync.
+3. Rehearse the existing-booking add-product flow:
+   - select a mapped add-on for a paid existing booking
+   - confirm no duplicate visible contact entry is required
+   - quote and pay the linked add-on draft
+   - confirm the add-product draft is linked/published in Aurora
+   - confirm the original check-in continuation still works
 
-4. Verify recent smoke bookings exist/fresh in Aurora where practical:
-   - recent new-booking smoke
-   - recent existing-booking smoke
-   - recent add-product smoke
+4. Verify data after the rehearsal:
+   - Aurora booking/session/draft rows where practical
+   - processed webhook events where practical
+   - no unsafe Roller Live or production writes
 
-5. Verify recent webhook events are processed, or document why no new webhook is expected.
-
-6. Verify lookup for a known recent paid booking returns from JumpYard Cloud/Aurora and not an unsafe state.
-
-7. Document whether any merged backend code still needs dev deployment before full integrated rehearsal.
-
-8. Update source-of-truth docs with results and next ticket.
+5. Update source-of-truth docs with:
+   - smoke booking references and safe identifiers
+   - passed/failed scenarios
+   - blockers or follow-ups
+   - next recommended ticket
 
 ## Non-goals
-- Do not modify runtime behavior.
+- Do not build new functionality.
+- Do not change UI copy/design.
 - Do not deploy AWS changes.
-- Do not create or modify AWS resources.
-- Do not create Roller bookings unless verification cannot proceed otherwise and the user explicitly approves it.
 - Do not send SMS/email.
-- Do not redeem tickets.
+- Do not submit AWS support cases.
+- Do not change payment-provider configuration.
+- Do not test Roller Live.
 
 ## Acceptance criteria
-- Data API schedule state is documented.
-- Latest sync health is documented.
-- Aurora freshness/readback is documented.
-- Webhook processing health is documented.
-- Known lookup behavior is documented.
-- No app/backend/AWS runtime files are changed.
+- New-booking purchase/check-in is either passed or a clear blocker is documented.
+- Existing-booking staff handoff/redeem is either passed or a clear blocker is documented.
+- Existing-booking add-product payment/continuation is either passed or a clear blocker is documented.
+- Aurora/webhook readback is documented where available.
+- No source/runtime files are changed.
 - `npm run validate` passes.
 - `git diff --check` passes, ignoring existing CRLF-only warnings if present.
 
 ## Manual verification
-Use AWS Console or AWS CLI read-only checks to confirm:
-- EventBridge schedule state.
-- Latest Data API run health.
-- Aurora records for recent smoke bookings.
-- Recent webhook processing status.
+Use the browser and AWS/Aurora read-only checks to confirm the integrated flows.
 
 ## Automated validation
 Run:

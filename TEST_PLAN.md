@@ -928,6 +928,22 @@ Use this file to define validation for the current project or milestone.
 | Backend deploy check | T0079 no-customer add-product quote should work in deployed dev. | Passed | Safe no-write quote for booking `5100926` omitted `customer`, returned `status=quoted`, `amountOwing=45`, mode `separate_draft_booking`, and `wroteBooking=false`. |
 | Relevant alarms | Data sync, webhook, and Roller API alarms should be OK. | Passed | CloudWatch alarms `jumpyard-check-in-dev-data-sync-lambda-errors`, `jumpyard-check-in-dev-data-sync-lambda-throttles`, `jumpyard-check-in-dev-webhook-lambda-errors`, `jumpyard-check-in-dev-webhook-lambda-throttles`, and `jumpyard-check-in-dev-roller-api-errors` are `OK`. |
 
+## T0081 Integrated Flow Rehearsal
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| New booking purchase | Public app should create and pay a Roller Playground booking by card. | Passed | Public Cloudflare flow created booking `5100963` for `2026-06-01 14:00`; Adyen Visa test card ending `1142` submitted and payment settled to `Paid`. |
+| New booking check-in | Paid new booking should continue through safety and reach staff handoff. | Passed | Booking `5100963` completed safety video plus six safety confirmations and reached session `jycs_mpv4s30n_b9f8b58c`, handoff `JY7597`, status `ready_for_staff`. |
+| Staff handoff visibility | Staff API should list/detail the ready handoff. | Passed | Staff auth returned a token; list/detail found booking `5100963`, one booking item, one selected ticket, handoff `JY7597`, and payment status `Paid`. |
+| Staff-confirmed redeem | Dedicated smoke session should redeem through the staff route only. | Passed | `POST /v1/staff/check-in/sessions/jycs_mpv4s30n_b9f8b58c/redeem` returned `redeemed`, Roller status code `200`, and ticket `5100963-21683812`. |
+| Aurora readback | Booking/session/ticket state should match the rehearsal. | Passed | Aurora shows `5100963` as `Paid` and `fresh`; session status is `redeemed`, handoff status `completed`, and ticket `5100963-21683812` is locally `redeemed`. |
+| Webhook readback | Created booking webhook should be processed. | Passed | `jumpyard.roller_webhook_events` has processed `Created` events for `5100963` and `5100965` with one enrichment attempt and no error summary. |
+| Fresh add-product source booking | A second paid booking should be available for add-product rehearsal without redeeming. | Passed | Public card flow created paid booking `5100965`; Aurora shows `Paid`, `fresh`, source `roller_webhook_enrichment`, session `guest_in_progress`, and ticket `5100965-21683813` unredeemed. |
+| Add-product no-contact UX | Existing-booking add-product flow should not show duplicate contact fields. | Passed | Public flow for `5100965` entered add-ons, selected one `Strumpor`, reached `KONTROLLERA TILLÄGG`, and had zero visible contact-like inputs. |
+| Add-product quote | Add-product quote should work without creating a draft. | Passed | Public/API quote for `5100965` returned `45 kr`, `mode=separate_draft_booking`, and `wroteBooking=false`. |
+| Add-product confirmed draft | Add-product draft should be created and paid without duplicate contact entry. | Blocked | `RESERVERA TILLÄGG` failed with `customer.firstName is required for Roller draft booking creation` for `5100965`; direct API confirmed quote succeeds but confirmed create fails without full resolved customer data. Tracked as `FU-074`/T0082. |
+| Legacy add-product contact gap | Older bookings without full customer context should fail closed. | Confirmed | Booking `5100926` also failed closed at confirmed add-product draft creation with `customer.firstName is required`, matching the intended no-invented-contact safety behavior. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
