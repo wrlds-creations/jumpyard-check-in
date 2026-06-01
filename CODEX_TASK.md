@@ -1,14 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0079
+T0080
 
 ## Goal
-Polish existing-booking add-product UX after the successful payment smoke.
+Verify that Roller Data API sync, webhook enrichment, Aurora freshness, and lookup behavior are healthy after the payment/add-product smokes.
 
 ## Dependencies
-- T0078 completed and merged.
-- Existing-booking add-product quote/draft/payment path works in Playground.
+- T0079 completed and merged.
+- AWS dev access available.
+- Roller Playground API access available.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -17,73 +18,70 @@ Polish existing-booking add-product UX after the successful payment smoke.
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
 - TEST_PLAN.md
-- infra/lambda/booking/index.js
-- jumpyard-checkin-phone/src/components/AddonsOffer.tsx
-- jumpyard-checkin-phone/src/components/RollerPaymentDropIn.tsx
-- jumpyard-checkin-phone/src/context/LanguageContext.tsx
-- jumpyard-checkin-phone/src/flow/cloudClient.ts
 
 ## Do not touch
-- SMS/email production unlock work
-- Data API importer code
-- Webhook code
-- Redeem code
-- Staff/admin app
-- CDK infrastructure resources
+- App source code
+- UI files
+- Lambda code
+- CDK infrastructure
 - Aurora migrations
+- Package dependencies
+- AWS resources
 - Production credentials
-- Live Roller config
+- Roller Live
 - `.env`
-- Unrelated local assets or deliverables
-- Roller/Adyen postal-code configuration
+- Assets/deliverables
 
 ## Requirements
 
-1. Existing-booking add-products should not ask the guest to re-enter contact details when the original booking/contact data can be used server-side.
-   - The phone add-product flow should skip the visible contact step for existing bookings.
-   - JumpYard Cloud should be able to quote/create the add-product draft without a customer payload by resolving safe original booking contact server-side.
-   - If contact cannot be resolved, fail closed with a clear message rather than using fake contact data.
+1. Verify dev AWS identity/account/region.
 
-2. Add a short payment-approved confirmation state before the app advances to the original safety/check-in continuation.
-   - The guest should briefly see that payment was approved.
-   - Do not add a manual extra click unless needed.
-   - Keep the app flow fast.
+2. Verify the daily Roller Data API EventBridge rule:
+   - It exists.
+   - It is enabled.
+   - It targets the dev data-sync Lambda.
 
-3. Leave postal-code behavior unchanged.
-   - Do not attempt to disable or bypass Adyen/Roller postal-code collection in T0079.
-   - Track postal-code configuration only as an external follow-up if needed.
+3. Check latest `jumpyard.booking_seed_runs` status for scheduled/manual Data API sync.
 
-4. Update source-of-truth docs.
-   - Update `PROJECT_CONTEXT.md` with the T0079 behavior.
-   - Update `REPO_CURRENT_STATE.md` with T0079 status and next ticket numbering.
-   - Update `TEST_PLAN.md` with validation scenarios.
-   - Add out-of-scope findings to `FOLLOWUPS.md`.
+4. Verify recent smoke bookings exist/fresh in Aurora where practical:
+   - recent new-booking smoke
+   - recent existing-booking smoke
+   - recent add-product smoke
+
+5. Verify recent webhook events are processed, or document why no new webhook is expected.
+
+6. Verify lookup for a known recent paid booking returns from JumpYard Cloud/Aurora and not an unsafe state.
+
+7. Document whether any merged backend code still needs dev deployment before full integrated rehearsal.
+
+8. Update source-of-truth docs with results and next ticket.
 
 ## Non-goals
-- Do not change the linked add-on booking architecture.
-- Do not modify original Roller bookings directly.
-- Do not change staff/admin redeem.
-- Do not deploy AWS unless explicitly needed and credentials are available.
-- Do not alter Roller/Adyen payment-method or postal-code settings.
+- Do not modify runtime behavior.
+- Do not deploy AWS changes.
+- Do not create or modify AWS resources.
+- Do not create Roller bookings unless verification cannot proceed otherwise and the user explicitly approves it.
+- Do not send SMS/email.
+- Do not redeem tickets.
 
 ## Acceptance criteria
-- Existing-booking add-product flow skips guest contact entry when server-side original contact can be used.
-- Backend add-product quote/draft accepts omitted customer only when original contact can be resolved safely.
-- Approved payment shows a short confirmation before safety/check-in continuation.
+- Data API schedule state is documented.
+- Latest sync health is documented.
+- Aurora freshness/readback is documented.
+- Webhook processing health is documented.
+- Known lookup behavior is documented.
+- No app/backend/AWS runtime files are changed.
 - `npm run validate` passes.
-- Relevant syntax/build checks pass.
-- `git diff --check` passes.
+- `git diff --check` passes, ignoring existing CRLF-only warnings if present.
 
 ## Manual verification
-Run an existing-booking add-product flow and confirm:
-- add-on selection goes directly to review/quote, not contact entry
-- linked add-on draft still uses separate booking mode
-- approved payment briefly confirms success before safety continuation
+Use AWS Console or AWS CLI read-only checks to confirm:
+- EventBridge schedule state.
+- Latest Data API run health.
+- Aurora records for recent smoke bookings.
+- Recent webhook processing status.
 
 ## Automated validation
-Run where local tooling permits:
-- node --check infra/lambda/booking/index.js
-- npm --prefix jumpyard-checkin-phone run lint
-- npm --prefix jumpyard-checkin-phone run build
+Run:
 - npm run validate
 - git diff --check

@@ -591,6 +591,8 @@ T0078 confirmed the public existing-booking add-product payment path using paid 
 
 T0079 polishes the existing-booking add-product guest flow. The phone app no longer asks the guest to re-enter contact details when adding products to an existing booking; add-product quote/draft calls omit the customer payload, and JumpYard Cloud resolves the original booking contact server-side from Roller booking detail plus Aurora `guest_profiles`. If first name, last name, email, or phone cannot be resolved, JumpYard Cloud fails closed instead of inventing contact data. After an approved add-product payment, the phone app briefly shows a payment-approved confirmation before continuing into the original safety/check-in flow. Postal-code collection remains unchanged and controlled by Roller/Adyen.
 
+T0080 verifies data/webhook/Aurora health after the payment/add-product smokes. AWS identity was confirmed as account `376129878018` in `eu-north-1`; EventBridge rule `jumpyard-check-in-dev-data-api-daily-sync` is enabled at `02:00 UTC` and targets Lambda `jumpyard-check-in-dev-stack-data-sync`; the latest scheduled run for `2026-05-31 -> 2026-06-01` succeeded with product refresh and no booking deltas; recent smoke bookings `5100930`, `5100926`, and `5100877` are fresh in Aurora; their Roller `Created` webhook events are `processed`; public lookup returns from `jumpyard_cloud` through `aurora:booking_reference` with `refreshedFromRoller=false`; and a no-customer add-product quote for booking `5100926` confirms the T0079 backend behavior is deployed.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
