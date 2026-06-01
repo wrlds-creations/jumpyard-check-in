@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-01
-- Current branch: `codex/t0077-existing-booking-happy-path`
-- Current status: T0077 paid existing-booking happy path completed locally; existing lookup resumes to ready-for-staff QR/handoff without another payment.
-- Current ticket: `T0077` completed locally, not committed
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`
-- Recommended next step: commit/merge T0077, then run T0078 existing-booking add-product payment flow.
+- Current branch: `codex/t0078-add-product-payment-flow`
+- Current status: T0078 existing-booking add-product card payment completed locally; add-product creates a separate linked draft and returns to the original safety flow after approved payment.
+- Current ticket: `T0078` completed locally, not committed
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`
+- Recommended next step: commit/merge T0078, then run T0079 staff handoff and redeem polish.
 
 ## Current Structure
 
@@ -208,19 +208,19 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0074` | Prepared SMS production unlock package. | 2026-05-29 | Read-only AWS checks confirmed SNS and AWS End User Messaging SMS remain sandboxed with no sender IDs or pools; docs now contain the AWS Support case draft and missing user inputs. |
 | `T0075` | Verified card payment unblock. | 2026-06-01 | Pabel's Roller Playground fix is confirmed in the public checkout: card payment renders, Adyen Visa test card ending `1142` submits, and the phone flow reaches the safety-video step. |
 | `T0076` | Verified full new-booking purchase flow. | 2026-06-01 | Public Cloudflare smoke completed buy-entry, time/product/add-ons/contact/review, card payment with Adyen Visa ending `1142`, safety video/rules, and ready-for-staff QR/handoff code `JY4704`; merged through PR #78. |
-| `T0077` | Verified paid existing-booking happy path. | 2026-06-01 | Public existing-booking lookup for paid booking `5100930` resumed directly to ready-for-staff QR/handoff code `JY4704`; completed locally, not committed. |
+| `T0077` | Verified paid existing-booking happy path. | 2026-06-01 | Public existing-booking lookup for paid booking `5100930` resumed directly to ready-for-staff QR/handoff code `JY4704`; merged through PR #79. |
+| `T0078` | Verified existing-booking add-product payment flow. | 2026-06-01 | Public existing-booking add-product smoke for paid booking `5100926` selected one `Strumpor`, created a separate linked add-on draft, paid by card with Adyen Visa ending `1142`, and continued to safety video; completed locally, not committed. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0077` | Paid existing-booking happy path. | Completed locally, not committed | Public existing-booking lookup for paid booking `5100930` resumes directly to QR/handoff code `JY4704` because the safety flow was already complete. |
+| `T0078` | Existing-booking add-product payment flow. | Completed locally, not committed | Public add-product smoke for paid booking `5100926` creates a separate linked add-on draft and reaches the safety-video continuation after card payment. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0078` | Existing-booking add-product payment flow | Prove add-ons on an existing booking create a separate linked add-on draft, pay through the same Roller package path, and continue the original check-in flow. |
 | `T0079` | Staff handoff and redeem polish | Re-test QR scan/manual code, staff login, redeem only redeemable tickets, and clear states for already redeemed, unpaid, or non-redeemable cases. |
 | `T0080` | Data sync/webhook verification | Re-check daily Data API sync, webhook enrichment, Aurora freshness, and lookup behavior after the payment/add-product smokes. |
 | `T0081` | Full integrated flow rehearsal | Run a small end-to-end rehearsal of the three target flows before returning to production readiness. |
@@ -229,7 +229,15 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Validation Status
 
+- T0078 branch setup: branch `codex/t0078-add-product-payment-flow` was created from updated `main` after T0077 was merged.
+- T0078 public add-product smoke: `https://jumpyard-check-in.pages.dev` used paid existing booking `5100926`, entered the add-ons step, selected one `Strumpor`, collected add-on contact details, showed server quote `45 kr`, and created a separate linked add-on draft.
+- T0078 linked-draft proof: the safe API response used `mode='separate_draft_booking'`, original booking `5100926`, Roller draft unique id `fe892301-95b7-490a-b4ad-dff311cfdd7f`, add-on group `jyao_32bbe440269649e7af`, link `jyl_77074c7ce26047b3b0`, and prepayment draft `jypd_529c13ed3a8a4d83a1`.
+- T0078 payment continuation: the Roller/Adyen drop-in rendered card payment, secure iframes accepted the Adyen Visa test card ending `1142`, `Betala 45,00 kr` submitted, and the phone flow returned to the original booking's safety-video step.
+- T0078 scope safety: no original booking mutation endpoint was used, no staff/admin redeem was performed, no AWS resources were changed, and no full guest contact data, Roller secrets, raw payment JWTs, access tokens, or full card data were printed.
+- T0078 intermediate retry note: selector/debug attempts created unpaid pending linked add-on drafts for `5100929`, `5100928`, and `5100927`; the final successful payment pass was `5100926`.
+- T0078 Aurora readback: direct read-only Aurora verification was not completed because the local AWS SSO token for profile `wrlds-dev` had expired.
 - T0077 branch setup: branch `codex/t0077-existing-booking-happy-path` was created from updated `main` after T0076 was merged.
+- T0077 merge: branch `codex/t0077-existing-booking-happy-path` was pushed and merged through PR #79 before T0078 started.
 - T0077 paid booking discovery: read-only Roller Data API `/data/bookingitems` for modified-date window `2026-06-01 -> 2026-06-02` found paid booking `5100930`, booking date `2026-06-01`, session start `11:00`, product id `1765860`.
 - T0077 public existing-booking smoke: `https://jumpyard-check-in.pages.dev/?codexSmoke=t0077-existing-5100930` used the existing-booking path, entered booking reference `5100930`, and reached the ready-for-staff QR/handoff screen without another payment.
 - T0077 session resume behavior: the app resumed the existing server-owned ready-for-staff session and showed handoff/backup code `JY4704`, which confirms completed safety was not repeated.
