@@ -540,8 +540,8 @@ Use this file to define validation for the current project or milestone.
 |---|---|---|---|
 | Raw JWT handling | Add-product draft JWT stays response-only and in-memory. | Passed | Source scan found JWT use only in the client response type, in-memory payment component, and payment readiness gate; no logging or rendering was added. |
 | Payment fallback | Add-product drafts without JWT/config keep the safe payment-pending fallback. | Passed | `AddonsOffer` only enters payment when JWT and config are present; otherwise it keeps the T0035 pending screen. |
-| Payment drop-in | Existing-booking add-products render the Roller payment drop-in when JWT/config are present. | Pending manual | Code path is wired; domain allowlist is confirmed and full card execution is ready for public smoke. |
-| Approved add-product continuation | Approved add-product payment continues the original booking check-in path. | Pending manual | Code path skips legacy `APP_PAYMENT`; must be proven with a successful public card smoke. |
+| Payment drop-in | Existing-booking add-products render the Roller payment drop-in when JWT/config are present. | Passed | T0078 public smoke rendered Roller's card payment drop-in for a linked add-product draft on `https://jumpyard-check-in.pages.dev`. |
+| Approved add-product continuation | Approved add-product payment continues the original booking check-in path. | Passed | T0078 public card smoke paid the linked add-product draft and continued to the original booking safety-video step. |
 | Root validation | `npm run validate` passes after T0052 updates. | Passed | Passed on 2026-05-26. |
 | Phone lint | `npm --prefix jumpyard-checkin-phone run lint` passes. | Passed with warnings | Passed with the pre-existing four `<img>` warnings. |
 | Phone build | `npm --prefix jumpyard-checkin-phone run build` passes. | Passed | Static export build passed; Next reported stale `baseline-browser-mapping` advisory warnings. |
@@ -883,6 +883,18 @@ Use this file to define validation for the current project or milestone.
 | Ready-session resume | A booking already ready for staff should not repeat completed safety steps. | Passed | Booking `5100930` resumed directly to ready-for-staff because T0076 already completed safety for this session. |
 | QR/handoff state | Final page shows the server-owned handoff code. | Passed | Final state showed handoff/backup code `JY4704` and one armband item. |
 | Staff redeem | T0077 should not redeem tickets. | Passed | No staff/admin redeem action was performed. |
+
+## T0078 Existing-Booking Add-Product Payment Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Paid booking fixture | A paid existing booking for today's operating date can enter add-ons instead of ready QR. | Passed | Booking `5100926` was found as `Paid` and opened the add-ons step rather than a completed QR state. |
+| Add-on quote | Selecting one mapped add-on should quote through JumpYard Cloud before draft/payment. | Passed | Selected one `Strumpor`; `POST /v1/bookings/5100926/add-products/quote` returned `quoted`, amount owing `45`, item count `1`, and mode `separate_draft_booking`. |
+| Separate linked draft | Add-product should create a separate linked draft, not mutate the original booking. | Passed | `POST /v1/bookings/5100926/add-products` returned draft unique id `fe892301-95b7-490a-b4ad-dff311cfdd7f`, add-on group `jyao_32bbe440269649e7af`, link `jyl_77074c7ce26047b3b0`, and prepayment draft `jypd_529c13ed3a8a4d83a1`. |
+| Card payment | The shared Roller/Adyen payment package should accept the approved test card path. | Passed | Secure Adyen card iframes accepted the Visa test card ending `1142`; JumpYard did not own raw card fields or print the full card number. |
+| Original flow continuation | Approved add-product payment should continue the original check-in flow. | Passed | After `Betala 45,00 kr`, the phone app left add-product payment and showed the original booking safety-video step. |
+| Scope safety | T0078 must not redeem tickets, change AWS resources, or expose secrets/PII. | Passed | No staff/admin redeem was performed, no AWS resources changed, and output stayed to safe booking/draft/link identifiers only. |
+| Direct Aurora readback | Read-only Aurora state should be checked where practical. | Blocked | Local AWS SSO token for profile `wrlds-dev` had expired, so direct database readback was deferred. The safe API response still proved linked draft metadata. |
 
 ## T0053 New-Booking Basket Before Payment Validation
 
