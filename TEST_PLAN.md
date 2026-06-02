@@ -1062,15 +1062,21 @@ Use this file to define validation for the current project or milestone.
 | Production unlock doc | A future session should know the gates and missing inputs. | Documented | Added `GUEST_MESSAGING_PRODUCTION_UNLOCK.md`. |
 | Scope guard | T0089 should not change code, resources, support cases, sender identities, or unattended sends. | Passed | Read-only AWS checks and documentation only; `confirmSend=false` remains unchanged. |
 
-## T0090-T0092 Gift Card And Multi-Visit Edge Cases
+## T0090-T0093 Gift Card And Multi-Visit Code Edge Cases
 
 | Scenario | Expected Result | Status | Notes |
 |---|---|---|---|
-| Gift card discovery | Confirm the exact Roller Playground payloads/endpoints for applying a gift card to booking costs and draft booking creation. | Planned | T0090 should verify full and partial gift-card payment behavior before code changes. |
-| Gift card full payment | A gift card that covers the full amount should produce a booking path that does not require card entry, if Roller supports it. | Planned | T0091/T0092 only after T0090 proves the Roller behavior. |
-| Gift card partial payment | A gift card that covers part of the amount should reduce the payment total and still hand remaining payment to Roller/Adyen. | Planned | Must preserve response-only/in-memory raw payment JWT handling. |
-| Multi-visit discovery | Confirm whether multi-visit passes are exposed as guest multi-passes, tickets, memberships, or another Roller model. | Planned | Do not change redeem eligibility until the Roller model is proven. |
-| Multi-visit checkout smoke | A multi-visit case should flow through phone checkout, Aurora state, Roller state, check-in session, and staff redeem/eligibility without consuming the wrong ticket. | Planned | T0092 integrated smoke. |
+| Gift card costs payload | Roller costs should accept `giftCards` without creating a booking. | Passed in T0090 | Invalid gift-card quote returned HTTP `200`, kept `amountOwing=200`, and included one `giftCardErrors` entry. |
+| Gift card Data API source | Determine whether current Playground has gift-card records for tests. | Passed with active fixtures | `/data/giftcards` first returned HTTP `200` and zero records; after Venue Manager fixtures were created and paid it returned two rows for `5101043` and `5101044`. |
+| Gift card full payment | A gift card that covers the full amount should produce a no-card-required booking path if Roller supports it. | Passed at costs layer | The `500 kr` fixture applied to a `200 kr` quote and reduced `amountOwing` to `0`. Draft/publish flow still needs T0091/T0092. |
+| Gift card partial payment | A gift card that covers part of the amount should reduce the amount owing and send only the remainder to Roller/Adyen. | Passed at costs layer | The `100 kr` fixture applied to a `200 kr` quote and reduced `amountOwing` to `100`. Draft/payment continuation still needs T0091/T0092. |
+| Gift card fixture setup | Venue Manager can issue gift cards for controlled tests. | Passed | Use `Products > All products > Gift card product > Issue new gift card`; fixtures must be paid/active, not only created/reserved, before booking costs can apply them. |
+| Multi-visit product discovery | Confirm whether multi-visit products exist in the catalog. | Passed in T0090 | Product catalog contains `membership` products for `10-Kort`, `20-Kort`, and `30-Kort`; selling `10-Kort` can be costed. |
+| Multi-visit existing-pass discovery | Confirm whether existing passes are exposed through a documented guest/customer pass endpoint. | Blocked after membership fixture | `GET /customers/{customerId}/multi-passes` is reachable and returned HTTP `200` with zero balances for both a known booking customer and paid `10-Kort` customer `4045520`. |
+| Multi-visit beta auto-apply smoke | Booking costs/draft should auto-apply an active beta multi-pass when the booking holder/email owns it and the cart has eligible session passes. | Deferred pending fixture | Help Center says Roller carts auto-apply this way; API behavior must be proven with a Playground guest/pass fixture before implementation. |
+| Paid `10-Kort` auto-apply smoke | A paid membership-style `10-Kort` should reduce a normal entry quote only if Roller treats it as an applicable multi-pass. | Failed as multi-pass proof | Paid booking `5101046` bought `10-Kort`; costs with the same guest email kept `amountOwing=200` and returned empty `multiPassAllocations`. |
+| Membership/multi-visit code costs smoke | A guest-entered Nacka membership or `10-Kort` code should be sent through the Roller-supported validation field and let Roller accept or reject it. | Planned for T0093 | Likely candidate is `discounts: [{ code }]`, but T0093 must validate with real Playground code data before UI promises support. Do not display remaining visit balance in V1. |
+| Multi-visit checkout smoke | A multi-visit case should flow through phone checkout, Aurora state, Roller state, check-in session, and staff redeem/eligibility without consuming the wrong ticket. | Deferred | Do not implement until Roller confirms API auto-apply behavior or provides a fixture; if relevant, RedemptionDetail should include expected `multiPass` proof after use/redeem. |
 
 ## T0053 New-Booking Basket Before Payment Validation
 

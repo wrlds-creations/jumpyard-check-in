@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-02
-- Current branch: `codex/t0089-guest-messaging-production-unlock`
-- Current status: T0089 completed locally. Read-only AWS checks confirmed SMS and SES are still sandboxed, no production SMS sender identity/domain setup exists, only one dev SMS destination phone is verified, and only `love@wrlds.com` is verified in SES. `GUEST_MESSAGING_PRODUCTION_UNLOCK.md` now documents hard gates and missing user/AWS inputs before unattended production sends can be enabled.
-- Current ticket: `T0089` completed locally, pending review/commit/merge.
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`
-- Recommended next step: review/merge T0089, then run T0090 gift card and multi-visit discovery before returning to broader production readiness.
+- Current branch: `codex/t0090-gift-card-multi-visit-discovery`
+- Current status: T0090 completed locally. Roller Playground discovery confirmed gift cards are accepted by `POST /bookings/draft/costs`, invalid gift cards return `giftCardErrors`, and two paid Venue Manager gift-card fixtures apply successfully in costs. A `100 kr` gift card reduces a `200 kr` quote to `amountOwing=100`; a `500 kr` gift card reduces it to `amountOwing=0`. Multi-visit remains blocked because `GET /customers/{customerId}/multi-passes` is reachable, but paid `10-Kort` booking `5101046` returned zero multi-pass balances and did not auto-apply in costs.
+- Current ticket: `T0090` completed locally, pending review/commit/merge.
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`
+- Recommended next step: review/merge T0090, then implement gift-card checkout in T0091 using the proven full and partial Playground gift-card fixtures. Multi-visit balance display should wait for Roller confirmation or a true beta multi-pass fixture; the next practical multi-visit step is a separate membership/discount-code validation ticket because paid `10-Kort` did not work as a beta multi-pass.
 
 ## Current Structure
 
@@ -27,6 +27,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |-- FOLLOWUPS.md
 |-- AWS_RESOURCES.md
 |-- TEST_PLAN.md
+|-- GUEST_MESSAGING_PRODUCTION_UNLOCK.md
+|-- GIFT_CARD_MULTI_VISIT_DISCOVERY.md
 |-- scripts/
 |   |-- check-roller-env.js
 |   |-- roller-client.js
@@ -222,25 +224,31 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0087` | Staff admin Cloudflare deployment. | 2026-06-02 | Admin Pages settings are documented for `jumpyard-checkin-admin`, static Cloudflare headers are added, dev CORS includes `https://jumpyard-checkin-admin.pages.dev`, public staff smoke passed from the Cloudflare URL, and the ticket was merged through PR #88. |
 | `T0088` | Real-time guest-name enrichment. | 2026-06-02 | Webhook enrichment now uses booking detail plus documented read-only `GET /guests/{guestId}` fallback when needed; dev deploy and safe booking `5100965` smoke confirmed guest profile name/contact booleans without raw PII output. |
 | `T0089` | Guest messaging production unlock package. | 2026-06-02 | Read-only AWS checks confirmed SNS SMS and SES remain sandboxed; `GUEST_MESSAGING_PRODUCTION_UNLOCK.md` documents hard gates, missing inputs, and future approved steps without changing resources, code, support cases, or unattended sends. |
+| `T0090` | Gift card and multi-visit discovery. | 2026-06-02 | Roller Playground safe discovery confirmed gift-card cost payload behavior, invalid gift-card errors, active partial/full gift-card application in costs, the documented multi-pass read endpoint, and a paid `10-Kort` membership fixture that did not expose or auto-apply as a multi-pass. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0089` | Guest messaging production unlock package. | Completed locally | Production guest messaging remains blocked: SMS and SES are sandboxed, no production sender identity/domain is configured, and EventBridge due-message processing still uses `confirmSend=false`. |
+| `T0090` | Gift card and multi-visit discovery. | Completed locally | Gift card is ready for T0091 implementation with proven active Playground gift-card fixtures; multi-visit stays clarification-only because paid `10-Kort` did not behave as a beta multi-pass. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0090` | Gift card and multi-visit discovery | Verify in Roller Playground how gift cards and multi-visit passes can be used in the buy-entry checkout. Gift card scope is guest-entered payment value during booking costs/draft/payment; multi-visit scope is entitlement/payment behavior discovery before implementation. |
-| `T0091` | Gift card and multi-visit implementation | Add the server-side and phone-flow changes proven by T0090, including cost/draft payload handling, zero-balance/no-card behavior when Roller allows it, partial-payment behavior, and any Aurora state needed for audit/display. |
-| `T0092` | Gift card and multi-visit integrated smoke | Prove normal card, gift-card full/partial payment, and multi-visit cases through public phone flow, Aurora state, Roller Playground booking state, check-in session, and staff redeem/eligibility. |
-| `T0093` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, gift card/multi-visit, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
-| `T0094` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
+| `T0091` | Gift card implementation with active Playground fixtures | Add guest-entered gift-card handling to quote/draft/payment continuation using the proven full-balance and partial-balance Playground gift cards. Multi-visit and membership codes remain out of scope. |
+| `T0092` | Gift card integrated smoke | Prove normal card, invalid gift-card, partial gift-card, and full gift-card cases through public phone flow, Aurora state, Roller Playground booking state, check-in session, and staff redeem/eligibility. |
+| `T0093` | Membership and multi-visit code validation | Test whether Nacka `10-Kort`/membership/multi-visit codes can be sent as `discounts: [{ code }]` or another Roller-supported costs/draft field. Do not show remaining visit balance in V1. |
+| `T0094` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, gift card/multi-visit code handling, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
+| `T0095` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
 ## Validation Status
 
+- T0090 docs verification: Roller Create draft booking docs describe gift card payments separately from discounts, booking costs uses the same booking payload family for safe cost calculation, and Help Center docs describe gift cards as stored-value tender.
+- T0090 safe Roller Playground discovery: direct `POST /bookings/draft/costs` returned `bookingCosts.total=200` and `amountOwing=200` for entry product `1765860` at `2026-06-02 10:00`; adding an invalid gift card kept `amountOwing=200` and returned one `giftCardErrors` entry.
+- T0090 gift-card data check: `/data/giftcards` first returned HTTP `200` but zero records for sampled Playground windows; after Venue Manager fixtures were created and paid, the `2026-06-02` window returned two gift cards for booking references `5101043` and `5101044` with balances `500` and `100`. Safe `POST /bookings/draft/costs` quotes using those gift cards applied one gift card with no errors; the `100 kr` card reduced a `200 kr` quote to `amountOwing=100`, and the `500 kr` card reduced it to `amountOwing=0`. `/products` contains `giftcard` products `Presentkort`, `Presentkort Återbetalningskort`, and `Julbox`.
+- T0090 multi-visit discovery: product catalog contains `membership` products for `10-Kort`, `20-Kort`, and `30-Kort`; a safe cost quote for `10-Kort` variation `1765758` returned `total=1750`; paid booking `5101046` bought `10-Kort` and exposes membership-like ticket fields, but `GET /customers/4045520/multi-passes` returned zero balances and a costs quote with the same guest email returned `amountOwing=200` with empty `multiPassAllocations`. Help Center beta multi-pass docs describe automatic all-or-nothing application to eligible session passes by booking holder/email, but current `10-Kort` is not proven to be that model. Pabel/project notes indicate Nacka multi-visit may instead be validated as a membership/discount code; V1 should let Roller validate codes and should not show remaining visit balance.
+- T0090 scope guard: no app code, Lambda code, CDK resources, Aurora migrations, AWS resources, Roller bookings, drafts, payments, redemptions, assets, deliverables, or production credentials changed.
 - T0089 AWS read-only checks: SNS SMS sandbox status is still enabled, SNS SMS type is transactional, monthly spend limit is `1` USD, no default Sender ID/origination number exists, AWS End User Messaging SMS is still sandbox tier with no sender ids/pools/phone numbers, SES production access is disabled, only `love@wrlds.com` is verified for SES, and no dedicated email configuration set exists.
 - T0089 documentation: `GUEST_MESSAGING_PRODUCTION_UNLOCK.md` records SMS sandbox exit, SES production access, sender/domain identity gates, missing JumpYard/WRLDS inputs, and future approved implementation steps.
 - T0089 scope guard: no app code, Lambda code, CDK resources, Aurora migrations, Roller config, support cases, sender identities, domains, SMS/email sends, EventBridge payloads, or `confirmSend` behavior changed.
