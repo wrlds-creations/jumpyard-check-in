@@ -1,15 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0084
+T0085
 
 ## Goal
-Rebuild the staff handoff app into one operational queue/detail page that works well on phones and keeps staff focused on finding a booking, reviewing what to hand out, and triggering the existing staff check-in action.
+Polish the staff handoff completion moment so staff get a clear successful check-in confirmation after redeeming tickets, then return to the queue/search screen.
 
 ## Dependencies
-- T0083 completed and merged.
-- Staff auth from T0047 remains required for all staff handoff APIs.
-- Staff identity/search data from T0083 is available in the admin API response.
+- T0084 completed and merged.
+- Staff auth from T0047 remains required for staff handoff APIs.
+- Existing staff redeem behavior from T0027 remains the source of truth for actual ticket redemption.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -18,7 +18,6 @@ Rebuild the staff handoff app into one operational queue/detail page that works 
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - jumpyard-checkin-admin/src/app/page.tsx
-- jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx
 
 ## Do not touch
 - Guest phone flow behavior
@@ -37,59 +36,52 @@ Rebuild the staff handoff app into one operational queue/detail page that works 
 
 ## Requirements
 
-1. Keep the staff app as one operational page after login:
-   - search input and QR scanner controls remain immediately available
-   - the waiting queue remains visible on the same page
-   - selecting a row, searching, or scanning opens the handoff summary without browser navigation
+1. Keep the existing staff redeem action:
+   - do not change API calls
+   - do not change staff auth
+   - do not change redeem request payloads or idempotency behavior
+   - do not change Roller write semantics
 
-2. Improve phone-sized staff UX:
-   - show search/scan first
-   - when no handoff is selected, show the queue below search/scan
-   - when a handoff is selected, switch to a focused compact summary view
-   - include a close/back control so staff can return to search/scan and queue without redeeming
+2. Add a clear post-redeem success confirmation:
+   - show a large green success/check visual after a successful staff redeem
+   - show enough context for staff to trust the action, such as guest name, handoff code, booking reference, ticket count, and status
+   - keep this confirmation visible until staff chooses the next step
+   - provide a manual button to return to the queue
+   - provide a manual button to scan the next QR code
 
-3. Improve queue readability:
-   - prioritize guest name when available
-   - keep handoff code and booking reference visible
-   - keep date, time, and selected ticket count easy to scan
+3. Return staff to the operating surface after completion:
+   - clear the selected handoff after successful completion
+   - remove the redeemed session from the visible queue
+   - clear search text when staff chooses to continue so the remaining queue is visible
+   - keep search/QR controls available for the next guest
 
-4. Improve detail/summary readability:
-   - prioritize guest, handoff code, booking reference, date/time, and payment state
-   - do not show masked contact details in the compact summary
-   - do not show safety status as a separate summary tile
-   - show products/items as the compact "att lämna ut" list
-   - do not show a separate ticket list unless it becomes operationally needed again
-   - keep the existing staff redeem/check-in button behavior
-
-5. Keep scope narrow:
-   - do not change backend contracts or API behavior
-   - do not add the large green post-redeem success screen; that stays in T0085
-   - do not deploy the staff/admin app to Cloudflare; that stays in T0087
-
-6. User-approved pulled-forward T0086 fix:
-   - remove the duplicate guest-facing backup-code box from the ready-for-staff confirmation screen
-   - keep the QR code and main staff/pickup code visible
+4. Keep phone-sized staff UX clean:
+   - on mobile, the success confirmation should use the focused detail area
+   - after staff chooses a next step, the user should land back on search/scan plus queue or open QR scanning
+   - avoid adding new scroll-heavy sections
 
 ## Non-goals
+- Do not redesign the full admin app again.
 - Do not change staff auth.
+- Do not change backend contracts or API behavior.
 - Do not change redeem semantics.
-- Do not change QR payload semantics.
-- Do not add new backend search fields.
+- Do not create new backend state or migrations.
+- Do not add staff/admin Cloudflare deployment; that stays in T0087.
 - Do not implement real-time guest-name enrichment; that stays in T0088.
+- Do not change guest messaging, payment, booking, or phone app flows.
 
 ## Acceptance criteria
-- Admin app still builds.
-- Staff login, queue, search, QR scanner toggle, selected detail, product/ticket summary, and existing staff redeem action remain wired to the same API functions.
-- On mobile layout, search/scan appears before selected detail and queue.
-- Guest ready-for-staff screen no longer shows a separate backup-code box.
-- No app backend, AWS, Roller, payment, SMS, or email behavior changes.
+- Admin app builds.
+- Existing staff login, queue, search, QR scanner toggle, selected detail, and staff redeem action remain wired to the same API functions.
+- Successful staff redeem shows a large green confirmation.
+- The UI stays on the confirmation until staff chooses `Tillbaka till kön` or `Scanna ny QR`.
+- No backend, AWS, Roller, payment, SMS, email, package, or asset behavior changes.
 
 ## Manual verification
-Open the staff/admin app, log in with the staff passcode, confirm the queue loads, search or select a ready handoff, and confirm the selected compact summary appears on the same page with products, tickets, and the check-in button.
+Open the staff/admin app, log in with the staff passcode, select a ready handoff, trigger the existing staff check-in action on a Playground test session, confirm the large green success confirmation appears, then confirm `Tillbaka till kön` returns to search/scan plus queue and `Scanna ny QR` opens the scanner.
 
 ## Automated validation
 Run:
 - npm --prefix jumpyard-checkin-admin run build
-- npm --prefix jumpyard-checkin-phone run build
 - npm run validate
 - git diff --check
