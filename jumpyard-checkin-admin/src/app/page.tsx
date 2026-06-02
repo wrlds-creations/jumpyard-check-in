@@ -9,7 +9,10 @@ import {
   CheckCircle2,
   Loader2,
   RefreshCcw,
+  ScanLine,
+  Search,
   TicketCheck,
+  X,
 } from "lucide-react";
 import {
   getStaffSession,
@@ -17,7 +20,6 @@ import {
   listReadyStaffSessions,
   redeemStaffSession,
   type StaffBookingItem,
-  type StaffBookingTicket,
   type StaffAuthSession,
   type StaffSessionDetail,
   type StaffSessionSummary,
@@ -38,13 +40,11 @@ interface ParsedHandoffPayload {
 type StaffIconName =
   | "addons-bag"
   | "admission-ticket"
-  | "booking-card"
   | "group"
   | "info"
   | "jump"
   | "payment-card"
   | "profile"
-  | "safety-check"
   | "success-check"
   | "time"
   | "visitor-wristband";
@@ -106,10 +106,6 @@ function getDisplayCode(session: StaffSessionSummary) {
 
 function getGuestDisplayName(session: StaffSessionSummary) {
   return session.guest?.name ?? session.guest?.emailMasked ?? session.guest?.phoneMasked ?? "Gäst";
-}
-
-function getGuestContactLine(session: StaffSessionSummary) {
-  return [session.guest?.emailMasked, session.guest?.phoneMasked].filter(Boolean).join(" · ");
 }
 
 function searchableText(session: StaffSessionSummary) {
@@ -233,7 +229,7 @@ function SessionRow({
       onClick={onSelect}
       data-testid="handoff-session-row"
       data-handoff-code={session.handoffCode ?? ""}
-      className={`w-full rounded-2xl border px-4 py-4 text-left shadow-sm transition active:scale-[0.99] ${
+      className={`w-full rounded-2xl border px-3 py-3 text-left shadow-sm transition active:scale-[0.99] ${
         isSelected
           ? "border-primary bg-primary/5 ring-4 ring-primary/10"
           : "border-border bg-white hover:border-primary/40 hover:bg-surface"
@@ -241,24 +237,22 @@ function SessionRow({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-surface">
-            <StaffIcon name="visitor-wristband" className="h-7 w-7" />
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface">
+            <StaffIcon name="visitor-wristband" className="h-6 w-6" />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-2xl font-black italic uppercase leading-none text-foreground">{getDisplayCode(session)}</p>
-            <p className="mt-1 truncate text-sm font-black italic text-foreground">{getGuestDisplayName(session)}</p>
-            <p className="mt-1 truncate text-xs text-foreground/60">Bokning {session.bookingReference ?? "-"}</p>
-            {getGuestContactLine(session) && (
-              <p className="mt-1 truncate text-xs text-foreground/55">{getGuestContactLine(session)}</p>
-            )}
+            <p className="truncate text-lg font-black italic uppercase leading-none text-foreground">{getGuestDisplayName(session)}</p>
+            <p className="mt-1 truncate text-xs text-foreground/65">
+              {getDisplayCode(session)} · bokning {session.bookingReference ?? "-"}
+            </p>
           </div>
         </div>
-        <span className="rounded-full bg-success/10 px-3 py-1 text-[11px] font-black uppercase text-success">
+        <span className="shrink-0 rounded-full bg-success/10 px-2.5 py-1 text-[10px] font-black uppercase text-success">
           {statusLabel(session.handoffStatus)}
         </span>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2 text-[11px] uppercase text-foreground/60">
+      <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] uppercase text-foreground/60">
         <span className="rounded-xl bg-surface px-2 py-1.5 text-center">{formatDate(session.visitDate)}</span>
         <span className="rounded-xl bg-surface px-2 py-1.5 text-center">{formatClock(session.booking.startTime)}</span>
         <span className="rounded-xl bg-surface px-2 py-1.5 text-center">{session.counts.selectedTickets} biljetter</span>
@@ -277,10 +271,10 @@ function InfoTile({
   value: string | number;
 }) {
   return (
-    <div className="min-h-24 rounded-2xl border border-border bg-white p-4 shadow-sm">
-      <div className="mb-3 text-muted">{icon}</div>
-      <p className="break-words text-lg font-black italic text-foreground">{value}</p>
-      <p className="mt-1 text-[11px] uppercase tracking-wide text-foreground/60">{label}</p>
+    <div className="rounded-2xl border border-border bg-white p-2.5 shadow-sm">
+      <div className="mb-1.5 text-muted">{icon}</div>
+      <p className="break-words text-sm font-black italic text-foreground sm:text-base">{value}</p>
+      <p className="mt-1 text-[9px] uppercase tracking-wide text-foreground/55 sm:text-[10px]">{label}</p>
     </div>
   );
 }
@@ -293,60 +287,22 @@ function ItemRows({ items }: { items: StaffBookingItem[] }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
       {items.map((item) => (
-        <div key={item.bookingItemKey ?? item.bookingItemId ?? item.productId ?? item.productName ?? "item"} className="grid gap-3 border-b border-border px-4 py-3 last:border-b-0 sm:grid-cols-[1fr_86px_112px]">
-          <div className="flex min-w-0 items-center gap-3">
-            <StaffIcon name="admission-ticket" className="h-7 w-7 shrink-0" />
+        <div
+          key={item.bookingItemKey ?? item.bookingItemId ?? item.productId ?? item.productName ?? "item"}
+          className="grid grid-cols-[1fr_auto] items-center gap-2 border-b border-border px-3 py-2.5 last:border-b-0"
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <StaffIcon name="admission-ticket" className="h-6 w-6 shrink-0" />
             <div className="min-w-0">
               <p className="truncate text-sm font-black italic text-foreground">{item.parentProductName ?? item.productName ?? "Produkt"}</p>
-              <p className="truncate text-xs text-foreground/60">
-                {item.productName ?? item.productId ?? "-"}
+              <p className="truncate text-[11px] text-foreground/55">
+                {item.productName ?? item.productId ?? "-"} · {formatClock(item.startTime)}-{formatClock(item.endTime)}
               </p>
             </div>
           </div>
-          <p className="text-sm font-black italic text-foreground">{item.quantity} st</p>
-          <p className="text-sm text-foreground/65">
-            {formatClock(item.startTime)}-{formatClock(item.endTime)}
-          </p>
+          <p className="rounded-xl bg-surface px-2.5 py-1 text-sm font-black italic text-foreground">{item.quantity} st</p>
         </div>
       ))}
-    </div>
-  );
-}
-
-function TicketRows({ items, tickets }: { items: StaffBookingItem[]; tickets: StaffBookingTicket[] }) {
-  if (tickets.length === 0) {
-    return <p className="rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground/65">Inga biljetter.</p>;
-  }
-
-  const itemsById = new Map(items.map((item) => [item.bookingItemId, item]));
-
-  return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
-      {tickets.map((ticket) => {
-        const item = ticket.bookingItemId ? itemsById.get(ticket.bookingItemId) : null;
-        const productName = item?.parentProductName ?? item?.productName ?? "Biljett";
-        const ticketCode = ticket.customTicketId ?? ticket.ticketId ?? "-";
-
-        return (
-          <div key={ticket.ticketId ?? ticket.customTicketId ?? "ticket"} className="grid gap-3 border-b border-border px-4 py-3 last:border-b-0 sm:grid-cols-[1fr_118px_108px]">
-            <div className="flex min-w-0 items-center gap-3">
-              <StaffIcon name="booking-card" className="h-7 w-7 shrink-0" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-black italic text-foreground">{productName}</p>
-                <p className="truncate text-xs text-foreground/60">Ticket {ticketCode}</p>
-              </div>
-            </div>
-            <span
-              className={`w-fit rounded-full px-3 py-1 text-[11px] font-black uppercase ${
-                ticket.selectedForCheckIn ? "bg-primary/10 text-primary" : "bg-surface text-muted"
-              }`}
-            >
-              {ticket.selectedForCheckIn ? "Vald" : "Ej vald"}
-            </span>
-            <p className="text-sm text-foreground/65">{statusLabel(ticket.redeemStatusLastSeen) ?? "-"}</p>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -355,6 +311,7 @@ function DetailPanel({
   auth,
   detail,
   loading,
+  onClose,
   onRedeem,
   redeemMessage,
   redeemState,
@@ -362,13 +319,14 @@ function DetailPanel({
   auth: StaffAuthSession | null;
   detail: StaffSessionDetail | null;
   loading: boolean;
+  onClose?: () => void;
   onRedeem: () => void;
   redeemMessage: string;
   redeemState: RedeemState;
 }) {
   if (loading && !detail) {
     return (
-      <section className="grid min-h-80 place-items-center rounded-3xl border border-border bg-surface p-8 shadow-sm">
+      <section className="grid min-h-48 place-items-center rounded-3xl border border-border bg-surface p-6 shadow-sm">
         <div className="flex items-center gap-3 text-sm font-black italic uppercase text-foreground">
           <Loader2 className="animate-spin" size={20} />
           Hämtar handoff
@@ -379,11 +337,11 @@ function DetailPanel({
 
   if (!detail) {
     return (
-      <section className="grid min-h-80 place-items-center rounded-3xl border border-border bg-surface p-8 text-center shadow-sm">
+      <section className="grid min-h-44 place-items-center rounded-3xl border border-border bg-surface p-6 text-center shadow-sm">
         <div>
-          <StaffIcon name="info" className="mx-auto mb-3 h-12 w-12 opacity-70" />
-          <p className="text-lg font-black italic text-foreground">Ingen handoff vald</p>
-          <p className="mt-1 text-sm text-foreground/65">Välj en rad i listan.</p>
+          <StaffIcon name="info" className="mx-auto mb-3 h-10 w-10 opacity-70" />
+          <p className="text-lg font-black italic uppercase text-foreground">Välj handoff</p>
+          <p className="mt-1 text-sm text-foreground/65">Skanna QR eller tryck på en bokning i kön.</p>
         </div>
       </section>
     );
@@ -404,59 +362,55 @@ function DetailPanel({
       data-handoff-code={detail.handoffCode ?? ""}
       className="overflow-hidden rounded-3xl border border-border bg-surface shadow-sm"
     >
-      <div className="border-b border-border bg-white px-5 py-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-4">
-            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-primary/10">
-              <StaffIcon name="success-check" className="h-10 w-10" />
+      <div className="border-b border-border bg-white p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/10">
+              <StaffIcon name="success-check" className="h-8 w-8" />
             </span>
             <div className="min-w-0">
-              <p className="text-xs uppercase tracking-[0.18em] text-foreground/60">Handoff</p>
-              <h2 className="mt-1 truncate text-4xl font-black italic uppercase leading-none text-foreground">{getDisplayCode(detail)}</h2>
-              <p className="mt-1 text-sm text-foreground/65">Session {detail.checkinSessionId}</p>
+              <h2 className="truncate text-2xl font-black italic uppercase leading-none text-foreground sm:text-3xl">
+                {getGuestDisplayName(detail)}
+              </h2>
+              <p className="mt-1 truncate text-sm text-foreground/65">
+                {getDisplayCode(detail)} · bokning {detail.bookingReference ?? "-"}
+              </p>
             </div>
           </div>
-          <span className="rounded-full bg-success/10 px-4 py-2 text-sm font-black uppercase text-success">
-            {statusLabel(detail.handoffStatus)}
-          </span>
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Stäng sammanfattning"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-border bg-white text-foreground transition hover:border-primary hover:text-primary"
+            >
+              <X size={18} />
+            </button>
+          ) : (
+            <span className="shrink-0 rounded-full bg-success/10 px-3 py-1.5 text-xs font-black uppercase text-success">
+              {statusLabel(detail.handoffStatus)}
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5">
-        <InfoTile icon={<StaffIcon name="profile" className="h-7 w-7" />} label="Gäst" value={getGuestDisplayName(detail)} />
-        <InfoTile icon={<StaffIcon name="booking-card" className="h-7 w-7" />} label="Bokning" value={detail.bookingReference ?? "-"} />
+      <div className="grid grid-cols-3 gap-2 p-3">
         <InfoTile icon={<CalendarDays size={20} />} label="Datum" value={formatDate(detail.visitDate)} />
         <InfoTile
           icon={<StaffIcon name="time" className="h-7 w-7" />}
           label="Tid"
           value={`${formatClock(detail.booking.startTime)}-${formatClock(detail.booking.endTime)}`}
         />
-        <InfoTile icon={<StaffIcon name="safety-check" className="h-7 w-7" />} label="Säkerhet" value={statusLabel(detail.safetyStatus)} />
+        <InfoTile icon={<StaffIcon name="payment-card" className="h-7 w-7" />} label="Betalning" value={statusLabel(detail.booking.paymentStatus ?? detail.booking.bookingStatus)} />
       </div>
 
-      {getGuestContactLine(detail) && (
-        <div className="px-4 pb-4">
-          <div className="rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground/65">
-            Kontakt: {getGuestContactLine(detail)}
-          </div>
-        </div>
-      )}
-
-      <div className="grid gap-4 p-4 pt-0 xl:grid-cols-[1fr_1fr]">
+      <div className="px-3 pb-3">
         <section>
           <div className="mb-2 flex items-center gap-2">
             <StaffIcon name="addons-bag" className="h-7 w-7" />
-            <h3 className="text-base font-black italic uppercase text-foreground">Produkter</h3>
+            <h3 className="text-base font-black italic uppercase text-foreground">Att lämna ut</h3>
           </div>
           <ItemRows items={detail.items} />
-        </section>
-
-        <section>
-          <div className="mb-2 flex items-center gap-2">
-            <StaffIcon name="visitor-wristband" className="h-7 w-7" />
-            <h3 className="text-base font-black italic uppercase text-foreground">Biljetter</h3>
-          </div>
-          <TicketRows items={detail.items} tickets={detail.tickets} />
         </section>
       </div>
 
@@ -464,15 +418,13 @@ function DetailPanel({
         data-testid="staff-redeem-panel"
         className="border-t border-border bg-white p-4"
       >
-        <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="mb-2 flex items-center gap-2">
               <StaffIcon name="success-check" className="h-7 w-7" />
               <h3 className="text-base font-black italic uppercase text-foreground">Slutför check-in</h3>
             </div>
-            <p className="text-sm text-foreground/65">
-              Servern gör sista Roller-kontrollen och redeemar valda biljetter.
-            </p>
+            <p className="text-sm text-foreground/65">Sista kontrollen sker server-side innan biljetterna redeemas.</p>
           </div>
 
           {isCompleted ? (
@@ -507,11 +459,9 @@ function DetailPanel({
         )}
       </div>
 
-      <div className="grid gap-3 border-t border-border bg-white p-4 text-sm text-foreground/65 sm:grid-cols-3">
-        <p>Betalning: {statusLabel(detail.booking.paymentStatus ?? detail.booking.bookingStatus)}</p>
-        <p>Total: {formatMoney(detail.booking.totalCents)}</p>
-        <p>Redo: {formatDateTime(detail.readyForStaffAt)}</p>
-      </div>
+      <p className="border-t border-border bg-white p-3 text-xs text-foreground/55">
+        Redo: {formatDateTime(detail.readyForStaffAt)} · Total: {formatMoney(detail.booking.totalCents)}
+      </p>
     </section>
   );
 }
@@ -547,6 +497,14 @@ export default function Home() {
     setDetailState("loading");
   }, []);
 
+  const closeSelectedSession = useCallback(() => {
+    setDetail(null);
+    setDetailState("idle");
+    setRedeemMessage("");
+    setRedeemState("idle");
+    setSelectedId(null);
+  }, []);
+
   const refreshSessions = useCallback(async () => {
     if (!auth || isStaffAuthExpired(auth)) {
       setAuth(null);
@@ -568,7 +526,7 @@ export default function Home() {
       const nextSelectedId =
         selectedId && nextSessions.some((session) => session.checkinSessionId === selectedId)
           ? selectedId
-          : nextSessions[0]?.checkinSessionId ?? null;
+          : null;
 
       setSessions(nextSessions);
       setSelectedId(nextSelectedId);
@@ -925,10 +883,26 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-4 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 lg:grid-cols-[minmax(340px,400px)_1fr] lg:px-8">
-        <aside className={`${selectedId ? "order-2" : "order-1"} rounded-3xl border border-border bg-white shadow-sm lg:order-1`}>
+      {selectedId && (
+        <div className="mx-auto max-w-3xl px-3 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:hidden">
+          <DetailPanel
+            auth={auth}
+            key={detail?.checkinSessionId ?? "mobile-focus"}
+            detail={detail}
+            loading={detailState === "loading"}
+            onClose={closeSelectedSession}
+            onRedeem={handleRedeem}
+            redeemMessage={redeemMessage}
+            redeemState={redeemState}
+          />
+        </div>
+      )}
+
+      <div className={`mx-auto max-w-7xl gap-4 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 lg:grid-cols-[minmax(340px,400px)_1fr] lg:px-8 ${selectedId ? "hidden lg:grid" : "grid"}`}>
+        <aside className={`${selectedId ? "hidden lg:block" : ""} order-1 rounded-3xl border border-border bg-white shadow-sm lg:order-1`}>
           <div className="border-b border-border p-4">
-            <label className="flex min-h-14 items-center rounded-2xl border border-border bg-white px-4 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
+            <label className="flex min-h-14 items-center gap-3 rounded-2xl border border-border bg-white px-4 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
+              <Search className="shrink-0 text-muted" size={18} />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -947,8 +921,9 @@ export default function Home() {
                 onClick={handleSearchSubmit}
                 disabled={!query.trim()}
                 data-testid="handoff-open-code"
-                className="flex min-h-12 items-center justify-center rounded-2xl border border-border bg-white px-3 text-sm font-black italic uppercase text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:bg-surface disabled:text-foreground/40"
+                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-border bg-white px-3 text-sm font-black italic uppercase text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:bg-surface disabled:text-foreground/40"
               >
+                <Search size={16} />
                 Sök
               </button>
               <button
@@ -965,8 +940,9 @@ export default function Home() {
                   setScannerOpen(true);
                 }}
                 data-testid="handoff-scan-toggle"
-                className="flex min-h-12 items-center justify-center rounded-2xl bg-primary px-3 text-sm font-black italic uppercase text-white shadow-sm transition hover:bg-primary-dark"
+                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-primary px-3 text-sm font-black italic uppercase text-white shadow-sm transition hover:bg-primary-dark"
               >
+                <ScanLine size={17} />
                 {scannerOpen ? "Stäng" : "Skanna QR"}
               </button>
             </div>
@@ -1008,7 +984,10 @@ export default function Home() {
           )}
 
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <p className="text-sm font-black italic uppercase text-foreground">Väntar</p>
+            <div>
+              <p className="text-sm font-black italic uppercase text-foreground">Kö</p>
+              <p className="text-xs text-foreground/55">Redo för personal</p>
+            </div>
             <span className="rounded-full bg-surface px-3 py-1 text-xs text-foreground/60">{filteredSessions.length}</span>
           </div>
 
@@ -1035,7 +1014,7 @@ export default function Home() {
           </div>
         </aside>
 
-        <div className={`${selectedId ? "order-1" : "order-2 hidden lg:block"} lg:order-2`}>
+        <div className="order-2 hidden lg:block">
           <DetailPanel
             auth={auth}
             key={detail?.checkinSessionId ?? "empty"}

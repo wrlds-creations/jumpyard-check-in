@@ -1,115 +1,95 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0083
+T0084
 
 ## Goal
-Add staff-only booking identity and search data to the handoff queue so staff can identify guests by booking code, customer name, or email.
+Rebuild the staff handoff app into one operational queue/detail page that works well on phones and keeps staff focused on finding a booking, reviewing what to hand out, and triggering the existing staff check-in action.
 
 ## Dependencies
-- T0082 completed and merged.
+- T0083 completed and merged.
 - Staff auth from T0047 remains required for all staff handoff APIs.
+- Staff identity/search data from T0083 is available in the admin API response.
 
 ## Allowed areas
 - CODEX_TASK.md
 - PROJECT_CONTEXT.md
-- DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
-- AWS_RESOURCES.md
 - TEST_PLAN.md
-- infra/migrations/0008_prepayment_draft_customer_names.sql
-- infra/lambda/booking/index.js
-- infra/lambda/data-sync/index.js
-- infra/lambda/session/index.js
-- infra/scripts/import-related-data.ts
-- jumpyard-checkin-admin/src/lib/adminApi.ts
 - jumpyard-checkin-admin/src/app/page.tsx
-
-Operational verification may use:
-- Dev JumpYard Cloud API
-- Dev Aurora read-only queries and the T0083 customer-name migration
-- AWS CDK deploy for existing booking, session, and data-sync Lambda code only
+- jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx
 
 ## Do not touch
 - Guest phone flow behavior
-- Booking/payment Lambda
+- JumpYard Cloud API/Lambda behavior
+- AWS/CDK resources
+- Aurora migrations
 - Roller API write paths
+- Payment behavior
+- SMS/email behavior
+- Package dependencies
 - Assets
 - Deliverables
-- CDK resource definitions unless required for the session Lambda code deploy
-- Package dependencies
 - Production credentials
 - Roller Live
 - `.env`
 
 ## Requirements
 
-1. Extend the authenticated staff handoff API response with limited guest identity:
-   - booking/customer display name when available
-   - masked email when available
-   - masked phone when available
+1. Keep the staff app as one operational page after login:
+   - search input and QR scanner controls remain immediately available
+   - the waiting queue remains visible on the same page
+   - selecting a row, searching, or scanning opens the handoff summary without browser navigation
 
-2. Support staff search through the authenticated staff list endpoint:
-   - handoff code
-   - booking reference
-   - booking/customer name
-   - email
-   - phone when available
+2. Improve phone-sized staff UX:
+   - show search/scan first
+   - when no handoff is selected, show the queue below search/scan
+   - when a handoff is selected, switch to a focused compact summary view
+   - include a close/back control so staff can return to search/scan and queue without redeeming
 
-3. Keep PII boundaries:
-   - do not expose raw email or raw phone in the staff API response
-   - do not add guest identity to public phone APIs or public guest UI
-   - do not print full email, phone, tokens, or secrets during validation
+3. Improve queue readability:
+   - prioritize guest name when available
+   - keep handoff code and booking reference visible
+   - keep date, time, and selected ticket count easy to scan
 
-4. Update the staff/admin UI enough to use the new data:
-   - show name in the queue row and detail view
-   - show masked contact details when available
-   - show product names before raw ticket ids in the ticket rows
-   - keep the current queue/detail layout; full UX redesign stays in T0084/T0085
+4. Improve detail/summary readability:
+   - prioritize guest, handoff code, booking reference, date/time, and payment state
+   - do not show masked contact details in the compact summary
+   - do not show safety status as a separate summary tile
+   - show products/items as the compact "att lämna ut" list
+   - do not show a separate ticket list unless it becomes operationally needed again
+   - keep the existing staff redeem/check-in button behavior
 
-5. Persist reliable customer names for staff-only handoff:
-   - store first and last name on new prepayment draft rows
-   - import first and last name from Roller Data API `/data/customers` into `guest_profiles.latest_booking_context`
-   - backfill existing draft rows from matched guest profiles where possible
+5. Keep scope narrow:
+   - do not change backend contracts or API behavior
+   - do not add the large green post-redeem success screen; that stays in T0085
+   - do not deploy the staff/admin app to Cloudflare; that stays in T0087
 
-6. Deploy only the existing dev Lambda code changes after AWS preflight confirms:
-   - account `376129878018`
-   - region `eu-north-1`
-   - approved `infra/config/dev.json` tags
+6. User-approved pulled-forward T0086 fix:
+   - remove the duplicate guest-facing backup-code box from the ready-for-staff confirmation screen
+   - keep the QR code and main staff/pickup code visible
 
 ## Non-goals
-- Do not redesign the full staff handoff flow.
-- Do not add the large green redeem success screen.
-- Do not deploy the staff/admin app to Cloudflare.
-- Do not change guest ready-for-staff QR UI.
-- Do not change payment behavior.
-- Do not redeem tickets as part of this ticket.
-- Do not create new AWS resources.
-- Do not create new Aurora tables; T0083 may add name columns to the existing prepayment draft table.
-- Do not change SMS/email behavior.
-- Do not write to Roller Live.
+- Do not change staff auth.
+- Do not change redeem semantics.
+- Do not change QR payload semantics.
+- Do not add new backend search fields.
+- Do not implement real-time guest-name enrichment; that stays in T0088.
 
 ## Acceptance criteria
-- Staff handoff list/detail responses include limited guest identity when available.
-- Staff handoff search can match a ready session by booking code, name, and email.
-- The admin UI shows the guest name for staff without exposing raw contact details.
-- Staff ticket rows show useful product context instead of using raw Roller item ids as the main label.
-- `npm run validate` passes.
-- `npm --prefix infra run diff:dev` shows no differences after deploy.
+- Admin app still builds.
+- Staff login, queue, search, QR scanner toggle, selected detail, product/ticket summary, and existing staff redeem action remain wired to the same API functions.
+- On mobile layout, search/scan appears before selected detail and queue.
+- Guest ready-for-staff screen no longer shows a separate backup-code box.
+- No app backend, AWS, Roller, payment, SMS, or email behavior changes.
 
 ## Manual verification
-Open the staff/admin app, log in with the staff passcode, and confirm the queue can be searched by booking code, customer name, and email for a ready-for-staff booking. Confirm only masked contact details are visible.
+Open the staff/admin app, log in with the staff passcode, confirm the queue loads, search or select a ready handoff, and confirm the selected compact summary appears on the same page with products, tickets, and the check-in button.
 
 ## Automated validation
 Run:
-- node --check infra/lambda/session/index.js
-- node --check infra/lambda/booking/index.js
-- node --check infra/lambda/data-sync/index.js
-- npm --prefix infra run build
-- npm --prefix infra run migrate:dev
-- npm --prefix infra run synth:dev
-- npm --prefix infra run diff:dev
 - npm --prefix jumpyard-checkin-admin run build
+- npm --prefix jumpyard-checkin-phone run build
 - npm run validate
 - git diff --check

@@ -979,6 +979,22 @@ Use this file to define validation for the current project or milestone.
 | Name availability | Staff UI should show booking/customer name when Aurora stores it. | Passed | Staff API smoke for `5100965` returned a two-part guest name and matched searches by first name plus derived last-name value without returning raw contact fields. |
 | Ticket row readability | Staff UI should not lead ticket rows with opaque Roller item ids. | Passed | Admin build passed after ticket rows were changed to show product name first and ticket id as secondary context. |
 
+## T0084 Staff One-Page Handoff UX
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Admin build | Staff/admin app should compile after one-page UX changes. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. |
+| Phone build | Guest phone app should compile after the pulled-forward backup-code UI fix. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed; Next reported stale `baseline-browser-mapping` advisory warnings only. |
+| Mobile default view | Phone-sized staff layout should show search/scan first and queue below when no handoff is selected. | Passed | In-app browser loaded `http://localhost:3002/?codexSmoke=t0084`; search/QR controls and empty queue state were visible. |
+| Mobile selected view | Phone-sized staff layout should switch to a focused compact summary when a handoff is selected. | Passed | Browser smoke found 2 ready rows, opened the first detail, showed the focused summary with X/back, and returned to search/queue with both rows still visible. |
+| Desktop ordering | Desktop staff layout should keep queue and detail visible together. | Code validated | Desktop keeps the existing two-column operational layout with queue/search on the left and the selected compact detail on the right. |
+| Compact summary content | Staff summary should avoid repeated/low-value fields. | Code validated | The focused summary hides masked contact details, removes separate booking/safety tiles, removes the separate visible ticket list, and keeps date/time/payment plus compact product rows. |
+| Browser smoke | Local admin app should load with the updated staff handoff surface. | Passed | In-app browser loaded `http://localhost:3002/?codexSmoke=t0084`; search/QR controls, queue label, two rows, focused detail, and X/back return were verified. |
+| Guest backup-code UI | Guest ready-for-staff confirmation should not show a separate backup-code box. | Passed | `ConfirmationScreen.tsx` no longer renders `t.confirm.backupLabel`; local phone app loaded at `http://localhost:3000/?codexSmoke=backup-code-fix`. QR and main staff/pickup code remain. |
+| Root validation | Source-of-truth files should validate after T0084 docs updates. | Passed | `npm run validate` passed. |
+| Diff whitespace | Diff whitespace check should pass. | Passed with CRLF notices | `git diff --check` passed; output contains Git line-ending notices only. |
+| Backend scope | T0084 should not change JumpYard Cloud, Roller, AWS, payment, SMS, or email behavior. | Passed by code review | Only the admin page component, one guest confirmation UI component, and source-of-truth docs are changed. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
