@@ -14,6 +14,18 @@ T0058 production-readiness audit notes:
 - At T0058 audit time, API Gateway routes had `AuthorizationType=NONE` and wildcard CORS; T0060 later replaced dev wildcard CORS with explicit allowed origins, while route authorizers remain future production work.
 - Dev is appropriate for Playground development and smoke testing, but staging/live must wait for the readiness gate documented in `PROJECT_CONTEXT.md`, `DECISIONS.md`, and `FOLLOWUPS.md`.
 
+T0087 staff/admin Cloudflare readiness notes:
+
+- AWS resources changed: existing API Gateway HTTP API CORS configuration only.
+- Confirmed Cloudflare Pages project: `jumpyard-checkin-admin`.
+- Confirmed public admin origin: `https://jumpyard-checkin-admin.pages.dev`.
+- Local validation: `npm --prefix infra run synth:dev` passed with the source CORS config that includes the admin origin.
+- Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-06-02 after AWS SSO refresh; CloudFormation stack `jumpyard-check-in-dev-stack` returned `UPDATE_COMPLETE`.
+- Post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
+- CORS verification: API preflight for `POST /v1/staff/auth/login` with origin `https://jumpyard-checkin-admin.pages.dev` returned `access-control-allow-origin: https://jumpyard-checkin-admin.pages.dev`.
+- Public admin smoke: `https://jumpyard-checkin-admin.pages.dev` logged in through JumpYard Cloud, loaded the ready queue, opened booking `5100992`/handoff `JY9056`, completed staff redeem, returned to queue count `0`, and opened QR scanner mode.
+- Secrets: Cloudflare credentials, staff passcode, and JumpYard Cloud secrets are not stored in the repository; staff auth remains server-owned through JumpYard Cloud.
+
 T0059 redeem eligibility notes:
 
 - AWS resources changed: existing Lambda code only.
