@@ -36,6 +36,16 @@ T0088 real-time guest-name enrichment notes:
 - Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-06-02; pre-deploy diff showed only `WebhookHandler` Lambda code.
 - Dev smoke: safe webhook event for booking `5100965` returned `guestDetailStatus=available` and `guestNamePresent=true`; Aurora readback booleans confirmed booking customer id, guest profile, first/last context, email, and phone were present without raw PII output.
 
+T0089 guest messaging production unlock notes:
+
+- AWS resources changed: none.
+- Read-only checks only; no AWS Support cases, sender ids, pools, phone numbers, SES identities, DNS records, CDK resources, Lambda code, EventBridge payloads, or production sends were created or changed.
+- SNS SMS state: `IsInSandbox=true`, `DefaultSMSType=Transactional`, `MonthlySpendLimit=1`, delivery success sampling `100`, no `DefaultSenderID`, no SNS origination numbers.
+- AWS End User Messaging SMS state: account tier `SANDBOX`, no Sender IDs, no pools, no phone numbers, one verified dev destination phone masked as `+46*****9508`.
+- SES state: `ProductionAccessEnabled=false`, `SendingEnabled=true`, enforcement `HEALTHY`, sandbox quota `200/day` and `1/sec`, only verified email identity `love@wrlds.com`, and no dedicated configuration set named `jumpyard-check-in-dev-email`.
+- Source-of-truth unlock document: `GUEST_MESSAGING_PRODUCTION_UNLOCK.md`.
+- Safety state: dev scheduled due-message processing remains planning-only with `confirmSend=false`; controlled manual smokes remain possible only within current sandbox limitations.
+
 T0059 redeem eligibility notes:
 
 - AWS resources changed: existing Lambda code only.

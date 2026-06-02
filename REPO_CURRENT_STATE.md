@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-02
-- Current branch: `codex/t0088-realtime-guest-name-enrichment`
-- Current status: T0088 completed locally. Webhook enrichment now starts with Roller booking detail and uses the documented read-only `GET /guests/{guestId}` fallback only when booking detail has a customer/guest id but lacks first/last/contact fields. Dev deploy and safe webhook smoke for booking `5100965` passed without raw PII output.
-- Current ticket: `T0088` completed locally, pending review/merge.
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`
-- Recommended next step: review/merge T0088, then start T0089 guest messaging production unlock.
+- Current branch: `codex/t0089-guest-messaging-production-unlock`
+- Current status: T0089 completed locally. Read-only AWS checks confirmed SMS and SES are still sandboxed, no production SMS sender identity/domain setup exists, only one dev SMS destination phone is verified, and only `love@wrlds.com` is verified in SES. `GUEST_MESSAGING_PRODUCTION_UNLOCK.md` now documents hard gates and missing user/AWS inputs before unattended production sends can be enabled.
+- Current ticket: `T0089` completed locally, pending review/commit/merge.
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`
+- Recommended next step: review/merge T0089, then run T0090 gift card and multi-visit discovery before returning to broader production readiness.
 
 ## Current Structure
 
@@ -221,23 +221,29 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0086` | Guest/admin UI polish pass. | 2026-06-02 | Phone/admin UI only: removed leftover backup-code labels/text from phone source, changed the legacy present-code label to staff/personalkod, removed unused font-stretch helpers from phone/admin globals, and kept flow behavior unchanged; merged through PR #87. |
 | `T0087` | Staff admin Cloudflare deployment. | 2026-06-02 | Admin Pages settings are documented for `jumpyard-checkin-admin`, static Cloudflare headers are added, dev CORS includes `https://jumpyard-checkin-admin.pages.dev`, public staff smoke passed from the Cloudflare URL, and the ticket was merged through PR #88. |
 | `T0088` | Real-time guest-name enrichment. | 2026-06-02 | Webhook enrichment now uses booking detail plus documented read-only `GET /guests/{guestId}` fallback when needed; dev deploy and safe booking `5100965` smoke confirmed guest profile name/contact booleans without raw PII output. |
+| `T0089` | Guest messaging production unlock package. | 2026-06-02 | Read-only AWS checks confirmed SNS SMS and SES remain sandboxed; `GUEST_MESSAGING_PRODUCTION_UNLOCK.md` documents hard gates, missing inputs, and future approved steps without changing resources, code, support cases, or unattended sends. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0088` | Real-time guest-name enrichment. | Completed locally | Webhook enrichment now updates `guest_profiles`, booking summaries, and ticket customer links from booking detail or the documented guest-detail fallback while keeping responses/logs PII-safe. |
+| `T0089` | Guest messaging production unlock package. | Completed locally | Production guest messaging remains blocked: SMS and SES are sandboxed, no production sender identity/domain is configured, and EventBridge due-message processing still uses `confirmSend=false`. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0089` | Guest messaging production unlock | Resume SES/SNS production unlock, sender/domain setup, SMS sandbox exit planning, and unattended booking-time sends after the core add-product, staff handoff, UI, staff-admin deployment, and real-time name enrichment blockers are fixed. |
-| `T0090` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
-| `T0091` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
+| `T0090` | Gift card and multi-visit discovery | Verify in Roller Playground how gift cards and multi-visit passes can be used in the buy-entry checkout. Gift card scope is guest-entered payment value during booking costs/draft/payment; multi-visit scope is entitlement/payment behavior discovery before implementation. |
+| `T0091` | Gift card and multi-visit implementation | Add the server-side and phone-flow changes proven by T0090, including cost/draft payload handling, zero-balance/no-card behavior when Roller allows it, partial-payment behavior, and any Aurora state needed for audit/display. |
+| `T0092` | Gift card and multi-visit integrated smoke | Prove normal card, gift-card full/partial payment, and multi-visit cases through public phone flow, Aurora state, Roller Playground booking state, check-in session, and staff redeem/eligibility. |
+| `T0093` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, gift card/multi-visit, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
+| `T0094` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
 ## Validation Status
 
+- T0089 AWS read-only checks: SNS SMS sandbox status is still enabled, SNS SMS type is transactional, monthly spend limit is `1` USD, no default Sender ID/origination number exists, AWS End User Messaging SMS is still sandbox tier with no sender ids/pools/phone numbers, SES production access is disabled, only `love@wrlds.com` is verified for SES, and no dedicated email configuration set exists.
+- T0089 documentation: `GUEST_MESSAGING_PRODUCTION_UNLOCK.md` records SMS sandbox exit, SES production access, sender/domain identity gates, missing JumpYard/WRLDS inputs, and future approved implementation steps.
+- T0089 scope guard: no app code, Lambda code, CDK resources, Aurora migrations, Roller config, support cases, sender identities, domains, SMS/email sends, EventBridge payloads, or `confirmSend` behavior changed.
 - T0088 endpoint verification: official Roller docs page `Get guest detail` confirms `GET /guests/{guestId}` and states `guestId` is formerly/equivalent to `customerId`.
 - T0088 deploy: `node --check infra/lambda/webhook/index.js`, `npm --prefix infra run synth:dev`, pre-deploy `npm --prefix infra run diff:dev`, and `npm --prefix infra run deploy:dev` passed; CDK diff showed only `WebhookHandler` Lambda code.
 - T0088 webhook smoke: safe Playground webhook event for booking `5100965` returned `status=accepted`, `enrichmentStatus=processed`, `guestDetailStatus=available`, and `guestNamePresent=true` without printing raw PII.

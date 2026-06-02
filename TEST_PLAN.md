@@ -1049,6 +1049,29 @@ Use this file to define validation for the current project or milestone.
 | Aurora readback | Aurora should show linked guest identity state without printing PII. | Passed | Boolean-only query confirmed booking customer id, booking name flag, guest profile, first/last context, email, and phone were present. |
 | Scope guard | T0088 should not change UI, migrations, SMS/email, payment, packages, assets, or Roller writes. | Passed | T0088 changes are limited to docs and `infra/lambda/webhook/index.js`; Roller calls are read-only. |
 
+## T0089 Guest Messaging Production Unlock
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| SNS SMS sandbox check | Current SMS production state should be known without changing AWS. | Passed | `aws sns get-sms-sandbox-account-status` returned `IsInSandbox=true`. |
+| SNS SMS attributes check | Current SMS sender/message/spend settings should be known. | Passed | `DefaultSMSType=Transactional`, `MonthlySpendLimit=1`, delivery status sampling `100`, no `DefaultSenderID`. |
+| SES account check | Current email production state should be known. | Passed | `aws sesv2 get-account` returned `ProductionAccessEnabled=false`, `SendingEnabled=true`, quota `200/day` and `1/sec`. |
+| SES identity check | Verified sender identities should be known. | Passed | `aws sesv2 list-email-identities` returned only `love@wrlds.com` as verified. |
+| End User Messaging SMS check | Newer SMS service tier and sender resources should be known. | Passed | Account tier is `SANDBOX`; no Sender IDs, pools, or phone numbers; one verified dev destination phone exists. |
+| Dedicated email config set check | Determine whether a project-specific SES configuration set exists. | Passed | `jumpyard-check-in-dev-email` was not found. |
+| Production unlock doc | A future session should know the gates and missing inputs. | Documented | Added `GUEST_MESSAGING_PRODUCTION_UNLOCK.md`. |
+| Scope guard | T0089 should not change code, resources, support cases, sender identities, or unattended sends. | Passed | Read-only AWS checks and documentation only; `confirmSend=false` remains unchanged. |
+
+## T0090-T0092 Gift Card And Multi-Visit Edge Cases
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Gift card discovery | Confirm the exact Roller Playground payloads/endpoints for applying a gift card to booking costs and draft booking creation. | Planned | T0090 should verify full and partial gift-card payment behavior before code changes. |
+| Gift card full payment | A gift card that covers the full amount should produce a booking path that does not require card entry, if Roller supports it. | Planned | T0091/T0092 only after T0090 proves the Roller behavior. |
+| Gift card partial payment | A gift card that covers part of the amount should reduce the payment total and still hand remaining payment to Roller/Adyen. | Planned | Must preserve response-only/in-memory raw payment JWT handling. |
+| Multi-visit discovery | Confirm whether multi-visit passes are exposed as guest multi-passes, tickets, memberships, or another Roller model. | Planned | Do not change redeem eligibility until the Roller model is proven. |
+| Multi-visit checkout smoke | A multi-visit case should flow through phone checkout, Aurora state, Roller state, check-in session, and staff redeem/eligibility without consuming the wrong ticket. | Planned | T0092 integrated smoke. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
