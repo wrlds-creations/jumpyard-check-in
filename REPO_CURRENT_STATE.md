@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-02
-- Current branch: `main`
-- Current status: T0084 complete. Staff/admin UI keeps search/QR plus queue as the default operating view, switches to a focused compact summary on phone-sized screens when a handoff is selected, preserves the desktop queue/detail layout, and the guest ready-for-staff screen no longer shows the separate backup-code box.
-- Current ticket: `T0085` recommended next; not started.
+- Current branch: `codex/t0085-staff-redeem-confirmation-polish`
+- Current status: T0085 implemented locally. Staff/admin UI now shows a large green success confirmation after the existing staff redeem call succeeds, then waits for staff to choose `Tillbaka till kön` or `Scanna ny QR`; the redeemed session is removed from the queue.
+- Current ticket: `T0085` ready for review/merge.
 - Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`
-- Recommended next step: start T0085 staff redeem confirmation polish, then continue with T0086 guest/admin UI polish, T0087 staff admin Cloudflare deployment, and T0088 real-time guest-name enrichment before guest messaging production unlock resumes.
+- Recommended next step: review/merge T0085, then continue with T0086 guest/admin UI polish, T0087 staff admin Cloudflare deployment, and T0088 real-time guest-name enrichment before guest messaging production unlock resumes.
 
 ## Current Structure
 
@@ -221,13 +221,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0084` | Staff handoff one-page queue/detail UX. | Complete | Admin UI only: search/QR plus queue stay as the default view; selecting a handoff on phone opens a focused compact summary with X/back, date/time/payment, compact products, and the existing redeem button. User-approved pulled-forward T0086 fix removed the guest backup-code box while keeping QR and main staff/pickup code. Admin build, phone build, root validation, diff check, and browser smoke passed. |
+| `T0085` | Staff handoff redeem confirmation polish. | Complete, ready for review | Admin UI only: successful staff redeem now shows a large green confirmation with guest/code/booking/ticket count, then waits for staff to choose `Tillbaka till kön` or `Scanna ny QR`; both paths clear the redeemed selected handoff. Build, root validation, diff check, and browser smoke passed. No backend, AWS, Roller, payment, SMS, or email changes. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0085` | Staff handoff redeem confirmation polish | After staff check-in/redeem, show a large green success confirmation, then return to the queue/search screen; verify the flow on phone-sized staff screens. |
 | `T0086` | Guest/admin UI polish pass | Clean up remaining visual inconsistencies before broader testing: fix remaining incorrect fonts and align check-in/admin UI details with the approved JumpYard style. The unnecessary guest backup-code box was already removed during T0084. |
 | `T0087` | Staff admin Cloudflare deployment | Make the staff/admin app available through a Cloudflare URL and verify the login, queue, QR/search, detail, and redeem flow works outside local `localhost`. |
 | `T0088` | Real-time guest-name enrichment | Investigate and implement the best same-day name path for non-JumpYard-created bookings: webhook-triggered booking detail, customer references, possible REST/Data API fallback, and `guest_profiles` update without exposing raw PII. |

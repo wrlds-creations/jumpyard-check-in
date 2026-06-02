@@ -995,6 +995,18 @@ Use this file to define validation for the current project or milestone.
 | Diff whitespace | Diff whitespace check should pass. | Passed with CRLF notices | `git diff --check` passed; output contains Git line-ending notices only. |
 | Backend scope | T0084 should not change JumpYard Cloud, Roller, AWS, payment, SMS, or email behavior. | Passed by code review | Only the admin page component, one guest confirmation UI component, and source-of-truth docs are changed. |
 
+## T0085 Staff Redeem Confirmation Polish
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Admin build | Staff/admin app should compile after success-confirmation changes. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. |
+| Success confirmation state | A successful staff redeem should replace the detail panel with a large green confirmation. | Code validated | `RedeemSuccessPanel` renders from `redeemState='success'` plus a local safe confirmation object after the existing `redeemStaffSession` call succeeds. |
+| Manual next step | After successful redeem, staff should explicitly choose whether to return to search/QR plus queue or scan the next QR. | Code validated | Success state no longer auto-returns. It exposes `Tillbaka till kön` and `Scanna ny QR`; both clear the selected handoff and search text, and the scan action opens the QR scanner. |
+| Scope guard | T0085 should not change backend, AWS, Roller, payment, SMS, email, package, or asset behavior. | Code validated | Only admin page source and source-of-truth docs are changed. |
+| Browser smoke | Local admin app should load after the success-confirmation changes. | Passed | In-app browser loaded `http://localhost:3002/?codexSmoke=t0085-manual-next-step` and showed the staff handoff app. No real redeem was run to avoid consuming a Playground ticket without a dedicated test handoff. |
+| Root validation | Source-of-truth files should validate after T0085 docs updates. | Passed | `npm run validate` passed. |
+| Diff whitespace | Diff whitespace check should pass. | Passed with CRLF notices | `git diff --check` passed; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

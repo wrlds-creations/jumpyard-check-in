@@ -37,6 +37,14 @@ interface ParsedHandoffPayload {
   raw: string;
 }
 
+interface RedeemConfirmation {
+  bookingReference: string | null;
+  completedAt: string | null;
+  guestName: string;
+  handoffCode: string;
+  ticketCount: number;
+}
+
 type StaffIconName =
   | "addons-bag"
   | "admission-ticket"
@@ -307,12 +315,80 @@ function ItemRows({ items }: { items: StaffBookingItem[] }) {
   );
 }
 
+function RedeemSuccessPanel({
+  confirmation,
+  onReturnToQueue,
+  onScanNext,
+}: {
+  confirmation: RedeemConfirmation;
+  onReturnToQueue: () => void;
+  onScanNext: () => void;
+}) {
+  return (
+    <section
+      data-testid="staff-redeem-success"
+      className="grid min-h-[420px] place-items-center overflow-hidden rounded-3xl border border-success/30 bg-success/10 p-4 text-center shadow-sm"
+    >
+      <div className="w-full max-w-sm rounded-3xl border border-success/25 bg-white p-5 shadow-sm">
+        <div className="mx-auto grid h-28 w-28 place-items-center rounded-full bg-success/15">
+          <CheckCircle2 className="h-16 w-16 text-success" strokeWidth={3} />
+        </div>
+        <p className="mt-5 text-[11px] font-black uppercase tracking-[0.22em] text-success">Check-in klar</p>
+        <h2 className="mt-1 text-3xl font-black italic uppercase leading-none text-foreground">
+          {confirmation.guestName}
+        </h2>
+        <p className="mt-2 text-sm text-foreground/65">
+          {confirmation.handoffCode} · bokning {confirmation.bookingReference ?? "-"}
+        </p>
+
+        <div className="mt-5 grid grid-cols-2 gap-2 text-left">
+          <div className="rounded-2xl bg-success/10 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-foreground/55">Biljetter</p>
+            <p className="mt-1 text-2xl font-black italic text-success">{confirmation.ticketCount}</p>
+          </div>
+          <div className="rounded-2xl bg-surface p-3">
+            <p className="text-[10px] uppercase tracking-wide text-foreground/55">Status</p>
+            <p className="mt-1 text-base font-black italic text-foreground">Incheckad</p>
+          </div>
+        </div>
+
+        <p className="mt-4 text-xs text-foreground/55">
+          {confirmation.completedAt ? `Klar ${formatDateTime(confirmation.completedAt)}` : "Välj nästa steg."}
+        </p>
+
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={onReturnToQueue}
+            data-testid="staff-redeem-success-return"
+            className="flex min-h-12 w-full items-center justify-center rounded-2xl border border-success/35 bg-white px-4 text-sm font-black italic uppercase text-success shadow-sm transition hover:bg-success/10"
+          >
+            Tillbaka till kön
+          </button>
+          <button
+            type="button"
+            onClick={onScanNext}
+            data-testid="staff-redeem-success-scan-next"
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-success px-4 text-sm font-black italic uppercase text-white shadow-sm transition hover:brightness-95"
+          >
+            <ScanLine size={17} />
+            Scanna ny QR
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function DetailPanel({
   auth,
   detail,
   loading,
   onClose,
   onRedeem,
+  onReturnToQueue,
+  onScanNext,
+  redeemConfirmation,
   redeemMessage,
   redeemState,
 }: {
@@ -321,9 +397,22 @@ function DetailPanel({
   loading: boolean;
   onClose?: () => void;
   onRedeem: () => void;
+  onReturnToQueue: () => void;
+  onScanNext: () => void;
+  redeemConfirmation: RedeemConfirmation | null;
   redeemMessage: string;
   redeemState: RedeemState;
 }) {
+  if (redeemState === "success" && redeemConfirmation) {
+    return (
+      <RedeemSuccessPanel
+        confirmation={redeemConfirmation}
+        onReturnToQueue={onReturnToQueue}
+        onScanNext={onScanNext}
+      />
+    );
+  }
+
   if (loading && !detail) {
     return (
       <section className="grid min-h-48 place-items-center rounded-3xl border border-border bg-surface p-6 shadow-sm">
@@ -475,6 +564,7 @@ export default function Home() {
   const [detailState, setDetailState] = useState<LoadState>("idle");
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [redeemConfirmation, setRedeemConfirmation] = useState<RedeemConfirmation | null>(null);
   const [redeemMessage, setRedeemMessage] = useState("");
   const [redeemState, setRedeemState] = useState<RedeemState>("idle");
   const [scannerMessage, setScannerMessage] = useState("");
@@ -490,6 +580,7 @@ export default function Home() {
 
   const selectSession = useCallback((checkinSessionId: string) => {
     setError("");
+    setRedeemConfirmation(null);
     setRedeemMessage("");
     setRedeemState("idle");
     setSelectedId(checkinSessionId);
@@ -500,10 +591,29 @@ export default function Home() {
   const closeSelectedSession = useCallback(() => {
     setDetail(null);
     setDetailState("idle");
+    setRedeemConfirmation(null);
     setRedeemMessage("");
     setRedeemState("idle");
     setSelectedId(null);
   }, []);
+
+  const returnToQueueAfterRedeem = useCallback(() => {
+    setDetail(null);
+    setDetailState("idle");
+    setQuery("");
+    setRedeemConfirmation(null);
+    setRedeemMessage("");
+    setRedeemState("idle");
+    setScannerMessage("");
+    setSelectedId(null);
+  }, []);
+
+  const scanNextAfterRedeem = useCallback(() => {
+    returnToQueueAfterRedeem();
+    setScannerMessage("");
+    setScannerState("starting");
+    setScannerOpen(true);
+  }, [returnToQueueAfterRedeem]);
 
   const refreshSessions = useCallback(async () => {
     if (!auth || isStaffAuthExpired(auth)) {
@@ -693,6 +803,7 @@ export default function Home() {
       }
 
       setError("");
+      setRedeemConfirmation(null);
       setRedeemMessage("");
       setRedeemState("loading");
 
@@ -720,6 +831,13 @@ export default function Home() {
           };
         });
         setSessions((current) => current.filter((session) => session.checkinSessionId !== detail.checkinSessionId));
+        setRedeemConfirmation({
+          bookingReference: detail.bookingReference,
+          completedAt: result.session.completedAt ?? null,
+          guestName: getGuestDisplayName(detail),
+          handoffCode: getDisplayCode(detail),
+          ticketCount: result.redeemedTicketIds.length,
+        });
         setRedeemMessage(`Incheckad: ${result.redeemedTicketIds.length} biljetter.`);
         setRedeemState("success");
       } catch (redeemError) {
@@ -770,6 +888,7 @@ export default function Home() {
     setDetailState("idle");
     setError("");
     setQuery("");
+    setRedeemConfirmation(null);
     setRedeemMessage("");
     setRedeemState("idle");
     setSelectedId(null);
@@ -892,6 +1011,9 @@ export default function Home() {
             loading={detailState === "loading"}
             onClose={closeSelectedSession}
             onRedeem={handleRedeem}
+            onReturnToQueue={returnToQueueAfterRedeem}
+            onScanNext={scanNextAfterRedeem}
+            redeemConfirmation={redeemConfirmation}
             redeemMessage={redeemMessage}
             redeemState={redeemState}
           />
@@ -1021,6 +1143,9 @@ export default function Home() {
             detail={detail}
             loading={detailState === "loading"}
             onRedeem={handleRedeem}
+            onReturnToQueue={returnToQueueAfterRedeem}
+            onScanNext={scanNextAfterRedeem}
+            redeemConfirmation={redeemConfirmation}
             redeemMessage={redeemMessage}
             redeemState={redeemState}
           />
