@@ -1020,6 +1020,22 @@ Use this file to define validation for the current project or milestone.
 | Diff whitespace | Diff whitespace check should pass. | Passed with CRLF notices | `git diff --check` passed; output contains Git line-ending notices only. |
 | Scope guard | T0086 should not change backend, AWS, Roller, payment, SMS, email, package, asset, or flow behavior. | Code validated | Only source-of-truth docs, phone translation/present-code text, and phone/admin global CSS are changed. |
 
+## T0087 Staff Admin Cloudflare Deployment
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Admin static export | Staff/admin app should compile for Cloudflare Pages output. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed; output directory is `jumpyard-checkin-admin/out`. |
+| Admin Pages settings | Cloudflare deployment settings should be explicit. | Code documented | `jumpyard-checkin-admin/README.md` defines project name `jumpyard-checkin-admin`, root directory, build command, output directory, public API env var, and smoke checklist. |
+| Admin static headers | Static export should include Cloudflare headers. | Code validated | `jumpyard-checkin-admin/public/_headers` defines security headers and allows API calls to JumpYard Cloud dev API. |
+| Dev CORS source config | Intended admin origin should be in source CORS config. | Passed | `infra/config/dev.json` and `infra/config/dev.example.json` include `https://jumpyard-checkin-admin.pages.dev`. |
+| Infra synth | Dev stack should synthesize with the new CORS origin. | Passed | `npm --prefix infra run synth:dev` passed and rendered the dev stack with the new source CORS origin. |
+| Cloudflare project existence | Public admin URL should exist before public smoke. | Passed | `curl -I https://jumpyard-checkin-admin.pages.dev` returned HTTP `200`, and the HTML response contained the staff login screen. |
+| Cloudflare authentication | Wrangler should be authenticated before CLI deploy. | Blocked externally | `npx --yes wrangler whoami` reported not logged in. No Cloudflare credentials or tokens were stored. |
+| AWS CORS deploy | Public admin URL should be allowed to call JumpYard Cloud staff APIs. | Passed | CDK diff showed only the admin origin added to API Gateway CORS, deploy passed, post-deploy diff showed no differences, and preflight returned the expected origin header. |
+| Public admin smoke | Login, queue, search/QR, detail, and redeem should work on the public URL. | Passed | Public smoke on `https://jumpyard-checkin-admin.pages.dev` logged in, loaded one ready handoff, opened booking `5100992`/handoff `JY9056`, completed staff redeem, returned to an empty queue, accepted a search query, and opened QR scanner mode. |
+| Root validation | Source-of-truth files should validate after T0087 docs updates. | Passed | `npm run validate` passed. |
+| Diff whitespace | Diff whitespace check should pass. | Passed with CRLF notices | `git diff --check` passed; output contains Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

@@ -1,33 +1,35 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0086
+T0087
 
 ## Goal
-Run a narrow guest/admin UI polish pass to remove remaining outdated backup-code/font artifacts and keep the active check-in surfaces aligned with the approved JumpYard visual rules.
+Prepare the staff/admin app for Cloudflare Pages deployment and make the dev JumpYard Cloud API ready to accept the intended admin Pages origin.
 
 ## Dependencies
-- T0085 completed and merged.
-- T0084 already removed the visible guest backup-code box from the active ready-for-staff confirmation screen.
+- T0086 completed and merged.
+- Staff/admin app already builds as a static Next export.
+- JumpYard Cloud dev API is the only backend target for the admin app.
 
 ## Allowed areas
 - CODEX_TASK.md
 - PROJECT_CONTEXT.md
+- DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
+- AWS_RESOURCES.md
 - TEST_PLAN.md
-- jumpyard-checkin-phone/src/app/globals.css
-- jumpyard-checkin-phone/src/components/PresentCode.tsx
-- jumpyard-checkin-phone/src/context/LanguageContext.tsx
-- jumpyard-checkin-admin/src/app/globals.css
+- infra/config/dev.json
+- infra/config/dev.example.json
+- jumpyard-checkin-admin/README.md
+- jumpyard-checkin-admin/public/_headers
 
 ## Do not touch
-- Guest phone flow state machine behavior
-- Staff/admin flow behavior
-- JumpYard Cloud API/Lambda behavior
-- AWS/CDK resources
+- Staff/admin UI behavior
+- Guest phone UI behavior
+- JumpYard Cloud Lambda code
 - Aurora migrations
-- Roller API write paths
+- Roller API paths
 - Payment behavior
 - SMS/email behavior
 - Package dependencies
@@ -39,43 +41,61 @@ Run a narrow guest/admin UI polish pass to remove remaining outdated backup-code
 
 ## Requirements
 
-1. Remove remaining guest-facing backup-code artifacts:
-   - remove unused backup-code labels from the phone translations
-   - update the legacy phone present-code component so it says staff/personalkod instead of backup code
-   - keep the active QR/staff-code confirmation behavior intact
+1. Define the intended public admin Cloudflare Pages origin:
+   - `https://jumpyard-checkin-admin.pages.dev`
+   - document that a different Cloudflare project name requires a matching CORS config update
 
-2. Remove obsolete font artifacts:
-   - remove the unused `font-stretch-expanded` helper from active phone/admin globals
-   - keep the documented system sans-serif font stack
-   - do not add or restore any Google font imports or historical display-font overrides
+2. Prepare admin Cloudflare Pages deployment docs:
+   - Cloudflare project name
+   - repository and root directory
+   - build command
+   - output directory
+   - required public environment variable
+   - smoke checks for login, queue, search/QR, detail, and redeem
 
-3. Keep scope narrow:
-   - no functional flow changes
-   - no new components unless required for cleanup
-   - no backend/API/deploy changes
+3. Prepare dev API CORS config for the admin Pages origin:
+   - add the admin origin to `infra/config/dev.json`
+   - keep local admin origins
+   - keep the guest phone Pages origin
+   - update the example config consistently
+
+4. Add Cloudflare Pages static headers for the admin app:
+   - no secrets
+   - security headers suitable for a static staff app
+   - allow browser API calls to JumpYard Cloud dev API
+
+5. Document deployment constraints:
+   - no Cloudflare account credentials or API token are stored in the repo
+   - admin staff auth remains server-owned through JumpYard Cloud
+   - AWS CORS deploy is required before the public admin URL can call staff APIs
 
 ## Non-goals
-- Do not redesign the guest or admin apps.
-- Do not change staff auth, queue, detail, QR scan, or redeem behavior.
-- Do not change backend contracts or API behavior.
-- Do not create new backend state or migrations.
-- Do not add staff/admin Cloudflare deployment; that stays in T0087.
+- Do not create a Cloudflare project from code unless Cloudflare credentials are already available.
+- Do not deploy AWS unless the AWS profile is authenticated and the diff is reviewed.
+- Do not change staff auth, queue, QR scanner, detail, or redeem behavior.
+- Do not add production/staging domains.
+- Do not enable guest messaging production unlock.
 - Do not implement real-time guest-name enrichment; that stays in T0088.
-- Do not change guest messaging, payment, booking, add-product, or safety flow behavior.
 
 ## Acceptance criteria
-- Phone app builds.
+- Admin app has documented Cloudflare Pages settings.
+- Intended admin Pages origin is present in dev CORS config.
+- Admin static export includes Cloudflare headers.
 - Admin app builds.
-- No phone/admin source contains active backup-code UI text.
-- No phone/admin global CSS contains the unused `font-stretch-expanded` helper.
-- No backend, AWS, Roller, payment, SMS, email, package, or asset behavior changes.
+- Root validation passes.
+- No backend Lambda, Aurora, Roller, payment, SMS/email, package, asset, or production config behavior changes.
 
 ## Manual verification
-Open the phone app final ready-for-staff screen and confirm it shows QR plus staff/personalkod without a backup-code label. Open the staff/admin app and confirm it still loads normally.
+After Cloudflare Pages is connected and AWS CORS is deployed, open the admin Pages URL and confirm:
+- staff login works
+- ready queue loads
+- search/QR opens a handoff
+- handoff detail loads
+- staff redeem works on a dedicated Playground test booking
 
 ## Automated validation
 Run:
-- npm --prefix jumpyard-checkin-phone run build
 - npm --prefix jumpyard-checkin-admin run build
+- npm --prefix infra run synth:dev
 - npm run validate
 - git diff --check

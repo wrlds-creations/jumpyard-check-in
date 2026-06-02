@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-02
-- Current branch: `codex/t0086-ui-polish-pass`
-- Current status: T0086 implemented locally. Phone/admin UI source no longer contains active backup-code labels/text, legacy present-code copy now says staff/personalkod, and unused `font-stretch-expanded` helpers were removed from phone/admin globals.
-- Current ticket: `T0086` ready for review/merge.
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`
-- Recommended next step: review/merge T0086, then continue with T0087 staff admin Cloudflare deployment and T0088 real-time guest-name enrichment before guest messaging production unlock resumes.
+- Current branch: `codex/t0087-staff-admin-cloudflare`
+- Current status: T0087 completed locally. Admin Cloudflare Pages settings are documented, admin static headers are added, dev API CORS source config includes the confirmed admin origin `https://jumpyard-checkin-admin.pages.dev`, AWS API Gateway preflight allows that origin, and public staff login/queue/detail/redeem smoke passed from the public URL.
+- Current ticket: `T0087` completed locally, pending review/merge.
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`
+- Recommended next step: review/merge T0087, then start T0088 real-time guest-name enrichment.
 
 ## Current Structure
 
@@ -218,18 +218,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0083` | Added staff handoff identity/search data. | 2026-06-01 | Session Lambda now returns staff-only guest identity fields with masked contact values and supports staff search over code, booking reference, stored first/last name, email, and phone; booking/data-sync capture customer names; admin queue/detail displays safe identity fields and product-first ticket rows. |
 | `T0084` | Rebuilt staff handoff one-page queue/detail UX. | 2026-06-02 | Staff/admin now defaults to search/QR plus queue, opens a compact selected handoff summary with products to hand out, and removed the guest backup-code box as a pulled-forward UI fix. |
 | `T0085` | Polished staff redeem confirmation. | 2026-06-02 | Successful staff redeem now shows a large green confirmation and waits for staff to choose `Tillbaka till kön` or `Scanna ny QR`; merged through PR #86. |
+| `T0086` | Guest/admin UI polish pass. | 2026-06-02 | Phone/admin UI only: removed leftover backup-code labels/text from phone source, changed the legacy present-code label to staff/personalkod, removed unused font-stretch helpers from phone/admin globals, and kept flow behavior unchanged; merged through PR #87. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0086` | Guest/admin UI polish pass. | Complete, ready for review | Phone/admin UI only: removed leftover backup-code labels/text from phone source, changed the legacy present-code label to staff/personalkod, removed unused font-stretch helpers from phone/admin globals, and kept flow behavior unchanged. Phone build, admin build, root validation, diff check, and browser smoke passed. |
+| `T0087` | Staff admin Cloudflare deployment. | Completed locally | Admin Pages settings are documented for `jumpyard-checkin-admin`, static Cloudflare headers are added, dev CORS source config includes `https://jumpyard-checkin-admin.pages.dev`, AWS CORS deploy passed, admin build/synth/root validation/diff check passed, and public staff login/queue/detail/redeem smoke passed from `https://jumpyard-checkin-admin.pages.dev`. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0087` | Staff admin Cloudflare deployment | Make the staff/admin app available through a Cloudflare URL and verify the login, queue, QR/search, detail, and redeem flow works outside local `localhost`. |
 | `T0088` | Real-time guest-name enrichment | Investigate and implement the best same-day name path for non-JumpYard-created bookings: webhook-triggered booking detail, customer references, possible REST/Data API fallback, and `guest_profiles` update without exposing raw PII. |
 | `T0089` | Guest messaging production unlock | Resume SES/SNS production unlock, sender/domain setup, SMS sandbox exit planning, and unattended booking-time sends after the core add-product, staff handoff, UI, staff-admin deployment, and real-time name enrichment blockers are fixed. |
 | `T0090` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
