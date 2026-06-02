@@ -50,7 +50,3 @@ input {
 .bg-jy-red {
   background-color: var(--primary);
 }
-
-.font-stretch-expanded {
-  font-stretch: expanded;
-}

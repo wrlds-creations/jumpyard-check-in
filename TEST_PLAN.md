@@ -1007,6 +1007,19 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth files should validate after T0085 docs updates. | Passed | `npm run validate` passed. |
 | Diff whitespace | Diff whitespace check should pass. | Passed with CRLF notices | `git diff --check` passed; output contains Git line-ending notices only. |
 
+## T0086 Guest/Admin UI Polish Pass
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Phone build | Guest phone app should compile after text/CSS polish. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed; Next reported the existing stale `baseline-browser-mapping` advisory warnings only. |
+| Admin build | Staff/admin app should compile after CSS polish. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. |
+| Backup-code source cleanup | Phone/admin active source should not contain backup-code labels or backup-code copy. | Code validated | Targeted `rg` over `jumpyard-checkin-phone/src` and `jumpyard-checkin-admin/src` returned no `backupLabel`, `Backupkod`, `Backup code`, `backupkoden`, or `backup code` matches. |
+| Font artifact cleanup | Phone/admin global CSS should not contain unused historical font-stretch helpers. | Code validated | Removed `.font-stretch-expanded` from phone/admin globals; targeted `rg` returned no source matches for `font-stretch-expanded`, `Space Grotesk`, `next/font`, Google font imports, or font stylesheet imports. |
+| Browser smoke | Phone and staff/admin apps should still load locally. | Passed | In-app browser loaded `http://localhost:3000/?codexSmoke=t0086` and `http://localhost:3002/?codexSmoke=t0086`; both app shells loaded. |
+| Root validation | Source-of-truth files should validate after T0086 docs updates. | Passed | `npm run validate` passed. |
+| Diff whitespace | Diff whitespace check should pass. | Passed with CRLF notices | `git diff --check` passed; output contains Git line-ending notices only. |
+| Scope guard | T0086 should not change backend, AWS, Roller, payment, SMS, email, package, asset, or flow behavior. | Code validated | Only source-of-truth docs, phone translation/present-code text, and phone/admin global CSS are changed. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

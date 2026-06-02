@@ -260,7 +260,6 @@ const sv = {
     title: 'Redo f\u00f6r personal',
     subtitle: 'Visa koden nedan vid entr\u00e9n. Personalen slutf\u00f6r incheckningen.',
     pickupCode: 'Personalkod',
-    backupLabel: 'Backupkod',
     staffHandout: 'Att hämta ut hos personalen',
     otherAddons: 'Övriga tillägg i bokningen',
     wristbands: 'Armband',
@@ -280,8 +279,7 @@ const sv = {
   present: {
     eyebrow: 'Visa vid entrén',
     title: 'Redo för parken',
-    backupLabel: 'Backupkod',
-    instruction: 'Visa QR-koden eller backupkoden till personalen för att få armband.',
+    instruction: 'Visa QR-koden eller personalkoden till personalen för att få armband.',
     startOver: 'Börja om',
   },
   extend: {
@@ -573,7 +571,6 @@ const en: typeof sv = {
     title: 'Ready for staff',
     subtitle: 'Show the code below at the entrance. Staff will complete check-in.',
     pickupCode: 'Staff code',
-    backupLabel: 'Backup code',
     staffHandout: 'Pick up from staff',
     otherAddons: 'Other add-ons on your booking',
     wristbands: 'Wristbands',
@@ -593,8 +590,7 @@ const en: typeof sv = {
   present: {
     eyebrow: 'Show at entrance',
     title: 'Ready for the park',
-    backupLabel: 'Backup code',
-    instruction: 'Show the QR code or backup code to staff to get your wristbands.',
+    instruction: 'Show the QR code or staff code to staff to get your wristbands.',
     startOver: 'Start over',
   },
   extend: {

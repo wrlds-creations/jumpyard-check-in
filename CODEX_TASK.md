@@ -1,15 +1,14 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0085
+T0086
 
 ## Goal
-Polish the staff handoff completion moment so staff get a clear successful check-in confirmation after redeeming tickets, then return to the queue/search screen.
+Run a narrow guest/admin UI polish pass to remove remaining outdated backup-code/font artifacts and keep the active check-in surfaces aligned with the approved JumpYard visual rules.
 
 ## Dependencies
-- T0084 completed and merged.
-- Staff auth from T0047 remains required for staff handoff APIs.
-- Existing staff redeem behavior from T0027 remains the source of truth for actual ticket redemption.
+- T0085 completed and merged.
+- T0084 already removed the visible guest backup-code box from the active ready-for-staff confirmation screen.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -17,10 +16,14 @@ Polish the staff handoff completion moment so staff get a clear successful check
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
 - TEST_PLAN.md
-- jumpyard-checkin-admin/src/app/page.tsx
+- jumpyard-checkin-phone/src/app/globals.css
+- jumpyard-checkin-phone/src/components/PresentCode.tsx
+- jumpyard-checkin-phone/src/context/LanguageContext.tsx
+- jumpyard-checkin-admin/src/app/globals.css
 
 ## Do not touch
-- Guest phone flow behavior
+- Guest phone flow state machine behavior
+- Staff/admin flow behavior
 - JumpYard Cloud API/Lambda behavior
 - AWS/CDK resources
 - Aurora migrations
@@ -36,52 +39,43 @@ Polish the staff handoff completion moment so staff get a clear successful check
 
 ## Requirements
 
-1. Keep the existing staff redeem action:
-   - do not change API calls
-   - do not change staff auth
-   - do not change redeem request payloads or idempotency behavior
-   - do not change Roller write semantics
+1. Remove remaining guest-facing backup-code artifacts:
+   - remove unused backup-code labels from the phone translations
+   - update the legacy phone present-code component so it says staff/personalkod instead of backup code
+   - keep the active QR/staff-code confirmation behavior intact
 
-2. Add a clear post-redeem success confirmation:
-   - show a large green success/check visual after a successful staff redeem
-   - show enough context for staff to trust the action, such as guest name, handoff code, booking reference, ticket count, and status
-   - keep this confirmation visible until staff chooses the next step
-   - provide a manual button to return to the queue
-   - provide a manual button to scan the next QR code
+2. Remove obsolete font artifacts:
+   - remove the unused `font-stretch-expanded` helper from active phone/admin globals
+   - keep the documented system sans-serif font stack
+   - do not add or restore any Google font imports or historical display-font overrides
 
-3. Return staff to the operating surface after completion:
-   - clear the selected handoff after successful completion
-   - remove the redeemed session from the visible queue
-   - clear search text when staff chooses to continue so the remaining queue is visible
-   - keep search/QR controls available for the next guest
-
-4. Keep phone-sized staff UX clean:
-   - on mobile, the success confirmation should use the focused detail area
-   - after staff chooses a next step, the user should land back on search/scan plus queue or open QR scanning
-   - avoid adding new scroll-heavy sections
+3. Keep scope narrow:
+   - no functional flow changes
+   - no new components unless required for cleanup
+   - no backend/API/deploy changes
 
 ## Non-goals
-- Do not redesign the full admin app again.
-- Do not change staff auth.
+- Do not redesign the guest or admin apps.
+- Do not change staff auth, queue, detail, QR scan, or redeem behavior.
 - Do not change backend contracts or API behavior.
-- Do not change redeem semantics.
 - Do not create new backend state or migrations.
 - Do not add staff/admin Cloudflare deployment; that stays in T0087.
 - Do not implement real-time guest-name enrichment; that stays in T0088.
-- Do not change guest messaging, payment, booking, or phone app flows.
+- Do not change guest messaging, payment, booking, add-product, or safety flow behavior.
 
 ## Acceptance criteria
+- Phone app builds.
 - Admin app builds.
-- Existing staff login, queue, search, QR scanner toggle, selected detail, and staff redeem action remain wired to the same API functions.
-- Successful staff redeem shows a large green confirmation.
-- The UI stays on the confirmation until staff chooses `Tillbaka till kön` or `Scanna ny QR`.
+- No phone/admin source contains active backup-code UI text.
+- No phone/admin global CSS contains the unused `font-stretch-expanded` helper.
 - No backend, AWS, Roller, payment, SMS, email, package, or asset behavior changes.
 
 ## Manual verification
-Open the staff/admin app, log in with the staff passcode, select a ready handoff, trigger the existing staff check-in action on a Playground test session, confirm the large green success confirmation appears, then confirm `Tillbaka till kön` returns to search/scan plus queue and `Scanna ny QR` opens the scanner.
+Open the phone app final ready-for-staff screen and confirm it shows QR plus staff/personalkod without a backup-code label. Open the staff/admin app and confirm it still loads normally.
 
 ## Automated validation
 Run:
+- npm --prefix jumpyard-checkin-phone run build
 - npm --prefix jumpyard-checkin-admin run build
 - npm run validate
 - git diff --check
