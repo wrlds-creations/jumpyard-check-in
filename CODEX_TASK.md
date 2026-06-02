@@ -1,16 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0089
+T0090
 
 ## Goal
-Prepare the guest SMS/email production unlock package without enabling unattended production sends.
+Discover how Roller Playground supports gift card payment and multi-visit pass use in the buy-entry checkout flow.
 
 ## Dependencies
-- T0088 completed and merged.
-- Guest messaging already has server-owned SMS/email link creation and unified due-message planning.
-- Dev scheduled due-message processing still runs with `confirmSend=false`.
-- SNS and SES production access require external AWS approval and sender/domain inputs.
+- T0089 completed and merged.
+- Card-based new-booking and add-product payment flows already work in Playground.
+- No production readiness work should resume until gift card and multi-visit behavior is understood.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -18,20 +17,18 @@ Prepare the guest SMS/email production unlock package without enabling unattende
 - DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
-- AWS_RESOURCES.md
 - TEST_PLAN.md
-- New guest-messaging production-readiness documentation file if useful
+- New gift-card/multi-visit discovery documentation file if useful
+- Existing local Roller scripts only if a small read-only discovery helper is needed
 
 ## Do not touch
 - App UI files
 - Lambda code
 - CDK resources
 - Aurora migrations
-- Roller integration code
-- Payment behavior
+- Payment package/vendor files
 - Staff/admin behavior
 - Guest phone behavior
-- Package dependencies
 - Assets
 - Deliverables
 - Production credentials
@@ -40,57 +37,66 @@ Prepare the guest SMS/email production unlock package without enabling unattende
 
 ## Requirements
 
-1. Run read-only AWS checks for the current dev messaging state:
-   - SNS SMS sandbox status
-   - SNS SMS attributes relevant to sender id/message type/spend
-   - SES account sandbox/production status
-   - SES verified identities
-   - AWS End User Messaging SMS sender-id/pool state if available through the CLI
+1. Verify Roller documentation and current repository support for gift cards:
+   - booking costs payload
+   - draft booking payload
+   - full gift-card payment behavior
+   - partial gift-card payment behavior
+   - whether `/data/giftcards` or booking payment rows are needed for reconciliation
 
-2. Create or update clear production-unlock documentation for:
-   - SMS sandbox exit requirements
-   - email SES production access requirements
-   - sender/domain identity requirements
-   - what user inputs are still missing
-   - what Codex can do later with user approval
-   - what must stay blocked until approval is complete
+2. Verify Roller documentation and current Playground behavior for multi-visit passes:
+   - whether a documented guest multi-pass endpoint exists
+   - whether multi-visit passes appear as tickets, memberships, guest details, or another object
+   - whether they can be used in checkout as payment/entitlement or only redeemed later
 
-3. Keep the implementation safe:
-   - do not submit AWS Support cases
-   - do not create sender ids, pools, identities, DNS records, domains, or production resources
-   - do not enable unattended real scheduled sends
-   - do not change EventBridge payloads
-   - do not change `confirmSend`
+3. Run only safe discovery checks:
+   - read-only Roller REST/Data API calls are allowed
+   - `POST /bookings/draft/costs` is allowed because it calculates costs and creates no booking
+   - do not create draft bookings
+   - do not publish draft bookings
+   - do not process payments
+   - do not redeem tickets
+   - do not print secrets, raw tokens, raw payment JWTs, full gift-card numbers, full phone numbers, or full emails
 
-4. Update roadmap/source-of-truth files:
+4. Document the result clearly:
+   - what is confirmed
+   - what is blocked or unknown
+   - what we should ask Josh/Joao/Pabel if needed
+   - exact recommended scope for T0091
+   - exact test cases for T0092
+
+5. Update source-of-truth files:
    - current state
-   - followups for user/AWS inputs
-   - decisions if a production messaging gate is confirmed
-   - test plan with read-only validation
+   - followups
+   - decisions if a meaningful architecture choice is confirmed
+   - test plan
 
 ## Non-goals
-- Do not move SNS or SES out of sandbox.
-- Do not verify a new phone number or email/domain identity.
-- Do not send SMS or email.
-- Do not enable production sender id `JumpYard`.
-- Do not enable production unattended booking-time messages.
-- Do not create staging/live AWS resources.
-- Do not modify app flows.
+- Do not implement gift-card UI.
+- Do not implement multi-visit UI.
+- Do not change JumpYard Cloud endpoints.
+- Do not create Roller bookings.
+- Do not pay bookings.
+- Do not redeem tickets or passes.
+- Do not write to Aurora.
+- Do not deploy AWS changes.
+- Do not change production readiness tickets except to keep roadmap order clear.
 
 ## Acceptance criteria
-- Current SNS and SES readiness state is documented from read-only AWS checks.
-- The repository contains a clear checklist for SMS/email production unlock.
-- Missing user/AWS inputs are explicit.
-- The current dev safety gate remains unchanged.
+- Gift-card payment path is documented as confirmed, blocked, or needing Roller clarification.
+- Multi-visit pass path is documented as confirmed, blocked, or needing Roller clarification.
+- T0091 implementation scope is precise and does not guess unsupported Roller behavior.
+- T0092 smoke cases are explicit.
+- No app, Lambda, AWS, Aurora, payment package, assets, or Roller write behavior changed.
 - Root validation passes.
 
 ## Manual verification
-Open the production-unlock document and confirm a non-chat Codex session can answer:
-- what is ready now
-- what is blocked
-- what user input is needed
-- what AWS approval is needed
-- what must not be enabled yet
+Open the discovery document and confirm a new Codex session can answer:
+- Can a guest enter a gift card during buy-entry checkout?
+- What happens if gift card balance covers the full total?
+- What happens if gift card balance only covers part of the total?
+- How are multi-visit passes exposed by Roller?
+- What should we ask Roller if anything is still unclear?
 
 ## Automated validation
 Run:
