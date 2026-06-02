@@ -18,6 +18,8 @@ const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
 const PRODUCT_CACHE_TTL_MS = 15 * 60 * 1000;
 const RETRYABLE_DUPLICATE_STATUSES = new Set(['received', 'failed']);
+const SOURCE_WEBHOOK_GUEST_PROFILE = 'roller_webhook_booking_detail';
+const SOURCE_WEBHOOK_GUEST_DETAIL = 'roller_webhook_guest_detail';
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
@@ -414,6 +416,7 @@ async function enrichWebhookEvent(intake, correlationId) {
 
     const products = await getProductCatalogBestEffort(config, token);
     const booking = normalizeBooking(bookingResult.body, products);
+    const guestDetail = await enrichGuestProfileFromGuestDetailBestEffort(config, token, booking);
     if (!booking.bookingReference || !booking.rollerUniqueId) {
       const error = new Error('Roller booking detail did not include required booking identifiers.');
       error.code = 'roller_lookup_error';
@@ -421,9 +424,10 @@ async function enrichWebhookEvent(intake, correlationId) {
     }
 
     await upsertWebhookBooking(booking, config.env, null);
+    const guestProfile = await upsertWebhookGuestProfile(booking);
     await reconcilePrepaymentDraftFromPaidBooking(booking, 'roller_webhook_enrichment');
     await updateWebhookEventStatus(intake.eventId, 'processed', null, true);
-    await persistEnrichmentEventLog(intake, correlationId, booking, products.status);
+    await persistEnrichmentEventLog(intake, correlationId, booking, products.status, guestProfile);
 
     return {
       status: 'processed',
@@ -432,8 +436,11 @@ async function enrichWebhookEvent(intake, correlationId) {
       rollerUniqueId: booking.rollerUniqueId,
       itemCount: booking.items.length,
       ticketCount: booking.items.reduce((total, item) => total + (item.tickets?.length ?? 0), 0),
+      guestProfileUpdated: guestProfile.updated,
+      guestNamePresent: guestProfile.namePresent,
+      guestDetailStatus: guestDetail.status,
       productCatalog: products.status,
-      lookupPath: 'GET /bookings/{identifier}',
+      lookupPath: guestDetail.used ? 'GET /bookings/{identifier} + GET /guests/{guestId}' : 'GET /bookings/{identifier}',
     };
   } catch (error) {
     await updateWebhookEventStatus(intake.eventId, 'failed', safeErrorSummary(error), false).catch(() => {});
@@ -468,7 +475,7 @@ async function updateWebhookEventStatus(eventId, status, errorSummary, processed
   );
 }
 
-async function persistEnrichmentEventLog(intake, correlationId, booking, productCatalogStatus) {
+async function persistEnrichmentEventLog(intake, correlationId, booking, productCatalogStatus, guestProfile) {
   await executeStatement(
     `INSERT INTO jumpyard.event_log (
       event_id,
@@ -496,6 +503,8 @@ async function persistEnrichmentEventLog(intake, correlationId, booking, product
         'eventPayload',
         JSON.stringify({
           bookingReference: booking.bookingReference,
+          guestNamePresent: Boolean(guestProfile?.namePresent),
+          guestProfileUpdated: Boolean(guestProfile?.updated),
           itemCount: booking.items.length,
           productCatalog: productCatalogStatus,
           rollerUniqueId: booking.rollerUniqueId,
@@ -663,6 +672,30 @@ async function getBookingDetail(config, token, identifier) {
   };
 }
 
+async function getGuestDetail(config, token, guestId) {
+  const response = await fetch(buildRollerUrl(config.baseUrl, `/guests/${encodeURIComponent(guestId)}`), {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+    },
+  });
+  emitRollerApiMetric({ method: 'GET', operation: 'get_guest_detail', status: response.status, ok: response.ok });
+
+  if (response.status === 404) {
+    return { ok: false, status: 404, body: null };
+  }
+
+  const text = await response.text();
+  const body = text ? JSON.parse(text) : null;
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    body,
+  };
+}
+
 async function getProductCatalogBestEffort(config, token) {
   if (cachedProducts && cachedProducts.expiresAt > Date.now()) {
     return cachedProducts;
@@ -734,8 +767,40 @@ function flattenProducts(products, parent = null) {
   return flattened;
 }
 
+async function enrichGuestProfileFromGuestDetailBestEffort(config, token, booking) {
+  if (!booking?.customerId || !needsGuestDetailFallback(booking.guestProfile)) {
+    return { status: 'not_needed', used: false };
+  }
+
+  try {
+    const result = await getGuestDetail(config, token, booking.customerId);
+    if (result.status === 404) return { status: 'not_found', used: true };
+    if (!result.ok) return { status: 'unavailable', used: true };
+
+    const profile = normalizeGuestDetailProfile(result.body, booking);
+    if (!profile) return { status: 'no_profile_fields', used: true };
+
+    booking.guestProfile = mergeGuestProfiles(booking.guestProfile, profile, booking);
+    booking.customerId = booking.guestProfile?.rollerCustomerId ?? booking.customerId;
+
+    return { status: 'available', used: true };
+  } catch {
+    return { status: 'unavailable', used: true };
+  }
+}
+
+function needsGuestDetailFallback(profile) {
+  return !(
+    profile?.firstName &&
+    profile?.lastName &&
+    (profile.email || profile.contactNumber)
+  );
+}
+
 function normalizeBooking(booking, products) {
   const items = Array.isArray(booking.items) ? booking.items : [];
+  const guestProfile = normalizeBookingGuestProfile(booking);
+  const bookingCustomerId = guestProfile?.rollerCustomerId ?? stringOrNull(booking.customerId);
 
   return {
     bookingReference: stringOrNull(booking.bookingReference ?? booking.reference),
@@ -746,15 +811,17 @@ function normalizeBooking(booking, products) {
     total: numberOrNull(booking.total ?? booking.costs?.total),
     amountOwing: numberOrNull(booking.amountOwing ?? booking.remainder ?? booking.costs?.amountOwing),
     createdDate: stringOrNull(booking.createdDate),
-    customerId: stringOrNull(booking.customerId),
-    items: items.map((item) => normalizeBookingItem(item, products.byId)),
+    customerId: bookingCustomerId,
+    guestProfile,
+    items: items.map((item) => normalizeBookingItem(item, products.byId, bookingCustomerId)),
   };
 }
 
-function normalizeBookingItem(item, productById) {
+function normalizeBookingItem(item, productById, bookingCustomerId) {
   const productId = item.productId != null ? String(item.productId) : null;
   const product = productId ? productById.get(productId) : null;
   const tickets = Array.isArray(item.tickets) ? item.tickets : [];
+  const itemCustomerId = stringOrNull(item.customerId ?? item.rollerCustomerId ?? item.bookingCustomerId) ?? bookingCustomerId;
 
   return {
     bookingItemId: stringOrNull(item.bookingItemId ?? item.id),
@@ -769,10 +836,180 @@ function normalizeBookingItem(item, productById) {
     endTime: stringOrNull(item.endTime ?? item.sessionEndTime),
     tickets: tickets.map((ticket) => ({
       ticketId: stringOrNull(ticket.ticketId ?? ticket.id),
+      customerId:
+        stringOrNull(ticket.customerId ?? ticket.rollerCustomerId ?? ticket.bookingCustomerId ?? ticket.guestId) ??
+        itemCustomerId,
       ticketHolderName: stringOrNull(ticket.ticketHolderName ?? ticket.name),
       locations: Array.isArray(ticket.locations) ? ticket.locations : [],
     })),
   };
+}
+
+function normalizeBookingGuestProfile(booking) {
+  const customer = firstRecord([
+    booking.customer,
+    booking.bookingCustomer,
+    booking.bookingHolder,
+    booking.bookingOwner,
+    booking.primaryContact,
+    booking.contact,
+    booking.contacts,
+    booking.guest,
+    booking.guestDetails,
+    booking.customerDetails,
+    booking.customers,
+  ]);
+  const structuredFullName = stringOrNull(
+    customer?.name ??
+      customer?.fullName ??
+      customer?.displayName ??
+      booking.customerName ??
+      booking.bookingCustomerName ??
+      booking.bookingHolderName,
+  );
+  const splitFullName = splitPersonName(structuredFullName);
+  const rollerCustomerId = stringOrNull(
+    booking.customerId ??
+      customer?.customerId ??
+      customer?.id ??
+      customer?.uniqueId ??
+      customer?.rollerCustomerId ??
+      customer?.guestId,
+  );
+  const firstName = stringOrNull(
+    customer?.firstName ?? customer?.givenName ?? customer?.forename ?? booking.customerFirstName ?? splitFullName.firstName,
+  );
+  const lastName = stringOrNull(
+    customer?.lastName ?? customer?.surname ?? customer?.familyName ?? booking.customerLastName ?? splitFullName.lastName,
+  );
+  const email = normalizeEmail(customer?.email ?? customer?.emailAddress ?? booking.customerEmail ?? booking.email);
+  const contactNumber = normalizePhone(
+    customer?.phone ??
+      customer?.phoneNumber ??
+      customer?.contactNumber ??
+      customer?.mobile ??
+      customer?.mobileNumber ??
+      booking.customerPhone ??
+      booking.phone,
+  );
+
+  if (!rollerCustomerId && !email && !contactNumber) return null;
+
+  return {
+    contactNumber,
+    contactNumberHash: contactNumber ? hashString(contactNumber) : null,
+    contactNumberMasked: maskPhone(contactNumber),
+    email,
+    emailHash: email ? hashString(email) : null,
+    emailMasked: maskEmail(email),
+    firstName,
+    guestProfileId: rollerCustomerId
+      ? `roller_customer:${rollerCustomerId}`
+      : `contact:${hashString(`${email || ''}:${contactNumber || ''}`)}`,
+    lastName,
+    latestBookingContext: compactObject({
+      bookingReference: stringOrNull(booking.bookingReference ?? booking.reference),
+      createdDate: stringOrNull(booking.createdDate),
+      firstName,
+      lastName,
+      source: SOURCE_WEBHOOK_GUEST_PROFILE,
+    }),
+    rollerCustomerId,
+    smsReady: Boolean(contactNumber),
+  };
+}
+
+function normalizeGuestDetailProfile(body, booking) {
+  const guest = firstRecord([body?.guest, body?.customer, body?.data, body]);
+  if (!isRecord(guest)) return null;
+
+  const rollerCustomerId = stringOrNull(
+    guest.guestId ?? guest.customerId ?? guest.id ?? guest.rollerCustomerId ?? booking.customerId,
+  );
+  const firstName = stringOrNull(guest.firstName ?? guest.givenName ?? guest.forename);
+  const lastName = stringOrNull(guest.lastName ?? guest.surname ?? guest.familyName);
+  const email = normalizeEmail(guest.email ?? guest.emailAddress);
+  const contactNumber = normalizePhone(guest.phone ?? guest.phoneNumber ?? guest.contactNumber ?? guest.mobile ?? guest.mobileNumber);
+
+  if (!rollerCustomerId && !email && !contactNumber) return null;
+
+  return {
+    contactNumber,
+    contactNumberHash: contactNumber ? hashString(contactNumber) : null,
+    contactNumberMasked: maskPhone(contactNumber),
+    email,
+    emailHash: email ? hashString(email) : null,
+    emailMasked: maskEmail(email),
+    firstName,
+    guestProfileId: rollerCustomerId
+      ? `roller_customer:${rollerCustomerId}`
+      : `contact:${hashString(`${email || ''}:${contactNumber || ''}`)}`,
+    lastName,
+    latestBookingContext: compactObject({
+      bookingReference: booking.bookingReference,
+      firstName,
+      lastName,
+      source: SOURCE_WEBHOOK_GUEST_DETAIL,
+    }),
+    rollerCustomerId,
+    smsReady: Boolean(contactNumber),
+  };
+}
+
+function mergeGuestProfiles(primary, fallback, booking) {
+  if (!primary) return fallback;
+
+  const rollerCustomerId = primary.rollerCustomerId ?? fallback.rollerCustomerId;
+  const email = primary.email ?? fallback.email;
+  const contactNumber = primary.contactNumber ?? fallback.contactNumber;
+  const firstName = primary.firstName ?? fallback.firstName;
+  const lastName = primary.lastName ?? fallback.lastName;
+  const guestProfileId = rollerCustomerId
+    ? `roller_customer:${rollerCustomerId}`
+    : primary.guestProfileId ?? fallback.guestProfileId;
+
+  return {
+    ...primary,
+    contactNumber,
+    contactNumberHash: contactNumber ? hashString(contactNumber) : null,
+    contactNumberMasked: maskPhone(contactNumber),
+    email,
+    emailHash: email ? hashString(email) : null,
+    emailMasked: maskEmail(email),
+    firstName,
+    guestProfileId,
+    lastName,
+    latestBookingContext: compactObject({
+      ...(primary.latestBookingContext ?? {}),
+      ...(fallback.latestBookingContext ?? {}),
+      bookingReference: booking.bookingReference,
+      firstName,
+      lastName,
+    }),
+    rollerCustomerId,
+    smsReady: Boolean(primary.smsReady || fallback.smsReady || contactNumber),
+  };
+}
+
+function firstRecord(values) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const nested = firstRecord(value);
+      if (isRecord(nested) && Object.keys(nested).length > 0) return nested;
+    }
+    if (isRecord(value)) return value;
+  }
+  return {};
+}
+
+function splitPersonName(value) {
+  const parts = stringOrNull(value)
+    ?.trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts || parts.length === 0) return { firstName: null, lastName: null };
+  if (parts.length === 1) return { firstName: parts[0], lastName: null };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
 }
 
 async function upsertWebhookBooking(booking, rollerEnv, venueId) {
@@ -868,6 +1105,10 @@ async function upsertWebhookBooking(booking, rollerEnv, venueId) {
       stringParameter(
         'normalizedSummary',
         JSON.stringify({
+          bookingCustomerId: booking.customerId,
+          customerEmailPresent: Boolean(booking.guestProfile?.email),
+          customerNamePresent: Boolean(booking.guestProfile?.firstName || booking.guestProfile?.lastName),
+          customerPhonePresent: Boolean(booking.guestProfile?.contactNumber),
           externalId: booking.externalId,
           itemCount: booking.items.length,
           source: 'roller_webhook_enrichment',
@@ -964,6 +1205,7 @@ async function upsertWebhookTicket(rollerUniqueId, bookingItemKey, item, ticket)
       roller_unique_id,
       booking_item_key,
       booking_item_id,
+      roller_customer_id,
       ticket_holder_name_masked,
       locations,
       last_seen_from_roller_at,
@@ -976,6 +1218,7 @@ async function upsertWebhookTicket(rollerUniqueId, bookingItemKey, item, ticket)
       :rollerUniqueId,
       :bookingItemKey,
       :bookingItemId,
+      :rollerCustomerId,
       NULL,
       CAST(:locations AS jsonb),
       now(),
@@ -987,6 +1230,7 @@ async function upsertWebhookTicket(rollerUniqueId, bookingItemKey, item, ticket)
       roller_unique_id = EXCLUDED.roller_unique_id,
       booking_item_key = EXCLUDED.booking_item_key,
       booking_item_id = EXCLUDED.booking_item_id,
+      roller_customer_id = COALESCE(EXCLUDED.roller_customer_id, jumpyard.roller_booking_tickets.roller_customer_id),
       locations = EXCLUDED.locations,
       last_seen_from_roller_at = now(),
       product_id = EXCLUDED.product_id,
@@ -998,6 +1242,7 @@ async function upsertWebhookTicket(rollerUniqueId, bookingItemKey, item, ticket)
       stringParameter('rollerUniqueId', rollerUniqueId),
       stringParameter('bookingItemKey', bookingItemKey),
       stringParameter('bookingItemId', item.bookingItemId),
+      stringParameter('rollerCustomerId', ticket.customerId),
       stringParameter('locations', JSON.stringify(Array.isArray(ticket.locations) ? ticket.locations : [])),
       stringParameter('productId', item.productId),
       stringParameter('bookingDate', item.bookingDate),
@@ -1009,6 +1254,77 @@ async function upsertWebhookTicket(rollerUniqueId, bookingItemKey, item, ticket)
       ),
     ],
   );
+}
+
+async function upsertWebhookGuestProfile(booking) {
+  const profile = booking?.guestProfile;
+  if (!profile?.guestProfileId) {
+    return { updated: false, namePresent: false, contactPresent: false };
+  }
+
+  const result = await executeStatement(
+    `INSERT INTO jumpyard.guest_profiles (
+      guest_profile_id,
+      roller_customer_id,
+      email,
+      email_hash,
+      email_masked,
+      contact_number,
+      contact_number_hash,
+      contact_number_masked,
+      sms_ready,
+      contact_source,
+      latest_booking_context,
+      last_seen_from_roller_at
+    )
+    VALUES (
+      :guestProfileId,
+      :rollerCustomerId,
+      :email,
+      :emailHash,
+      :emailMasked,
+      :contactNumber,
+      :contactNumberHash,
+      :contactNumberMasked,
+      :smsReady,
+      :contactSource,
+      CAST(:latestBookingContext AS jsonb),
+      now()
+    )
+    ON CONFLICT (guest_profile_id) DO UPDATE SET
+      roller_customer_id = COALESCE(EXCLUDED.roller_customer_id, jumpyard.guest_profiles.roller_customer_id),
+      email = COALESCE(EXCLUDED.email, jumpyard.guest_profiles.email),
+      email_hash = COALESCE(EXCLUDED.email_hash, jumpyard.guest_profiles.email_hash),
+      email_masked = COALESCE(EXCLUDED.email_masked, jumpyard.guest_profiles.email_masked),
+      contact_number = COALESCE(EXCLUDED.contact_number, jumpyard.guest_profiles.contact_number),
+      contact_number_hash = COALESCE(EXCLUDED.contact_number_hash, jumpyard.guest_profiles.contact_number_hash),
+      contact_number_masked = COALESCE(EXCLUDED.contact_number_masked, jumpyard.guest_profiles.contact_number_masked),
+      sms_ready = jumpyard.guest_profiles.sms_ready OR EXCLUDED.sms_ready,
+      contact_source = EXCLUDED.contact_source,
+      latest_booking_context = jumpyard.guest_profiles.latest_booking_context || EXCLUDED.latest_booking_context,
+      last_seen_from_roller_at = EXCLUDED.last_seen_from_roller_at,
+      updated_at = now()
+    RETURNING guest_profile_id`,
+    [
+      stringParameter('guestProfileId', profile.guestProfileId),
+      stringParameter('rollerCustomerId', profile.rollerCustomerId),
+      stringParameter('email', profile.email),
+      stringParameter('emailHash', profile.emailHash),
+      stringParameter('emailMasked', profile.emailMasked),
+      stringParameter('contactNumber', profile.contactNumber),
+      stringParameter('contactNumberHash', profile.contactNumberHash),
+      stringParameter('contactNumberMasked', profile.contactNumberMasked),
+      { name: 'smsReady', value: { booleanValue: Boolean(profile.smsReady) } },
+      stringParameter('contactSource', SOURCE_WEBHOOK_GUEST_PROFILE),
+      stringParameter('latestBookingContext', JSON.stringify(profile.latestBookingContext)),
+    ],
+  );
+
+  return {
+    updated: (result.records?.length ?? 0) > 0,
+    namePresent: Boolean(profile.firstName || profile.lastName),
+    contactPresent: Boolean(profile.email || profile.contactNumber),
+  };
 }
 
 async function reconcilePrepaymentDraftFromPaidBooking(booking, source) {
@@ -1232,6 +1548,30 @@ function currencyToCents(value) {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : null;
 }
 
+function normalizeEmail(value) {
+  const email = stringOrNull(value)?.trim().toLowerCase();
+  return email && email.includes('@') ? email : null;
+}
+
+function normalizePhone(value) {
+  const phone = stringOrNull(value)?.replace(/[^\d+]/g, '');
+  return phone || null;
+}
+
+function maskEmail(email) {
+  if (!email) return null;
+  const [name, domain] = String(email).split('@');
+  if (!name || !domain) return '***';
+  return `${name.slice(0, 2)}***@${domain.slice(0, 1)}***`;
+}
+
+function maskPhone(phone) {
+  if (!phone) return null;
+  const value = String(phone);
+  if (value.length <= 4) return '****';
+  return `${value.slice(0, 3)}*****${value.slice(-4)}`;
+}
+
 function minOrNull(values) {
   const sorted = values.filter(Boolean).sort();
   return sorted[0] ?? null;
@@ -1248,6 +1588,12 @@ function hashJson(value) {
 
 function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function compactObject(value) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== null && entry !== undefined && entry !== ''),
+  );
 }
 
 function hashString(value) {

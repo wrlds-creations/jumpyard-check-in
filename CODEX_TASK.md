@@ -1,15 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0087
+T0088
 
 ## Goal
-Prepare the staff/admin app for Cloudflare Pages deployment and make the dev JumpYard Cloud API ready to accept the intended admin Pages origin.
+Add real-time guest-name enrichment for Roller webhook-created/updated bookings so staff-admin can show and search guest names before the daily Data API customer import has run.
 
 ## Dependencies
-- T0086 completed and merged.
-- Staff/admin app already builds as a static Next export.
-- JumpYard Cloud dev API is the only backend target for the admin app.
+- T0087 completed and merged.
+- Roller booking webhook enrichment already fetches `GET /bookings/{identifier}`.
+- Official Roller Rest API docs confirm read-only `GET /guests/{guestId}` where `guestId` is formerly/equivalent to `customerId`.
+- T0083 staff-admin identity/search already reads names from `jumpyard.guest_profiles.latest_booking_context`.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,17 +20,15 @@ Prepare the staff/admin app for Cloudflare Pages deployment and make the dev Jum
 - FOLLOWUPS.md
 - AWS_RESOURCES.md
 - TEST_PLAN.md
-- infra/config/dev.json
-- infra/config/dev.example.json
-- jumpyard-checkin-admin/README.md
-- jumpyard-checkin-admin/public/_headers
+- infra/lambda/webhook/index.js
 
 ## Do not touch
 - Staff/admin UI behavior
 - Guest phone UI behavior
-- JumpYard Cloud Lambda code
+- Other JumpYard Cloud Lambda code
 - Aurora migrations
-- Roller API paths
+- Data API importer behavior
+- Roller write API paths
 - Payment behavior
 - SMS/email behavior
 - Package dependencies
@@ -41,61 +40,70 @@ Prepare the staff/admin app for Cloudflare Pages deployment and make the dev Jum
 
 ## Requirements
 
-1. Define the intended public admin Cloudflare Pages origin:
-   - `https://jumpyard-checkin-admin.pages.dev`
-   - document that a different Cloudflare project name requires a matching CORS config update
+1. Extend webhook booking-detail normalization to extract structured guest identity when Roller returns it:
+   - Roller customer id
+   - first name
+   - last name
+   - email
+   - phone/contact number
 
-2. Prepare admin Cloudflare Pages deployment docs:
-   - Cloudflare project name
-   - repository and root directory
-   - build command
-   - output directory
-   - required public environment variable
-   - smoke checks for login, queue, search/QR, detail, and redeem
+2. If booking detail only returns a Roller customer/guest id, use one safe read-only fallback:
+   - call `GET /guests/{guestId}` once
+   - only for Playground webhook enrichment
+   - only when booking detail lacks first/last/contact data
+   - never print raw names, emails, or phone numbers
 
-3. Prepare dev API CORS config for the admin Pages origin:
-   - add the admin origin to `infra/config/dev.json`
-   - keep local admin origins
-   - keep the guest phone Pages origin
-   - update the example config consistently
+3. Upsert webhook-derived guest identity into `jumpyard.guest_profiles`:
+   - use `roller_customer:<id>` when a Roller customer id is present
+   - fall back to existing contact-hash profile id only when email or phone exists
+   - store first/last name in `latest_booking_context`
+   - keep email/phone masking and hashing consistent with existing import behavior
+   - never print raw names, emails, or phone numbers in Lambda responses or validation output
 
-4. Add Cloudflare Pages static headers for the admin app:
-   - no secrets
-   - security headers suitable for a static staff app
-   - allow browser API calls to JumpYard Cloud dev API
+4. Connect webhook-enriched bookings/tickets to guest profiles:
+   - include `bookingCustomerId` in the booking normalized summary when available
+   - write `roller_customer_id` to webhook-enriched ticket rows when available
+   - preserve existing Data API importer behavior
 
-5. Document deployment constraints:
-   - no Cloudflare account credentials or API token are stored in the repo
-   - admin staff auth remains server-owned through JumpYard Cloud
-   - AWS CORS deploy is required before the public admin URL can call staff APIs
+5. Keep webhook behavior safe:
+   - do not call any Roller write endpoint
+   - keep the existing `GET /bookings/{identifier}` enrichment path
+   - use only the documented read-only `GET /guests/{guestId}` fallback when needed
+   - do not change webhook registration
+   - do not add new Aurora migrations
+
+6. Document the T0088 behavior, validation, and remaining limitations.
 
 ## Non-goals
-- Do not create a Cloudflare project from code unless Cloudflare credentials are already available.
-- Do not deploy AWS unless the AWS profile is authenticated and the diff is reviewed.
-- Do not change staff auth, queue, QR scanner, detail, or redeem behavior.
-- Do not add production/staging domains.
+- Do not change staff/admin UI.
+- Do not change phone UI.
+- Do not add new Roller Data API imports.
+- Do not create a guest-name lookup button or admin manual refresh.
+- Do not store raw Roller payloads.
+- Do not expose full email or phone in public guest UI.
+- Do not create staging/live resources.
 - Do not enable guest messaging production unlock.
-- Do not implement real-time guest-name enrichment; that stays in T0088.
+- Do not change SMS/email sending behavior.
 
 ## Acceptance criteria
-- Admin app has documented Cloudflare Pages settings.
-- Intended admin Pages origin is present in dev CORS config.
-- Admin static export includes Cloudflare headers.
-- Admin app builds.
+- Webhook enrichment can update `guest_profiles` from Roller booking detail customer fields.
+- Webhook enrichment can update `guest_profiles` from documented Roller guest detail when booking detail only has a customer/guest id.
+- Webhook-enriched booking summaries include `bookingCustomerId` when available.
+- Webhook-enriched tickets include `roller_customer_id` when available.
+- Lambda response and logs expose only safe booleans/statuses for guest enrichment.
+- No staff/admin UI, phone UI, payment, SMS/email, package, asset, or production config behavior changes.
 - Root validation passes.
-- No backend Lambda, Aurora, Roller, payment, SMS/email, package, asset, or production config behavior changes.
 
 ## Manual verification
-After Cloudflare Pages is connected and AWS CORS is deployed, open the admin Pages URL and confirm:
-- staff login works
-- ready queue loads
-- search/QR opens a handoff
-- handoff detail loads
-- staff redeem works on a dedicated Playground test booking
+Trigger a safe Roller Playground booking webhook enrichment for a booking with customer first/last name. Confirm:
+- webhook response reports guest profile status without raw PII
+- `jumpyard.guest_profiles.latest_booking_context` contains first/last name
+- `jumpyard.roller_bookings.normalized_summary` contains `bookingCustomerId`
+- staff search can find the handoff by stored name after the booking is ready for staff
 
 ## Automated validation
 Run:
-- npm --prefix jumpyard-checkin-admin run build
+- node --check infra/lambda/webhook/index.js
 - npm --prefix infra run synth:dev
 - npm run validate
 - git diff --check
