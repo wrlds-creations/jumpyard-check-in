@@ -26,6 +26,16 @@ T0087 staff/admin Cloudflare readiness notes:
 - Public admin smoke: `https://jumpyard-checkin-admin.pages.dev` logged in through JumpYard Cloud, loaded the ready queue, opened booking `5100992`/handoff `JY9056`, completed staff redeem, returned to queue count `0`, and opened QR scanner mode.
 - Secrets: Cloudflare credentials, staff passcode, and JumpYard Cloud secrets are not stored in the repository; staff auth remains server-owned through JumpYard Cloud.
 
+T0088 real-time guest-name enrichment notes:
+
+- AWS resources changed: existing webhook Lambda code only.
+- Changed resource: `WebhookHandler`.
+- Behavior: webhook enrichment still reads Roller Playground booking detail first, then uses documented read-only `GET /guests/{guestId}` only when booking detail has a customer/guest id but lacks first/last/contact data.
+- Data written: existing Aurora tables only; `jumpyard.guest_profiles` may receive Roller customer id, masked/hashed email and phone, and first/last name inside `latest_booking_context`; `jumpyard.roller_bookings.normalized_summary` includes `bookingCustomerId`; `jumpyard.roller_booking_tickets.roller_customer_id` can be set.
+- Safety: Lambda responses and validation output expose only status/boolean fields for guest enrichment and do not print raw names, emails, phone numbers, Roller tokens, or secrets.
+- Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-06-02; pre-deploy diff showed only `WebhookHandler` Lambda code.
+- Dev smoke: safe webhook event for booking `5100965` returned `guestDetailStatus=available` and `guestNamePresent=true`; Aurora readback booleans confirmed booking customer id, guest profile, first/last context, email, and phone were present without raw PII output.
+
 T0059 redeem eligibility notes:
 
 - AWS resources changed: existing Lambda code only.

@@ -1036,6 +1036,19 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth files should validate after T0087 docs updates. | Passed | `npm run validate` passed. |
 | Diff whitespace | Diff whitespace check should pass. | Passed with CRLF notices | `git diff --check` passed; output contains Git line-ending notices only. |
 
+## T0088 Real-Time Guest-Name Enrichment
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Official endpoint verification | Guest detail endpoint should be documented before implementation. | Passed | Official Roller docs page `Get guest detail` confirms read-only `GET /guests/{guestId}` and notes `guestId` is formerly/equivalent to `customerId`. |
+| Lambda syntax | Webhook Lambda should parse after enrichment changes. | Passed | `node --check infra/lambda/webhook/index.js` passed. |
+| Infra synth | Dev stack should synthesize after webhook code changes. | Passed | `npm --prefix infra run synth:dev` passed. |
+| CDK diff guard | Deploy should only update webhook Lambda code. | Passed | `npm --prefix infra run diff:dev` showed only `WebhookHandler` Lambda code S3 key changed. |
+| Dev deploy | Webhook enrichment change should be deployed to dev. | Passed | `npm --prefix infra run deploy:dev` passed on 2026-06-02. |
+| Webhook smoke | Webhook should enrich a booking through booking detail plus guest-detail fallback. | Passed | Safe event for booking `5100965` returned `status=accepted`, `enrichmentStatus=processed`, `guestDetailStatus=available`, and `guestNamePresent=true` without raw PII output. |
+| Aurora readback | Aurora should show linked guest identity state without printing PII. | Passed | Boolean-only query confirmed booking customer id, booking name flag, guest profile, first/last context, email, and phone were present. |
+| Scope guard | T0088 should not change UI, migrations, SMS/email, payment, packages, assets, or Roller writes. | Passed | T0088 changes are limited to docs and `infra/lambda/webhook/index.js`; Roller calls are read-only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

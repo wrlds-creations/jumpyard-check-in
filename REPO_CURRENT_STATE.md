@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-02
-- Current branch: `codex/t0087-staff-admin-cloudflare`
-- Current status: T0087 completed locally. Admin Cloudflare Pages settings are documented, admin static headers are added, dev API CORS source config includes the confirmed admin origin `https://jumpyard-checkin-admin.pages.dev`, AWS API Gateway preflight allows that origin, and public staff login/queue/detail/redeem smoke passed from the public URL.
-- Current ticket: `T0087` completed locally, pending review/merge.
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`
-- Recommended next step: review/merge T0087, then start T0088 real-time guest-name enrichment.
+- Current branch: `codex/t0088-realtime-guest-name-enrichment`
+- Current status: T0088 completed locally. Webhook enrichment now starts with Roller booking detail and uses the documented read-only `GET /guests/{guestId}` fallback only when booking detail has a customer/guest id but lacks first/last/contact fields. Dev deploy and safe webhook smoke for booking `5100965` passed without raw PII output.
+- Current ticket: `T0088` completed locally, pending review/merge.
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`
+- Recommended next step: review/merge T0088, then start T0089 guest messaging production unlock.
 
 ## Current Structure
 
@@ -219,24 +219,29 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0084` | Rebuilt staff handoff one-page queue/detail UX. | 2026-06-02 | Staff/admin now defaults to search/QR plus queue, opens a compact selected handoff summary with products to hand out, and removed the guest backup-code box as a pulled-forward UI fix. |
 | `T0085` | Polished staff redeem confirmation. | 2026-06-02 | Successful staff redeem now shows a large green confirmation and waits for staff to choose `Tillbaka till kön` or `Scanna ny QR`; merged through PR #86. |
 | `T0086` | Guest/admin UI polish pass. | 2026-06-02 | Phone/admin UI only: removed leftover backup-code labels/text from phone source, changed the legacy present-code label to staff/personalkod, removed unused font-stretch helpers from phone/admin globals, and kept flow behavior unchanged; merged through PR #87. |
+| `T0087` | Staff admin Cloudflare deployment. | 2026-06-02 | Admin Pages settings are documented for `jumpyard-checkin-admin`, static Cloudflare headers are added, dev CORS includes `https://jumpyard-checkin-admin.pages.dev`, public staff smoke passed from the Cloudflare URL, and the ticket was merged through PR #88. |
+| `T0088` | Real-time guest-name enrichment. | 2026-06-02 | Webhook enrichment now uses booking detail plus documented read-only `GET /guests/{guestId}` fallback when needed; dev deploy and safe booking `5100965` smoke confirmed guest profile name/contact booleans without raw PII output. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0087` | Staff admin Cloudflare deployment. | Completed locally | Admin Pages settings are documented for `jumpyard-checkin-admin`, static Cloudflare headers are added, dev CORS source config includes `https://jumpyard-checkin-admin.pages.dev`, AWS CORS deploy passed, admin build/synth/root validation/diff check passed, and public staff login/queue/detail/redeem smoke passed from `https://jumpyard-checkin-admin.pages.dev`. |
+| `T0088` | Real-time guest-name enrichment. | Completed locally | Webhook enrichment now updates `guest_profiles`, booking summaries, and ticket customer links from booking detail or the documented guest-detail fallback while keeping responses/logs PII-safe. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0088` | Real-time guest-name enrichment | Investigate and implement the best same-day name path for non-JumpYard-created bookings: webhook-triggered booking detail, customer references, possible REST/Data API fallback, and `guest_profiles` update without exposing raw PII. |
 | `T0089` | Guest messaging production unlock | Resume SES/SNS production unlock, sender/domain setup, SMS sandbox exit planning, and unattended booking-time sends after the core add-product, staff handoff, UI, staff-admin deployment, and real-time name enrichment blockers are fixed. |
 | `T0090` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
 | `T0091` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
 ## Validation Status
 
+- T0088 endpoint verification: official Roller docs page `Get guest detail` confirms `GET /guests/{guestId}` and states `guestId` is formerly/equivalent to `customerId`.
+- T0088 deploy: `node --check infra/lambda/webhook/index.js`, `npm --prefix infra run synth:dev`, pre-deploy `npm --prefix infra run diff:dev`, and `npm --prefix infra run deploy:dev` passed; CDK diff showed only `WebhookHandler` Lambda code.
+- T0088 webhook smoke: safe Playground webhook event for booking `5100965` returned `status=accepted`, `enrichmentStatus=processed`, `guestDetailStatus=available`, and `guestNamePresent=true` without printing raw PII.
+- T0088 Aurora readback: boolean-only query confirmed booking customer id, booking name flag, guest profile, first/last context, email, and phone were present without printing raw PII.
 - T0081 branch setup: branch `codex/t0081-integrated-flow-rehearsal` was created from updated `main` after T0080 was merged through PR #82.
 - T0081 new-booking smoke: public Cloudflare buy-entry flow created paid Playground booking `5100963` for `2026-06-01 14:00`, completed card payment with Adyen Visa ending `1142`, completed safety video and safety rules, and reached ready-for-staff session `jycs_mpv4s30n_b9f8b58c` with handoff `JY7597`.
 - T0081 staff redeem smoke: staff login with the dev passcode returned a short-lived token, staff list/detail found booking `5100963`, and staff-confirmed redeem returned HTTP `200` with Roller status code `200`, redeemed ticket `5100963-21683812`, session status `redeemed`, and handoff status `completed`.
