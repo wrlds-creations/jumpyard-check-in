@@ -101,12 +101,6 @@ export const ConfirmationScreen = ({
                         </div>
                     )}
 
-                    {!completed && handoffCode && (
-                        <div className="mt-3 bg-surface-strong border border-border rounded-lg px-4 py-2">
-                            <p className="text-[10px] text-muted uppercase tracking-widest mb-0.5">{t.confirm.backupLabel}</p>
-                            <p className="text-xl font-black tracking-[0.3em] text-primary font-mono">{handoffCode}</p>
-                        </div>
-                    )}
                 </div>
 
                 {!completed && (
