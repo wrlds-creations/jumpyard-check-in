@@ -44,8 +44,8 @@ export const PresentCode = ({ bookingId, onDone }: PresentCodeProps) => {
             </div>
 
             <div className="bg-surface border border-border rounded-xl px-8 py-3 mb-4">
-                <p className="text-[11px] text-muted uppercase tracking-[0.3em] font-bold italic mb-1">{t.present.backupLabel}</p>
-                <p className="text-3xl font-black tracking-[0.3em] text-primary font-mono">
+                <p className="text-[11px] text-muted uppercase tracking-[0.18em] font-bold italic mb-1">{t.confirm.pickupCode}</p>
+                <p className="text-3xl font-black tracking-[0.18em] text-primary">
                     {shortCode || '----'}
                 </p>
             </div>
