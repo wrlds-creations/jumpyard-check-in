@@ -120,6 +120,58 @@ Not confirmed:
 
 Do not implement multi-visit in T0091. The paid `10-Kort` membership fixture did not appear in `GET /customers/{customerId}/multi-passes` and did not auto-apply in costs. Multi-visit needs Roller/Josh/Joao/Pabel confirmation or a real beta multi-pass fixture.
 
+## T0093 Membership And 10-Kort Code Validation
+
+T0093 tested the likely Nacka membership/code payload without creating bookings, drafts, payments, redemptions, Aurora writes, AWS resources, or UI changes.
+
+Tested payload shape:
+
+```json
+{
+  "items": [
+    {
+      "productId": 1765860,
+      "quantity": 1,
+      "bookingDate": "2026-06-03",
+      "startTime": "10:00"
+    }
+  ],
+  "discounts": [
+    {
+      "code": "<guest-entered code>"
+    }
+  ]
+}
+```
+
+Safe Playground results:
+
+| Check | Result |
+|---|---|
+| Baseline no code | `POST /bookings/draft/costs` returned `total=200`, `amountOwing=200`, `discount=0`, and `multiPassAllocations.allocations=[]`. |
+| Invalid discount code | Roller returned HTTP `200`, kept `amountOwing=200`, returned `discount=0`, and still echoed a discount row. This means JumpYard must not treat the presence of a discount row as proof that a code applied. |
+| Paid `10-Kort` booking reference, booking unique id, and booking item id | These candidate values had no effect: `amountOwing=200`, `discount=0`, and no multi-pass allocation. |
+| Paid `10-Kort` ticket id | The masked ticket id from paid `10-Kort` booking `5101046` applied as a 100% discount through `discounts: [{ code }]`: one `200 kr` entry became `amountOwing=0`, `discount=200`. |
+| Paid `10-Kort` ticket id with quantity `2` | The same code also discounted two entry tickets from `400 kr` to `amountOwing=0`, `discount=400`. Roller returned this as a normal discount, not as `multiPassAllocations`. |
+| Normal paid entry ticket id comparison | A normal paid entry ticket id from booking `5100965` did not discount the quote. This suggests the successful `10-Kort` behavior is not generic "any ticket id works". |
+
+Important interpretation:
+
+- The current Nacka `10-Kort` fixture appears usable as a Roller discount-code style checkout input when the guest enters the membership/ticket code.
+- Roller did not return any remaining-visit balance or `multiPassAllocations` for this fixture.
+- Roller treated the accepted code as `percentOff=100`, `isLoyaltyDiscount=false`, and a normal discount response.
+- The API costs response does not clearly show whether a future draft/published booking consumes one visit, all covered sessions, or only validates the code at checkout time.
+- Because quantity `2` was fully discounted, JumpYard should ask Roller whether this is intended for Nacka `10-Kort` and whether draft/publish/payment enforces exhaustion and usage.
+
+V1 recommendation:
+
+- Implement membership/`10-Kort` only as code validation, not as balance display.
+- Send the guest-entered code to Roller as `discounts: [{ code }]` in quote and draft payloads.
+- Treat a code as accepted only when Roller reduces `amountOwing` or returns a positive discount amount.
+- Treat no amount reduction as rejected/no effect, even if Roller echoes a discount row.
+- Do not show "X visits remaining" in V1.
+- Before writing a real draft/booking with a `10-Kort` code, run a guarded Playground smoke with explicit user approval because it may consume or reserve use of the pass.
+
 ## Questions For Roller/Josh/Joao/Pabel
 
 1. What is the supported API flow for applying a guest's existing multi-visit pass/10-card to a new booking?

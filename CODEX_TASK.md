@@ -80,3 +80,45 @@ If user-provided membership or multi-visit codes are needed, handle them as sens
 Run:
 - npm run validate
 - git diff --check
+
+## T0093 Result
+
+T0093 completed with only safe Roller Playground `POST /bookings/draft/costs` calls. No bookings, drafts, payments, redemptions, Aurora rows, AWS resources, app UI, Lambda code, assets, production credentials, or `.env` were changed.
+
+Exact tested payload shape:
+
+```json
+{
+  "discounts": [
+    {
+      "code": "<guest-entered membership or 10-Kort code>"
+    }
+  ]
+}
+```
+
+Confirmed:
+
+- Baseline entry quote for product `1765860`, `2026-06-03 10:00`, quantity `1` returned `total=200`, `amountOwing=200`, `discount=0`, and empty `multiPassAllocations`.
+- Invalid code returned HTTP `200` but no amount reduction.
+- Paid `10-Kort` booking reference, unique id, and booking item id returned no amount reduction.
+- A normal paid entry ticket id returned no amount reduction.
+- The masked paid `10-Kort` ticket id from booking `5101046` reduced one `200 kr` entry to `amountOwing=0` and `discount=200`.
+- The same masked `10-Kort` ticket id reduced quantity `2` from `400 kr` to `amountOwing=0` and `discount=400`.
+- Roller returned the accepted code as a normal `percentOff=100` discount with empty `multiPassAllocations`, not as a balance-aware multi-pass allocation.
+
+Conclusion:
+
+V1 can support membership/`10-Kort` as code validation only. It must not show remaining visits. A code should be treated as accepted only when Roller reduces `amountOwing` or returns a positive discount amount; an echoed discount row alone is not enough.
+
+## Recommended Next Ticket
+
+`T0094`: Implement membership/`10-Kort` code validation in the buy-entry checkout.
+
+Scope:
+
+- Add one optional membership/`10-Kort` code input only if it fits the existing checkout UX.
+- Send the code as `discounts: [{ code }]` to JumpYard Cloud quote/draft payloads.
+- Display accepted, rejected/no-effect, and no-balance states clearly.
+- Do not display remaining visit balance.
+- Ask before any guarded Playground write smoke because creating/publishing a booking with the code may consume or reserve a pass use.
