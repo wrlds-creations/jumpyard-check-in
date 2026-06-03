@@ -113,6 +113,10 @@ T0091 implements the confirmed gift-card path for buy-entry checkout. Gift cards
 
 T0091 was deployed to the dev booking Lambda on 2026-06-02 with a clean CDK diff limited to `BookingHandler` code. Direct JumpYard Cloud API smoke passed for invalid gift-card quote, partial `100 kr` gift-card quote, and full `500 kr` gift-card no-payment draft publish; the full smoke created Roller Playground booking `5101055` and stored the local prepayment draft as `published`. Public phone-flow proof is deferred to T0092 after the phone UI changes are committed, merged, and published by Cloudflare.
 
+T0092 first found that the public phone app at `https://jumpyard-check-in.pages.dev` still served a bundle without the T0091 gift-card UI after PR #93 merged. After Cloudflare was updated on 2026-06-03, the public phone app exposed the optional `Presentkort` field. Public smokes confirmed: invalid gift card shows a safe Roller error and blocks continuation; a partial `100 kr` gift card reduces a `200 kr` booking to `100 kr` and renders card payment for the remainder; a full-cover gift card reduces a `200 kr` booking to `0 kr` and continues directly into the safety/check-in flow without card payment; and a normal card-only flow still renders card payment for `200 kr`. The full-cover smoke created Roller Playground booking `5101070`; JumpYard Cloud lookup returned it from `aurora:booking_reference` as fresh, paid, amount owing `0`, with one redeemable ticket. Direct Aurora CLI readback was not run because local AWS SSO had expired.
+
+T0093 is planned as a validation ticket for membership and multi-visit codes. The target is to test whether Nacka `10-Kort`/membership/multi-visit codes can be sent as `discounts: [{ code }]` or another Roller-supported Booking Costs/Create Draft Booking field, letting Roller accept or reject the code. T0093 must not display or promise remaining visit balance unless Roller provides a proven public API fixture for that behavior.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
