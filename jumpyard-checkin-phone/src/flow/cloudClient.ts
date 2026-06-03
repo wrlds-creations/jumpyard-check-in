@@ -174,9 +174,28 @@ export interface NewBookingItemRequest {
   startTime: string;
 }
 
+export interface NewBookingGiftCardInput {
+  giftCardNumber: string;
+}
+
+export interface CloudGiftCardSummary {
+  requestedCount: number;
+  appliedCount: number;
+  totalApplied: number | null;
+  applied: Array<{
+    amountDeducted: number | null;
+    maskedNumber: string | null;
+  }>;
+  errors: Array<{
+    code: string | null;
+    message: string;
+  }>;
+}
+
 export interface NewBookingQuote {
   externalId: string | null;
   costs: CloudBookingCosts;
+  giftCards?: CloudGiftCardSummary;
   itemCount: number;
   expiresAt: string | null;
 }
@@ -187,6 +206,7 @@ export interface NewBookingDraftResult {
     capacityReservationId: string | null;
     bookingReference: string | null;
     costs: CloudBookingCosts;
+    giftCards?: CloudGiftCardSummary;
     itemCount: number;
   };
   paymentSession: {
@@ -504,7 +524,8 @@ export async function getNewBookingAvailability(startTimes: string[], date = get
 export async function quoteNewBooking(
   customer: NewBookingCustomer,
   items: NewBookingItemRequest[],
-  requireAvailability = true
+  requireAvailability = true,
+  giftCards: NewBookingGiftCardInput[] = []
 ): Promise<NewBookingQuote> {
   let response: Response;
   let body: QuoteResponse | null = null;
@@ -518,6 +539,7 @@ export async function quoteNewBooking(
       body: JSON.stringify({
         correlationId: `phone_quote_${Date.now().toString(36)}`,
         customer,
+        giftCards,
         items,
         name: `${customer.firstName} ${customer.lastName}`.trim() || 'JumpYard booking',
         requireAvailability,
@@ -540,7 +562,8 @@ export async function createDraftBooking(
   customer: NewBookingCustomer,
   items: NewBookingItemRequest[],
   idempotencyKey: string,
-  requireAvailability = true
+  requireAvailability = true,
+  giftCards: NewBookingGiftCardInput[] = []
 ): Promise<NewBookingDraftResult> {
   let response: Response;
   let body: DraftResponse | null = null;
@@ -556,6 +579,7 @@ export async function createDraftBooking(
         confirmDraft: true,
         correlationId: `phone_draft_${Date.now().toString(36)}`,
         customer,
+        giftCards,
         idempotencyKey,
         items,
         name: `${customer.firstName} ${customer.lastName}`.trim() || 'JumpYard booking',

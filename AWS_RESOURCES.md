@@ -46,6 +46,17 @@ T0089 guest messaging production unlock notes:
 - Source-of-truth unlock document: `GUEST_MESSAGING_PRODUCTION_UNLOCK.md`.
 - Safety state: dev scheduled due-message processing remains planning-only with `confirmSend=false`; controlled manual smokes remain possible only within current sandbox limitations.
 
+T0091 gift-card checkout notes:
+
+- AWS resources changed: existing booking Lambda code only.
+- Changed resource: `BookingHandler`.
+- Behavior: `POST /v1/bookings/quote` and `POST /v1/bookings/draft` now accept optional `giftCards: [{ giftCardNumber }]`, forward them to Roller Playground Booking Costs/Create Draft Booking, return safe applied/error metadata, and redact gift-card numbers from logs/errors.
+- Full gift-card behavior: when Roller returns `amountOwing=0` for a gift-card-backed draft, the booking Lambda calls Roller `POST /bookings/draft/publish` and persists the local prepayment draft as `published`; if publish fails, the flow fails closed.
+- Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-06-02; pre-deploy diff showed only `BookingHandler` Lambda code and post-deploy diff showed no differences.
+- Dev smoke: invalid gift-card quote returned `giftCardErrorCount=1` with `amountOwing=200`; partial gift-card quote using the masked `100 kr` fixture reduced `amountOwing` to `100`; full gift-card quote using the masked `500 kr` fixture reduced `amountOwing` to `0`.
+- No-payment smoke: full gift-card draft created Roller Playground booking `5101055`, returned `amountOwing=0`, and Aurora shows the local prepayment draft as `published` with `total_cents=20000` and `amount_owing_cents=0`.
+- Safety: full gift-card numbers, Roller credentials, access tokens, and payment JWT values were not printed in validation output or documentation.
+
 T0059 redeem eligibility notes:
 
 - AWS resources changed: existing Lambda code only.

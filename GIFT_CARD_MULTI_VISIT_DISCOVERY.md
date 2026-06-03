@@ -160,3 +160,26 @@ Defer membership/multi-visit code UX to a separate validation ticket. The likely
 ## Current Decision
 
 T0091 should implement gift-card support only after a valid Playground gift-card number is available. Multi-visit remains discovery/clarification-only until Roller confirms the API model.
+
+## T0091 Implementation Note
+
+T0091 implements only the confirmed gift-card path:
+
+- The phone buy-entry flow accepts one optional gift-card number before quote/draft creation.
+- JumpYard Cloud forwards `giftCards: [{ giftCardNumber }]` to Roller Booking Costs/Create Draft Booking.
+- JumpYard Cloud returns safe gift-card metadata: requested count, applied count, applied amount when available/inferable, masked number when Roller returns one, and redacted errors.
+- JumpYard Cloud does not log, persist, or return full gift-card numbers after submission.
+- Invalid gift-card errors block draft creation until the guest removes or fixes the number.
+- Partial gift-card coverage continues to Roller/Adyen payment for the remaining `amountOwing`.
+- Full gift-card coverage calls Roller `POST /bookings/draft/publish` server-side when `amountOwing=0`, then the phone flow tries to sync the published booking through normal JumpYard Cloud lookup.
+- If no-payment publish fails, JumpYard Cloud fails closed and does not show a misleading paid state.
+
+T0091 still does not implement gift-card administration, `/data/giftcards` import, multi-visit balance display, membership-code payloads, or Payment Link behavior.
+
+Dev deploy and direct API smoke passed on 2026-06-02:
+
+- Invalid gift-card quote returned one safe error and kept `amountOwing=200`.
+- The active `100 kr` fixture reduced a `200 kr` quote to `amountOwing=100`.
+- The active `500 kr` fixture reduced a `200 kr` quote to `amountOwing=0`.
+- Full gift-card draft publish created Roller Playground booking `5101055` and stored the local prepayment draft as `published`.
+- Public phone-flow smoke remains T0092 because the phone UI must be committed, merged, and published by Cloudflare first.
