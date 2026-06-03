@@ -1094,6 +1094,21 @@ Use this file to define validation for the current project or milestone.
 | Membership balance/allocation display | V1 should not display remaining visits unless public API data proves it. | Blocked by API data | The accepted `10-Kort` code returned `multiPassAllocations.allocations=[]`; `GET /customers/{customerId}/multi-passes` still returned zero balances for the paid `10-Kort` customer. |
 | Multi-visit checkout smoke | A multi-visit case should flow through phone checkout, Aurora state, Roller state, check-in session, and staff redeem/eligibility without consuming the wrong ticket. | Deferred | Do not implement until Roller confirms API auto-apply behavior or provides a fixture; if relevant, RedemptionDetail should include expected `multiPass` proof after use/redeem. |
 
+## T0095 Integrated Regression Rehearsal
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Public phone app load | Public phone app should load from Cloudflare Pages. | Passed | `https://jumpyard-check-in.pages.dev/?codexSmoke=t0095-giftcard-field` loaded the buy-entry start screen with `Jag har en bokning` and `Köp entré`. |
+| Buy-entry availability | Selecting a current time should load real product availability before product selection. | Passed | Public flow selected `14:30`; product step showed live remaining capacity such as `165 platser kvar` for jump-entry products. |
+| Card-only payment surface | A normal no-gift-card checkout should still reach Roller/Adyen payment. | Passed | Existing public card-only payment URL showed `Kortbetalning`, `Delbetalning`, `Google Pay`, and `Swish` for `200 kr`. No payment was submitted in T0095. |
+| Gift-card input | Buy-entry checkout should still expose optional gift-card entry. | Passed | Public contact step showed `Presentkort` with help text before quote/draft creation. |
+| Invalid gift-card blocking | Invalid gift-card value should show a safe error and block payment continuation. | Passed | Public flow with a clearly invalid test value showed `Gift card could not be applied.`, kept total `200 kr`, and rendered `Gå till betalning` disabled. |
+| Public staff/admin load | Public staff/admin app should load from Cloudflare Pages. | Passed | `https://jumpyard-checkin-admin.pages.dev/?codexSmoke=t0095-admin` loaded `JumpYard Check-in Personalhandoff`. |
+| Staff/admin login and queue | Staff login should reach the operational queue without redeeming. | Passed | Logged in with the current dev staff code, reached `Sök`, `Skanna QR`, and `Kö`; queue was reachable and empty with `Inga handovers väntar.` |
+| Destructive operations | T0095 should not create paid bookings, publish drafts, send messages, or redeem tickets. | Passed | No payment submission, no draft creation beyond quote/review progression, no SMS/email send, and no staff redeem were intentionally run. |
+| Root validation | Source-of-truth files should validate after T0095 docs updates. | Passed | `npm run validate` passed on 2026-06-03. |
+| Diff whitespace | T0095 docs should pass whitespace validation. | Passed with CRLF notices | `git diff --check` passed on 2026-06-03; output contained Git line-ending notices only. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |
