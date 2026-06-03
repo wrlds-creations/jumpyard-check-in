@@ -1109,6 +1109,23 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth files should validate after T0095 docs updates. | Passed | `npm run validate` passed on 2026-06-03. |
 | Diff whitespace | T0095 docs should pass whitespace validation. | Passed with CRLF notices | `git diff --check` passed on 2026-06-03; output contained Git line-ending notices only. |
 
+## T0096 Controlled Full Write/Redeem Rehearsal
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Public buy-entry booking | Public phone app should create exactly one dedicated normal buy-entry booking. | Passed | Public flow created booking `5101105` for `2026-06-03 14:30`, one `60 min entre`, no gift card, no membership/`10-Kort`, and safe test guest data. |
+| Public payment | Payment should complete through the public allowlisted Playground payment flow. | Passed with method substitution | Roller/Adyen card fields rendered, but the in-app browser cannot type into cross-origin Adyen iframes. Swish was selected in the same payment package instead and completed the `200 kr` payment. |
+| Roller/Data API readback | Paid booking should be visible from Roller Playground read APIs. | Passed | Local read-only Roller Data API `/data/bookingitems` for `2026-06-03 -> 2026-06-04` found booking `5101105` as `Paid`, `Api`, one item, product id `1765860`, created and modified on `2026-06-03`. |
+| Aurora-backed lookup | JumpYard Cloud lookup should find the paid booking from server state. | Passed | `POST /v1/check-in/lookup` returned `found`, eligibility `ready`, `source.system=jumpyard_cloud`, `freshnessStatus=fresh`, and `refreshedFromRoller=false`. |
+| Phone continuation | Paid booking should continue into the check-in/safety flow. | Passed to safety step | After successful payment, the public phone app showed `Betalning lyckades`, fetched the booking, and routed to `Sakerhetsvideo`. |
+| Browser safety automation | Automated browser should complete the safety video if possible. | Blocked by browser automation | The video was loaded, but the in-app browser could not start/complete the HTML5 video or dispatch an `ended` event from this runtime. This is recorded as an automation limitation, not an app-code change request. |
+| Ready-for-staff state | The same booking should become ready for staff with completed safety status. | Passed through server route | Because the browser could not finish the video, the same public guest session API was used to mark session `jycs_mpy1x4ne_910af158` ready for staff with safety status `completed`; handoff code `JY5397`. |
+| Staff queue/detail | Staff/admin should see the ready handoff before redeem. | Passed through staff API | Staff-authenticated list/detail found booking `5101105`, session `jycs_mpy1x4ne_910af158`, status `ready_for_staff`, handoff status `ready_for_staff`. |
+| Staff-confirmed redeem | The dedicated handoff should be redeemed once. | Passed | Staff-confirmed redeem returned `redeemed` and consumed one ticket for the dedicated booking only. |
+| Public admin readback | Public staff/admin app should no longer show the completed handoff in queue. | Passed | Public admin loaded at `https://jumpyard-checkin-admin.pages.dev/?codexSmoke=t0096-admin-after-redeem`; queue count was `0` with `Inga handovers vantar.` |
+| Queue after redeem | Completed handoff should no longer appear in staff list/search. | Passed | Staff API search for booking `5101105` after redeem returned `stillQueued=false`. |
+| Scope guard | T0096 should not change app/source behavior or create unrelated writes. | Passed | Only one dedicated Playground booking/payment/redeem was created for this rehearsal; no app code, Lambda code, CDK resources, migrations, assets, deliverables, secrets, `.env`, SMS, or email behavior changed. |
+
 ## T0053 New-Booking Basket Before Payment Validation
 
 | Scenario | Expected Result | Status | Notes |

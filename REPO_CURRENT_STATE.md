@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-03
-- Current branch: `codex/t0095-integrated-regression-rehearsal`
-- Current status: T0095 completed in working tree. Public non-destructive regression passed for phone load, buy-entry availability, card-only payment surface, gift-card input, invalid gift-card blocking, public staff/admin load, and staff/admin login plus queue access. T0094 membership/`10-Kort` implementation remains parked until JumpYard/Roller confirms the intended pass/code model.
-- Current ticket: `T0096` recommended next; run a controlled full write/redeem rehearsal with explicit approval before any destructive payment or staff redeem actions.
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`
-- Recommended next step: start T0096 controlled full integrated write/redeem rehearsal. Scope should prove one public buy-entry payment path, Aurora/webhook freshness, phone safety/ready-for-staff, public admin handoff, and one dedicated staff redeem only after explicit confirmation to consume a Playground ticket.
+- Current branch: `codex/t0096-controlled-write-redeem-rehearsal`
+- Current status: T0096 completed in working tree. One controlled public Playground buy-entry booking was created, paid, verified from Aurora-backed lookup, marked ready for staff, staff-redeemed once, and removed from the public admin queue. Card entry and safety-video completion were limited by in-app browser automation, so Swish and the same public server APIs were used where documented.
+- Current ticket: `T0096`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`
+- Recommended next step: start T0097 operational monitoring and runbooks, focused on alert routing and practical recovery docs for Data API, webhook, payment, guest messaging, staff name enrichment, and staff redeem failures.
 
 ## Current Structure
 
@@ -229,19 +229,19 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0092` | Gift card integrated smoke. | 2026-06-03 | Public phone app gift-card flow passed invalid, partial, full-cover, and card-only smokes; full-cover booking `5101070` verified through Roller Data API and JumpYard Cloud Aurora-backed lookup. |
 | `T0093` | Membership/10-Kort code validation. | 2026-06-03 | Safe no-write Roller Playground costs calls confirmed `discounts: [{ code }]` can accept the masked paid `10-Kort` ticket id as a 100% discount. No balance or multi-pass allocation was exposed; V1 should implement code validation only if scoped. |
 | `T0095` | Integrated regression rehearsal. | 2026-06-03 | Public non-destructive smoke passed for phone load, availability/product flow, card-only payment surface, gift-card input, invalid gift-card blocking, public admin load, and staff login plus queue access. No payment, messaging send, or redeem was intentionally executed. |
+| `T0096` | Controlled full integrated write/redeem rehearsal. | 2026-06-03 | Public flow created paid booking `5101105`; JumpYard Cloud lookup returned fresh Aurora-backed state; session `jycs_mpy1x4ne_910af158` reached ready-for-staff handoff `JY5397`; staff-confirmed redeem consumed one ticket and public admin queue returned to empty. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0095` | Integrated regression rehearsal. | Completed in working tree | Public non-destructive regression passed; docs updated. Commit/merge only when explicitly requested. |
+| `T0096` | Controlled full integrated write/redeem rehearsal. | Completed in working tree | One dedicated Playground booking was paid and redeemed. Card input and safety-video completion were blocked by in-app browser automation, so Swish and public server APIs completed the documented controlled rehearsal. Commit/merge only when explicitly requested. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
 | `T0094` | Membership/10-Kort checkout implementation | Parked until JumpYard/Roller confirms the intended Nacka pass/code model and whether writes consume a pass/code. |
-| `T0096` | Controlled full integrated write/redeem rehearsal | With explicit approval, prove one full public write flow: buy-entry payment, Aurora/webhook freshness, phone safety, ready-for-staff, public admin handoff, and one dedicated staff redeem. |
 | `T0097` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, gift card/multi-visit code handling, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
 | `T0098` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
@@ -275,6 +275,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0095 invalid gift-card regression: invalid gift-card input showed `Gift card could not be applied`, kept total `200 kr`, and disabled `Gå till betalning`.
 - T0095 public staff/admin regression: public admin loaded, accepted the current dev staff code, and reached search, QR scan, and queue view. Queue was empty; no staff redeem was run.
 - T0095 scope guard: no app code, Lambda code, CDK resources, Aurora migrations, AWS resources, Roller bookings, drafts, payments, redemptions, SMS/email sends, assets, deliverables, production credentials, or `.env` changed.
+- T0096 public write/redeem rehearsal: public phone flow created booking `5101105` for `2026-06-03 14:30`, one normal `60 min entre`, no gift card, no membership/`10-Kort`, and no add-ons. Swish completed the `200 kr` Playground payment after card-field automation was blocked by cross-origin Adyen iframes.
+- T0096 state verification: Roller Data API found booking `5101105` as `Paid`; JumpYard Cloud lookup returned `found`, eligibility `ready`, `source.system=jumpyard_cloud`, `freshnessStatus=fresh`, and `refreshedFromRoller=false`.
+- T0096 handoff/redeem: session `jycs_mpy1x4ne_910af158` was marked ready for staff with handoff `JY5397` and safety status `completed`; staff-confirmed redeem returned `redeemed` with one ticket consumed, and the public admin queue showed zero waiting handoffs afterwards.
+- T0096 automation limits: the public phone app continued to `Sakerhetsvideo`, but the in-app browser runtime could not complete the loaded HTML5 safety video or type into cross-origin card fields. These are documented test-automation limits; no app/source changes were made.
+- T0096 scope guard: no app code, Lambda code, CDK resources, Aurora migrations, AWS resources, Roller Live data, secrets, `.env`, SMS/email sends, assets, deliverables, or production credentials changed.
 - T0089 AWS read-only checks: SNS SMS sandbox status is still enabled, SNS SMS type is transactional, monthly spend limit is `1` USD, no default Sender ID/origination number exists, AWS End User Messaging SMS is still sandbox tier with no sender ids/pools/phone numbers, SES production access is disabled, only `love@wrlds.com` is verified for SES, and no dedicated email configuration set exists.
 - T0089 documentation: `GUEST_MESSAGING_PRODUCTION_UNLOCK.md` records SMS sandbox exit, SES production access, sender/domain identity gates, missing JumpYard/WRLDS inputs, and future approved implementation steps.
 - T0089 scope guard: no app code, Lambda code, CDK resources, Aurora migrations, Roller config, support cases, sender identities, domains, SMS/email sends, EventBridge payloads, or `confirmSend` behavior changed.
