@@ -109,6 +109,10 @@ T0050 bootstraps the Roller Payments readiness path without payment execution. P
 
 T0051 integrates the Roller-approved `@roller/ecom-payments` package `v217` into the phone buy-entry flow for new booking drafts. The phone app now keeps using JumpYard Cloud for availability, quote, and draft creation, then passes the response-only draft `paymentJwt` and safe `paymentSettings` config to Roller's payment package in memory. The raw JWT is not persisted, logged, printed, or rendered. If the payment package cannot bootstrap its configuration, the phone app fails closed into a visible payment-unavailable state instead of spinning indefinitely. After an approved payment, the phone app attempts to resolve the newly paid booking through JumpYard Cloud lookup and continue into the normal check-in path; if Roller/webhook sync lags, it shows a retryable sync message. Add-product payment is intentionally deferred to T0052.
 
+T0091 implements the confirmed gift-card path for buy-entry checkout. Gift cards are sent server-side as `giftCards: [{ giftCardNumber }]` to Roller Booking Costs/Create Draft Booking, JumpYard Cloud returns only safe applied/error metadata, and full gift-card coverage uses Roller no-payment draft publish instead of rendering card payment. JumpYard Cloud must not log, persist, or render full gift-card numbers. Gift-card creation/administration remains a Venue Manager task, not a JumpYard public API feature. Multi-visit and membership-code behavior remains deferred until Roller confirms the exact supported payload.
+
+T0091 was deployed to the dev booking Lambda on 2026-06-02 with a clean CDK diff limited to `BookingHandler` code. Direct JumpYard Cloud API smoke passed for invalid gift-card quote, partial `100 kr` gift-card quote, and full `500 kr` gift-card no-payment draft publish; the full smoke created Roller Playground booking `5101055` and stored the local prepayment draft as `published`. Public phone-flow proof is deferred to T0092 after the phone UI changes are committed, merged, and published by Cloudflare.
+
 The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
 
 ## Architecture Principles
@@ -178,6 +182,8 @@ The booking index ingestion contract is documented in `BOOKING_INDEX_INGESTION_C
 - `F3`: check in an existing booking and add products by creating a separate linked add-on booking, then linking original booking and add-on booking inside JumpYard Cloud.
 
 For `F1`, the preferred target is to keep the guest inside the JumpYard PWA for booking creation and Playground/test payment using Roller draft booking `paymentJwt` and the approved Roller Payments package. T0033 implements the pre-payment booking flow: product/time selection, server-side availability/capacity check where required, server-side quote, guarded draft creation, and a clear payment-pending state. T0050 captures the payment readiness inputs from Pabel; payment package/drop-in execution is split into T0051 for new bookings and T0052 for add-product drafts. Pabel has confirmed the public-origin allowlist for `https://jumpyard-check-in.pages.dev`; the remaining payment proof is successful public browser smokes. Hosted payment links remain a fallback, not the preferred pilot UX.
+
+For gift-card support inside `F1`, JumpYard should keep using Roller Draft Booking and not Payment Link. Partial gift-card value reduces the remaining amount sent to the Roller/Adyen payment drop-in. Full gift-card value should publish a no-payment draft server-side and continue into the normal paid-booking lookup/session path.
 
 ## Phone/Staff Redeem Handoff
 

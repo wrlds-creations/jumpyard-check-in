@@ -215,11 +215,15 @@ async function handleQuote(event, body, correlationId) {
   }
 
   const costs = normalizeCosts(rollerResult.body);
+  const giftCards = normalizeGiftCardSummary(rollerResult.body, request);
   await writeBookingEventLog({
     correlationId,
     eventType: 'booking.quote_succeeded',
     payload: {
       endpoint: 'POST /bookings/draft/costs',
+      giftCardAppliedCount: giftCards.appliedCount,
+      giftCardErrorCount: giftCards.errors.length,
+      giftCardRequestedCount: giftCards.requestedCount,
       itemCount: request.items.length,
       rollerEnvironment: config.env,
       total: costs.total,
@@ -234,6 +238,7 @@ async function handleQuote(event, body, correlationId) {
     quote: {
       externalId: payload.externalId,
       costs,
+      giftCards,
       itemCount: request.items.length,
       expiresAt: null,
     },
@@ -258,6 +263,7 @@ async function handleDraft(event, body, correlationId) {
 
   const requestHash = hashJson({
     customer: maskCustomerForHash(request.customer),
+    giftCards: hashGiftCardsForHash(request.giftCards),
     items: request.items,
     operation: 'booking_draft_create',
     sendConfirmations: request.sendConfirmations,
@@ -317,12 +323,53 @@ async function handleDraft(event, body, correlationId) {
       },
       roller: {
         statusCode: rollerResult.status,
-        error: summarizeRollerError(rollerResult.body),
+        error: summarizeRollerError(rollerResult.body, request.giftCards),
       },
     });
   }
 
-  const draft = normalizeDraftResponse(rollerResult.body, request.items.length);
+  let draft = normalizeDraftResponse(rollerResult.body, request.items.length, request);
+  const giftCards = draft.giftCards;
+  let noPaymentPublish = null;
+  if (isZeroAmount(draft.costs.amountOwing) && request.giftCards.length > 0) {
+    noPaymentPublish = await publishNoPaymentDraft(config, token, draft.uniqueId);
+    if (!noPaymentPublish.ok) {
+      await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_publish_http_${noPaymentPublish.status}`);
+      await writeBookingEventLog({
+        correlationId,
+        eventType: 'booking.draft_publish_failed',
+        payload: {
+          endpoint: 'POST /bookings/draft/publish',
+          giftCardAppliedCount: giftCards.appliedCount,
+          giftCardRequestedCount: giftCards.requestedCount,
+          itemCount: request.items.length,
+          rollerEnvironment: config.env,
+          rollerStatus: noPaymentPublish.status,
+          rollerDraftUniqueId: draft.uniqueId,
+        },
+        subjectRef: draft.uniqueId || payload.externalId,
+        summary: `Roller no-payment draft publish failed with HTTP ${noPaymentPublish.status}.`,
+      });
+
+      return jsonResponse(noPaymentPublish.status === 409 ? 409 : 502, correlationId, {
+        status: noPaymentPublish.status === 409 ? 'rejected' : 'roller_error',
+        error: {
+          code: 'roller_draft_publish_failed',
+          message: `Roller no-payment draft publish failed with HTTP ${noPaymentPublish.status}.`,
+        },
+        roller: {
+          statusCode: noPaymentPublish.status,
+          error: summarizeRollerError(noPaymentPublish.body, request.giftCards),
+        },
+      });
+    }
+
+    draft = {
+      ...draft,
+      uniqueId: stringOrNull(noPaymentPublish.body?.uniqueId) || draft.uniqueId,
+      bookingReference: stringOrNull(noPaymentPublish.body?.bookingReference) || draft.bookingReference,
+    };
+  }
   const paymentConfig = await getVenuePaymentConfig(config, token);
   const jwtSummary = summarizeJwt(rollerResult.body?.paymentJwt);
   const prepaymentDraft = await persistPrepaymentDraft({
@@ -333,13 +380,35 @@ async function handleDraft(event, body, correlationId) {
     jwtSummary,
     paymentConfig,
     request,
+    status: noPaymentPublish?.ok ? 'published' : 'payment_pending',
   });
   await completeIdempotencyKey(request.idempotencyKey, 'succeeded', `roller_draft:${draft.uniqueId ?? payload.externalId}`);
+  if (noPaymentPublish?.ok) {
+    await writeBookingEventLog({
+      correlationId,
+      eventType: 'booking.draft_published_no_payment',
+      payload: {
+        endpoint: 'POST /bookings/draft/publish',
+        giftCardAppliedCount: giftCards.appliedCount,
+        giftCardRequestedCount: giftCards.requestedCount,
+        itemCount: request.items.length,
+        prepaymentDraftId: prepaymentDraft.prepaymentDraftId,
+        rollerBookingReference: draft.bookingReference,
+        rollerEnvironment: config.env,
+        rollerDraftUniqueId: draft.uniqueId,
+      },
+      subjectRef: draft.uniqueId || payload.externalId,
+      summary: 'Roller Playground no-payment draft booking published.',
+    });
+  }
   await writeBookingEventLog({
     correlationId,
     eventType: 'booking.draft_succeeded',
     payload: {
       endpoint: 'POST /bookings/draft',
+      giftCardAppliedCount: giftCards.appliedCount,
+      giftCardErrorCount: giftCards.errors.length,
+      giftCardRequestedCount: giftCards.requestedCount,
       itemCount: request.items.length,
       paymentJwtPresent: jwtSummary.present,
       prepaymentDraftId: prepaymentDraft.prepaymentDraftId,
@@ -533,6 +602,7 @@ async function handleAddProductDraft(event, body, correlationId) {
 
   const requestHash = hashJson({
     customer: maskCustomerForHash(request.customer),
+    giftCards: hashGiftCardsForHash(request.giftCards),
     items: request.items,
     operation: 'booking_add_product_draft_create',
     originalBookingReference: original.bookingReference,
@@ -598,12 +668,12 @@ async function handleAddProductDraft(event, body, correlationId) {
       },
       roller: {
         statusCode: rollerResult.status,
-        error: summarizeRollerError(rollerResult.body),
+        error: summarizeRollerError(rollerResult.body, request.giftCards),
       },
     });
   }
 
-  const draft = normalizeDraftResponse(rollerResult.body, request.items.length);
+  const draft = normalizeDraftResponse(rollerResult.body, request.items.length, request);
   const paymentConfig = await getVenuePaymentConfig(config, token);
   const jwtSummary = summarizeJwt(rollerResult.body?.paymentJwt);
   const prepaymentDraft = await persistPrepaymentDraft({
@@ -827,6 +897,106 @@ function normalizeGiftCards(value) {
       giftCardNumber: stringOrNull(giftCard?.giftCardNumber),
     }))
     .filter((giftCard) => giftCard.giftCardNumber);
+}
+
+function hashGiftCardsForHash(giftCards) {
+  return giftCards.map((giftCard) => ({
+    giftCardNumberHash: hashString(giftCard.giftCardNumber),
+  }));
+}
+
+function normalizeGiftCardSummary(body, request) {
+  const requestedGiftCards = Array.isArray(request?.giftCards) ? request.giftCards : [];
+  const costs = extractCostsObject(body);
+  const appliedSource = asArray(body?.giftCards).length > 0 ? asArray(body?.giftCards) : asArray(costs.giftCards);
+  const errorsSource = [...asArray(body?.giftCardErrors), ...asArray(costs.giftCardErrors)];
+  const applied = appliedSource
+    .map((giftCard) => {
+      const amountDeducted = numberOrNull(
+        giftCard?.amountDeducted ??
+          giftCard?.amountDeducuted ??
+          giftCard?.amountDeductedFromBooking ??
+          giftCard?.amount
+      );
+      const maskedNumber = maskGiftCardNumber(
+        stringOrNull(giftCard?.giftCardNumber ?? giftCard?.number ?? giftCard?.transactionId)
+      );
+
+      return {
+        amountDeducted,
+        maskedNumber,
+      };
+    })
+    .filter((giftCard) => giftCard.amountDeducted !== null || giftCard.maskedNumber !== null);
+
+  const directTotalApplied = applied.reduce(
+    (total, giftCard) => total + (giftCard.amountDeducted !== null ? giftCard.amountDeducted : 0),
+    0,
+  );
+  const inferredTotalApplied =
+    requestedGiftCards.length > 0 && errorsSource.length === 0 && directTotalApplied === 0
+      ? inferGiftCardAppliedAmount(costs)
+      : null;
+
+  return {
+    requestedCount: requestedGiftCards.length,
+    appliedCount: applied.length,
+    totalApplied: directTotalApplied > 0 ? directTotalApplied : inferredTotalApplied,
+    applied,
+    errors: errorsSource.map((error) => normalizeGiftCardError(error, requestedGiftCards)),
+  };
+}
+
+function extractCostsObject(body) {
+  if (body?.costs && typeof body.costs === 'object') return body.costs;
+  if (body?.bookingCosts && typeof body.bookingCosts === 'object') return body.bookingCosts;
+  return body && typeof body === 'object' ? body : {};
+}
+
+function inferGiftCardAppliedAmount(costs) {
+  const total = numberOrNull(costs.total);
+  const amountOwing = numberOrNull(costs.amountOwing);
+  const discount = numberOrNull(costs.discount) ?? 0;
+  if (total === null || amountOwing === null) return null;
+
+  return Math.max(0, total - amountOwing - discount);
+}
+
+function isZeroAmount(value) {
+  return value !== null && Number.isFinite(value) && Math.abs(value) < 0.01;
+}
+
+function normalizeGiftCardError(error, requestedGiftCards) {
+  const message =
+    stringOrNull(error?.message ?? error?.error ?? error?.title ?? error?.name) ||
+    'Gift card could not be applied.';
+
+  return {
+    code: stringOrNull(error?.code ?? error?.errorCode),
+    message: redactGiftCardSecrets(message, requestedGiftCards),
+  };
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function maskGiftCardNumber(value) {
+  const normalized = stringOrNull(value);
+  if (!normalized) return null;
+  const compact = normalized.replace(/\s/g, '');
+  const last4 = compact.slice(-4);
+  return last4 ? `**** ${last4}` : '****';
+}
+
+function redactGiftCardSecrets(value, requestedGiftCards) {
+  let redacted = stringOrNull(value) || '';
+  for (const giftCard of requestedGiftCards) {
+    const giftCardNumber = stringOrNull(giftCard?.giftCardNumber);
+    if (!giftCardNumber) continue;
+    redacted = redacted.split(giftCardNumber).join(maskGiftCardNumber(giftCardNumber));
+  }
+  return redacted;
 }
 
 function validateQuoteRequest(request) {
@@ -1168,6 +1338,20 @@ async function postRollerJson(config, token, endpointPath, payload) {
     ok: response.ok,
     status: response.status,
   };
+}
+
+async function publishNoPaymentDraft(config, token, rollerDraftUniqueId) {
+  if (!rollerDraftUniqueId) {
+    return {
+      body: null,
+      ok: false,
+      status: 400,
+    };
+  }
+
+  return postRollerJson(config, token, '/bookings/draft/publish', {
+    uniqueId: rollerDraftUniqueId,
+  });
 }
 
 async function getRollerJson(config, token, endpointPath) {
@@ -1725,23 +1909,19 @@ async function getVenuePaymentConfig(config, token) {
   return cachedVenuePaymentConfig;
 }
 
-function normalizeDraftResponse(body, itemCount) {
+function normalizeDraftResponse(body, itemCount, request = null) {
   return {
     uniqueId: stringOrNull(body?.uniqueId),
     capacityReservationId: stringOrNull(body?.capacityReservationId),
     bookingReference: stringOrNull(body?.bookingReference),
     costs: normalizeCosts(body),
+    giftCards: normalizeGiftCardSummary(body, request),
     itemCount,
   };
 }
 
 function normalizeCosts(body) {
-  const costs =
-    body?.costs && typeof body.costs === 'object'
-      ? body.costs
-      : body?.bookingCosts && typeof body.bookingCosts === 'object'
-        ? body.bookingCosts
-        : body ?? {};
+  const costs = extractCostsObject(body);
 
   return {
     total: numberOrNull(costs.total),
@@ -1760,7 +1940,16 @@ function normalizeCosts(body) {
   };
 }
 
-async function persistPrepaymentDraft({ config, draft, externalId, idempotencyKey, jwtSummary, paymentConfig, request }) {
+async function persistPrepaymentDraft({
+  config,
+  draft,
+  externalId,
+  idempotencyKey,
+  jwtSummary,
+  paymentConfig,
+  request,
+  status = 'payment_pending',
+}) {
   const prepaymentDraftId = `jypd_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`;
   const firstItem = request.items[0] ?? {};
   const flowType = request.flowType === 'add_product' ? 'add_product' : 'new_booking';
@@ -1817,7 +2006,7 @@ async function persistPrepaymentDraft({ config, draft, externalId, idempotencyKe
        :originalBookingReference,
        :originalRollerUniqueId,
        :addOnGroupId,
-       'payment_pending',
+       :status,
        :rollerEnv,
        CAST(:bookingDate AS date),
        CAST(:startTime AS time),
@@ -1864,6 +2053,7 @@ async function persistPrepaymentDraft({ config, draft, externalId, idempotencyKe
       stringParameter('originalBookingReference', request.originalBookingReference),
       stringParameter('originalRollerUniqueId', request.originalRollerUniqueId),
       stringParameter('addOnGroupId', request.addOnGroupId),
+      stringParameter('status', status),
       stringParameter('rollerEnv', config.env),
       stringParameter('bookingDate', firstItem.bookingDate),
       stringParameter('startTime', firstItem.startTime),
@@ -1893,10 +2083,10 @@ async function persistPrepaymentDraft({ config, draft, externalId, idempotencyKe
     flowType,
     originalBookingReference: request.originalBookingReference ?? null,
     originalRollerUniqueId: request.originalRollerUniqueId ?? null,
-    paymentBlockedReason: 'payment_dropin_not_configured',
+    paymentBlockedReason: status === 'published' ? null : 'payment_dropin_not_configured',
     prepaymentDraftId,
     rollerDraftUniqueId: draft.uniqueId,
-    status: 'payment_pending',
+    status,
     total: draft.costs.total,
     totalCents,
   };
@@ -2140,7 +2330,7 @@ function parseJsonOrNull(value) {
   }
 }
 
-function summarizeRollerError(body) {
+function summarizeRollerError(body, requestedGiftCards = []) {
   if (!body || typeof body !== 'object') {
     return {
       code: null,
@@ -2151,14 +2341,14 @@ function summarizeRollerError(body) {
   const errors = Array.isArray(body.errors)
     ? body.errors.map((error) => ({
         code: stringOrNull(error.code),
-        message: stringOrNull(error.message),
+        message: redactGiftCardSecrets(stringOrNull(error.message), requestedGiftCards),
         name: stringOrNull(error.name),
       }))
     : [];
 
   return {
     code: stringOrNull(body.code ?? body.errorCode),
-    message: stringOrNull(body.message ?? body.error ?? body.title),
+    message: redactGiftCardSecrets(stringOrNull(body.message ?? body.error ?? body.title), requestedGiftCards),
     errors,
   };
 }
@@ -2242,6 +2432,7 @@ function emitRollerApiMetric({ method, operation, status, ok }) {
 function rollerOperationFromEndpointPath(endpointPath, method) {
   const path = String(endpointPath || '').split('?')[0];
   if (path === '/bookings/draft/costs') return 'create_draft_costs';
+  if (path === '/bookings/draft/publish') return 'publish_draft_booking';
   if (path === '/bookings/draft') return method === 'POST' ? 'create_draft_booking' : 'get_draft_booking';
   if (path === '/product-availability') return 'get_product_availability';
   if (path === '/venues/me') return 'get_venue_detail';

@@ -12,6 +12,7 @@ import {
   type NewBookingAvailability,
   type NewBookingCustomer,
   type NewBookingDraftResult,
+  type NewBookingGiftCardInput,
   type NewBookingItemRequest,
   type NewBookingProduct,
   type NewBookingQuote,
@@ -83,6 +84,22 @@ function generateSlots(): string[] {
 function formatMoney(value: number | null | undefined) {
   if (value === null || value === undefined) return '-';
   return `${Math.round(value)} kr`;
+}
+
+function buildGiftCardInputs(value: string): NewBookingGiftCardInput[] {
+  const giftCardNumber = value.trim();
+  return giftCardNumber ? [{ giftCardNumber }] : [];
+}
+
+function getGiftCardAppliedAmount(quote: NewBookingQuote | null) {
+  if (!quote?.giftCards || quote.giftCards.requestedCount === 0 || quote.giftCards.errors.length > 0) return null;
+  if (quote.giftCards.totalApplied !== null) return quote.giftCards.totalApplied;
+  if (quote.costs.total === null || quote.costs.amountOwing === null) return null;
+  return Math.max(0, quote.costs.total - quote.costs.amountOwing);
+}
+
+function getDraftAmountOwing(draft: NewBookingDraftResult | null) {
+  return draft?.prepayment?.amountOwing ?? draft?.draft.costs.amountOwing ?? null;
 }
 
 function getMaxQuantity(product: NewBookingProduct | null) {
@@ -209,6 +226,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [giftCardNumber, setGiftCardNumber] = useState('');
   const [quote, setQuote] = useState<NewBookingQuote | null>(null);
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -247,6 +265,11 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const entryTotal = (selectedProduct?.unitPrice ?? 0) * quantity;
   const basketEstimateTotal = entryTotal + addonsTotal;
   const shouldPrecheckBasketAvailability = selectedAddons.every((addon) => addon.requiresAvailability === true);
+  const giftCardInputs = buildGiftCardInputs(giftCardNumber);
+  const giftCardErrors = quote?.giftCards?.errors ?? [];
+  const giftCardAppliedAmount = getGiftCardAppliedAmount(quote);
+  const draftAmountOwing = getDraftAmountOwing(draft);
+  const noPaymentRequired = draftAmountOwing !== null && draftAmountOwing <= 0;
   const basketLines = [
     ...(selectedProduct
       ? [
@@ -298,6 +321,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setQuote(null);
     setDraft(null);
     setPaymentSyncError(null);
+    setGiftCardNumber('');
   };
 
   const handleProductSelect = (product: NewBookingProduct) => {
@@ -323,6 +347,14 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       }
       return next;
     });
+    setQuote(null);
+    setDraft(null);
+    setPaymentSyncError(null);
+  };
+
+  const updateGiftCardNumber = (value: string) => {
+    setGiftCardNumber(value);
+    setSubmitError(null);
     setQuote(null);
     setDraft(null);
     setPaymentSyncError(null);
@@ -366,7 +398,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const result = await quoteNewBooking(buildCustomer(), buildItems(), shouldPrecheckBasketAvailability);
+      const result = await quoteNewBooking(buildCustomer(), buildItems(), shouldPrecheckBasketAvailability, giftCardInputs);
       setQuote(result);
       setStep('REVIEW');
     } catch (error) {
@@ -382,14 +414,22 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setSubmitError(null);
     try {
       const itemKey = basketLines.map((line) => `${line.key}-${line.qty}`).join(':');
+      if (giftCardErrors.length > 0) return;
+
       const result = await createDraftBooking(
         buildCustomer(),
         buildItems(),
         `phone-draft:${selectedProduct.productId}:${selectedProduct.startTime}:${itemKey}:${Date.now().toString(36)}`,
-        shouldPrecheckBasketAvailability
+        shouldPrecheckBasketAvailability,
+        giftCardInputs
       );
       setDraft(result);
       setPaymentSyncError(null);
+      if (getDraftAmountOwing(result) !== null && getDraftAmountOwing(result)! <= 0) {
+        setStep('PENDING');
+        void resolvePaidDraftBooking(result);
+        return;
+      }
       setStep(canStartPayment(result) ? 'PAYMENT' : 'PENDING');
     } catch (error) {
       setSubmitError(error instanceof CloudBookingError ? error.message : t.buy.draftFailed);
@@ -398,8 +438,9 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     }
   };
 
-  const resolvePaidDraftBooking = async () => {
-    const identifier = draft?.draft.uniqueId ?? draft?.draft.bookingReference;
+  const resolvePaidDraftBooking = async (draftOverride?: NewBookingDraftResult) => {
+    const activeDraft = draftOverride ?? draft;
+    const identifier = activeDraft?.draft.bookingReference ?? activeDraft?.draft.uniqueId;
     if (!identifier || paymentSyncing) return;
 
     setPaymentSyncing(true);
@@ -780,6 +821,21 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
               />
             </label>
 
+            <label className="block mb-5">
+              <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
+                <CreditCard size={14} className="text-primary" /> {t.buy.giftCardLabel}
+              </span>
+              <input
+                type="text"
+                value={giftCardNumber}
+                onChange={(event) => updateGiftCardNumber(event.target.value)}
+                placeholder={t.buy.giftCardPlaceholder}
+                autoComplete="off"
+                className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
+              />
+              <p className="mt-1 text-[11px] text-muted">{t.buy.giftCardHelp}</p>
+            </label>
+
             {submitError && (
               <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>
             )}
@@ -821,16 +877,53 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
               </div>
             </div>
 
-            <div className="bg-white border border-border p-3 rounded-xl mb-5 flex justify-between items-center px-4">
-              <span className="text-muted text-sm font-bold italic uppercase">{t.buy.total}</span>
-              <span className="text-xl font-black italic text-primary">{formatMoney(quote.costs.amountOwing)}</span>
+            {giftCardNumber.trim() && (
+              <div
+                className={`bg-white border rounded-xl p-3 mb-4 ${
+                  giftCardErrors.length > 0 ? 'border-danger/30' : 'border-border'
+                }`}
+              >
+                <div className="flex justify-between gap-3 text-sm">
+                  <span className="text-muted font-bold italic uppercase">{t.buy.giftCardLabel}</span>
+                  <span className={`font-black ${giftCardErrors.length > 0 ? 'text-danger' : 'text-primary'}`}>
+                    {giftCardErrors.length > 0
+                      ? t.buy.giftCardRejected
+                      : giftCardAppliedAmount !== null && giftCardAppliedAmount > 0
+                        ? `-${formatMoney(giftCardAppliedAmount)}`
+                        : t.buy.giftCardApplied}
+                  </span>
+                </div>
+                {giftCardErrors.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {giftCardErrors.map((error, index) => (
+                      <p key={`${error.code ?? 'gift-card'}-${index}`} className="text-sm text-danger font-bold">
+                        {error.message || t.buy.giftCardErrorFallback}
+                      </p>
+                    ))}
+                    <p className="text-xs text-muted">{t.buy.giftCardFixHint}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="bg-white border border-border p-3 rounded-xl mb-5 px-4">
+              <div className="flex justify-between items-center">
+                <span className="text-muted text-sm font-bold italic uppercase">{t.buy.total}</span>
+                <span className="text-xl font-black italic text-primary">{formatMoney(quote.costs.amountOwing)}</span>
+              </div>
+              {quote.costs.total !== null && quote.costs.amountOwing !== null && quote.costs.total !== quote.costs.amountOwing && (
+                <div className="mt-1 flex justify-between gap-3 text-[11px] text-muted">
+                  <span>{t.buy.originalTotal}</span>
+                  <span>{formatMoney(quote.costs.total)}</span>
+                </div>
+              )}
             </div>
 
             {submitError && <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>}
 
             <button
               onClick={() => void createDraft()}
-              disabled={submitting}
+              disabled={submitting || giftCardErrors.length > 0}
               className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
             >
               {submitting ? t.buy.creating : t.buy.createDraft} {!submitting && <Check size={18} />}
@@ -890,27 +983,42 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
         >
           <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
             <div className="w-14 h-14 rounded-full bg-white border border-border mx-auto mb-4 flex items-center justify-center">
-              <CreditCard size={28} className="text-primary" />
+              {noPaymentRequired ? <Check size={28} className="text-primary" /> : <CreditCard size={28} className="text-primary" />}
             </div>
-            <h2 className="text-xl font-black italic text-foreground uppercase mb-2">{t.buy.pendingTitle}</h2>
-            <p className="text-muted text-sm mb-5">{t.buy.pendingDesc}</p>
+            <h2 className="text-xl font-black italic text-foreground uppercase mb-2">
+              {noPaymentRequired ? t.buy.noPaymentTitle : t.buy.pendingTitle}
+            </h2>
+            <p className="text-muted text-sm mb-5">
+              {noPaymentRequired ? t.buy.noPaymentDesc : t.buy.pendingDesc}
+            </p>
 
             <div className="bg-white border border-border rounded-xl p-4 mb-5 text-left">
               <div className="flex justify-between gap-3 text-sm mb-2">
                 <span className="text-muted font-bold italic uppercase">{t.buy.total}</span>
-                <span className="font-black text-primary">{formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}</span>
+                <span className="font-black text-primary">{formatMoney(draftAmountOwing)}</span>
               </div>
               <div className="flex justify-between gap-3 text-xs">
                 <span className="text-muted">{t.buy.draftStatus}</span>
-                <span className="font-bold text-foreground">{t.buy.paymentPending}</span>
+                <span className="font-bold text-foreground">
+                  {noPaymentRequired ? t.buy.noPaymentStatus : t.buy.paymentPending}
+                </span>
               </div>
             </div>
 
+            {paymentSyncing && (
+              <p className="mb-4 text-xs text-muted font-bold italic uppercase">{t.buy.paymentSyncing}</p>
+            )}
+
+            {paymentSyncError && (
+              <p className="mb-4 text-sm text-danger font-bold italic">{paymentSyncError}</p>
+            )}
+
             <button
-              onClick={onBack}
+              onClick={noPaymentRequired ? () => void resolvePaidDraftBooking() : onBack}
+              disabled={noPaymentRequired && paymentSyncing}
               className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all active:scale-[0.98]"
             >
-              {t.common.done}
+              {noPaymentRequired ? t.buy.paymentRetrySync : t.common.done}
             </button>
           </div>
         </motion.div>
