@@ -1,17 +1,18 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0095
+T0096
 
 ## Goal
-Run a structured integrated regression rehearsal for the current public Playground system and document what still needs fixing before broader production-readiness work resumes.
+Run one controlled full integrated write/redeem rehearsal against the current public Playground system.
 
 ## Dependencies
-- T0093 completed and merged.
-- T0094 membership/`10-Kort` implementation is parked until JumpYard/Roller confirms intended usage/consumption.
+- T0095 completed and merged.
 - Public phone app is available at `https://jumpyard-check-in.pages.dev`.
 - Public staff/admin app is available at `https://jumpyard-checkin-admin.pages.dev`.
-- Roller Playground credentials and AWS dev backend are already configured.
+- Roller Playground card payment is available through the allowlisted public phone domain.
+- Staff/admin dev login is available.
+- Roller Playground and AWS dev backend are already configured.
 
 ## Allowed areas
 - CODEX_TASK.md
@@ -19,7 +20,6 @@ Run a structured integrated regression rehearsal for the current public Playgrou
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
 - TEST_PLAN.md
-- GIFT_CARD_MULTI_VISIT_DISCOVERY.md only if gift-card or membership/code findings need clarification
 
 ## Do not touch
 - Phone app UI
@@ -37,44 +37,65 @@ Run a structured integrated regression rehearsal for the current public Playgrou
 
 ## Requirements
 
-1. Run the regression rehearsal against the current public dev/Playground system only.
+1. Use the current public dev/Playground system only.
 
-2. Cover the highest-value flows:
-   - Public phone app loads.
-   - Buy-entry card-only payment still reaches Roller/Adyen payment.
-   - Gift-card field still appears in buy-entry checkout.
-   - Invalid gift card remains blocked.
-   - Staff/admin public app loads.
-   - Staff/admin login and ready queue are still reachable.
+2. Create exactly one dedicated new buy-entry booking through the public phone app:
+   - Select a current available time.
+   - Select one normal jump-entry product.
+   - Do not use gift card or membership/`10-Kort` code in this rehearsal.
+   - Use safe test guest data.
+   - Submit one Playground card payment if the Roller/Adyen test payment flow is available.
 
-3. Prefer non-destructive checks first.
-   - Do not intentionally consume staff redeem tickets unless the test needs a full end-to-end check-in proof.
-   - If a full write/payment/redeem smoke is needed, document it clearly before running it.
+3. Continue the same guest flow after successful payment:
+   - Confirm the paid booking continues into safety/check-in.
+   - Complete the guest safety step.
+   - Confirm the phone flow reaches ready-for-staff with a handoff code/QR.
 
-4. Record each result in `TEST_PLAN.md`.
+4. Use the public staff/admin app to finish the same booking:
+   - Log in with the dev staff auth flow.
+   - Find the handoff in the queue or search.
+   - Verify the detail summary is usable.
+   - Perform one staff-confirmed redeem only for this dedicated test booking.
 
-5. Update `REPO_CURRENT_STATE.md` with:
-   - T0095 status.
+5. Verify server-side state after the rehearsal:
+   - Booking is visible from JumpYard Cloud lookup/Aurora-backed state.
+   - Staff redeem returns success.
+   - Admin queue no longer shows the completed handoff.
+   - Record the created booking reference, handoff code, and safe result metadata.
+
+6. Stop and document instead of fixing if any blocker appears:
+   - Payment package fails to load.
+   - Card payment cannot complete.
+   - Booking does not sync to Aurora.
+   - Phone cannot reach ready-for-staff.
+   - Admin cannot redeem.
+
+7. Record all results in `TEST_PLAN.md`.
+
+8. Update `REPO_CURRENT_STATE.md` with:
+   - T0096 status.
    - What passed.
-   - What failed or needs a follow-up.
+   - Any blockers or follow-ups.
    - Recommended next ticket.
 
-6. Put any bug or UX findings in `FOLLOWUPS.md` unless the user explicitly asks to fix them inside T0095.
+9. Put any bug or UX findings in `FOLLOWUPS.md` unless the user explicitly asks to fix them inside T0096.
 
 ## Non-goals
 - Do not implement new features.
 - Do not fix UI polish issues.
-- Do not add membership/`10-Kort` UI.
-- Do not change gift-card behavior.
+- Do not test Roller Live.
+- Do not test gift-card payment.
+- Do not test membership/`10-Kort` code consumption.
+- Do not create AWS resources.
 - Do not deploy AWS changes.
-- Do not create production resources.
 - Do not change secrets or credentials.
+- Do not run broad load tests.
 
 ## Acceptance criteria
-- T0095 documents whether the current public phone and staff/admin apps are usable for the core rehearsal surface.
-- T0095 documents any blocking issue separately from lower-priority polish.
+- One dedicated public Playground booking has either completed through payment, ready-for-staff, and staff redeem, or the exact blocker is documented.
+- Any created booking reference and handoff code are recorded in source-of-truth docs.
 - No app/source behavior changes are made.
-- No secrets, raw tokens, full contact data, full gift-card numbers, or private test codes are committed.
+- No secrets, raw tokens, full contact data, full card data, full gift-card numbers, or private test codes are committed.
 - Root validation passes after docs updates.
 
 ## Manual verification
