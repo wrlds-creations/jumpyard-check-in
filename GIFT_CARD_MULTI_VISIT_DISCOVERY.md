@@ -172,6 +172,51 @@ V1 recommendation:
 - Do not show "X visits remaining" in V1.
 - Before writing a real draft/booking with a `10-Kort` code, run a guarded Playground smoke with explicit user approval because it may consume or reserve use of the pass.
 
+## T0097 Gustav Membership Discount-Code Confirmation
+
+T0097 re-checked the same question after Gustav clarified that the current JumpYard Nacka `10-Kort` setup is not Roller beta multi-pass. Gustav's model is that the current cards behave more like a membership-linked discount code: the guest has a code, Roller validates the code, and Roller should decide whether it can be applied.
+
+Official docs checked:
+
+| Source | Finding |
+|---|---|
+| Roller Validate discount codes docs | The endpoint is being deprecated and says Booking Costs should be used to validate discounts instead. URL: https://docs.roller.app/docs/rest-api/6e406a47c99e9-validate-discount-codes |
+| Roller Create Discount Codes docs | Roller has first-class discount-code configuration APIs for creating codes against an existing discount configuration. URL: https://docs.roller.app/docs/rest-api/armugwijxjpqd-create-discount-codes |
+| Roller Booking Costs docs | Booking Costs is the safe no-write calculation endpoint and uses the same draft/create booking payload family, including `discounts`. URL: https://docs.roller.app/docs/rest-api/branches/main/62e21c34b7ef3-booking-costs |
+| Roller Get membership redemptions Data API docs | Roller has readback data for membership redemptions by redemption date, which may be useful after a real use is consumed. URL: https://docs.roller.app/docs/roller-api/377728db25f1a-get-membership-redemptions |
+| Roller guest multi-passes docs | `GET /customers/{customerId}/multi-passes` remains the documented beta-style balance endpoint, but current Nacka `10-Kort` data still does not appear there. |
+
+Safe no-write Playground checks:
+
+| Check | Result |
+|---|---|
+| Paid `10-Kort` fixture | Booking `5101046` is still `Paid`, total `1750`, has a customer id, and contains membership-like markers in booking detail. |
+| Multi-pass endpoint | `GET /customers/4045520/multi-passes` returned HTTP `200` with `0` balances. |
+| Baseline quote | `POST /bookings/draft/costs` for one eligible `200 kr` entry without a code returned `total=200`, `amountOwing=200`, and `discount=0`. |
+| Invalid code quote | The same quote with an invalid code returned HTTP `200`, kept `amountOwing=200`, and returned a discount row with `discount=0`. Echoed discount rows must not be treated as success. |
+| Known `10-Kort` code quote | The masked paid `10-Kort` ticket/code from booking `5101046` sent as `discounts: [{ code }]` reduced the `200 kr` quote to `amountOwing=0`, `discount=200`, `percentOff=100`, and still returned empty `multiPassAllocations`. |
+| Quantity `2` edge quote | The same known code reduced two `200 kr` entries from `400 kr` to `amountOwing=0`, `discount=400`. This needs a real consumption/exhaustion write test before we rely on it in production UX. |
+
+Interpretation:
+
+- Gustav's clarification matches the observed API behavior.
+- The current Nacka `10-Kort` should not be implemented as a beta multi-pass balance in V1.
+- The current Nacka `10-Kort` can be treated as a guest-entered membership/discount code candidate and sent to Roller as `discounts: [{ code }]` for quote/draft validation.
+- JumpYard should consider a code accepted only if Roller actually reduces `amountOwing` or returns a positive discount amount.
+- JumpYard should not show remaining visits for this setup because neither Booking Costs nor `GET /customers/{customerId}/multi-passes` returned balance data.
+- JumpYard should not try to count visits locally in V1. Roller must remain the validator and enforcer.
+
+Still unknown:
+
+- Whether creating/publishing a draft with this code consumes one membership/10-card use.
+- Whether Roller blocks the code once uses are exhausted.
+- Whether quantity `2` should consume two visits or is an unintended discount configuration issue.
+- Which readback source best proves consumption after a write: booking detail, membership redemptions Data API, redemption webhook, or another Roller view.
+
+Recommended next ticket:
+
+- `T0098` should be a controlled write smoke for the current Nacka `10-Kort` model, only after explicit approval. It should create one dedicated Playground booking with the code, publish/settle it through the supported no-payment or payment path, then verify whether Roller records a use and whether a second quote changes.
+
 ## Questions For Roller/Josh/Joao/Pabel
 
 1. What is the supported API flow for applying a guest's existing multi-visit pass/10-card to a new booking?

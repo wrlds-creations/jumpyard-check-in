@@ -1094,6 +1094,21 @@ Use this file to define validation for the current project or milestone.
 | Membership balance/allocation display | V1 should not display remaining visits unless public API data proves it. | Blocked by API data | The accepted `10-Kort` code returned `multiPassAllocations.allocations=[]`; `GET /customers/{customerId}/multi-passes` still returned zero balances for the paid `10-Kort` customer. |
 | Multi-visit checkout smoke | A multi-visit case should flow through phone checkout, Aurora state, Roller state, check-in session, and staff redeem/eligibility without consuming the wrong ticket. | Deferred | Do not implement until Roller confirms API auto-apply behavior or provides a fixture; if relevant, RedemptionDetail should include expected `multiPass` proof after use/redeem. |
 
+## T0097 Membership Discount-Code Discovery
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Official discount docs | Current Roller docs should identify the safe no-write discount validation path. | Passed | Roller Validate discount codes docs say that endpoint is being deprecated and Booking Costs should be used for discount validation instead. Create Discount Codes docs confirm discount-code configuration exists. |
+| Paid `10-Kort` fixture | Existing Playground fixture should still be membership-like and paid. | Passed | `GET /bookings/5101046` returned `Paid`, total `1750`, customer id context, and membership-like markers without printing secrets or raw full code. |
+| Multi-pass balance boundary | Current `10-Kort` fixture should not be treated as beta multi-pass unless the documented endpoint exposes a balance. | Passed as blocker | `GET /customers/4045520/multi-passes` returned HTTP `200` with `0` balances. |
+| Baseline costs quote | One eligible entry without a code should cost normal money. | Passed | `POST /bookings/draft/costs` returned `total=200`, `amountOwing=200`, and `discount=0`. |
+| Invalid code quote | No-effect code must not be treated as accepted. | Passed | Invalid code returned HTTP `200`, echoed a discount row, but kept `amountOwing=200` and `discount=0`. |
+| Known `10-Kort` code quote | The known membership/ticket code should apply if Gustav's model is correct. | Passed | Masked paid `10-Kort` code sent as `discounts: [{ code }]` reduced one entry to `amountOwing=0`, `discount=200`, `percentOff=100`, with empty `multiPassAllocations`. |
+| Quantity edge quote | Quantity behavior should be known before implementation. | Needs write proof | The same code reduced two entries to `amountOwing=0`, `discount=400`; T0098 must prove whether this consumes two uses or exposes a configuration risk. |
+| Scope guard | T0097 should not create or mutate Roller or AWS state. | Passed | No bookings, drafts, payments, redemptions, Aurora writes, AWS resources, app code, Lambda code, migrations, secrets, or assets were changed. |
+| Root validation | Source-of-truth docs should validate after T0097 docs updates. | Passed | `npm run validate` passed on 2026-06-03. |
+| Diff whitespace | T0097 docs should pass whitespace validation. | Passed with CRLF notices | `git diff --check` passed on 2026-06-03; output contained Git line-ending notices only. |
+
 ## T0095 Integrated Regression Rehearsal
 
 | Scenario | Expected Result | Status | Notes |
