@@ -4,12 +4,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Snapshot
 
-- Date: 2026-06-02
-- Current branch: `codex/t0091-gift-card-checkout`
-- Current status: T0091 implemented, deployed to dev, and direct API-smoked. Buy-entry gift-card checkout now sends guest-entered `giftCards` to JumpYard Cloud quote/draft calls, returns safe applied/error metadata, blocks invalid gift-card continuation, keeps full gift-card numbers out of logs/persistence, and publishes Roller no-payment drafts when gift card value reduces `amountOwing` to `0`.
-- Current ticket: `T0091` implemented/deployed; ready for commit/merge and then T0092 public integrated gift-card smoke.
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`
-- Recommended next step: commit/merge T0091, let the phone UI publish through Cloudflare, then run T0092 integrated gift-card smokes across invalid, partial, full, and normal card-only cases. Multi-visit balance display should wait for Roller confirmation or a true beta multi-pass fixture; the next practical multi-visit step remains a separate membership/discount-code validation ticket because paid `10-Kort` did not work as a beta multi-pass.
+- Date: 2026-06-03
+- Current branch: `main`
+- Current status: T0092 completed. Public gift-card smokes passed for visible UI, invalid gift-card blocking, partial gift-card remainder payment, full gift-card no-payment continuation, and normal card-only payment rendering. Direct Aurora CLI readback remains pending because local AWS SSO expired, but JumpYard Cloud lookup verified the full gift-card booking from fresh Aurora state.
+- Current ticket: `T0093` ready to start; membership/multi-visit code validation.
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`
+- Recommended next step: start T0093 membership/multi-visit code validation. Multi-visit balance display should wait for Roller confirmation or a true beta multi-pass fixture; the next practical multi-visit step remains a separate membership/discount-code validation ticket because paid `10-Kort` did not work as a beta multi-pass.
 
 ## Current Structure
 
@@ -225,19 +225,19 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0088` | Real-time guest-name enrichment. | 2026-06-02 | Webhook enrichment now uses booking detail plus documented read-only `GET /guests/{guestId}` fallback when needed; dev deploy and safe booking `5100965` smoke confirmed guest profile name/contact booleans without raw PII output. |
 | `T0089` | Guest messaging production unlock package. | 2026-06-02 | Read-only AWS checks confirmed SNS SMS and SES remain sandboxed; `GUEST_MESSAGING_PRODUCTION_UNLOCK.md` documents hard gates, missing inputs, and future approved steps without changing resources, code, support cases, or unattended sends. |
 | `T0090` | Gift card and multi-visit discovery. | 2026-06-02 | Roller Playground safe discovery confirmed gift-card cost payload behavior, invalid gift-card errors, active partial/full gift-card application in costs, the documented multi-pass read endpoint, and a paid `10-Kort` membership fixture that did not expose or auto-apply as a multi-pass. |
+| `T0091` | Gift card checkout implementation. | 2026-06-03 | Merged through PR #93 as merge commit `9718b58`; buy-entry gift-card checkout is implemented, dev-deployed, and direct API-smoked for invalid, partial, and full gift-card behavior. |
+| `T0092` | Gift card integrated smoke. | 2026-06-03 | Public phone app gift-card flow passed invalid, partial, full-cover, and card-only smokes; full-cover booking `5101070` verified through Roller Data API and JumpYard Cloud Aurora-backed lookup. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0091` | Gift card checkout implementation. | Implemented and deployed to dev | Buy-entry quote/draft now accepts gift cards; direct dev API smoke passed for invalid, partial, and full gift-card behavior. Commit/merge and public phone smoke remain. |
+| `T0093` | Membership and multi-visit code validation. | Ready to start | Validate whether Nacka `10-Kort`/membership/multi-visit codes can be sent through a Roller-supported quote/draft field without promising remaining-balance display. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0092` | Gift card integrated smoke | After T0091 is committed/merged and Cloudflare publishes the phone UI, prove normal card, invalid gift-card, partial gift-card, and full gift-card cases through public phone flow, Aurora state, Roller Playground booking state, check-in session, and staff redeem/eligibility. |
-| `T0093` | Membership and multi-visit code validation | Test whether Nacka `10-Kort`/membership/multi-visit codes can be sent as `discounts: [{ code }]` or another Roller-supported costs/draft field. Do not show remaining visit balance in V1. |
 | `T0094` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, gift card/multi-visit code handling, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
 | `T0095` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
@@ -254,6 +254,14 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0091 browser sanity: local phone app loaded at `http://localhost:3000/?codexSmoke=t0091-gift-card-ui`; buy-entry flow reached the contact/payment group and showed the optional `Presentkort` input with the expected help text. Full public phone flow remains pending until T0091 is committed/merged and Cloudflare publishes the phone UI.
 - T0091 dev API smoke: direct JumpYard Cloud quote calls with active masked gift-card fixtures passed. Invalid gift card returned HTTP `200`, `status=quoted`, `amountOwing=200`, and one safe gift-card error. The `100 kr` fixture reduced a `200 kr` quote to `amountOwing=100`. The `500 kr` fixture reduced a `200 kr` quote to `amountOwing=0`.
 - T0091 no-payment draft smoke: direct JumpYard Cloud draft call with the full gift-card fixture created Roller Playground booking `5101055`, returned HTTP `201`, `amountOwing=0`, `giftCardAppliedCount=1`, and Aurora shows the local prepayment draft as `published` with `total_cents=20000` and `amount_owing_cents=0`.
+- T0092 public smoke attempt: `https://jumpyard-check-in.pages.dev/?codexSmoke=t0092-gift-card` reached the buy-entry contact step, but the public UI did not show `Presentkort`. A cache-busted reload still lacked the field.
+- T0092 public deploy verification: public HTML/JavaScript chunks for `https://jumpyard-check-in.pages.dev` did not contain `Presentkort`, `giftCard`, or `giftCards`; GitHub showed PR #93 merged as `9718b58` but no deployment/status for that merge commit.
+- T0092 public UI retest: after Cloudflare updated, public phone app reached the buy-entry contact step and exposed the optional `Presentkort` field with help text.
+- T0092 invalid gift-card public smoke: entering an invalid gift card produced safe text `Gift card could not be applied`, kept total `200 kr`, and disabled `Gå till betalning`.
+- T0092 partial gift-card public smoke: the active `100 kr` fixture reduced a `200 kr` booking to `100 kr`, then rendered Roller/Adyen payment for `100 kr` with card, instalment, and Google Pay methods visible.
+- T0092 full gift-card public smoke: the active full-cover fixture reduced a `200 kr` booking to `0 kr`, skipped card entry, and continued to the phone safety/check-in flow. Roller Data API showed paid API booking `5101070` for `2026-06-03`, and JumpYard Cloud lookup returned booking `5101070` as `found`, `Paid`, `amountOwing=0`, source `jumpyard_cloud`, lookup path `aurora:booking_reference`, freshness `fresh`, and one redeemable ticket.
+- T0092 card-only regression smoke: a normal no-gift-card `200 kr` buy-entry flow still rendered Roller/Adyen payment for `200 kr`.
+- T0092 direct Aurora CLI readback: not run because local AWS SSO for profile `wrlds-dev` had expired. Use `aws sso login --profile wrlds-dev` before any future direct RDS Data API verification.
 - T0089 AWS read-only checks: SNS SMS sandbox status is still enabled, SNS SMS type is transactional, monthly spend limit is `1` USD, no default Sender ID/origination number exists, AWS End User Messaging SMS is still sandbox tier with no sender ids/pools/phone numbers, SES production access is disabled, only `love@wrlds.com` is verified for SES, and no dedicated email configuration set exists.
 - T0089 documentation: `GUEST_MESSAGING_PRODUCTION_UNLOCK.md` records SMS sandbox exit, SES production access, sender/domain identity gates, missing JumpYard/WRLDS inputs, and future approved implementation steps.
 - T0089 scope guard: no app code, Lambda code, CDK resources, Aurora migrations, Roller config, support cases, sender identities, domains, SMS/email sends, EventBridge payloads, or `confirmSend` behavior changed.

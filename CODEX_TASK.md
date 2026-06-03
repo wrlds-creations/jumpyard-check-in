@@ -1,116 +1,82 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0091
+T0093
 
 ## Goal
-Implement gift-card use in the buy-entry checkout flow using the proven Roller Draft Booking path.
+Validate whether Nacka membership, `10-Kort`, or multi-visit codes can be used in the buy-entry checkout through a Roller-supported server-side quote/draft payload.
 
 ## Dependencies
-- T0090 completed and merged.
-- Active Playground gift-card fixtures exist:
-  - `100 kr` gift card reduces a `200 kr` quote to `amountOwing=100`.
-  - `500 kr` gift card reduces a `200 kr` quote to `amountOwing=0`.
-- Card-based new-booking and add-product payment flows already work in Playground.
+- T0092 completed and merged.
+- T0090 found that paid `10-Kort` does not currently expose a usable beta multi-pass balance through `GET /customers/{customerId}/multi-passes`.
+- Roller Playground still has the relevant membership or `10-Kort` product/code fixtures available.
 
 ## Allowed areas
 - CODEX_TASK.md
 - PROJECT_CONTEXT.md
-- DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
 - TEST_PLAN.md
-- GIFT_CARD_MULTI_VISIT_DISCOVERY.md, only if needed for implementation notes
-- infra/lambda/booking/index.js
-- jumpyard-checkin-phone/src/app/page.tsx
-- jumpyard-checkin-phone/src/flow/cloudClient.ts
-- jumpyard-checkin-phone/src/flow/machine.ts
-- Existing phone components touched only if required for the gift-card UI in the current buy-entry checkout flow
+- GIFT_CARD_MULTI_VISIT_DISCOVERY.md
+- Small local discovery script only if needed and consistent with existing Roller discovery tooling
 
 ## Do not touch
+- Phone app UI
 - Staff/admin app
 - Kiosk app
-- Assets
-- Deliverables
-- Payment package/vendor files
+- Lambda implementation
 - AWS CDK resources
 - Aurora migrations
+- Payment package/vendor files
+- Assets
+- Deliverables
 - Roller Live
 - Production credentials
 - `.env`
-- Multi-visit or membership-code implementation
-- Payment Link flow
+- Real booking payment/redeem flows unless explicitly approved for a safe Playground-only smoke
 
 ## Requirements
 
-1. Add a guest-facing gift-card input in the buy-entry checkout path before draft/payment creation.
+1. Investigate the safest Roller-supported way to validate a guest-entered membership, `10-Kort`, or multi-visit code in the booking checkout payload.
 
-2. Send gift cards to JumpYard Cloud quote/draft calls as:
-   - `giftCards: [{ giftCardNumber }]`
+2. Test only safe no-booking-write quote/cost calls first.
+   - Candidate payload: `discounts: [{ code }]`
+   - If docs or Playground behavior points to another field, document it before testing.
 
-3. Backend must:
-   - accept optional gift cards in quote and draft payloads
-   - forward gift cards to Roller Booking Costs/Create Draft Booking
-   - return safe gift-card applied/error information
-   - never log or persist full gift-card numbers
+3. Confirm whether Roller returns:
+   - accepted code / reduced amount owing
+   - rejected code / safe error
+   - no effect
+   - any `multiPassAllocations` or related metadata
 
-4. Frontend must:
-   - show invalid gift-card errors returned by Roller
-   - show applied gift-card amount/reduced amount owing when Roller returns it
-   - continue to Roller/Adyen payment when `amountOwing > 0`
-   - handle `amountOwing === 0` as a no-card-needed path if Roller supports draft publish/no-payment continuation
+4. Do not display, implement, or promise remaining visit balance in V1 unless a proven public API fixture returns it.
 
-5. If zero-owing draft publish cannot be safely completed in this ticket:
-   - fail closed or show a clear payment-not-needed pending state
-   - document the exact blocker and next ticket
+5. If a write smoke is needed, stop and ask the user before creating a Playground draft or booking.
 
-6. Keep multi-visit out of scope:
-   - do not show remaining visits
-   - do not add membership/multi-visit code behavior
-   - do not guess discount-code payload behavior
+6. Update source-of-truth docs with the exact conclusion and next recommended ticket.
 
 ## Non-goals
-- Do not create or administer gift cards.
-- Do not implement gift-card balance lookup UI.
-- Do not import `/data/giftcards` into Aurora unless a proven need appears.
-- Do not implement multi-visit or membership code.
-- Do not change add-product Payment Link behavior.
+- Do not implement membership/multi-visit UI.
+- Do not change gift-card behavior.
+- Do not change payment behavior.
 - Do not change staff redeem behavior.
 - Do not create AWS resources.
-- Do not change production readiness tickets except for roadmap clarity.
+- Do not create Aurora schema.
+- Do not consume a real multi-visit pass unless the user explicitly approves it.
 
 ## Acceptance criteria
-- Buy-entry quote can include a gift card.
-- Invalid gift cards show a safe guest-facing error.
-- Partial gift-card payment reduces the amount due and still allows card payment for the remainder.
-- Full gift-card payment does not render a card-payment requirement if Roller supports no-payment publish.
-- No full gift-card numbers are stored, logged, or printed.
-- Existing card-only checkout still works.
-- Root validation passes.
-- Phone lint/build pass if phone code changes.
+- T0093 states whether membership/`10-Kort`/multi-visit codes can be validated through Roller quote/cost payloads.
+- T0093 documents the exact tested payload shape and safe result.
+- T0093 clearly states whether V1 should support only code validation, no support, or a later richer balance-aware implementation.
+- No full secrets, raw tokens, full contact data, or private code values are committed.
+- Root validation passes after docs updates.
 
 ## Manual verification
-Use active Playground gift-card fixtures:
-- invalid gift-card number
-- `100 kr` gift card for partial payment
-- `500 kr` gift card for full payment
+Use Roller Playground only.
 
-Confirm:
-- Roller Booking Costs applies or rejects gift card correctly.
-- Phone UI explains the outcome clearly.
-- No full gift-card number appears in logs or persisted state.
+If user-provided membership or multi-visit codes are needed, handle them as sensitive test data and do not commit or print them.
 
 ## Automated validation
 Run:
 - npm run validate
-- node --check infra/lambda/booking/index.js
-- npm --prefix jumpyard-checkin-phone run lint
-- npm --prefix jumpyard-checkin-phone run build
 - git diff --check
-
-## Implementation result
-- Implemented and deployed to JumpYard Cloud dev on 2026-06-02.
-- Dev deploy changed only `BookingHandler` Lambda code.
-- Direct API smoke passed for invalid gift card, partial `100 kr` gift card, and full `500 kr` gift card.
-- Full gift-card smoke created Roller Playground booking `5101055` through no-payment draft publish.
-- Public phone-flow proof moves to T0092 after this branch is committed, merged, and published by Cloudflare.
