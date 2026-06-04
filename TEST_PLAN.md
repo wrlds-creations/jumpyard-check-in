@@ -1229,3 +1229,18 @@ Use this file to define validation for the current project or milestone.
 | Phone lint | Phone app lint should pass. | Passed with existing warnings | `npm --prefix jumpyard-checkin-phone run lint` passed with the pre-existing four `<img>` warnings. |
 | Phone build | Phone app build should pass. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed; output included existing `baseline-browser-mapping` age notices. |
 | Local render smoke | Local phone app should render after changes. | Passed | Local dev server returned HTTP 200 and Playwright CLI screenshot after a 5s wait rendered the start screen. Direct click-through was not automated because there is no route into internal buy substeps and the in-app browser tool was unavailable in this run. |
+
+## T0103 SkyRider Availability Gate
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Ticket scope | T0103 should be the narrowed SkyRider gate, not the broad dynamic add-on catalog. | Passed | The broader add-on catalog is deferred until Gustav confirms which Roller products should be guest-facing. |
+| Roller shape check | Roller SkyRider availability should be readable from the Playground product availability endpoint. | Passed | Read-only check against parent product `1765442` returned HTTP `200`; SkyRider uses an all-day availability shape instead of entry-style sessions. |
+| Availability response | JumpYard Cloud availability should include SkyRider alongside entry/family products. | Pending deploy smoke | The booking Lambda now loads the SkyRider parent product and includes it in the same Roller availability request. |
+| Add-on UI gate | Phone add-ons should show SkyRider only when availability is valid for the selected date/time. | Passed in build | The phone app hides SkyRider when availability is missing, closed, or zero. |
+| Add-on quantity cap | SkyRider quantity should be capped by returned finite capacity and selected jumper count. | Passed in build | If Roller returns unlimited/null capacity, the cap remains selected jumper count. |
+| Quote/draft safety | Entry and SkyRider should be server-validated, while stock add-ons should not fail availability validation. | Passed in build | Phone items now carry `requiresAvailability`; the booking Lambda validates only explicitly flagged capacity-bound items. |
+| Booking Lambda syntax | Booking Lambda should remain syntactically valid. | Passed | `node --check infra/lambda/booking/index.js` passed on 2026-06-04. |
+| Phone lint | Phone app lint should pass. | Passed with existing warnings | `npm --prefix jumpyard-checkin-phone run lint` passed with the pre-existing four `<img>` warnings. |
+| Phone build | Phone app build should pass. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+| Root validation | Source-of-truth docs should validate after T0103 updates. | Passed | `npm run validate` passed on 2026-06-04. |
