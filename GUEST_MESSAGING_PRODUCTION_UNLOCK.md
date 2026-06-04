@@ -6,6 +6,8 @@ This document is the source of truth for moving JumpYard guest SMS and email fro
 
 Read-only AWS checks were run on 2026-06-02 against account `376129878018`, region `eu-north-1`.
 
+T0101 added the dev response runbook in `OPERATIONS_RUNBOOK.md`, including SMS/email delivery checks, SNS/SES sandbox meaning, and safe first actions. This does not replace production delivery monitoring or SNS/SES production access.
+
 | Area | Current state | Meaning |
 |---|---|---|
 | SNS SMS sandbox | `IsInSandbox=true` | SMS can only be sent to verified sandbox destination numbers. |
@@ -45,7 +47,7 @@ Do not enable unattended `confirmSend=true` scheduled booking-time messages unti
 | Email sender identity | A production sender domain or address is verified with DKIM, SPF/DMARC policy, and approved reply-to/from values. |
 | Guest consent/copy | Final transactional SMS and email copy, opt-in/consent basis, and support/opt-out wording are approved. |
 | Volume plan | Expected monthly volume, peak rate, countries, and spend limits are approved. |
-| Monitoring | Delivery failure monitoring and runbooks exist for SMS, email, and due-message processing. |
+| Monitoring | Production delivery failure monitoring exists for SMS, email, and due-message processing; the T0101 dev runbook is not enough by itself. |
 | Environment boundary | Dev/staging/live config, base URLs, secrets, and sender identities are separated. |
 
 Until those gates are satisfied:
@@ -79,7 +81,7 @@ After the missing inputs are available and explicitly approved, the next impleme
 2. Configure production email sender/reply-to values per environment.
 3. Request or configure SMS sender identity/origination according to AWS approval.
 4. Submit AWS Support production-access requests with approved content.
-5. Add channel-specific delivery alarms and runbooks.
+5. Add channel-specific delivery alarms and link them to the T0101 operations runbook.
 6. Run sandbox-to-production smokes with real guest-like data.
 7. Flip unattended booking-time sends only after a reviewed CDK/config change.
 

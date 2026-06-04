@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-04
-- Current branch: `codex/t0100-public-smoke-closeout`
-- Current status: T0100 is completed. The T0099/T0100 implementation was committed, pushed, merged through PR #99, published by Cloudflare, and public phone/API smoke confirmed `Klippkort` is present and working without remaining-visit display.
-- Current ticket: `T0101`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`
-- Recommended next step: start T0101 operational monitoring and runbooks, unless you want to pause for manual Klippkort UI testing first.
+- Current branch: `codex/t0101-operational-runbooks`
+- Current status: T0101 is completed locally. It added the dev operations runbook layer and updated source-of-truth docs without changing or deploying AWS resources.
+- Current ticket: `T0102`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`
+- Recommended next step: commit/merge T0101, then start T0102 notification routing and channel-specific operational alerts.
 
 ## Current Structure
 
@@ -27,6 +27,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |-- FOLLOWUPS.md
 |-- AWS_RESOURCES.md
 |-- TEST_PLAN.md
+|-- OPERATIONS_RUNBOOK.md
 |-- GUEST_MESSAGING_PRODUCTION_UNLOCK.md
 |-- GIFT_CARD_MULTI_VISIT_DISCOVERY.md
 |-- scripts/
@@ -232,19 +233,20 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0096` | Controlled full integrated write/redeem rehearsal. | 2026-06-03 | Public flow created paid booking `5101105`; JumpYard Cloud lookup returned fresh Aurora-backed state; session `jycs_mpy1x4ne_910af158` reached ready-for-staff handoff `JY5397`; staff-confirmed redeem consumed one ticket and public admin queue returned to empty. |
 | `T0097` | Membership/discount-code discovery. | 2026-06-03 | Gustav's clarification was confirmed through official docs and safe no-write Roller Playground checks: current Nacka `10-Kort` is not exposed as beta multi-pass balance, but the known code applies through `discounts: [{ code }]` as a 100% discount. |
 | `T0098` | Controlled 10-Kort consumption smoke. | 2026-06-03 | One approved Playground write created and published booking `5101114` with the masked `10-Kort` code. Roller showed booking discount evidence but no 10 -> 9 remaining-use readback; V1 must not show remaining visits. |
+| `T0101` | Operational monitoring and runbooks. | 2026-06-04 | Read-only AWS checks confirmed dashboard `jumpyard-check-in-dev-ops`, 17 `jumpyard-check-in-dev-*` alarms in `OK`, and Lambda log groups with 30-day retention. Added `OPERATIONS_RUNBOOK.md` for dev incident response across Data API, webhook, booking/payment, gift card/Klippkort, messaging, and staff redeem without changing AWS resources. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0099` | Klippkort code checkout implementation. | Completed | Phone buy-entry checkout adds optional `Klippkort` code entry, JumpYard Cloud returns safe discount-code metadata, and full code coverage uses the no-payment draft publish path. Dev deploy, public publish, and smoke passed in T0100. |
+| `T0101` | Operational monitoring and runbooks. | Completed locally | Added the dev operations runbook and documented existing observability, AWS/Aurora response paths, safe first actions, and escalation owners. No AWS resources changed. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0101` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, gift card/code handling, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
-| `T0102` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
+| `T0102` | Notification routing and channel-specific alerts | Add the next low-risk alert layer: owner/action routing, SNS/SES delivery failure visibility, scheduler-specific health checks, and dashboard/runbook links without enabling production sends. |
+| `T0103` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
 ## Validation Status
 
