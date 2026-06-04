@@ -1,14 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0101
+T0102
 
 ## Goal
-Add the next operational monitoring and runbook layer for the JumpYard Cloud dev flow before broader readiness work.
+Add the next notification-routing and channel-specific alerting layer for JumpYard Cloud dev operations.
 
 ## Dependencies
-- T0100 completed.
-- Existing dev AWS foundation and CloudWatch observability from earlier tickets.
+- T0101 completed.
+- `OPERATIONS_RUNBOOK.md` exists and documents the current dev signals.
+- Existing dev CloudWatch dashboard and alarms remain healthy.
 - No production/live cutover yet.
 
 ## Allowed areas
@@ -19,8 +20,9 @@ Add the next operational monitoring and runbook layer for the JumpYard Cloud dev
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - AWS_RESOURCES.md
+- OPERATIONS_RUNBOOK.md
 - GUEST_MESSAGING_PRODUCTION_UNLOCK.md
-- Existing infra observability/logging files only if needed for monitoring/runbook wiring
+- Existing infra observability/logging files only if needed for alert wiring
 - New docs/runbook files only if they fit the repo source-of-truth structure
 
 ## Do not touch
@@ -34,53 +36,51 @@ Add the next operational monitoring and runbook layer for the JumpYard Cloud dev
 - AWS production/staging stacks
 - Payment package/vendor files
 - Staff auth model
+- Guest-facing SMS/email copy unless explicitly scoped
 
 ## Requirements
 
-1. Review the current dev monitoring coverage:
-   - Data API sync.
-   - Roller webhook processing.
-   - Booking quote/draft/payment paths.
-   - Gift card and Klippkort/code paths.
-   - SMS/email guest messaging.
-   - Staff handoff/redeem.
+1. Review the T0101 runbook and current dev CloudWatch coverage.
 
-2. Identify practical gaps before larger rollout:
-   - Missing alarms.
-   - Missing dashboards.
-   - Missing runbook steps.
-   - Missing owner/action routing.
-   - Missing safe API call/error counters.
+2. Decide the lowest-risk next alerting additions for dev:
+   - Owner/action routing for existing alarms.
+   - Scheduler-specific health signals for Data API sync and due-message planning.
+   - SMS/email delivery failure visibility.
+   - Webhook enrichment failure visibility.
+   - Gift card/Klippkort quote/draft error visibility.
 
-3. Add only the monitoring/runbook pieces that are low-risk and fit the existing dev AWS pattern.
+3. Add only dev-safe monitoring changes that fit the current CDK pattern.
 
-4. Document operational response:
-   - What the signal means.
-   - Where to look in AWS.
-   - What a safe first action is.
-   - When to contact Roller/Josh/Joao/Pabel.
+4. Do not enable unattended production guest messaging.
 
-5. Update source-of-truth docs with what changed and what remains for staging/live readiness.
+5. Update `OPERATIONS_RUNBOOK.md` so each new signal has:
+   - Meaning.
+   - AWS location.
+   - Safe first action.
+   - Escalation owner.
+
+6. Update source-of-truth docs with what changed and what remains for staging/live readiness.
 
 ## Non-goals
 - Do not move to staging/live.
 - Do not request SMS/SES production unlock.
-- Do not replace dev staff auth.
-- Do not redesign the customer or staff UI.
-- Do not add new payment behavior.
+- Do not replace staff auth.
+- Do not redesign customer or staff UI.
+- Do not add payment behavior.
 - Do not change Roller webhook subscriptions unless explicitly required.
+- Do not create production notification subscriptions without explicit approval.
 
-## Acceptance criteria
-- Existing dev observability is documented clearly.
-- Any added alarms/dashboards/runbooks are listed in AWS_RESOURCES.md.
+## Acceptance Criteria
+- Existing T0101 runbook stays accurate.
+- Any added alarms, dashboards, metric filters, or notification targets are listed in AWS_RESOURCES.md.
 - Operational gaps remain tracked in FOLLOWUPS.md.
 - `npm run validate` passes.
-- If AWS changes are made, `npm --prefix infra run synth:dev`, `diff:dev`, and `deploy:dev` are run and documented.
+- If infra changes are made, `npm --prefix infra run synth:dev`, `diff:dev`, and `deploy:dev` are run and documented.
 
-## Manual verification
-Open the relevant AWS Console areas and confirm the documented dashboard/alarm/runbook paths make sense for a non-Codex operator.
+## Manual Verification
+Open AWS Console and confirm any new alerting resources are visible, named with `jumpyard-check-in-dev`, and point back to the runbook.
 
-## Automated validation
+## Automated Validation
 Run:
 - npm run validate
 - npm --prefix infra run synth:dev, if infra changed

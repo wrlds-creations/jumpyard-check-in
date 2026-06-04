@@ -1202,3 +1202,16 @@ Use this file to define validation for the current project or milestone.
 | Phone build | `npm --prefix jumpyard-checkin-phone run build` passes. | Passed | Static export build passed; Next reported stale `baseline-browser-mapping` advisory warnings. |
 | Local browser smoke | Local buy-entry review shows one basket before draft/payment. | Passed | Browser check on `http://localhost:3000/` showed `60 min entré`, `Strumpor`, and `Reservera bokning` on the review step. |
 | Diff whitespace | `git diff --check` passes. | Passed | Passed on 2026-05-26; line-ending notices are Git CRLF warnings only. |
+
+## T0101 Operational Monitoring And Runbooks
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Source docs | Required ticket docs and AWS workflow notes should be read before T0101 changes. | Passed | `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, `CODEX_TASK.md`, `AWS_RESOURCES.md`, and `skills/aws-project-infrastructure/` were reviewed. |
+| Existing dashboard | Current dev operations dashboard should exist. | Passed | Read-only AWS check returned dashboard `jumpyard-check-in-dev-ops` in account `376129878018`, region `eu-north-1`. |
+| Existing alarms | Current dev alarms should exist and not be firing. | Passed | Read-only AWS check returned 17 `jumpyard-check-in-dev-*` alarms, all in `OK`: API, Lambda, Roller API, DLQ, and API throttling. |
+| Existing log groups | Main Lambda log groups should have retention configured. | Passed | Read-only AWS check returned lookup, booking, redeem, session, webhook, and data-sync log groups with 30-day retention. |
+| Runbook coverage | Operational response should cover the current critical dev flows. | Passed | `OPERATIONS_RUNBOOK.md` covers Data API sync, webhook, booking quote/draft/payment, gift card/Klippkort, SMS/email, staff handoff/redeem, Aurora checks, safe first actions, and escalation routing. |
+| AWS mutation scope | T0101 should not create or modify AWS resources. | Passed | No infra code changed; no CDK synth/diff/deploy was required. |
+| Root validation | Source-of-truth docs should validate after T0101 updates. | Passed | `npm.cmd run validate` passed. |
+| Diff whitespace | Diff whitespace check should pass. | Passed with CRLF notices | `git diff --check` passed; output contains Git line-ending notices only. |

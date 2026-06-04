@@ -95,6 +95,15 @@ T0061 API protection boundary notes:
 - Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-05-28; post-deploy `npm --prefix infra run diff:dev` showed no differences.
 - Smoke: `POST /v1/bookings/availability` returned HTTP `200` after throttling was enabled, without creating a booking.
 
+T0101 operational runbook notes:
+
+- AWS resources changed: none.
+- Read-only AWS verification on 2026-06-04 confirmed dashboard `jumpyard-check-in-dev-ops` exists.
+- Read-only AWS verification confirmed 17 `jumpyard-check-in-dev-*` alarms are present and `OK`: API 5xx, high API 4xx, API throttled requests, Roller API errors, Roller ops DLQ, and Lambda errors/throttles for lookup, booking, redeem, session, webhook, and data-sync.
+- Read-only AWS verification confirmed the six main Lambda log groups have 30-day retention.
+- Added source-of-truth runbook `OPERATIONS_RUNBOOK.md` for Data API sync, webhook, booking quote/draft/payment, gift card/Klippkort, SMS/email, staff handoff/redeem, Aurora checks, safe first actions, and escalation routing.
+- No synth, diff, deploy, or AWS mutation was required because T0101 only documents the current dev operations layer.
+
 T0062 route auth and WAF/edge boundary notes:
 
 - AWS resources changed: none.
@@ -601,6 +610,7 @@ Confirmed T0006 dev target:
 | `m0uo5g4mde` | API Gateway HTTP API | `dev` | `eu-north-1` | `cdk` | Endpoint `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`; lookup, booking availability/quote/draft, existing-booking add-product quote/draft, session, check-in session link, SMS/email link, staff auth/handoff, webhook, and redeem routes are implemented; CORS uses explicit dev origins; `$default` stage throttling is rate `25` requests/second and burst `50`. |
 | `jumpyard-check-in-dev-ops` | CloudWatch Dashboard | `dev` | `eu-north-1` | `cdk` | T0060 operations dashboard for API requests/errors/latency, Lambda metrics, SQS/DLQ metrics, and Roller outbound API call/error metrics. |
 | `jumpyard-check-in-dev-*` CloudWatch alarms | CloudWatch Alarms | `dev` | `eu-north-1` | `cdk` | T0060 alarms for API 5xx, high API 4xx, Roller API errors, Roller ops DLQ messages, and Lambda errors/throttles; T0061 adds API throttled request alarm `jumpyard-check-in-dev-api-throttled-requests`. |
+| `OPERATIONS_RUNBOOK.md` | Operational Runbook | `dev` | `eu-north-1` | repo docs | T0101 source-of-truth runbook for where to look in AWS/Aurora, what each signal means, safe first actions, and when to contact Roller/Josh/Joao/Pabel, AWS Support, or JumpYard operations. |
 | `jumpyard-check-in-dev-stack-lookup` | Lambda | `dev` | `eu-north-1` | `cdk` | T0016 lookup handler; reads Aurora first, refreshes from Roller Playground only when needed, and returns normalized phone-flow lookup response. |
 | `jumpyard-check-in-dev-stack-booking` | Lambda | `dev` | `eu-north-1` | `cdk` | T0083 booking handler; reads Roller Playground availability, quotes Roller Playground draft costs, creates confirmed Playground draft bookings behind idempotency, creates separate linked add-product draft bookings for existing bookings, resolves original booking contact server-side for no-customer add-product drafts, persists safe pre-payment draft rows including first/last name for staff-only handoff use, returns safe payment config and response-only `paymentJwt`, and writes safe audit rows. |
 | `jumpyard-check-in-dev-stack-redeem` | Lambda | `dev` | `eu-north-1` | `cdk` | T0047 redeem handler; plans/validates server-side redemption from Aurora, requires a dev token for lower-level direct confirmed writes, refreshes live Roller state before write, supports staff-auth-protected session redeem, marks completed sessions, and records attempt audit. |
