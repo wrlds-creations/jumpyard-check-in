@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-04
-- Current branch: `codex/t0100-klippkort-deploy-smoke`
-- Current status: T0100 deployed the existing T0099 booking Lambda code to AWS dev and passed backend Klippkort smokes. Public Cloudflare Pages still serves a bundle without `Klippkort`, so the public phone smoke remains blocked until the T0099/T0100 changes are committed, merged, and published.
-- Current ticket: `T0100`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`
-- Recommended next step: commit, push, and merge the T0099/T0100 changes so Cloudflare publishes the phone app, then finish the public T0100 phone-flow smoke for `Klippkort`.
+- Current branch: `codex/t0100-public-smoke-closeout`
+- Current status: T0100 is completed. The T0099/T0100 implementation was committed, pushed, merged through PR #99, published by Cloudflare, and public phone/API smoke confirmed `Klippkort` is present and working without remaining-visit display.
+- Current ticket: `T0101`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`
+- Recommended next step: start T0101 operational monitoring and runbooks, unless you want to pause for manual Klippkort UI testing first.
 
 ## Current Structure
 
@@ -237,13 +237,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0099` | Klippkort code checkout implementation. | Completed locally in working tree | Phone buy-entry checkout adds optional `Klippkort` code entry, JumpYard Cloud returns safe discount-code metadata, and full code coverage uses the no-payment draft publish path. Dev booking Lambda deploy/backend smoke passed in T0100; public phone smoke remains pending until Cloudflare publishes the UI. |
+| `T0099` | Klippkort code checkout implementation. | Completed | Phone buy-entry checkout adds optional `Klippkort` code entry, JumpYard Cloud returns safe discount-code metadata, and full code coverage uses the no-payment draft publish path. Dev deploy, public publish, and smoke passed in T0100. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0100` | Klippkort deploy and integrated smoke | Deploy the booking Lambda code update and verify invalid Klippkort, entry-only full coverage, entry plus add-ons partial coverage, Aurora/lookup continuation, and staff redeem eligibility. |
 | `T0101` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, gift card/code handling, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
 | `T0102` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
@@ -295,7 +294,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0099 local validation: `node --check infra/lambda/booking/index.js`, `npm --prefix jumpyard-checkin-phone run build`, `npm run validate`, and `git diff --check` passed. Phone build reported existing baseline-browser-mapping age notices; `git diff --check` reported Git CRLF notices only.
 - T0100 branch/deploy status: branch `codex/t0100-klippkort-deploy-smoke` was created on 2026-06-04. AWS SSO profile `wrlds-dev` resolved account `376129878018`; pre-deploy `npm.cmd --prefix infra run diff:dev` showed only `BookingHandler` Lambda code; `npm.cmd --prefix infra run deploy:dev` passed; post-deploy `npm.cmd --prefix infra run diff:dev` showed no differences.
 - T0100 backend Klippkort smoke: dev JumpYard Cloud availability found entry product `1765860` at `10:00`. Baseline quote returned `amountOwing=200`; invalid code returned `amountOwing=200` with one safe discount-code error; the masked paid `10-Kort` ticket/code from booking `5101046` reduced entry-only to `amountOwing=0` with `discount=200`; mixed entry plus JumpSocks with `requireAvailability=false` left `amountOwing=45` and `discount=200`; a full-coverage draft was published without payment as Roller Playground booking `5101133`. Validation output and Aurora event rows used masked codes/counts only.
-- T0100 regression smoke: the active masked `100 kr` gift card from booking `5101044` still applied separately through `giftCards`, reducing a `200 kr` quote to `amountOwing=100` with one applied gift card and no gift-card errors. Public Cloudflare bundle check for `https://jumpyard-check-in.pages.dev` returned HTTP `200` but no `Klippkort`, `clipCard`, or `discountCodes` strings in the served HTML/assets, so public phone verification is pending publish.
+- T0100 regression smoke: the active masked `100 kr` gift card from booking `5101044` still applied separately through `giftCards`, reducing a `200 kr` quote to `amountOwing=100` with one applied gift card and no gift-card errors. PR #99 merged T0099/T0100 into `main`; after Cloudflare published, public bundle check for `https://jumpyard-check-in.pages.dev` found `Klippkort`, `clipCard`, and `discountCodes`. Public API smoke confirmed baseline `amountOwing=200`, invalid Klippkort kept `amountOwing=200` with one safe error, valid entry-only Klippkort reduced `amountOwing=0`, and mixed entry plus JumpSocks left `amountOwing=45`.
 - T0089 AWS read-only checks: SNS SMS sandbox status is still enabled, SNS SMS type is transactional, monthly spend limit is `1` USD, no default Sender ID/origination number exists, AWS End User Messaging SMS is still sandbox tier with no sender ids/pools/phone numbers, SES production access is disabled, only `love@wrlds.com` is verified for SES, and no dedicated email configuration set exists.
 - T0089 documentation: `GUEST_MESSAGING_PRODUCTION_UNLOCK.md` records SMS sandbox exit, SES production access, sender/domain identity gates, missing JumpYard/WRLDS inputs, and future approved implementation steps.
 - T0089 scope guard: no app code, Lambda code, CDK resources, Aurora migrations, Roller config, support cases, sender identities, domains, SMS/email sends, EventBridge payloads, or `confirmSend` behavior changed.
