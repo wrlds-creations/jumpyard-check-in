@@ -174,6 +174,18 @@ function getJumperCount(product: NewBookingProduct | null, nextQuantity: number)
     : nextQuantity;
 }
 
+function getAddonMaxQuantity(
+  addon: BuyAddonEntry,
+  addonAvailability: NewBookingProduct | null,
+  jumperCount: number
+) {
+  const baseMax = Math.max(1, jumperCount * addon.maxPerGuest);
+  if (!addon.requiresAvailability) return baseMax;
+  if (!addonAvailability?.available || !addonAvailability.productId) return 0;
+  if (addonAvailability.capacityRemaining === null) return baseMax;
+  return Math.max(0, Math.min(baseMax, addonAvailability.capacityRemaining));
+}
+
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
@@ -314,22 +326,29 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       ].filter((addon): addon is BuyAddonEntry => addon.rollerProductId !== null),
     [t]
   );
-  const selectedAddons: Addon[] = useMemo(
-    () =>
-      buyAddons.filter((addon) => addonQty[addon.id] > 0).map((addon) => ({
-        id: addon.id,
-        label: addon.label,
-        price: addon.price,
-        qty: addonQty[addon.id],
-        requiresAvailability: addon.requiresAvailability,
-        rollerProductId: addon.rollerProductId,
-      })),
-    [addonQty, buyAddons]
-  );
+  const addonAvailabilityById = new Map<AddonId, NewBookingProduct>();
+  for (const product of selectedSlot?.products ?? []) {
+    if (product.type === 'addon') {
+      addonAvailabilityById.set(product.key as AddonId, product);
+    }
+  }
+  const getBuyAddonMax = (addon: BuyAddonEntry, nextJumperCount = jumperCount) =>
+    getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null, nextJumperCount);
+  const visibleBuyAddons = buyAddons.filter((addon) => getBuyAddonMax(addon) > 0);
+  const selectedAddons: Addon[] = buyAddons
+    .filter((addon) => addonQty[addon.id] > 0 && getBuyAddonMax(addon) > 0)
+    .map((addon) => ({
+      id: addon.id,
+      label: addon.label,
+      price: addon.price,
+      qty: Math.min(addonQty[addon.id], getBuyAddonMax(addon)),
+      requiresAvailability: addon.requiresAvailability,
+      rollerProductId: addon.rollerProductId,
+    }));
   const addonsTotal = selectedAddons.reduce((total, addon) => total + addon.price * addon.qty, 0);
   const entryTotal = (selectedProduct?.unitPrice ?? 0) * quantity;
   const basketEstimateTotal = entryTotal + addonsTotal;
-  const shouldPrecheckBasketAvailability = selectedAddons.every((addon) => addon.requiresAvailability === true);
+  const shouldPrecheckBasketAvailability = selectedProduct !== null;
   const giftCardInputs = buildGiftCardInputs(giftCardNumber);
   const discountCodeInputs = buildDiscountCodeInputs(clipCardCode);
   const productLabels = buildProductLabelMap(selectedProduct, buyAddons);
@@ -420,7 +439,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setAddonQty((current) => {
       const next = { ...current };
       for (const addon of buyAddons) {
-        next[addon.id] = Math.min(next[addon.id], Math.max(1, nextJumperCount * addon.maxPerGuest));
+        next[addon.id] = Math.min(next[addon.id], getBuyAddonMax(addon, nextJumperCount));
       }
       return next;
     });
@@ -450,7 +469,9 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setQuote(null);
     setDraft(null);
     setPaymentSyncError(null);
-    setAddonQty((current) => ({ ...current, [id]: Math.max(0, nextQty) }));
+    const addon = buyAddons.find((entry) => entry.id === id);
+    const max = addon ? getBuyAddonMax(addon) : 0;
+    setAddonQty((current) => ({ ...current, [id]: Math.max(0, Math.min(max, nextQty)) }));
   };
 
   const buildCustomer = (): NewBookingCustomer => ({
@@ -467,12 +488,14 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
         bookingDate: availability.date,
         productId: Number(selectedProduct.productId),
         quantity,
+        requiresAvailability: true,
         startTime: selectedProduct.startTime,
       },
       ...selectedAddons.map((addon) => ({
         bookingDate: availability.date,
         productId: Number(addon.rollerProductId),
         quantity: addon.qty,
+        requiresAvailability: addon.requiresAvailability === true,
         startTime: selectedProduct.startTime,
       })),
     ];
@@ -792,9 +815,9 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
           </div>
 
           <div className="flex-1 flex flex-col gap-2 mb-4">
-            {buyAddons.map((addon) => {
+            {visibleBuyAddons.map((addon) => {
               const value = addonQty[addon.id];
-              const max = Math.max(1, jumperCount * addon.maxPerGuest);
+              const max = getBuyAddonMax(addon);
 
               return (
                 <div

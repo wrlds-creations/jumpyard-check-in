@@ -144,7 +144,7 @@ export interface NewBookingProduct {
   productId: string | null;
   productName: string | null;
   startTime: string;
-  type: 'entry' | 'family';
+  type: 'entry' | 'family' | 'addon';
   unitPrice: number | null;
   unitPriceCents: number | null;
 }
@@ -171,6 +171,7 @@ export interface NewBookingItemRequest {
   bookingDate: string;
   productId: number;
   quantity: number;
+  requiresAvailability?: boolean;
   startTime: string;
 }
 

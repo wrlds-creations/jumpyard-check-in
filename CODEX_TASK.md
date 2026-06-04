@@ -1,99 +1,73 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0102
+T0103
 
 ## Goal
-Polish the public phone buy-entry demo flow so it is clearer and more JumpYard-branded before the Playground demo.
+Add a narrow SkyRider availability gate to the phone buy-entry flow so SkyRider is only offered when Roller says it is available for the selected booking date/time, and selected SkyRider quantity cannot exceed returned capacity.
 
-## Dependencies
-- T0101 completed and merged.
-- The public phone app already supports buy entry, live availability, add-ons, gift card, Klippkort, Roller payment, safety, and staff handoff.
-- Existing Roller Playground and JumpYard Cloud dev APIs remain unchanged.
+## Context
+- The previously discussed broad add-on catalog ticket is deferred until it has been reviewed with Gustav.
+- The current buy-entry add-on list remains intentionally curated.
+- SkyRider is the only current buy-entry add-on that needs availability gating in this ticket.
+- Stock-style add-ons such as socks, padlock, and coffee should remain selectable without Roller time-capacity checks.
 
 ## Allowed areas
-- CODEX_TASK.md
-- PROJECT_CONTEXT.md
-- DECISIONS.md
-- REPO_CURRENT_STATE.md
-- FOLLOWUPS.md
-- TEST_PLAN.md
-- Existing phone app UI files
-- Existing phone app translation/context files
-- JumpYard phone icon references and newly referenced phone public icons if required by the UI
+- `CODEX_TASK.md`
+- `PROJECT_CONTEXT.md`
+- `DECISIONS.md`
+- `REPO_CURRENT_STATE.md`
+- `FOLLOWUPS.md`
+- `TEST_PLAN.md`
+- `infra/lambda/booking/index.js`
+- `jumpyard-checkin-phone/src/components/BuyTickets.tsx`
+- `jumpyard-checkin-phone/src/flow/cloudClient.ts`
 
 ## Do not touch
 - Roller Live
 - Production credentials
 - `.env`
-- AWS resources
+- AWS resources or CDK resource shape
 - Aurora migrations
-- Backend Lambda behavior
 - Staff/admin app
-- Deliverables
-- Payment package/vendor files
-- SMS/email sending logic
-- Raw secrets or raw payment JWT handling
+- SMS/email logic
+- Gift-card or Klippkort validation semantics
+- Broader dynamic add-on catalog discovery
 
 ## Requirements
 
-1. Improve the time-selection loading moment:
-   - Do not show all time buttons as individually loading.
-   - Show one branded loading state with a JumpYard icon/logo feel.
-   - Use clear copy such as fetching available places/capacity.
+1. Extend the booking availability response:
+   - Include the SkyRider parent product in the server-side Roller availability request.
+   - Preserve existing entry/family product availability behavior.
+   - Treat SkyRider's Roller all-day availability shape as valid when `onlineSalesOpen` is true.
 
-2. Move optional payment-code entry out of contact:
-   - Contact should stay focused on name, email, and phone.
-   - Gift card and Klippkort should be shown under the payment/review part of the flow.
-   - Keep the server-side order correct: codes must still be included before quote/draft/payment.
+2. Gate the phone add-on UI:
+   - Show SkyRider only when available for the chosen slot/date.
+   - Cap SkyRider quantity by the lower of selected jumper count and returned capacity when capacity is finite.
+   - Hide SkyRider when availability is missing, closed, or zero.
 
-3. Improve icon use:
-   - Add a phone icon to the phone field.
-   - Use JumpYard-created icons for payment, gift card, Klippkort, and basket rows where available.
-   - Do not add placeholder icons when no suitable icon exists.
-
-4. Polish the review/summary:
-   - Add compact icons beside basket rows such as entry, socks, lock, coffee, and SkyRider.
-   - Make the selected jump time explicit instead of showing a bare time value.
-   - Remove the duplicate grey bottom total/time footer.
-   - Keep the total/payment amount clear without repeating unnecessary totals.
-
-5. Keep behavior scoped:
-   - Do not change payment API contracts.
-   - Do not change Roller payment package behavior.
-   - Do not create bookings or make Roller writes as part of validation.
+3. Keep quote/draft safety:
+   - Send item-level `requiresAvailability` flags from the phone app.
+   - Server-side availability validation should validate only items explicitly marked as capacity-bound.
+   - Entry products and SkyRider should be checked; stock add-ons should not block availability validation.
 
 ## Non-goals
-- Do not implement new payment methods.
-- Do not solve Swish/Apple Pay visibility.
-- Do not change gift-card or Klippkort backend validation.
-- Do not create demo bookings.
-- Do not change staff handoff UI.
-- Do not change SMS/email production unlock.
-- Do not change production readiness or AWS alerting.
+- Do not build a dynamic add-on catalog.
+- Do not decide which food/drink/merch products should be visible.
+- Do not add Valo, extra person, Connected, party food, or other product groups.
+- Do not change payment methods, payment package behavior, or checkout copy.
+- Do not deploy AWS changes unless explicitly requested.
 
 ## Acceptance Criteria
-- Buy-entry loading after time selection uses one branded loading card.
-- Gift card and Klippkort inputs no longer appear in the contact step.
-- Gift card and Klippkort inputs appear in a payment/review dropdown before draft creation.
-- Updating gift card or Klippkort values requires an updated quote before the payment button is enabled.
-- Review basket rows include JumpYard icons and clearer jump-time labeling.
-- Payment surfaces use the JumpYard payment-card icon instead of a generic card icon.
-- Phone app lint/build pass.
-- Source-of-truth docs reflect T0102 scope and validation.
+- A selected time returns entry/family products as before.
+- SkyRider is included in availability data when Roller product cache has the SkyRider parent.
+- SkyRider is hidden in the add-on step if Roller does not expose valid availability for that selected date/time.
+- If SkyRider capacity is finite, the plus button cannot exceed available capacity.
+- Quote/draft with entry plus stock add-ons still works because stock add-ons are not capacity-checked.
+- Quote/draft with entry plus SkyRider still performs server-side availability validation before creating a draft.
 
-## Manual Verification
-Open the phone app and walk the non-writing part of the buy-entry flow:
-
-1. Choose `Köp entré`.
-2. Pick a time and press `Fortsätt`.
-3. Confirm the single branded loading card appears.
-4. Confirm product capacity loads.
-5. Continue to contact and confirm only contact fields appear.
-6. Continue to summary and confirm payment-code dropdown, row icons, explicit jump time, and cleaner total presentation.
-
-## Automated Validation
-Run:
+## Validation
+- `node --check infra/lambda/booking/index.js`
 - `npm --prefix jumpyard-checkin-phone run lint`
 - `npm --prefix jumpyard-checkin-phone run build`
 - `npm run validate`

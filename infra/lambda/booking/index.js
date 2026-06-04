@@ -19,6 +19,10 @@ const PHONE_BOOKING_PRODUCTS = [
   { key: 'F120', parentName: 'Entré 120 min - Familj', label: '120 min familj', type: 'family', durationMinutes: 120, jumpersPerUnit: 4 },
 ];
 
+const PHONE_CAPACITY_ADDON_PRODUCTS = [
+  { key: 'skyrider', parentName: 'SkyRider', label: 'SkyRider', type: 'addon', durationMinutes: 0, jumpersPerUnit: 1 },
+];
+
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
 const ssmClient = new SSMClient({});
@@ -88,6 +92,7 @@ async function handleAvailability(body, correlationId) {
   const config = await getRollerConfig();
   const token = await getRollerAccessToken(config);
   const parentProducts = await loadPhoneBookingParentProducts(config.env);
+  const addonProducts = await loadPhoneCapacityAddonParentProducts(config.env);
   const missingParents = PHONE_BOOKING_PRODUCTS.filter((product) => !parentProducts.some((parent) => parent.key === product.key));
 
   if (missingParents.length > 0) {
@@ -100,7 +105,8 @@ async function handleAvailability(body, correlationId) {
     });
   }
 
-  const parentProductIds = parentProducts.map((product) => product.parentProductId);
+  const availabilityProducts = [...parentProducts, ...addonProducts];
+  const parentProductIds = [...new Set(availabilityProducts.map((product) => product.parentProductId))];
   const rollerResult = await getRollerJson(
     config,
     token,
@@ -135,7 +141,7 @@ async function handleAvailability(body, correlationId) {
     });
   }
 
-  const availability = buildPhoneAvailability(request, parentProducts, rollerResult.body);
+  const availability = buildPhoneAvailability(request, availabilityProducts, rollerResult.body);
   await writeBookingEventLog({
     correlationId,
     eventType: 'booking.availability_succeeded',
@@ -861,6 +867,7 @@ function normalizeItems(value) {
     priceOverride: numberOrNull(item?.priceOverride),
     productId: numberOrNull(item?.productId),
     quantity: numberOrNull(item?.quantity),
+    requiresAvailability: item?.requiresAvailability === true,
     startTime: stringOrNull(item?.startTime),
     tickets: normalizeTickets(item?.tickets),
   }));
@@ -1777,12 +1784,45 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
   }).filter(Boolean);
 }
 
+async function loadPhoneCapacityAddonParentProducts(rollerEnv) {
+  const result = await executeStatement(
+    `SELECT DISTINCT
+       summary ->> 'parentProductId' AS parent_product_id,
+       summary ->> 'parentProductName' AS parent_product_name,
+       summary ->> 'id' AS id,
+       summary ->> 'name' AS name
+     FROM jumpyard.product_catalog_cache
+     WHERE roller_env = :rollerEnv
+       AND (
+         summary ->> 'parentProductName' IN ('SkyRider')
+         OR summary ->> 'name' IN ('SkyRider')
+       )`,
+    [stringParameter('rollerEnv', rollerEnv)],
+  );
+  const rows = mappedRows(result);
+
+  return PHONE_CAPACITY_ADDON_PRODUCTS.map((product) => {
+    const row = rows.find((candidate) => candidate.parent_product_name === product.parentName || candidate.name === product.parentName);
+    const parentProductId = stringOrNull(row?.parent_product_id) || stringOrNull(row?.id);
+    if (!parentProductId) return null;
+
+    return {
+      ...product,
+      parentProductId,
+    };
+  }).filter(Boolean);
+}
+
 async function validateItemsAvailable(config, token, items) {
-  const productIds = [...new Set(items.map((item) => item.productId).filter(Boolean))];
+  const hasExplicitItemFlags = items.some((item) => item.requiresAvailability === true || item.requiresAvailability === false);
+  const itemsToValidate = hasExplicitItemFlags ? items.filter((item) => item.requiresAvailability === true) : items;
+  if (itemsToValidate.length === 0) return null;
+
+  const productIds = [...new Set(itemsToValidate.map((item) => item.productId).filter(Boolean))];
   const productParents = await loadParentProductsForChildIds(config.env, productIds);
   const parentsByProductId = new Map(productParents.map((product) => [String(product.productId), product]));
 
-  for (const item of items) {
+  for (const item of itemsToValidate) {
     const productParent = parentsByProductId.get(String(item.productId));
     if (!productParent?.parentProductId) {
       return {
@@ -1906,6 +1946,18 @@ function findSessionForParent(parent, startTime) {
       const match = sessions.find((session) => stringOrNull(session?.startTime) === startTime);
       if (match) return match;
     }
+  }
+
+  const parentAvailabilities = Array.isArray(parent.availabilities) ? parent.availabilities : [];
+  const parentAllDayAvailability = parentAvailabilities.find((availability) => {
+    const sessions = Array.isArray(availability?.sessions) ? availability.sessions : [];
+    return sessions.length === 0;
+  });
+  if (parentAllDayAvailability) {
+    return {
+      ...parentAllDayAvailability,
+      startTime,
+    };
   }
 
   return null;
