@@ -57,6 +57,15 @@ T0091 gift-card checkout notes:
 - No-payment smoke: full gift-card draft created Roller Playground booking `5101055`, returned `amountOwing=0`, and Aurora shows the local prepayment draft as `published` with `total_cents=20000` and `amount_owing_cents=0`.
 - Safety: full gift-card numbers, Roller credentials, access tokens, and payment JWT values were not printed in validation output or documentation.
 
+T0100 Klippkort deploy and smoke notes:
+
+- AWS resources changed: existing booking Lambda code only.
+- Changed resource: `BookingHandler`.
+- Deploy result: `npm.cmd --prefix infra run deploy:dev` passed on 2026-06-04 after AWS SSO refresh; pre-deploy diff showed only `BookingHandler` Lambda code and post-deploy diff showed no differences.
+- Dev Klippkort smoke: baseline quote returned `amountOwing=200`; invalid code returned one safe discount-code error with `amountOwing=200`; the masked paid `10-Kort` ticket/code from booking `5101046` reduced entry-only to `amountOwing=0`; mixed entry plus JumpSocks left `amountOwing=45`; no-payment publish created Roller Playground booking `5101133`.
+- Regression smoke: active masked `100 kr` gift card still applied through `giftCards`, reducing `amountOwing` from `200` to `100` without using `discountCodes`.
+- Safety: raw Klippkort codes, gift-card numbers, Roller credentials, access tokens, and payment JWT values were not printed in validation output or documentation; Aurora event readback showed only counts, amounts, and booking references.
+
 T0059 redeem eligibility notes:
 
 - AWS resources changed: existing Lambda code only.

@@ -1,33 +1,34 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0097
+T0100
 
 ## Goal
-Investigate and prove how JumpYard Nacka `10-Kort`/membership codes work when Roller models them as membership-linked discount codes rather than beta multi-visit passes.
+Deploy and smoke-test the T0099 `Klippkort` checkout implementation in dev/public environments.
 
 ## Dependencies
-- T0096 completed and merged.
-- Gustav confirmed the current `10-Kort` setup is not the Roller beta multi-pass model.
-- Existing Playground `10-Kort` fixture booking `5101046` exists.
-- Local Roller Playground credentials are available for safe read/no-write API checks.
+- T0099 completed locally in working tree.
+- Roller Playground code-validation model remains `discounts: [{ code }]`.
+- AWS dev deploy access and Cloudflare/public app publish access are required for full completion.
 
 ## Allowed areas
 - CODEX_TASK.md
 - PROJECT_CONTEXT.md
-- DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
 - TEST_PLAN.md
 - GIFT_CARD_MULTI_VISIT_DISCOVERY.md
+- AWS_RESOURCES.md
+- infra/lambda/booking/index.js, only if deploy smoke finds a T0099 Klippkort defect
+- jumpyard-checkin-phone/src/components/BuyTickets.tsx, only if public smoke finds a T0099 Klippkort defect
+- jumpyard-checkin-phone/src/context/LanguageContext.tsx, only if public smoke finds a T0099 Klippkort defect
+- jumpyard-checkin-phone/src/flow/cloudClient.ts, only if public smoke finds a T0099 Klippkort defect
 
 ## Do not touch
-- Phone app UI
 - Staff/admin app UI
 - Kiosk app
-- Lambda implementation
-- AWS CDK resources
 - Aurora migrations
+- AWS CDK resource topology
 - Payment package/vendor files
 - Assets
 - Deliverables
@@ -37,69 +38,60 @@ Investigate and prove how JumpYard Nacka `10-Kort`/membership codes work when Ro
 
 ## Requirements
 
-1. Research current official Roller documentation for:
-   - Discounts and discount codes.
-   - Membership or pass code behavior if documented.
-   - Multi-pass endpoint boundaries.
-   - Booking Costs/Create Draft Booking discount payload behavior.
+1. Deploy the T0099 booking Lambda changes to AWS dev:
+   - Confirm AWS account and region before deploy.
+   - Run CDK diff and verify only the booking Lambda code changes.
+   - Deploy only the approved T0099 backend code.
 
-2. Re-check the existing Playground `10-Kort` fixture:
-   - Confirm it still appears as a paid membership-like booking.
-   - Confirm whether the documented `GET /customers/{customerId}/multi-passes` endpoint still returns no balance.
-   - Confirm whether the known membership/ticket code still applies through `discounts: [{ code }]`.
+2. Publish or verify the public phone app bundle includes the T0099 UI:
+   - Public buy-entry flow should show optional `Klippkort`.
+   - The field must not be named `10-Kort`.
+   - The UI must not show remaining visits.
 
-3. Test safe no-write quote cases only unless explicitly approved:
-   - Baseline no-code quote.
-   - Invalid code quote.
-   - Known `10-Kort`/membership code quote.
-   - Quantity edge case if useful.
-   - Normal ticket comparison if needed.
+3. Run integrated Playground smokes:
+   - Invalid/no-effect `Klippkort` blocks continuation.
+   - Valid entry-only `Klippkort` reduces eligible entry amount.
+   - Full coverage publishes a no-payment draft and continues into check-in sync.
+   - Valid `Klippkort` with entry plus add-ons leaves add-ons payable.
+   - Normal no-code and gift-card flows still work.
 
-4. Do not create or publish bookings in T0097 unless a separate explicit write approval is given.
+4. Verify server-side safety:
+   - Raw `Klippkort` codes are not logged, persisted, or returned.
+   - API responses show only masked/safe metadata.
+   - Idempotency uses hashed code values only.
 
-5. Document the interpretation clearly:
-   - What Gustav's model likely means.
-   - What Roller proved through API responses.
-   - What remains unknown about actual use consumption/exhaustion.
-   - What JumpYard should and should not build in V1.
-
-6. Update `GIFT_CARD_MULTI_VISIT_DISCOVERY.md` with the T0097 findings.
-
-7. Update `DECISIONS.md` if the architecture direction changes from "multi-visit pass" to "membership discount-code validation".
-
-8. Update `REPO_CURRENT_STATE.md` with:
-   - T0097 status.
-   - Safe test results.
-   - Recommended next ticket.
-
-9. Put any out-of-scope findings in `FOLLOWUPS.md`.
+5. Update source-of-truth docs with deploy/smoke results and the next recommended ticket.
 
 ## Non-goals
-- Do not implement membership-code UI.
-- Do not change JumpYard Cloud quote/draft behavior.
-- Do not create or publish a Roller booking.
-- Do not consume a `10-Kort`/membership use.
+- Do not implement remaining-use display.
+- Do not implement local pass counting.
+- Do not create or administer Roller memberships, gift cards, or discount codes.
 - Do not call Roller Live.
-- Do not change AWS resources.
-- Do not add migrations.
-- Do not change secrets or credentials.
+- Do not change AWS resource topology.
+- Do not add Aurora migrations.
+- Do not change staff redeem behavior.
 
 ## Acceptance criteria
-- T0097 clearly explains whether the current Nacka `10-Kort` behaves like a discount-code validation flow.
-- The docs clearly separate this model from Roller beta multi-pass balances.
-- The docs identify whether V1 should use `discounts: [{ code }]` and how to detect applied vs no-effect codes.
-- Unknowns about actual use consumption are recorded before any implementation ticket.
-- No app/source behavior changes are made.
-- Root validation passes after docs updates.
+- Dev booking Lambda has T0099 `Klippkort` logic deployed.
+- Public phone app exposes `Klippkort`.
+- Invalid/no-effect code blocks safely.
+- Valid entry-only code can complete the no-payment path when fully covered.
+- Mixed entry plus add-ons leaves add-ons payable.
+- No remaining visits are displayed.
+- `npm run validate` passes.
 
 ## Manual verification
-Read the updated source-of-truth docs and confirm a future Codex session can explain the difference between:
+Run public phone smokes after deploy/publish:
 
-- Gift card payment.
-- Roller beta multi-pass balance endpoint.
-- Nacka membership/`10-Kort` discount-code behavior.
+- No gift card or klippkort.
+- Invalid klippkort code.
+- Valid klippkort code for entry-only basket.
+- Valid klippkort code with entry plus add-ons.
 
 ## Automated validation
 Run:
 - npm run validate
+- npm --prefix jumpyard-checkin-phone run build
+- node --check infra/lambda/booking/index.js
+- npm --prefix infra run synth:dev
 - git diff --check
