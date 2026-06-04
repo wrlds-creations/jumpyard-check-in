@@ -320,7 +320,7 @@ T0100 backend result on 2026-06-04:
 - The masked paid `10-Kort` ticket/code from booking `5101046` reduced eligible entry to `amountOwing=0` and published no-payment booking `5101133`.
 - Mixed entry plus JumpSocks left `amountOwing=45`, proving add-ons remain payable.
 - Active masked `100 kr` gift card still applied through `giftCards`, separate from `discountCodes`.
-- Public phone app smoke is still pending because the Cloudflare Pages bundle does not yet expose `Klippkort`.
+- PR #99 merged the changes to `main`; after Cloudflare published, the public phone app bundle exposed `Klippkort`, `clipCard`, and `discountCodes`.
 
 ## Recommended T0092 Smoke Cases
 

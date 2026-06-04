@@ -1,97 +1,88 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0100
+T0101
 
 ## Goal
-Deploy and smoke-test the T0099 `Klippkort` checkout implementation in dev/public environments.
+Add the next operational monitoring and runbook layer for the JumpYard Cloud dev flow before broader readiness work.
 
 ## Dependencies
-- T0099 completed locally in working tree.
-- Roller Playground code-validation model remains `discounts: [{ code }]`.
-- AWS dev deploy access and Cloudflare/public app publish access are required for full completion.
+- T0100 completed.
+- Existing dev AWS foundation and CloudWatch observability from earlier tickets.
+- No production/live cutover yet.
 
 ## Allowed areas
 - CODEX_TASK.md
 - PROJECT_CONTEXT.md
+- DECISIONS.md
 - REPO_CURRENT_STATE.md
 - FOLLOWUPS.md
 - TEST_PLAN.md
-- GIFT_CARD_MULTI_VISIT_DISCOVERY.md
 - AWS_RESOURCES.md
-- infra/lambda/booking/index.js, only if deploy smoke finds a T0099 Klippkort defect
-- jumpyard-checkin-phone/src/components/BuyTickets.tsx, only if public smoke finds a T0099 Klippkort defect
-- jumpyard-checkin-phone/src/context/LanguageContext.tsx, only if public smoke finds a T0099 Klippkort defect
-- jumpyard-checkin-phone/src/flow/cloudClient.ts, only if public smoke finds a T0099 Klippkort defect
+- GUEST_MESSAGING_PRODUCTION_UNLOCK.md
+- Existing infra observability/logging files only if needed for monitoring/runbook wiring
+- New docs/runbook files only if they fit the repo source-of-truth structure
 
 ## Do not touch
-- Staff/admin app UI
-- Kiosk app
-- Aurora migrations
-- AWS CDK resource topology
-- Payment package/vendor files
-- Assets
-- Deliverables
 - Roller Live
 - Production credentials
 - `.env`
+- App UI
+- Assets
+- Deliverables
+- Aurora schema migrations unless explicitly approved
+- AWS production/staging stacks
+- Payment package/vendor files
+- Staff auth model
 
 ## Requirements
 
-1. Deploy the T0099 booking Lambda changes to AWS dev:
-   - Confirm AWS account and region before deploy.
-   - Run CDK diff and verify only the booking Lambda code changes.
-   - Deploy only the approved T0099 backend code.
+1. Review the current dev monitoring coverage:
+   - Data API sync.
+   - Roller webhook processing.
+   - Booking quote/draft/payment paths.
+   - Gift card and Klippkort/code paths.
+   - SMS/email guest messaging.
+   - Staff handoff/redeem.
 
-2. Publish or verify the public phone app bundle includes the T0099 UI:
-   - Public buy-entry flow should show optional `Klippkort`.
-   - The field must not be named `10-Kort`.
-   - The UI must not show remaining visits.
+2. Identify practical gaps before larger rollout:
+   - Missing alarms.
+   - Missing dashboards.
+   - Missing runbook steps.
+   - Missing owner/action routing.
+   - Missing safe API call/error counters.
 
-3. Run integrated Playground smokes:
-   - Invalid/no-effect `Klippkort` blocks continuation.
-   - Valid entry-only `Klippkort` reduces eligible entry amount.
-   - Full coverage publishes a no-payment draft and continues into check-in sync.
-   - Valid `Klippkort` with entry plus add-ons leaves add-ons payable.
-   - Normal no-code and gift-card flows still work.
+3. Add only the monitoring/runbook pieces that are low-risk and fit the existing dev AWS pattern.
 
-4. Verify server-side safety:
-   - Raw `Klippkort` codes are not logged, persisted, or returned.
-   - API responses show only masked/safe metadata.
-   - Idempotency uses hashed code values only.
+4. Document operational response:
+   - What the signal means.
+   - Where to look in AWS.
+   - What a safe first action is.
+   - When to contact Roller/Josh/Joao/Pabel.
 
-5. Update source-of-truth docs with deploy/smoke results and the next recommended ticket.
+5. Update source-of-truth docs with what changed and what remains for staging/live readiness.
 
 ## Non-goals
-- Do not implement remaining-use display.
-- Do not implement local pass counting.
-- Do not create or administer Roller memberships, gift cards, or discount codes.
-- Do not call Roller Live.
-- Do not change AWS resource topology.
-- Do not add Aurora migrations.
-- Do not change staff redeem behavior.
+- Do not move to staging/live.
+- Do not request SMS/SES production unlock.
+- Do not replace dev staff auth.
+- Do not redesign the customer or staff UI.
+- Do not add new payment behavior.
+- Do not change Roller webhook subscriptions unless explicitly required.
 
 ## Acceptance criteria
-- Dev booking Lambda has T0099 `Klippkort` logic deployed.
-- Public phone app exposes `Klippkort`.
-- Invalid/no-effect code blocks safely.
-- Valid entry-only code can complete the no-payment path when fully covered.
-- Mixed entry plus add-ons leaves add-ons payable.
-- No remaining visits are displayed.
+- Existing dev observability is documented clearly.
+- Any added alarms/dashboards/runbooks are listed in AWS_RESOURCES.md.
+- Operational gaps remain tracked in FOLLOWUPS.md.
 - `npm run validate` passes.
+- If AWS changes are made, `npm --prefix infra run synth:dev`, `diff:dev`, and `deploy:dev` are run and documented.
 
 ## Manual verification
-Run public phone smokes after deploy/publish:
-
-- No gift card or klippkort.
-- Invalid klippkort code.
-- Valid klippkort code for entry-only basket.
-- Valid klippkort code with entry plus add-ons.
+Open the relevant AWS Console areas and confirm the documented dashboard/alarm/runbook paths make sense for a non-Codex operator.
 
 ## Automated validation
 Run:
 - npm run validate
-- npm --prefix jumpyard-checkin-phone run build
-- node --check infra/lambda/booking/index.js
-- npm --prefix infra run synth:dev
+- npm --prefix infra run synth:dev, if infra changed
+- npm --prefix infra run diff:dev, if infra changed
 - git diff --check
