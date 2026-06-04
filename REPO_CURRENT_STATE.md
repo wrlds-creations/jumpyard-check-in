@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-04
-- Current branch: `codex/t0101-operational-runbooks`
-- Current status: T0101 is completed locally. It added the dev operations runbook layer and updated source-of-truth docs without changing or deploying AWS resources.
+- Current branch: `codex/t0102-phone-demo-polish`
+- Current status: T0102 is completed locally. It polishes the public phone buy-entry demo flow with a branded availability-loading card, cleaner contact/payment separation, JumpYard icons in summary/payment surfaces, and updated source-of-truth docs without changing backend, AWS, Roller, SMS, or email behavior.
 - Current ticket: `T0102`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`
-- Recommended next step: commit/merge T0101, then start T0102 notification routing and channel-specific operational alerts.
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`
+- Recommended next step: review/commit/merge T0102, then run T0103 add-on availability gating so capacity-bound add-ons such as SkyRider are disabled or hidden before the guest reaches quote/draft/payment.
 
 ## Current Structure
 
