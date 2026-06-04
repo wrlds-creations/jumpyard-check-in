@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, ArrowLeft, Check, CreditCard, Minus, Plus, RefreshCw, Ticket } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, ChevronDown, Minus, Phone, Plus, RefreshCw } from 'lucide-react';
 import {
   CloudBookingError,
   createDraftBooking,
@@ -110,6 +110,38 @@ function getDiscountCodeAppliedAmount(quote: NewBookingQuote | null) {
   return quote.costs.discount ?? null;
 }
 
+function buildProductLabelMap(
+  selectedProduct: NewBookingProduct | null,
+  buyAddons: BuyAddonEntry[]
+) {
+  const labels = new Map<string, string>();
+  if (selectedProduct?.productId !== null && selectedProduct?.productId !== undefined) {
+    labels.set(String(selectedProduct.productId), selectedProduct.label);
+  }
+  for (const addon of buyAddons) {
+    labels.set(String(addon.rollerProductId), addon.label);
+  }
+  return labels;
+}
+
+function formatBuyFlowError(
+  error: unknown,
+  labels: ReturnType<typeof useTranslation>['t']['buy'],
+  productLabels: Map<string, string>,
+  fallback: string
+) {
+  if (!(error instanceof CloudBookingError)) return fallback;
+
+  const productUnavailable = /^Product\s+(\d+)\s+is not available for\s+([\d-]+)\s+([\d:]+)\.?$/i.exec(error.message);
+  if (productUnavailable) {
+    const productLabel = productLabels.get(productUnavailable[1]) ?? labels.unavailableProductFallback;
+    const startTime = productUnavailable[3].slice(0, 5);
+    return `${productLabel} ${labels.unavailableProductPrefix} ${startTime}. ${labels.unavailableProductAction}`;
+  }
+
+  return error.message;
+}
+
 function getDraftAmountOwing(draft: NewBookingDraftResult | null) {
   return draft?.prepayment?.amountOwing ?? draft?.draft.costs.amountOwing ?? null;
 }
@@ -170,6 +202,24 @@ function getBuyProgressIndex(step: Step) {
   if (step === 'ADDONS') return 1;
   if (step === 'CONTACT' || step === 'REVIEW' || step === 'PAYMENT' || step === 'PENDING') return 2;
   return 0;
+}
+
+function AvailabilityLoadingCard({ selectedTime }: { selectedTime: string | null }) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="bg-surface border border-border rounded-2xl p-6 text-center">
+      <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-white border border-border shadow-sm">
+        <JumpyardIcon name="jump" className="h-14 w-14 animate-pulse" />
+      </div>
+      <h3 className="text-lg font-black italic uppercase text-foreground">
+        {t.buy.loadingAvailabilityTitle}
+      </h3>
+      <p className="mt-2 text-sm text-muted">
+        {selectedTime ? `${t.buy.loadingAvailabilityDesc} ${selectedTime}` : t.buy.loadingAvailabilityGeneric}
+      </p>
+    </div>
+  );
 }
 
 function BuyEntryProgress({ step }: { step: Step }) {
@@ -240,6 +290,8 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const [phone, setPhone] = useState('');
   const [giftCardNumber, setGiftCardNumber] = useState('');
   const [clipCardCode, setClipCardCode] = useState('');
+  const [paymentOptionsOpen, setPaymentOptionsOpen] = useState(false);
+  const [paymentInputsDirty, setPaymentInputsDirty] = useState(false);
   const [quote, setQuote] = useState<NewBookingQuote | null>(null);
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -280,8 +332,12 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const shouldPrecheckBasketAvailability = selectedAddons.every((addon) => addon.requiresAvailability === true);
   const giftCardInputs = buildGiftCardInputs(giftCardNumber);
   const discountCodeInputs = buildDiscountCodeInputs(clipCardCode);
+  const productLabels = buildProductLabelMap(selectedProduct, buyAddons);
   const giftCardErrors = quote?.giftCards?.errors ?? [];
   const discountCodeErrors = quote?.discountCodes?.errors ?? [];
+  const paymentInputsHaveValues = Boolean(giftCardNumber.trim() || clipCardCode.trim());
+  const paymentInputsBlockingErrors =
+    !paymentInputsDirty && (giftCardErrors.length > 0 || discountCodeErrors.length > 0);
   const giftCardAppliedAmount = getGiftCardAppliedAmount(quote);
   const discountCodeAppliedAmount = getDiscountCodeAppliedAmount(quote);
   const draftAmountOwing = getDraftAmountOwing(draft);
@@ -294,6 +350,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             label: selectedProduct.label,
             qty: quantity,
             total: entryTotal,
+            icon: 'admission-ticket' as JumpyardIconName,
           },
         ]
       : []),
@@ -302,6 +359,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       label: addon.label,
       qty: addon.qty,
       total: addon.price * addon.qty,
+      icon: buyAddons.find((entry) => entry.id === addon.id)?.icon ?? ('addons-bag' as JumpyardIconName),
     })),
   ];
   const customerValid =
@@ -339,6 +397,8 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setPaymentSyncError(null);
     setGiftCardNumber('');
     setClipCardCode('');
+    setPaymentOptionsOpen(false);
+    setPaymentInputsDirty(false);
   };
 
   const handleProductSelect = (product: NewBookingProduct) => {
@@ -372,17 +432,17 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const updateGiftCardNumber = (value: string) => {
     setGiftCardNumber(value);
     setSubmitError(null);
-    setQuote(null);
     setDraft(null);
     setPaymentSyncError(null);
+    if (quote) setPaymentInputsDirty(true);
   };
 
   const updateClipCardCode = (value: string) => {
     setClipCardCode(value);
     setSubmitError(null);
-    setQuote(null);
     setDraft(null);
     setPaymentSyncError(null);
+    if (quote) setPaymentInputsDirty(true);
   };
 
   const setOneAddon = (id: AddonId, nextQty: number) => {
@@ -431,9 +491,10 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
         discountCodeInputs
       );
       setQuote(result);
+      setPaymentInputsDirty(false);
       setStep('REVIEW');
     } catch (error) {
-      setSubmitError(error instanceof CloudBookingError ? error.message : t.buy.quoteFailed);
+      setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.quoteFailed));
     } finally {
       setSubmitting(false);
     }
@@ -441,11 +502,15 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
 
   const createDraft = async () => {
     if (!selectedProduct || !quote || submitting) return;
+    if (paymentInputsDirty) {
+      setSubmitError(t.buy.paymentOptionsUpdateRequired);
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
       const itemKey = basketLines.map((line) => `${line.key}-${line.qty}`).join(':');
-      if (giftCardErrors.length > 0 || discountCodeErrors.length > 0) return;
+      if (paymentInputsBlockingErrors) return;
 
       const result = await createDraftBooking(
         buildCustomer(),
@@ -464,7 +529,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       }
       setStep(canStartPayment(result) ? 'PAYMENT' : 'PENDING');
     } catch (error) {
-      setSubmitError(error instanceof CloudBookingError ? error.message : t.buy.draftFailed);
+      setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.draftFailed));
     } finally {
       setSubmitting(false);
     }
@@ -574,51 +639,45 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             </div>
           )}
 
-          <div className="flex flex-col gap-2 mb-5">
-            {slots.map((time) => {
-              const anyAvailable = !loadingAvailability;
-              const isSelected = selectedTime === time;
-              return (
-                <button
-                  key={time}
-                  onClick={() => anyAvailable && handleTimeSelect(time)}
-                  disabled={!anyAvailable}
-                  className={`w-full p-3.5 rounded-xl text-left flex items-center justify-between transition-all ${
-                    isSelected
-                      ? 'bg-primary text-white border-2 border-primary'
-                      : anyAvailable
-                      ? 'bg-white border border-border active:scale-[0.98]'
-                      : 'bg-surface-strong border border-border opacity-50 cursor-not-allowed'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={isSelected ? 'rounded-md bg-white' : ''}>
-                      <JumpyardIcon name="time" className="w-7 h-7" />
-                    </span>
-                    <span className={`text-lg font-black italic ${isSelected ? 'text-white' : 'text-foreground'}`}>
-                      {time}
-                    </span>
-                  </div>
-                  {loadingAvailability ? (
-                    <span className={`text-[10px] font-bold italic uppercase tracking-wider ${isSelected ? 'text-white/70' : 'text-muted'}`}>
-                      {t.common.loading}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
+          {loadingAvailability ? (
+            <AvailabilityLoadingCard selectedTime={selectedTime} />
+          ) : (
+            <>
+              <div className="flex flex-col gap-2 mb-5">
+                {slots.map((time) => {
+                  const isSelected = selectedTime === time;
+                  return (
+                    <button
+                      key={time}
+                      onClick={() => handleTimeSelect(time)}
+                      className={`w-full p-3.5 rounded-xl text-left flex items-center justify-between transition-all ${
+                        isSelected
+                          ? 'bg-primary text-white border-2 border-primary'
+                          : 'bg-white border border-border active:scale-[0.98]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={isSelected ? 'rounded-md bg-white' : ''}>
+                          <JumpyardIcon name="time" className="w-7 h-7" />
+                        </span>
+                        <span className={`text-lg font-black italic ${isSelected ? 'text-white' : 'text-foreground'}`}>
+                          {time}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
 
-          <button
-            onClick={() => selectedTime && void loadAvailability([selectedTime])}
-            disabled={
-              !selectedTime ||
-              loadingAvailability
-            }
-            className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
-          >
-            {loadingAvailability ? t.common.loading : t.common.continue} <Check size={18} />
-          </button>
+              <button
+                onClick={() => selectedTime && void loadAvailability([selectedTime])}
+                disabled={!selectedTime}
+                className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
+              >
+                {t.common.continue} <Check size={18} />
+              </button>
+            </>
+          )}
 
           {availabilityError && (
             <button
@@ -840,8 +899,8 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             </label>
 
             <label className="block mb-5">
-              <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest block mb-1">
-                {t.buy.phoneLabel}
+              <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
+                <Phone size={14} className="text-primary" /> {t.buy.phoneLabel}
               </span>
               <input
                 type="tel"
@@ -851,36 +910,6 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
                 autoComplete="tel"
                 className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
               />
-            </label>
-
-            <label className="block mb-5">
-              <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
-                <CreditCard size={14} className="text-primary" /> {t.buy.giftCardLabel}
-              </span>
-              <input
-                type="text"
-                value={giftCardNumber}
-                onChange={(event) => updateGiftCardNumber(event.target.value)}
-                placeholder={t.buy.giftCardPlaceholder}
-                autoComplete="off"
-                className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
-              />
-              <p className="mt-1 text-[11px] text-muted">{t.buy.giftCardHelp}</p>
-            </label>
-
-            <label className="block mb-5">
-              <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
-                <Ticket size={14} className="text-primary" /> {t.buy.clipCardLabel}
-              </span>
-              <input
-                type="text"
-                value={clipCardCode}
-                onChange={(event) => updateClipCardCode(event.target.value)}
-                placeholder={t.buy.clipCardPlaceholder}
-                autoComplete="off"
-                className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
-              />
-              <p className="mt-1 text-[11px] text-muted">{t.buy.clipCardHelp}</p>
             </label>
 
             {submitError && (
@@ -909,22 +938,92 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">{t.buy.reviewTitle}</h2>
             <p className="text-muted text-xs mb-5 text-center">{t.buy.reviewDesc}</p>
 
-            <div className="bg-white border border-border rounded-xl p-4 mb-4">
-              <div className="space-y-2 mb-3">
+            <div className="bg-white border border-border rounded-xl p-3 mb-4">
+              <div className="mb-3 flex items-center justify-center gap-1.5 text-xs font-bold italic uppercase text-muted">
+                <JumpyardIcon name="time" className="h-5 w-5" />
+                <span>{t.buy.jumpTimeLabel} {selectedProduct.startTime}</span>
+              </div>
+              <div className="space-y-2">
                 {basketLines.map((line) => (
-                  <div key={line.key} className="flex justify-between gap-3 text-sm font-bold text-foreground">
-                    <span>{line.label}</span>
-                    <span>{line.qty} st - {formatMoney(line.total)}</span>
+                  <div key={line.key} className="flex items-center gap-2 rounded-lg bg-surface/60 px-2.5 py-2">
+                    <JumpyardIcon name={line.icon} className="h-7 w-7 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-black italic uppercase text-foreground">{line.label}</p>
+                      <p className="text-[11px] text-muted">{line.qty} st</p>
+                    </div>
+                    <span className="text-sm font-black italic text-foreground">{formatMoney(line.total)}</span>
                   </div>
                 ))}
               </div>
-              <div className="flex justify-between gap-3 text-xs text-muted border-t border-border pt-3">
-                <span>{selectedProduct.startTime}</span>
-                <span>{formatMoney(quote.costs.total)}</span>
-              </div>
             </div>
 
-            {giftCardNumber.trim() && (
+            <div className="bg-white border border-border rounded-xl mb-4 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setPaymentOptionsOpen((open) => !open)}
+                className="flex w-full items-center justify-between gap-3 p-3 text-left"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <JumpyardIcon name="payment-card" className="h-8 w-8 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-black italic uppercase text-foreground">{t.buy.paymentOptionsTitle}</p>
+                  </div>
+                </div>
+                <ChevronDown
+                  size={18}
+                  className={`flex-shrink-0 text-muted transition-transform ${
+                    paymentOptionsOpen || paymentInputsHaveValues ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {(paymentOptionsOpen || paymentInputsHaveValues) && (
+                <div className="border-t border-border p-3">
+                  <label className="block mb-3">
+                    <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
+                      <JumpyardIcon name="presentkort" className="h-5 w-5" /> {t.buy.giftCardLabel}
+                    </span>
+                    <input
+                      type="text"
+                      value={giftCardNumber}
+                      onChange={(event) => updateGiftCardNumber(event.target.value)}
+                      placeholder={t.buy.giftCardPlaceholder}
+                      autoComplete="off"
+                      className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
+                    />
+                    <p className="mt-1 text-[11px] text-muted">{t.buy.giftCardHelp}</p>
+                  </label>
+
+                  <label className="block">
+                    <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
+                      <JumpyardIcon name="points-star" className="h-5 w-5" /> {t.buy.clipCardLabel}
+                    </span>
+                    <input
+                      type="text"
+                      value={clipCardCode}
+                      onChange={(event) => updateClipCardCode(event.target.value)}
+                      placeholder={t.buy.clipCardPlaceholder}
+                      autoComplete="off"
+                      className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
+                    />
+                    <p className="mt-1 text-[11px] text-muted">{t.buy.clipCardHelp}</p>
+                  </label>
+
+                  {paymentInputsDirty && (
+                    <button
+                      type="button"
+                      onClick={() => void goToReview()}
+                      disabled={submitting}
+                      className="mt-3 w-full bg-foreground text-white font-black italic uppercase text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98]"
+                    >
+                      {submitting ? t.buy.quoting : t.buy.paymentOptionsUpdate}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {!paymentInputsDirty && giftCardNumber.trim() && (
               <div
                 className={`bg-white border rounded-xl p-3 mb-4 ${
                   giftCardErrors.length > 0 ? 'border-danger/30' : 'border-border'
@@ -953,7 +1052,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
               </div>
             )}
 
-            {clipCardCode.trim() && (
+            {!paymentInputsDirty && clipCardCode.trim() && (
               <div
                 className={`bg-white border rounded-xl p-3 mb-4 ${
                   discountCodeErrors.length > 0 ? 'border-danger/30' : 'border-border'
@@ -984,7 +1083,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
 
             <div className="bg-white border border-border p-3 rounded-xl mb-5 px-4">
               <div className="flex justify-between items-center">
-                <span className="text-muted text-sm font-bold italic uppercase">{t.buy.total}</span>
+                <span className="text-muted text-sm font-bold italic uppercase">{t.buy.toPay}</span>
                 <span className="text-xl font-black italic text-primary">{formatMoney(quote.costs.amountOwing)}</span>
               </div>
               {quote.costs.total !== null && quote.costs.amountOwing !== null && quote.costs.total !== quote.costs.amountOwing && (
@@ -999,7 +1098,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
 
             <button
               onClick={() => void createDraft()}
-              disabled={submitting || giftCardErrors.length > 0 || discountCodeErrors.length > 0}
+              disabled={submitting || paymentInputsDirty || paymentInputsBlockingErrors}
               className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
             >
               {submitting ? t.buy.creating : t.buy.createDraft} {!submitting && <Check size={18} />}
@@ -1015,12 +1114,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
           className="w-full flex items-center justify-center"
           style={{ minHeight: 'calc(100dvh - 160px)' }}
         >
-          <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
-            <h2 className="text-xl font-black italic text-foreground uppercase mb-2">{t.buy.paymentTitle}</h2>
-            <p className="text-muted text-sm mb-5">
-              {formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
-            </p>
-
+          <div className="w-full bg-surface border border-border p-5 rounded-2xl">
             <RollerPaymentDropIn
               amountLabel={formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
               paymentSession={draft.paymentSession}
@@ -1059,7 +1153,11 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
         >
           <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
             <div className="w-14 h-14 rounded-full bg-white border border-border mx-auto mb-4 flex items-center justify-center">
-              {noPaymentRequired ? <Check size={28} className="text-primary" /> : <CreditCard size={28} className="text-primary" />}
+              {noPaymentRequired ? (
+                <Check size={28} className="text-primary" />
+              ) : (
+                <JumpyardIcon name="payment-card" className="h-10 w-10" />
+              )}
             </div>
             <h2 className="text-xl font-black italic text-foreground uppercase mb-2">
               {noPaymentRequired ? t.buy.noPaymentTitle : t.buy.pendingTitle}

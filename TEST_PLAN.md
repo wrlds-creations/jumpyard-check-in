@@ -1215,3 +1215,17 @@ Use this file to define validation for the current project or milestone.
 | AWS mutation scope | T0101 should not create or modify AWS resources. | Passed | No infra code changed; no CDK synth/diff/deploy was required. |
 | Root validation | Source-of-truth docs should validate after T0101 updates. | Passed | `npm.cmd run validate` passed. |
 | Diff whitespace | Diff whitespace check should pass. | Passed with CRLF notices | `git diff --check` passed; output contains Git line-ending notices only. |
+
+## T0102 Phone Buy-Entry Demo Polish
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Ticket scope | T0102 should reflect the user-requested phone demo polish, not the previously planned alerting ticket. | Passed | `CODEX_TASK.md` was rewritten for the buy-entry UI polish scope. |
+| Contact separation | Contact step should only collect contact fields. | Passed in build | Gift card and Klippkort inputs were removed from the contact step; phone label now has a phone icon. |
+| Payment-code placement | Gift card and Klippkort should appear under payment/review before draft creation. | Passed in build | Review step now has a collapsible `Lägg till presentkort eller klippkort` section without subtitle. Editing code values marks the quote dirty and disables draft/payment until the amount is updated. |
+| Summary polish | Basket rows should be compact, icon-led, and show clear jump time. | Passed in build | Review rows now use JumpYard icons per item, show `Hopptid`, and remove the old grey bottom time/total footer. |
+| Branded loading | Time selection should show one branded loading state while capacity loads. | Passed in build | Availability loading now renders a JumpYard icon card with capacity-loading copy instead of making all time rows show loading. |
+| Payment icon and copy | Payment surfaces should use the JumpYard payment-card icon without redundant payment headings. | Passed in build | `RollerPaymentDropIn` and pending payment state now use `payment-card`; the outer payment screen no longer repeats `Betala` plus amount above the drop-in. |
+| Phone lint | Phone app lint should pass. | Passed with existing warnings | `npm --prefix jumpyard-checkin-phone run lint` passed with the pre-existing four `<img>` warnings. |
+| Phone build | Phone app build should pass. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed; output included existing `baseline-browser-mapping` age notices. |
+| Local render smoke | Local phone app should render after changes. | Passed | Local dev server returned HTTP 200 and Playwright CLI screenshot after a 5s wait rendered the start screen. Direct click-through was not automated because there is no route into internal buy substeps and the in-app browser tool was unavailable in this run. |

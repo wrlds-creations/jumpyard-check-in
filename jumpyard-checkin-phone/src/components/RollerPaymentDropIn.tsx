@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, CreditCard, Loader2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
+import { JumpyardIcon } from '@/components/JumpyardIcon';
 import type { NewBookingDraftResult } from '@/flow/cloudClient';
 
 type PaymentStatus = 'bootstrapping' | 'ready' | 'received' | 'approved' | 'failed' | 'blocked';
@@ -167,7 +168,7 @@ export const RollerPaymentDropIn = ({
           ) : status === 'failed' || status === 'blocked' ? (
             <AlertCircle size={22} className="text-danger" />
           ) : (
-            <CreditCard size={22} className="text-primary" />
+            <JumpyardIcon name="payment-card" className="h-7 w-7" />
           )}
         </div>
         <div className="min-w-0">
@@ -269,7 +270,8 @@ function getStatusTitle(status: PaymentStatus, labels: ReturnType<typeof useTran
   if (status === 'approved') return labels.paymentApprovedTitle;
   if (status === 'failed') return labels.paymentFailedTitle;
   if (status === 'blocked') return labels.paymentBlockedTitle;
-  return labels.paymentTitle;
+  if (status === 'bootstrapping') return labels.paymentSetupTitle;
+  return labels.paymentMethodTitle;
 }
 
 function getStatusDescription(
