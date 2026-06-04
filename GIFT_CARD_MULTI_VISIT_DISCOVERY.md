@@ -217,6 +217,48 @@ Recommended next ticket:
 
 - `T0098` should be a controlled write smoke for the current Nacka `10-Kort` model, only after explicit approval. It should create one dedicated Playground booking with the code, publish/settle it through the supported no-payment or payment path, then verify whether Roller records a use and whether a second quote changes.
 
+## T0098 Controlled 10-Kort Consumption Smoke
+
+T0098 ran one controlled Roller Playground write after explicit user approval. It created one dedicated booking using the known masked `10-Kort` code from booking `5101046`. No app code, Lambda code, AWS resources, Aurora migrations, assets, deliverables, production credentials, or Roller Live data changed.
+
+Controlled write result:
+
+| Check | Result |
+|---|---|
+| Pre-write fixture | `GET /bookings/5101046` still returned `Paid`, customer id `4045520`, and one masked candidate code. |
+| Pre-write multi-pass balance | `GET /customers/4045520/multi-passes` returned HTTP `200` and `0` balances. |
+| Pre-write quote | One eligible `200 kr` entry with the masked code returned `total=0`, `amountOwing=0`, and `discount=200`. |
+| Draft creation | `POST /bookings/draft` returned HTTP `201`, `amountOwing=0`, `discount=200`, and `paymentJwtPresent=true`; raw JWT was not printed or stored. |
+| No-payment publish | `POST /bookings/draft/publish` returned HTTP `201` and created booking `5101114`. |
+| Published booking readback | `GET /bookings/5101114` returned HTTP `200`, `Paid`, one item, and a customer id. |
+| Post-write multi-pass balance | `GET /customers/4045520/multi-passes` still returned `0` balances. The new smoke-booking customer also returned `0` balances. |
+| Post-write quote quantity `1` | The same masked code still reduced one `200 kr` entry to `amountOwing=0`, `discount=200`. |
+| Post-write quote quantity `10` | The same masked code reduced ten entries to `amountOwing=0`, `discount=2000`. |
+| Post-write quote quantity `11` | The same masked code reduced `2000 kr` but left `amountOwing=200`, suggesting a per-transaction limit of ten covered entries, not an exposed remaining-balance counter. |
+| Product coverage quote | The masked code discounted representative entry/session pass products such as `Entré 60 min` variation `1765860` and `Entré 120 min` variation `1765836`. It did not discount add-on/retail products such as JumpSocks `1765445`, coffee/tea variations such as Bryggkaffe `1765452`, or SkyRider add-on `1765443`. |
+| Mixed basket quote | A basket with one `60 min` entry plus socks and coffee reduced only the `200 kr` entry and left `80 kr` owing. A basket with two `120 min` entries plus two socks and two SkyRider add-ons reduced only the `520 kr` entry value and left `170 kr` owing. |
+| Quantity behavior quote | Two-person entry quotes were fully discounted, for example two `120 min` entries reduced `520 kr` to `0 kr`. Ten entries were fully discounted, while eleven left one entry price owing. This proves item quantity maps to covered entry units inside one quote, but does not prove a visible global remaining-use counter. |
+| Data API bookingitems | `/data/bookingitems` for the modified-date window found booking `5101114` as `Paid`, product `1765860`, quantity `1`, `bookingTotal=0`, `discountAmount=200`, and one booking discount code/id. |
+| Data API membership redemptions | The official docs identify a membership redemptions Data API source, but Playground calls to `/data/membershipredemptions` returned HTTP `400` with `startDate is required, endDate is required` even when those parameters were supplied. This source remains unusable until Roller confirms the exact callable parameter shape or fixes access. |
+
+Interpretation:
+
+- The current Nacka `10-Kort` code can create and publish a paid/no-owing booking through the normal `discounts: [{ code }]` booking payload.
+- The observed coverage matches Gustav's explanation: it covers entry/session pass products, not add-ons such as socks, coffee, or SkyRider.
+- A two-person booking can be fully covered when both items are eligible entry/session pass units. If the basket also contains add-ons, the code covers only the eligible entry value and the add-ons remain payable.
+- Roller does not expose "10 kvar", "9 kvar", or similar remaining-use balance for this current setup through `GET /customers/{customerId}/multi-passes`, Booking Costs, published booking readback, or `/data/bookingitems`.
+- After creating one booking, the same code still quoted as valid for up to ten entries in a new no-write quote. That means JumpYard cannot safely claim one use was subtracted from ten to nine based on the public API response.
+- The strongest readback signal we have is "discount applied to booking", not "membership visit consumed".
+- JumpYard must not calculate remaining uses locally in V1. Local counting would drift from Roller and could become wrong if Roller configuration changes, staff edits bookings, or the same code is used through Venue Manager/POS.
+
+V1 recommendation:
+
+- Implement this as `10-Kort`/membership code validation only.
+- Send the guest-entered code as `discounts: [{ code }]` in quote and draft payloads.
+- Show whether the code reduced the amount due.
+- Do not show remaining visits or a 10 -> 9 counter.
+- If JumpYard wants a real remaining-uses display, ask Roller/Josh/Joao/Pabel for either a balance-aware beta multi-pass fixture or a confirmed read endpoint for the current Nacka membership setup.
+
 ## Questions For Roller/Josh/Joao/Pabel
 
 1. What is the supported API flow for applying a guest's existing multi-visit pass/10-card to a new booking?
@@ -243,6 +285,42 @@ Implement gift card first if valid Playground gift-card test data is available:
 Defer multi-visit implementation until the supported apply payload and a Playground fixture are confirmed.
 
 Defer membership/multi-visit code UX to a separate validation ticket. The likely V1 target is a generic "presentkort eller kod" concept only after Roller confirms whether membership/10-card codes should be sent as discount codes or another field.
+
+## T0099 Klippkort Checkout Implementation
+
+T0099 implements the confirmed code-validation model as `Klippkort` in the buy-entry phone checkout. The guest-facing label intentionally avoids `10-Kort` because the same Roller setup can cover 10-, 20-, and 30-card products.
+
+Implementation rules:
+
+- Send the entered code to JumpYard Cloud only; the frontend must not call Roller directly.
+- JumpYard Cloud forwards the code to Roller through `discounts: [{ code }]`.
+- A code is accepted only when Roller returns a positive discount or reduces `amountOwing`.
+- No-effect codes are treated as rejected and block checkout continuation.
+- Full coverage by gift card or klippkort can use `POST /bookings/draft/publish` without rendering card payment.
+- The API response returns only safe masked/applied metadata; raw klippkort codes are not logged or persisted.
+- The UI must not show remaining-use counts.
+
+## T0100 Klippkort Deploy And Smoke Gate
+
+T0100 should prove the T0099 model after deploy, not introduce a new model:
+
+- Deploy the booking Lambda implementation that forwards `discountCodes` as Roller discounts.
+- Verify the public phone app exposes `Klippkort`.
+- Smoke invalid/no-effect code handling.
+- Smoke full entry-only coverage through no-payment draft publish.
+- Smoke entry plus add-ons so add-ons remain payable.
+- Regress no-code and gift-card checkout paths.
+- Keep remaining-use display out of scope unless Roller provides a new authoritative balance source.
+
+T0100 backend result on 2026-06-04:
+
+- AWS dev deploy passed with a CDK diff limited to `BookingHandler` code.
+- Baseline no-code quote remained `amountOwing=200`.
+- Invalid/no-effect `Klippkort` returned one safe error and did not reduce the amount.
+- The masked paid `10-Kort` ticket/code from booking `5101046` reduced eligible entry to `amountOwing=0` and published no-payment booking `5101133`.
+- Mixed entry plus JumpSocks left `amountOwing=45`, proving add-ons remain payable.
+- Active masked `100 kr` gift card still applied through `giftCards`, separate from `discountCodes`.
+- Public phone app smoke is still pending because the Cloudflare Pages bundle does not yet expose `Klippkort`.
 
 ## Recommended T0092 Smoke Cases
 

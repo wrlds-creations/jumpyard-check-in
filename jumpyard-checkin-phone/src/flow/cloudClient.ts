@@ -178,6 +178,24 @@ export interface NewBookingGiftCardInput {
   giftCardNumber: string;
 }
 
+export interface NewBookingDiscountCodeInput {
+  code: string;
+}
+
+export interface CloudDiscountCodeSummary {
+  requestedCount: number;
+  appliedCount: number;
+  totalApplied: number | null;
+  applied: Array<{
+    amountDeducted: number | null;
+    maskedCode: string | null;
+  }>;
+  errors: Array<{
+    code: string | null;
+    message: string;
+  }>;
+}
+
 export interface CloudGiftCardSummary {
   requestedCount: number;
   appliedCount: number;
@@ -195,6 +213,7 @@ export interface CloudGiftCardSummary {
 export interface NewBookingQuote {
   externalId: string | null;
   costs: CloudBookingCosts;
+  discountCodes?: CloudDiscountCodeSummary;
   giftCards?: CloudGiftCardSummary;
   itemCount: number;
   expiresAt: string | null;
@@ -206,6 +225,7 @@ export interface NewBookingDraftResult {
     capacityReservationId: string | null;
     bookingReference: string | null;
     costs: CloudBookingCosts;
+    discountCodes?: CloudDiscountCodeSummary;
     giftCards?: CloudGiftCardSummary;
     itemCount: number;
   };
@@ -525,7 +545,8 @@ export async function quoteNewBooking(
   customer: NewBookingCustomer,
   items: NewBookingItemRequest[],
   requireAvailability = true,
-  giftCards: NewBookingGiftCardInput[] = []
+  giftCards: NewBookingGiftCardInput[] = [],
+  discountCodes: NewBookingDiscountCodeInput[] = []
 ): Promise<NewBookingQuote> {
   let response: Response;
   let body: QuoteResponse | null = null;
@@ -539,6 +560,7 @@ export async function quoteNewBooking(
       body: JSON.stringify({
         correlationId: `phone_quote_${Date.now().toString(36)}`,
         customer,
+        discountCodes: discountCodes.map((discount) => discount.code),
         giftCards,
         items,
         name: `${customer.firstName} ${customer.lastName}`.trim() || 'JumpYard booking',
@@ -563,7 +585,8 @@ export async function createDraftBooking(
   items: NewBookingItemRequest[],
   idempotencyKey: string,
   requireAvailability = true,
-  giftCards: NewBookingGiftCardInput[] = []
+  giftCards: NewBookingGiftCardInput[] = [],
+  discountCodes: NewBookingDiscountCodeInput[] = []
 ): Promise<NewBookingDraftResult> {
   let response: Response;
   let body: DraftResponse | null = null;
@@ -579,6 +602,7 @@ export async function createDraftBooking(
         confirmDraft: true,
         correlationId: `phone_draft_${Date.now().toString(36)}`,
         customer,
+        discountCodes: discountCodes.map((discount) => discount.code),
         giftCards,
         idempotencyKey,
         items,

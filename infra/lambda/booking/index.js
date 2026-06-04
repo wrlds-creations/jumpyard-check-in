@@ -130,7 +130,7 @@ async function handleAvailability(body, correlationId) {
       },
       roller: {
         statusCode: rollerResult.status,
-        error: summarizeRollerError(rollerResult.body),
+        error: summarizeRollerError(rollerResult.body, request),
       },
     });
   }
@@ -216,11 +216,15 @@ async function handleQuote(event, body, correlationId) {
 
   const costs = normalizeCosts(rollerResult.body);
   const giftCards = normalizeGiftCardSummary(rollerResult.body, request);
+  const discountCodes = normalizeDiscountCodeSummary(rollerResult.body, request);
   await writeBookingEventLog({
     correlationId,
     eventType: 'booking.quote_succeeded',
     payload: {
       endpoint: 'POST /bookings/draft/costs',
+      discountCodeAppliedCount: discountCodes.appliedCount,
+      discountCodeErrorCount: discountCodes.errors.length,
+      discountCodeRequestedCount: discountCodes.requestedCount,
       giftCardAppliedCount: giftCards.appliedCount,
       giftCardErrorCount: giftCards.errors.length,
       giftCardRequestedCount: giftCards.requestedCount,
@@ -238,6 +242,7 @@ async function handleQuote(event, body, correlationId) {
     quote: {
       externalId: payload.externalId,
       costs,
+      discountCodes,
       giftCards,
       itemCount: request.items.length,
       expiresAt: null,
@@ -263,6 +268,7 @@ async function handleDraft(event, body, correlationId) {
 
   const requestHash = hashJson({
     customer: maskCustomerForHash(request.customer),
+    discounts: hashDiscountsForHash(request.discounts),
     giftCards: hashGiftCardsForHash(request.giftCards),
     items: request.items,
     operation: 'booking_draft_create',
@@ -323,15 +329,16 @@ async function handleDraft(event, body, correlationId) {
       },
       roller: {
         statusCode: rollerResult.status,
-        error: summarizeRollerError(rollerResult.body, request.giftCards),
+        error: summarizeRollerError(rollerResult.body, request),
       },
     });
   }
 
   let draft = normalizeDraftResponse(rollerResult.body, request.items.length, request);
   const giftCards = draft.giftCards;
+  const discountCodes = draft.discountCodes;
   let noPaymentPublish = null;
-  if (isZeroAmount(draft.costs.amountOwing) && request.giftCards.length > 0) {
+  if (isZeroAmount(draft.costs.amountOwing) && (request.giftCards.length > 0 || request.discounts.length > 0)) {
     noPaymentPublish = await publishNoPaymentDraft(config, token, draft.uniqueId);
     if (!noPaymentPublish.ok) {
       await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_publish_http_${noPaymentPublish.status}`);
@@ -340,6 +347,8 @@ async function handleDraft(event, body, correlationId) {
         eventType: 'booking.draft_publish_failed',
         payload: {
           endpoint: 'POST /bookings/draft/publish',
+          discountCodeAppliedCount: discountCodes.appliedCount,
+          discountCodeRequestedCount: discountCodes.requestedCount,
           giftCardAppliedCount: giftCards.appliedCount,
           giftCardRequestedCount: giftCards.requestedCount,
           itemCount: request.items.length,
@@ -359,7 +368,7 @@ async function handleDraft(event, body, correlationId) {
         },
         roller: {
           statusCode: noPaymentPublish.status,
-          error: summarizeRollerError(noPaymentPublish.body, request.giftCards),
+          error: summarizeRollerError(noPaymentPublish.body, request),
         },
       });
     }
@@ -389,6 +398,8 @@ async function handleDraft(event, body, correlationId) {
       eventType: 'booking.draft_published_no_payment',
       payload: {
         endpoint: 'POST /bookings/draft/publish',
+        discountCodeAppliedCount: discountCodes.appliedCount,
+        discountCodeRequestedCount: discountCodes.requestedCount,
         giftCardAppliedCount: giftCards.appliedCount,
         giftCardRequestedCount: giftCards.requestedCount,
         itemCount: request.items.length,
@@ -406,6 +417,9 @@ async function handleDraft(event, body, correlationId) {
     eventType: 'booking.draft_succeeded',
     payload: {
       endpoint: 'POST /bookings/draft',
+      discountCodeAppliedCount: discountCodes.appliedCount,
+      discountCodeErrorCount: discountCodes.errors.length,
+      discountCodeRequestedCount: discountCodes.requestedCount,
       giftCardAppliedCount: giftCards.appliedCount,
       giftCardErrorCount: giftCards.errors.length,
       giftCardRequestedCount: giftCards.requestedCount,
@@ -602,6 +616,7 @@ async function handleAddProductDraft(event, body, correlationId) {
 
   const requestHash = hashJson({
     customer: maskCustomerForHash(request.customer),
+    discounts: hashDiscountsForHash(request.discounts),
     giftCards: hashGiftCardsForHash(request.giftCards),
     items: request.items,
     operation: 'booking_add_product_draft_create',
@@ -668,7 +683,7 @@ async function handleAddProductDraft(event, body, correlationId) {
       },
       roller: {
         statusCode: rollerResult.status,
-        error: summarizeRollerError(rollerResult.body, request.giftCards),
+        error: summarizeRollerError(rollerResult.body, request),
       },
     });
   }
@@ -905,6 +920,46 @@ function hashGiftCardsForHash(giftCards) {
   }));
 }
 
+function hashDiscountsForHash(discounts) {
+  return discounts.map((discount) => ({
+    amount: discount.amount,
+    codeHash: discount.code ? hashString(discount.code) : null,
+    percentage: discount.percentage,
+  }));
+}
+
+function normalizeDiscountCodeSummary(body, request) {
+  const requestedCodes = Array.isArray(request?.discounts)
+    ? request.discounts.map((discount) => stringOrNull(discount?.code)).filter(Boolean)
+    : [];
+  const costs = extractCostsObject(body);
+  const totalApplied = numberOrNull(costs.discount) ?? 0;
+  const applied = requestedCodes.length > 0 && totalApplied > 0
+    ? [
+        {
+          amountDeducted: totalApplied,
+          maskedCode: maskDiscountCode(requestedCodes[0]),
+        },
+      ]
+    : [];
+  const errors = requestedCodes.length > 0 && totalApplied <= 0
+    ? [
+        {
+          code: 'discount_code_not_applied',
+          message: 'Klippkortskoden kunde inte användas.',
+        },
+      ]
+    : [];
+
+  return {
+    requestedCount: requestedCodes.length,
+    appliedCount: applied.length,
+    totalApplied: totalApplied > 0 ? totalApplied : 0,
+    applied,
+    errors,
+  };
+}
+
 function normalizeGiftCardSummary(body, request) {
   const requestedGiftCards = Array.isArray(request?.giftCards) ? request.giftCards : [];
   const costs = extractCostsObject(body);
@@ -989,6 +1044,14 @@ function maskGiftCardNumber(value) {
   return last4 ? `**** ${last4}` : '****';
 }
 
+function maskDiscountCode(value) {
+  const normalized = stringOrNull(value);
+  if (!normalized) return null;
+  const compact = normalized.replace(/\s/g, '');
+  const last4 = compact.slice(-4);
+  return last4 ? `**** ${last4}` : '****';
+}
+
 function redactGiftCardSecrets(value, requestedGiftCards) {
   let redacted = stringOrNull(value) || '';
   for (const giftCard of requestedGiftCards) {
@@ -997,6 +1060,26 @@ function redactGiftCardSecrets(value, requestedGiftCards) {
     redacted = redacted.split(giftCardNumber).join(maskGiftCardNumber(giftCardNumber));
   }
   return redacted;
+}
+
+function redactDiscountCodeSecrets(value, requestedDiscounts) {
+  let redacted = stringOrNull(value) || '';
+  for (const discount of requestedDiscounts) {
+    const code = stringOrNull(discount?.code);
+    if (!code) continue;
+    redacted = redacted.split(code).join(maskDiscountCode(code));
+  }
+  return redacted;
+}
+
+function redactPaymentInputSecrets(value, requestOrGiftCards = []) {
+  const requestedGiftCards = Array.isArray(requestOrGiftCards)
+    ? requestOrGiftCards
+    : Array.isArray(requestOrGiftCards?.giftCards)
+      ? requestOrGiftCards.giftCards
+      : [];
+  const requestedDiscounts = Array.isArray(requestOrGiftCards?.discounts) ? requestOrGiftCards.discounts : [];
+  return redactDiscountCodeSecrets(redactGiftCardSecrets(value, requestedGiftCards), requestedDiscounts);
 }
 
 function validateQuoteRequest(request) {
@@ -1915,6 +1998,7 @@ function normalizeDraftResponse(body, itemCount, request = null) {
     capacityReservationId: stringOrNull(body?.capacityReservationId),
     bookingReference: stringOrNull(body?.bookingReference),
     costs: normalizeCosts(body),
+    discountCodes: normalizeDiscountCodeSummary(body, request),
     giftCards: normalizeGiftCardSummary(body, request),
     itemCount,
   };
@@ -2330,7 +2414,7 @@ function parseJsonOrNull(value) {
   }
 }
 
-function summarizeRollerError(body, requestedGiftCards = []) {
+function summarizeRollerError(body, requestOrGiftCards = []) {
   if (!body || typeof body !== 'object') {
     return {
       code: null,
@@ -2341,14 +2425,14 @@ function summarizeRollerError(body, requestedGiftCards = []) {
   const errors = Array.isArray(body.errors)
     ? body.errors.map((error) => ({
         code: stringOrNull(error.code),
-        message: redactGiftCardSecrets(stringOrNull(error.message), requestedGiftCards),
+        message: redactPaymentInputSecrets(stringOrNull(error.message), requestOrGiftCards),
         name: stringOrNull(error.name),
       }))
     : [];
 
   return {
     code: stringOrNull(body.code ?? body.errorCode),
-    message: redactGiftCardSecrets(stringOrNull(body.message ?? body.error ?? body.title), requestedGiftCards),
+    message: redactPaymentInputSecrets(stringOrNull(body.message ?? body.error ?? body.title), requestOrGiftCards),
     errors,
   };
 }

@@ -4,12 +4,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Snapshot
 
-- Date: 2026-06-03
-- Current branch: `codex/t0097-membership-discount-code-discovery`
-- Current status: T0097 completed in working tree. Gustav's `10-Kort` clarification was researched and re-tested through safe no-write Roller Playground calls. Current Nacka `10-Kort` behaves like membership/discount-code validation through `discounts: [{ code }]`, not as a beta multi-pass balance.
-- Current ticket: `T0097`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`
-- Recommended next step: start T0098 controlled `10-Kort` consumption smoke, with explicit write approval, to prove whether draft/publish consumes one use and how Roller exposes exhaustion/readback.
+- Date: 2026-06-04
+- Current branch: `codex/t0100-klippkort-deploy-smoke`
+- Current status: T0100 deployed the existing T0099 booking Lambda code to AWS dev and passed backend Klippkort smokes. Public Cloudflare Pages still serves a bundle without `Klippkort`, so the public phone smoke remains blocked until the T0099/T0100 changes are committed, merged, and published.
+- Current ticket: `T0100`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`
+- Recommended next step: commit, push, and merge the T0099/T0100 changes so Cloudflare publishes the phone app, then finish the public T0100 phone-flow smoke for `Klippkort`.
 
 ## Current Structure
 
@@ -231,21 +231,21 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0095` | Integrated regression rehearsal. | 2026-06-03 | Public non-destructive smoke passed for phone load, availability/product flow, card-only payment surface, gift-card input, invalid gift-card blocking, public admin load, and staff login plus queue access. No payment, messaging send, or redeem was intentionally executed. |
 | `T0096` | Controlled full integrated write/redeem rehearsal. | 2026-06-03 | Public flow created paid booking `5101105`; JumpYard Cloud lookup returned fresh Aurora-backed state; session `jycs_mpy1x4ne_910af158` reached ready-for-staff handoff `JY5397`; staff-confirmed redeem consumed one ticket and public admin queue returned to empty. |
 | `T0097` | Membership/discount-code discovery. | 2026-06-03 | Gustav's clarification was confirmed through official docs and safe no-write Roller Playground checks: current Nacka `10-Kort` is not exposed as beta multi-pass balance, but the known code applies through `discounts: [{ code }]` as a 100% discount. |
+| `T0098` | Controlled 10-Kort consumption smoke. | 2026-06-03 | One approved Playground write created and published booking `5101114` with the masked `10-Kort` code. Roller showed booking discount evidence but no 10 -> 9 remaining-use readback; V1 must not show remaining visits. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0097` | Membership/discount-code discovery. | Completed in working tree | Safe no-write research only. Current Nacka `10-Kort` should be treated as membership/discount-code validation, not beta multi-pass balance. Commit/merge only when explicitly requested. |
+| `T0099` | Klippkort code checkout implementation. | Completed locally in working tree | Phone buy-entry checkout adds optional `Klippkort` code entry, JumpYard Cloud returns safe discount-code metadata, and full code coverage uses the no-payment draft publish path. Dev booking Lambda deploy/backend smoke passed in T0100; public phone smoke remains pending until Cloudflare publishes the UI. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0098` | Controlled `10-Kort` consumption smoke | With explicit write approval only: create one dedicated Playground draft/booking using the accepted `10-Kort` code, then verify whether Roller consumes one use and how exhaustion/readback appears. |
-| `T0099` | Membership/10-Kort checkout implementation | Implement the guest-entered code UX only after T0098 proves the write/consumption model and safe failure handling. |
-| `T0100` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, gift card/code handling, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
-| `T0101` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
+| `T0100` | Klippkort deploy and integrated smoke | Deploy the booking Lambda code update and verify invalid Klippkort, entry-only full coverage, entry plus add-ons partial coverage, Aurora/lookup continuation, and staff redeem eligibility. |
+| `T0101` | Operational monitoring and runbooks | Add notification routing and practical runbooks for Data API, webhook, payment, gift card/code handling, SMS/email, staff name enrichment, and staff redeem failures before wider rollout. |
+| `T0102` | Environment and production readiness | Define staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal. |
 
 ## Validation Status
 
@@ -286,6 +286,16 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0097 `10-Kort` fixture check: paid Playground booking `5101046` is still `Paid`, total `1750`, has customer id context, and contains membership-like markers. `GET /customers/4045520/multi-passes` returned HTTP `200` with zero balances.
 - T0097 safe costs smokes: baseline one-entry quote returned `amountOwing=200`, invalid code kept `amountOwing=200` with `discount=0`, and the masked known `10-Kort` code sent as `discounts: [{ code }]` reduced one entry to `amountOwing=0`, `discount=200`, and quantity `2` to `amountOwing=0`, `discount=400`; `multiPassAllocations` stayed empty.
 - T0097 scope guard: no app code, Lambda code, CDK resources, Aurora migrations, AWS resources, Roller bookings, drafts, payments, redemptions, Live data, secrets, `.env`, assets, or deliverables changed.
+- T0098 pre-write checks: `GET /bookings/5101046` returned `Paid`, customer id `4045520`, and one masked candidate code; `GET /customers/4045520/multi-passes` returned zero balances; a no-write costs quote with the masked code returned `amountOwing=0` and `discount=200`.
+- T0098 controlled write: one dedicated Playground booking was created with the masked code. `POST /bookings/draft` returned HTTP `201`, `amountOwing=0`, and `paymentJwtPresent=true`; `POST /bookings/draft/publish` returned HTTP `201` and booking reference `5101114`.
+- T0098 post-write checks: `GET /bookings/5101114` returned `Paid`; original and smoke customer `multi-passes` still returned zero balances; the same code still quoted as valid for up to ten entries, while quantity `11` left `amountOwing=200`.
+- T0098 product coverage quotes: the masked code discounted representative entry/session pass products (`Entré 60 min`, `Entré 120 min`) and multi-quantity entry quotes, but did not discount JumpSocks, coffee/tea, SkyRider add-ons, or mixed-basket add-on amounts.
+- T0098 Data API readback: `/data/bookingitems` found booking `5101114` with `bookingTotal=0`, `discountAmount=200`, one discount code/id, and no remaining-use balance. `/data/membershipredemptions` returned HTTP `400` with `startDate is required, endDate is required` despite supplied parameters, so Roller must clarify that endpoint before it can be used.
+- T0099 implementation status: phone buy-entry checkout now has an optional `Klippkort` field, sends safe `discountCodes` to JumpYard Cloud quote/draft calls, displays applied/rejected state, and blocks no-effect codes. Booking Lambda returns safe discount-code metadata, hashes codes in idempotency material, redacts raw codes from Roller errors, and uses no-payment draft publish when gift card or klippkort coverage reduces `amountOwing` to zero.
+- T0099 local validation: `node --check infra/lambda/booking/index.js`, `npm --prefix jumpyard-checkin-phone run build`, `npm run validate`, and `git diff --check` passed. Phone build reported existing baseline-browser-mapping age notices; `git diff --check` reported Git CRLF notices only.
+- T0100 branch/deploy status: branch `codex/t0100-klippkort-deploy-smoke` was created on 2026-06-04. AWS SSO profile `wrlds-dev` resolved account `376129878018`; pre-deploy `npm.cmd --prefix infra run diff:dev` showed only `BookingHandler` Lambda code; `npm.cmd --prefix infra run deploy:dev` passed; post-deploy `npm.cmd --prefix infra run diff:dev` showed no differences.
+- T0100 backend Klippkort smoke: dev JumpYard Cloud availability found entry product `1765860` at `10:00`. Baseline quote returned `amountOwing=200`; invalid code returned `amountOwing=200` with one safe discount-code error; the masked paid `10-Kort` ticket/code from booking `5101046` reduced entry-only to `amountOwing=0` with `discount=200`; mixed entry plus JumpSocks with `requireAvailability=false` left `amountOwing=45` and `discount=200`; a full-coverage draft was published without payment as Roller Playground booking `5101133`. Validation output and Aurora event rows used masked codes/counts only.
+- T0100 regression smoke: the active masked `100 kr` gift card from booking `5101044` still applied separately through `giftCards`, reducing a `200 kr` quote to `amountOwing=100` with one applied gift card and no gift-card errors. Public Cloudflare bundle check for `https://jumpyard-check-in.pages.dev` returned HTTP `200` but no `Klippkort`, `clipCard`, or `discountCodes` strings in the served HTML/assets, so public phone verification is pending publish.
 - T0089 AWS read-only checks: SNS SMS sandbox status is still enabled, SNS SMS type is transactional, monthly spend limit is `1` USD, no default Sender ID/origination number exists, AWS End User Messaging SMS is still sandbox tier with no sender ids/pools/phone numbers, SES production access is disabled, only `love@wrlds.com` is verified for SES, and no dedicated email configuration set exists.
 - T0089 documentation: `GUEST_MESSAGING_PRODUCTION_UNLOCK.md` records SMS sandbox exit, SES production access, sender/domain identity gates, missing JumpYard/WRLDS inputs, and future approved implementation steps.
 - T0089 scope guard: no app code, Lambda code, CDK resources, Aurora migrations, Roller config, support cases, sender identities, domains, SMS/email sends, EventBridge payloads, or `confirmSend` behavior changed.

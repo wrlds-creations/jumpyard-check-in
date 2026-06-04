@@ -1109,6 +1109,55 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs should validate after T0097 docs updates. | Passed | `npm run validate` passed on 2026-06-03. |
 | Diff whitespace | T0097 docs should pass whitespace validation. | Passed with CRLF notices | `git diff --check` passed on 2026-06-03; output contained Git line-ending notices only. |
 
+## T0098 Controlled 10-Kort Consumption Smoke
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Pre-write fixture read | Existing `10-Kort` fixture should still resolve before the write smoke. | Passed | `GET /bookings/5101046` returned HTTP `200`, `Paid`, customer id `4045520`, and one masked candidate code. |
+| Pre-write multi-pass balance | Current Nacka `10-Kort` should not be treated as beta multi-pass unless balance appears. | Passed as no-balance proof | `GET /customers/4045520/multi-passes` returned HTTP `200` with `0` balances. |
+| Pre-write costs quote | The known code should still reduce a safe no-write quote before creating a booking. | Passed | One `200 kr` entry with `discounts: [{ code }]` returned `total=0`, `amountOwing=0`, and `discount=200`. |
+| Controlled draft create | Exactly one dedicated Playground draft should be created only after the zero-owing quote proves safe. | Passed | `POST /bookings/draft` returned HTTP `201`, `amountOwing=0`, `discount=200`, and `paymentJwtPresent=true`; raw JWT and full code were not printed. |
+| No-payment publish | A zero-owing draft should be publishable without card payment. | Passed | `POST /bookings/draft/publish` returned HTTP `201` and created booking `5101114`. |
+| Published booking readback | The smoke booking should exist in Roller and be paid. | Passed | `GET /bookings/5101114` returned HTTP `200`, `Paid`, one item, and customer id present. |
+| Post-write balance readback | Roller should expose a 10 -> 9 style balance if the current setup supports it. | Failed as balance proof | Both original customer and smoke-booking customer returned `0` balances from `GET /customers/{customerId}/multi-passes`; no remaining-use counter appeared. |
+| Post-write quote quantity checks | A second safe quote should reveal whether the write reduced available uses. | Passed as no-balance/no-decrement proof | After publishing booking `5101114`, the same code still discounted quantity `1`, `2`, and `10` fully; quantity `11` left `amountOwing=200`, indicating a ten-entry per-transaction discount limit rather than exposed remaining balance. |
+| Product coverage quotes | The `10-Kort` code should cover entry/session pass products but not unrelated add-ons if Gustav's description is correct. | Passed | Safe no-write quotes showed the code discounts representative `Entré 60 min` and `Entré 120 min` session pass variations, but does not discount JumpSocks, coffee/tea, or SkyRider add-ons. Mixed baskets left add-on amounts owing. |
+| Two-person entry quote | Quantity should map to covered entry units inside a booking quote. | Passed | Two `120 min` entry units reduced `520 kr` to `0 kr`; two `120 min` entries plus two socks and two SkyRider add-ons reduced only the `520 kr` entry value and left `170 kr` owing. |
+| Data API bookingitems readback | Data API should show at least discount evidence for the smoke booking. | Passed | `/data/bookingitems` found `5101114` as `Paid`, product `1765860`, quantity `1`, `bookingTotal=0`, `discountAmount=200`, and one discount code/id. |
+| Data API membership redemptions | Membership redemption Data API should be checked as a possible readback source. | Blocked by Roller/API behavior | `/data/membershipredemptions` returned HTTP `400` with `startDate is required, endDate is required` even when parameters were supplied; needs Roller confirmation before use. |
+| Balance UX decision | V1 should not show remaining visits unless public API proves it. | Passed | T0098 found no public 10 -> 9 signal; V1 should show only code accepted/rejected and amount reduction. |
+| Root validation | Source-of-truth docs should validate after T0098 docs updates. | Passed | `npm run validate` passed on 2026-06-03. |
+| Diff whitespace | T0098 docs should pass whitespace validation. | Passed with CRLF notices | `git diff --check` passed on 2026-06-03; output contained Git line-ending notices only. |
+
+## T0099 Klippkort Code Checkout Implementation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Phone optional field | Buy-entry contact/payment step should expose a `Klippkort` field, not `10-Kort`. | Pending | Must cover 10-, 20-, and 30-card naming without promising remaining visits. |
+| Invalid/no-effect code | A no-effect code should block continuation. | Pending | JumpYard Cloud should return a safe no-effect error when Roller does not reduce the amount due. |
+| Entry-only accepted code | A valid code should reduce eligible entry/session pass amount and show the applied amount. | Pending | Full coverage should publish the no-payment Roller draft and continue into normal check-in sync. |
+| Entry plus add-ons | A valid code should reduce only eligible entry amount and leave add-ons payable. | Pending | Add-ons such as socks, coffee, and SkyRider must remain in amount owing. |
+| Remaining balance UX | UI should not show remaining uses. | Pending | No "10 kvar", "9 kvar", or local visit counter. |
+| Secret/code handling | Raw klippkort codes should not be logged or persisted. | Pending | API response should use safe masked metadata and idempotency hashing should use code hashes only. |
+| Root validation | Source-of-truth and root validation should pass after T0099. | Passed | `npm run validate` passed on 2026-06-03. |
+| Phone build | Phone app should build after the new field and types. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed on 2026-06-03; output included existing baseline-browser-mapping age notices. |
+| Booking Lambda syntax | Booking Lambda should remain syntactically valid. | Passed | `node --check infra/lambda/booking/index.js` passed on 2026-06-03. |
+| Diff whitespace | T0099 diff should not contain whitespace errors. | Passed with CRLF notices | `git diff --check` passed on 2026-06-03; output contained Git line-ending notices only. |
+
+## T0100 Klippkort Deploy And Integrated Smoke
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Ticket branch setup | Work should continue on `codex/t0100-klippkort-deploy-smoke` before deploy. | Passed | Branch `codex/t0100-klippkort-deploy-smoke` was created on 2026-06-04. |
+| Local preflight | T0099 backend/frontend should still validate before deploy. | Passed | `node --check infra/lambda/booking/index.js`, `npm.cmd --prefix jumpyard-checkin-phone run build`, `npm.cmd --prefix infra run synth:dev`, `npm.cmd run validate`, and `git diff --check` passed on 2026-06-04. PowerShell blocked `npm.ps1`, so `npm.cmd` was used. |
+| CDK diff guard | Dev deploy diff should show only booking Lambda code changes. | Passed | Pre-deploy `npm.cmd --prefix infra run diff:dev` showed only `BookingHandler` Lambda code; post-deploy diff showed no differences. |
+| Booking Lambda deploy | T0099 booking Lambda changes should be deployed to AWS dev. | Passed | `npm.cmd --prefix infra run deploy:dev` passed on 2026-06-04 against AWS account `376129878018`, region `eu-north-1`. |
+| Public phone publish | Public Cloudflare Pages bundle should expose optional `Klippkort`. | Blocked by publish | `https://jumpyard-check-in.pages.dev` returned HTTP `200`, but served HTML/assets did not include `Klippkort`, `clipCard`, or `discountCodes`; commit/merge/publish is required before public phone smoke. |
+| Invalid/no-effect code smoke | Flow should reject a no-effect `Klippkort` code and block continuation. | Passed in backend | Dev API quote kept `amountOwing=200`, applied zero discount codes, and returned one safe discount-code error without printing the raw code. |
+| Entry-only full coverage smoke | Valid entry-only code should reduce amount owing to zero, publish no-payment draft, and continue into check-in sync. | Passed in backend | Dev API quote reduced `amountOwing` to `0`, `discount=200`, and Aurora event readback confirmed no-payment publish as Roller Playground booking `5101133`. |
+| Entry plus add-ons smoke | Valid code should cover eligible entry amount and leave add-ons payable. | Passed in backend | Dev API mixed entry plus JumpSocks quote used `requireAvailability=false`, applied `discount=200`, and left `amountOwing=45` for the add-on. |
+| Normal/gift-card regression | No-code and gift-card flows should still work. | Passed in backend | Baseline no-code quote returned `amountOwing=200`; active masked `100 kr` gift card reduced `amountOwing` to `100` through `giftCards`, separate from `discountCodes`. |
+
 ## T0095 Integrated Regression Rehearsal
 
 | Scenario | Expected Result | Status | Notes |

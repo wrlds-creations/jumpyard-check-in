@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, ArrowLeft, Check, CreditCard, Minus, Plus, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, CreditCard, Minus, Plus, RefreshCw, Ticket } from 'lucide-react';
 import {
   CloudBookingError,
   createDraftBooking,
@@ -11,6 +11,7 @@ import {
   quoteNewBooking,
   type NewBookingAvailability,
   type NewBookingCustomer,
+  type NewBookingDiscountCodeInput,
   type NewBookingDraftResult,
   type NewBookingGiftCardInput,
   type NewBookingItemRequest,
@@ -91,11 +92,22 @@ function buildGiftCardInputs(value: string): NewBookingGiftCardInput[] {
   return giftCardNumber ? [{ giftCardNumber }] : [];
 }
 
+function buildDiscountCodeInputs(value: string): NewBookingDiscountCodeInput[] {
+  const code = value.trim();
+  return code ? [{ code }] : [];
+}
+
 function getGiftCardAppliedAmount(quote: NewBookingQuote | null) {
   if (!quote?.giftCards || quote.giftCards.requestedCount === 0 || quote.giftCards.errors.length > 0) return null;
   if (quote.giftCards.totalApplied !== null) return quote.giftCards.totalApplied;
   if (quote.costs.total === null || quote.costs.amountOwing === null) return null;
   return Math.max(0, quote.costs.total - quote.costs.amountOwing);
+}
+
+function getDiscountCodeAppliedAmount(quote: NewBookingQuote | null) {
+  if (!quote?.discountCodes || quote.discountCodes.requestedCount === 0 || quote.discountCodes.errors.length > 0) return null;
+  if (quote.discountCodes.totalApplied !== null) return quote.discountCodes.totalApplied;
+  return quote.costs.discount ?? null;
 }
 
 function getDraftAmountOwing(draft: NewBookingDraftResult | null) {
@@ -227,6 +239,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [giftCardNumber, setGiftCardNumber] = useState('');
+  const [clipCardCode, setClipCardCode] = useState('');
   const [quote, setQuote] = useState<NewBookingQuote | null>(null);
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -266,8 +279,11 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const basketEstimateTotal = entryTotal + addonsTotal;
   const shouldPrecheckBasketAvailability = selectedAddons.every((addon) => addon.requiresAvailability === true);
   const giftCardInputs = buildGiftCardInputs(giftCardNumber);
+  const discountCodeInputs = buildDiscountCodeInputs(clipCardCode);
   const giftCardErrors = quote?.giftCards?.errors ?? [];
+  const discountCodeErrors = quote?.discountCodes?.errors ?? [];
   const giftCardAppliedAmount = getGiftCardAppliedAmount(quote);
+  const discountCodeAppliedAmount = getDiscountCodeAppliedAmount(quote);
   const draftAmountOwing = getDraftAmountOwing(draft);
   const noPaymentRequired = draftAmountOwing !== null && draftAmountOwing <= 0;
   const basketLines = [
@@ -322,6 +338,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setDraft(null);
     setPaymentSyncError(null);
     setGiftCardNumber('');
+    setClipCardCode('');
   };
 
   const handleProductSelect = (product: NewBookingProduct) => {
@@ -354,6 +371,14 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
 
   const updateGiftCardNumber = (value: string) => {
     setGiftCardNumber(value);
+    setSubmitError(null);
+    setQuote(null);
+    setDraft(null);
+    setPaymentSyncError(null);
+  };
+
+  const updateClipCardCode = (value: string) => {
+    setClipCardCode(value);
     setSubmitError(null);
     setQuote(null);
     setDraft(null);
@@ -398,7 +423,13 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const result = await quoteNewBooking(buildCustomer(), buildItems(), shouldPrecheckBasketAvailability, giftCardInputs);
+      const result = await quoteNewBooking(
+        buildCustomer(),
+        buildItems(),
+        shouldPrecheckBasketAvailability,
+        giftCardInputs,
+        discountCodeInputs
+      );
       setQuote(result);
       setStep('REVIEW');
     } catch (error) {
@@ -414,14 +445,15 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setSubmitError(null);
     try {
       const itemKey = basketLines.map((line) => `${line.key}-${line.qty}`).join(':');
-      if (giftCardErrors.length > 0) return;
+      if (giftCardErrors.length > 0 || discountCodeErrors.length > 0) return;
 
       const result = await createDraftBooking(
         buildCustomer(),
         buildItems(),
         `phone-draft:${selectedProduct.productId}:${selectedProduct.startTime}:${itemKey}:${Date.now().toString(36)}`,
         shouldPrecheckBasketAvailability,
-        giftCardInputs
+        giftCardInputs,
+        discountCodeInputs
       );
       setDraft(result);
       setPaymentSyncError(null);
@@ -836,6 +868,21 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
               <p className="mt-1 text-[11px] text-muted">{t.buy.giftCardHelp}</p>
             </label>
 
+            <label className="block mb-5">
+              <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
+                <Ticket size={14} className="text-primary" /> {t.buy.clipCardLabel}
+              </span>
+              <input
+                type="text"
+                value={clipCardCode}
+                onChange={(event) => updateClipCardCode(event.target.value)}
+                placeholder={t.buy.clipCardPlaceholder}
+                autoComplete="off"
+                className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
+              />
+              <p className="mt-1 text-[11px] text-muted">{t.buy.clipCardHelp}</p>
+            </label>
+
             {submitError && (
               <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>
             )}
@@ -906,6 +953,35 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
               </div>
             )}
 
+            {clipCardCode.trim() && (
+              <div
+                className={`bg-white border rounded-xl p-3 mb-4 ${
+                  discountCodeErrors.length > 0 ? 'border-danger/30' : 'border-border'
+                }`}
+              >
+                <div className="flex justify-between gap-3 text-sm">
+                  <span className="text-muted font-bold italic uppercase">{t.buy.clipCardLabel}</span>
+                  <span className={`font-black ${discountCodeErrors.length > 0 ? 'text-danger' : 'text-primary'}`}>
+                    {discountCodeErrors.length > 0
+                      ? t.buy.clipCardRejected
+                      : discountCodeAppliedAmount !== null && discountCodeAppliedAmount > 0
+                        ? `-${formatMoney(discountCodeAppliedAmount)}`
+                        : t.buy.clipCardApplied}
+                  </span>
+                </div>
+                {discountCodeErrors.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {discountCodeErrors.map((error, index) => (
+                      <p key={`${error.code ?? 'clip-card'}-${index}`} className="text-sm text-danger font-bold">
+                        {error.message || t.buy.clipCardErrorFallback}
+                      </p>
+                    ))}
+                    <p className="text-xs text-muted">{t.buy.clipCardFixHint}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="bg-white border border-border p-3 rounded-xl mb-5 px-4">
               <div className="flex justify-between items-center">
                 <span className="text-muted text-sm font-bold italic uppercase">{t.buy.total}</span>
@@ -923,7 +999,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
 
             <button
               onClick={() => void createDraft()}
-              disabled={submitting || giftCardErrors.length > 0}
+              disabled={submitting || giftCardErrors.length > 0 || discountCodeErrors.length > 0}
               className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
             >
               {submitting ? t.buy.creating : t.buy.createDraft} {!submitting && <Check size={18} />}
