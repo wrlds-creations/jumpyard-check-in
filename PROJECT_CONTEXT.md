@@ -639,6 +639,8 @@ T0102 polishes the public phone buy-entry demo flow without changing backend or 
 
 T0103 is narrowed to SkyRider availability gating only. The broader dynamic add-on catalog is deferred until Gustav reviews which Roller products should be guest-facing. The booking availability endpoint now also asks Roller for the SkyRider parent product, the phone app hides SkyRider when that selected date/time is not available, and item-level `requiresAvailability` flags keep quote/draft validation focused on entry products plus SkyRider while stock add-ons such as socks, padlock, and coffee remain selectable without time-capacity checks.
 
+T0104 deploys the T0103 booking Lambda code to AWS dev. Before deploy, the public Cloudflare phone app had the new frontend gate, but the deployed `POST /v1/bookings/availability` backend still returned only `entry` and `family`, so SkyRider was hidden. After deploy, the same dev availability endpoint returns `skyrider` as `type='addon'` with product id `1765443` in each tested slot, so the public phone app can show SkyRider as an add-on when Roller says it is available. The planned phone summary icon/copy polish moves to T0105.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
