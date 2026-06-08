@@ -1269,6 +1269,19 @@ Use this file to define validation for the current project or milestone.
 | Phone lint | Phone app lint should pass after changes. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with existing `<img>` warnings only. |
 | Phone build | Phone app build should pass after changes. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
 
+## T0107 Linked Add-ons In Staff Handoff
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Staff detail item source | Staff session detail should return original booking items and paid/published linked add-on items. | Passed in code | `findStaffBookingItems` now unions original items with linked add-on booking items when the linked draft is `published` or the linked booking is paid/no-payment-required. |
+| Pending add-on exclusion | Staff session detail should not show unpaid/payment-pending linked add-ons. | Passed in code | Linked rows are filtered by local draft status or settled linked Roller booking state. |
+| Admin add-on display | Admin handoff product rows should visibly mark linked add-on rows. | Passed in build | Admin `ItemRows` marks linked rows as `Tillägg` and uses the add-ons icon while keeping original entry rows as admission rows. |
+| Redeem behavior | Staff redeem should remain ticket/session based and not treat stock-only add-ons as selected tickets. | Passed by scope | T0107 does not change selected ticket ids, redeem eligibility, or redeem Lambda behavior. |
+| Session Lambda syntax | Session Lambda should remain syntactically valid. | Passed | `node --check infra/lambda/session/index.js` passed on 2026-06-08. |
+| Admin lint | Admin app lint should pass after changes. | Passed | `npm --prefix jumpyard-checkin-admin run lint` passed. |
+| Admin build | Admin app build should pass after changes. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. |
+| Root validation | Source-of-truth docs should validate after T0107 updates. | Passed | `npm run validate` passed on 2026-06-08. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |

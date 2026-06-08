@@ -2074,6 +2074,21 @@ async function findReadyStaffSessions(request) {
          SELECT COUNT(*)
          FROM jumpyard.roller_booking_items AS item
          WHERE item.roller_unique_id = session_rows.roller_unique_id
+            OR item.roller_unique_id IN (
+              SELECT link.linked_roller_unique_id
+              FROM jumpyard.booking_links AS link
+              LEFT JOIN jumpyard.roller_bookings AS linked_booking
+                ON linked_booking.roller_unique_id = link.linked_roller_unique_id
+              LEFT JOIN jumpyard.prepayment_booking_drafts AS linked_draft
+                ON linked_draft.roller_draft_unique_id = link.linked_roller_unique_id
+              WHERE link.original_roller_unique_id = session_rows.roller_unique_id
+                AND link.link_type = 'add_product_draft'
+                AND (
+                  linked_draft.status = 'published'
+                  OR linked_booking.amount_owing_cents = 0
+                  OR lower(replace(COALESCE(linked_booking.payment_status, linked_booking.booking_status, ''), ' ', '')) IN ('paid', 'paidinfull', 'nopaymentrequired')
+                )
+            )
        )::int AS item_count,
        (
          SELECT COUNT(*)
@@ -2124,6 +2139,21 @@ async function findStaffSessionDetail(checkinSessionId) {
          SELECT COUNT(*)
          FROM jumpyard.roller_booking_items AS item
          WHERE item.roller_unique_id = cs.roller_unique_id
+            OR item.roller_unique_id IN (
+              SELECT link.linked_roller_unique_id
+              FROM jumpyard.booking_links AS link
+              LEFT JOIN jumpyard.roller_bookings AS linked_booking
+                ON linked_booking.roller_unique_id = link.linked_roller_unique_id
+              LEFT JOIN jumpyard.prepayment_booking_drafts AS linked_draft
+                ON linked_draft.roller_draft_unique_id = link.linked_roller_unique_id
+              WHERE link.original_roller_unique_id = cs.roller_unique_id
+                AND link.link_type = 'add_product_draft'
+                AND (
+                  linked_draft.status = 'published'
+                  OR linked_booking.amount_owing_cents = 0
+                  OR lower(replace(COALESCE(linked_booking.payment_status, linked_booking.booking_status, ''), ' ', '')) IN ('paid', 'paidinfull', 'nopaymentrequired')
+                )
+            )
        )::int AS item_count,
        (
          SELECT COUNT(*)
@@ -2226,7 +2256,58 @@ async function findStaffBookingItems(rollerUniqueId) {
   if (!rollerUniqueId) return [];
 
   const result = await executeStatement(
-    `SELECT
+    `WITH staff_items AS (
+       SELECT
+         item.booking_item_key,
+         item.booking_item_id,
+         item.product_id,
+         item.parent_product_id,
+         item.product_name,
+         item.parent_product_name,
+         item.quantity,
+         item.booking_date::text AS booking_date,
+         item.start_time::text AS start_time,
+         item.end_time::text AS end_time,
+         item.item_summary::text AS item_summary,
+         NULL::text AS linked_booking_reference,
+         NULL::text AS linked_roller_unique_id,
+         'original'::text AS fulfillment_source,
+         0 AS source_order
+       FROM jumpyard.roller_booking_items AS item
+       WHERE item.roller_unique_id = :rollerUniqueId
+       UNION ALL
+       SELECT
+         item.booking_item_key,
+         item.booking_item_id,
+         item.product_id,
+         item.parent_product_id,
+         item.product_name,
+         item.parent_product_name,
+         item.quantity,
+         item.booking_date::text AS booking_date,
+         item.start_time::text AS start_time,
+         item.end_time::text AS end_time,
+         item.item_summary::text AS item_summary,
+         link.linked_booking_reference,
+         link.linked_roller_unique_id,
+         'linked_add_on'::text AS fulfillment_source,
+         1 AS source_order
+       FROM jumpyard.booking_links AS link
+       INNER JOIN jumpyard.roller_booking_items AS item
+         ON item.roller_unique_id = link.linked_roller_unique_id
+       LEFT JOIN jumpyard.roller_bookings AS linked_booking
+         ON linked_booking.roller_unique_id = link.linked_roller_unique_id
+       LEFT JOIN jumpyard.prepayment_booking_drafts AS linked_draft
+         ON linked_draft.roller_draft_unique_id = link.linked_roller_unique_id
+       WHERE link.original_roller_unique_id = :rollerUniqueId
+         AND link.link_type = 'add_product_draft'
+         AND (
+           linked_draft.status = 'published'
+           OR linked_booking.amount_owing_cents = 0
+           OR lower(replace(COALESCE(linked_booking.payment_status, linked_booking.booking_status, ''), ' ', '')) IN ('paid', 'paidinfull', 'nopaymentrequired')
+         )
+     )
+     SELECT
        booking_item_key,
        booking_item_id,
        product_id,
@@ -2234,13 +2315,15 @@ async function findStaffBookingItems(rollerUniqueId) {
        product_name,
        parent_product_name,
        quantity,
-       booking_date::text AS booking_date,
-       start_time::text AS start_time,
-       end_time::text AS end_time,
-       item_summary::text AS item_summary
-     FROM jumpyard.roller_booking_items
-     WHERE roller_unique_id = :rollerUniqueId
-     ORDER BY booking_date NULLS LAST, start_time NULLS LAST, product_name NULLS LAST`,
+       booking_date,
+       start_time,
+       end_time,
+       item_summary,
+       linked_booking_reference,
+       linked_roller_unique_id,
+       fulfillment_source
+     FROM staff_items
+     ORDER BY source_order ASC, booking_date NULLS LAST, start_time NULLS LAST, product_name NULLS LAST`,
     [stringParameter('rollerUniqueId', rollerUniqueId)],
   );
 
@@ -2249,6 +2332,9 @@ async function findStaffBookingItems(rollerUniqueId) {
     bookingItemId: stringOrNull(row.booking_item_id),
     bookingItemKey: stringOrNull(row.booking_item_key),
     endTime: stringOrNull(row.end_time),
+    fulfillmentSource: stringOrNull(row.fulfillment_source) || 'original',
+    linkedBookingReference: stringOrNull(row.linked_booking_reference),
+    linkedRollerUniqueId: stringOrNull(row.linked_roller_unique_id),
     parentProductId: stringOrNull(row.parent_product_id),
     parentProductName: stringOrNull(row.parent_product_name),
     productId: stringOrNull(row.product_id),

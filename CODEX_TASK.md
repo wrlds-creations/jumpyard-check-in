@@ -1,16 +1,15 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0106
+T0107
 
 ## Goal
-Move SkyRider height consent before payment/draft creation in both buy-entry and existing-booking add-on flows.
+Show paid linked add-on booking products in staff/handoff fulfillment.
 
 ## Context
-- T0105 cleaned up the existing-booking add-on UI.
-- SkyRider is capacity-gated and can be selected as an add-on.
-- The demo flow should not let a guest pay for SkyRider before confirming the height requirement.
-- Current behavior can show the SkyRider consent too late because payment/draft logic is inside the buy-entry and add-on components.
+- Existing-booking add-ons are created as separate linked Roller draft bookings.
+- After payment, staff currently sees the original booking items but can miss paid linked add-ons such as socks, padlock, coffee, or SkyRider.
+- The demo handoff needs one staff summary that shows everything the guest should receive.
 
 ## Allowed Areas
 - `CODEX_TASK.md`
@@ -18,11 +17,9 @@ Move SkyRider height consent before payment/draft creation in both buy-entry and
 - `REPO_CURRENT_STATE.md`
 - `FOLLOWUPS.md`
 - `TEST_PLAN.md`
-- `jumpyard-checkin-phone/src/components/BuyTickets.tsx`
-- `jumpyard-checkin-phone/src/components/AddonsOffer.tsx`
-- `jumpyard-checkin-phone/src/components/SkyRiderAttest.tsx`
-- `jumpyard-checkin-phone/src/flow/machine.ts`
-- `jumpyard-checkin-phone/src/flow/types.ts`
+- `infra/lambda/session/index.js`
+- `jumpyard-checkin-admin/src/lib/adminApi.ts`
+- `jumpyard-checkin-admin/src/app/page.tsx`
 
 ## Do Not Touch
 - Roller Live
@@ -30,42 +27,42 @@ Move SkyRider height consent before payment/draft creation in both buy-entry and
 - `.env`
 - AWS resources or deploys
 - Aurora migrations
-- Staff/admin app
+- Phone buy-entry flow
 - Payment package internals
 - Redemption logic
 - SMS/email logic
-- Dynamic add-on catalog beyond SkyRider consent timing
+- Dynamic add-on catalog
 
 ## Requirements
 
-1. Buy-entry flow:
-   - If SkyRider is selected, show the SkyRider height requirement before quote/draft/payment.
-   - After confirmation, continue to contact/review/payment.
-   - If no SkyRider is selected, keep the existing path unchanged.
+1. Staff session detail:
+   - Include original booking items.
+   - Include paid/published linked add-on booking items for the same original booking.
+   - Do not include unpaid or payment-pending linked add-on items.
 
-2. Existing-booking add-on flow:
-   - If SkyRider is newly selected, show the SkyRider height requirement before quote/draft/payment.
-   - After confirmation, continue to add-on review and payment.
-   - Avoid showing the parent flow SkyRider consent again after payment.
+2. Staff UI:
+   - Show linked add-on rows in the same handoff product list.
+   - Mark linked add-on rows clearly as `Tillägg`.
+   - Keep redeem behavior unchanged.
 
-3. Flow safety:
-   - Do not create a Roller draft before the SkyRider height requirement is confirmed.
-   - Do not change payment, quote, or backend request payloads except for timing of when they are called.
+3. Documentation:
+   - Update source-of-truth docs and the lower roadmap/current-ticket tables.
+   - Keep T0108 as the next confirmed demo-regression ticket.
 
 ## Non-Goals
-- Do not change SkyRider availability gating.
-- Do not add new Roller products.
-- Do not solve linked add-on products in staff/handoff; that remains T0107.
-- Do not run full Gustav demo regression; that remains T0108.
+- Do not change how add-on bookings are created or paid.
+- Do not change Roller redemption eligibility.
+- Do not deploy AWS in this ticket.
+- Do not run the full Gustav demo regression; that remains T0108.
 
 ## Acceptance Criteria
-- Buy-entry SkyRider path shows the height requirement before contact/review/payment.
-- Existing-booking SkyRider add-on path shows the height requirement before add-on review/payment.
-- Existing-booking SkyRider add-on path does not show the height requirement again after payment.
-- Phone lint/build pass.
-- Source-of-truth docs record T0106 status and next ticket.
+- Staff detail returns original plus paid linked add-on product rows.
+- Staff UI visibly labels linked rows as add-ons.
+- Admin lint/build and session Lambda syntax checks pass.
+- Source-of-truth docs record T0107 status and next ticket.
 
 ## Validation
-- `npm --prefix jumpyard-checkin-phone run lint`
-- `npm --prefix jumpyard-checkin-phone run build`
-- Local browser smoke if feasible.
+- `node --check infra/lambda/session/index.js`
+- `npm --prefix jumpyard-checkin-admin run lint`
+- `npm --prefix jumpyard-checkin-admin run build`
+- `npm run validate`

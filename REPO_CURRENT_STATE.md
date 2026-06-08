@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-08
-- Current branch: `codex/t0106-skyrider-consent-before-payment`
-- Current status: T0106 is completed locally. T0105 was merged to `main` through PR #105. T0106 moves SkyRider height consent before quote/draft/payment in both buy-entry and existing-booking add-on flows.
-- Current ticket: `T0106`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`
-- Recommended next step: run T0107 linked add-ons in staff/handoff, then T0108 full Gustav demo regression smoke/runbook.
+- Current branch: `codex/t0107-linked-addons-handoff`
+- Current status: T0107 is completed locally. T0106 was merged to `main` through PR #106. T0107 adds paid linked add-on booking products to staff handoff detail and labels them as `Tillägg` in admin.
+- Current ticket: `T0107`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`
+- Recommended next step: run T0108 full Gustav demo regression smoke/runbook after T0107 is merged and published/deployed.
 
 ## Current Structure
 
@@ -240,18 +240,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0103` | SkyRider availability gate. | 2026-06-04 | Implemented locally; booking availability now includes SkyRider, phone add-ons hide/cap SkyRider from availability, and quote/draft validates only explicitly capacity-bound items. |
 | `T0104` | SkyRider availability backend deploy. | 2026-06-08 | Deployed the T0103 booking Lambda code to AWS dev; deployed availability now returns `skyrider` as an add-on with product id `1765443` for tested slots. |
 | `T0105` | Existing-booking add-on UI cleanup. | 2026-06-08 | Merged through PR #105; existing-booking summary/add-on/payment copy was tightened, duplicate internal backs removed, review rows gained correct icons, and final guest handout copy now shows the actual entry product instead of generic wristband copy. |
+| `T0106` | SkyRider consent before payment. | 2026-06-08 | Merged through PR #106; buy-entry and existing-booking add-on flows now show SkyRider height consent before quote/draft/payment and avoid duplicate consent after add-on payment. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0106` | SkyRider consent before payment. | Completed locally; not yet merged | Moves SkyRider height consent before quote/draft/payment in buy-entry and existing-booking add-on flows. Phone lint/build and root validation passed; full local browser smoke is blocked by local JumpYard Cloud connectivity and should be rechecked after public deploy. |
+| `T0107` | Linked add-on products in staff/handoff fulfillment. | Completed locally; not yet merged | Staff detail now includes paid/published linked add-on booking items and admin labels them as `Tillägg`; deploy/public smoke remains part of T0108. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0107` | Linked add-on products in staff/handoff fulfillment | Show paid linked add-on booking products such as socks, padlock, coffee, and SkyRider alongside the original entry so staff can see everything to hand out/redeem. |
 | `T0108` | Gustav demo regression smoke/runbook | Run the full Playground demo flow order, verify buy-entry availability/payment/QR/redeem, existing-booking add-ons, gift card/Klippkort paths, and produce the concise demo runbook. |
 | `TBD` | Guest-facing add-on catalog review | Talk with Gustav before exposing more Roller add-ons such as drinks, food, merch, Valo, event, party, gift-card, and membership products. |
 | `TBD` | Production readiness sequence | Resume staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal after the Playground demo scope is stable. |
