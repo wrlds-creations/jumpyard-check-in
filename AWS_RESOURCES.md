@@ -75,6 +75,18 @@ T0104 SkyRider availability deploy notes:
 - Dev smoke: deployed availability for `2026-06-08` and tested slots `09:00`, `09:30`, `10:00`, `10:30`, `11:00`, and `16:00` returned `addon,entry,family` product types with `skyrider` present in each slot and product id `1765443`.
 - Safety: no Roller bookings, drafts, payments, redemptions, Aurora migrations, secrets, or Cloudflare configuration changed.
 
+T0108 Gustav demo regression deploy notes:
+
+- AWS resources changed: existing session Lambda code only.
+- Changed resource: `SessionHandler`.
+- Reason: deploy the already-reviewed T0107 staff handoff behavior so public staff/admin can show paid linked add-on booking items before the Gustav demo.
+- Deploy guard: AWS identity was account `376129878018`; CDK diff showed only `SessionHandler` Lambda `Code` S3 key changing.
+- Deploy result: `npm --prefix infra run deploy:dev` passed on 2026-06-08 and CloudFormation returned `UPDATE_COMPLETE`.
+- Post-deploy diff: `npm --prefix infra run diff:dev` showed no differences.
+- Public smoke: phone and admin Cloudflare pages returned HTTP `200`; `POST /v1/bookings/availability` returned entry, add-on, and SkyRider rows; staff auth/list/detail returned one ready session with 5 product rows, including 4 linked add-on rows.
+- Health smoke: all 17 `jumpyard-check-in-dev-*` CloudWatch alarms were `OK`; Aurora readback showed 2 recent successful seed runs and 8 recent processed webhook events.
+- Safety: no Roller bookings, drafts, payments, redemptions, Aurora migrations, secrets, SMS/email sends, or Cloudflare configuration changed.
+
 T0059 redeem eligibility notes:
 
 - AWS resources changed: existing Lambda code only.
