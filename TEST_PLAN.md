@@ -1244,3 +1244,16 @@ Use this file to define validation for the current project or milestone.
 | Phone lint | Phone app lint should pass. | Passed with existing warnings | `npm --prefix jumpyard-checkin-phone run lint` passed with the pre-existing four `<img>` warnings. |
 | Phone build | Phone app build should pass. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
 | Root validation | Source-of-truth docs should validate after T0103 updates. | Passed | `npm run validate` passed on 2026-06-04. |
+
+## T0104 SkyRider Availability Deploy
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| AWS identity | Deploy must target WRLDS dev account and region. | Passed | `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`; region is `eu-north-1`. |
+| Booking Lambda syntax | Booking Lambda should remain syntactically valid before deploy. | Passed | `node --check infra/lambda/booking/index.js` passed on 2026-06-08. |
+| Infra build | CDK TypeScript should compile before deploy. | Passed | `npm --prefix infra run build` passed. |
+| CDK synth | Dev stack should synthesize with approved dev config. | Passed | `npm --prefix infra run synth:dev` passed after running CDK commands sequentially. |
+| CDK diff | Deploy should only change booking Lambda code. | Passed | `npm --prefix infra run diff:dev` showed only `BookingHandler` Lambda `Code` S3 key changing. |
+| Dev deploy | AWS dev stack should update successfully. | Passed | `npm --prefix infra run deploy:dev` completed with CloudFormation `UPDATE_COMPLETE`. |
+| Deployed availability | Public API should return SkyRider as an add-on. | Passed | `POST /v1/bookings/availability` for `2026-06-08` and slots `09:00`, `09:30`, `10:00`, `10:30`, `11:00`, and `16:00` returned product types `addon,entry,family` and product key `skyrider` in each slot. |
+| SkyRider product id | Deployed availability should map SkyRider to the child product used by quote/draft. | Passed | Returned `skyrider` rows have `productId=1765443` and product name `SkyRider 1 åk`. |

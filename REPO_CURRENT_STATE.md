@@ -4,12 +4,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Snapshot
 
-- Date: 2026-06-04
-- Current branch: `codex/t0103-skyrider-availability-gate`
-- Current status: T0103 is implemented locally and validated. It narrows the planned add-on availability work to SkyRider only: JumpYard Cloud reads SkyRider availability with entry/family availability, the phone app hides or caps SkyRider based on the selected date/time, and quote/draft validation now checks only explicitly capacity-bound items so stock add-ons still work.
-- Current ticket: `T0103`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`
-- Recommended next step: deploy the T0103 booking Lambda change to dev when approved, then run a public phone smoke for a selected time with SkyRider visible/hidden behavior and an entry-plus-stock-add-on regression.
+- Date: 2026-06-08
+- Current branch: `codex/t0104-deploy-skyrider-availability`
+- Current status: T0104 is completed locally after deploying the merged T0103 booking Lambda change to AWS dev. The deployed `POST /v1/bookings/availability` endpoint now returns `skyrider` as `type='addon'` with product id `1765443` for tested slots, so the public Cloudflare phone app can show SkyRider as a normal add-on when Roller says it is available.
+- Current ticket: `T0104`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`
+- Recommended next step: run T0105 phone summary icon/copy polish, then do a short public smoke through the phone buy-entry add-on step to visually confirm SkyRider appears when expected.
 
 ## Current Structure
 
@@ -236,18 +236,19 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0101` | Operational monitoring and runbooks. | 2026-06-04 | Read-only AWS checks confirmed dashboard `jumpyard-check-in-dev-ops`, 17 `jumpyard-check-in-dev-*` alarms in `OK`, and Lambda log groups with 30-day retention. Added `OPERATIONS_RUNBOOK.md` for dev incident response across Data API, webhook, booking/payment, gift card/Klippkort, messaging, and staff redeem without changing AWS resources. |
 | `T0102` | Phone buy-entry demo polish. | 2026-06-04 | Merged through PR #102; polished loading, contact/payment-code placement, summary rows, and payment icon/copy without changing backend behavior. |
 | `T0103` | SkyRider availability gate. | 2026-06-04 | Implemented locally; booking availability now includes SkyRider, phone add-ons hide/cap SkyRider from availability, and quote/draft validates only explicitly capacity-bound items. |
+| `T0104` | SkyRider availability backend deploy. | 2026-06-08 | Deployed the T0103 booking Lambda code to AWS dev; deployed availability now returns `skyrider` as an add-on with product id `1765443` for tested slots. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0103` | SkyRider availability gate. | Completed locally | Awaiting review/commit/deploy. No AWS resource shape changed; booking Lambda code must be deployed before public app can use the new SkyRider availability data. |
+| `T0104` | SkyRider availability backend deploy. | Completed locally | AWS dev deploy passed; deployed API smoke confirms SkyRider availability is now returned to the public phone app. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0104` | Phone summary icon/copy polish | Use the preferred calendar/time icon, correct product icons for handout/add-on rows, and remove redundant subtitles/details in the check-in app summary so rows are tighter and easier to scan. |
+| `T0105` | Phone summary icon/copy polish | Use the preferred calendar/time icon, correct product icons for handout/add-on rows, and remove redundant subtitles/details in the check-in app summary so rows are tighter and easier to scan. |
 | `TBD` | Guest-facing add-on catalog review | Talk with Gustav before exposing more Roller add-ons such as drinks, food, merch, Valo, event, party, gift-card, and membership products. |
 | `TBD` | Production readiness sequence | Resume staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal after the Playground demo scope is stable. |
 
