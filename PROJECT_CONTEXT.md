@@ -653,6 +653,8 @@ T0108 completes the Gustav demo regression preparation. The already-reviewed T01
 
 T0109 hardens SkyRider consent timing in the phone app. The visible flow still sends new buy-entry guests from add-ons to the SkyRider 100 cm approval before contact/review/payment, and sends existing-booking add-on guests from add-ons to the same approval before quote/review/payment. The quote and draft handlers now also fail closed if SkyRider is selected without recorded approval, so a UI state mistake cannot create a Roller quote, draft, or payment session before the height requirement is accepted.
 
+T0110 polishes the staff handoff fulfillment rows before the Gustav demo. The admin "Att lämna ut" list now keeps only product name, linked add-on badge, and quantity; the old grey product subtitle with child product/time detail is removed. Product rows now choose JumpYard icons by detected product type, including entry, SkyRider, socks, padlock, coffee, and family/group, and the staff redeem panel no longer shows the explanatory server-side final-check copy. Redeem behavior and staff API contracts are unchanged.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |

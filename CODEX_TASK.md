@@ -1,23 +1,23 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0109
+T0110
 
 ## Goal
-Verify and harden SkyRider consent timing before payment.
+Polish staff handoff product rows before the Gustav demo.
 
 ## Context
-- T0106 moved SkyRider height consent before payment in the visible phone UI.
-- The follow-up from demo rehearsal is to make that rule fail-closed, so neither new buy-entry nor existing-booking add-on payment can be quoted/drafted if SkyRider was selected without the 100 cm approval.
-- T0110 is intentionally separate and handles staff/admin handoff row polish.
+- T0107 made paid linked add-on products visible in staff handoff.
+- T0108 proved the deployed staff detail can show original entry plus linked add-ons.
+- T0110 tightens the staff view so operators see a compact handout list with the right product icons and no noisy explanatory or duplicate product subtitles.
 
 ## Allowed Areas
 - `CODEX_TASK.md`
 - `PROJECT_CONTEXT.md`
 - `REPO_CURRENT_STATE.md`
 - `TEST_PLAN.md`
-- `jumpyard-checkin-phone/src/components/BuyTickets.tsx`
-- `jumpyard-checkin-phone/src/components/AddonsOffer.tsx`
+- `jumpyard-checkin-admin/src/app/page.tsx`
+- `jumpyard-checkin-admin/public/jumpyard-next-icons/*.png`
 
 ## Do Not Touch
 - Roller Live
@@ -25,7 +25,7 @@ Verify and harden SkyRider consent timing before payment.
 - `.env`
 - AWS resources
 - Aurora migrations
-- Admin application source
+- Phone application source
 - Payment package internals
 - Redemption logic or redeem writes
 - SMS/email logic
@@ -33,30 +33,36 @@ Verify and harden SkyRider consent timing before payment.
 
 ## Requirements
 
-1. New buy-entry flow:
-   - Selecting SkyRider must show the 100 cm approval immediately after the add-ons step.
-   - Quote/draft/payment side effects must be blocked if SkyRider is selected and the approval is not present.
+1. Product rows:
+   - Remove grey subtitles under each "Att lämna ut" row, such as ticket/price/time or SkyRider child-detail text.
+   - Keep the primary product name and quantity visible.
+   - Preserve the linked add-on badge for rows that come from linked paid add-on bookings.
 
-2. Existing-booking add-on flow:
-   - Adding SkyRider must show the 100 cm approval immediately after the add-ons step.
-   - Add-product quote/draft/payment side effects must be blocked if SkyRider is newly selected and the approval is not present.
+2. Product icons:
+   - Use product-specific JumpYard icons for common handout rows: entry, SkyRider, socks, padlock, coffee, and family/group where detectable.
+   - Keep a safe fallback for unknown products.
 
-3. Documentation:
-   - Update source-of-truth docs and the lower roadmap/current-ticket tables.
-   - Keep T0110 as the next confirmed ticket.
+3. Redeem panel copy:
+   - Remove the explanatory copy saying the final check happens server-side before tickets are redeemed.
+   - Do not change the actual staff-confirmed redeem behavior.
+
+4. Documentation:
+   - Update source-of-truth docs and the roadmap/current-ticket tables.
 
 ## Non-Goals
-- Do not change Roller product ids or availability mapping.
-- Do not change backend quote/draft endpoints.
+- Do not change staff API contracts.
+- Do not change redeem behavior.
+- Do not change backend linked add-on logic.
+- Do not add new Roller product mappings beyond UI icon detection.
 - Do not deploy AWS resources.
-- Do not change admin handoff UI in this ticket.
 
 ## Acceptance Criteria
-- SkyRider approval is required before quote/draft/payment for new buy-entry.
-- SkyRider approval is required before quote/draft/payment for existing-booking add-ons.
-- Source-of-truth docs record T0109 status and T0110 as next confirmed step.
+- The staff handoff detail list is more compact and no longer shows grey product subtitles.
+- SkyRider, socks, padlock, coffee, entry, and family/group rows use the closest available JumpYard icon.
+- The staff redeem panel no longer displays the server-side final-check copy.
+- Source-of-truth docs record T0110 status.
 
 ## Validation
-- `npm --prefix jumpyard-checkin-phone run lint`
-- `npm --prefix jumpyard-checkin-phone run build`
+- `npm --prefix jumpyard-checkin-admin run lint`
+- `npm --prefix jumpyard-checkin-admin run build`
 - `npm run validate`

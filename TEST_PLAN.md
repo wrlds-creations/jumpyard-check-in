@@ -1314,6 +1314,19 @@ Use this file to define validation for the current project or milestone.
 | Scoped diff check | T0109 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
 | Local browser smoke | Local phone UI should visually reach the SkyRider gate when JumpYard Cloud is reachable. | Blocked | Temporary dev server at `http://127.0.0.1:3012/?codexSmoke=t0109` reached buy-entry time selection, but local availability returned `Could not reach JumpYard Cloud`, matching the earlier T0106 local browser blocker. |
 
+## T0110 Staff Handoff Row Polish
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Compact handout rows | Staff "Att lämna ut" rows should not show grey child product/time subtitles. | Passed in code | `ItemRows` now renders product name, linked add-on badge, and quantity only. |
+| Product icons | Common handout products should use matching JumpYard icons. | Passed in code | Product text now maps entry/family/SkyRider/socks/padlock/coffee to the closest JumpYard icon with a safe fallback. |
+| Redeem panel copy | Staff detail should not show the server-side final-check explanatory text. | Passed in code | The copy below "Slutför check-in" was removed; redeem behavior is unchanged. |
+| Admin lint | Admin app lint should pass after row polish. | Passed | `npm --prefix jumpyard-checkin-admin run lint` passed on 2026-06-08. |
+| Admin build | Admin app should build with the added product icon assets. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed on 2026-06-08. |
+| Root validation | Source-of-truth docs should validate after T0110 updates. | Passed | `npm run validate` passed on 2026-06-08. |
+| Scoped diff check | T0110 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
+| Local admin smoke | Admin app should render after adding product icon assets. | Passed | Temporary admin dev server at `http://127.0.0.1:3013/?codexSmoke=t0110` rendered login with no missing images, then the test server was stopped. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |
