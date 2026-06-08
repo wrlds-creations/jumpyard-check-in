@@ -1245,6 +1245,19 @@ Use this file to define validation for the current project or milestone.
 | Phone build | Phone app build should pass. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
 | Root validation | Source-of-truth docs should validate after T0103 updates. | Passed | `npm run validate` passed on 2026-06-04. |
 
+## T0105 Existing Booking Add-on UI Cleanup
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Ticket scope | T0105 should stay frontend-only and not change Roller, AWS, Aurora, payments, or redemption logic. | Passed | Only phone UI components, translations, and docs changed. T0106 handles SkyRider consent timing; T0107 handles linked add-ons in staff/handoff; T0108 handles the full demo regression smoke. |
+| Booking summary hint | Existing-booking summary should not say the next step is safety video. | Passed | Removed the visible `timeHint` line from `BookingSummary`. |
+| Existing add-on catalog | Existing-booking add-on picker should hide future unsupported items. | Passed | `Connected` and `extra person` are filtered out; stock add-ons and SkyRider stay in scope. |
+| Add-on review polish | Existing-booking add-on review should use one back affordance, product icons, clear payment-forward CTA copy, and no check icon in the CTA. | Passed | Removed the internal duplicate back link, added JumpYard icons to review rows, changed CTA to `Gå till betalning`, and removed the CTA check icon. |
+| Ready-for-staff handout | Guest final screen should show the actual entry product to collect, not generic wristband copy. | Passed | First staff handout row now uses `booking.productLabel` when available. Linked add-on products in staff/handoff remain T0107. |
+| Local app smoke | Phone app should load locally after changes. | Passed | In-app browser loaded `http://localhost:3010/?codexSmoke=t0105` and showed the park choice screen. Full booking/session smoke deferred to T0108 to avoid creating extra backend session state during this UI-only ticket. |
+| Phone lint | Phone app lint should pass after changes. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with existing `<img>` warnings only. |
+| Phone build | Phone app build should pass after changes. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |

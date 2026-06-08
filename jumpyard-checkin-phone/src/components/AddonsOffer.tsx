@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, ArrowLeft, Check, CreditCard, Minus, Plus } from 'lucide-react';
+import { AlertCircle, Check, CreditCard, Minus, Plus } from 'lucide-react';
 import {
     CloudBookingError,
     createAddProductDraft,
@@ -53,6 +53,7 @@ const ADDON_PRODUCTS: Record<AddonId, { rollerProductId: number | null; requires
     socks: { rollerProductId: 1765445, requiresAvailability: false },
 };
 
+const HIDDEN_EXISTING_BOOKING_ADDONS = new Set<AddonId>(['connected', 'extra_person']);
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
 
 function Counter({
@@ -124,15 +125,23 @@ function canStartPayment(draft: AddProductDraftResult) {
 export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, onPendingDone }: AddonsOfferProps) => {
     const { t } = useTranslation();
     const catalog = useMemo<CatalogEntry[]>(
-        () => [
+        () => {
+            const entries: CatalogEntry[] = [
             { id: 'skyrider', label: t.addons.products.skyriderLabel, price: 45, unit: t.addons.perJumper, description: t.addons.products.skyriderDesc, maxPerGuest: 1, icon: 'zipline', ...ADDON_PRODUCTS.skyrider },
             { id: 'connected', label: t.addons.products.connectedLabel, price: 40, unit: t.addons.perJumper, description: t.addons.products.connectedDesc, maxPerGuest: 1, icon: 'connected-band', ...ADDON_PRODUCTS.connected },
             { id: 'socks', label: t.addons.products.socksLabel, price: 40, unit: t.addons.each, description: t.addons.products.socksDesc, maxPerGuest: 4, icon: 'grip-socks', ...ADDON_PRODUCTS.socks },
             { id: 'coffee', label: t.addons.products.coffeeLabel, price: 35, unit: t.addons.each, description: t.addons.products.coffeeDesc, maxPerGuest: 4, icon: 'drink-cup', ...ADDON_PRODUCTS.coffee },
             { id: 'extra_person', label: t.addons.products.extraPersonLabel, price: 179, unit: t.addons.perPerson, description: t.addons.products.extraPersonDesc, maxPerGuest: 4, icon: 'add-guest', ...ADDON_PRODUCTS.extra_person },
             { id: 'lock', label: t.addons.products.lockLabel, price: 40, unit: t.addons.each, description: t.addons.products.lockDesc, maxPerGuest: 1, icon: 'padlock', ...ADDON_PRODUCTS.lock },
-        ],
+        ];
+            return entries.filter((entry) => !HIDDEN_EXISTING_BOOKING_ADDONS.has(entry.id));
+        },
         [t]
+    );
+
+    const catalogById = useMemo(
+        () => new Map(catalog.map((entry) => [entry.id, entry])),
+        [catalog]
     );
 
     const minQty = useMemo(() => {
@@ -265,13 +274,6 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
         }
     };
 
-    const backFromInternalStep = () => {
-        setSubmitError(null);
-        if (step === 'PAYMENT' || step === 'APPROVED') setStep('REVIEW');
-        else if (step === 'REVIEW') setStep('SELECT');
-        else setStep('SELECT');
-    };
-
     return (
         <motion.div
             className="w-full max-w-md mx-auto flex flex-col px-4 py-3"
@@ -283,15 +285,6 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            {step !== 'SELECT' && step !== 'PENDING' && (
-                <button
-                    onClick={backFromInternalStep}
-                    className="mb-3 flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
-                >
-                    <ArrowLeft size={14} /> {t.common.back}
-                </button>
-            )}
-
             {step === 'PAYMENT' && draft && (
                 <motion.div
                     initial={{ opacity: 0 }}
@@ -417,12 +410,18 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                     <p className="text-muted text-xs mb-5 text-center">{t.addons.reviewDesc}</p>
 
                     <div className="bg-white border border-border rounded-xl p-4 mb-4">
-                        {addedAddons.map((addon) => (
-                            <div key={addon.id} className="flex justify-between gap-3 text-sm font-bold text-foreground py-1">
-                                <span>{addon.label}</span>
-                                <span>{addon.qty} st</span>
-                            </div>
-                        ))}
+                        {addedAddons.map((addon) => {
+                            const entry = catalogById.get(addon.id);
+                            return (
+                                <div key={addon.id} className="flex justify-between items-center gap-3 text-sm font-bold text-foreground py-1">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <JumpyardIcon name={entry?.icon ?? 'addons-bag'} className="w-7 h-7 flex-shrink-0" />
+                                        <span className="truncate">{addon.label}</span>
+                                    </div>
+                                    <span className="flex-shrink-0">{addon.qty} st</span>
+                                </div>
+                            );
+                        })}
                     </div>
 
                     <div className="bg-white border border-border p-3 rounded-xl mb-5 flex justify-between items-center px-4">
@@ -437,7 +436,7 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                         disabled={submitting}
                         className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
-                        {submitting ? t.buy.creating : t.addons.createDraft} {!submitting && <Check size={18} />}
+                        {submitting ? t.buy.creating : t.addons.createDraft}
                     </button>
                 </motion.div>
             )}

@@ -1,75 +1,87 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0104
+T0105
 
 ## Goal
-Deploy the already-merged T0103 booking Lambda change to AWS dev and verify that the public phone app can receive SkyRider as a capacity-gated add-on from JumpYard Cloud availability.
+Clean up the existing-booking add-on flow before the Gustav demo, without changing Roller payment, backend, AWS, or redemption behavior.
 
 ## Context
-- T0103 was merged to `main`, and Cloudflare deployed the phone frontend automatically.
-- Cloudflare did not deploy the AWS booking Lambda.
-- The deployed AWS booking Lambda still returned only `entry` and `family` availability, so the new phone UI correctly hid SkyRider.
-- This ticket deploys only the booking Lambda code already present on `main`.
+- The public phone app can now buy entry, add products, pay, and proceed to check-in.
+- Existing-booking add-on flow has several UI/demo blockers:
+  - Booking summary says the next step is safety video even though existing bookings go to add-ons first.
+  - Existing-booking add-ons still show unsupported future items such as Connected/extra person.
+  - Add-on review/payment states can show duplicate back links.
+  - Add-on review CTA says `Reservera tillägg` and shows a check icon, which is unclear before payment.
+  - Add-on review list lacks the same JumpYard product icons as the new-booking flow.
+  - Ready-for-staff handout copy says generic `Armband` instead of the actual entry product.
 
-## Allowed areas
+## Allowed Areas
 - `CODEX_TASK.md`
 - `PROJECT_CONTEXT.md`
 - `DECISIONS.md`
-- `AWS_RESOURCES.md`
 - `REPO_CURRENT_STATE.md`
 - `FOLLOWUPS.md`
 - `TEST_PLAN.md`
+- `jumpyard-checkin-phone/src/components/BookingSummary.tsx`
+- `jumpyard-checkin-phone/src/components/AddonsOffer.tsx`
+- `jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx`
+- `jumpyard-checkin-phone/src/context/LanguageContext.tsx`
+- `jumpyard-checkin-phone/src/flow/types.ts`
 
-## Do not touch
+## Do Not Touch
 - Roller Live
 - Production credentials
 - `.env`
-- AWS resource shape beyond deploying the existing booking Lambda code asset
+- AWS resources or deploys
 - Aurora migrations
-- Phone app UI implementation
-- Staff/admin app
+- Staff/admin backend behavior
+- Payment package internals
+- Redemption logic
 - SMS/email logic
-- Payment, gift-card, or Klippkort behavior
-- Broader dynamic add-on catalog
+- Broad dynamic add-on catalog
 
 ## Requirements
 
-1. Confirm AWS deployment target:
-   - Account must be `376129878018`.
-   - Region must be `eu-north-1`.
-   - Environment must be `dev`.
+1. Document the near-term roadmap:
+   - `T0105`: existing-booking add-on UI cleanup.
+   - `T0106`: SkyRider consent before payment in both new-booking and existing-booking flows.
+   - `T0107`: show linked add-on booking products in staff/handoff fulfillment.
+   - `T0108`: demo regression smoke/runbook.
 
-2. Deploy scoped backend change:
-   - Run CDK build/synth/diff.
-   - Confirm diff only changes `BookingHandler` Lambda code.
-   - Deploy the dev stack.
+2. Existing booking summary cleanup:
+   - Remove the visible `next step: safety video` hint.
+   - Keep paid/unpaid and booking details unchanged.
 
-3. Verify deployed behavior:
-   - Call deployed `POST /v1/bookings/availability`.
-   - Confirm each selected slot includes product key `skyrider`.
-   - Confirm `skyrider` has `type="addon"` and product id `1765443`.
-   - Confirm stock add-ons remain frontend-owned static add-ons.
+3. Existing-booking add-on catalog cleanup:
+   - Hide `Connected` and `extra person` from the existing-booking add-on picker for now.
+   - Keep stock add-ons and SkyRider available when supported by the current backend.
 
-## Non-goals
-- Do not add UI polish.
-- Do not change the SkyRider visibility rules from T0103.
-- Do not deploy production or Roller Live.
-- Do not change Cloudflare configuration.
-- Do not create bookings, drafts, payments, or redemptions.
+4. Existing-booking add-on review cleanup:
+   - Avoid duplicate back links inside add-on review/payment states.
+   - Rename the review CTA from `Reservera tillägg` to a payment-forward label.
+   - Remove the check icon from the review CTA.
+   - Show JumpYard product icons next to review items.
+
+5. Ready-for-staff handout copy:
+   - Replace generic `Armband` wording with the actual entry product label when available.
+   - Keep add-on handout behavior unchanged until T0107.
+
+## Non-Goals
+- Do not implement SkyRider height consent in T0105.
+- Do not make linked add-on bookings appear in staff/admin in T0105.
+- Do not change how add-on drafts/payments are created.
+- Do not change Roller availability rules or product IDs.
+- Do not introduce new backend endpoints.
 
 ## Acceptance Criteria
-- AWS identity and region are verified before deploy.
-- CDK diff shows only `BookingHandler` Lambda code asset changing.
-- Dev deploy completes successfully.
-- Deployed availability API returns `addon,entry,family` product types.
-- Deployed availability API includes `skyrider` in selected slot product keys.
-- Source-of-truth docs record the deploy and move phone summary icon/copy polish to T0105.
+- Existing booking summary no longer says safety video is the next step.
+- Existing-booking add-on picker no longer shows Connected or extra person.
+- Add-on review has one back affordance, product icons, no CTA check icon, and clearer payment-forward CTA copy.
+- Confirmation handout shows the entry product label instead of generic wristband copy.
+- Source-of-truth docs record T0105 and the follow-up tickets T0106-T0108.
 
 ## Validation
-- `node --check infra/lambda/booking/index.js`
-- `npm --prefix infra run build`
-- `npm --prefix infra run synth:dev`
-- `npm --prefix infra run diff:dev`
-- `npm --prefix infra run deploy:dev`
-- `POST /v1/bookings/availability` smoke against deployed dev API
+- `npm --prefix jumpyard-checkin-phone run lint`
+- `npm --prefix jumpyard-checkin-phone run build`
+- Browser smoke on local phone app for an existing booking add-on flow, if feasible.

@@ -46,7 +46,6 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
                 <p className="text-base font-bold italic text-foreground opacity-90 mt-0.5">{guestDisplay}</p>
             )}
             <p className="text-muted text-xs mt-1 mb-1">{t.booking.subtitle}</p>
-            <p className="text-muted text-[11px] mb-3 text-center">{t.booking.timeHint}</p>
 
             <div className="bg-surface border border-border w-full rounded-2xl p-4 text-left shadow-sm mb-4">
                 <div className="grid grid-cols-2 gap-2 mb-3">
