@@ -1282,6 +1282,24 @@ Use this file to define validation for the current project or milestone.
 | Admin build | Admin app build should pass after changes. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. |
 | Root validation | Source-of-truth docs should validate after T0107 updates. | Passed | `npm run validate` passed on 2026-06-08. |
 
+## T0108 Gustav Demo Regression Smoke
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| AWS identity | Dev deploy/checks should target the approved dev account. | Passed | `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`. |
+| Infra build | CDK TypeScript should compile before deploy. | Passed | `npm --prefix infra run build` passed. |
+| CDK synth | Dev stack should synthesize with approved dev config. | Passed | `npm --prefix infra run synth:dev` passed. |
+| CDK diff guard | Deploy should only change the T0107 session Lambda code. | Passed | Pre-deploy `npm --prefix infra run diff:dev` showed only `SessionHandler` Lambda `Code` S3 key changing. |
+| Dev deploy | T0107 behavior should be live in AWS dev. | Passed | `npm --prefix infra run deploy:dev` completed with stack `UPDATE_COMPLETE`. |
+| Post-deploy diff | Stack should be clean after deploy. | Passed | `npm --prefix infra run diff:dev` showed no differences. |
+| Public pages | Guest and staff Cloudflare apps should respond. | Passed | `https://jumpyard-check-in.pages.dev/?codexSmoke=t0108` and `https://jumpyard-checkin-admin.pages.dev/?codexSmoke=t0108` both returned HTTP `200`. |
+| Availability | JumpYard Cloud should return real availability including SkyRider. | Passed | `POST /v1/bookings/availability` for `2026-06-09` and `11:30`, `12:00`, `16:00` returned 3 slots, 21 products, entry rows, add-on rows, and 3 available SkyRider rows. |
+| Staff auth/list/detail | Staff API should authenticate and return the ready queue/detail. | Passed | Staff login returned `authenticated`; list returned 1 ready session; detail returned `ready_for_staff`. Secret passcode was read from AWS internally and not printed. |
+| Linked add-ons in staff detail | T0107 linked add-on rows should appear from deployed staff detail. | Passed | The first ready staff detail returned 5 item rows, including 4 rows with `fulfillmentSource='linked_add_on'`, and 1 selected ticket. |
+| CloudWatch alarms | Current dev alarms should not be firing before demo. | Passed | All 17 `jumpyard-check-in-dev-*` alarms returned `OK`. |
+| Aurora health | Data API and webhook should show recent healthy activity. | Passed | Aurora Data API readback showed 2 recent successful seed runs and 8 recent processed webhook events in the last 48 hours. |
+| Demo runbook | Gustav demo case order should exist in the repo. | Passed | Added `GUSTAV_DEMO_RUNBOOK.md` with public URLs, demo order, talking points, and current health checks. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |
