@@ -15,6 +15,7 @@ import type { Addon, AddonId, Booking } from '@/flow/types';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
+import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 
 interface AddonsOfferProps {
     booking: Booking;
@@ -24,6 +25,7 @@ interface AddonsOfferProps {
         selectedAddons: Addon[];
         addonsTotal: number;
         skyriderSelected: boolean;
+        skyriderHeightConfirmed?: boolean;
         connectedSelected: boolean;
         paymentHandled?: boolean;
     }) => void;
@@ -42,7 +44,7 @@ interface CatalogEntry {
     requiresAvailability: boolean;
 }
 
-type Step = 'SELECT' | 'REVIEW' | 'PAYMENT' | 'APPROVED' | 'PENDING';
+type Step = 'SELECT' | 'SKYRIDER_ATTEST' | 'REVIEW' | 'PAYMENT' | 'APPROVED' | 'PENDING';
 
 const ADDON_PRODUCTS: Record<AddonId, { rollerProductId: number | null; requiresAvailability: boolean }> = {
     skyrider: { rollerProductId: 1765443, requiresAvailability: true },
@@ -158,11 +160,13 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
     const [draft, setDraft] = useState<AddProductDraftResult | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
 
     const setOne = (id: AddonId, nextQty: number) => {
         setSubmitError(null);
         setQuote(null);
         setDraft(null);
+        if (id === 'skyrider') setSkyriderConsentConfirmed(false);
         setQty((current) => ({ ...current, [id]: Math.max(minQty[id], nextQty) }));
     };
 
@@ -196,6 +200,7 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
         () => addedAddons.reduce((sum, addon) => sum + addon.price * addon.qty, 0),
         [addedAddons]
     );
+    const addedSkyrider = addedAddons.some((addon) => addon.id === 'skyrider');
 
     const buildItems = (): NewBookingItemRequest[] => {
         const bookingDate = booking.date ?? getVenueToday();
@@ -217,7 +222,8 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
         onContinue({
             selectedAddons,
             addonsTotal,
-            skyriderSelected: qty.skyrider > 0,
+            skyriderSelected: addedSkyrider,
+            skyriderHeightConfirmed: addedSkyrider ? skyriderConsentConfirmed : false,
             connectedSelected: qty.connected > 0,
             paymentHandled,
         });
@@ -231,6 +237,11 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
 
         if (buildItems().length !== addedAddons.length) {
             setSubmitError(t.addons.unsupportedSelection);
+            return;
+        }
+
+        if (addedSkyrider && !skyriderConsentConfirmed) {
+            setStep('SKYRIDER_ATTEST');
             return;
         }
 
@@ -402,6 +413,16 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                         </button>
                     </div>
                 </>
+            )}
+
+            {step === 'SKYRIDER_ATTEST' && (
+                <SkyRiderAttest
+                    onComplete={() => {
+                        setSkyriderConsentConfirmed(true);
+                        setStep('SELECT');
+                        void goToReview();
+                    }}
+                />
             )}
 
             {step === 'REVIEW' && quote && (

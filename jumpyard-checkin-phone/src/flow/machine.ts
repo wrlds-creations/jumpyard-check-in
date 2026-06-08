@@ -89,7 +89,7 @@ export function nextState(
       return 'APP_ADDONS';
 
     case 'APP_ADDONS':
-      if (ctx.skyriderSelected) return 'APP_SKYRIDER_ATTEST';
+      if (ctx.skyriderSelected && !ctx.skyriderHeightConfirmed) return 'APP_SKYRIDER_ATTEST';
       return afterSkyriderGate(ctx);
 
     case 'APP_SKYRIDER_ATTEST':

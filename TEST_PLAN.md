@@ -1258,6 +1258,17 @@ Use this file to define validation for the current project or milestone.
 | Phone lint | Phone app lint should pass after changes. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with existing `<img>` warnings only. |
 | Phone build | Phone app build should pass after changes. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
 
+## T0106 SkyRider Consent Before Payment
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Buy-entry SkyRider consent | Selecting SkyRider in buy-entry should show the height requirement before contact/review/payment. | Passed | Internal buy-entry step now routes `ADDONS -> SKYRIDER_ATTEST -> CONTACT`, so no quote/draft/payment call is reachable before confirmation. |
+| Existing-booking SkyRider consent | Selecting SkyRider as an add-on to an existing booking should show the height requirement before add-on quote/review/payment. | Passed | Internal add-on step now routes `SELECT -> SKYRIDER_ATTEST -> REVIEW`, and quote/draft/payment stay after confirmation. |
+| Duplicate consent guard | Existing-booking SkyRider add-on should not show the parent SkyRider consent again after payment. | Passed | Add-on completion now passes `skyriderHeightConfirmed=true`, and parent flow skips duplicate `APP_SKYRIDER_ATTEST`. |
+| Local browser smoke | Local phone app should prove the SkyRider gate visually when the API is reachable. | Blocked | Local app loaded, but availability returned `Could not reach JumpYard Cloud`; public smoke should run after deploy or with a working local API base URL. |
+| Phone lint | Phone app lint should pass after changes. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with existing `<img>` warnings only. |
+| Phone build | Phone app build should pass after changes. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |

@@ -22,13 +22,14 @@ import type { Addon, AddonId, Booking } from '@/flow/types';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
+import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 
 interface BuyTicketsProps {
   onBack: () => void;
   onBookingReady: (booking: Booking) => void;
 }
 
-type Step = 'TIMESLOT' | 'PRODUCT' | 'QUANTITY' | 'ADDONS' | 'CONTACT' | 'REVIEW' | 'PAYMENT' | 'PENDING';
+type Step = 'TIMESLOT' | 'PRODUCT' | 'QUANTITY' | 'ADDONS' | 'SKYRIDER_ATTEST' | 'CONTACT' | 'REVIEW' | 'PAYMENT' | 'PENDING';
 
 const BUY_PROGRESS_ICONS: JumpyardIconName[] = [
   'admission-ticket',
@@ -211,7 +212,7 @@ function wait(ms: number) {
 }
 
 function getBuyProgressIndex(step: Step) {
-  if (step === 'ADDONS') return 1;
+  if (step === 'ADDONS' || step === 'SKYRIDER_ATTEST') return 1;
   if (step === 'CONTACT' || step === 'REVIEW' || step === 'PAYMENT' || step === 'PENDING') return 2;
   return 0;
 }
@@ -304,6 +305,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const [clipCardCode, setClipCardCode] = useState('');
   const [paymentOptionsOpen, setPaymentOptionsOpen] = useState(false);
   const [paymentInputsDirty, setPaymentInputsDirty] = useState(false);
+  const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
   const [quote, setQuote] = useState<NewBookingQuote | null>(null);
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -346,6 +348,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       rollerProductId: addon.rollerProductId,
     }));
   const addonsTotal = selectedAddons.reduce((total, addon) => total + addon.price * addon.qty, 0);
+  const skyriderSelected = selectedAddons.some((addon) => addon.id === 'skyrider');
   const entryTotal = (selectedProduct?.unitPrice ?? 0) * quantity;
   const basketEstimateTotal = entryTotal + addonsTotal;
   const shouldPrecheckBasketAvailability = selectedProduct !== null;
@@ -418,6 +421,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setClipCardCode('');
     setPaymentOptionsOpen(false);
     setPaymentInputsDirty(false);
+    setSkyriderConsentConfirmed(false);
   };
 
   const handleProductSelect = (product: NewBookingProduct) => {
@@ -429,6 +433,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setQuote(null);
     setDraft(null);
     setPaymentSyncError(null);
+    setSkyriderConsentConfirmed(false);
     setStep('QUANTITY');
   };
 
@@ -446,6 +451,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setQuote(null);
     setDraft(null);
     setPaymentSyncError(null);
+    setSkyriderConsentConfirmed(false);
   };
 
   const updateGiftCardNumber = (value: string) => {
@@ -471,7 +477,17 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setPaymentSyncError(null);
     const addon = buyAddons.find((entry) => entry.id === id);
     const max = addon ? getBuyAddonMax(addon) : 0;
+    if (id === 'skyrider') setSkyriderConsentConfirmed(false);
     setAddonQty((current) => ({ ...current, [id]: Math.max(0, Math.min(max, nextQty)) }));
+  };
+
+  const continueFromAddons = () => {
+    if (skyriderSelected && !skyriderConsentConfirmed) {
+      setStep('SKYRIDER_ATTEST');
+      return;
+    }
+
+    setStep('CONTACT');
   };
 
   const buildCustomer = (): NewBookingCustomer => ({
@@ -589,6 +605,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     }
     if (step === 'REVIEW') setStep('CONTACT');
     else if (step === 'CONTACT') setStep('ADDONS');
+    else if (step === 'SKYRIDER_ATTEST') setStep('ADDONS');
     else if (step === 'ADDONS') setStep('QUANTITY');
     else if (step === 'QUANTITY') setStep('PRODUCT');
     else if (step === 'PRODUCT') setStep('TIMESLOT');
@@ -861,12 +878,21 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
           </div>
 
           <button
-            onClick={() => setStep('CONTACT')}
+            onClick={continueFromAddons}
             className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
           >
             {t.common.continue} <Check size={18} />
           </button>
         </motion.div>
+      )}
+
+      {step === 'SKYRIDER_ATTEST' && (
+        <SkyRiderAttest
+          onComplete={() => {
+            setSkyriderConsentConfirmed(true);
+            setStep('CONTACT');
+          }}
+        />
       )}
 
       {step === 'CONTACT' && selectedProduct && (

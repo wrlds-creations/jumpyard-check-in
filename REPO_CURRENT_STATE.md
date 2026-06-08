@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-08
-- Current branch: `codex/t0105-existing-booking-ui-cleanup`
-- Current status: T0105 is completed locally. T0104 deployed the merged T0103 booking Lambda change to AWS dev, and the deployed `POST /v1/bookings/availability` endpoint now returns `skyrider` as `type='addon'` with product id `1765443`. T0105 cleaned up the frontend-only existing-booking add-on demo path before the Gustav rehearsal.
-- Current ticket: `T0105`
+- Current branch: `codex/t0106-skyrider-consent-before-payment`
+- Current status: T0106 is completed locally. T0105 was merged to `main` through PR #105. T0106 moves SkyRider height consent before quote/draft/payment in both buy-entry and existing-booking add-on flows.
+- Current ticket: `T0106`
 - Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`
-- Recommended next step: run T0106 SkyRider consent-before-payment, then T0107 linked add-ons in staff/handoff, and T0108 full Gustav demo regression smoke/runbook.
+- Recommended next step: run T0107 linked add-ons in staff/handoff, then T0108 full Gustav demo regression smoke/runbook.
 
 ## Current Structure
 
@@ -233,22 +233,26 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0096` | Controlled full integrated write/redeem rehearsal. | 2026-06-03 | Public flow created paid booking `5101105`; JumpYard Cloud lookup returned fresh Aurora-backed state; session `jycs_mpy1x4ne_910af158` reached ready-for-staff handoff `JY5397`; staff-confirmed redeem consumed one ticket and public admin queue returned to empty. |
 | `T0097` | Membership/discount-code discovery. | 2026-06-03 | Gustav's clarification was confirmed through official docs and safe no-write Roller Playground checks: current Nacka `10-Kort` is not exposed as beta multi-pass balance, but the known code applies through `discounts: [{ code }]` as a 100% discount. |
 | `T0098` | Controlled 10-Kort consumption smoke. | 2026-06-03 | One approved Playground write created and published booking `5101114` with the masked `10-Kort` code. Roller showed booking discount evidence but no 10 -> 9 remaining-use readback; V1 must not show remaining visits. |
+| `T0099` | Implemented Klippkort code checkout. | 2026-06-03 | Phone buy-entry checkout accepts optional `Klippkort`, sends it as a Roller discount code, blocks no-effect codes, and keeps remaining-visit balance out of V1. |
+| `T0100` | Deployed and smoked Klippkort checkout. | 2026-06-04 | Deployed booking Lambda changes, verified public Cloudflare bundle exposed `Klippkort`, and passed invalid, entry-only, mixed entry-plus-add-on, and gift-card regression smokes. |
 | `T0101` | Operational monitoring and runbooks. | 2026-06-04 | Read-only AWS checks confirmed dashboard `jumpyard-check-in-dev-ops`, 17 `jumpyard-check-in-dev-*` alarms in `OK`, and Lambda log groups with 30-day retention. Added `OPERATIONS_RUNBOOK.md` for dev incident response across Data API, webhook, booking/payment, gift card/Klippkort, messaging, and staff redeem without changing AWS resources. |
 | `T0102` | Phone buy-entry demo polish. | 2026-06-04 | Merged through PR #102; polished loading, contact/payment-code placement, summary rows, and payment icon/copy without changing backend behavior. |
 | `T0103` | SkyRider availability gate. | 2026-06-04 | Implemented locally; booking availability now includes SkyRider, phone add-ons hide/cap SkyRider from availability, and quote/draft validates only explicitly capacity-bound items. |
 | `T0104` | SkyRider availability backend deploy. | 2026-06-08 | Deployed the T0103 booking Lambda code to AWS dev; deployed availability now returns `skyrider` as an add-on with product id `1765443` for tested slots. |
+| `T0105` | Existing-booking add-on UI cleanup. | 2026-06-08 | Merged through PR #105; existing-booking summary/add-on/payment copy was tightened, duplicate internal backs removed, review rows gained correct icons, and final guest handout copy now shows the actual entry product instead of generic wristband copy. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0104` | SkyRider availability backend deploy. | Completed locally | AWS dev deploy passed; deployed API smoke confirms SkyRider availability is now returned to the public phone app. |
+| `T0106` | SkyRider consent before payment. | Completed locally; not yet merged | Moves SkyRider height consent before quote/draft/payment in buy-entry and existing-booking add-on flows. Phone lint/build and root validation passed; full local browser smoke is blocked by local JumpYard Cloud connectivity and should be rechecked after public deploy. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0105` | Phone summary icon/copy polish | Use the preferred calendar/time icon, correct product icons for handout/add-on rows, and remove redundant subtitles/details in the check-in app summary so rows are tighter and easier to scan. |
+| `T0107` | Linked add-on products in staff/handoff fulfillment | Show paid linked add-on booking products such as socks, padlock, coffee, and SkyRider alongside the original entry so staff can see everything to hand out/redeem. |
+| `T0108` | Gustav demo regression smoke/runbook | Run the full Playground demo flow order, verify buy-entry availability/payment/QR/redeem, existing-booking add-ons, gift card/Klippkort paths, and produce the concise demo runbook. |
 | `TBD` | Guest-facing add-on catalog review | Talk with Gustav before exposing more Roller add-ons such as drinks, food, merch, Valo, event, party, gift-card, and membership products. |
 | `TBD` | Production readiness sequence | Resume staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal after the Playground demo scope is stable. |
 
