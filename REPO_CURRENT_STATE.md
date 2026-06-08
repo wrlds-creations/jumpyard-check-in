@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-08
-- Current branch: `codex/t0108-gustav-demo-regression`
-- Current status: T0108 is completed locally. T0106 and T0107 were merged to `main` through PR #106 and PR #107; T0108 deployed the T0107 session Lambda code, passed public dev smoke, and added the Gustav demo runbook.
-- Current ticket: `T0108`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`
-- Recommended next step: use `GUSTAV_DEMO_RUNBOOK.md` for the Playground demo rehearsal and open the next implementation ticket only after demo feedback is known.
+- Current branch: `codex/t0109-skyrider-consent-timing`
+- Current status: T0109 is completed locally and pending commit/merge to `main`. It hardens SkyRider consent before quote/draft/payment side effects in the phone app.
+- Current ticket: `T0109`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`
+- Recommended next step: implement T0110 admin handoff row polish before the next Gustav demo rehearsal.
 
 ## Current Structure
 
@@ -243,23 +243,28 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0105` | Existing-booking add-on UI cleanup. | 2026-06-08 | Merged through PR #105; existing-booking summary/add-on/payment copy was tightened, duplicate internal backs removed, review rows gained correct icons, and final guest handout copy now shows the actual entry product instead of generic wristband copy. |
 | `T0106` | SkyRider consent before payment. | 2026-06-08 | Merged through PR #106; buy-entry and existing-booking add-on flows now show SkyRider height consent before quote/draft/payment and avoid duplicate consent after add-on payment. |
 | `T0107` | Linked add-on products in staff/handoff fulfillment. | 2026-06-08 | Merged through PR #107; staff detail now includes paid/published linked add-on booking items and admin labels them as `Tillägg` without changing redeem behavior. |
-| `T0108` | Gustav demo regression smoke/runbook. | 2026-06-08 | Completed locally; deployed the T0107 `SessionHandler` Lambda code, verified public phone/admin, availability, staff linked add-ons, alarms, and Aurora health, and added `GUSTAV_DEMO_RUNBOOK.md`. |
+| `T0108` | Gustav demo regression smoke/runbook. | 2026-06-08 | Merged through PR #108; deployed the T0107 `SessionHandler` Lambda code, verified public phone/admin, availability, staff linked add-ons, alarms, and Aurora health, and added `GUSTAV_DEMO_RUNBOOK.md`. |
+| `T0109` | SkyRider consent timing hardening. | 2026-06-08 | Phone buy-entry and existing-booking add-on quote/draft handlers now fail closed when SkyRider is selected without recorded 100 cm approval, preserving the visible consent-before-payment flow. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0108` | Gustav demo regression smoke/runbook. | Completed locally; pending commit/merge | Dev stack is no-diff after deploying only `SessionHandler`; smoke passed for public pages, availability, staff linked add-ons, alarms, and Aurora health. |
+| `T0109` | SkyRider consent timing hardening. | Completed locally; pending commit/merge | The phone app now blocks quote/draft/payment side effects unless SkyRider 100 cm approval is recorded in both new buy-entry and existing-booking add-on flows. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
+| `T0110` | Staff handoff product-row polish | In the admin handoff "att lämna ut" list, remove the grey product subtitles such as ticket/price/time and SkyRider child-detail text, use the correct JumpYard icon per product instead of the generic ticket icon for every row, and remove the explanatory copy saying the final check happens server-side before tickets are redeemed. |
 | `TBD` | Guest-facing add-on catalog review | Talk with Gustav before exposing more Roller add-ons such as drinks, food, merch, Valo, event, party, gift-card, and membership products. |
 | `TBD` | Production readiness sequence | Resume staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal after the Playground demo scope is stable. |
 
 ## Validation Status
 
+- T0109 implementation status: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` and `jumpyard-checkin-phone/src/components/AddonsOffer.tsx` now guard both quote and draft creation with the same SkyRider approval requirement used by the visible add-ons step, so a state mismatch cannot create a Roller quote, draft, or payment session before the 100 cm approval.
+- T0109 validation: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, `npm run validate`, and scoped `git diff --check` passed on 2026-06-08. Lint still reports the existing four `<img>` warnings, and the build still reports existing `baseline-browser-mapping` age notices.
+- T0109 local browser smoke: phone dev server started on `http://127.0.0.1:3012/?codexSmoke=t0109` and the buy-entry path reached the time selection screen, but availability could not continue because local dev returned `Could not reach JumpYard Cloud`; this matches the prior T0106 local browser blocker and does not indicate a new code error. The temporary dev server was stopped.
 - T0090 docs verification: Roller Create draft booking docs describe gift card payments separately from discounts, booking costs uses the same booking payload family for safe cost calculation, and Help Center docs describe gift cards as stored-value tender.
 - T0090 safe Roller Playground discovery: direct `POST /bookings/draft/costs` returned `bookingCosts.total=200` and `amountOwing=200` for entry product `1765860` at `2026-06-02 10:00`; adding an invalid gift card kept `amountOwing=200` and returned one `giftCardErrors` entry.
 - T0090 gift-card data check: `/data/giftcards` first returned HTTP `200` but zero records for sampled Playground windows; after Venue Manager fixtures were created and paid, the `2026-06-02` window returned two gift cards for booking references `5101043` and `5101044` with balances `500` and `100`. Safe `POST /bookings/draft/costs` quotes using those gift cards applied one gift card with no errors; the `100 kr` card reduced a `200 kr` quote to `amountOwing=100`, and the `500 kr` card reduced it to `amountOwing=0`. `/products` contains `giftcard` products `Presentkort`, `Presentkort Återbetalningskort`, and `Julbox`.

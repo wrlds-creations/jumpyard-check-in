@@ -651,6 +651,8 @@ T0107 makes paid linked add-on bookings visible to staff handoff. Staff session 
 
 T0108 completes the Gustav demo regression preparation. The already-reviewed T0107 `SessionHandler` Lambda code was deployed to AWS dev after CDK diff showed only that Lambda code changing, and post-deploy diff showed no differences. Public phone and staff/admin Cloudflare pages return HTTP 200, dev availability returns entry/add-on products including SkyRider, staff auth/list/detail works against the deployed API, a ready staff session returned 5 product rows including 4 linked add-on fulfillment rows, all 17 dev CloudWatch alarms are `OK`, and Aurora readback shows recent successful Data API seed runs plus processed webhooks. `GUSTAV_DEMO_RUNBOOK.md` is the short demo script for showing buy-entry, staff redeem, existing-booking add-ons, gift card, and Klippkort flows.
 
+T0109 hardens SkyRider consent timing in the phone app. The visible flow still sends new buy-entry guests from add-ons to the SkyRider 100 cm approval before contact/review/payment, and sends existing-booking add-on guests from add-ons to the same approval before quote/review/payment. The quote and draft handlers now also fail closed if SkyRider is selected without recorded approval, so a UI state mistake cannot create a Roller quote, draft, or payment session before the height requirement is accepted.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
