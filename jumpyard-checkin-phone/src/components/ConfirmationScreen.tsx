@@ -44,8 +44,9 @@ export const ConfirmationScreen = ({
         ? `JY_HANDOFF:${handoffCode}:${checkinSession?.checkinSessionId ?? booking.id}`
         : `JY_SESSION:${checkinSession?.checkinSessionId ?? booking.id}`;
 
+    const entryHandoutLabel = booking.productLabel?.trim() || t.confirm.wristbands;
     const handoutItems: { label: string; qty: number; icon: JumpyardIconName }[] = [
-        { label: t.confirm.wristbands, qty: jumperCount, icon: 'visitor-wristband' },
+        { label: entryHandoutLabel, qty: jumperCount, icon: 'admission-ticket' },
     ];
     for (const addon of selectedAddons) {
         if (HANDOUT_IDS.has(addon.id)) {

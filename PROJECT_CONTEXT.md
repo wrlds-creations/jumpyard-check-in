@@ -641,6 +641,10 @@ T0103 is narrowed to SkyRider availability gating only. The broader dynamic add-
 
 T0104 deploys the T0103 booking Lambda code to AWS dev. Before deploy, the public Cloudflare phone app had the new frontend gate, but the deployed `POST /v1/bookings/availability` backend still returned only `entry` and `family`, so SkyRider was hidden. After deploy, the same dev availability endpoint returns `skyrider` as `type='addon'` with product id `1765443` in each tested slot, so the public phone app can show SkyRider as an add-on when Roller says it is available. The planned phone summary icon/copy polish moves to T0105.
 
+T0105 is the existing-booking demo cleanup ticket before the Gustav rehearsal. It is frontend-only and focuses on the existing-booking add-on path: remove the incorrect visible safety-video next-step hint from booking summary, hide future add-ons `Connected` and `extra person` in the existing-booking add-on picker, remove duplicate back affordances in add-on review/payment states, rename the add-on review CTA toward payment, remove the CTA check icon, add correct JumpYard icons in add-on review rows, and make the ready-for-staff handout copy show the actual entry product instead of generic wristband text.
+
+The immediate post-T0105 roadmap is locked as follows: T0106 moves SkyRider height/consent approval before payment in both buy-entry and existing-booking add-on flows; T0107 makes paid linked add-on bookings visible in staff/handoff fulfillment so staff can see products such as socks, padlock, coffee, and SkyRider alongside the original entry; T0108 runs the full Gustav demo regression smoke and produces the demo runbook/case order.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
