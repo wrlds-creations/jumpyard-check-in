@@ -68,7 +68,7 @@ function getBuyEntryStepIndex(state: FlowState): number {
 
 function prePaymentBack(ctx: FlowContext): FlowState {
     if (ctx.connectedSelected) return 'APP_CONNECTED';
-    if (ctx.skyriderSelected) return 'APP_SKYRIDER_ATTEST';
+    if (ctx.skyriderSelected && !ctx.skyriderHeightConfirmed) return 'APP_SKYRIDER_ATTEST';
     return 'APP_ADDONS';
 }
 
@@ -79,7 +79,7 @@ function getBackState(state: FlowState, ctx: FlowContext): FlowState | null {
         case 'APP_BOOKING': return ctx.channel === 'park-qr' ? 'KIOSK_CHOICE' : null;
         case 'APP_ADDONS': return 'APP_BOOKING';
         case 'APP_SKYRIDER_ATTEST': return 'APP_ADDONS';
-        case 'APP_CONNECTED': return ctx.skyriderSelected ? 'APP_SKYRIDER_ATTEST' : 'APP_ADDONS';
+        case 'APP_CONNECTED': return ctx.skyriderSelected && !ctx.skyriderHeightConfirmed ? 'APP_SKYRIDER_ATTEST' : 'APP_ADDONS';
         case 'APP_PAYMENT': return prePaymentBack(ctx);
         case 'APP_SAFETY_VIDEO': return ctx.paymentTotal > 0 ? 'APP_PAYMENT' : prePaymentBack(ctx);
         case 'APP_SAFETY_ATTEST': return 'APP_SAFETY_VIDEO';
@@ -467,11 +467,12 @@ function CheckInFlow() {
                             booking={ctx.booking}
                             guestCount={ctx.booking.jumpers}
                             existingAddons={ctx.existingAddons}
-                            onContinue={({ selectedAddons, addonsTotal, skyriderSelected, connectedSelected, paymentHandled }) =>
+                            onContinue={({ selectedAddons, addonsTotal, skyriderSelected, skyriderHeightConfirmed, connectedSelected, paymentHandled }) =>
                                 advance({
                                     selectedAddons,
                                     addonsTotal,
                                     skyriderSelected,
+                                    skyriderHeightConfirmed: skyriderHeightConfirmed ?? false,
                                     connectedSelected,
                                     paymentTotal: paymentHandled ? 0 : (ctx.baseTotal || 0) + addonsTotal,
                                 })

@@ -645,6 +645,8 @@ T0105 is the existing-booking demo cleanup ticket before the Gustav rehearsal. I
 
 The immediate post-T0105 roadmap is locked as follows: T0106 moves SkyRider height/consent approval before payment in both buy-entry and existing-booking add-on flows; T0107 makes paid linked add-on bookings visible in staff/handoff fulfillment so staff can see products such as socks, padlock, coffee, and SkyRider alongside the original entry; T0108 runs the full Gustav demo regression smoke and produces the demo runbook/case order.
 
+T0106 moves the existing SkyRider height/consent screen before payment-side effects. In the buy-entry flow, selecting SkyRider now routes from add-ons to SkyRider consent before contact/review/draft/payment. In the existing-booking add-on flow, newly selecting SkyRider now routes to SkyRider consent before add-on quote/draft/payment, and the parent flow is marked as already confirmed so the same consent is not shown again after payment.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
