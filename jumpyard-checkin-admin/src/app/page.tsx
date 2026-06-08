@@ -294,15 +294,27 @@ function ItemRows({ items }: { items: StaffBookingItem[] }) {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
-      {items.map((item) => (
+      {items.map((item) => {
+        const isLinkedAddOn = item.fulfillmentSource === "linked_add_on";
+
+        return (
         <div
-          key={item.bookingItemKey ?? item.bookingItemId ?? item.productId ?? item.productName ?? "item"}
-          className="grid grid-cols-[1fr_auto] items-center gap-2 border-b border-border px-3 py-2.5 last:border-b-0"
+          key={`${item.fulfillmentSource ?? "original"}:${item.bookingItemKey ?? item.bookingItemId ?? item.productId ?? item.productName ?? "item"}`}
+          className={`grid grid-cols-[1fr_auto] items-center gap-2 border-b px-3 py-2.5 last:border-b-0 ${
+            isLinkedAddOn ? "border-primary/15 bg-primary/5" : "border-border"
+          }`}
         >
           <div className="flex min-w-0 items-center gap-2">
-            <StaffIcon name="admission-ticket" className="h-6 w-6 shrink-0" />
+            <StaffIcon name={isLinkedAddOn ? "addons-bag" : "admission-ticket"} className="h-6 w-6 shrink-0" />
             <div className="min-w-0">
-              <p className="truncate text-sm font-black italic text-foreground">{item.parentProductName ?? item.productName ?? "Produkt"}</p>
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="truncate text-sm font-black italic text-foreground">{item.parentProductName ?? item.productName ?? "Produkt"}</p>
+                {isLinkedAddOn ? (
+                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase text-primary">
+                    Tillägg
+                  </span>
+                ) : null}
+              </div>
               <p className="truncate text-[11px] text-foreground/55">
                 {item.productName ?? item.productId ?? "-"} · {formatClock(item.startTime)}-{formatClock(item.endTime)}
               </p>
@@ -310,7 +322,8 @@ function ItemRows({ items }: { items: StaffBookingItem[] }) {
           </div>
           <p className="rounded-xl bg-surface px-2.5 py-1 text-sm font-black italic text-foreground">{item.quantity} st</p>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

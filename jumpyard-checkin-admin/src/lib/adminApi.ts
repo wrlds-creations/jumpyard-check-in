@@ -49,6 +49,9 @@ export interface StaffBookingItem {
   bookingItemId: string | null;
   bookingItemKey: string | null;
   endTime: string | null;
+  fulfillmentSource?: "original" | "linked_add_on" | string | null;
+  linkedBookingReference?: string | null;
+  linkedRollerUniqueId?: string | null;
   parentProductId: string | null;
   parentProductName: string | null;
   productId: string | null;

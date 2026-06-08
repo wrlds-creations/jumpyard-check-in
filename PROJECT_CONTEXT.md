@@ -647,6 +647,8 @@ The immediate post-T0105 roadmap is locked as follows: T0106 moves SkyRider heig
 
 T0106 moves the existing SkyRider height/consent screen before payment-side effects. In the buy-entry flow, selecting SkyRider now routes from add-ons to SkyRider consent before contact/review/draft/payment. In the existing-booking add-on flow, newly selecting SkyRider now routes to SkyRider consent before add-on quote/draft/payment, and the parent flow is marked as already confirmed so the same consent is not shown again after payment.
 
+T0107 makes paid linked add-on bookings visible to staff handoff. Staff session detail now returns the original booking items plus linked add-on booking items when the add-on draft is published or the linked Roller booking is paid/no-payment-required. The admin handoff product list marks those linked rows as `Tillägg` and keeps staff redeem behavior unchanged, so products such as socks, padlock, coffee, and SkyRider can be seen as fulfillment rows without treating stock-only add-ons as redeemable tickets.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
