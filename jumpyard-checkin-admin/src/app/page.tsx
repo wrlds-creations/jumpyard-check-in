@@ -48,14 +48,18 @@ interface RedeemConfirmation {
 type StaffIconName =
   | "addons-bag"
   | "admission-ticket"
+  | "drink-cup"
+  | "grip-socks"
   | "group"
   | "info"
   | "jump"
+  | "padlock"
   | "payment-card"
   | "profile"
   | "success-check"
   | "time"
-  | "visitor-wristband";
+  | "visitor-wristband"
+  | "zipline";
 
 function StaffIcon({
   className = "h-8 w-8",
@@ -106,6 +110,30 @@ function formatMoney(cents?: number | null) {
     maximumFractionDigits: 0,
     style: "currency",
   }).format(cents / 100);
+}
+
+function normalizeProductText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function getItemIconName(item: StaffBookingItem): StaffIconName {
+  const text = normalizeProductText(
+    [item.parentProductName, item.productName, item.productId, item.parentProductId].filter(Boolean).join(" ")
+  );
+
+  if (text.includes("skyrider") || text.includes("sky rider")) return "zipline";
+  if (text.includes("strump") || text.includes("sock")) return "grip-socks";
+  if (text.includes("hanglas") || text.includes("lock")) return "padlock";
+  if (text.includes("kaffe") || text.includes("coffee") || text.includes("brygg")) return "drink-cup";
+  if (text.includes("familj") || text.includes("family") || text.includes("grupp")) return "group";
+  if (text.includes("entre") || text.includes("entry") || text.includes("biljett") || text.includes("ticket") || text.includes("pass")) {
+    return "admission-ticket";
+  }
+
+  return item.fulfillmentSource === "linked_add_on" ? "addons-bag" : "admission-ticket";
 }
 
 function getDisplayCode(session: StaffSessionSummary) {
@@ -305,7 +333,7 @@ function ItemRows({ items }: { items: StaffBookingItem[] }) {
           }`}
         >
           <div className="flex min-w-0 items-center gap-2">
-            <StaffIcon name={isLinkedAddOn ? "addons-bag" : "admission-ticket"} className="h-6 w-6 shrink-0" />
+            <StaffIcon name={getItemIconName(item)} className="h-6 w-6 shrink-0" />
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
                 <p className="truncate text-sm font-black italic text-foreground">{item.parentProductName ?? item.productName ?? "Produkt"}</p>
@@ -315,9 +343,6 @@ function ItemRows({ items }: { items: StaffBookingItem[] }) {
                   </span>
                 ) : null}
               </div>
-              <p className="truncate text-[11px] text-foreground/55">
-                {item.productName ?? item.productId ?? "-"} · {formatClock(item.startTime)}-{formatClock(item.endTime)}
-              </p>
             </div>
           </div>
           <p className="rounded-xl bg-surface px-2.5 py-1 text-sm font-black italic text-foreground">{item.quantity} st</p>
@@ -526,7 +551,6 @@ function DetailPanel({
               <StaffIcon name="success-check" className="h-7 w-7" />
               <h3 className="text-base font-black italic uppercase text-foreground">Slutför check-in</h3>
             </div>
-            <p className="text-sm text-foreground/65">Sista kontrollen sker server-side innan biljetterna redeemas.</p>
           </div>
 
           {isCompleted ? (
