@@ -201,6 +201,8 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
         [addedAddons]
     );
     const addedSkyrider = addedAddons.some((addon) => addon.id === 'skyrider');
+    const needsSkyRiderConsent = (confirmed = skyriderConsentConfirmed) =>
+        addedSkyrider && !confirmed;
 
     const buildItems = (): NewBookingItemRequest[] => {
         const bookingDate = booking.date ?? getVenueToday();
@@ -240,7 +242,7 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
             return;
         }
 
-        if (addedSkyrider && !skyriderConsentConfirmed) {
+        if (needsSkyRiderConsent()) {
             setStep('SKYRIDER_ATTEST');
             return;
         }
@@ -248,8 +250,12 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
         void goToReview();
     };
 
-    const goToReview = async () => {
+    const goToReview = async (skyriderConsentOverride = skyriderConsentConfirmed) => {
         if (submitting) return;
+        if (needsSkyRiderConsent(skyriderConsentOverride)) {
+            setStep('SKYRIDER_ATTEST');
+            return;
+        }
         setSubmitting(true);
         setSubmitError(null);
         try {
@@ -265,6 +271,10 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
 
     const createDraft = async () => {
         if (!quote || submitting) return;
+        if (needsSkyRiderConsent()) {
+            setStep('SKYRIDER_ATTEST');
+            return;
+        }
         setSubmitting(true);
         setSubmitError(null);
         try {
@@ -420,7 +430,7 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                     onComplete={() => {
                         setSkyriderConsentConfirmed(true);
                         setStep('SELECT');
-                        void goToReview();
+                        void goToReview(true);
                     }}
                 />
             )}

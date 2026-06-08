@@ -481,8 +481,10 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setAddonQty((current) => ({ ...current, [id]: Math.max(0, Math.min(max, nextQty)) }));
   };
 
+  const needsSkyRiderConsent = () => skyriderSelected && !skyriderConsentConfirmed;
+
   const continueFromAddons = () => {
-    if (skyriderSelected && !skyriderConsentConfirmed) {
+    if (needsSkyRiderConsent()) {
       setStep('SKYRIDER_ATTEST');
       return;
     }
@@ -519,6 +521,10 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
 
   const goToReview = async () => {
     if (!selectedProduct || !customerValid || submitting) return;
+    if (needsSkyRiderConsent()) {
+      setStep('SKYRIDER_ATTEST');
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -541,6 +547,10 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
 
   const createDraft = async () => {
     if (!selectedProduct || !quote || submitting) return;
+    if (needsSkyRiderConsent()) {
+      setStep('SKYRIDER_ATTEST');
+      return;
+    }
     if (paymentInputsDirty) {
       setSubmitError(t.buy.paymentOptionsUpdateRequired);
       return;

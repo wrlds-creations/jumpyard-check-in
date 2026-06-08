@@ -1,73 +1,62 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0108
+T0109
 
 ## Goal
-Run the Gustav demo regression smoke and lock the demo runbook.
+Verify and harden SkyRider consent timing before payment.
 
 ## Context
-- T0106 and T0107 are merged to `main`.
-- T0107 backend behavior must be deployed before the public staff demo can show paid linked add-ons.
-- The Gustav demo should be structured around a few clear flows rather than ad hoc clicking.
+- T0106 moved SkyRider height consent before payment in the visible phone UI.
+- The follow-up from demo rehearsal is to make that rule fail-closed, so neither new buy-entry nor existing-booking add-on payment can be quoted/drafted if SkyRider was selected without the 100 cm approval.
+- T0110 is intentionally separate and handles staff/admin handoff row polish.
 
 ## Allowed Areas
 - `CODEX_TASK.md`
 - `PROJECT_CONTEXT.md`
 - `REPO_CURRENT_STATE.md`
 - `TEST_PLAN.md`
-- `AWS_RESOURCES.md`
-- `GUSTAV_DEMO_RUNBOOK.md`
+- `jumpyard-checkin-phone/src/components/BuyTickets.tsx`
+- `jumpyard-checkin-phone/src/components/AddonsOffer.tsx`
 
 ## Do Not Touch
 - Roller Live
 - Production credentials
 - `.env`
-- AWS resources other than deploying the already-reviewed T0107 `SessionHandler` Lambda code
+- AWS resources
 - Aurora migrations
-- Phone or admin application source
+- Admin application source
 - Payment package internals
 - Redemption logic or redeem writes
 - SMS/email logic
-- Roller bookings, drafts, payments, or redemptions unless explicitly started as a separate manual demo
+- Roller bookings, drafts, payments, or redemptions
 
 ## Requirements
 
-1. Deploy scope:
-   - Confirm AWS account `376129878018` and dev region `eu-north-1`.
-   - Run CDK build/synth/diff.
-   - Deploy only if the diff is limited to `SessionHandler` Lambda code.
-   - Confirm post-deploy no-diff.
+1. New buy-entry flow:
+   - Selecting SkyRider must show the 100 cm approval immediately after the add-ons step.
+   - Quote/draft/payment side effects must be blocked if SkyRider is selected and the approval is not present.
 
-2. Regression smoke:
-   - Verify public phone and public admin pages respond.
-   - Verify availability returns entry/add-on data and SkyRider from JumpYard Cloud.
-   - Verify staff auth/list/detail works from the deployed API.
-   - Verify at least one staff detail includes linked add-on fulfillment rows when present.
-   - Verify current CloudWatch alarms are not firing.
-   - Verify recent Data API/webhook health from Aurora.
+2. Existing-booking add-on flow:
+   - Adding SkyRider must show the 100 cm approval immediately after the add-ons step.
+   - Add-product quote/draft/payment side effects must be blocked if SkyRider is newly selected and the approval is not present.
 
 3. Documentation:
    - Update source-of-truth docs and the lower roadmap/current-ticket tables.
-   - Add a concise Gustav demo runbook/case order.
-   - Record deployment and smoke results without secrets, raw PII, payment JWTs, or full card/gift-card/Klippkort values.
+   - Keep T0110 as the next confirmed ticket.
 
 ## Non-Goals
-- Do not change feature behavior.
-- Do not create new AWS resources.
-- Do not run live/production cutover work.
-- Do not broaden the add-on catalog or change product mapping.
+- Do not change Roller product ids or availability mapping.
+- Do not change backend quote/draft endpoints.
+- Do not deploy AWS resources.
+- Do not change admin handoff UI in this ticket.
 
 ## Acceptance Criteria
-- T0107 session Lambda behavior is deployed to dev if diff scope is clean.
-- Public API smoke confirms availability, staff auth/list/detail, linked add-on rows, alarms, and Aurora health.
-- Gustav demo runbook exists in the repo.
-- Source-of-truth docs record T0108 status and next confirmed step.
+- SkyRider approval is required before quote/draft/payment for new buy-entry.
+- SkyRider approval is required before quote/draft/payment for existing-booking add-ons.
+- Source-of-truth docs record T0109 status and T0110 as next confirmed step.
 
 ## Validation
-- `npm --prefix infra run build`
-- `npm --prefix infra run synth:dev`
-- `npm --prefix infra run diff:dev`
-- `npm --prefix infra run deploy:dev`
-- Public API/page smoke commands documented in `TEST_PLAN.md`
+- `npm --prefix jumpyard-checkin-phone run lint`
+- `npm --prefix jumpyard-checkin-phone run build`
 - `npm run validate`

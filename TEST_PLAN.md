@@ -1300,6 +1300,20 @@ Use this file to define validation for the current project or milestone.
 | Aurora health | Data API and webhook should show recent healthy activity. | Passed | Aurora Data API readback showed 2 recent successful seed runs and 8 recent processed webhook events in the last 48 hours. |
 | Demo runbook | Gustav demo case order should exist in the repo. | Passed | Added `GUSTAV_DEMO_RUNBOOK.md` with public URLs, demo order, talking points, and current health checks. |
 
+## T0109 SkyRider Consent Timing Hardening
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Buy-entry visible gate | Selecting SkyRider in a new buy-entry basket should show 100 cm approval immediately after add-ons. | Passed in code | `continueFromAddons` still routes `ADDONS -> SKYRIDER_ATTEST -> CONTACT` when SkyRider is selected without approval. |
+| Buy-entry side-effect guard | Buy-entry quote/draft/payment should not run if SkyRider approval is missing. | Passed in code | `goToReview` and `createDraft` now re-check the approval and route back to `SKYRIDER_ATTEST` before calling JumpYard Cloud. |
+| Existing-booking visible gate | Adding SkyRider to an existing booking should show 100 cm approval immediately after add-ons. | Passed in code | `handleSelectContinue` still routes `SELECT -> SKYRIDER_ATTEST -> REVIEW` when newly selected SkyRider lacks approval. |
+| Existing-booking side-effect guard | Add-product quote/draft/payment should not run if SkyRider approval is missing. | Passed in code | `goToReview` and `createDraft` now re-check the approval before `quoteAddProducts` or `createAddProductDraft`. |
+| Phone lint | Phone app lint should pass after changes. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings only. |
+| Phone build | Phone app build should pass after changes. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+| Root validation | Source-of-truth docs should validate after T0109 updates. | Passed | `npm run validate` passed on 2026-06-08. |
+| Scoped diff check | T0109 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
+| Local browser smoke | Local phone UI should visually reach the SkyRider gate when JumpYard Cloud is reachable. | Blocked | Temporary dev server at `http://127.0.0.1:3012/?codexSmoke=t0109` reached buy-entry time selection, but local availability returned `Could not reach JumpYard Cloud`, matching the earlier T0106 local browser blocker. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |
