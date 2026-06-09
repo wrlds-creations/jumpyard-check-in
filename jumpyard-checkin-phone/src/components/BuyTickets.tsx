@@ -52,6 +52,11 @@ interface BuyAddonEntry {
 }
 
 type AddonQuantityMap = Record<AddonId, number>;
+type PaymentOptionInputState = 'empty' | 'ready' | 'applied' | 'rejected';
+
+const PAYMENT_OPTION_CODE_MAX_LENGTH = 32;
+const PAYMENT_OPTION_INPUT_CLASS =
+  'w-full bg-surface border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:ring-2 focus:ring-primary/10 outline-none transition-all';
 
 const createEmptyAddonQty = (): AddonQuantityMap => ({
   skyrider: 0,
@@ -88,6 +93,33 @@ function buildGiftCardInputs(value: string): NewBookingGiftCardInput[] {
 function buildDiscountCodeInputs(value: string): NewBookingDiscountCodeInput[] {
   const code = value.trim();
   return code ? [{ code }] : [];
+}
+
+function clampPaymentOptionCode(value: string) {
+  return value.slice(0, PAYMENT_OPTION_CODE_MAX_LENGTH);
+}
+
+function getPaymentOptionInputState(
+  value: string,
+  paymentInputsDirty: boolean,
+  errors: unknown[]
+): PaymentOptionInputState {
+  if (!value.trim()) return 'empty';
+  if (paymentInputsDirty) return 'ready';
+  return errors.length > 0 ? 'rejected' : 'applied';
+}
+
+function getPaymentOptionInputClass(state: PaymentOptionInputState) {
+  if (state === 'rejected') return `${PAYMENT_OPTION_INPUT_CLASS} border-danger/40 focus:border-danger focus:ring-danger/10`;
+  if (state === 'applied') return `${PAYMENT_OPTION_INPUT_CLASS} border-primary/40 bg-primary/5 focus:border-primary`;
+  if (state === 'ready') return `${PAYMENT_OPTION_INPUT_CLASS} border-primary/60 bg-white focus:border-primary`;
+  return `${PAYMENT_OPTION_INPUT_CLASS} border-border focus:border-primary`;
+}
+
+function getPaymentOptionFeedbackClass(state: PaymentOptionInputState) {
+  if (state === 'rejected') return 'text-danger';
+  if (state === 'ready' || state === 'applied') return 'text-primary';
+  return 'text-muted';
 }
 
 function getGiftCardAppliedAmount(quote: NewBookingQuote | null) {
@@ -404,6 +436,28 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const productLabels = buildProductLabelMap(selectedProduct, buyAddons);
   const giftCardErrors = quote?.giftCards?.errors ?? [];
   const discountCodeErrors = quote?.discountCodes?.errors ?? [];
+  const giftCardInputState = getPaymentOptionInputState(giftCardNumber, paymentInputsDirty, giftCardErrors);
+  const clipCardInputState = getPaymentOptionInputState(clipCardCode, paymentInputsDirty, discountCodeErrors);
+  const giftCardInputFeedback =
+    giftCardInputState === 'empty'
+      ? t.buy.giftCardHelp
+      : giftCardInputState === 'ready' && giftCardNumber.length >= PAYMENT_OPTION_CODE_MAX_LENGTH
+        ? t.buy.paymentCodeMaxLength
+        : giftCardInputState === 'ready'
+          ? t.buy.paymentCodeReady
+          : giftCardInputState === 'rejected'
+            ? t.buy.giftCardRejected
+            : t.buy.paymentCodeDone;
+  const clipCardInputFeedback =
+    clipCardInputState === 'empty'
+      ? t.buy.clipCardHelp
+      : clipCardInputState === 'ready' && clipCardCode.length >= PAYMENT_OPTION_CODE_MAX_LENGTH
+        ? t.buy.paymentCodeMaxLength
+        : clipCardInputState === 'ready'
+          ? t.buy.paymentCodeReady
+          : clipCardInputState === 'rejected'
+            ? t.buy.clipCardRejected
+            : t.buy.paymentCodeDone;
   const paymentInputsHaveValues = Boolean(giftCardNumber.trim() || clipCardCode.trim());
   const paymentOptionsApplyLabel =
     giftCardNumber.trim() && clipCardCode.trim()
@@ -510,7 +564,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   };
 
   const updateGiftCardNumber = (value: string) => {
-    setGiftCardNumber(value);
+    setGiftCardNumber(clampPaymentOptionCode(value));
     setSubmitError(null);
     setDraft(null);
     setPaymentSyncError(null);
@@ -518,7 +572,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   };
 
   const updateClipCardCode = (value: string) => {
-    setClipCardCode(value);
+    setClipCardCode(clampPaymentOptionCode(value));
     setSubmitError(null);
     setDraft(null);
     setPaymentSyncError(null);
@@ -1102,10 +1156,18 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
                       value={giftCardNumber}
                       onChange={(event) => updateGiftCardNumber(event.target.value)}
                       placeholder={t.buy.giftCardPlaceholder}
+                      maxLength={PAYMENT_OPTION_CODE_MAX_LENGTH}
                       autoComplete="off"
-                      className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
+                      aria-describedby="gift-card-feedback"
+                      aria-invalid={giftCardInputState === 'rejected'}
+                      className={getPaymentOptionInputClass(giftCardInputState)}
                     />
-                    <p className="mt-1 text-[11px] text-muted">{t.buy.giftCardHelp}</p>
+                    <p
+                      id="gift-card-feedback"
+                      className={`mt-1 text-[11px] font-bold ${getPaymentOptionFeedbackClass(giftCardInputState)}`}
+                    >
+                      {giftCardInputFeedback}
+                    </p>
                   </label>
 
                   <label className="block">
@@ -1117,10 +1179,18 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
                       value={clipCardCode}
                       onChange={(event) => updateClipCardCode(event.target.value)}
                       placeholder={t.buy.clipCardPlaceholder}
+                      maxLength={PAYMENT_OPTION_CODE_MAX_LENGTH}
                       autoComplete="off"
-                      className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
+                      aria-describedby="clip-card-feedback"
+                      aria-invalid={clipCardInputState === 'rejected'}
+                      className={getPaymentOptionInputClass(clipCardInputState)}
                     />
-                    <p className="mt-1 text-[11px] text-muted">{t.buy.clipCardHelp}</p>
+                    <p
+                      id="clip-card-feedback"
+                      className={`mt-1 text-[11px] font-bold ${getPaymentOptionFeedbackClass(clipCardInputState)}`}
+                    >
+                      {clipCardInputFeedback}
+                    </p>
                   </label>
 
                   {paymentInputsDirty && (
@@ -1140,7 +1210,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             {!paymentInputsDirty && giftCardNumber.trim() && (
               <div
                 className={`bg-white border rounded-xl p-3 mb-4 ${
-                  giftCardErrors.length > 0 ? 'border-danger/30' : 'border-border'
+                  giftCardErrors.length > 0 ? 'border-danger/30' : 'border-primary/30'
                 }`}
               >
                 <div className="flex justify-between gap-3 text-sm">
@@ -1169,7 +1239,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             {!paymentInputsDirty && clipCardCode.trim() && (
               <div
                 className={`bg-white border rounded-xl p-3 mb-4 ${
-                  discountCodeErrors.length > 0 ? 'border-danger/30' : 'border-border'
+                  discountCodeErrors.length > 0 ? 'border-danger/30' : 'border-primary/30'
                 }`}
               >
                 <div className="flex justify-between gap-3 text-sm">

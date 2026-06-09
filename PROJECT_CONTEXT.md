@@ -673,6 +673,8 @@ T0117 improves the SkyRider consent screen in the phone app. The screen now expl
 
 T0118 clarifies the buy-entry gift-card/Klippkort payment-options apply action. The old `Uppdatera belopp` CTA is replaced with specific labels such as `Applicera presentkort` or `Applicera klippkort` based on which field changed, while the existing quote-refresh handler and dirty-payment-input blocking behavior remain unchanged. The ticket does not change validation rules, input max length, quote/draft/payment payloads, backend contracts, AWS, Roller writes, redeem, SMS, or email behavior.
 
+T0119 improves the buy-entry gift-card/Klippkort input feedback without changing server-side validation or payment contracts. Both payment-option fields now have a conservative frontend max length of 32 characters, pasted values are clamped to the same limit, dirty entered values show a ready-to-apply state, accepted refreshed quotes show a clear done state, and rejected refreshed quotes show an error state. Quote refresh, dirty-input blocking, quote/draft payload shape, backend contracts, AWS, Roller writes, redeem, SMS, and email behavior remain unchanged.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |

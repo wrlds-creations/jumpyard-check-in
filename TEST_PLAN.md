@@ -1426,6 +1426,20 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs should validate after T0118 updates. | Passed | `npm run validate` passed on 2026-06-09. |
 | Scoped diff check | T0118 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
 
+## T0119 Gift-card/Klippkort Input Validation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Input max length | Gift-card and Klippkort fields should not accept more than 32 characters. | Passed in browser | Local browser smoke at `http://127.0.0.1:3019/?codexSmoke=t0119` confirmed both fields clamp typed/pasted values to 32 characters and expose `maxlength=32`. |
+| Ready feedback | Entered but unapplied payment-option codes should show a clear ready-to-apply state. | Passed in browser | Browser smoke confirmed dirty Klippkort input shows `Redo att applicera` and stays `aria-invalid=false` before quote errors exist. |
+| Done feedback | Applied codes with no refreshed quote errors should show a clear done state. | Passed in browser | Browser smoke confirmed a mocked accepted gift-card quote changes the gift-card feedback to `Klart` and removes the dirty apply button. |
+| Rejected feedback | Codes rejected by refreshed quote should show an error state only after quote errors exist. | Passed in browser | Browser smoke confirmed a mocked rejected Klippkort quote changes feedback to `Ej godkänt` and sets `aria-invalid=true`. |
+| Quote/draft scope | Input feedback should not change quote/draft payload shape or backend validation. | Passed in code | `buildGiftCardInputs` and `buildDiscountCodeInputs` still return the same `giftCards` and `discountCodes` payload shapes; T0119 only clamps the stored input value and changes UI feedback. |
+| Phone lint | Phone app lint should pass after T0119. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings only. |
+| Phone build | Phone app should build after T0119. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+| Root validation | Source-of-truth docs should validate after T0119 updates. | Passed | `npm run validate` passed on 2026-06-09. |
+| Scoped diff check | T0119 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |
