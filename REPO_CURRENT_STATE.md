@@ -89,7 +89,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 | Command | Purpose | Notes |
 |---|---|---|
-| `npm run validate` | Validate root WRLDS workflow files, skills, AWS tags, and `REPO_CURRENT_STATE.md` snapshot/table consistency. | Fails if the snapshot current ticket disagrees with the Current Ticket table, or if completed tickets remain in Current/Confirmed Next state. |
+| `npm run validate` | Validate root WRLDS workflow files, skills, AWS tags, and `REPO_CURRENT_STATE.md` snapshot/table consistency. | Fails if snapshot completed tickets disagree with the Completed Tickets table, if snapshot current ticket disagrees with the Current Ticket table, or if completed tickets remain in Current/Confirmed Next state. |
 | `npm run infra:check` | Type-check and synthesize the deploy-blocked CDK foundation with example config. | Added in T0004; does not deploy or require AWS credentials. |
 | `npm run infra:synth` | Synthesize the JumpYard Cloud CDK stack with `infra/config/dev.example.json`. | Added in T0004; example config is not approved for deploy. |
 | `npm --prefix infra run synth:dev` | Synthesize the confirmed T0006 dev stack. | Uses `infra/config/dev.json`. |
@@ -249,6 +249,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0111` | Capacity loading-state polish. | 2026-06-09 | Phone buy-entry availability loading now shows an accessible loading card with a real spinner and the required `Hämtar tillgängliga platser` text while capacity/availability is fetched. |
 | `T0112` | Add-on price consistency. | 2026-06-09 | Buy-entry and existing-booking add-ons now read price/config metadata from one shared phone catalog module, keeping local selection and summary values aligned while quote/draft/payment totals remain server-owned. |
 | `T0113` | Dynamic add-on prices. | 2026-06-09 | Static frontend add-on prices were removed; availability now returns Roller-derived stock add-on prices from `product_catalog_cache`, both phone add-on flows use those prices, and the existing dev `BookingHandler` Lambda was deployed with post-deploy diff clean. |
+| `T0114` | Customer-friendly product names. | 2026-06-09 | Existing-booking add-on rows now map known Roller/internal add-on names to guest-friendly labels such as `Bryggkaffe`, `Strumpor`, `Hänglås`, and `SkyRider`. |
+| `T0115` | Existing add-on back navigation. | 2026-06-09 | Existing-booking add-on review/payment-prep back now returns to add-on selection, while back from add-on selection still returns to booking summary. |
 
 ## Current Ticket
 

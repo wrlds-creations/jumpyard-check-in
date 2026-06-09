@@ -130,6 +130,26 @@ function validateRepoCurrentState() {
     fail('REPO_CURRENT_STATE.md snapshot is missing Completed tickets');
   }
 
+  const completedRows = extractTableRows(extractSection(text, 'Completed Tickets'));
+  const completedTableTickets = completedRows.flatMap(row => parseTickets(row[0]));
+  const completedTableSet = new Set(completedTableTickets);
+
+  if (completedTableTickets.length !== completedTableSet.size) {
+    fail('REPO_CURRENT_STATE.md Completed Tickets table contains duplicate ticket ids');
+  }
+
+  for (const ticket of snapshotCompletedTickets) {
+    if (!completedTableSet.has(ticket)) {
+      fail(`REPO_CURRENT_STATE.md snapshot completed ticket ${ticket} is missing from the Completed Tickets table`);
+    }
+  }
+
+  for (const ticket of completedTableTickets) {
+    if (!completedSet.has(ticket)) {
+      fail(`REPO_CURRENT_STATE.md Completed Tickets table includes ${ticket}, but the snapshot does not list it as completed`);
+    }
+  }
+
   const currentRows = extractTableRows(extractSection(text, 'Current Ticket'));
   if (currentRows.length !== 1) {
     fail(`REPO_CURRENT_STATE.md Current Ticket table must contain exactly one data row, found ${currentRows.length}`);
