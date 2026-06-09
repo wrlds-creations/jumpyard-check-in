@@ -1327,6 +1327,17 @@ Use this file to define validation for the current project or milestone.
 | Scoped diff check | T0110 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
 | Local admin smoke | Admin app should render after adding product icon assets. | Passed | Temporary admin dev server at `http://127.0.0.1:3013/?codexSmoke=t0110` rendered login with no missing images, then the test server was stopped. |
 
+## T0111 Capacity Loading-State Polish
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Loading card text | Capacity/availability loading should show the required guest text. | Passed in browser | Playwright-core smoke intercepted `/v1/bookings/availability`, delayed the response, and confirmed the visible loading card text `HÄMTAR TILLGÄNGLIGA PLATSER`. |
+| Loading spinner | Capacity/availability loading should show a spinner or animation. | Passed in browser | The same smoke confirmed `[data-availability-loading="true"]` rendered with an `.animate-spin` element. |
+| Phone lint | Phone app lint should pass after T0111. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings only. |
+| Phone build | Phone app should build after T0111. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+| Root validation | Source-of-truth docs should validate after T0111 updates. | Passed | `npm run validate` passed on 2026-06-09. |
+| Local HTTP smoke | Local phone dev app should serve during visual validation. | Passed | Temporary phone dev server at `http://127.0.0.1:3014/?codexSmoke=t0111` returned HTTP `200`; Playwright-core smoke then exercised the buy-entry loading state. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |
