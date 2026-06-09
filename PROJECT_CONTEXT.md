@@ -671,6 +671,8 @@ T0116 relaxes shared phone add-on quantity metadata for products where buying mo
 
 T0117 improves the SkyRider consent screen in the phone app. The screen now explains the minimum 100 cm height requirement, that staff performs a safety check before the ride, and that SkyRider is recommended after trampoline/jump time. The existing consent-before-payment gate remains unchanged, and the ticket does not change prices, product ids, quantity rules, availability/capacity gating, quote/draft/payment payloads, backend contracts, AWS, Roller writes, redeem, SMS, or email behavior.
 
+T0118 clarifies the buy-entry gift-card/Klippkort payment-options apply action. The old `Uppdatera belopp` CTA is replaced with specific labels such as `Applicera presentkort` or `Applicera klippkort` based on which field changed, while the existing quote-refresh handler and dirty-payment-input blocking behavior remain unchanged. The ticket does not change validation rules, input max length, quote/draft/payment payloads, backend contracts, AWS, Roller writes, redeem, SMS, or email behavior.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
