@@ -1,16 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0117
+T0118
 
 ## Goal
-Improve SkyRider information so guests understand the height requirement, staff safety check, and recommended timing.
+Replace the unclear gift-card/Klippkort payment-options CTA with specific apply actions.
 
 ## Context
-- T0117 is the next confirmed Gustav review ticket after T0116.
-- SkyRider consent already happens before quote/draft/payment in both buy-entry and existing-booking add-on flows.
-- The existing consent copy only makes the 100 cm requirement clear.
-- Guests also need to understand that staff performs a safety check and that SkyRider is best used after trampoline/jump time.
+- T0118 is the next confirmed Gustav review ticket after T0117.
+- Gift card and Klippkort inputs live in the buy-entry review/payment-preparation step.
+- Editing either field marks payment inputs dirty and requires a fresh quote before the draft/payment button is enabled.
+- The current CTA text `Uppdatera belopp` is too vague for guests.
 - The phone app must still call JumpYard Cloud only, never Roller directly.
 
 ## Allowed Areas
@@ -18,7 +18,7 @@ Improve SkyRider information so guests understand the height requirement, staff 
 - `PROJECT_CONTEXT.md`
 - `REPO_CURRENT_STATE.md`
 - `TEST_PLAN.md`
-- `jumpyard-checkin-phone/src/components/SkyRiderAttest.tsx`
+- `jumpyard-checkin-phone/src/components/BuyTickets.tsx`
 - `jumpyard-checkin-phone/src/context/LanguageContext.tsx`
 
 ## Do Not Touch
@@ -30,40 +30,41 @@ Improve SkyRider information so guests understand the height requirement, staff 
 - Staff/admin application source
 - Kiosk application source
 - Add-on prices, quantity rules, product ids, quote/draft/payment payload shape, or backend contracts
+- Gift-card/Klippkort validation rules or max length
 - Redemption logic or redeem writes
 - SMS/email logic
 - Roller bookings, drafts, payments, or redemptions
 
 ## Requirements
 
-1. Guest-facing SkyRider information:
-   - Show the 100 cm height requirement.
-   - Explain that staff performs a safety check before the ride.
-   - Recommend using SkyRider after trampoline/jump time.
+1. Payment-options CTA:
+   - Show `Applicera presentkort` when only a gift card has been entered.
+   - Show `Applicera klippkort` when only a Klippkort code has been entered.
+   - Keep the action clear when both fields have values or a code is being cleared.
 
 2. Flow scope:
-   - Keep the existing SkyRider consent-before-payment gate.
-   - Keep existing add-on selection, quote, draft, payment, and capacity behavior unchanged.
-   - Do not change add-on prices, product ids, quantity rules, backend contracts, AWS, Roller writes, redeem, SMS, or email behavior.
+   - Keep the existing quote-refresh behavior after editing payment option fields.
+   - Keep the draft/payment button disabled while payment inputs are dirty.
+   - Do not change validation, input max length, quote/draft payload shape, backend contracts, AWS, Roller writes, redeem, SMS, or email behavior.
 
 3. Documentation:
-   - Update source-of-truth docs and validation notes for T0117.
+   - Update source-of-truth docs and validation notes for T0118.
 
 ## Non-Goals
-- Do not change add-on quantity rules in T0117; T0116 handled that.
-- Do not change gift-card/Klippkort CTA or validation in T0117; T0118/T0119 handle those.
-- Do not change staff date or handout behavior in T0117; T0120-T0122 handle those.
-- Do not change SkyRider availability/capacity gating.
+- Do not change gift-card/Klippkort max length, input formatting, or valid/ready state in T0118; T0119 handles that.
+- Do not change SkyRider information or quantity rules.
+- Do not change staff date or handout behavior; T0120-T0122 handle those.
+- Do not change payment package internals.
 
 ## Acceptance Criteria
-- SkyRider consent screen clearly shows the 100 cm requirement.
-- SkyRider consent screen clearly mentions staff safety check before riding.
-- SkyRider consent screen recommends SkyRider after jump time.
-- Consent and continue behavior still require explicit confirmation before the flow proceeds.
-- No price, product id, quantity, payment, backend, AWS, redeem, SMS/email, or Roller write behavior changes.
+- The old guest-facing CTA text `Uppdatera belopp` is no longer used for the payment-options apply action.
+- Gift-card-only edits show `Applicera presentkort`.
+- Klippkort-only edits show `Applicera klippkort`.
+- The existing quote refresh still runs through the same handler.
+- No validation, max length, price, product id, quantity, payment payload, backend, AWS, redeem, SMS/email, or Roller write behavior changes.
 
 ## Validation
 - `npm --prefix jumpyard-checkin-phone run lint`
 - `npm --prefix jumpyard-checkin-phone run build`
 - `npm run validate`
-- Browser or equivalent smoke confirms the SkyRider consent screen shows the new information and still requires confirmation before continuing.
+- Browser or equivalent smoke confirms the CTA labels for gift-card-only and Klippkort-only edits.

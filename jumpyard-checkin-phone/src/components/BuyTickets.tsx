@@ -405,6 +405,14 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const giftCardErrors = quote?.giftCards?.errors ?? [];
   const discountCodeErrors = quote?.discountCodes?.errors ?? [];
   const paymentInputsHaveValues = Boolean(giftCardNumber.trim() || clipCardCode.trim());
+  const paymentOptionsApplyLabel =
+    giftCardNumber.trim() && clipCardCode.trim()
+      ? t.buy.paymentOptionsApplyBoth
+      : giftCardNumber.trim()
+        ? t.buy.paymentOptionsApplyGiftCard
+        : clipCardCode.trim()
+          ? t.buy.paymentOptionsApplyClipCard
+          : t.buy.paymentOptionsApplyChanges;
   const paymentInputsBlockingErrors =
     !paymentInputsDirty && (giftCardErrors.length > 0 || discountCodeErrors.length > 0);
   const giftCardAppliedAmount = getGiftCardAppliedAmount(quote);
@@ -1122,7 +1130,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
                       disabled={submitting}
                       className="mt-3 w-full bg-foreground text-white font-black italic uppercase text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98]"
                     >
-                      {submitting ? t.buy.quoting : t.buy.paymentOptionsUpdate}
+                      {submitting ? t.buy.quoting : paymentOptionsApplyLabel}
                     </button>
                   )}
                 </div>

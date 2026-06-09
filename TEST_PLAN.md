@@ -1413,6 +1413,19 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs should validate after T0117 updates. | Passed | `npm run validate` passed on 2026-06-09. |
 | Scoped diff check | T0117 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
 
+## T0118 Gift-card/Klippkort CTA Copy
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Gift-card-only CTA | Editing only the gift-card field should show `Applicera presentkort`. | Passed in browser | Local browser smoke reached buy-entry review with a mock quote, typed a gift-card value, and confirmed the dirty payment-options CTA changed to `Applicera presentkort`. |
+| Klippkort-only CTA | Editing only the Klippkort field should show `Applicera klippkort`. | Passed in browser | Local browser smoke reached buy-entry review with a mock quote, typed a Klippkort value, and confirmed the dirty payment-options CTA changed to `Applicera klippkort`. |
+| Old CTA removal | The old payment-options apply CTA should no longer appear in the guest UI. | Passed in browser | Local browser smoke confirmed `Uppdatera belopp` was not visible in the gift-card-only or Klippkort-only dirty states. |
+| Quote refresh scope | The apply CTA should still use the existing quote-refresh handler. | Passed in code | `BuyTickets.tsx` still calls `goToReview()` from the payment-options dirty-state button; only the button label changed. |
+| Phone lint | Phone app lint should pass after T0118. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings only. |
+| Phone build | Phone app should build after T0118. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+| Root validation | Source-of-truth docs should validate after T0118 updates. | Passed | `npm run validate` passed on 2026-06-09. |
+| Scoped diff check | T0118 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |
