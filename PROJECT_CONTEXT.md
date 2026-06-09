@@ -669,6 +669,8 @@ T0115 fixes the visible back behavior inside the existing-booking add-on flow. T
 
 T0116 relaxes shared phone add-on quantity metadata for products where buying more than one is operationally reasonable. Padlocks and SkyRider passes now allow up to four per guest/jumper in the frontend limit model, matching the existing multi-unit pattern for socks and coffee. SkyRider remains availability/capacity gated through JumpYard Cloud/Roller availability, and the ticket does not change prices, product ids, quote/draft/payment payloads, backend contracts, AWS, Roller writes, redeem, SMS, or email behavior.
 
+T0117 improves the SkyRider consent screen in the phone app. The screen now explains the minimum 100 cm height requirement, that staff performs a safety check before the ride, and that SkyRider is recommended after trampoline/jump time. The existing consent-before-payment gate remains unchanged, and the ticket does not change prices, product ids, quantity rules, availability/capacity gating, quote/draft/payment payloads, backend contracts, AWS, Roller writes, redeem, SMS, or email behavior.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
