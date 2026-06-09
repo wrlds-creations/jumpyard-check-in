@@ -1400,6 +1400,19 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs should validate after T0116 updates. | Passed | `npm run validate` passed on 2026-06-09. |
 | Browser smoke | Padlock and SkyRider increment controls should allow quantity above one when availability allows it. | Passed in browser | Local phone app at `http://127.0.0.1:3016/?codexSmoke=t0116mock` used a mock JumpYard Cloud availability response; with one jumper, SkyRider and Hänglås both incremented to `2`, and the add-on total updated to `370 kr`. |
 
+## T0117 SkyRider Information
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Height requirement copy | SkyRider consent should clearly show the minimum 100 cm requirement. | Passed in browser | Local browser smoke confirmed the SkyRider consent screen shows `Minst 100 cm`. |
+| Safety check copy | SkyRider consent should explain that staff performs a safety check before the ride. | Passed in browser | Local browser smoke confirmed the SkyRider consent screen shows `Säkerhetscheck`. |
+| Timing recommendation copy | SkyRider consent should recommend using SkyRider after jump time. | Passed in browser | Local browser smoke confirmed the SkyRider consent screen shows `Åk efter hopptiden`. |
+| Consent gate | Continue should stay disabled until the guest confirms the SkyRider requirement. | Passed in browser | Local browser smoke confirmed the continue button is disabled before confirmation and enabled after clicking the checkbox. |
+| Phone lint | Phone app lint should pass after T0117. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings only. |
+| Phone build | Phone app should build after T0117. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+| Root validation | Source-of-truth docs should validate after T0117 updates. | Passed | `npm run validate` passed on 2026-06-09. |
+| Scoped diff check | T0117 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |
