@@ -19,8 +19,43 @@ const PHONE_BOOKING_PRODUCTS = [
   { key: 'F120', parentName: 'Entré 120 min - Familj', label: '120 min familj', type: 'family', durationMinutes: 120, jumpersPerUnit: 4 },
 ];
 
-const PHONE_CAPACITY_ADDON_PRODUCTS = [
-  { key: 'skyrider', parentName: 'SkyRider', label: 'SkyRider', type: 'addon', durationMinutes: 0, jumpersPerUnit: 1 },
+const PHONE_ADDON_PRODUCTS = [
+  {
+    key: 'skyrider',
+    parentName: 'SkyRider',
+    label: 'SkyRider',
+    type: 'addon',
+    durationMinutes: 0,
+    jumpersPerUnit: 1,
+    requiresAvailability: true,
+  },
+  {
+    key: 'socks',
+    productId: '1765445',
+    label: 'JumpSocks',
+    type: 'addon',
+    durationMinutes: 0,
+    jumpersPerUnit: 1,
+    requiresAvailability: false,
+  },
+  {
+    key: 'lock',
+    productId: '1765441',
+    label: 'Hänglås',
+    type: 'addon',
+    durationMinutes: 0,
+    jumpersPerUnit: 1,
+    requiresAvailability: false,
+  },
+  {
+    key: 'coffee',
+    productId: '1765452',
+    label: 'Bryggkaffe',
+    type: 'addon',
+    durationMinutes: 0,
+    jumpersPerUnit: 1,
+    requiresAvailability: false,
+  },
 ];
 
 const rdsClient = new RDSDataClient({});
@@ -92,7 +127,7 @@ async function handleAvailability(body, correlationId) {
   const config = await getRollerConfig();
   const token = await getRollerAccessToken(config);
   const parentProducts = await loadPhoneBookingParentProducts(config.env);
-  const addonProducts = await loadPhoneCapacityAddonParentProducts(config.env);
+  const addonProducts = await loadPhoneAddonProducts(config.env);
   const missingParents = PHONE_BOOKING_PRODUCTS.filter((product) => !parentProducts.some((parent) => parent.key === product.key));
 
   if (missingParents.length > 0) {
@@ -105,7 +140,11 @@ async function handleAvailability(body, correlationId) {
     });
   }
 
-  const availabilityProducts = [...parentProducts, ...addonProducts];
+  const availabilityProducts = [
+    ...parentProducts,
+    ...addonProducts.filter((product) => product.requiresAvailability === true),
+  ];
+  const phoneProducts = [...parentProducts, ...addonProducts];
   const parentProductIds = [...new Set(availabilityProducts.map((product) => product.parentProductId))];
   const rollerResult = await getRollerJson(
     config,
@@ -141,7 +180,7 @@ async function handleAvailability(body, correlationId) {
     });
   }
 
-  const availability = buildPhoneAvailability(request, availabilityProducts, rollerResult.body);
+  const availability = buildPhoneAvailability(request, phoneProducts, rollerResult.body);
   await writeBookingEventLog({
     correlationId,
     eventType: 'booking.availability_succeeded',
@@ -1784,31 +1823,59 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
   }).filter(Boolean);
 }
 
-async function loadPhoneCapacityAddonParentProducts(rollerEnv) {
+async function loadPhoneAddonProducts(rollerEnv) {
+  const clauses = [];
+  const parameters = [stringParameter('rollerEnv', rollerEnv)];
+
+  PHONE_ADDON_PRODUCTS.forEach((product, index) => {
+    if (product.productId) {
+      clauses.push(`summary ->> 'id' = :addonProductId${index}`);
+      parameters.push(stringParameter(`addonProductId${index}`, product.productId));
+    }
+
+    if (product.parentName) {
+      clauses.push(`summary ->> 'parentProductName' = :addonParentName${index}`);
+      clauses.push(`summary ->> 'name' = :addonParentName${index}`);
+      parameters.push(stringParameter(`addonParentName${index}`, product.parentName));
+    }
+  });
+
+  if (clauses.length === 0) return [];
+
   const result = await executeStatement(
     `SELECT DISTINCT
        summary ->> 'parentProductId' AS parent_product_id,
        summary ->> 'parentProductName' AS parent_product_name,
        summary ->> 'id' AS id,
-       summary ->> 'name' AS name
+       summary ->> 'name' AS name,
+       summary ->> 'priceCents' AS price_cents
      FROM jumpyard.product_catalog_cache
      WHERE roller_env = :rollerEnv
-       AND (
-         summary ->> 'parentProductName' IN ('SkyRider')
-         OR summary ->> 'name' IN ('SkyRider')
-       )`,
-    [stringParameter('rollerEnv', rollerEnv)],
+       AND (${clauses.join(' OR ')})`,
+    parameters,
   );
   const rows = mappedRows(result);
 
-  return PHONE_CAPACITY_ADDON_PRODUCTS.map((product) => {
-    const row = rows.find((candidate) => candidate.parent_product_name === product.parentName || candidate.name === product.parentName);
+  return PHONE_ADDON_PRODUCTS.map((product) => {
+    const row = rows.find(
+      (candidate) =>
+        (product.productId && candidate.id === product.productId) ||
+        (product.parentName && (candidate.parent_product_name === product.parentName || candidate.name === product.parentName)),
+    );
+    const productId = stringOrNull(row?.id) || stringOrNull(product.productId);
     const parentProductId = stringOrNull(row?.parent_product_id) || stringOrNull(row?.id);
-    if (!parentProductId) return null;
+    const unitPriceCents = numberOrNull(row?.price_cents);
+
+    if (product.requiresAvailability === true && !parentProductId) return null;
+    if (product.requiresAvailability !== true && (!productId || unitPriceCents === null)) return null;
 
     return {
       ...product,
-      parentProductId,
+      parentProductId: parentProductId || productId,
+      productId,
+      productName: stringOrNull(row?.name) || product.label,
+      unitPrice: unitPriceCents === null ? null : unitPriceCents / 100,
+      unitPriceCents,
     };
   }).filter(Boolean);
 }
@@ -1895,6 +1962,31 @@ function buildPhoneAvailability(request, parentProducts, rollerBody) {
     date: request.date,
     startTime,
     products: parentProducts.map((definition) => {
+      if (definition.requiresAvailability === false) {
+        const unitPrice = numberOrNull(definition.unitPrice);
+        const unitPriceCents = numberOrNull(definition.unitPriceCents);
+        const product = {
+          available: Boolean(definition.productId && unitPrice !== null),
+          capacityRemaining: null,
+          durationMinutes: definition.durationMinutes,
+          endTime: null,
+          jumpersPerUnit: definition.jumpersPerUnit,
+          key: definition.key,
+          label: definition.label,
+          onlineSalesOpen: Boolean(definition.productId && unitPrice !== null),
+          parentProductId: definition.parentProductId,
+          productId: stringOrNull(definition.productId),
+          productName: stringOrNull(definition.productName),
+          requiresAvailability: false,
+          startTime,
+          type: definition.type,
+          unitPrice,
+          unitPriceCents: unitPriceCents ?? (unitPrice === null ? null : Math.round(unitPrice * 100)),
+        };
+        products.push(product);
+        return product;
+      }
+
       const parent = rollerProducts.find((candidate) => String(candidate.parentProductId ?? candidate.id) === definition.parentProductId);
       const session = findSessionForParent(parent, startTime);
       const selectedProduct = selectAvailabilityProduct(parent, session);
@@ -1914,6 +2006,7 @@ function buildPhoneAvailability(request, parentProducts, rollerBody) {
         parentProductId: definition.parentProductId,
         productId: stringOrNull(selectedProduct?.id),
         productName: stringOrNull(selectedProduct?.name),
+        requiresAvailability: true,
         startTime,
         type: definition.type,
         unitPrice,

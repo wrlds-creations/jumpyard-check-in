@@ -1349,6 +1349,23 @@ Use this file to define validation for the current project or milestone.
 | Phone build | Phone app should build after T0112. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
 | Root validation | Source-of-truth docs should validate after T0112 updates. | Passed | `npm run validate` passed on 2026-06-09. |
 
+## T0113 Dynamic Add-on Prices
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Frontend static price removal | Phone add-on catalog/components should not contain the old static add-on price literals. | Passed | `rg` found no `45/40/35/179` add-on price literals or `config.price` reads in `addonCatalog.ts`, `BuyTickets.tsx`, or `AddonsOffer.tsx`. |
+| Booking Lambda syntax | Booking Lambda should remain syntactically valid before deploy. | Passed | `node --check infra/lambda/booking/index.js` passed on 2026-06-09. |
+| Phone lint | Phone app lint should pass after T0113. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings only. |
+| Phone build | Phone app should build after T0113. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+| Buy-entry dynamic price smoke | Buy-entry add-on selection and review should use prices returned by JumpYard Cloud availability. | Passed in browser | Playwright-core smoke mocked availability prices `socks=51`, `coffee=37`, selected both, and confirmed selection/review total `288 kr` with old `40 kr`/`35 kr` values absent. |
+| Existing-booking dynamic price smoke | Existing-booking add-ons should load dynamic prices before purchase controls are enabled. | Passed in browser | Playwright-core smoke mocked lookup/session/availability and confirmed add-on list showed `Strumpor 51 kr`, `Kaffe 37 kr`, and `Hänglås 44 kr` with old static prices absent. |
+| AWS identity | Dev deploy must target WRLDS dev account and region. | Passed | `aws sts get-caller-identity --profile wrlds-dev` returned account `376129878018`; region is `eu-north-1`. |
+| Infra build/synth | CDK should compile and synthesize with approved dev config. | Passed | `npm --prefix infra run build` and `npm --prefix infra run synth:dev` passed. |
+| CDK diff | Deploy should only change existing booking Lambda code. | Passed | Pre-deploy `npm --prefix infra run diff:dev` showed only `BookingHandler` Lambda `Code` S3 key changing. |
+| Dev deploy | AWS dev stack should update successfully. | Passed | `npm --prefix infra run deploy:dev` completed with CloudFormation `UPDATE_COMPLETE`. |
+| Post-deploy diff | Deployed stack should match local template. | Passed | Post-deploy `npm --prefix infra run diff:dev` showed no differences. |
+| Deployed availability prices | Public dev API should return Roller-derived add-on prices. | Passed | `POST /v1/bookings/availability` for `2026-06-09 14:30` returned `skyrider=40`, `socks=45`, `lock=45`, and `coffee=35` with product ids present. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |

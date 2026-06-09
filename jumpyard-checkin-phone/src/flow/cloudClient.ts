@@ -143,6 +143,7 @@ export interface NewBookingProduct {
   parentProductId: string;
   productId: string | null;
   productName: string | null;
+  requiresAvailability?: boolean;
   startTime: string;
   type: 'entry' | 'family' | 'addon';
   unitPrice: number | null;
