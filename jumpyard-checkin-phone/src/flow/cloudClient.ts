@@ -331,6 +331,15 @@ interface AddProductDraftResponse {
   error?: { code?: string; message?: string };
 }
 
+const CUSTOMER_ADDON_LABELS: Record<AddonId, string> = {
+  connected: 'Connected',
+  coffee: 'Bryggkaffe',
+  extra_person: 'Extra person',
+  lock: 'Hänglås',
+  skyrider: 'SkyRider',
+  socks: 'Strumpor',
+};
+
 export async function lookupBooking(code: string): Promise<Booking> {
   const identifier = code.trim();
   if (!identifier) {
@@ -939,7 +948,7 @@ function getExistingAddons(items: CloudBookingItem[]): Addon[] {
     if (!isAddonItem(item)) continue;
 
     const id = inferAddonId(item);
-    const label = getProductLabel(item) ?? id;
+    const label = getCustomerAddonLabel(id, item);
     const qty = Math.max(1, item.quantity ?? item.tickets.length ?? 1);
     const existing = addons.get(id);
 
@@ -982,7 +991,35 @@ function inferAddonId(item: CloudBookingItem): AddonId {
 
 function getProductLabel(item: CloudBookingItem | null) {
   if (!item) return undefined;
-  return item.parentProductName ?? item.productName ?? undefined;
+  if (isAddonItem(item)) {
+    return getCustomerAddonLabel(inferAddonId(item), item);
+  }
+
+  return cleanCustomerProductLabel(item.parentProductName ?? item.productName);
+}
+
+function getCustomerAddonLabel(id: AddonId, item: CloudBookingItem) {
+  const rawLabel = cleanCustomerProductLabel(item.parentProductName ?? item.productName);
+  if (id === 'extra_person' && !isExtraPersonItem(item)) {
+    return rawLabel ?? CUSTOMER_ADDON_LABELS.extra_person;
+  }
+
+  return CUSTOMER_ADDON_LABELS[id] ?? rawLabel ?? id;
+}
+
+function cleanCustomerProductLabel(value?: string | null) {
+  const label = value?.trim();
+  if (!label) return undefined;
+
+  const normalized = label.toLowerCase();
+  if (normalized.includes('coffee and tea')) return 'Bryggkaffe';
+
+  return label;
+}
+
+function isExtraPersonItem(item: CloudBookingItem) {
+  const text = `${item.productName ?? ''} ${item.parentProductName ?? ''}`.toLowerCase();
+  return text.includes('extra') && text.includes('person');
 }
 
 function formatClockTime(value?: string | null) {
