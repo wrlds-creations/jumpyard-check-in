@@ -1440,6 +1440,21 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs should validate after T0119 updates. | Passed | `npm run validate` passed on 2026-06-09. |
 | Scoped diff check | T0119 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
 
+## T0120 Human-Readable Staff Dates
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Staff date formatter | A date such as `2026-08-06` should render as `6 aug`. | Passed in browser | Local admin browser smoke at `http://localhost:3020/?codexSmoke=t0120c` with a mock staff API confirmed staff-facing date labels use `6 aug`. |
+| Staff date/time formatter | A timestamp such as `2026-08-06T08:30:00.000Z` should render with the same readable date style. | Passed in browser | Browser smoke confirmed the ready timestamp shows `Redo: 6 aug 10:30`, not a raw numeric date. |
+| Missing or invalid dates | Missing dates should render as `-`, and unparseable values should fall back to the raw value. | Passed in code | `formatDate` and `formatDateTime` preserve `-` for missing values and return the original value when parsing fails. |
+| Staff list row | Handoff queue rows should show the human-readable visit date. | Passed in browser | Browser smoke confirmed the mocked queue row contains `6 aug`. |
+| Staff detail tile | Selected handoff detail should show the same human-readable date in the `Datum` tile. | Passed in browser | Browser smoke confirmed the selected mocked detail contains `6 aug` and no raw `2026-08-06` date. |
+| Scope guard | Date display should not change staff API contracts, auth, redeem, sorting, filtering, or handout logic. | Passed in code | Only `formatDate`, `formatDateTime`, and docs changed; staff API calls and detail/list flow remain unchanged. |
+| Admin lint | Admin app lint should pass after T0120. | Passed | `npm --prefix jumpyard-checkin-admin run lint` passed. |
+| Admin build | Admin app should build after T0120. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. |
+| Root validation | Source-of-truth docs should validate after T0120 updates. | Passed | `npm run validate` passed on 2026-06-09. |
+| Scoped diff check | T0120 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |

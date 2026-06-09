@@ -1,25 +1,23 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0119
+T0120
 
 ## Goal
-Improve gift-card and Klippkort input validation feedback in the buy-entry payment-options section.
+Show staff/admin dates in a human-readable Swedish format.
 
 ## Context
-- T0119 is the next confirmed Gustav review ticket after T0118.
-- Gift card and Klippkort inputs live in the buy-entry review/payment-preparation step.
-- Editing either field marks payment inputs dirty and requires a fresh quote before draft/payment can continue.
-- Guests can currently type overly long codes, and the field feedback does not clearly distinguish ready, accepted, or rejected states.
-- The phone app must still call JumpYard Cloud only, never Roller directly.
+- T0120 is the next confirmed Gustav review ticket after T0119.
+- Staff handoff rows and detail tiles currently use `formatDate()` in `jumpyard-checkin-admin/src/app/page.tsx`.
+- `formatDate()` returns the raw date string, and the ready timestamp uses a numeric short date, so staff can see numeric dates that may be misread during handoff.
+- The desired staff-facing format is short and human-readable, for example `6 aug`.
 
 ## Allowed Areas
 - `CODEX_TASK.md`
 - `PROJECT_CONTEXT.md`
 - `REPO_CURRENT_STATE.md`
 - `TEST_PLAN.md`
-- `jumpyard-checkin-phone/src/components/BuyTickets.tsx`
-- `jumpyard-checkin-phone/src/context/LanguageContext.tsx`
+- `jumpyard-checkin-admin/src/app/page.tsx`
 
 ## Do Not Touch
 - Roller Live
@@ -27,51 +25,45 @@ Improve gift-card and Klippkort input validation feedback in the buy-entry payme
 - `.env`
 - AWS resources or deploys
 - Aurora migrations
-- Staff/admin application source
+- Phone application source
 - Kiosk application source
-- Add-on prices, quantity rules, product ids, quote/draft/payment payload shape, or backend contracts
-- Gift-card/Klippkort server-side validation rules
+- Staff API contracts or backend source
+- Date-box layout fixes; T0121 handles visual box layout
+- Handout categorization; T0122 handles handout grouping
 - Redemption logic or redeem writes
 - SMS/email logic
 - Roller bookings, drafts, payments, or redemptions
 
 ## Requirements
 
-1. Input length:
-   - Add a frontend max length to the gift-card and Klippkort fields.
-   - Clamp pasted or programmatic input to the same max length.
-   - Do not change the quote/draft payload shape.
+1. Staff date display:
+   - Render staff-facing visit dates as Swedish human-readable labels such as `6 aug`.
+   - Apply the same formatting to the staff queue row and the selected handoff detail date tile.
+   - Format staff-facing date/time timestamps with the same readable date style, for example `6 aug 10:30`.
+   - Preserve `-` for missing dates and preserve the raw value when it cannot be parsed as a date.
 
-2. Input state:
-   - Show a neutral helper state before input.
-   - Show a clear ready state after a guest enters or edits a code and before it is applied.
-   - Show a clear done state after a refreshed quote accepts the entered value.
-   - Show a rejected/error state only after a refreshed quote returns gift-card or discount-code errors.
+2. Flow scope:
+   - Do not change staff API contracts, backend date payloads, sorting, filtering, auth, redeem, or handout logic.
+   - Do not change the visual layout of the date box in T0120; T0121 handles that separately.
 
-3. Flow scope:
-   - Keep the existing quote-refresh behavior after editing payment option fields.
-   - Keep the draft/payment button disabled while payment inputs are dirty.
-   - Do not change backend validation, Roller writes, quote/draft contracts, prices, product ids, redeem, SMS, or email behavior.
-
-4. Documentation:
-   - Update source-of-truth docs and validation notes for T0119.
+3. Documentation:
+   - Update source-of-truth docs and validation notes for T0120.
 
 ## Non-Goals
-- Do not implement server-side gift-card/Klippkort validation changes.
-- Do not change add-on prices, product ids, or quantity rules.
-- Do not change staff date or handout behavior; T0120-T0122 handle those.
-- Do not change payment package internals.
+- Do not implement the T0121 staff date-box layout fix.
+- Do not implement the T0122 handout-list grouping.
+- Do not change phone, kiosk, backend, AWS, Roller, redeem, payment, SMS, or email behavior.
 
 ## Acceptance Criteria
-- Gift-card and Klippkort inputs cannot exceed the configured frontend max length.
-- Pasted values are clamped to the same max length.
-- Entered but unapplied values show a clear ready/apply feedback state.
-- Applied quote values show a clear done state when no code errors are returned.
-- Rejected quote values show a clear error state without pre-marking untouched fields as invalid.
-- Existing quote refresh, dirty-input blocking, and quote/draft payload shape stay unchanged.
+- A staff visit date such as `2026-08-06` renders as `6 aug`.
+- A staff date/time such as `2026-08-06T08:30:00.000Z` renders with the readable date label, for example `6 aug 10:30`.
+- Missing dates still render as `-`.
+- Unparseable date values still render as their original value.
+- Staff list rows and selected handoff detail use the human-readable date label.
+- No staff API, backend, auth, redeem, sorting, filtering, or handout behavior changes.
 
 ## Validation
-- `npm --prefix jumpyard-checkin-phone run lint`
-- `npm --prefix jumpyard-checkin-phone run build`
+- `npm --prefix jumpyard-checkin-admin run lint`
+- `npm --prefix jumpyard-checkin-admin run build`
 - `npm run validate`
-- Browser or equivalent smoke confirms max length and ready/done/rejected feedback states.
+- Browser or equivalent smoke confirms a staff queue row and handoff detail show a date such as `6 aug`.

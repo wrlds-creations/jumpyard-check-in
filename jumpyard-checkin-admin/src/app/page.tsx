@@ -30,6 +30,7 @@ type RedeemState = "idle" | "loading" | "success" | "error";
 type ScannerState = "idle" | "starting" | "scanning" | "error";
 
 const STAFF_AUTH_STORAGE_KEY = "jumpyard_staff_auth_v1";
+const SWEDISH_SHORT_MONTHS = ["jan", "feb", "mars", "apr", "maj", "juni", "juli", "aug", "sep", "okt", "nov", "dec"];
 
 interface ParsedHandoffPayload {
   checkinSessionId: string | null;
@@ -88,7 +89,18 @@ function formatClock(value?: string | null) {
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
-  return value;
+  const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnly) {
+    const day = Number(dateOnly[3]);
+    const month = Number(dateOnly[2]);
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return `${day} ${SWEDISH_SHORT_MONTHS[month - 1]}`;
+    }
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return `${parsed.getDate()} ${SWEDISH_SHORT_MONTHS[parsed.getMonth()]}`;
 }
 
 function formatDateTime(value?: string | null) {
@@ -96,10 +108,11 @@ function formatDateTime(value?: string | null) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
 
-  return new Intl.DateTimeFormat("sv-SE", {
-    dateStyle: "short",
-    timeStyle: "short",
+  const time = new Intl.DateTimeFormat("sv-SE", {
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(parsed);
+  return `${parsed.getDate()} ${SWEDISH_SHORT_MONTHS[parsed.getMonth()]} ${time}`;
 }
 
 function formatMoney(cents?: number | null) {

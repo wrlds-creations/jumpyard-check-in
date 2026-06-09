@@ -675,6 +675,8 @@ T0118 clarifies the buy-entry gift-card/Klippkort payment-options apply action. 
 
 T0119 improves the buy-entry gift-card/Klippkort input feedback without changing server-side validation or payment contracts. Both payment-option fields now have a conservative frontend max length of 32 characters, pasted values are clamped to the same limit, dirty entered values show a ready-to-apply state, accepted refreshed quotes show a clear done state, and rejected refreshed quotes show an error state. Quote refresh, dirty-input blocking, quote/draft payload shape, backend contracts, AWS, Roller writes, redeem, SMS, and email behavior remain unchanged.
 
+T0120 improves staff/admin date readability without changing backend contracts or layout structure. Staff handoff queue rows, the selected handoff detail date tile, and staff-facing ready timestamps now format parseable dates as short Swedish labels such as `6 aug` or `6 aug 10:30`, while missing dates still show `-` and unparseable values fall back to the raw value. Staff API payloads, auth, sorting, filtering, redeem, handout logic, AWS, Roller writes, SMS, and email behavior remain unchanged.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
