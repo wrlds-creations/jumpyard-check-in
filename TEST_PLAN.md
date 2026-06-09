@@ -1388,6 +1388,18 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs should validate after T0115 updates. | Passed | `npm run validate` passed on 2026-06-09. |
 | Scoped diff check | T0115 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
 
+## T0116 Add-on Quantity Rules
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Shared quantity metadata | Padlocks and SkyRider should no longer be frontend-capped at one per guest/jumper. | Passed in code | `ADDON_CATALOG_CONFIG.lock.maxPerGuest` and `ADDON_CATALOG_CONFIG.skyrider.maxPerGuest` are now `4`; socks/coffee remain unchanged and future hidden add-ons stay hidden by the existing catalog lists. |
+| SkyRider capacity gating | SkyRider should still use the existing availability/capacity gate. | Passed in code | `skyrider.requiresAvailability` remains `true`, so `BuyTickets` still clamps by availability capacity and existing-booking add-product payloads still mark SkyRider as availability-bound. |
+| Price/payment scope | Quantity rule changes should not alter prices, product ids, or payment payload shape. | Passed in code | Only `maxPerGuest` values changed in `addonCatalog.ts`; `rollerProductId`, dynamic price reads, quote/draft item shape, and payment code are unchanged. |
+| Phone lint | Phone app lint should pass after T0116. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings only. |
+| Phone build | Phone app should build after T0116. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+| Root validation | Source-of-truth docs should validate after T0116 updates. | Passed | `npm run validate` passed on 2026-06-09. |
+| Browser smoke | Padlock and SkyRider increment controls should allow quantity above one when availability allows it. | Passed in browser | Local phone app at `http://127.0.0.1:3016/?codexSmoke=t0116mock` used a mock JumpYard Cloud availability response; with one jumper, SkyRider and Hänglås both incremented to `2`, and the add-on total updated to `370 kr`. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |
