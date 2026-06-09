@@ -43,11 +43,11 @@ const BUY_PROGRESS_ICONS: JumpyardIconName[] = [
 interface BuyAddonEntry {
   id: AddonId;
   label: string;
-  price: number;
+  price: number | null;
   unit: string;
   maxPerGuest: number;
   icon: JumpyardIconName;
-  rollerProductId: number;
+  rollerProductId: number | null;
   requiresAvailability: boolean;
 }
 
@@ -112,7 +112,7 @@ function buildProductLabelMap(
     labels.set(String(selectedProduct.productId), selectedProduct.label);
   }
   for (const addon of buyAddons) {
-    labels.set(String(addon.rollerProductId), addon.label);
+    if (addon.rollerProductId !== null) labels.set(String(addon.rollerProductId), addon.label);
   }
   return labels;
 }
@@ -220,6 +220,19 @@ function getAddonUnit(id: AddonId, labels: ReturnType<typeof useTranslation>['t'
   if (id === 'skyrider' || id === 'connected') return labels.perJumper;
   if (id === 'extra_person') return labels.perPerson;
   return labels.each;
+}
+
+function numberProductId(value: string | null | undefined) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function getDynamicAddonProduct(slot: NewBookingAvailability['slots'][number] | null, id: AddonId) {
+  return slot?.products.find((product) => product.type === 'addon' && product.key === id) ?? null;
+}
+
+function isPricedAddon(addon: BuyAddonEntry): addon is BuyAddonEntry & { price: number; rollerProductId: number } {
+  return addon.price !== null && addon.rollerProductId !== null;
 }
 
 function wait(ms: number) {
@@ -350,13 +363,13 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
           icon: config.icon as JumpyardIconName,
           label: getAddonLabel(id, t.addons.products),
           maxPerGuest: config.maxPerGuest,
-          price: config.price,
+          price: getDynamicAddonProduct(selectedSlot, id)?.unitPrice ?? null,
           requiresAvailability: config.requiresAvailability,
-          rollerProductId: config.rollerProductId,
+          rollerProductId: numberProductId(getDynamicAddonProduct(selectedSlot, id)?.productId) ?? config.rollerProductId,
           unit: getAddonUnit(id, t.addons),
         };
-      }).filter((addon): addon is BuyAddonEntry => addon.rollerProductId !== null),
-    [t]
+      }),
+    [selectedSlot, t]
   );
   const addonAvailabilityById = new Map<AddonId, NewBookingProduct>();
   for (const product of selectedSlot?.products ?? []) {
@@ -366,17 +379,21 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   }
   const getBuyAddonMax = (addon: BuyAddonEntry, nextJumperCount = jumperCount) =>
     getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null, nextJumperCount);
-  const visibleBuyAddons = buyAddons.filter((addon) => getBuyAddonMax(addon) > 0);
-  const selectedAddons: Addon[] = buyAddons
-    .filter((addon) => addonQty[addon.id] > 0 && getBuyAddonMax(addon) > 0)
-    .map((addon) => ({
-      id: addon.id,
-      label: addon.label,
-      price: addon.price,
-      qty: Math.min(addonQty[addon.id], getBuyAddonMax(addon)),
-      requiresAvailability: addon.requiresAvailability,
-      rollerProductId: addon.rollerProductId,
-    }));
+  const visibleBuyAddons = buyAddons.filter((addon) => getBuyAddonMax(addon) > 0 && isPricedAddon(addon));
+  const selectedAddons: Addon[] = buyAddons.flatMap((addon) => {
+    if (addonQty[addon.id] <= 0 || getBuyAddonMax(addon) <= 0 || !isPricedAddon(addon)) return [];
+
+    return [
+      {
+        id: addon.id,
+        label: addon.label,
+        price: addon.price,
+        qty: Math.min(addonQty[addon.id], getBuyAddonMax(addon)),
+        requiresAvailability: addon.requiresAvailability,
+        rollerProductId: addon.rollerProductId,
+      },
+    ];
+  });
   const addonsTotal = selectedAddons.reduce((total, addon) => total + addon.price * addon.qty, 0);
   const skyriderSelected = selectedAddons.some((addon) => addon.id === 'skyrider');
   const entryTotal = (selectedProduct?.unitPrice ?? 0) * quantity;

@@ -570,6 +570,15 @@ Response:
           "unitPrice": 200,
           "currency": "SEK",
           "capacityRemaining": 153
+        },
+        {
+          "code": "socks",
+          "name": "JumpSocks",
+          "productId": 1765445,
+          "durationMinutes": 0,
+          "unitPrice": 45,
+          "currency": "SEK",
+          "capacityRemaining": null
         }
       ]
     }
@@ -586,6 +595,8 @@ Availability rules:
 
 - Use Roller `GET /product-availability` server-side.
 - Query parent product ids for the relevant phone jump-entry products and return only the normalized product/time/capacity fields needed by the phone flow.
+- T0113 also returns mapped stock add-ons such as socks, padlock, and coffee as `type='addon'` rows with product ids and `unitPrice` derived from `jumpyard.product_catalog_cache`.
+- Capacity-gated add-ons such as SkyRider still derive availability and price from Roller `GET /product-availability`.
 - Capacity must be checked again before quote and before draft creation because availability can change between screen steps.
 - Frontend quantity controls must be capped by the returned capacity, but server-side quote/draft validation remains authoritative.
 
@@ -644,6 +655,7 @@ Quote rules:
 - T0033 implemented server-side availability re-check before quote.
 - Product list prices are display hints only; final price comes from Booking Costs.
 - T0033 phone pre-payment flow should expose availability/capacity only through JumpYard Cloud. The phone app must not call Roller `/product-availability` directly.
+- T0113 removes static phone add-on prices; buy-entry and existing-booking add-on selection prices come from the JumpYard Cloud availability response before quote/draft/payment.
 
 ### `POST /v1/bookings/draft`
 

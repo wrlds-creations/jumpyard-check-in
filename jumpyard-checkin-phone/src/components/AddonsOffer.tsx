@@ -1,14 +1,17 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, Check, CreditCard, Minus, Plus } from 'lucide-react';
 import {
     CloudBookingError,
     createAddProductDraft,
+    getNewBookingAvailability,
     quoteAddProducts,
     type AddProductDraftResult,
+    type NewBookingAvailability,
     type NewBookingItemRequest,
+    type NewBookingProduct,
     type NewBookingQuote,
 } from '@/flow/cloudClient';
 import type { Addon, AddonId, Booking } from '@/flow/types';
@@ -40,7 +43,7 @@ interface AddonsOfferProps {
 interface CatalogEntry {
     id: AddonId;
     label: string;
-    price: number;
+    price: number | null;
     unit: string;
     description: string;
     maxPerGuest: number;
@@ -159,27 +162,75 @@ function getAddonUnit(id: AddonId, labels: ReturnType<typeof useTranslation>['t'
     return labels.each;
 }
 
+function numberProductId(value: string | null | undefined) {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function getDynamicAddonProduct(products: NewBookingProduct[], id: AddonId) {
+    return products.find((product) => product.type === 'addon' && product.key === id) ?? null;
+}
+
+function getSlotAddonProducts(availability: NewBookingAvailability, startTime: string) {
+    const slot = availability.slots.find((entry) => entry.startTime === startTime) ?? availability.slots[0] ?? null;
+    return slot?.products.filter((product) => product.type === 'addon') ?? [];
+}
+
+function isPricedCatalogEntry(entry: CatalogEntry): entry is CatalogEntry & { price: number; rollerProductId: number } {
+    return entry.price !== null && entry.rollerProductId !== null;
+}
+
 export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, onPendingDone }: AddonsOfferProps) => {
     const { t } = useTranslation();
+    const bookingDate = booking.date ?? getVenueToday();
+    const bookingStartTime = normalizeStartTime(booking.time) ?? '09:00';
+    const [catalogProducts, setCatalogProducts] = useState<NewBookingProduct[]>([]);
+    const [catalogLoading, setCatalogLoading] = useState(true);
+    const [catalogError, setCatalogError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        setCatalogLoading(true);
+        setCatalogError(null);
+        getNewBookingAvailability([bookingStartTime], bookingDate)
+            .then((availability) => {
+                if (cancelled) return;
+                setCatalogProducts(getSlotAddonProducts(availability, bookingStartTime));
+            })
+            .catch((error) => {
+                if (cancelled) return;
+                setCatalogProducts([]);
+                setCatalogError(error instanceof CloudBookingError ? error.message : t.buy.availabilityFailed);
+            })
+            .finally(() => {
+                if (!cancelled) setCatalogLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [bookingDate, bookingStartTime, t.buy.availabilityFailed]);
+
     const catalog = useMemo<CatalogEntry[]>(
         () => {
             const entries: CatalogEntry[] = EXISTING_BOOKING_ADDON_IDS.map((id) => {
                 const config = ADDON_CATALOG_CONFIG[id];
+                const dynamicProduct = getDynamicAddonProduct(catalogProducts, id);
                 return {
                     id,
                     description: getAddonDescription(id, t.addons.products),
                     icon: config.icon as JumpyardIconName,
                     label: getAddonLabel(id, t.addons.products),
                     maxPerGuest: config.maxPerGuest,
-                    price: config.price,
+                    price: dynamicProduct?.unitPrice ?? null,
                     requiresAvailability: config.requiresAvailability,
-                    rollerProductId: config.rollerProductId,
+                    rollerProductId: numberProductId(dynamicProduct?.productId) ?? config.rollerProductId,
                     unit: getAddonUnit(id, t.addons),
                 };
             });
             return entries.filter((entry) => !HIDDEN_EXISTING_BOOKING_ADDONS.has(entry.id));
         },
-        [t]
+        [catalogProducts, t]
     );
 
     const catalogById = useMemo(
@@ -213,27 +264,35 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
 
     const selectedAddons: Addon[] = useMemo(
         () =>
-            catalog.filter((entry) => qty[entry.id] > 0).map((entry) => ({
-                id: entry.id,
-                label: entry.label,
-                price: entry.price,
-                qty: qty[entry.id],
-                requiresAvailability: entry.requiresAvailability,
-                rollerProductId: entry.rollerProductId,
-            })),
+            catalog.flatMap((entry) => {
+                if (qty[entry.id] <= 0 || !isPricedCatalogEntry(entry)) return [];
+
+                return [{
+                    id: entry.id,
+                    label: entry.label,
+                    price: entry.price,
+                    qty: qty[entry.id],
+                    requiresAvailability: entry.requiresAvailability,
+                    rollerProductId: entry.rollerProductId,
+                }];
+            }),
         [catalog, qty]
     );
 
     const addedAddons: Addon[] = useMemo(
         () =>
-            catalog.filter((entry) => qty[entry.id] > minQty[entry.id]).map((entry) => ({
-                id: entry.id,
-                label: entry.label,
-                price: entry.price,
-                qty: qty[entry.id] - minQty[entry.id],
-                requiresAvailability: entry.requiresAvailability,
-                rollerProductId: entry.rollerProductId,
-            })),
+            catalog.flatMap((entry) => {
+                if (qty[entry.id] <= minQty[entry.id] || !isPricedCatalogEntry(entry)) return [];
+
+                return [{
+                    id: entry.id,
+                    label: entry.label,
+                    price: entry.price,
+                    qty: qty[entry.id] - minQty[entry.id],
+                    requiresAvailability: entry.requiresAvailability,
+                    rollerProductId: entry.rollerProductId,
+                }];
+            }),
         [catalog, minQty, qty]
     );
 
@@ -255,11 +314,12 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                 bookingDate,
                 productId: Number(addon.rollerProductId),
                 quantity: addon.qty,
+                requiresAvailability: addon.requiresAvailability === true,
                 startTime,
             }));
     };
 
-    const requireAvailability = addedAddons.length > 0 && addedAddons.every((addon) => addon.requiresAvailability === true);
+    const requireAvailability = addedAddons.some((addon) => addon.requiresAvailability === true);
 
     const completeAddons = (paymentHandled = false) => {
         onContinue({
@@ -273,6 +333,12 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
     };
 
     const handleSelectContinue = () => {
+        if (catalogLoading) return;
+        if (catalogError) {
+            setSubmitError(catalogError);
+            return;
+        }
+
         if (addedAddons.length === 0) {
             completeAddons(false);
             return;
@@ -397,10 +463,10 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                         </div>
                     )}
 
-                    {submitError && (
+                    {(submitError || catalogError) && (
                         <div className="mb-3 bg-white border border-danger/25 rounded-xl p-3 text-sm text-foreground flex gap-2">
                             <AlertCircle size={18} className="text-danger flex-shrink-0 mt-0.5" />
-                            <span>{submitError}</span>
+                            <span>{submitError || catalogError}</span>
                         </div>
                     )}
 
@@ -411,7 +477,7 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                                 const max = Math.max(1, guestCount * entry.maxPerGuest);
                                 const locked = minQty[entry.id];
                                 const isHighlighted = entry.id === 'connected' || entry.id === 'skyrider';
-                                const isEnabled = entry.rollerProductId !== null;
+                                const isEnabled = isPricedCatalogEntry(entry) && !catalogLoading;
 
                                 return (
                                     <div
@@ -428,7 +494,7 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                                                 <div className="min-w-0">
                                                     <p className="text-foreground font-bold italic text-sm">{entry.label}</p>
                                                     <p className="text-muted text-[11px]">
-                                                        {entry.price} {t.common.currency} - {entry.unit}
+                                                        {formatMoney(entry.price)} - {entry.unit}
                                                     </p>
                                                     {!isEnabled && (
                                                         <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded-full bg-surface-strong text-muted text-[9px] font-bold italic uppercase tracking-wide">{t.addons.unsupported}</span>
@@ -457,10 +523,10 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
 
                         <button
                             onClick={handleSelectContinue}
-                            disabled={submitting}
+                            disabled={submitting || catalogLoading}
                             className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm disabled:opacity-40 disabled:hover:bg-primary disabled:hover:text-white disabled:hover:border-transparent"
                         >
-                            {submitting ? t.buy.quoting : t.common.continue}
+                            {catalogLoading ? t.buy.loadingAvailabilityTitle : submitting ? t.buy.quoting : t.common.continue}
                         </button>
                     </div>
                 </>

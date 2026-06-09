@@ -661,6 +661,8 @@ T0111 completes the phone loading-state polish for capacity/availability fetchin
 
 T0112 centralizes phone add-on price/config metadata into `jumpyard-checkin-phone/src/flow/addonCatalog.ts`. Buy-entry add-ons and existing-booking add-ons now use the same frontend source for add-on price, Roller product id, availability requirement, max-per-guest, and icon metadata, while final quote/draft/payment amount due still comes from JumpYard Cloud responses. T0113 remains the ticket that replaces these static catalog prices with Roller/JumpYard Cloud-derived dynamic pricing.
 
+T0113 removes static add-on prices from the phone frontend. The existing `POST /v1/bookings/availability` JumpYard Cloud endpoint now returns stock add-ons as `type='addon'` rows with product ids and prices read from `jumpyard.product_catalog_cache`, while SkyRider continues to use Roller `GET /product-availability`. Buy-entry and existing-booking add-on flows use those server-owned prices before quote/draft/payment, and final amount due still comes from JumpYard Cloud quote/draft responses. The dev `BookingHandler` Lambda was deployed on 2026-06-09 with no new routes/resources; post-deploy availability smoke returned SkyRider `40`, socks `45`, lock `45`, and coffee `35` from Roller-derived data for slot `14:30`.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
