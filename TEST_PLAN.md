@@ -1366,6 +1366,17 @@ Use this file to define validation for the current project or milestone.
 | Post-deploy diff | Deployed stack should match local template. | Passed | Post-deploy `npm --prefix infra run diff:dev` showed no differences. |
 | Deployed availability prices | Public dev API should return Roller-derived add-on prices. | Passed | `POST /v1/bookings/availability` for `2026-06-09 14:30` returned `skyrider=40`, `socks=45`, `lock=45`, and `coffee=35` with product ids present. |
 
+## T0114 Customer-Friendly Product Names
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Add-on label mapping | Known internal Roller add-on names should be cleaned before phone UI display. | Passed in code | `cloudClient.ts` maps known add-on ids to customer labels including `Bryggkaffe`, `Strumpor`, `Hänglås`, and `SkyRider`; `Coffee and tea` names are explicitly normalized to `Bryggkaffe`. |
+| Existing-booking summary smoke | Existing add-ons should not show `Coffee and tea Sweden` in guest summary. | Passed in browser | Local in-app browser smoke used a mock JumpYard Cloud lookup containing parent product `Coffee and tea Sweden`; booking summary showed `Bryggkaffe x1` and did not contain the internal name. |
+| Phone lint | Phone app lint should pass after T0114. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings only. |
+| Phone build | Phone app should build after T0114. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+| Root validation | Source-of-truth docs should validate after T0114 updates. | Passed | `npm run validate` passed on 2026-06-09. |
+| Scoped diff check | T0114 files should have no whitespace errors. | Passed | Scoped `git diff --check -- CODEX_TASK.md jumpyard-checkin-phone/src/flow/cloudClient.ts` passed; Git printed CRLF conversion notices only. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |

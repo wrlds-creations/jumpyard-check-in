@@ -663,6 +663,8 @@ T0112 centralizes phone add-on price/config metadata into `jumpyard-checkin-phon
 
 T0113 removes static add-on prices from the phone frontend. The existing `POST /v1/bookings/availability` JumpYard Cloud endpoint now returns stock add-ons as `type='addon'` rows with product ids and prices read from `jumpyard.product_catalog_cache`, while SkyRider continues to use Roller `GET /product-availability`. Buy-entry and existing-booking add-on flows use those server-owned prices before quote/draft/payment, and final amount due still comes from JumpYard Cloud quote/draft responses. The dev `BookingHandler` Lambda was deployed on 2026-06-09 with no new routes/resources; post-deploy availability smoke returned SkyRider `40`, socks `45`, lock `45`, and coffee `35` from Roller-derived data for slot `14:30`.
 
+T0114 cleans guest-facing product labels in the phone booking model. Existing-booking add-on rows now map known Roller/internal add-on names to customer-friendly labels such as `Bryggkaffe`, `Strumpor`, `Hänglås`, and `SkyRider` before booking summary, confirmation, or handout copy renders them. This is frontend-only and does not change prices, product ids, quote/draft/payment payloads, JumpYard Cloud contracts, AWS, Roller writes, redeem, SMS, or email behavior.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
