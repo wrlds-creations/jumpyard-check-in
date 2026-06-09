@@ -7,7 +7,7 @@ import { ArrowLeft } from 'lucide-react';
 import { BookingSummary } from '@/components/BookingSummary';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { SafetyAttest } from '@/components/SafetyAttest';
-import { AddonsOffer } from '@/components/AddonsOffer';
+import { AddonsOffer, type AddonsOfferStep } from '@/components/AddonsOffer';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { ConnectedProfiles } from '@/components/ConnectedProfiles';
 import { PaymentView } from '@/components/PaymentView';
@@ -163,6 +163,8 @@ function CheckInFlow() {
     const [isMarkingReadyForStaff, setIsMarkingReadyForStaff] = useState(false);
     const [readyForStaffError, setReadyForStaffError] = useState<SessionIssue | null>(null);
     const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
+    const [addonsStep, setAddonsStep] = useState<AddonsOfferStep>('SELECT');
+    const [addonsBackRequest, setAddonsBackRequest] = useState(0);
 
     const scrollToTop = () => {
         window.scrollTo(0, 0);
@@ -334,6 +336,10 @@ function CheckInFlow() {
     }, [state]);
 
     useEffect(() => {
+        if (state !== 'APP_ADDONS') setAddonsStep('SELECT');
+    }, [state]);
+
+    useEffect(() => {
         if (state !== 'APP_MOBILE') return;
         let alive = true;
         if (!linkToken) {
@@ -366,6 +372,9 @@ function CheckInFlow() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state]);
 
+    const backState = getBackState(state, ctx);
+    const addonsHandlesBack = state === 'APP_ADDONS' && addonsStep !== 'SELECT' && addonsStep !== 'APPROVED';
+
     return (
         <div
             className="z-10 w-full max-w-lg flex flex-col items-center"
@@ -379,9 +388,17 @@ function CheckInFlow() {
             <ProgressBar state={state} buyEntryFlow={ctx.buyEntryFlow} />
 
             <div className="w-full max-w-md px-4 h-8 flex items-center">
-                {getBackState(state, ctx) && (
+                {(backState || addonsHandlesBack) && (
                     <button
-                        onClick={() => { setState(getBackState(state, ctx)!); scrollToTop(); }}
+                        onClick={() => {
+                            if (addonsHandlesBack) {
+                                setAddonsBackRequest((request) => request + 1);
+                                scrollToTop();
+                                return;
+                            }
+                            setState(backState!);
+                            scrollToTop();
+                        }}
                         className="flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
                     >
                         <ArrowLeft size={14} /> {t.common.back}
@@ -463,10 +480,12 @@ function CheckInFlow() {
 
                     {state === 'APP_ADDONS' && ctx.booking && (
                         <AddonsOffer
+                            backRequest={addonsBackRequest}
                             key="addons"
                             booking={ctx.booking}
                             guestCount={ctx.booking.jumpers}
                             existingAddons={ctx.existingAddons}
+                            onStepChange={setAddonsStep}
                             onContinue={({ selectedAddons, addonsTotal, skyriderSelected, skyriderHeightConfirmed, connectedSelected, paymentHandled }) =>
                                 advance({
                                     selectedAddons,
