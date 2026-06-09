@@ -1468,6 +1468,20 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs should validate after T0121 updates. | Passed | `npm run validate` passed on 2026-06-09. |
 | Scoped diff check | T0121 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
 
+## T0122 Staff Handout-List Grouping
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Check-in handout section | Visitor wristbands, socks, padlocks, and SkyRider passes should appear under `Lämna ut vid incheckning`. | Passed in browser | Local admin browser smoke at `http://localhost:3022/?codexSmoke=t0122` with a mock staff API confirmed the check-in section contains `Besöksband`, `Strumpor`, `Hänglås`, and `SkyRider-pass`. |
+| Later collection section | Coffee should appear separately as a later collection item. | Passed in browser | Browser smoke confirmed `Kaffe` appears under `Hämtas efter hoppet` and not in the check-in handout section. |
+| Unknown item visibility | Products that do not match known handout categories should remain visible for staff review. | Passed in browser | Browser smoke confirmed an unmatched mock product appears under `Övrigt i bokningen`. |
+| Linked add-on badge | Linked add-on rows should still expose the add-on badge where relevant. | Passed in browser | Browser smoke confirmed linked add-on categories display `Tillägg`. |
+| Staff flow scope | The grouping fix should not change staff API, auth, redeem, sorting, filtering, or backend handout behavior. | Passed in code | Only staff/admin grouping helpers, handout list rendering, and docs changed; staff API calls and action handlers remain unchanged. |
+| Admin lint | Admin app lint should pass after T0122. | Passed | `npm --prefix jumpyard-checkin-admin run lint` passed. |
+| Admin build | Admin app should build after T0122. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. |
+| Root validation | Source-of-truth docs should validate after T0122 updates. | Passed | `npm run validate` passed on 2026-06-09. |
+| Scoped diff check | T0122 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |
