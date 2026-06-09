@@ -679,6 +679,8 @@ T0120 improves staff/admin date readability without changing backend contracts o
 
 T0121 fixes the staff/admin selected-handoff date-box layout without changing date formatting or staff flow behavior. The date/time/payment metadata tiles now stack cleanly on narrow phone-sized staff/admin viewports, keep date and time values intact without awkward word-breaking, and return to the compact three-tile row on wider viewports. Staff API payloads, auth, sorting, filtering, redeem, handout logic, AWS, Roller writes, SMS, and email behavior remain unchanged.
 
+T0122 makes the staff/admin handout list operationally clearer without changing staff API contracts or redeem behavior. The selected handoff detail now groups items into `Lämna ut vid incheckning`, `Hämtas efter hoppet`, and `Övrigt i bokningen`, with visitor wristbands, socks, padlocks, and SkyRider passes treated as check-in handouts and coffee shown as later collection. Unknown products remain visible for staff review, and linked add-on badges are preserved.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |

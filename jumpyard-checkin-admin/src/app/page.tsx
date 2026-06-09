@@ -132,10 +132,18 @@ function normalizeProductText(value: string) {
     .toLowerCase();
 }
 
-function getItemIconName(item: StaffBookingItem): StaffIconName {
-  const text = normalizeProductText(
+function getItemProductText(item: StaffBookingItem) {
+  return normalizeProductText(
     [item.parentProductName, item.productName, item.productId, item.parentProductId].filter(Boolean).join(" ")
   );
+}
+
+function getItemDisplayName(item: StaffBookingItem) {
+  return item.parentProductName ?? item.productName ?? "Produkt";
+}
+
+function getItemIconName(item: StaffBookingItem): StaffIconName {
+  const text = getItemProductText(item);
 
   if (text.includes("skyrider") || text.includes("sky rider")) return "zipline";
   if (text.includes("strump") || text.includes("sock")) return "grip-socks";
@@ -147,6 +155,85 @@ function getItemIconName(item: StaffBookingItem): StaffIconName {
   }
 
   return item.fulfillmentSource === "linked_add_on" ? "addons-bag" : "admission-ticket";
+}
+
+type HandoutSectionKey = "checkin" | "later" | "other";
+
+interface HandoutCategoryDefinition {
+  icon: StaffIconName;
+  key: string;
+  label: string;
+  note?: string;
+  order: number;
+  section: HandoutSectionKey;
+}
+
+interface HandoutGroup extends HandoutCategoryDefinition {
+  hasLinkedAddOn: boolean;
+  items: StaffBookingItem[];
+  quantity: number;
+}
+
+const HANDOUT_SECTIONS: Record<HandoutSectionKey, { note: string; order: number; title: string }> = {
+  checkin: {
+    note: "Besöksband, strumpor, hänglås och SkyRider-pass.",
+    order: 1,
+    title: "Lämna ut vid incheckning",
+  },
+  later: {
+    note: "Kaffe och annat som hämtas efter hoppet.",
+    order: 2,
+    title: "Hämtas efter hoppet",
+  },
+  other: {
+    note: "Kontrollera vid behov innan utlämning.",
+    order: 3,
+    title: "Övrigt i bokningen",
+  },
+};
+
+function getHandoutCategory(item: StaffBookingItem): HandoutCategoryDefinition {
+  const text = getItemProductText(item);
+
+  if (text.includes("skyrider") || text.includes("sky rider")) {
+    return { icon: "zipline", key: "skyrider", label: "SkyRider-pass", order: 40, section: "checkin" };
+  }
+
+  if (text.includes("strump") || text.includes("sock")) {
+    return { icon: "grip-socks", key: "socks", label: "Strumpor", order: 20, section: "checkin" };
+  }
+
+  if (text.includes("hanglas") || text.includes("lock")) {
+    return { icon: "padlock", key: "padlock", label: "Hänglås", order: 30, section: "checkin" };
+  }
+
+  if (text.includes("kaffe") || text.includes("coffee") || text.includes("brygg")) {
+    return {
+      icon: "drink-cup",
+      key: "coffee",
+      label: "Kaffe",
+      note: "Hämtas efter hoppet.",
+      order: 10,
+      section: "later",
+    };
+  }
+
+  if (
+    text.includes("entre") ||
+    text.includes("entry") ||
+    text.includes("biljett") ||
+    text.includes("ticket") ||
+    text.includes("pass") ||
+    text.includes("familj") ||
+    text.includes("family") ||
+    text.includes("grupp") ||
+    text.includes("barn") ||
+    text.includes("jump")
+  ) {
+    return { icon: "visitor-wristband", key: "wristband", label: "Besöksband", order: 10, section: "checkin" };
+  }
+
+  return { icon: getItemIconName(item), key: "other", label: "Övrigt", order: 90, section: "other" };
 }
 
 function getDisplayCode(session: StaffSessionSummary) {
@@ -337,14 +424,112 @@ function InfoTile({
   );
 }
 
+function formatHandoutItemNames(items: StaffBookingItem[]) {
+  const names = Array.from(new Set(items.map(getItemDisplayName))).filter(Boolean);
+  if (names.length <= 2) return names.join(", ");
+  return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+}
+
+function groupHandoutItems(items: StaffBookingItem[]) {
+  const groups = new Map<string, HandoutGroup>();
+
+  for (const item of items) {
+    const category = getHandoutCategory(item);
+    const groupKey = `${category.section}:${category.key}`;
+    const existing = groups.get(groupKey);
+    const quantity = Math.max(0, item.quantity ?? 0);
+
+    if (existing) {
+      existing.items.push(item);
+      existing.quantity += quantity;
+      existing.hasLinkedAddOn = existing.hasLinkedAddOn || item.fulfillmentSource === "linked_add_on";
+      continue;
+    }
+
+    groups.set(groupKey, {
+      ...category,
+      hasLinkedAddOn: item.fulfillmentSource === "linked_add_on",
+      items: [item],
+      quantity,
+    });
+  }
+
+  return Array.from(groups.values()).sort((left, right) => {
+    const sectionOrder = HANDOUT_SECTIONS[left.section].order - HANDOUT_SECTIONS[right.section].order;
+    if (sectionOrder !== 0) return sectionOrder;
+    return left.order - right.order || left.label.localeCompare(right.label, "sv-SE");
+  });
+}
+
+function HandoutSection({
+  groups,
+  section,
+}: {
+  groups: HandoutGroup[];
+  section: HandoutSectionKey;
+}) {
+  const sectionInfo = HANDOUT_SECTIONS[section];
+  const totalQuantity = groups.reduce((sum, group) => sum + group.quantity, 0);
+
+  return (
+    <section data-testid={`handout-section-${section}`} className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
+      <div className="flex items-start justify-between gap-3 border-b border-border bg-surface px-3 py-2.5">
+        <div className="min-w-0">
+          <h4 className="text-sm font-black italic uppercase text-foreground">{sectionInfo.title}</h4>
+          <p className="mt-0.5 text-xs leading-snug text-foreground/60">{sectionInfo.note}</p>
+        </div>
+        <span className="shrink-0 rounded-xl bg-white px-2.5 py-1 text-xs font-black italic text-foreground">
+          {totalQuantity} st
+        </span>
+      </div>
+
+      <div className="divide-y divide-border">
+        {groups.map((group) => (
+          <div
+            key={`${group.section}:${group.key}`}
+            data-handout-category={group.key}
+            className="grid grid-cols-[auto_1fr_auto] items-center gap-2 px-3 py-2.5"
+          >
+            <StaffIcon name={group.icon} className="h-6 w-6 shrink-0" />
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="truncate text-sm font-black italic text-foreground">{group.label}</p>
+                {group.hasLinkedAddOn ? (
+                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase text-primary">
+                    Tillägg
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-0.5 truncate text-xs text-foreground/55">
+                {group.note ?? formatHandoutItemNames(group.items)}
+              </p>
+            </div>
+            <p className="rounded-xl bg-surface px-2.5 py-1 text-sm font-black italic text-foreground">{group.quantity} st</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ItemRows({ items }: { items: StaffBookingItem[] }) {
   if (items.length === 0) {
     return <p className="rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground/65">Inga produktrader.</p>;
   }
 
+  const groups = groupHandoutItems(items);
+  const groupsBySection = groups.reduce<Record<HandoutSectionKey, HandoutGroup[]>>(
+    (sections, group) => {
+      sections[group.section].push(group);
+      return sections;
+    },
+    { checkin: [], later: [], other: [] }
+  );
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
-      {items.map((item) => {
+    <div className="grid gap-2" data-testid="staff-handout-list">
+      {groups.length === 0 ? (
+        items.map((item) => {
         const isLinkedAddOn = item.fulfillmentSource === "linked_add_on";
 
         return (
@@ -370,7 +555,14 @@ function ItemRows({ items }: { items: StaffBookingItem[] }) {
           <p className="rounded-xl bg-surface px-2.5 py-1 text-sm font-black italic text-foreground">{item.quantity} st</p>
         </div>
         );
-      })}
+        })
+      ) : (
+        (["checkin", "later", "other"] as HandoutSectionKey[]).map((section) =>
+          groupsBySection[section].length > 0 ? (
+            <HandoutSection key={section} section={section} groups={groupsBySection[section]} />
+          ) : null
+        )
+      )}
     </div>
   );
 }
