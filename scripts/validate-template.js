@@ -70,6 +70,108 @@ function exists(relativePath) {
   return fs.existsSync(path.join(root, relativePath));
 }
 
+function normalizeCell(value) {
+  return value.replace(/`/g, '').trim().replace(/\s+/g, ' ');
+}
+
+function parseTickets(value) {
+  return Array.from(new Set((value.match(/T\d{4}/g) || [])));
+}
+
+function parseActiveTicketIds(value) {
+  if (!value || /^None active\b/i.test(value)) return [];
+  return parseTickets(value);
+}
+
+function extractSnapshotValue(text, label) {
+  const pattern = new RegExp(`^- ${label}:\\s*(.+)$`, 'm');
+  const match = text.match(pattern);
+  return match ? normalizeCell(match[1]) : null;
+}
+
+function extractSection(text, heading) {
+  const lines = text.split(/\r?\n/);
+  const startIndex = lines.findIndex(line => line.trim() === `## ${heading}`);
+  if (startIndex === -1) return '';
+
+  const sectionLines = [];
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    if (/^##\s/.test(lines[index])) break;
+    sectionLines.push(lines[index]);
+  }
+  return sectionLines.join('\n');
+}
+
+function extractTableRows(sectionText) {
+  return sectionText
+    .split(/\r?\n/)
+    .filter(line => line.trim().startsWith('|'))
+    .filter(line => !/^\|\s*-+/.test(line.trim()))
+    .filter(line => !/^\|\s*Ticket\s*\|/i.test(line.trim()))
+    .map(line => line.split('|').slice(1, -1).map(normalizeCell))
+    .filter(cells => cells.length > 0 && cells[0]);
+}
+
+function validateRepoCurrentState() {
+  const repoStatePath = path.join(root, 'REPO_CURRENT_STATE.md');
+  if (!fs.existsSync(repoStatePath)) return;
+
+  const text = fs.readFileSync(repoStatePath, 'utf8');
+  const snapshotCurrentTicket = extractSnapshotValue(text, 'Current ticket');
+  const snapshotCompletedTickets = parseTickets(extractSnapshotValue(text, 'Completed tickets') || '');
+  const snapshotRecommendedNext = extractSnapshotValue(text, 'Recommended next step') || '';
+  const completedSet = new Set(snapshotCompletedTickets);
+
+  if (!snapshotCurrentTicket) {
+    fail('REPO_CURRENT_STATE.md snapshot is missing Current ticket');
+  }
+
+  if (snapshotCompletedTickets.length === 0) {
+    fail('REPO_CURRENT_STATE.md snapshot is missing Completed tickets');
+  }
+
+  const currentRows = extractTableRows(extractSection(text, 'Current Ticket'));
+  if (currentRows.length !== 1) {
+    fail(`REPO_CURRENT_STATE.md Current Ticket table must contain exactly one data row, found ${currentRows.length}`);
+  } else if (snapshotCurrentTicket && currentRows[0][0] !== snapshotCurrentTicket) {
+    fail(`REPO_CURRENT_STATE.md snapshot Current ticket (${snapshotCurrentTicket}) does not match Current Ticket table (${currentRows[0][0]})`);
+  }
+
+  const currentTicketIds = parseActiveTicketIds(snapshotCurrentTicket || '');
+  for (const ticket of currentTicketIds) {
+    if (completedSet.has(ticket)) {
+      fail(`REPO_CURRENT_STATE.md current ticket ${ticket} is already listed as completed`);
+    }
+  }
+
+  const nextRows = extractTableRows(extractSection(text, 'Confirmed Next Tickets'));
+  const nextTickets = nextRows.flatMap(row => parseTickets(row[0]));
+  const nextSet = new Set(nextTickets);
+
+  if (nextTickets.length !== nextSet.size) {
+    fail('REPO_CURRENT_STATE.md Confirmed Next Tickets contains duplicate ticket ids');
+  }
+
+  for (const ticket of nextTickets) {
+    if (completedSet.has(ticket)) {
+      fail(`REPO_CURRENT_STATE.md confirmed next ticket ${ticket} is already listed as completed`);
+    }
+    if (currentTicketIds.includes(ticket)) {
+      fail(`REPO_CURRENT_STATE.md current ticket ${ticket} must not also be in Confirmed Next Tickets`);
+    }
+  }
+
+  const recommendedTickets = parseTickets(snapshotRecommendedNext);
+  for (const ticket of recommendedTickets) {
+    if (completedSet.has(ticket)) {
+      fail(`REPO_CURRENT_STATE.md recommended next ticket ${ticket} is already listed as completed`);
+    }
+    if (!nextSet.has(ticket) && !currentTicketIds.includes(ticket)) {
+      fail(`REPO_CURRENT_STATE.md recommended next ticket ${ticket} is not in Current Ticket or Confirmed Next Tickets`);
+    }
+  }
+}
+
 for (const file of coreFiles) {
   if (!exists(file)) fail(`missing ${file}`);
 }
@@ -121,6 +223,8 @@ if (fs.existsSync(agentsPath)) {
     }
   }
 }
+
+validateRepoCurrentState();
 
 if (failures > 0) {
   console.error(`Template validation failed with ${failures} issue(s).`);
