@@ -1455,6 +1455,19 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs should validate after T0120 updates. | Passed | `npm run validate` passed on 2026-06-09. |
 | Scoped diff check | T0120 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
 
+## T0121 Staff Date-Box Layout
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Narrow staff detail date tile | The selected handoff detail `Datum` tile should display a date such as `6 aug` without broken wrapping or overlap on a phone-sized viewport. | Passed in browser | Local admin browser smoke at `http://localhost:3021/?codexSmoke=t0121` with a mock staff API and narrow viewport confirmed the date tile displays `6 aug` cleanly and stays within its tile. |
+| Responsive metadata layout | Date/time/payment metadata tiles should stack on narrow staff/admin viewports and return to three columns on wider viewports. | Passed in browser | Browser smoke confirmed the detail metadata grid uses one column on the narrow viewport and three columns after switching to a wider viewport. |
+| Date formatting scope | The visual layout fix should preserve T0120 date formatting behavior. | Passed in code | `formatDate` and `formatDateTime` are unchanged; only metadata tile layout classes and no-wrap value classes changed. |
+| Staff flow scope | The visual layout fix should not change staff API, auth, redeem, sorting, filtering, or handout behavior. | Passed in code | Only `InfoTile`, the selected handoff metadata grid, and docs changed; staff API calls and action handlers remain unchanged. |
+| Admin lint | Admin app lint should pass after T0121. | Passed | `npm --prefix jumpyard-checkin-admin run lint` passed. |
+| Admin build | Admin app should build after T0121. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. |
+| Root validation | Source-of-truth docs should validate after T0121 updates. | Passed | `npm run validate` passed on 2026-06-09. |
+| Scoped diff check | T0121 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |

@@ -6,10 +6,10 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 - Date: 2026-06-09
 - Current branch: `main`
-- Current status: T0120 is completed and merged to `main`. Staff/admin handoff rows, detail date tiles, and ready timestamps now show short Swedish readable dates such as `6 aug`.
-- Current ticket: `None active after T0120`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`, `T0110`, `T0111`, `T0112`, `T0113`, `T0114`, `T0115`, `T0116`, `T0117`, `T0118`, `T0119`, `T0120`
-- Recommended next step: start `T0121` staff date-box layout fix.
+- Current status: T0121 is completed and merged to `main`. Staff/admin selected-handoff date/time/payment tiles now fit cleanly on narrow viewports and preserve the compact three-tile layout on wider viewports.
+- Current ticket: `None active after T0121`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`, `T0110`, `T0111`, `T0112`, `T0113`, `T0114`, `T0115`, `T0116`, `T0117`, `T0118`, `T0119`, `T0120`, `T0121`
+- Recommended next step: start `T0122` staff handout-list grouping.
 
 ## Current Structure
 
@@ -256,18 +256,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0118` | Gift-card/Klippkort CTA copy. | 2026-06-09 | Buy-entry payment-options apply action now shows specific CTA labels such as `Applicera presentkort` and `Applicera klippkort` instead of the generic `Uppdatera belopp`. |
 | `T0119` | Gift-card/Klippkort input validation. | 2026-06-09 | Buy-entry payment-option inputs now cap at 32 characters, clamp pasted values, and show ready, done, or rejected feedback without changing quote/draft payloads. |
 | `T0120` | Human-readable staff dates. | 2026-06-09 | Staff handoff queue rows, detail date tiles, and ready timestamps now show short Swedish labels such as `6 aug` instead of raw numeric date strings. |
+| `T0121` | Staff date-box layout. | 2026-06-09 | Selected-handoff date/time/payment tiles now stack cleanly on narrow staff/admin viewports, keep date and time values intact, and use the compact three-tile row on wider screens. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `None active after T0120` | Start T0121 next. | T0120 completed and merged to `main` | Staff dates are human-readable. The next unstarted ticket is `T0121`, staff date-box visual layout. |
+| `None active after T0121` | Start T0122 next. | T0121 completed and merged to `main` | Staff date-box layout is fixed. The next unstarted ticket is `T0122`, clearer staff handout-list grouping. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0121` | Fixa datumrutan visuellt | Fix the staff date-box layout so it does not break or appear visually damaged. |
 | `T0122` | Tydligare handout-lista | Separate what staff hands out at check-in versus later collection: padlocks, socks, visitor wristbands, and SkyRider passes at check-in; coffee later. |
 | `T0123` | Final Gustav demo rehearsal | Run the planned public phone/admin flows end-to-end after the selected demo polish tickets are deployed and record any remaining demo-blocking fixes as new scoped tickets. |
 | `TBD` | Guest-facing add-on catalog review | Talk with Gustav before exposing more Roller add-ons such as drinks, food, merch, Valo, event, party, gift-card, and membership products. |
@@ -290,6 +290,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 - T0119 validation: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, `npm run validate`, and scoped `git diff --check` passed on 2026-06-09. Lint still reports the existing four `<img>` warnings, and the build still reports existing `baseline-browser-mapping` age notices. Browser smoke with a local mock API confirmed both fields clamp to 32 characters, dirty Klippkort shows `Redo att applicera`, accepted gift card shows `Klart`, and rejected Klippkort shows `Ej godkänt` with `aria-invalid=true`.
 - T0120 implementation status: `jumpyard-checkin-admin/src/app/page.tsx` now formats staff visit dates as short Swedish labels such as `6 aug` in the handoff queue row and detail date tile, and formats staff-facing ready timestamps with the same readable date style such as `6 aug 10:30`. Missing dates still show `-`, and unparseable values fall back to the raw value. Staff API contracts, auth, sorting, filtering, redeem, handout logic, and backend behavior remain unchanged.
 - T0120 validation: `npm --prefix jumpyard-checkin-admin run lint`, `npm --prefix jumpyard-checkin-admin run build`, `npm run validate`, and scoped `git diff --check` passed on 2026-06-09. Browser smoke with a local mock staff API confirmed the queue row contains `6 aug`, the selected handoff detail contains `6 aug`, the ready timestamp shows `Redo: 6 aug 10:30`, and the detail text no longer contains raw `2026-08-06`.
+- T0121 implementation status: `jumpyard-checkin-admin/src/app/page.tsx` now uses a responsive selected-handoff metadata grid so date/time/payment tiles stack on narrow staff/admin viewports and return to a compact three-column row on wider viewports. The date and time tile values stay intact without word-breaking. Date formatting, staff API contracts, auth, sorting, filtering, redeem, handout logic, and backend behavior remain unchanged.
+- T0121 validation: `npm --prefix jumpyard-checkin-admin run lint`, `npm --prefix jumpyard-checkin-admin run build`, `npm run validate`, and scoped `git diff --check` passed on 2026-06-09. Browser smoke with a local mock staff API confirmed the selected handoff detail date tile displays `6 aug` cleanly on a narrow viewport, stays within its tile, and the wider viewport still uses three metadata columns.
 - T0090 docs verification: Roller Create draft booking docs describe gift card payments separately from discounts, booking costs uses the same booking payload family for safe cost calculation, and Help Center docs describe gift cards as stored-value tender.
 - T0090 safe Roller Playground discovery: direct `POST /bookings/draft/costs` returned `bookingCosts.total=200` and `amountOwing=200` for entry product `1765860` at `2026-06-02 10:00`; adding an invalid gift card kept `amountOwing=200` and returned one `giftCardErrors` entry.
 - T0090 gift-card data check: `/data/giftcards` first returned HTTP `200` but zero records for sampled Playground windows; after Venue Manager fixtures were created and paid, the `2026-06-02` window returned two gift cards for booking references `5101043` and `5101044` with balances `500` and `100`. Safe `POST /bookings/draft/costs` quotes using those gift cards applied one gift card with no errors; the `100 kr` card reduced a `200 kr` quote to `amountOwing=100`, and the `500 kr` card reduced it to `amountOwing=0`. `/products` contains `giftcard` products `Presentkort`, `Presentkort Återbetalningskort`, and `Julbox`.
