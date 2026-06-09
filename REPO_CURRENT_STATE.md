@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-09
-- Current branch: `codex/t0115-addon-back-navigation`
-- Current status: T0115 is completed locally. Existing-booking add-on review/payment-prep back now returns to add-on selection, while back from add-on selection still returns to booking summary.
-- Current ticket: `T0115`
+- Current branch: `main`
+- Current status: T0115 is completed and merged to `main`. Existing-booking add-on review/payment-prep back now returns to add-on selection, while back from add-on selection still returns to booking summary.
+- Current ticket: `None active after T0115`
 - Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`, `T0110`, `T0111`, `T0112`, `T0113`, `T0114`, `T0115`
-- Recommended next step: commit/push/merge `T0115`.
+- Recommended next step: start `T0116` add-on quantity rules.
 
 ## Current Structure
 
@@ -89,7 +89,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 | Command | Purpose | Notes |
 |---|---|---|
-| `npm run validate` | Validate root WRLDS workflow files and skills. | Existing repository command. |
+| `npm run validate` | Validate root WRLDS workflow files, skills, AWS tags, and `REPO_CURRENT_STATE.md` snapshot/table consistency. | Fails if the snapshot current ticket disagrees with the Current Ticket table, or if completed tickets remain in Current/Confirmed Next state. |
 | `npm run infra:check` | Type-check and synthesize the deploy-blocked CDK foundation with example config. | Added in T0004; does not deploy or require AWS credentials. |
 | `npm run infra:synth` | Synthesize the JumpYard Cloud CDK stack with `infra/config/dev.example.json`. | Added in T0004; example config is not approved for deploy. |
 | `npm --prefix infra run synth:dev` | Synthesize the confirmed T0006 dev stack. | Uses `infra/config/dev.json`. |
@@ -254,14 +254,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0113` | Dynamic add-on prices. | Completed and deployed to AWS dev | Buy-entry and existing-booking add-ons use JumpYard Cloud availability prices; quote/draft/payment totals remain server-owned. |
+| `None active after T0115` | Start T0116 next. | T0115 completed and merged to `main` | Existing-booking add-on back navigation is fixed. The next unstarted ticket is `T0116`, add-on quantity rules. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0114` | Rensa produktnamn mot kund | Map internal Roller names such as `Coffee and tea Sweden` to customer-friendly labels such as `Bryggkaffe`. |
-| `T0115` | Tillbaka-knapp i tilläggsflödet | Make back from add-on summary/payment preparation return to add-on selection instead of the booking summary. |
 | `T0116` | Tillåt flera av vissa tillägg | Adjust quantity rules so add-ons such as padlocks and SkyRider can be bought in multiple quantities where operationally reasonable. |
 | `T0117` | Tydligare SkyRider-information | Add height requirement, safety check/consent context, and recommendation that SkyRider is used after jump time. |
 | `T0118` | Byt CTA för presentkort/klippkort | Replace `Uppdatera belopp` with clearer CTAs such as `Applicera presentkort` and `Applicera klippkort`. |
