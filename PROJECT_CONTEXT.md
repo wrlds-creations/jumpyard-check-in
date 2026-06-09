@@ -659,6 +659,8 @@ The post-T0110 Gustav review tickets are confirmed as implementation tickets, no
 
 T0111 completes the phone loading-state polish for capacity/availability fetching. The buy-entry availability loading card now exposes an accessible status region, shows a real spinning border animation around the JumpYard icon, keeps the required `Hämtar tillgängliga platser` text visible, and does not change booking availability, quote, draft, payment, Roller, AWS, redeem, SMS, or email behavior.
 
+T0112 centralizes phone add-on price/config metadata into `jumpyard-checkin-phone/src/flow/addonCatalog.ts`. Buy-entry add-ons and existing-booking add-ons now use the same frontend source for add-on price, Roller product id, availability requirement, max-per-guest, and icon metadata, while final quote/draft/payment amount due still comes from JumpYard Cloud responses. T0113 remains the ticket that replaces these static catalog prices with Roller/JumpYard Cloud-derived dynamic pricing.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |

@@ -19,6 +19,7 @@ import {
   type NewBookingQuote,
 } from '@/flow/cloudClient';
 import type { Addon, AddonId, Booking } from '@/flow/types';
+import { ADDON_CATALOG_CONFIG, BUY_ENTRY_ADDON_IDS } from '@/flow/addonCatalog';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
@@ -51,15 +52,6 @@ interface BuyAddonEntry {
 }
 
 type AddonQuantityMap = Record<AddonId, number>;
-
-const BUY_ADDON_PRODUCTS: Record<AddonId, { rollerProductId: number | null; requiresAvailability: boolean }> = {
-  skyrider: { rollerProductId: 1765443, requiresAvailability: true },
-  connected: { rollerProductId: null, requiresAvailability: false },
-  coffee: { rollerProductId: 1765452, requiresAvailability: false },
-  extra_person: { rollerProductId: null, requiresAvailability: true },
-  lock: { rollerProductId: 1765441, requiresAvailability: false },
-  socks: { rollerProductId: 1765445, requiresAvailability: false },
-};
 
 const createEmptyAddonQty = (): AddonQuantityMap => ({
   skyrider: 0,
@@ -207,6 +199,29 @@ function canStartPayment(draft: NewBookingDraftResult) {
   );
 }
 
+function getAddonLabel(id: AddonId, products: ReturnType<typeof useTranslation>['t']['addons']['products']) {
+  switch (id) {
+    case 'skyrider':
+      return products.skyriderLabel;
+    case 'connected':
+      return products.connectedLabel;
+    case 'coffee':
+      return products.coffeeLabel;
+    case 'extra_person':
+      return products.extraPersonLabel;
+    case 'lock':
+      return products.lockLabel;
+    case 'socks':
+      return products.socksLabel;
+  }
+}
+
+function getAddonUnit(id: AddonId, labels: ReturnType<typeof useTranslation>['t']['addons']) {
+  if (id === 'skyrider' || id === 'connected') return labels.perJumper;
+  if (id === 'extra_person') return labels.perPerson;
+  return labels.each;
+}
+
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -328,12 +343,19 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const jumperCount = getJumperCount(selectedProduct, quantity);
   const buyAddons = useMemo<BuyAddonEntry[]>(
     () =>
-      [
-        { id: 'skyrider', label: t.addons.products.skyriderLabel, price: 45, unit: t.addons.perJumper, maxPerGuest: 1, icon: 'zipline', ...BUY_ADDON_PRODUCTS.skyrider },
-        { id: 'socks', label: t.addons.products.socksLabel, price: 40, unit: t.addons.each, maxPerGuest: 4, icon: 'grip-socks', ...BUY_ADDON_PRODUCTS.socks },
-        { id: 'lock', label: t.addons.products.lockLabel, price: 40, unit: t.addons.each, maxPerGuest: 1, icon: 'padlock', ...BUY_ADDON_PRODUCTS.lock },
-        { id: 'coffee', label: t.addons.products.coffeeLabel, price: 35, unit: t.addons.each, maxPerGuest: 4, icon: 'drink-cup', ...BUY_ADDON_PRODUCTS.coffee },
-      ].filter((addon): addon is BuyAddonEntry => addon.rollerProductId !== null),
+      BUY_ENTRY_ADDON_IDS.map((id) => {
+        const config = ADDON_CATALOG_CONFIG[id];
+        return {
+          id,
+          icon: config.icon as JumpyardIconName,
+          label: getAddonLabel(id, t.addons.products),
+          maxPerGuest: config.maxPerGuest,
+          price: config.price,
+          requiresAvailability: config.requiresAvailability,
+          rollerProductId: config.rollerProductId,
+          unit: getAddonUnit(id, t.addons),
+        };
+      }).filter((addon): addon is BuyAddonEntry => addon.rollerProductId !== null),
     [t]
   );
   const addonAvailabilityById = new Map<AddonId, NewBookingProduct>();

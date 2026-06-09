@@ -1,25 +1,25 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0111
+T0112
 
 ## Goal
-Add a clear loading state while the phone app fetches available capacity/places.
+Fix add-on price inconsistency across add-on selection, summary, and payment preparation.
 
 ## Context
-- T0102 already replaced row-by-row loading with a branded availability-loading card in the buy-entry flow.
-- The Gustav review still found that the capacity/availability fetch can feel static in the phone app.
-- This ticket should make the waiting state explicit for guests without changing booking, quote, draft, payment, Roller, or AWS behavior.
+- The Gustav review found that add-ons can show different prices in selection, summary, and payment steps.
+- Current phone add-on price metadata is duplicated between buy-entry add-ons and existing-booking add-ons.
+- T0112 should make those UI paths use one shared frontend price/config source so they do not drift inside the app.
+- T0113 remains responsible for replacing static prices with Roller/JumpYard Cloud-derived dynamic prices.
 
 ## Allowed Areas
 - `CODEX_TASK.md`
 - `PROJECT_CONTEXT.md`
 - `REPO_CURRENT_STATE.md`
 - `TEST_PLAN.md`
-- `jumpyard-checkin-phone/src/app/page.tsx`
 - `jumpyard-checkin-phone/src/components/BuyTickets.tsx`
 - `jumpyard-checkin-phone/src/components/AddonsOffer.tsx`
-- `jumpyard-checkin-phone/src/flow/machine.ts`
+- `jumpyard-checkin-phone/src/flow/addonCatalog.ts`
 
 ## Do Not Touch
 - Roller Live
@@ -35,32 +35,36 @@ Add a clear loading state while the phone app fetches available capacity/places.
 
 ## Requirements
 
-1. Loading state:
-   - Show a spinner or animation while the phone app fetches available places/capacity.
-   - Include the exact guest-facing text `Hämtar tillgängliga platser`.
-   - Keep the loading state visually aligned with the JumpYard phone app style.
+1. Shared add-on price/config source:
+   - Move duplicated add-on price, product id, availability flag, max-per-guest, and icon metadata into one shared phone frontend module.
+   - Use that shared source in both buy-entry and existing-booking add-on selection flows.
 
-2. Scope:
-   - Keep the change frontend-only unless existing frontend state cannot represent the fetch cleanly.
-   - Do not change availability, quote, draft, payment, or Roller API contracts.
+2. Price consistency:
+   - Selection rows, local basket totals, review rows, and values passed forward in the phone flow should all use the same shared add-on price values.
+   - Keep server quote/draft totals as the source for final amount due/payment display.
 
-3. Documentation:
-   - Keep the planned post-T0110 ticket roadmap in source-of-truth docs.
-   - Update `REPO_CURRENT_STATE.md` after the ticket.
+3. Scope:
+   - Do not change backend API contracts or Roller calls.
+   - Do not introduce dynamic Roller price fetching in T0112; that is T0113.
+
+4. Documentation:
+   - Update source-of-truth docs and validation notes for T0112.
 
 ## Non-Goals
-- Do not fix add-on pricing in T0111.
-- Do not remove hardcoded add-on prices in T0111.
-- Do not change product display-name mappings in T0111.
-- Do not change back navigation, add-on quantity rules, SkyRider copy, gift-card/Klippkort validation, staff date display, or staff handout grouping in T0111.
+- Do not remove static add-on prices in T0112.
+- Do not add new Roller product mappings in T0112.
+- Do not change add-on quantity rules in T0112.
+- Do not change product display names in T0112.
+- Do not change back navigation in T0112.
 
 ## Acceptance Criteria
-- Guests see a clear spinner/animation and `Hämtar tillgängliga platser` during the relevant capacity/availability fetch.
-- The app no longer appears static while places are being loaded.
+- Buy-entry and existing-booking add-on flows no longer define separate price/config literals for the same add-ons.
+- Visible add-on selection prices and local summary values are derived from one shared source.
+- Final quote/draft/payment amounts still come from JumpYard Cloud responses.
 - No backend, Roller, payment, redeem, SMS/email, or AWS behavior changes.
-- Source-of-truth docs still list the remaining planned tickets.
 
 ## Validation
 - `npm --prefix jumpyard-checkin-phone run lint`
 - `npm --prefix jumpyard-checkin-phone run build`
 - `npm run validate`
+- Search confirms duplicated add-on price literals are removed from the two components.

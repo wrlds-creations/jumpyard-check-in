@@ -12,6 +12,11 @@ import {
     type NewBookingQuote,
 } from '@/flow/cloudClient';
 import type { Addon, AddonId, Booking } from '@/flow/types';
+import {
+    ADDON_CATALOG_CONFIG,
+    EXISTING_BOOKING_ADDON_IDS,
+    HIDDEN_EXISTING_BOOKING_ADDONS,
+} from '@/flow/addonCatalog';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
@@ -46,16 +51,6 @@ interface CatalogEntry {
 
 type Step = 'SELECT' | 'SKYRIDER_ATTEST' | 'REVIEW' | 'PAYMENT' | 'APPROVED' | 'PENDING';
 
-const ADDON_PRODUCTS: Record<AddonId, { rollerProductId: number | null; requiresAvailability: boolean }> = {
-    skyrider: { rollerProductId: 1765443, requiresAvailability: true },
-    connected: { rollerProductId: null, requiresAvailability: false },
-    coffee: { rollerProductId: 1765452, requiresAvailability: false },
-    extra_person: { rollerProductId: null, requiresAvailability: true },
-    lock: { rollerProductId: 1765441, requiresAvailability: false },
-    socks: { rollerProductId: 1765445, requiresAvailability: false },
-};
-
-const HIDDEN_EXISTING_BOOKING_ADDONS = new Set<AddonId>(['connected', 'extra_person']);
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
 
 function Counter({
@@ -124,18 +119,64 @@ function canStartPayment(draft: AddProductDraftResult) {
     );
 }
 
+function getAddonLabel(id: AddonId, products: ReturnType<typeof useTranslation>['t']['addons']['products']) {
+    switch (id) {
+        case 'skyrider':
+            return products.skyriderLabel;
+        case 'connected':
+            return products.connectedLabel;
+        case 'coffee':
+            return products.coffeeLabel;
+        case 'extra_person':
+            return products.extraPersonLabel;
+        case 'lock':
+            return products.lockLabel;
+        case 'socks':
+            return products.socksLabel;
+    }
+}
+
+function getAddonDescription(id: AddonId, products: ReturnType<typeof useTranslation>['t']['addons']['products']) {
+    switch (id) {
+        case 'skyrider':
+            return products.skyriderDesc;
+        case 'connected':
+            return products.connectedDesc;
+        case 'coffee':
+            return products.coffeeDesc;
+        case 'extra_person':
+            return products.extraPersonDesc;
+        case 'lock':
+            return products.lockDesc;
+        case 'socks':
+            return products.socksDesc;
+    }
+}
+
+function getAddonUnit(id: AddonId, labels: ReturnType<typeof useTranslation>['t']['addons']) {
+    if (id === 'skyrider' || id === 'connected') return labels.perJumper;
+    if (id === 'extra_person') return labels.perPerson;
+    return labels.each;
+}
+
 export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, onPendingDone }: AddonsOfferProps) => {
     const { t } = useTranslation();
     const catalog = useMemo<CatalogEntry[]>(
         () => {
-            const entries: CatalogEntry[] = [
-            { id: 'skyrider', label: t.addons.products.skyriderLabel, price: 45, unit: t.addons.perJumper, description: t.addons.products.skyriderDesc, maxPerGuest: 1, icon: 'zipline', ...ADDON_PRODUCTS.skyrider },
-            { id: 'connected', label: t.addons.products.connectedLabel, price: 40, unit: t.addons.perJumper, description: t.addons.products.connectedDesc, maxPerGuest: 1, icon: 'connected-band', ...ADDON_PRODUCTS.connected },
-            { id: 'socks', label: t.addons.products.socksLabel, price: 40, unit: t.addons.each, description: t.addons.products.socksDesc, maxPerGuest: 4, icon: 'grip-socks', ...ADDON_PRODUCTS.socks },
-            { id: 'coffee', label: t.addons.products.coffeeLabel, price: 35, unit: t.addons.each, description: t.addons.products.coffeeDesc, maxPerGuest: 4, icon: 'drink-cup', ...ADDON_PRODUCTS.coffee },
-            { id: 'extra_person', label: t.addons.products.extraPersonLabel, price: 179, unit: t.addons.perPerson, description: t.addons.products.extraPersonDesc, maxPerGuest: 4, icon: 'add-guest', ...ADDON_PRODUCTS.extra_person },
-            { id: 'lock', label: t.addons.products.lockLabel, price: 40, unit: t.addons.each, description: t.addons.products.lockDesc, maxPerGuest: 1, icon: 'padlock', ...ADDON_PRODUCTS.lock },
-        ];
+            const entries: CatalogEntry[] = EXISTING_BOOKING_ADDON_IDS.map((id) => {
+                const config = ADDON_CATALOG_CONFIG[id];
+                return {
+                    id,
+                    description: getAddonDescription(id, t.addons.products),
+                    icon: config.icon as JumpyardIconName,
+                    label: getAddonLabel(id, t.addons.products),
+                    maxPerGuest: config.maxPerGuest,
+                    price: config.price,
+                    requiresAvailability: config.requiresAvailability,
+                    rollerProductId: config.rollerProductId,
+                    unit: getAddonUnit(id, t.addons),
+                };
+            });
             return entries.filter((entry) => !HIDDEN_EXISTING_BOOKING_ADDONS.has(entry.id));
         },
         [t]

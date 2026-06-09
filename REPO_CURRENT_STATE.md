@@ -6,10 +6,10 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 - Date: 2026-06-09
 - Current branch: `codex/t0111-demo-ticket-roadmap`
-- Current status: T0111 is completed locally and pending commit/merge to `main`. It adds a clearer phone loading state while capacity/availability is being fetched, without changing backend, Roller, payment, redeem, SMS/email, or AWS behavior.
-- Current ticket: `T0111`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`, `T0110`, `T0111`
-- Recommended next step: commit/merge T0111, then start `T0112` add-on price consistency.
+- Current status: T0112 is completed locally and pending commit/merge to `main`. It centralizes phone add-on price/config metadata so buy-entry and existing-booking add-on UI paths use the same frontend source.
+- Current ticket: `T0112`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`, `T0110`, `T0111`, `T0112`
+- Recommended next step: commit/merge T0112, then start `T0113` dynamic Roller-derived add-on pricing.
 
 ## Current Structure
 
@@ -247,18 +247,18 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0109` | SkyRider consent timing hardening. | 2026-06-08 | Phone buy-entry and existing-booking add-on quote/draft handlers now fail closed when SkyRider is selected without recorded 100 cm approval, preserving the visible consent-before-payment flow. |
 | `T0110` | Staff handoff product-row polish. | 2026-06-08 | Admin handoff fulfillment rows are now compact, remove grey child-detail subtitles, use product-specific JumpYard icons for entry/SkyRider/socks/padlock/coffee/family rows, and no longer show the server-side final-check copy. |
 | `T0111` | Capacity loading-state polish. | 2026-06-09 | Phone buy-entry availability loading now shows an accessible loading card with a real spinner and the required `Hämtar tillgängliga platser` text while capacity/availability is fetched. |
+| `T0112` | Add-on price consistency. | 2026-06-09 | Buy-entry and existing-booking add-ons now read price/config metadata from one shared phone catalog module, keeping local selection and summary values aligned while quote/draft/payment totals remain server-owned. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0111` | Loading state during capacity fetch. | Completed locally; pending commit/merge | Phone UI now shows an accessible loading card with a real spinner and `Hämtar tillgängliga platser` while availability/capacity is loading. |
+| `T0112` | Add-on price consistency. | Completed locally; pending commit/merge | Shared phone add-on catalog now owns local add-on price/config metadata for both buy-entry and existing-booking add-on flows. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0112` | Prisinkonsekvens på tillägg | Ensure add-on selection, summary, and payment preparation use one trusted price source and stop showing wrong/stale add-on prices. |
 | `T0113` | Ta bort hårdkodade tilläggspriser | Remove hardcoded add-on prices and fetch/add derive prices dynamically from Roller through JumpYard Cloud/server-owned data. |
 | `T0114` | Rensa produktnamn mot kund | Map internal Roller names such as `Coffee and tea Sweden` to customer-friendly labels such as `Bryggkaffe`. |
 | `T0115` | Tillbaka-knapp i tilläggsflödet | Make back from add-on summary/payment preparation return to add-on selection instead of the booking summary. |

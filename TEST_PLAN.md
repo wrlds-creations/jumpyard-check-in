@@ -1338,6 +1338,17 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs should validate after T0111 updates. | Passed | `npm run validate` passed on 2026-06-09. |
 | Local HTTP smoke | Local phone dev app should serve during visual validation. | Passed | Temporary phone dev server at `http://127.0.0.1:3014/?codexSmoke=t0111` returned HTTP `200`; Playwright-core smoke then exercised the buy-entry loading state. |
 
+## T0112 Add-on Price Consistency
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Shared price/config source | Buy-entry and existing-booking add-on components should not define separate duplicate price/product-id literals. | Passed in code | `BuyTickets.tsx` and `AddonsOffer.tsx` now read add-on price/config metadata from `jumpyard-checkin-phone/src/flow/addonCatalog.ts`. |
+| Duplicate price literal search | Old component-local add-on price/product-id literals should be gone from both components. | Passed | `rg` found add-on price/product-id literals only in `addonCatalog.ts`, not in `BuyTickets.tsx` or `AddonsOffer.tsx`. |
+| Buy-entry price smoke | Selection, local total, and review should agree for selected add-ons. | Passed in browser | Playwright-core smoke mocked availability/quote, selected socks and coffee, and confirmed selection had `Strumpor 40 kr`, `Kaffe 35 kr`, local total `275 kr`, and review/payment-prep had the same rows plus `Att betala 275 kr`. |
+| Phone lint | Phone app lint should pass after T0112. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings only. |
+| Phone build | Phone app should build after T0112. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+| Root validation | Source-of-truth docs should validate after T0112 updates. | Passed | `npm run validate` passed on 2026-06-09. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |
