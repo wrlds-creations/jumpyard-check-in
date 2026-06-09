@@ -1,23 +1,25 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0110
+T0111
 
 ## Goal
-Polish staff handoff product rows before the Gustav demo.
+Add a clear loading state while the phone app fetches available capacity/places.
 
 ## Context
-- T0107 made paid linked add-on products visible in staff handoff.
-- T0108 proved the deployed staff detail can show original entry plus linked add-ons.
-- T0110 tightens the staff view so operators see a compact handout list with the right product icons and no noisy explanatory or duplicate product subtitles.
+- T0102 already replaced row-by-row loading with a branded availability-loading card in the buy-entry flow.
+- The Gustav review still found that the capacity/availability fetch can feel static in the phone app.
+- This ticket should make the waiting state explicit for guests without changing booking, quote, draft, payment, Roller, or AWS behavior.
 
 ## Allowed Areas
 - `CODEX_TASK.md`
 - `PROJECT_CONTEXT.md`
 - `REPO_CURRENT_STATE.md`
 - `TEST_PLAN.md`
-- `jumpyard-checkin-admin/src/app/page.tsx`
-- `jumpyard-checkin-admin/public/jumpyard-next-icons/*.png`
+- `jumpyard-checkin-phone/src/app/page.tsx`
+- `jumpyard-checkin-phone/src/components/BuyTickets.tsx`
+- `jumpyard-checkin-phone/src/components/AddonsOffer.tsx`
+- `jumpyard-checkin-phone/src/flow/machine.ts`
 
 ## Do Not Touch
 - Roller Live
@@ -25,7 +27,7 @@ Polish staff handoff product rows before the Gustav demo.
 - `.env`
 - AWS resources
 - Aurora migrations
-- Phone application source
+- Staff/admin application source
 - Payment package internals
 - Redemption logic or redeem writes
 - SMS/email logic
@@ -33,36 +35,32 @@ Polish staff handoff product rows before the Gustav demo.
 
 ## Requirements
 
-1. Product rows:
-   - Remove grey subtitles under each "Att lämna ut" row, such as ticket/price/time or SkyRider child-detail text.
-   - Keep the primary product name and quantity visible.
-   - Preserve the linked add-on badge for rows that come from linked paid add-on bookings.
+1. Loading state:
+   - Show a spinner or animation while the phone app fetches available places/capacity.
+   - Include the exact guest-facing text `Hämtar tillgängliga platser`.
+   - Keep the loading state visually aligned with the JumpYard phone app style.
 
-2. Product icons:
-   - Use product-specific JumpYard icons for common handout rows: entry, SkyRider, socks, padlock, coffee, and family/group where detectable.
-   - Keep a safe fallback for unknown products.
+2. Scope:
+   - Keep the change frontend-only unless existing frontend state cannot represent the fetch cleanly.
+   - Do not change availability, quote, draft, payment, or Roller API contracts.
 
-3. Redeem panel copy:
-   - Remove the explanatory copy saying the final check happens server-side before tickets are redeemed.
-   - Do not change the actual staff-confirmed redeem behavior.
-
-4. Documentation:
-   - Update source-of-truth docs and the roadmap/current-ticket tables.
+3. Documentation:
+   - Keep the planned post-T0110 ticket roadmap in source-of-truth docs.
+   - Update `REPO_CURRENT_STATE.md` after the ticket.
 
 ## Non-Goals
-- Do not change staff API contracts.
-- Do not change redeem behavior.
-- Do not change backend linked add-on logic.
-- Do not add new Roller product mappings beyond UI icon detection.
-- Do not deploy AWS resources.
+- Do not fix add-on pricing in T0111.
+- Do not remove hardcoded add-on prices in T0111.
+- Do not change product display-name mappings in T0111.
+- Do not change back navigation, add-on quantity rules, SkyRider copy, gift-card/Klippkort validation, staff date display, or staff handout grouping in T0111.
 
 ## Acceptance Criteria
-- The staff handoff detail list is more compact and no longer shows grey product subtitles.
-- SkyRider, socks, padlock, coffee, entry, and family/group rows use the closest available JumpYard icon.
-- The staff redeem panel no longer displays the server-side final-check copy.
-- Source-of-truth docs record T0110 status.
+- Guests see a clear spinner/animation and `Hämtar tillgängliga platser` during the relevant capacity/availability fetch.
+- The app no longer appears static while places are being loaded.
+- No backend, Roller, payment, redeem, SMS/email, or AWS behavior changes.
+- Source-of-truth docs still list the remaining planned tickets.
 
 ## Validation
-- `npm --prefix jumpyard-checkin-admin run lint`
-- `npm --prefix jumpyard-checkin-admin run build`
+- `npm --prefix jumpyard-checkin-phone run lint`
+- `npm --prefix jumpyard-checkin-phone run build`
 - `npm run validate`

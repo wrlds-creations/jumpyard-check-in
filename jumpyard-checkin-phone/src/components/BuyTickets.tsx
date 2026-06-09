@@ -221,9 +221,17 @@ function AvailabilityLoadingCard({ selectedTime }: { selectedTime: string | null
   const { t } = useTranslation();
 
   return (
-    <div className="bg-surface border border-border rounded-2xl p-6 text-center">
-      <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-white border border-border shadow-sm">
-        <JumpyardIcon name="jump" className="h-14 w-14 animate-pulse" />
+    <div
+      className="bg-surface border border-border rounded-2xl p-6 text-center"
+      role="status"
+      aria-live="polite"
+      data-availability-loading="true"
+    >
+      <div className="relative mx-auto mb-4 h-20 w-20">
+        <div className="absolute inset-0 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+        <div className="absolute inset-2 flex items-center justify-center rounded-full bg-white border border-border shadow-sm">
+          <JumpyardIcon name="jump" className="h-12 w-12 animate-pulse" />
+        </div>
       </div>
       <h3 className="text-lg font-black italic uppercase text-foreground">
         {t.buy.loadingAvailabilityTitle}
