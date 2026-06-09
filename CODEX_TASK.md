@@ -1,16 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0120
+T0121
 
 ## Goal
-Show staff/admin dates in a human-readable Swedish format.
+Fix the staff/admin date-box layout so the date tile no longer breaks or appears visually damaged.
 
 ## Context
-- T0120 is the next confirmed Gustav review ticket after T0119.
-- Staff handoff rows and detail tiles currently use `formatDate()` in `jumpyard-checkin-admin/src/app/page.tsx`.
-- `formatDate()` returns the raw date string, and the ready timestamp uses a numeric short date, so staff can see numeric dates that may be misread during handoff.
-- The desired staff-facing format is short and human-readable, for example `6 aug`.
+- T0121 is the next confirmed Gustav review ticket after T0120.
+- T0120 made staff dates human-readable, for example `6 aug`.
+- The selected staff handoff detail currently renders the date, time, and payment tiles in three columns at every viewport width.
+- On phone-sized staff/admin screens, that cramped metadata row can make the date box look broken.
 
 ## Allowed Areas
 - `CODEX_TASK.md`
@@ -28,7 +28,7 @@ Show staff/admin dates in a human-readable Swedish format.
 - Phone application source
 - Kiosk application source
 - Staff API contracts or backend source
-- Date-box layout fixes; T0121 handles visual box layout
+- Date formatting semantics from T0120
 - Handout categorization; T0122 handles handout grouping
 - Redemption logic or redeem writes
 - SMS/email logic
@@ -36,34 +36,33 @@ Show staff/admin dates in a human-readable Swedish format.
 
 ## Requirements
 
-1. Staff date display:
-   - Render staff-facing visit dates as Swedish human-readable labels such as `6 aug`.
-   - Apply the same formatting to the staff queue row and the selected handoff detail date tile.
-   - Format staff-facing date/time timestamps with the same readable date style, for example `6 aug 10:30`.
-   - Preserve `-` for missing dates and preserve the raw value when it cannot be parsed as a date.
+1. Staff date-box layout:
+   - Make the selected handoff detail metadata tiles responsive and stable on narrow staff/admin viewports.
+   - Keep the `Datum` tile value visually intact, without awkward word-breaking.
+   - Keep the `Tid` tile value visually intact for normal start/end time labels.
+   - Preserve the compact three-tile layout on wider staff/admin viewports.
 
 2. Flow scope:
    - Do not change staff API contracts, backend date payloads, sorting, filtering, auth, redeem, or handout logic.
-   - Do not change the visual layout of the date box in T0120; T0121 handles that separately.
+   - Do not change the human-readable date formatting behavior added in T0120.
 
 3. Documentation:
-   - Update source-of-truth docs and validation notes for T0120.
+   - Update source-of-truth docs and validation notes for T0121.
 
 ## Non-Goals
-- Do not implement the T0121 staff date-box layout fix.
 - Do not implement the T0122 handout-list grouping.
 - Do not change phone, kiosk, backend, AWS, Roller, redeem, payment, SMS, or email behavior.
+- Do not change staff list sorting/filtering or queue loading behavior.
 
 ## Acceptance Criteria
-- A staff visit date such as `2026-08-06` renders as `6 aug`.
-- A staff date/time such as `2026-08-06T08:30:00.000Z` renders with the readable date label, for example `6 aug 10:30`.
-- Missing dates still render as `-`.
-- Unparseable date values still render as their original value.
-- Staff list rows and selected handoff detail use the human-readable date label.
+- The selected handoff detail `Datum` tile displays a date such as `6 aug` without broken wrapping or overlap.
+- Date/time/payment metadata tiles stack or otherwise fit cleanly on narrow phone-sized staff/admin viewports.
+- Wider staff/admin viewports still use the compact three-tile metadata layout.
+- Date formatting still follows T0120 behavior.
 - No staff API, backend, auth, redeem, sorting, filtering, or handout behavior changes.
 
 ## Validation
 - `npm --prefix jumpyard-checkin-admin run lint`
 - `npm --prefix jumpyard-checkin-admin run build`
 - `npm run validate`
-- Browser or equivalent smoke confirms a staff queue row and handoff detail show a date such as `6 aug`.
+- Browser or equivalent smoke confirms the staff handoff detail date tile fits cleanly on a narrow viewport.

@@ -314,16 +314,25 @@ function InfoTile({
   icon,
   label,
   value,
+  valueClassName = "",
 }: {
   icon: React.ReactNode;
   label: string;
   value: string | number;
+  valueClassName?: string;
 }) {
+  const valueClasses = [
+    "min-w-0 self-center text-sm font-black italic leading-tight text-foreground sm:text-base",
+    valueClassName,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className="rounded-2xl border border-border bg-white p-2.5 shadow-sm">
-      <div className="mb-1.5 text-muted">{icon}</div>
-      <p className="break-words text-sm font-black italic text-foreground sm:text-base">{value}</p>
-      <p className="mt-1 text-[9px] uppercase tracking-wide text-foreground/55 sm:text-[10px]">{label}</p>
+    <div className="grid min-h-[92px] min-w-0 grid-rows-[auto_1fr_auto] rounded-2xl border border-border bg-white p-3 shadow-sm">
+      <div className="flex h-6 items-center text-muted">{icon}</div>
+      <p className={valueClasses}>{value}</p>
+      <p className="mt-1 text-[9px] uppercase leading-none tracking-wide text-foreground/55 sm:text-[10px]">{label}</p>
     </div>
   );
 }
@@ -534,14 +543,27 @@ function DetailPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 p-3">
-        <InfoTile icon={<CalendarDays size={20} />} label="Datum" value={formatDate(detail.visitDate)} />
+      <div
+        data-testid="handoff-detail-metadata"
+        className="grid grid-cols-1 gap-2 p-3 min-[420px]:grid-cols-3"
+      >
+        <InfoTile
+          icon={<CalendarDays size={20} />}
+          label="Datum"
+          value={formatDate(detail.visitDate)}
+          valueClassName="whitespace-nowrap"
+        />
         <InfoTile
           icon={<StaffIcon name="time" className="h-7 w-7" />}
           label="Tid"
           value={`${formatClock(detail.booking.startTime)}-${formatClock(detail.booking.endTime)}`}
+          valueClassName="whitespace-nowrap"
         />
-        <InfoTile icon={<StaffIcon name="payment-card" className="h-7 w-7" />} label="Betalning" value={statusLabel(detail.booking.paymentStatus ?? detail.booking.bookingStatus)} />
+        <InfoTile
+          icon={<StaffIcon name="payment-card" className="h-7 w-7" />}
+          label="Betalning"
+          value={statusLabel(detail.booking.paymentStatus ?? detail.booking.bookingStatus)}
+        />
       </div>
 
       <div className="px-3 pb-3">

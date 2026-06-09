@@ -677,6 +677,8 @@ T0119 improves the buy-entry gift-card/Klippkort input feedback without changing
 
 T0120 improves staff/admin date readability without changing backend contracts or layout structure. Staff handoff queue rows, the selected handoff detail date tile, and staff-facing ready timestamps now format parseable dates as short Swedish labels such as `6 aug` or `6 aug 10:30`, while missing dates still show `-` and unparseable values fall back to the raw value. Staff API payloads, auth, sorting, filtering, redeem, handout logic, AWS, Roller writes, SMS, and email behavior remain unchanged.
 
+T0121 fixes the staff/admin selected-handoff date-box layout without changing date formatting or staff flow behavior. The date/time/payment metadata tiles now stack cleanly on narrow phone-sized staff/admin viewports, keep date and time values intact without awkward word-breaking, and return to the compact three-tile row on wider viewports. Staff API payloads, auth, sorting, filtering, redeem, handout logic, AWS, Roller writes, SMS, and email behavior remain unchanged.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
