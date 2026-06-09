@@ -667,6 +667,8 @@ T0114 cleans guest-facing product labels in the phone booking model. Existing-bo
 
 T0115 fixes the visible back behavior inside the existing-booking add-on flow. The parent phone flow now tracks the internal `AddonsOffer` step and routes the top back button from add-on review/payment preparation back to add-on selection instead of the booking summary. Back from the add-on selection step itself still returns to booking summary. This is frontend-only and does not change add-on prices, quantity rules, quote/draft/payment payloads, JumpYard Cloud contracts, AWS, Roller writes, redeem, SMS, or email behavior.
 
+T0116 relaxes shared phone add-on quantity metadata for products where buying more than one is operationally reasonable. Padlocks and SkyRider passes now allow up to four per guest/jumper in the frontend limit model, matching the existing multi-unit pattern for socks and coffee. SkyRider remains availability/capacity gated through JumpYard Cloud/Roller availability, and the ticket does not change prices, product ids, quote/draft/payment payloads, backend contracts, AWS, Roller writes, redeem, SMS, or email behavior.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |

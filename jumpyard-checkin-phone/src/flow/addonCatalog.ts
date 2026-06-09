@@ -10,7 +10,7 @@ export interface AddonCatalogConfig {
 export const ADDON_CATALOG_CONFIG: Record<AddonId, AddonCatalogConfig> = {
   skyrider: {
     icon: 'zipline',
-    maxPerGuest: 1,
+    maxPerGuest: 4,
     requiresAvailability: true,
     rollerProductId: 1765443,
   },
@@ -34,7 +34,7 @@ export const ADDON_CATALOG_CONFIG: Record<AddonId, AddonCatalogConfig> = {
   },
   lock: {
     icon: 'padlock',
-    maxPerGuest: 1,
+    maxPerGuest: 4,
     requiresAvailability: false,
     rollerProductId: 1765441,
   },

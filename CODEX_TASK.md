@@ -1,16 +1,16 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0115
+T0116
 
 ## Goal
-Fix back navigation inside the existing-booking add-on flow.
+Relax unnecessary max-one limits for add-ons where multiple quantities are operationally reasonable.
 
 ## Context
-- T0115 is the next confirmed Gustav review ticket after T0114.
-- The existing-booking add-on flow has internal steps for selecting add-ons, reviewing the add-on quote, preparing payment, and pending payment.
-- The visible top back button is currently owned by the parent app state, so it can treat the whole add-on flow as `APP_ADDONS`.
-- From add-on review/payment preparation, back should return to the add-on selection step, not to the booking summary.
+- T0116 is the next confirmed Gustav review ticket after T0115.
+- `ADDON_CATALOG_CONFIG.maxPerGuest` controls add-on quantity limits in both the buy-entry and existing-booking add-on flows.
+- Socks and coffee already allow several units per jumper/guest.
+- Padlocks and SkyRider are currently limited to one per jumper/guest, which can feel too restrictive for the demo and pilot operation.
 - The phone app must still call JumpYard Cloud only, never Roller directly.
 
 ## Allowed Areas
@@ -18,8 +18,7 @@ Fix back navigation inside the existing-booking add-on flow.
 - `PROJECT_CONTEXT.md`
 - `REPO_CURRENT_STATE.md`
 - `TEST_PLAN.md`
-- `jumpyard-checkin-phone/src/app/page.tsx`
-- `jumpyard-checkin-phone/src/components/AddonsOffer.tsx`
+- `jumpyard-checkin-phone/src/flow/addonCatalog.ts`
 
 ## Do Not Touch
 - Roller Live
@@ -33,40 +32,37 @@ Fix back navigation inside the existing-booking add-on flow.
 - Redemption logic or redeem writes
 - SMS/email logic
 - Roller bookings, drafts, payments, or redemptions
+- Add-on prices, product ids, quote/draft/payment payload shape, or backend contracts
 
 ## Requirements
 
-1. Existing-booking add-on back target:
-   - Back from add-on review should return to add-on selection.
-   - Back from add-on payment preparation should return to add-on selection.
-   - Back should not land on the booking summary while the guest is still inside add-on review/payment preparation.
+1. Add-on quantity rules:
+   - Allow multiple padlocks where operationally reasonable.
+   - Allow multiple SkyRider passes while keeping existing availability/capacity gating.
+   - Keep hidden/future add-ons hidden in the existing-booking add-on picker.
 
-2. Parent flow behavior:
-   - Back from the add-on selection step itself can keep returning to booking summary.
-   - Existing session start, safety, payment, quote/draft, and Roller payment behavior must remain unchanged.
+2. Scope:
+   - Change only the shared phone add-on quantity metadata.
+   - Do not change add-on pricing, product ids, quote/draft/payment payloads, backend contracts, AWS, Roller writes, redeem, SMS, or email behavior.
 
-3. Scope:
-   - Keep the change inside the phone frontend navigation coordination for the existing-booking add-on flow.
-   - Do not change prices, product ids, quote/draft/payment payloads, backend contracts, or payment package internals.
-
-4. Documentation:
-   - Update source-of-truth docs and validation notes for T0115.
+3. Documentation:
+   - Update source-of-truth docs and validation notes for T0116.
 
 ## Non-Goals
-- Do not change add-on quantity rules in T0115; T0116 handles it.
-- Do not change SkyRider information copy in T0115; T0117 handles it.
+- Do not change SkyRider information copy in T0116; T0117 handles it.
+- Do not change gift-card/Klippkort CTA or validation in T0116; T0118/T0119 handle those.
+- Do not change staff date or handout behavior in T0116; T0120-T0122 handle those.
 - Do not add new guest-facing add-ons.
-- Do not change AWS, backend routes, IAM, secrets, migrations, or EventBridge.
 
 ## Acceptance Criteria
-- The global visible back affordance returns from add-on review to add-on selection.
-- The global visible back affordance returns from add-on payment preparation to add-on selection.
-- Back from add-on selection itself still returns to booking summary.
-- No price, payment, add-on quantity, backend, AWS, redeem, SMS/email, or Roller write behavior changes.
+- Buy-entry add-ons can select more than one padlock.
+- Existing-booking add-ons can select more than one padlock.
+- SkyRider max is no longer hard capped at one per jumper/guest by frontend metadata, while existing capacity gating still applies.
+- No price, product id, payment, backend, AWS, redeem, SMS/email, or Roller write behavior changes.
 
 ## Validation
 - `npm --prefix jumpyard-checkin-phone run lint`
 - `npm --prefix jumpyard-checkin-phone run build`
 - `npm run validate`
-- Browser smoke with mocked JumpYard Cloud lookup/availability/quote confirms back from add-on review returns to add-on selection instead of booking summary.
-- Code check confirms the parent back button still returns from add-on selection to booking summary.
+- Code check confirms `ADDON_CATALOG_CONFIG` is the only changed source of quantity metadata.
+- Browser or equivalent smoke confirms padlock/SkyRider increment buttons can go above one when availability allows it.
