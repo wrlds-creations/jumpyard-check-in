@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, Check, CreditCard, Minus, Plus } from 'lucide-react';
 import {
@@ -26,9 +26,11 @@ import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 
 interface AddonsOfferProps {
+    backRequest?: number;
     booking: Booking;
     guestCount: number;
     existingAddons: Addon[];
+    onStepChange?: (step: AddonsOfferStep) => void;
     onContinue: (result: {
         selectedAddons: Addon[];
         addonsTotal: number;
@@ -52,7 +54,7 @@ interface CatalogEntry {
     requiresAvailability: boolean;
 }
 
-type Step = 'SELECT' | 'SKYRIDER_ATTEST' | 'REVIEW' | 'PAYMENT' | 'APPROVED' | 'PENDING';
+export type AddonsOfferStep = 'SELECT' | 'SKYRIDER_ATTEST' | 'REVIEW' | 'PAYMENT' | 'APPROVED' | 'PENDING';
 
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
 
@@ -61,17 +63,20 @@ function Counter({
     max,
     min = 0,
     onChange,
+    testId,
     value,
 }: {
     disabled?: boolean;
     max: number;
     min?: number;
     onChange: (n: number) => void;
+    testId?: string;
     value: number;
 }) {
     return (
         <div className="flex items-center gap-2">
             <button
+                data-testid={testId ? `${testId}-decrement` : undefined}
                 onClick={() => onChange(Math.max(min, value - 1))}
                 className="w-9 h-9 rounded-full bg-surface hover:bg-border border border-border text-foreground flex items-center justify-center disabled:opacity-30 disabled:bg-surface-strong"
                 disabled={disabled || value <= min}
@@ -80,6 +85,7 @@ function Counter({
             </button>
             <span className="text-xl font-black italic text-foreground w-7 text-center">{value}</span>
             <button
+                data-testid={testId ? `${testId}-increment` : undefined}
                 onClick={() => onChange(Math.min(max, value + 1))}
                 className="w-9 h-9 rounded-full bg-primary hover:bg-surface border border-transparent hover:border-primary hover:text-primary text-white flex items-center justify-center disabled:opacity-30 disabled:hover:bg-primary disabled:hover:text-white"
                 disabled={disabled || value >= max}
@@ -180,7 +186,15 @@ function isPricedCatalogEntry(entry: CatalogEntry): entry is CatalogEntry & { pr
     return entry.price !== null && entry.rollerProductId !== null;
 }
 
-export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, onPendingDone }: AddonsOfferProps) => {
+export const AddonsOffer = ({
+    backRequest = 0,
+    booking,
+    guestCount,
+    existingAddons,
+    onContinue,
+    onPendingDone,
+    onStepChange,
+}: AddonsOfferProps) => {
     const { t } = useTranslation();
     const bookingDate = booking.date ?? getVenueToday();
     const bookingStartTime = normalizeStartTime(booking.time) ?? '09:00';
@@ -246,13 +260,36 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
         return base;
     }, [existingAddons]);
 
-    const [step, setStep] = useState<Step>('SELECT');
+    const [step, setStep] = useState<AddonsOfferStep>('SELECT');
     const [qty, setQty] = useState<Record<AddonId, number>>(() => ({ ...minQty }));
     const [quote, setQuote] = useState<NewBookingQuote | null>(null);
     const [draft, setDraft] = useState<AddProductDraftResult | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
+    const handledBackRequest = useRef(backRequest);
+
+    const returnToSelect = useCallback(() => {
+        setSubmitError(null);
+        setQuote(null);
+        setDraft(null);
+        setStep('SELECT');
+    }, []);
+
+    useEffect(() => {
+        onStepChange?.(step);
+    }, [onStepChange, step]);
+
+    useEffect(() => () => {
+        onStepChange?.('SELECT');
+    }, [onStepChange]);
+
+    useEffect(() => {
+        if (backRequest === handledBackRequest.current) return;
+        handledBackRequest.current = backRequest;
+        if (step === 'SELECT' || step === 'APPROVED') return;
+        returnToSelect();
+    }, [backRequest, returnToSelect, step]);
 
     const setOne = (id: AddonId, nextQty: number) => {
         setSubmitError(null);
@@ -482,6 +519,7 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                                 return (
                                     <div
                                         key={entry.id}
+                                        data-testid={`addon-option-${entry.id}`}
                                         className={`w-full border rounded-xl p-2.5 shadow-sm ${
                                             isHighlighted
                                                 ? 'bg-primary/5 border-primary/30'
@@ -507,7 +545,14 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                                                     )}
                                                 </div>
                                             </div>
-                                            <Counter value={value} onChange={(nextQty) => setOne(entry.id, nextQty)} max={max} min={locked} disabled={!isEnabled} />
+                                            <Counter
+                                                value={value}
+                                                onChange={(nextQty) => setOne(entry.id, nextQty)}
+                                                max={max}
+                                                min={locked}
+                                                disabled={!isEnabled}
+                                                testId={`addon-option-${entry.id}`}
+                                            />
                                         </div>
                                     </div>
                                 );
@@ -522,6 +567,7 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
                         </div>
 
                         <button
+                            data-testid="addons-select-continue"
                             onClick={handleSelectContinue}
                             disabled={submitting || catalogLoading}
                             className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm disabled:opacity-40 disabled:hover:bg-primary disabled:hover:text-white disabled:hover:border-transparent"
@@ -543,7 +589,7 @@ export const AddonsOffer = ({ booking, guestCount, existingAddons, onContinue, o
             )}
 
             {step === 'REVIEW' && quote && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full bg-surface border border-border p-5 rounded-2xl">
+                <motion.div data-testid="addons-review" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full bg-surface border border-border p-5 rounded-2xl">
                     <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">{t.addons.reviewTitle}</h2>
                     <p className="text-muted text-xs mb-5 text-center">{t.addons.reviewDesc}</p>
 

@@ -1377,6 +1377,17 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs should validate after T0114 updates. | Passed | `npm run validate` passed on 2026-06-09. |
 | Scoped diff check | T0114 files should have no whitespace errors. | Passed | Scoped `git diff --check -- CODEX_TASK.md jumpyard-checkin-phone/src/flow/cloudClient.ts` passed; Git printed CRLF conversion notices only. |
 
+## T0115 Existing Add-on Back Navigation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Review back target | The visible top back button should return from existing-booking add-on review to add-on selection. | Passed in browser | In-app browser smoke used mocked lookup/session/availability/quote, selected socks, reached add-on review, pressed `Tillbaka`, and stayed in `APP_ADDONS` with the socks selection row visible and no booking summary/review visible. |
+| Selection back target | The visible top back button should still return from add-on selection to booking summary. | Passed in browser | The same mocked flow pressed `Tillbaka` from add-on selection and returned to `APP_BOOKING` with booking summary visible. |
+| Phone lint | Phone app lint should pass after T0115. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings only. |
+| Phone build | Phone app should build after T0115. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices. |
+| Root validation | Source-of-truth docs should validate after T0115 updates. | Passed | `npm run validate` passed on 2026-06-09. |
+| Scoped diff check | T0115 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |
