@@ -1499,14 +1499,14 @@ Use this file to define validation for the current project or milestone.
 
 | Scenario | Expected Result | Status | Notes |
 |---|---|---|---|
-| Clear rejected gift card | After a rejected gift-card attempt, clearing the gift-card field should allow normal no-code checkout. | Planned | Empty field should mean no gift card, not invalid gift card. |
-| Clear rejected Klippkort | After a rejected Klippkort attempt, clearing the Klippkort field should allow normal no-code checkout. | Planned | Empty field should mean no Klippkort, not invalid Klippkort. |
-| Non-empty rejected code still blocks | A non-empty code that was rejected by the refreshed quote should still block draft/payment continuation until removed or replaced. | Planned | Keeps the fail-closed behavior for invalid entered codes. |
-| Valid replacement | Replacing a rejected code with a valid gift card or Klippkort and applying it should allow checkout according to the refreshed quote. | Planned | Covers both recovery paths. |
-| Scope guard | T0124 should not change Roller payload shape, backend source, AWS resources, staff/admin, kiosk, redeem, SMS, or email behavior. | Planned | Phone payment-options state only unless implementation proves a narrow shared helper change is needed. |
-| Phone lint | Phone app lint should pass after T0124. | Planned | `npm --prefix jumpyard-checkin-phone run lint`. |
-| Phone build | Phone app should build after T0124. | Planned | `npm --prefix jumpyard-checkin-phone run build`. |
-| Root validation | Source-of-truth docs should validate after T0124 updates. | Planned | `npm run validate`. |
+| Clear rejected gift card | After a rejected gift-card attempt, clearing the gift-card field should allow normal no-code checkout. | Passed in browser | Local in-app browser smoke at `http://127.0.0.1:3025/` used a mock API on `4024`, rejected `BADGIFT`, confirmed checkout was blocked while non-empty, cleared the field, and proceeded to payment with a draft request containing `giftCards: []`. |
+| Clear rejected Klippkort | After a rejected Klippkort attempt, clearing the Klippkort field should allow normal no-code checkout. | Passed in browser | The same smoke rejected `BADCLIP`, confirmed checkout was blocked while non-empty, cleared the field, and the mock API recorded a second no-code draft request with `discountCodes: []`. |
+| Non-empty rejected code still blocks | A non-empty code that was rejected by the refreshed quote should still block draft/payment continuation until removed or replaced. | Passed in browser | Both rejected states set the field invalid and disabled `Gå till betalning` until the rejected value was removed. |
+| Valid replacement | Replacing a rejected code with a valid gift card or Klippkort and applying it should allow checkout according to the refreshed quote. | Passed in code | The accepted-code path still runs through the existing quote refresh handler; T0124 only changed dirty/error gating so a successful refreshed quote clears the field-specific dirty state as before. |
+| Scope guard | T0124 should not change Roller payload shape, backend source, AWS resources, staff/admin, kiosk, redeem, SMS, or email behavior. | Passed | Scoped implementation is limited to phone payment-option state and docs. Mock draft logs confirmed empty cleared fields are omitted as empty arrays, with no backend/API shape changes. |
+| Phone lint | Phone app lint should pass after T0124. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings. |
+| Phone build | Phone app should build after T0124. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed; Next still reports the existing `baseline-browser-mapping` age notices. |
+| Root validation | Source-of-truth docs should validate after T0124 updates. | Passed | `npm run validate` passed. |
 
 ## T0125 SkyRider Staff Handout Grouping
 

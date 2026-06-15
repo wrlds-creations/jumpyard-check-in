@@ -683,6 +683,8 @@ T0122 makes the staff/admin handout list operationally clearer without changing 
 
 The next Pelle/Anders walkthrough polish tickets are documented as an implementation sequence. T0123 changes the phone payment step heading from `Kortbetalning` to `Betalning` and fixes back navigation from the payment method/drop-in step so guests return to the buy-entry review/payment-prep summary without losing selected basket/contact/payment-option state. T0123 is frontend-only and does not change quote, draft, publish, payment, backend, Roller, AWS, staff/admin, kiosk, redeem, SMS, or email behavior. T0124 fixes rejected gift-card/Klippkort state so clearing a rejected code lets the guest continue with empty fields as a normal no-code checkout, while still blocking non-empty rejected codes. T0125 changes SkyRider staff handout grouping so SkyRider is not presented as the same kind of check-in handout as socks, padlocks, or visitor wristbands; no extra guest/staff explanatory text is required. The final Pelle/Anders rehearsal should run after these polish tickets.
 
+T0124 completes the rejected gift-card/Klippkort clearing fix in the phone buy-entry review step. Gift-card and Klippkort dirty/error state is tracked per field, empty cleared fields are treated as absent inputs, non-empty rejected codes still block checkout, and removing a previously applied value still requires a quote refresh. This is frontend-only and does not change quote, draft, publish, payment payloads, backend, Roller, AWS, staff/admin, kiosk, redeem, SMS, or email behavior.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
