@@ -6,10 +6,10 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 - Date: 2026-06-15
 - Current branch: `codex/t0127-project-context-hygiene-foundation`
-- Current status: T0127 is in progress as a project context-hygiene foundation: replacing stale T0125 task state, adding audit-first context hygiene guidance, and adding `CODEX_TASK.md` versus `REPO_CURRENT_STATE.md` validation without moving historical sections yet.
-- Current ticket: `T0127`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`, `T0110`, `T0111`, `T0112`, `T0113`, `T0114`, `T0115`, `T0116`, `T0117`, `T0118`, `T0119`, `T0120`, `T0121`, `T0122`, `T0123`, `T0124`, `T0125`
-- Recommended next step: finish `T0127` validation, then run `T0126` final Pelle/Anders demo rehearsal.
+- Current status: No active ticket after T0127. The project context-hygiene foundation is complete, and T0126 remains the recommended next Pelle/Anders demo rehearsal ticket.
+- Current ticket: None active after T0127
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`, `T0110`, `T0111`, `T0112`, `T0113`, `T0114`, `T0115`, `T0116`, `T0117`, `T0118`, `T0119`, `T0120`, `T0121`, `T0122`, `T0123`, `T0124`, `T0125`, `T0127`
+- Recommended next step: run `T0126` final Pelle/Anders demo rehearsal.
 
 ## Current Structure
 
@@ -266,12 +266,13 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0123` | Payment heading and payment-step back navigation. | 2026-06-15 | Phone payment method/drop-in heading now reads `Betalning`, and back from payment returns to the buy-entry review/payment-prep summary with the existing basket/contact/payment-option state preserved. |
 | `T0124` | Rejected gift-card/Klippkort clearing. | 2026-06-15 | Buy-entry payment-option fields now track dirty/error state per field, so clearing a rejected gift-card or Klippkort value lets the guest continue without that code while non-empty rejected values still block. |
 | `T0125` | SkyRider check-in handout correction. | 2026-06-15 | Corrected after the first interpretation: SkyRider is a check-in handout. Phone confirmation now lists SkyRider under staff handout, and admin grouping is restored to `Lämna ut vid incheckning`. |
+| `T0127` | Project context-hygiene foundation. | 2026-06-15 | Added audit-first context hygiene guidance, a `CODEX_TASK.md` versus `REPO_CURRENT_STATE.md` validator, English-default source-of-truth language policy with exact Swedish UI/app-term exceptions, and closeout state with no active ticket. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0127` | Project context-hygiene foundation. | In progress | Create audit-first hygiene skill/report and current-ticket validation without moving large historical sections yet. T0126 remains reserved for the Pelle/Anders demo rehearsal. |
+| None active after T0127 | No active ticket. | Closed | T0127 is complete. T0126 remains reserved for the Pelle/Anders demo rehearsal. |
 
 ## Confirmed Next Tickets
 
@@ -283,8 +284,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Validation Status
 
-- T0127 implementation status: `CODEX_TASK.md` now describes the project context-hygiene foundation ticket, `REPO_CURRENT_STATE.md` points to T0127 as the active ticket, and T0126 remains the reserved next Pelle/Anders demo rehearsal ticket. T0127 is documentation/tooling/validation-focused and does not change application behavior, AWS, Roller, credentials, deployment config, phone/admin/kiosk UX, SMS, or email behavior.
-- T0127 validation: `node --check scripts/validate-current-ticket.js`, `node scripts/validate-current-ticket.js`, and `npm run validate` passed. Followup hygiene validation was intentionally deferred to a later ticket because the current `FOLLOWUPS.md` table already contains duplicate ids and `Done` rows under open followups, which needs a scoped migration before strict validation can pass.
+- T0127 implementation status: `CODEX_TASK.md` now records `NO_ACTIVE_TICKET`, `REPO_CURRENT_STATE.md` records none active after T0127, T0127 is listed as completed, and T0126 remains the reserved next Pelle/Anders demo rehearsal ticket. T0127 is documentation/tooling/validation-focused and does not change application behavior, AWS, Roller, credentials, deployment config, phone/admin/kiosk UX, SMS, or email behavior.
+- T0127 validation: `node --check scripts/validate-current-ticket.js`, `node scripts/validate-current-ticket.js`, `npm run validate`, and `git diff --check` passed. Followup hygiene validation was intentionally deferred to a later ticket because the current `FOLLOWUPS.md` table already contains duplicate ids and `Done` rows under open followups, which needs a scoped migration before strict validation can pass.
 - T0125 correction implementation status: `jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx` now treats SkyRider as a check-in staff handout instead of an other/later add-on, and `jumpyard-checkin-admin/src/app/page.tsx` is restored so SkyRider belongs under `Lämna ut vid incheckning`.
 - T0125 correction validation: `npm --prefix jumpyard-checkin-phone run lint` passed with existing `<img>` warnings, `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` notices, `npm --prefix jumpyard-checkin-admin run lint` passed, `npm --prefix jumpyard-checkin-admin run build` passed, and `npm run validate` passed. A local browser smoke with mock JumpYard Cloud API verified admin SkyRider in `handout-section-checkin`, not `handout-section-later`, with coffee still later; the phone confirmation grouping was verified by an explicit component contract check confirming `skyrider` is in `HANDOUT_IDS` and absent from `EXPERIENCE_IDS`.
 - T0124 implementation status: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now tracks gift-card and Klippkort payment-option dirty state separately. Empty cleared fields are treated as absent inputs, non-empty rejected codes still block checkout, and clearing a previously applied value still requires a quote refresh because the amount due can change.

@@ -6,7 +6,7 @@ Scope: documentation, workflow, and validation only
 
 ## Current State Summary
 
-The repository has passed 120 completed tickets and now carries substantial working memory in `PROJECT_CONTEXT.md`, `REPO_CURRENT_STATE.md`, `FOLLOWUPS.md`, `TEST_PLAN.md`, and supporting runbooks. This is valuable history, especially because it preserves Swedish business wording and detailed Roller/AWS validation evidence, but the active context is becoming long enough that future agents can miss the small state that matters for the next ticket.
+The repository has passed 120 completed tickets and now carries substantial working memory in `PROJECT_CONTEXT.md`, `REPO_CURRENT_STATE.md`, `FOLLOWUPS.md`, `TEST_PLAN.md`, and supporting runbooks. This is valuable history, especially because it preserves app/business terminology and detailed Roller/AWS validation evidence, but the active context is becoming long enough that future agents can miss the small state that matters for the next ticket.
 
 The immediate hygiene issue found at T0127 start was stale active-ticket state:
 
@@ -82,7 +82,7 @@ T0126 should remain reserved for the final Pelle/Anders demo rehearsal unless th
 - Do not renumber followups in T0127.
 - Do not delete prompt files or historical context in T0127.
 - Do not edit phone, admin, kiosk, backend, AWS, Roller, payment, SMS, or email behavior.
-- Do not translate or rewrite Swedish UX/business terms while moving context.
+- Do not translate or normalize Swedish UI strings or app/business terms when exact wording matters.
 
 ## Validator Changes Needed Before Moving History
 
@@ -118,15 +118,21 @@ Use `docs/roadmap/backlog.md` for the broad backlog. Suggested fields:
 
 Keep `REPO_CURRENT_STATE.md` limited to the active ticket plus a small confirmed-next list. This prevents the current snapshot from becoming another backlog database.
 
-## Preserving Swedish Working History
+## Language Policy
 
-When archiving Swedish history:
+Write workflow docs, skills, audit reports, ticket summaries, decisions, and validators in English by default.
 
-- copy text exactly unless the ticket explicitly scopes cleanup
-- preserve ticket ids, dates, names, and product terms
-- keep Swedish UX copy such as `Betalning`, `Presentkort`, `Klippkort`, `Lämna ut vid incheckning`, and `Hämtas efter hoppet`
-- add links from the shorter source files to archive files
-- avoid summarizing away operational decisions that were reached in Swedish chat context
+Preserve exact Swedish only when it is:
+
+- user-facing UX copy
+- staff/admin UI labels
+- product or operational terminology that appears in the app/business process
+- quoted source evidence
+- archived raw historical material that is intentionally copied verbatim
+
+Do not translate or normalize Swedish UI strings such as `Betalning`, `Presentkort`, `Klippkort`, `Lämna ut vid incheckning`, `Hämtas efter hoppet`, and `Övrigt i bokningen`.
+
+When summarizing Swedish chat/history into active source-of-truth docs, summarize in English unless exact Swedish wording matters. Validators should not enforce a general language choice.
 
 ## T0127 Decisions
 

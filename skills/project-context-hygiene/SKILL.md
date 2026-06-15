@@ -10,7 +10,11 @@ Use this skill when the repository memory itself needs maintenance: stale ticket
 ## Principles
 
 - Audit before moving content.
-- Preserve Swedish wording, business terminology, ticket ids, dates, and technical evidence exactly when archiving.
+- Write workflow docs, skills, audit reports, ticket summaries, decisions, and validators in English by default.
+- Preserve exact Swedish only when it is user-facing UX copy, staff/admin UI labels, product or operational terminology that appears in the app/business process, quoted source evidence, or archived raw historical material intentionally copied verbatim.
+- Do not translate or normalize Swedish UI strings such as `Betalning`, `Presentkort`, `Klippkort`, `Lämna ut vid incheckning`, `Hämtas efter hoppet`, and `Övrigt i bokningen`.
+- When summarizing Swedish chat or history into active source-of-truth docs, summarize in English unless exact Swedish wording matters.
+- Validators should not enforce a general language choice.
 - Prefer validators before large rewrites.
 - Archive before deleting. Deletion requires explicit user approval and a recoverable source location.
 - Keep the active snapshot short enough for agents to read at ticket start.
