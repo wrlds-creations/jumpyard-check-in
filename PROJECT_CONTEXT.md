@@ -685,6 +685,8 @@ The next Pelle/Anders walkthrough polish tickets are documented as an implementa
 
 T0124 completes the rejected gift-card/Klippkort clearing fix in the phone buy-entry review step. Gift-card and Klippkort dirty/error state is tracked per field, empty cleared fields are treated as absent inputs, non-empty rejected codes still block checkout, and removing a previously applied value still requires a quote refresh. This is frontend-only and does not change quote, draft, publish, payment payloads, backend, Roller, AWS, staff/admin, kiosk, redeem, SMS, or email behavior.
 
+T0125 completes the SkyRider staff handout grouping polish in the admin app. SkyRider rows now appear under the existing later-collection section instead of `Lämna ut vid incheckning`, while visitor wristbands, socks, and padlocks remain check-in handouts, coffee remains later collection, unknown products remain under other booking items, and linked add-on badges are preserved. This is frontend-only and does not change staff API contracts, backend, Roller, AWS, redeem, payment, phone, kiosk, SMS, or email behavior.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |

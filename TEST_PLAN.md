@@ -1512,14 +1512,14 @@ Use this file to define validation for the current project or milestone.
 
 | Scenario | Expected Result | Status | Notes |
 |---|---|---|---|
-| Staff grouping | SkyRider should no longer be misleadingly presented as the same kind of check-in handout as socks, padlocks, or visitor wristbands. | Planned | Keep staff operations clear without adding extra explanatory pickup text. |
-| No extra text requirement | T0125 should not require visible copy such as `SkyRider hämtas hos personalen`; correct grouping is enough. | Planned | Additional wording can be avoided unless implementation needs a short section label. |
-| Existing categories preserved | Socks, padlocks, and visitor wristbands remain check-in handouts; coffee remains later collection. | Planned | Preserve T0122 behavior except the SkyRider classification/grouping. |
-| Linked add-on badge | Linked SkyRider add-ons should still show the add-on badge where relevant. | Planned | Preserve T0107/T0122 linked add-on visibility. |
-| Scope guard | T0125 should not change staff API contracts, backend source, redeem behavior, Roller writes, payment logic, AWS resources, SMS, or email behavior. | Planned | Frontend grouping only. |
-| Admin/phone lint as applicable | Affected frontend app lint should pass after T0125. | Planned | Run admin and/or phone lint depending on touched files. |
-| Admin/phone build as applicable | Affected frontend app build should pass after T0125. | Planned | Run admin and/or phone build depending on touched files. |
-| Root validation | Source-of-truth docs should validate after T0125 updates. | Planned | `npm run validate`. |
+| Staff grouping | SkyRider should no longer be misleadingly presented as the same kind of check-in handout as socks, padlocks, or visitor wristbands. | Passed in browser | Local in-app browser smoke at `http://127.0.0.1:3026/` used a mock staff API on `4025`; SkyRider appeared under `Hämtas efter hoppet`, and the `Lämna ut vid incheckning` section contained only visitor wristband, socks, and padlock groups. |
+| No extra text requirement | T0125 should not require visible copy such as `SkyRider hämtas hos personalen`; correct grouping is enough. | Passed in browser | SkyRider row showed `SkyRider-pass`, `Tillägg`, and the product name from the mock data; no item-level pickup explanation was added. |
+| Existing categories preserved | Socks, padlocks, and visitor wristbands remain check-in handouts; coffee remains later collection. | Passed in browser | Browser smoke confirmed check-in categories `wristband`, `socks`, and `padlock`; later collection still included `coffee`. |
+| Linked add-on badge | Linked SkyRider add-ons should still show the add-on badge where relevant. | Passed in browser | Mock linked SkyRider row still showed `Tillägg`. |
+| Scope guard | T0125 should not change staff API contracts, backend source, redeem behavior, Roller writes, payment logic, AWS resources, SMS, or email behavior. | Passed | Scoped implementation is limited to admin frontend grouping and docs. Browser smoke used a local mock staff API only. |
+| Admin/phone lint as applicable | Affected frontend app lint should pass after T0125. | Passed | `npm --prefix jumpyard-checkin-admin run lint` passed. Phone app was not touched. |
+| Admin/phone build as applicable | Affected frontend app build should pass after T0125. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. Phone app was not touched. |
+| Root validation | Source-of-truth docs should validate after T0125 updates. | Passed | `npm run validate` passed. |
 
 ## T0104 SkyRider Availability Deploy
 
