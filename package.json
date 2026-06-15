@@ -4,8 +4,9 @@
   "private": true,
   "description": "JumpYard Check-in repository workflow and validation scripts.",
   "scripts": {
-    "validate": "npm run validate:template && npm run validate:skills && npm run validate:aws",
+    "validate": "npm run validate:template && npm run validate:current-ticket && npm run validate:skills && npm run validate:aws",
     "validate:template": "node scripts/validate-template.js",
+    "validate:current-ticket": "node scripts/validate-current-ticket.js",
     "validate:skills": "node scripts/validate-skills.js",
     "validate:aws": "node scripts/validate-aws-tags.js",
     "infra:check": "npm --prefix infra run check",

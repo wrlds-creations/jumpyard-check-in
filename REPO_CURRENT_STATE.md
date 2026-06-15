@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-15
-- Current branch: `codex/t0125-correct-skyrider-checkin-handout`
-- Current status: T0125 correction is implemented locally after the initial interpretation was wrong: SkyRider should be handed out at check-in. The phone confirmation screen treats SkyRider as a staff handout, and admin grouping is restored to check-in handout.
-- Current ticket: `None active after T0125 correction`
+- Current branch: `codex/t0127-project-context-hygiene-foundation`
+- Current status: T0127 is in progress as a project context-hygiene foundation: replacing stale T0125 task state, adding audit-first context hygiene guidance, and adding `CODEX_TASK.md` versus `REPO_CURRENT_STATE.md` validation without moving historical sections yet.
+- Current ticket: `T0127`
 - Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`, `T0110`, `T0111`, `T0112`, `T0113`, `T0114`, `T0115`, `T0116`, `T0117`, `T0118`, `T0119`, `T0120`, `T0121`, `T0122`, `T0123`, `T0124`, `T0125`
-- Recommended next step: run `T0126` final Pelle/Anders demo rehearsal.
+- Recommended next step: finish `T0127` validation, then run `T0126` final Pelle/Anders demo rehearsal.
 
 ## Current Structure
 
@@ -31,8 +31,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |-- GUEST_MESSAGING_PRODUCTION_UNLOCK.md
 |-- GIFT_CARD_MULTI_VISIT_DISCOVERY.md
 |-- GUSTAV_DEMO_RUNBOOK.md
+|-- docs/
+|   `-- context-hygiene-audit.md
 |-- scripts/
 |   |-- check-roller-env.js
+|   |-- validate-current-ticket.js
 |   |-- roller-client.js
 |   |-- roller-data-api-smoke.js
 |   |-- roller-payment-discovery.js
@@ -82,14 +85,16 @@ Use this file as the living snapshot of what actually exists in the repository. 
 |   |-- src/flow/cloudClient.ts
 |   `-- src/flow/machine.ts
 |-- jumpyard-checkin-kiosk/
-`-- jumpyard-checkin-admin/
+|-- jumpyard-checkin-admin/
+`-- skills/project-context-hygiene/
 ```
 
 ## Known Validation Commands
 
 | Command | Purpose | Notes |
 |---|---|---|
-| `npm run validate` | Validate root WRLDS workflow files, skills, AWS tags, and `REPO_CURRENT_STATE.md` snapshot/table consistency. | Fails if snapshot completed tickets disagree with the Completed Tickets table, if snapshot current ticket disagrees with the Current Ticket table, or if completed tickets remain in Current/Confirmed Next state. |
+| `npm run validate` | Validate root WRLDS workflow files, current ticket consistency, skills, AWS tags, and `REPO_CURRENT_STATE.md` snapshot/table consistency. | Fails if snapshot completed tickets disagree with the Completed Tickets table, if snapshot current ticket disagrees with the Current Ticket table, if `CODEX_TASK.md` disagrees with the active ticket state, or if completed tickets remain in Current/Confirmed Next state. |
+| `node scripts/validate-current-ticket.js` | Confirm `CODEX_TASK.md` and `REPO_CURRENT_STATE.md` point to the same active ticket state. | Added in T0127; catches stale active-ticket mismatches without calling GitHub, AWS, Roller, or the network. |
 | `npm run infra:check` | Type-check and synthesize the deploy-blocked CDK foundation with example config. | Added in T0004; does not deploy or require AWS credentials. |
 | `npm run infra:synth` | Synthesize the JumpYard Cloud CDK stack with `infra/config/dev.example.json`. | Added in T0004; example config is not approved for deploy. |
 | `npm --prefix infra run synth:dev` | Synthesize the confirmed T0006 dev stack. | Uses `infra/config/dev.json`. |
@@ -266,7 +271,7 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `None active after T0125 correction` | Start the final Pelle/Anders rehearsal ticket. | T0125 correction implemented locally | T0126 is the recommended next ticket for the final Pelle/Anders demo rehearsal. |
+| `T0127` | Project context-hygiene foundation. | In progress | Create audit-first hygiene skill/report and current-ticket validation without moving large historical sections yet. T0126 remains reserved for the Pelle/Anders demo rehearsal. |
 
 ## Confirmed Next Tickets
 
@@ -278,6 +283,8 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Validation Status
 
+- T0127 implementation status: `CODEX_TASK.md` now describes the project context-hygiene foundation ticket, `REPO_CURRENT_STATE.md` points to T0127 as the active ticket, and T0126 remains the reserved next Pelle/Anders demo rehearsal ticket. T0127 is documentation/tooling/validation-focused and does not change application behavior, AWS, Roller, credentials, deployment config, phone/admin/kiosk UX, SMS, or email behavior.
+- T0127 validation: `node --check scripts/validate-current-ticket.js`, `node scripts/validate-current-ticket.js`, and `npm run validate` passed. Followup hygiene validation was intentionally deferred to a later ticket because the current `FOLLOWUPS.md` table already contains duplicate ids and `Done` rows under open followups, which needs a scoped migration before strict validation can pass.
 - T0125 correction implementation status: `jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx` now treats SkyRider as a check-in staff handout instead of an other/later add-on, and `jumpyard-checkin-admin/src/app/page.tsx` is restored so SkyRider belongs under `Lämna ut vid incheckning`.
 - T0125 correction validation: `npm --prefix jumpyard-checkin-phone run lint` passed with existing `<img>` warnings, `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` notices, `npm --prefix jumpyard-checkin-admin run lint` passed, `npm --prefix jumpyard-checkin-admin run build` passed, and `npm run validate` passed. A local browser smoke with mock JumpYard Cloud API verified admin SkyRider in `handout-section-checkin`, not `handout-section-later`, with coffee still later; the phone confirmation grouping was verified by an explicit component contract check confirming `skyrider` is in `HANDOUT_IDS` and absent from `EXPERIENCE_IDS`.
 - T0124 implementation status: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now tracks gift-card and Klippkort payment-option dirty state separately. Empty cleared fields are treated as absent inputs, non-empty rejected codes still block checkout, and clearing a previously applied value still requires a quote refresh because the amount due can change.

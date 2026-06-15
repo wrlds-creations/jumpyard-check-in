@@ -687,6 +687,8 @@ T0124 completes the rejected gift-card/Klippkort clearing fix in the phone buy-e
 
 T0125 was corrected after the initial interpretation was wrong. The intended behavior is that SkyRider is handed out at check-in: the phone confirmation screen now includes SkyRider in `Att hämta ut hos personalen` instead of `Övriga tillägg i bokningen`, and the admin app again groups SkyRider under `Lämna ut vid incheckning`. Coffee remains later collection, unknown products remain under other booking items, and linked add-on badges are preserved. This is frontend-only and does not change staff API contracts, backend, Roller, AWS, redeem, payment, kiosk, SMS, or email behavior.
 
+T0127 creates the project context-hygiene foundation before the final Pelle/Anders rehearsal ticket. It is documentation/tooling-only: `CODEX_TASK.md` is moved from stale T0125 context to active T0127 context, a project-context-hygiene skill and audit report define archive-first memory hygiene, and validation is added so stale `CODEX_TASK.md` versus `REPO_CURRENT_STATE.md` active-ticket mismatches fail locally. Large historical sections are not moved in T0127.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
