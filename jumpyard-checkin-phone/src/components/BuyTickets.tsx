@@ -372,7 +372,8 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const [giftCardNumber, setGiftCardNumber] = useState('');
   const [clipCardCode, setClipCardCode] = useState('');
   const [paymentOptionsOpen, setPaymentOptionsOpen] = useState(false);
-  const [paymentInputsDirty, setPaymentInputsDirty] = useState(false);
+  const [giftCardInputDirty, setGiftCardInputDirty] = useState(false);
+  const [clipCardInputDirty, setClipCardInputDirty] = useState(false);
   const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
   const [quote, setQuote] = useState<NewBookingQuote | null>(null);
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
@@ -436,8 +437,8 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const productLabels = buildProductLabelMap(selectedProduct, buyAddons);
   const giftCardErrors = quote?.giftCards?.errors ?? [];
   const discountCodeErrors = quote?.discountCodes?.errors ?? [];
-  const giftCardInputState = getPaymentOptionInputState(giftCardNumber, paymentInputsDirty, giftCardErrors);
-  const clipCardInputState = getPaymentOptionInputState(clipCardCode, paymentInputsDirty, discountCodeErrors);
+  const giftCardInputState = getPaymentOptionInputState(giftCardNumber, giftCardInputDirty, giftCardErrors);
+  const clipCardInputState = getPaymentOptionInputState(clipCardCode, clipCardInputDirty, discountCodeErrors);
   const giftCardInputFeedback =
     giftCardInputState === 'empty'
       ? t.buy.giftCardHelp
@@ -459,6 +460,15 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             ? t.buy.clipCardRejected
             : t.buy.paymentCodeDone;
   const paymentInputsHaveValues = Boolean(giftCardNumber.trim() || clipCardCode.trim());
+  const giftCardWasApplied =
+    (quote?.giftCards?.appliedCount ?? 0) > 0 || (quote?.giftCards?.totalApplied ?? 0) > 0;
+  const discountCodeWasApplied =
+    (quote?.discountCodes?.appliedCount ?? 0) > 0 || (quote?.discountCodes?.totalApplied ?? 0) > 0;
+  const giftCardNeedsQuoteRefresh =
+    giftCardInputDirty && (Boolean(giftCardNumber.trim()) || giftCardWasApplied);
+  const clipCardNeedsQuoteRefresh =
+    clipCardInputDirty && (Boolean(clipCardCode.trim()) || discountCodeWasApplied);
+  const paymentInputsNeedQuoteRefresh = giftCardNeedsQuoteRefresh || clipCardNeedsQuoteRefresh;
   const paymentOptionsApplyLabel =
     giftCardNumber.trim() && clipCardCode.trim()
       ? t.buy.paymentOptionsApplyBoth
@@ -468,7 +478,8 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
           ? t.buy.paymentOptionsApplyClipCard
           : t.buy.paymentOptionsApplyChanges;
   const paymentInputsBlockingErrors =
-    !paymentInputsDirty && (giftCardErrors.length > 0 || discountCodeErrors.length > 0);
+    (!giftCardInputDirty && Boolean(giftCardNumber.trim()) && giftCardErrors.length > 0) ||
+    (!clipCardInputDirty && Boolean(clipCardCode.trim()) && discountCodeErrors.length > 0);
   const giftCardAppliedAmount = getGiftCardAppliedAmount(quote);
   const discountCodeAppliedAmount = getDiscountCodeAppliedAmount(quote);
   const draftAmountOwing = getDraftAmountOwing(draft);
@@ -529,7 +540,8 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setGiftCardNumber('');
     setClipCardCode('');
     setPaymentOptionsOpen(false);
-    setPaymentInputsDirty(false);
+    setGiftCardInputDirty(false);
+    setClipCardInputDirty(false);
     setSkyriderConsentConfirmed(false);
   };
 
@@ -568,7 +580,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setSubmitError(null);
     setDraft(null);
     setPaymentSyncError(null);
-    if (quote) setPaymentInputsDirty(true);
+    if (quote) setGiftCardInputDirty(true);
   };
 
   const updateClipCardCode = (value: string) => {
@@ -576,7 +588,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setSubmitError(null);
     setDraft(null);
     setPaymentSyncError(null);
-    if (quote) setPaymentInputsDirty(true);
+    if (quote) setClipCardInputDirty(true);
   };
 
   const setOneAddon = (id: AddonId, nextQty: number) => {
@@ -645,7 +657,8 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
         discountCodeInputs
       );
       setQuote(result);
-      setPaymentInputsDirty(false);
+      setGiftCardInputDirty(false);
+      setClipCardInputDirty(false);
       setStep('REVIEW');
     } catch (error) {
       setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.quoteFailed));
@@ -660,7 +673,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       setStep('SKYRIDER_ATTEST');
       return;
     }
-    if (paymentInputsDirty) {
+    if (paymentInputsNeedQuoteRefresh) {
       setSubmitError(t.buy.paymentOptionsUpdateRequired);
       return;
     }
@@ -1197,7 +1210,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
                     </p>
                   </label>
 
-                  {paymentInputsDirty && (
+                  {paymentInputsNeedQuoteRefresh && (
                     <button
                       type="button"
                       onClick={() => void goToReview()}
@@ -1211,7 +1224,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
               )}
             </div>
 
-            {!paymentInputsDirty && giftCardNumber.trim() && (
+            {!giftCardInputDirty && giftCardNumber.trim() && (
               <div
                 className={`bg-white border rounded-xl p-3 mb-4 ${
                   giftCardErrors.length > 0 ? 'border-danger/30' : 'border-primary/30'
@@ -1240,7 +1253,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
               </div>
             )}
 
-            {!paymentInputsDirty && clipCardCode.trim() && (
+            {!clipCardInputDirty && clipCardCode.trim() && (
               <div
                 className={`bg-white border rounded-xl p-3 mb-4 ${
                   discountCodeErrors.length > 0 ? 'border-danger/30' : 'border-primary/30'
@@ -1286,7 +1299,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
 
             <button
               onClick={() => void createDraft()}
-              disabled={submitting || paymentInputsDirty || paymentInputsBlockingErrors}
+              disabled={submitting || paymentInputsNeedQuoteRefresh || paymentInputsBlockingErrors}
               className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
             >
               {submitting ? t.buy.creating : t.buy.createDraft} {!submitting && <Check size={18} />}
