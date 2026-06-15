@@ -1,23 +1,28 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0122
+T0123
 
 ## Goal
-Make the staff/admin handout list clearer by separating what is handed out at check-in from what is collected later.
+Polish the phone payment step copy and back navigation before the Pelle/Anders walkthrough.
 
 ## Context
-- T0122 is the next confirmed Gustav review ticket after T0121.
-- Staff currently see one flat `Att lämna ut` product list in the selected handoff detail.
-- Staff need clearer operational grouping for visitor wristbands, socks, padlocks, SkyRider passes, coffee, and other booking rows.
-- The confirmed handout rule is: padlocks, socks, visitor wristbands, and SkyRider passes are handed out at check-in; coffee is collected after jump time.
+- T0123 is the first confirmed polish ticket after T0122.
+- The Pelle/Anders walkthrough is planned for Tuesday 2026-06-16 at 10:00 and should follow the Gustav demo flow.
+- In the buy-entry checkout, the Roller payment method page currently shows `Kortbetalning` even though the guest may choose card, Swish, Klarna, Apple Pay, or another payment method.
+- When the guest uses the back control from the payment method/drop-in step, the flow currently returns too far back and loses the selected basket/contact/payment-prep state.
+- Gift-card and Klippkort cleanup is intentionally split into T0124.
+- SkyRider staff handout grouping is intentionally split into T0125.
 
 ## Allowed Areas
 - `CODEX_TASK.md`
 - `PROJECT_CONTEXT.md`
 - `REPO_CURRENT_STATE.md`
 - `TEST_PLAN.md`
-- `jumpyard-checkin-admin/src/app/page.tsx`
+- `jumpyard-checkin-phone/src/components/BuyTickets.tsx`
+- `jumpyard-checkin-phone/src/components/RollerPaymentDropIn.tsx`
+- `jumpyard-checkin-phone/src/context/LanguageContext.tsx`
+- `jumpyard-checkin-phone/src/flow/machine.ts`
 
 ## Do Not Touch
 - Roller Live
@@ -25,50 +30,48 @@ Make the staff/admin handout list clearer by separating what is handed out at ch
 - `.env`
 - AWS resources or deploys
 - Aurora migrations
-- Phone application source
 - Kiosk application source
-- Staff API contracts or backend source
-- Date formatting or date-box layout
-- Redemption logic or redeem writes
-- SMS/email logic
+- Staff/admin application source
+- JumpYard Cloud backend source
+- Staff API contracts
+- Payment package/vendor source
 - Roller bookings, drafts, payments, or redemptions
+- Gift-card/Klippkort invalid-clearing behavior; that is T0124
+- SkyRider staff handout grouping; that is T0125
 
 ## Requirements
 
-1. Staff handout grouping:
-   - Separate selected handoff detail items into operational handout sections.
-   - Show a clear section for items handed out at check-in.
-   - Show coffee separately as collected after jump time.
-   - Keep unknown or unmatched products visible in an `other`/review section instead of hiding them.
+1. Payment heading:
+   - Change the visible payment step heading from `Kortbetalning` to `Betalning`.
+   - Keep the payment page generic because the available methods can include card, Swish, Klarna, Apple Pay, Google Pay, or other Roller/Adyen methods.
+   - Do not change payment method availability or payment package behavior.
 
-2. Category handling:
-   - Identify visitor wristbands from entry/ticket/pass/family/group-style products.
-   - Identify socks, padlocks, SkyRider passes, and coffee from product names/ids already available in the staff item payload.
-   - Preserve linked add-on visibility where relevant.
+2. Back navigation:
+   - When the guest is on the payment method/drop-in step and presses the visible back control, return to the buy-entry review/summary/payment-prep step.
+   - Preserve selected date/time, entry quantity, add-ons, contact fields, quote, gift-card/Klippkort input state, and payment-prep summary where possible.
+   - Do not return to the first availability/date step unless the guest explicitly backs through the normal earlier steps.
 
-3. Flow scope:
-   - Do not change staff API contracts, backend item payloads, sorting, filtering, auth, redeem, or handout API logic.
-   - Do not change phone/kiosk behavior or add new Roller/AWS work.
-
-4. Documentation:
-   - Update source-of-truth docs and validation notes for T0122.
+3. Scope:
+   - Keep this frontend-only.
+   - Do not change quote, draft, publish, or payment API payloads.
+   - Do not create Roller bookings or payments during implementation except if a later validation step explicitly uses normal public Playground checkout.
 
 ## Non-Goals
-- Do not change which products are returned by the staff API.
-- Do not change Roller redemption eligibility or selected ticket logic.
-- Do not deploy AWS changes.
-- Do not add new product catalog configuration.
+- Do not fix rejected gift-card/Klippkort clearing in T0123.
+- Do not change SkyRider fulfillment copy or grouping in T0123.
+- Do not change backend payment contracts.
+- Do not add new payment methods.
+- Do not alter Roller payment package internals.
 
 ## Acceptance Criteria
-- Staff handoff detail shows a distinct `Lämna ut vid incheckning` section.
-- Visitor wristbands, socks, padlocks, and SkyRider passes appear under the check-in handout section when present.
-- Coffee appears separately as `Hämtas efter hoppet` when present.
-- Unknown/unmatched products remain visible under an `Övrigt i bokningen` section.
-- Linked add-ons still show the add-on badge where relevant.
-- No staff API, backend, auth, redeem, sorting, filtering, payment, AWS, Roller, SMS, or email behavior changes.
+- Payment method/drop-in page heading reads `Betalning`, not `Kortbetalning`.
+- Back from the payment method/drop-in page returns to the review/summary/payment-prep step.
+- The guest's selected basket and contact/payment-prep state are still present after going back.
+- Guest can proceed forward to payment again from the review/summary/payment-prep step.
+- No AWS, Roller, backend, staff/admin, kiosk, redeem, SMS, or email behavior changes.
 
 ## Validation
-- `npm --prefix jumpyard-checkin-admin run lint`
-- `npm --prefix jumpyard-checkin-admin run build`
+- `npm --prefix jumpyard-checkin-phone run lint`
+- `npm --prefix jumpyard-checkin-phone run build`
 - `npm run validate`
-- Browser or equivalent smoke confirms a staff handoff detail separates check-in handouts from coffee/later collection.
+- Browser or equivalent smoke confirms the heading and back navigation behavior in the buy-entry payment flow.

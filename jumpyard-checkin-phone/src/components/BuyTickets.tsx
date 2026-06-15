@@ -718,7 +718,11 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   };
 
   const backFromStep = () => {
-    if (step === 'PAYMENT' || step === 'PENDING') {
+    if (step === 'PAYMENT') {
+      setStep('REVIEW');
+      return;
+    }
+    if (step === 'PENDING') {
       onBack();
       return;
     }
