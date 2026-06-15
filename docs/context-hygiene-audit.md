@@ -103,6 +103,18 @@ Before moving historical sections, validators should support the future location
 6. T0132: create the 50-ticket forward backlog outside repo state.
 7. T0133: compress current snapshot files after links and validators are proven.
 
+## T0128 Migration Result
+
+T0128 consolidated the planned T0128-T0133 hygiene work into one approved full migration.
+
+- Done/closed followups moved from `FOLLOWUPS.md` to [docs/history/followups-done.md](history/followups-done.md), and active duplicate followup ids were resolved.
+- Completed-ticket history moved from `REPO_CURRENT_STATE.md` to [docs/history/completed-tickets.md](history/completed-tickets.md).
+- Historical validation evidence and the long validation-command inventory moved to [docs/history/validation-log.md](history/validation-log.md).
+- Old ticket-by-ticket project narrative and the long repo-state issue/question snapshot moved to [docs/history/sprint-1-ticket-history.md](history/sprint-1-ticket-history.md).
+- Broad future planning moved to [docs/roadmap/backlog.md](roadmap/backlog.md).
+- `PROJECT_CONTEXT.md`, `REPO_CURRENT_STATE.md`, `FOLLOWUPS.md`, and `TEST_PLAN.md` now stay short and link to the archive files instead of carrying full history inline.
+- Validators now cover active ticket state, followup hygiene, completed-ticket archive shape, archive/backlog presence, and active-doc archive links.
+
 ## Supporting 50 Forward Tickets
 
 Use `docs/roadmap/backlog.md` for the broad backlog. Suggested fields:
