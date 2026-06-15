@@ -176,7 +176,7 @@ interface HandoutGroup extends HandoutCategoryDefinition {
 
 const HANDOUT_SECTIONS: Record<HandoutSectionKey, { note: string; order: number; title: string }> = {
   checkin: {
-    note: "Besöksband, strumpor och hänglås.",
+    note: "Besöksband, strumpor, hänglås och SkyRider-pass.",
     order: 1,
     title: "Lämna ut vid incheckning",
   },
@@ -196,7 +196,7 @@ function getHandoutCategory(item: StaffBookingItem): HandoutCategoryDefinition {
   const text = getItemProductText(item);
 
   if (text.includes("skyrider") || text.includes("sky rider")) {
-    return { icon: "zipline", key: "skyrider", label: "SkyRider-pass", order: 20, section: "later" };
+    return { icon: "zipline", key: "skyrider", label: "SkyRider-pass", order: 40, section: "checkin" };
   }
 
   if (text.includes("strump") || text.includes("sock")) {

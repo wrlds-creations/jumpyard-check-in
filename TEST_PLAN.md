@@ -1508,18 +1508,18 @@ Use this file to define validation for the current project or milestone.
 | Phone build | Phone app should build after T0124. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed; Next still reports the existing `baseline-browser-mapping` age notices. |
 | Root validation | Source-of-truth docs should validate after T0124 updates. | Passed | `npm run validate` passed. |
 
-## T0125 SkyRider Staff Handout Grouping
+## T0125 SkyRider Check-In Handout Correction
 
 | Scenario | Expected Result | Status | Notes |
 |---|---|---|---|
-| Staff grouping | SkyRider should no longer be misleadingly presented as the same kind of check-in handout as socks, padlocks, or visitor wristbands. | Passed in browser | Local in-app browser smoke at `http://127.0.0.1:3026/` used a mock staff API on `4025`; SkyRider appeared under `Hämtas efter hoppet`, and the `Lämna ut vid incheckning` section contained only visitor wristband, socks, and padlock groups. |
-| No extra text requirement | T0125 should not require visible copy such as `SkyRider hämtas hos personalen`; correct grouping is enough. | Passed in browser | SkyRider row showed `SkyRider-pass`, `Tillägg`, and the product name from the mock data; no item-level pickup explanation was added. |
-| Existing categories preserved | Socks, padlocks, and visitor wristbands remain check-in handouts; coffee remains later collection. | Passed in browser | Browser smoke confirmed check-in categories `wristband`, `socks`, and `padlock`; later collection still included `coffee`. |
-| Linked add-on badge | Linked SkyRider add-ons should still show the add-on badge where relevant. | Passed in browser | Mock linked SkyRider row still showed `Tillägg`. |
-| Scope guard | T0125 should not change staff API contracts, backend source, redeem behavior, Roller writes, payment logic, AWS resources, SMS, or email behavior. | Passed | Scoped implementation is limited to admin frontend grouping and docs. Browser smoke used a local mock staff API only. |
-| Admin/phone lint as applicable | Affected frontend app lint should pass after T0125. | Passed | `npm --prefix jumpyard-checkin-admin run lint` passed. Phone app was not touched. |
-| Admin/phone build as applicable | Affected frontend app build should pass after T0125. | Passed | `npm --prefix jumpyard-checkin-admin run build` passed. Phone app was not touched. |
-| Root validation | Source-of-truth docs should validate after T0125 updates. | Passed | `npm run validate` passed. |
+| Phone confirmation grouping | SkyRider should appear in the phone confirmation staff handout list. | Passed | Component contract check confirmed `skyrider` is in `HANDOUT_IDS` with the zipline handout icon. Local browser flow with a mock paid booking confirmed SkyRider is present in the selected add-ons before the safety-video gate. |
+| Phone other-addons exclusion | SkyRider should not appear in the phone confirmation other/later add-ons group. | Passed | Component contract check confirmed `skyrider` is no longer in `EXPERIENCE_IDS`; coffee remains in the other/later add-on set. |
+| Admin grouping restored | SkyRider should appear under `Lämna ut vid incheckning` in admin. | Passed in browser | Local in-app browser smoke at `http://127.0.0.1:3031/` used a mock JumpYard Cloud API on `4031`; `data-handout-category="skyrider"` appeared in `handout-section-checkin` and not in `handout-section-later`. |
+| Existing categories preserved | Socks, padlocks, visitor wristbands, and SkyRider remain check-in handouts; coffee remains later collection. | Passed in browser | Admin browser smoke confirmed check-in contains visitor wristband, socks, padlock, and SkyRider groups; later collection still contains coffee; unknown products remain under `Övrigt i bokningen`. |
+| Scope guard | T0125 correction should not change staff API contracts, backend source, redeem behavior, Roller writes, payment logic, AWS resources, SMS, or email behavior. | Passed | Scoped implementation is limited to phone/admin frontend grouping and docs. Browser smoke used a local mock API only. |
+| Phone lint/build | Phone app lint and build should pass after the correction. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with existing `<img>` warnings; `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` notices. |
+| Admin lint/build | Admin app lint and build should pass after the correction. | Passed | `npm --prefix jumpyard-checkin-admin run lint` passed; `npm --prefix jumpyard-checkin-admin run build` passed. |
+| Root validation | Source-of-truth docs should validate after the correction. | Passed | `npm run validate` passed. |
 
 ## T0104 SkyRider Availability Deploy
 
