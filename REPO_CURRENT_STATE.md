@@ -5,11 +5,11 @@ Use this file as the living snapshot of what actually exists in the repository. 
 ## Snapshot
 
 - Date: 2026-06-15
-- Current branch: `codex/t0124-clear-rejected-payment-codes`
-- Current status: T0123 is completed and merged to `main`. T0124 is implemented locally for the Pelle/Anders walkthrough: clearing a rejected gift-card or Klippkort field now allows normal no-code checkout while non-empty rejected codes still block.
-- Current ticket: `None active after T0124`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`, `T0110`, `T0111`, `T0112`, `T0113`, `T0114`, `T0115`, `T0116`, `T0117`, `T0118`, `T0119`, `T0120`, `T0121`, `T0122`, `T0123`, `T0124`
-- Recommended next step: implement `T0125` SkyRider staff handout grouping.
+- Current branch: `codex/t0125-skyrider-staff-handout-grouping`
+- Current status: T0124 is completed and merged to `main`. T0125 is implemented locally for the Pelle/Anders walkthrough: SkyRider staff handout rows now appear under the existing later-collection grouping instead of check-in handout.
+- Current ticket: `None active after T0125`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`, `T0110`, `T0111`, `T0112`, `T0113`, `T0114`, `T0115`, `T0116`, `T0117`, `T0118`, `T0119`, `T0120`, `T0121`, `T0122`, `T0123`, `T0124`, `T0125`
+- Recommended next step: run `T0126` final Pelle/Anders demo rehearsal.
 
 ## Current Structure
 
@@ -260,24 +260,26 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0122` | Staff handout-list grouping. | 2026-06-09 | Staff handoff detail now groups visitor wristbands, socks, padlocks, and SkyRider passes under check-in handout, coffee under later collection, and unmatched items under review. |
 | `T0123` | Payment heading and payment-step back navigation. | 2026-06-15 | Phone payment method/drop-in heading now reads `Betalning`, and back from payment returns to the buy-entry review/payment-prep summary with the existing basket/contact/payment-option state preserved. |
 | `T0124` | Rejected gift-card/Klippkort clearing. | 2026-06-15 | Buy-entry payment-option fields now track dirty/error state per field, so clearing a rejected gift-card or Klippkort value lets the guest continue without that code while non-empty rejected values still block. |
+| `T0125` | SkyRider staff handout grouping. | 2026-06-15 | Admin handoff grouping now shows SkyRider under the existing later-collection section instead of the check-in handout section, while linked add-on badges remain visible. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `None active after T0124` | Start the next scoped Pelle/Anders polish ticket. | T0124 implemented locally | T0125 is the recommended next ticket for SkyRider staff handout grouping. |
+| `None active after T0125` | Start the final Pelle/Anders rehearsal ticket. | T0125 implemented locally | T0126 is the recommended next ticket for the final Pelle/Anders demo rehearsal. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0125` | SkyRider staff handout grouping | Move SkyRider into the correct staff handout grouping so it is not presented as the same kind of check-in handout as socks, padlocks, or visitor wristbands; no extra explanatory pickup text is required. Preserve staff API contracts, linked add-on visibility, and redeem behavior. |
 | `T0126` | Final Pelle/Anders demo rehearsal | Run the planned public phone/admin flows end-to-end after T0123-T0125 are deployed and record any remaining demo-blocking fixes as new scoped tickets. |
 | `TBD` | Guest-facing add-on catalog review | Talk with Gustav before exposing more Roller add-ons such as drinks, food, merch, Valo, event, party, gift-card, and membership products. |
 | `TBD` | Production readiness sequence | Resume staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal after the Playground demo scope is stable. |
 
 ## Validation Status
 
+- T0125 implementation status: `jumpyard-checkin-admin/src/app/page.tsx` now classifies SkyRider handout groups into the existing `later` section while keeping the `SkyRider-pass` label, zipline icon, and linked add-on badge behavior. The check-in section note now names visitor wristbands, socks, and padlocks only.
+- T0125 validation: `npm --prefix jumpyard-checkin-admin run lint` passed, `npm --prefix jumpyard-checkin-admin run build` passed, and in-app browser smoke used a local mock staff API without Roller/AWS writes to verify check-in contains wristbands/socks/padlocks, later collection contains coffee plus SkyRider with `Tillägg`, and other products remain under `Övrigt i bokningen`.
 - T0124 implementation status: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now tracks gift-card and Klippkort payment-option dirty state separately. Empty cleared fields are treated as absent inputs, non-empty rejected codes still block checkout, and clearing a previously applied value still requires a quote refresh because the amount due can change.
 - T0124 validation: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings, `npm --prefix jumpyard-checkin-phone run build` passed with the existing `baseline-browser-mapping` age notices, and in-app browser smoke used a local mock JumpYard Cloud API without Roller writes to reject `BADGIFT` and `BADCLIP`, clear each field, and create no-code draft requests with empty `giftCards` and `discountCodes` arrays.
 - T0123 implementation status: `jumpyard-checkin-phone/src/context/LanguageContext.tsx` now changes the phone payment method/drop-in heading from `Kortbetalning` to `Betalning`, with matching English `Payment`; `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now routes back from `PAYMENT` to `REVIEW` instead of leaving the buy-entry flow, preserving the existing basket/contact/quote/payment-option state in component state.

@@ -1,26 +1,24 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0124
+T0125
 
 ## Goal
-Let guests continue checkout after clearing rejected gift-card or Klippkort fields.
+Move SkyRider into the correct staff handout grouping without adding extra explanatory item text.
 
 ## Context
-- T0124 is the next Pelle/Anders walkthrough polish ticket after T0123.
+- T0125 is the next Pelle/Anders walkthrough polish ticket after T0124.
 - The Pelle/Anders walkthrough is planned for Tuesday 2026-06-16 at 10:00 and should follow the Gustav demo flow.
-- Gift-card and Klippkort fields are payment-prep inputs in the buy-entry review step.
-- Today, after a rejected presentkort or Klippkort quote, the guest can get stuck unless they enter a valid replacement code.
-- Clearing a rejected field should mean normal checkout without that code.
-- SkyRider staff handout grouping is intentionally split into T0125.
+- T0122 grouped staff handout rows into check-in handout, later collection, and other booking items.
+- SkyRider is currently grouped with check-in handout items such as visitor wristbands, socks, and padlocks.
+- The user clarified that SkyRider does not need row text saying it is picked up from staff; correct grouping is enough.
 
 ## Allowed Areas
 - `CODEX_TASK.md`
 - `PROJECT_CONTEXT.md`
 - `REPO_CURRENT_STATE.md`
 - `TEST_PLAN.md`
-- `jumpyard-checkin-phone/src/components/BuyTickets.tsx`
-- `jumpyard-checkin-phone/src/context/LanguageContext.tsx`
+- `jumpyard-checkin-admin/src/app/page.tsx`
 
 ## Do Not Touch
 - Roller Live
@@ -29,45 +27,44 @@ Let guests continue checkout after clearing rejected gift-card or Klippkort fiel
 - AWS resources or deploys
 - Aurora migrations
 - Kiosk application source
-- Staff/admin application source
+- Phone application source
 - JumpYard Cloud backend source
 - Staff API contracts
 - Payment package/vendor source
 - Roller bookings, drafts, payments, or redemptions
-- SkyRider staff handout grouping; that is T0125
+- Gift-card or Klippkort checkout behavior; that was T0124
 
 ## Requirements
 
-1. Clearing rejected codes:
-   - If a rejected gift-card code is cleared, the guest can continue checkout with no gift card.
-   - If a rejected Klippkort code is cleared, the guest can continue checkout with no Klippkort.
-   - Empty fields should be treated as absent inputs, not invalid attempted codes.
+1. SkyRider grouping:
+   - SkyRider should no longer appear in the same check-in handout grouping as visitor wristbands, socks, and padlocks.
+   - SkyRider should remain visible in the staff handout list.
+   - Preserve the existing SkyRider icon and product label behavior.
 
-2. Rejected-code safety:
-   - A non-empty rejected gift-card or Klippkort code should still block draft/payment continuation until removed, replaced, or successfully re-applied.
-   - Replacing a rejected code with another non-empty code should still require quote refresh before draft/payment.
-   - Clearing a previously accepted/applied value should still require quote refresh because the amount due can change.
+2. Copy restraint:
+   - Do not add item-level text such as `SkyRider hämtas hos personalen`.
+   - Existing section labels or notes may remain if they are already part of the grouping UI.
 
 3. Scope:
    - Keep this frontend-only.
-   - Do not change quote, draft, publish, or payment API payload shapes.
-   - Do not create Roller bookings, drafts, or payments during implementation.
+   - Do not change staff API payloads, backend grouping/contracts, redeem behavior, payment behavior, Roller writes, AWS resources, SMS, or email behavior.
 
 ## Non-Goals
-- Do not change SkyRider fulfillment copy or grouping in T0124.
-- Do not change backend payment contracts.
-- Do not add new payment methods.
-- Do not alter Roller payment package internals.
+- Do not add new staff fulfillment states.
+- Do not change linked add-on visibility or badge behavior.
+- Do not change coffee, socks, padlock, visitor wristband, or unknown-item grouping except where the SkyRider move requires section note cleanup.
+- Do not add guest-facing SkyRider copy.
 
 ## Acceptance Criteria
-- After a rejected gift-card attempt, clearing the gift-card field lets the guest proceed with normal no-code checkout.
-- After a rejected Klippkort attempt, clearing the Klippkort field lets the guest proceed with normal no-code checkout.
-- A non-empty rejected gift-card or Klippkort code still blocks checkout until removed, replaced, or accepted by a refreshed quote.
-- Empty gift-card/Klippkort fields are omitted from quote/draft inputs as before.
-- No AWS, Roller, backend, staff/admin, kiosk, redeem, SMS, or email behavior changes.
+- SkyRider appears outside `Lämna ut vid incheckning`.
+- Visitor wristbands, socks, and padlocks still appear under `Lämna ut vid incheckning`.
+- Coffee still appears under `Hämtas efter hoppet`.
+- Unknown products still appear under `Övrigt i bokningen`.
+- Linked add-on badge remains visible for linked SkyRider rows.
+- No AWS, Roller, backend, phone, kiosk, redeem, payment, SMS, or email behavior changes.
 
 ## Validation
-- `npm --prefix jumpyard-checkin-phone run lint`
-- `npm --prefix jumpyard-checkin-phone run build`
+- `npm --prefix jumpyard-checkin-admin run lint`
+- `npm --prefix jumpyard-checkin-admin run build`
 - `npm run validate`
-- Browser or equivalent smoke confirms rejected gift-card and Klippkort clearing behavior.
+- Browser or equivalent smoke confirms SkyRider grouping and linked add-on badge behavior.
