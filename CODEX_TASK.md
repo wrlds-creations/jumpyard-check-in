@@ -4,14 +4,14 @@
 T0125
 
 ## Goal
-Move SkyRider into the correct staff handout grouping without adding extra explanatory item text.
+Correct SkyRider handout grouping so SkyRider is picked up at check-in in both phone and admin surfaces.
 
 ## Context
-- T0125 is the next Pelle/Anders walkthrough polish ticket after T0124.
-- The Pelle/Anders walkthrough is planned for Tuesday 2026-06-16 at 10:00 and should follow the Gustav demo flow.
-- T0122 grouped staff handout rows into check-in handout, later collection, and other booking items.
-- SkyRider is currently grouped with check-in handout items such as visitor wristbands, socks, and padlocks.
-- The user clarified that SkyRider does not need row text saying it is picked up from staff; correct grouping is enough.
+- T0125 was misinterpreted in the previous pass.
+- The intended behavior is that SkyRider is handed out at check-in.
+- The admin app was already correct before the previous T0125 change: SkyRider belonged under `Lämna ut vid incheckning`.
+- The phone/check-in app confirmation screen was the surface that grouped SkyRider as a later/other add-on.
+- This correction should restore admin grouping and move SkyRider into the phone confirmation handout list.
 
 ## Allowed Areas
 - `CODEX_TASK.md`
@@ -19,6 +19,7 @@ Move SkyRider into the correct staff handout grouping without adding extra expla
 - `REPO_CURRENT_STATE.md`
 - `TEST_PLAN.md`
 - `jumpyard-checkin-admin/src/app/page.tsx`
+- `jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx`
 
 ## Do Not Touch
 - Roller Live
@@ -27,23 +28,23 @@ Move SkyRider into the correct staff handout grouping without adding extra expla
 - AWS resources or deploys
 - Aurora migrations
 - Kiosk application source
-- Phone application source
 - JumpYard Cloud backend source
 - Staff API contracts
 - Payment package/vendor source
 - Roller bookings, drafts, payments, or redemptions
-- Gift-card or Klippkort checkout behavior; that was T0124
+- Gift-card or Klippkort checkout behavior
 
 ## Requirements
 
-1. SkyRider grouping:
-   - SkyRider should no longer appear in the same check-in handout grouping as visitor wristbands, socks, and padlocks.
-   - SkyRider should remain visible in the staff handout list.
-   - Preserve the existing SkyRider icon and product label behavior.
+1. Phone/check-in confirmation grouping:
+   - SkyRider should appear in the staff handout list shown to guests on the ready-for-staff confirmation screen.
+   - SkyRider should not appear under the phone confirmation screen's other/later add-ons group.
+   - Keep the existing SkyRider label and icon behavior.
 
-2. Copy restraint:
-   - Do not add item-level text such as `SkyRider hämtas hos personalen`.
-   - Existing section labels or notes may remain if they are already part of the grouping UI.
+2. Admin grouping:
+   - Restore SkyRider to `Lämna ut vid incheckning` in the admin staff handout list.
+   - Visitor wristbands, socks, padlocks, and SkyRider should be check-in handouts.
+   - Coffee should remain in the later-collection group.
 
 3. Scope:
    - Keep this frontend-only.
@@ -51,20 +52,21 @@ Move SkyRider into the correct staff handout grouping without adding extra expla
 
 ## Non-Goals
 - Do not add new staff fulfillment states.
-- Do not change linked add-on visibility or badge behavior.
-- Do not change coffee, socks, padlock, visitor wristband, or unknown-item grouping except where the SkyRider move requires section note cleanup.
-- Do not add guest-facing SkyRider copy.
+- Do not change linked add-on visibility or badge behavior in admin.
+- Do not change coffee, socks, padlock, visitor wristband, or unknown-item grouping except to restore SkyRider correctly.
+- Do not add extra explanatory pickup text for SkyRider.
 
 ## Acceptance Criteria
-- SkyRider appears outside `Lämna ut vid incheckning`.
-- Visitor wristbands, socks, and padlocks still appear under `Lämna ut vid incheckning`.
-- Coffee still appears under `Hämtas efter hoppet`.
-- Unknown products still appear under `Övrigt i bokningen`.
-- Linked add-on badge remains visible for linked SkyRider rows.
-- No AWS, Roller, backend, phone, kiosk, redeem, payment, SMS, or email behavior changes.
+- Phone confirmation screen lists SkyRider in `Att hämta ut hos personalen`.
+- Phone confirmation screen no longer lists SkyRider in `Övriga tillägg i bokningen`.
+- Admin handoff detail lists SkyRider under `Lämna ut vid incheckning`.
+- Admin coffee still appears under `Hämtas efter hoppet`.
+- No AWS, Roller, backend, kiosk, redeem, payment, SMS, or email behavior changes.
 
 ## Validation
+- `npm --prefix jumpyard-checkin-phone run lint`
+- `npm --prefix jumpyard-checkin-phone run build`
 - `npm --prefix jumpyard-checkin-admin run lint`
 - `npm --prefix jumpyard-checkin-admin run build`
 - `npm run validate`
-- Browser or equivalent smoke confirms SkyRider grouping and linked add-on badge behavior.
+- Browser or equivalent smoke confirms phone and admin SkyRider grouping.

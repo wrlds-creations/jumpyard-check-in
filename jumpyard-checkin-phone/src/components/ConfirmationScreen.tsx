@@ -13,19 +13,19 @@ interface ConfirmationScreenProps {
     alreadyCheckedIn?: boolean;
 }
 
-// Physical items that staff hand out
-const HANDOUT_IDS = new Set(['socks', 'connected', 'lock']);
+// Items that staff hand out at check-in.
+const HANDOUT_IDS = new Set(['socks', 'connected', 'lock', 'skyrider']);
 // Non-physical / experience addons
-const EXPERIENCE_IDS = new Set(['skyrider', 'coffee', 'extra_person']);
+const EXPERIENCE_IDS = new Set(['coffee', 'extra_person']);
 
 const HANDOUT_ICONS: Partial<Record<Addon['id'], JumpyardIconName>> = {
     connected: 'connected-band',
     socks: 'grip-socks',
     lock: 'padlock',
+    skyrider: 'zipline',
 };
 
 const EXPERIENCE_ICONS: Partial<Record<Addon['id'], JumpyardIconName>> = {
-    skyrider: 'zipline',
     coffee: 'drink-cup',
     extra_person: 'add-guest',
 };
