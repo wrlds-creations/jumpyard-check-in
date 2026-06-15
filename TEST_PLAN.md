@@ -1482,6 +1482,45 @@ Use this file to define validation for the current project or milestone.
 | Root validation | Source-of-truth docs should validate after T0122 updates. | Passed | `npm run validate` passed on 2026-06-09. |
 | Scoped diff check | T0122 files should have no whitespace errors. | Passed | Scoped `git diff --check` passed; Git printed CRLF conversion notices only. |
 
+## T0123 Payment Heading And Back Navigation
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Payment heading | The payment method/drop-in page should show `Betalning`, not `Kortbetalning`. | Passed | `paymentMethodTitle` now renders `Betalning` for Swedish and `Payment` for English; code search confirms no remaining phone translation value of `Kortbetalning` for the payment step. |
+| Back from payment | Pressing the visible back control from the payment method/drop-in step should return to the buy-entry review/payment-prep summary. | Passed | `BuyTickets` now maps `PAYMENT` back to `REVIEW` instead of calling the parent `onBack`. |
+| State preservation | Returning from payment should preserve selected date/time, entry quantity, add-ons, contact fields, quote, and payment-option inputs where possible. | Passed | The back path changes only the local `step`, so existing selected product, quantity, add-ons, customer, quote, and payment option state remains in the mounted component. |
+| Browser smoke | Browser or equivalent smoke should confirm the payment/back behavior in the buy-entry payment flow. | Passed | In-app browser at `http://127.0.0.1:3024/` used a local mock JumpYard Cloud API on `4023`, reached the payment step without Roller writes, showed no `Kortbetalning`, returned to `Sammanställning` with `Hopptid 10:00`, `60 min entré`, `1 st`, and `180 kr`, then re-entered payment again. |
+| Scope guard | T0123 should not change quote/draft/payment API payloads, backend source, AWS resources, Roller writes, staff/admin, kiosk, redeem, SMS, or email behavior. | Passed | Scoped diff is limited to phone UI copy/navigation plus source-of-truth docs. No backend, vendor, AWS, staff/admin, kiosk, or Roller write path changed. |
+| Phone lint | Phone app lint should pass after T0123. | Passed | `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings. |
+| Phone build | Phone app should build after T0123. | Passed | `npm --prefix jumpyard-checkin-phone run build` passed; Next still reports the existing `baseline-browser-mapping` age notices. |
+| Root validation | Source-of-truth docs should validate after T0123 updates. | Passed | `npm run validate` passed. |
+
+## T0124 Rejected Gift-card/Klippkort Clearing
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Clear rejected gift card | After a rejected gift-card attempt, clearing the gift-card field should allow normal no-code checkout. | Planned | Empty field should mean no gift card, not invalid gift card. |
+| Clear rejected Klippkort | After a rejected Klippkort attempt, clearing the Klippkort field should allow normal no-code checkout. | Planned | Empty field should mean no Klippkort, not invalid Klippkort. |
+| Non-empty rejected code still blocks | A non-empty code that was rejected by the refreshed quote should still block draft/payment continuation until removed or replaced. | Planned | Keeps the fail-closed behavior for invalid entered codes. |
+| Valid replacement | Replacing a rejected code with a valid gift card or Klippkort and applying it should allow checkout according to the refreshed quote. | Planned | Covers both recovery paths. |
+| Scope guard | T0124 should not change Roller payload shape, backend source, AWS resources, staff/admin, kiosk, redeem, SMS, or email behavior. | Planned | Phone payment-options state only unless implementation proves a narrow shared helper change is needed. |
+| Phone lint | Phone app lint should pass after T0124. | Planned | `npm --prefix jumpyard-checkin-phone run lint`. |
+| Phone build | Phone app should build after T0124. | Planned | `npm --prefix jumpyard-checkin-phone run build`. |
+| Root validation | Source-of-truth docs should validate after T0124 updates. | Planned | `npm run validate`. |
+
+## T0125 SkyRider Staff Handout Grouping
+
+| Scenario | Expected Result | Status | Notes |
+|---|---|---|---|
+| Staff grouping | SkyRider should no longer be misleadingly presented as the same kind of check-in handout as socks, padlocks, or visitor wristbands. | Planned | Keep staff operations clear without adding extra explanatory pickup text. |
+| No extra text requirement | T0125 should not require visible copy such as `SkyRider hämtas hos personalen`; correct grouping is enough. | Planned | Additional wording can be avoided unless implementation needs a short section label. |
+| Existing categories preserved | Socks, padlocks, and visitor wristbands remain check-in handouts; coffee remains later collection. | Planned | Preserve T0122 behavior except the SkyRider classification/grouping. |
+| Linked add-on badge | Linked SkyRider add-ons should still show the add-on badge where relevant. | Planned | Preserve T0107/T0122 linked add-on visibility. |
+| Scope guard | T0125 should not change staff API contracts, backend source, redeem behavior, Roller writes, payment logic, AWS resources, SMS, or email behavior. | Planned | Frontend grouping only. |
+| Admin/phone lint as applicable | Affected frontend app lint should pass after T0125. | Planned | Run admin and/or phone lint depending on touched files. |
+| Admin/phone build as applicable | Affected frontend app build should pass after T0125. | Planned | Run admin and/or phone build depending on touched files. |
+| Root validation | Source-of-truth docs should validate after T0125 updates. | Planned | `npm run validate`. |
+
 ## T0104 SkyRider Availability Deploy
 
 | Scenario | Expected Result | Status | Notes |

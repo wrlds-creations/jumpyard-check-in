@@ -4,12 +4,12 @@ Use this file as the living snapshot of what actually exists in the repository. 
 
 ## Snapshot
 
-- Date: 2026-06-09
-- Current branch: `main`
-- Current status: T0122 is completed and merged to `main`. Staff/admin handout detail now separates check-in handouts from later coffee collection while keeping unknown items visible for review.
-- Current ticket: `None active after T0122`
-- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`, `T0110`, `T0111`, `T0112`, `T0113`, `T0114`, `T0115`, `T0116`, `T0117`, `T0118`, `T0119`, `T0120`, `T0121`, `T0122`
-- Recommended next step: start `T0123` final Gustav demo rehearsal.
+- Date: 2026-06-15
+- Current branch: `codex/t0123-document-payment-demo-polish-tickets`
+- Current status: T0122 is completed and merged to `main`. T0123 is implemented locally for the Pelle/Anders walkthrough: the phone payment method/drop-in heading is now generic and back from payment returns to the buy-entry review/payment-prep summary.
+- Current ticket: `None active after T0123`
+- Completed tickets: `T0000`, `T0001`, `T0002`, `T0003`, `T0004`, `T0005`, `T0006`, `T0007`, `T0008`, `T0009`, `T0010`, `T0011`, `T0012`, `T0013`, `T0014`, `T0015`, `T0016`, `T0017`, `T0018`, `T0019`, `T0020`, `T0021`, `T0022`, `T0023`, `T0024`, `T0025`, `T0026`, `T0027`, `T0028`, `T0029`, `T0030`, `T0031`, `T0032`, `T0033`, `T0034`, `T0035`, `T0036`, `T0037`, `T0038`, `T0039`, `T0041`, `T0042`, `T0043`, `T0044`, `T0045`, `T0046`, `T0047`, `T0048`, `T0049`, `T0050`, `T0051`, `T0052`, `T0053`, `T0054`, `T0055`, `T0056`, `T0057`, `T0058`, `T0059`, `T0060`, `T0061`, `T0062`, `T0063`, `T0064`, `T0065`, `T0066`, `T0067`, `T0068`, `T0069`, `T0070`, `T0071`, `T0072`, `T0073`, `T0074`, `T0075`, `T0076`, `T0077`, `T0078`, `T0079`, `T0080`, `T0081`, `T0082`, `T0083`, `T0084`, `T0085`, `T0086`, `T0087`, `T0088`, `T0089`, `T0090`, `T0091`, `T0092`, `T0093`, `T0095`, `T0096`, `T0097`, `T0098`, `T0099`, `T0100`, `T0101`, `T0102`, `T0103`, `T0104`, `T0105`, `T0106`, `T0107`, `T0108`, `T0109`, `T0110`, `T0111`, `T0112`, `T0113`, `T0114`, `T0115`, `T0116`, `T0117`, `T0118`, `T0119`, `T0120`, `T0121`, `T0122`, `T0123`
+- Recommended next step: implement `T0124` rejected gift-card/Klippkort clearing.
 
 ## Current Structure
 
@@ -258,23 +258,28 @@ Use this file as the living snapshot of what actually exists in the repository. 
 | `T0120` | Human-readable staff dates. | 2026-06-09 | Staff handoff queue rows, detail date tiles, and ready timestamps now show short Swedish labels such as `6 aug` instead of raw numeric date strings. |
 | `T0121` | Staff date-box layout. | 2026-06-09 | Selected-handoff date/time/payment tiles now stack cleanly on narrow staff/admin viewports, keep date and time values intact, and use the compact three-tile row on wider screens. |
 | `T0122` | Staff handout-list grouping. | 2026-06-09 | Staff handoff detail now groups visitor wristbands, socks, padlocks, and SkyRider passes under check-in handout, coffee under later collection, and unmatched items under review. |
+| `T0123` | Payment heading and payment-step back navigation. | 2026-06-15 | Phone payment method/drop-in heading now reads `Betalning`, and back from payment returns to the buy-entry review/payment-prep summary with the existing basket/contact/payment-option state preserved. |
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `None active after T0122` | Start T0123 next. | T0122 completed and merged to `main` | Staff handout-list grouping is fixed. The next unstarted ticket is `T0123`, final Gustav demo rehearsal. |
+| `None active after T0123` | Start the next scoped Pelle/Anders polish ticket. | T0123 implemented locally | T0124 is the recommended next ticket for clearing rejected gift-card/Klippkort state after emptying the fields. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Notes |
 |---|---|---|
-| `T0123` | Final Gustav demo rehearsal | Run the planned public phone/admin flows end-to-end after the selected demo polish tickets are deployed and record any remaining demo-blocking fixes as new scoped tickets. |
+| `T0124` | Clear rejected gift-card/Klippkort state | Let guests continue with normal no-code payment after clearing rejected gift-card or Klippkort fields, while still blocking non-empty rejected codes until they are removed or replaced. |
+| `T0125` | SkyRider staff handout grouping | Move SkyRider into the correct staff handout grouping so it is not presented as the same kind of check-in handout as socks, padlocks, or visitor wristbands; no extra explanatory pickup text is required. Preserve staff API contracts, linked add-on visibility, and redeem behavior. |
+| `T0126` | Final Pelle/Anders demo rehearsal | Run the planned public phone/admin flows end-to-end after T0123-T0125 are deployed and record any remaining demo-blocking fixes as new scoped tickets. |
 | `TBD` | Guest-facing add-on catalog review | Talk with Gustav before exposing more Roller add-ons such as drinks, food, merch, Valo, event, party, gift-card, and membership products. |
 | `TBD` | Production readiness sequence | Resume staging/live config, route protection, retention, secrets, live backfill, webhook registration, monitoring/runbooks, rollback, and cutover rehearsal after the Playground demo scope is stable. |
 
 ## Validation Status
 
+- T0123 implementation status: `jumpyard-checkin-phone/src/context/LanguageContext.tsx` now changes the phone payment method/drop-in heading from `Kortbetalning` to `Betalning`, with matching English `Payment`; `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now routes back from `PAYMENT` to `REVIEW` instead of leaving the buy-entry flow, preserving the existing basket/contact/quote/payment-option state in component state.
+- T0123 validation: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings, `npm --prefix jumpyard-checkin-phone run build` passed with the existing `baseline-browser-mapping` age notices, and `npm run validate` passed. In-app browser smoke used a local mock JumpYard Cloud API, reached the payment step without Roller writes, confirmed no `Kortbetalning` text was visible, returned from payment to `Sammanställning` with time/product/quantity/amount preserved, and re-entered payment again.
 - T0109 implementation status: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` and `jumpyard-checkin-phone/src/components/AddonsOffer.tsx` now guard both quote and draft creation with the same SkyRider approval requirement used by the visible add-ons step, so a state mismatch cannot create a Roller quote, draft, or payment session before the 100 cm approval.
 - T0109 validation: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, `npm run validate`, and scoped `git diff --check` passed on 2026-06-08. Lint still reports the existing four `<img>` warnings, and the build still reports existing `baseline-browser-mapping` age notices.
 - T0109 local browser smoke: phone dev server started on `http://127.0.0.1:3012/?codexSmoke=t0109` and the buy-entry path reached the time selection screen, but availability could not continue because local dev returned `Could not reach JumpYard Cloud`; this matches the prior T0106 local browser blocker and does not indicate a new code error. The temporary dev server was stopped.

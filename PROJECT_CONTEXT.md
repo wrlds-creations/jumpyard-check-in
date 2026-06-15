@@ -681,6 +681,8 @@ T0121 fixes the staff/admin selected-handoff date-box layout without changing da
 
 T0122 makes the staff/admin handout list operationally clearer without changing staff API contracts or redeem behavior. The selected handoff detail now groups items into `Lämna ut vid incheckning`, `Hämtas efter hoppet`, and `Övrigt i bokningen`, with visitor wristbands, socks, padlocks, and SkyRider passes treated as check-in handouts and coffee shown as later collection. Unknown products remain visible for staff review, and linked add-on badges are preserved.
 
+The next Pelle/Anders walkthrough polish tickets are documented as an implementation sequence. T0123 changes the phone payment step heading from `Kortbetalning` to `Betalning` and fixes back navigation from the payment method/drop-in step so guests return to the buy-entry review/payment-prep summary without losing selected basket/contact/payment-option state. T0123 is frontend-only and does not change quote, draft, publish, payment, backend, Roller, AWS, staff/admin, kiosk, redeem, SMS, or email behavior. T0124 fixes rejected gift-card/Klippkort state so clearing a rejected code lets the guest continue with empty fields as a normal no-code checkout, while still blocking non-empty rejected codes. T0125 changes SkyRider staff handout grouping so SkyRider is not presented as the same kind of check-in handout as socks, padlocks, or visitor wristbands; no extra guest/staff explanatory text is required. The final Pelle/Anders rehearsal should run after these polish tickets.
+
 ## T0058 Production Readiness Matrix
 
 | Area | Result | Evidence | Before staging/live |
