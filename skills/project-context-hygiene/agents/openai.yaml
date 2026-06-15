@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Context Hygiene"
+  short_description: "Audit stale ticket state and oversized project memory"
+  default_prompt: "Use $project-context-hygiene to audit CODEX_TASK.md, REPO_CURRENT_STATE.md, PROJECT_CONTEXT.md, FOLLOWUPS.md, and validation scripts before moving or archiving historical context."
