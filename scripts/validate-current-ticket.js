@@ -5,6 +5,7 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const codeTaskPath = path.join(root, 'CODEX_TASK.md');
 const repoStatePath = path.join(root, 'REPO_CURRENT_STATE.md');
+const completedTicketsArchivePath = path.join(root, 'docs', 'history', 'completed-tickets.md');
 
 let failures = 0;
 
@@ -40,6 +41,42 @@ function extractSnapshotValue(text, label) {
   return match ? normalizeCell(match[1]) : null;
 }
 
+function extractSection(text, heading) {
+  const lines = text.split(/\r?\n/);
+  const startIndex = lines.findIndex(line => line.trim() === `## ${heading}`);
+  if (startIndex === -1) return '';
+
+  const sectionLines = [];
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    if (/^##\s/.test(lines[index])) break;
+    sectionLines.push(lines[index]);
+  }
+  return sectionLines.join('\n');
+}
+
+function extractTableRows(sectionText) {
+  return sectionText
+    .split(/\r?\n/)
+    .filter(line => line.trim().startsWith('|'))
+    .filter(line => !/^\|\s*-+/.test(line.trim()))
+    .filter(line => !/^\|\s*Ticket\s*\|/i.test(line.trim()))
+    .map(line => line.split('|').slice(1, -1).map(normalizeCell))
+    .filter(cells => cells.length > 0 && cells[0]);
+}
+
+function extractCompletedTickets(repoStateText) {
+  const tickets = new Set(parseTickets(extractSnapshotValue(repoStateText, 'Completed tickets') || ''));
+
+  if (fs.existsSync(completedTicketsArchivePath)) {
+    const archiveText = fs.readFileSync(completedTicketsArchivePath, 'utf8');
+    for (const row of extractTableRows(extractSection(archiveText, 'Completed Tickets'))) {
+      for (const ticket of parseTickets(row[0])) tickets.add(ticket);
+    }
+  }
+
+  return Array.from(tickets);
+}
+
 function extractCodeTaskTicket(text) {
   const ticketSection = text.match(/^## Ticket ID\s*\r?\n+([^\r\n]+)/mi);
   if (ticketSection) {
@@ -53,7 +90,7 @@ const repoStateText = readRequired('REPO_CURRENT_STATE.md', repoStatePath);
 
 const codeTaskTicket = extractCodeTaskTicket(codeTaskText);
 const snapshotCurrentTicket = extractSnapshotValue(repoStateText, 'Current ticket');
-const snapshotCompletedTickets = parseTickets(extractSnapshotValue(repoStateText, 'Completed tickets') || '');
+const snapshotCompletedTickets = extractCompletedTickets(repoStateText);
 const snapshotRecommendedNext = extractSnapshotValue(repoStateText, 'Recommended next step') || '';
 const completedSet = new Set(snapshotCompletedTickets);
 const activeTickets = parseActiveTicketIds(snapshotCurrentTicket || '');

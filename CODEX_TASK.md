@@ -3,16 +3,39 @@
 ## Ticket ID
 NO_ACTIVE_TICKET
 
-## Status
-No active ticket after T0127.
+## Goal
+No active Codex ticket.
 
-## Last Completed Ticket
-T0127
+## Context
+- T0128 completed the full context-hygiene migration.
+- Historical project memory now lives in `docs/history/` and broad forward planning lives in `docs/roadmap/backlog.md`.
+- T0126 remains a manual Pelle/Anders demo rehearsal outside Codex and is not marked completed.
 
-## Recommended Next Ticket
-T0126 final Pelle/Anders demo rehearsal.
+## Allowed Areas
+- None until a new ticket is selected.
 
-## Notes
-- Do not start new ticket work from chat history alone.
-- Before starting the next ticket, update this file and `REPO_CURRENT_STATE.md` together.
-- T0126 remains reserved for the final Pelle/Anders demo rehearsal unless the user explicitly reprioritizes.
+## Do Not Touch
+- Roller Live
+- Production credentials
+- `.env`
+- AWS resources or deploys
+- Aurora migrations
+- Phone application source
+- Admin application behavior
+- Kiosk application source
+- JumpYard Cloud backend source
+- Payment package/vendor source
+- Roller bookings, drafts, payments, or redemptions
+- SMS/email sending
+- Vendor assets or icons
+- unrelated local prompt files
+
+## Requirements
+1. Select and activate a new scoped ticket before making further repository changes.
+
+## Validation
+- `node scripts/validate-current-ticket.js`
+- `node scripts/validate-followups.js`
+- `node scripts/validate-history-archives.js`
+- `npm run validate`
+- `git diff --check`

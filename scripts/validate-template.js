@@ -112,25 +112,44 @@ function extractTableRows(sectionText) {
     .filter(cells => cells.length > 0 && cells[0]);
 }
 
+function extractCompletedTickets(repoStateText) {
+  const tickets = new Set(parseTickets(extractSnapshotValue(repoStateText, 'Completed tickets') || ''));
+  const archivePath = path.join(root, 'docs', 'history', 'completed-tickets.md');
+
+  if (fs.existsSync(archivePath)) {
+    const archiveText = fs.readFileSync(archivePath, 'utf8');
+    const archiveRows = extractTableRows(extractSection(archiveText, 'Completed Tickets'));
+    for (const row of archiveRows) {
+      for (const ticket of parseTickets(row[0])) tickets.add(ticket);
+    }
+  }
+
+  return Array.from(tickets);
+}
+
 function validateRepoCurrentState() {
   const repoStatePath = path.join(root, 'REPO_CURRENT_STATE.md');
   if (!fs.existsSync(repoStatePath)) return;
 
   const text = fs.readFileSync(repoStatePath, 'utf8');
   const snapshotCurrentTicket = extractSnapshotValue(text, 'Current ticket');
-  const snapshotCompletedTickets = parseTickets(extractSnapshotValue(text, 'Completed tickets') || '');
+  const snapshotCompletedTickets = extractCompletedTickets(text);
   const snapshotRecommendedNext = extractSnapshotValue(text, 'Recommended next step') || '';
   const completedSet = new Set(snapshotCompletedTickets);
+  const completedArchivePath = path.join(root, 'docs', 'history', 'completed-tickets.md');
+  const hasCompletedArchive = fs.existsSync(completedArchivePath);
 
   if (!snapshotCurrentTicket) {
     fail('REPO_CURRENT_STATE.md snapshot is missing Current ticket');
   }
 
   if (snapshotCompletedTickets.length === 0) {
-    fail('REPO_CURRENT_STATE.md snapshot is missing Completed tickets');
+    fail('completed ticket history is missing from REPO_CURRENT_STATE.md and docs/history/completed-tickets.md');
   }
 
-  const completedRows = extractTableRows(extractSection(text, 'Completed Tickets'));
+  const completedRows = hasCompletedArchive
+    ? extractTableRows(extractSection(fs.readFileSync(completedArchivePath, 'utf8'), 'Completed Tickets'))
+    : extractTableRows(extractSection(text, 'Completed Tickets'));
   const completedTableTickets = completedRows.flatMap(row => parseTickets(row[0]));
   const completedTableSet = new Set(completedTableTickets);
 
@@ -138,15 +157,13 @@ function validateRepoCurrentState() {
     fail('REPO_CURRENT_STATE.md Completed Tickets table contains duplicate ticket ids');
   }
 
-  for (const ticket of snapshotCompletedTickets) {
-    if (!completedTableSet.has(ticket)) {
-      fail(`REPO_CURRENT_STATE.md snapshot completed ticket ${ticket} is missing from the Completed Tickets table`);
-    }
+  if (hasCompletedArchive && !text.includes('docs/history/completed-tickets.md')) {
+    fail('REPO_CURRENT_STATE.md must link to docs/history/completed-tickets.md when completed tickets are archived');
   }
 
-  for (const ticket of completedTableTickets) {
-    if (!completedSet.has(ticket)) {
-      fail(`REPO_CURRENT_STATE.md Completed Tickets table includes ${ticket}, but the snapshot does not list it as completed`);
+  for (const ticket of parseTickets(extractSnapshotValue(text, 'Completed tickets') || '')) {
+    if (!completedTableSet.has(ticket)) {
+      fail(`REPO_CURRENT_STATE.md snapshot mentions completed ticket ${ticket}, but the completed-ticket archive/table does not include it`);
     }
   }
 
