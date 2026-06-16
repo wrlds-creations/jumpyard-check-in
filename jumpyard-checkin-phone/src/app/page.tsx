@@ -329,7 +329,13 @@ function CheckInFlow() {
     };
 
     const handleExistingBookingFound = async (booking: Booking) => {
-        const bookingPatch = { booking, checkinSession: null, existingAddons: booking.existingAddons ?? [] };
+        const bookingAddons = booking.existingAddons ?? [];
+        const bookingPatch = {
+            booking,
+            checkinSession: null,
+            existingAddons: bookingAddons,
+            selectedAddons: bookingAddons,
+        };
 
         setAlreadyCheckedIn(false);
         setSessionStartError(null);
@@ -519,9 +525,10 @@ function CheckInFlow() {
             .then(({ booking, checkinSession }) => {
                 if (!alive) return;
                 setAlreadyCheckedIn(false);
+                const bookingAddons = booking.existingAddons ?? [];
                 routeFromSessionResume(
                     checkinSession,
-                    { booking, checkinSession, existingAddons: booking.existingAddons ?? [] },
+                    { booking, checkinSession, existingAddons: bookingAddons, selectedAddons: bookingAddons },
                     'booking-summary'
                 );
             })
@@ -719,7 +726,9 @@ function CheckInFlow() {
                             checkinSession={ctx.checkinSession}
                             jumperCount={ctx.booking.jumpers}
                             selectedAddons={ctx.selectedAddons}
+                            channel={ctx.channel}
                             alreadyCheckedIn={alreadyCheckedIn}
+                            onStartOver={ctx.channel === 'park-qr' ? restartAfterBuyRecovery : undefined}
                         />
                     )}
                 </AnimatePresence>
