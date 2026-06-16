@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 131
-Latest archived completed ticket: `T0132`
+Archived count: 132
+Latest archived completed ticket: `T0133`
 
 ## Completed Tickets
 
@@ -143,3 +143,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0130` | Buy-entry start-time/date clarification. | 2026-06-16 | Phone buy-entry time selection now uses `Välj starttid`, shows `Idag` plus a Stockholm-formatted date near the time options, and uses the help text `Välj när ni vill börja hoppa.` without changing availability, future-date booking, quote, draft, payment, backend, AWS, Roller, SMS, or email behavior. |
 | `T0131` | Buy-entry jump-duration clarification. | 2026-06-16 | Phone buy-entry product selection now uses `Välj hopptid`, shows `Starttid [tid] idag`, emphasizes duration labels such as `60 min`, and makes review show start time, jump duration, and number of jumpers without changing quote, draft, payment, backend, AWS, Roller, SMS, or email behavior. |
 | `T0132` | Jump-socks manual choice. | 2026-06-16 | Phone buy-entry add-ons now show `Hoppstrumpor` in a separate top section, explain that all jumpers need approved jump socks, let guests manually choose sock quantity, and let guests confirm they already have approved socks without forcing a purchase or changing add-on pricing, availability, quote, draft, payment, backend, AWS, Roller, SMS, or email behavior. |
+| `T0133` | SkyRider attestation copy. | 2026-06-16 | Phone SkyRider attestation now focuses on the 100 cm height requirement and recommendation to use SkyRider after the jump session, removes the separate safety-check point, and keeps the confirmation gate while not changing SkyRider capacity, quote, draft, payment, handout, staff grouping, backend, AWS, Roller, SMS, or email behavior. |

@@ -19,14 +19,13 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| None | Ticket selection | No active Codex ticket. Choose the next scoped ticket from active followups, roadmap priorities, or user direction before editing. | T0132 completed | Low | Activate `CODEX_TASK.md` before implementation. | Root validators should pass before new ticket work starts. | Ready for selection |
+| None | Ticket selection | No active Codex ticket. Choose the next scoped ticket from active followups, roadmap priorities, or user direction before editing. | T0133 completed | Low | Activate `CODEX_TASK.md` before implementation. | Root validators should pass before new ticket work starts. | Ready for selection |
 
 ## Next
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0133` | Buy-flow UX | Tighten SkyRider attestation copy around height and timing only. | T0132 | Medium | SkyRider attestation copy only; preserve existing consent gate and capacity logic. | Phone lint/build plus smoke of SkyRider copy and checkbox wording. | Ready |
-| `T0134` | Payment UX | Add a clear post-payment loading state while the paid booking is fetched and check-in is prepared. | T0133 | High | Directly after approved buy-entry payment; no payment provider or backend contract changes unless explicitly activated. | Phone lint/build plus payment-return mock smoke for loading, retry, and fallback copy. | Planned |
+| `T0134` | Payment UX | Add a clear post-payment loading state while the paid booking is fetched and check-in is prepared. | T0133 | High | Directly after approved buy-entry payment; no payment provider or backend contract changes unless explicitly activated. | Phone lint/build plus payment-return mock smoke for loading, retry, and fallback copy. | Ready |
 | `T0135` | Safety UX | Add buy-entry-specific context before the safety video after purchase. | T0134 | Medium | Buy-entry safety copy only; existing-booking safety copy can stay simpler. | Phone lint/build plus smoke of paid buy-entry safety-video and rules copy. | Planned |
 | `T0136` | Flow recovery | Persist local buy-flow state so refresh can resume after purchase and during safety steps. | T0135 | High | Client-side buy-flow recovery only unless the activated ticket explicitly scopes server resume changes. | Phone lint/build plus refresh/resume smoke for paid and unsafe-to-resume states. | Planned |
 | `T0137` | Confirmation UX | Make the final confirmation view lighter and channel-aware. | T0136 | Medium | Confirmation/final-step copy and handout summary only; no redeem or staff workflow changes. | Phone lint/build plus smoke of on-site, SMS/home, and kiosk copy if those channels are in scope. | Planned |
@@ -37,35 +36,6 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 ## Buy-Flow UX Ticket Intake
 
 These tickets use the repository's normal `T####` ticket language. The source brief's external labels are intentionally not used as ticket identifiers.
-
-### T0133 Tighten SkyRider Copy
-
-Priority: P1
-
-Scope: SkyRider attestation.
-
-Goal: Focus the SkyRider step on the height requirement and recommended timing. Remove separate safety-check copy.
-
-Proposed copy:
-
-- Heading: `Innan SkyRider`
-- Point 1: `Minst 100 cm`
-- Text: `Alla som åker SkyRider behöver vara minst 100 cm.`
-- Point 2: `Passar bäst efter hopptiden`
-- Text: `Vi rekommenderar att SkyRider görs efter hoppasset.`
-- Checkbox: `Jag bekräftar att alla SkyRider-åkare är minst 100 cm.`
-
-Acceptance criteria:
-
-- Remove the separate point about a safety check.
-- The checkbox mentions only the height requirement.
-- Copy feels short and clear.
-- `SkyRider` is written consistently.
-
-Non-goals:
-
-- Do not change the existing height-confirmation requirement.
-- Do not change SkyRider capacity, quote, draft, payment, handout, or staff grouping behavior.
 
 ### T0134 Add Clear Post-Payment Loading State
 

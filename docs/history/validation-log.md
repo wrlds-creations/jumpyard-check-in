@@ -2,6 +2,17 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0133 SkyRider Attestation Copy Validation
+
+- 2026-06-16: T0133 was activated as a phone UI copy ticket to tighten SkyRider attestation around height and timing only.
+- 2026-06-16: `jumpyard-checkin-phone/src/context/LanguageContext.tsx` changed SkyRider attestation copy to `Innan SkyRider`, `Minst 100 cm`, `Alla som åker SkyRider behöver vara minst 100 cm.`, `Passar bäst efter hopptiden`, `Vi rekommenderar att SkyRider görs efter hoppasset.`, and `Jag bekräftar att alla SkyRider-åkare är minst 100 cm.`, with matching English copy.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/SkyRiderAttest.tsx` now renders only the height and timing information rows. The existing confirmation state, disabled continue behavior before confirmation, and completion callback remain unchanged.
+- 2026-06-16: Browser smoke at `http://localhost:3000/?codexSmoke=t0133` used a local mock JumpYard Cloud API only for availability. It selected SkyRider in the buy-entry add-ons step and confirmed the attestation showed only `Minst 100 cm` and `Passar bäst efter hopptiden`, did not show `Säkerhetscheck` or safety-check wording, kept `Fortsätt` disabled before confirmation, and enabled `Fortsätt` after clicking the height confirmation. No bookings, drafts, payments, redemptions, AWS resources, SMS, or email were created or changed.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `npm run validate` passed.
+- 2026-06-16: `git diff --check` passed with CRLF conversion notices only.
+
 ## T0132 Jump-Socks Manual Choice Validation
 
 - 2026-06-16: T0132 was activated as a phone UI ticket to present jump socks as an important manual choice in the buy-entry add-ons step.
