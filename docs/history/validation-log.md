@@ -2,6 +2,17 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0130 Buy-Entry Start-Time/Date Clarification Validation
+
+- 2026-06-16: T0130 was activated as a phone UI ticket to clarify the buy-entry time-selection step as start time with today's date context.
+- 2026-06-16: `jumpyard-checkin-phone/src/context/LanguageContext.tsx` changed Swedish buy-entry time copy to `Välj starttid`, `Idag`, and `Välj när ni vill börja hoppa.`; English copy now says `Choose start time`, `Today`, and `Choose when you want to start jumping.`
+- 2026-06-16: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now formats today's date in the `Europe/Stockholm` time zone and shows `Idag, [datum]` between the time-step heading and help text.
+- 2026-06-16: Browser smoke at `http://127.0.0.1:3030/?codexSmoke=t0130` clicked `Köp entré` and confirmed the time step visible text included `Välj starttid`, `Idag, 16 juni`, `Välj när ni vill börja hoppa.`, and the available start times.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `npm run validate` passed.
+- 2026-06-16: `git diff --check` passed with CRLF conversion notices only.
+
 ## T0129 Buy-Flow UX Backlog Intake Validation
 
 - 2026-06-16: T0129 was activated by explicit user request as a documentation-only backlog intake ticket.

@@ -25,8 +25,7 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0130` | Buy-flow UX | Clarify on-site time selection as start time and show that times apply today. | T0129 | Medium | Phone buy-entry time step only; no future-booking flow rebuild. | Phone lint/build plus focused smoke of time-step copy. | Ready |
-| `T0131` | Buy-flow UX | Clarify the product step as jump duration after a selected start time. | T0130 | Medium | Product step and review summary copy only; no first-version flow rebuild. | Phone lint/build plus smoke of start time, jump duration, and jumper count in review. | Planned |
+| `T0131` | Buy-flow UX | Clarify the product step as jump duration after a selected start time. | T0130 | Medium | Product step and review summary copy only; no first-version flow rebuild. | Phone lint/build plus smoke of start time, jump duration, and jumper count in review. | Ready |
 | `T0132` | Buy-flow UX | Present jump socks as an important manual choice with warm copy. | T0131 | Medium | Add-ons step sock section only; no automatic sock insertion. | Phone lint/build plus smoke of manual sock quantity and already-have-socks confirmation. | Planned |
 | `T0133` | Buy-flow UX | Tighten SkyRider attestation copy around height and timing only. | T0132 | Medium | SkyRider attestation copy only; preserve existing consent gate and capacity logic. | Phone lint/build plus smoke of SkyRider copy and checkbox wording. | Planned |
 | `T0134` | Payment UX | Add a clear post-payment loading state while the paid booking is fetched and check-in is prepared. | T0133 | High | Directly after approved buy-entry payment; no payment provider or backend contract changes unless explicitly activated. | Phone lint/build plus payment-return mock smoke for loading, retry, and fallback copy. | Planned |
@@ -40,32 +39,6 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 ## Buy-Flow UX Ticket Intake
 
 These tickets use the repository's normal `T####` ticket language. The source brief's external labels are intentionally not used as ticket identifiers.
-
-### T0130 Clarify Start Time And Date
-
-Priority: P1
-
-Scope: Mobile on-site buy-entry flow, time-selection step.
-
-Goal: Change the time-selection step from a generic time choice to a clear start-time choice and make it obvious that the available times apply today.
-
-Proposed copy:
-
-- Heading: `Välj starttid`
-- Subtext: `Idag, [datum]`
-- Help text: `Välj när ni vill börja hoppa.`
-
-Acceptance criteria:
-
-- The time step shows `Välj starttid`.
-- `Idag` or the date is visible near the time options.
-- The guest understands this is on-site drop-in for today, not future booking.
-- No user-facing copy introduced by the ticket uses en dashes, em dashes, or long dash punctuation.
-
-Non-goals:
-
-- Do not add future-date booking.
-- Do not change Roller availability, payment, draft, or check-in APIs.
 
 ### T0131 Clarify Jump Duration After Start Time
 
