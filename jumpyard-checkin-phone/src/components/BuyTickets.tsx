@@ -201,6 +201,11 @@ function getCapacityLabel(product: NewBookingProduct | null, spotsAvailable: str
   return capacityRemaining === null ? spotsAvailable : `${capacityRemaining} ${spotsLeft}`;
 }
 
+function getProductDurationLabel(product: NewBookingProduct | null) {
+  const duration = product?.label.match(/\b\d+\s*min\b/i)?.[0];
+  return duration ? duration.replace(/\s+/, ' ') : product?.label ?? '';
+}
+
 function getJumperCount(product: NewBookingProduct | null, nextQuantity: number) {
   return product?.type === 'family'
     ? nextQuantity * Math.max(1, product.jumpersPerUnit)
@@ -447,6 +452,9 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const giftCardInputs = buildGiftCardInputs(giftCardNumber);
   const discountCodeInputs = buildDiscountCodeInputs(clipCardCode);
   const productLabels = buildProductLabelMap(selectedProduct, buyAddons);
+  const selectedProductDurationLabel = getProductDurationLabel(selectedProduct);
+  const selectedProductTypeLabel =
+    selectedProduct?.type === 'family' ? t.buy.sectionFamily : t.buy.sectionEntry;
   const giftCardErrors = quote?.giftCards?.errors ?? [];
   const discountCodeErrors = quote?.discountCodes?.errors ?? [];
   const giftCardInputState = getPaymentOptionInputState(giftCardNumber, giftCardInputDirty, giftCardErrors);
@@ -501,7 +509,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       ? [
           {
             key: 'entry',
-            label: selectedProduct.label,
+            label: `${selectedProductDurationLabel} · ${selectedProductTypeLabel}`,
             qty: quantity,
             total: entryTotal,
             icon: 'admission-ticket' as JumpyardIconName,
@@ -763,6 +771,10 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const renderProductCard = (product: NewBookingProduct) => {
     const max = getMaxQuantity(product);
     const available = product.available && max > 0 && product.productId !== null;
+    const durationLabel = getProductDurationLabel(product);
+    const capacityLabel = getCapacityLabel(product, t.buy.spotsAvailable, t.buy.spotsLeft);
+    const productMeta =
+      product.type === 'family' ? `${t.buy.familyNote} · ${capacityLabel}` : capacityLabel;
     return (
       <button
         key={product.key}
@@ -776,14 +788,14 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       >
         <JumpyardIcon name="admission-ticket" className="w-9 h-9 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-black italic uppercase ${available ? 'text-foreground' : 'text-muted'}`}>
-            {product.label}
+          <p className={`text-lg font-black italic uppercase ${available ? 'text-foreground' : 'text-muted'}`}>
+            {durationLabel}
           </p>
           <p className={`text-[10px] font-bold italic uppercase tracking-wider mt-0.5 ${
             available ? 'text-muted' : 'text-muted/70'
           }`}>
             {available
-              ? getCapacityLabel(product, t.buy.spotsAvailable, t.buy.spotsLeft)
+              ? productMeta
               : t.buy.spotsFull}
           </p>
         </div>
@@ -883,11 +895,12 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       {step === 'PRODUCT' && (
         <>
           <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">
-            {t.buy.selectTicket}
+            {t.buy.selectJumpTime}
           </h2>
           {selectedTime && (
-            <p className="text-muted text-xs mb-4 text-center flex items-center justify-center gap-1.5">
-              <JumpyardIcon name="time" className="w-5 h-5" /> {selectedTime}
+            <p className="text-muted text-xs mb-4 text-center flex items-center justify-center gap-1.5 uppercase font-bold italic">
+              <JumpyardIcon name="time" className="w-5 h-5" />
+              <span>{t.buy.startTimeLabel} {selectedTime} {t.buy.todaySuffix}</span>
             </p>
           )}
 
@@ -913,7 +926,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
           <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
             <div className="bg-white border border-border rounded-xl px-3 py-2 mb-4 inline-flex items-center gap-2">
               <JumpyardIcon name="admission-ticket" className="w-6 h-6" />
-              <span className="text-sm font-bold italic text-foreground">{selectedProduct.label}</span>
+              <span className="text-sm font-bold italic text-foreground">{selectedProductDurationLabel}</span>
               {selectedProduct.type === 'family' && (
                 <span className="text-[10px] text-muted">· {t.buy.familyNote}</span>
               )}
@@ -923,7 +936,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
               {selectedProduct.type === 'family' ? t.buy.quantityPackages : t.buy.quantityJumpers}
             </h2>
             <p className="text-muted text-xs mb-4 flex items-center justify-center gap-1">
-              <JumpyardIcon name="time" className="w-5 h-5" /> {selectedProduct.startTime}
+              <JumpyardIcon name="time" className="w-5 h-5" /> {t.buy.startTimeLabel} {selectedProduct.startTime} {t.buy.todaySuffix}
             </p>
 
             <div className="flex items-center justify-center gap-6 mb-2">
@@ -1137,9 +1150,20 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             <p className="text-muted text-xs mb-5 text-center">{t.buy.reviewDesc}</p>
 
             <div className="bg-white border border-border rounded-xl p-3 mb-4">
-              <div className="mb-3 flex items-center justify-center gap-1.5 text-xs font-bold italic uppercase text-muted">
-                <JumpyardIcon name="time" className="h-5 w-5" />
-                <span>{t.buy.jumpTimeLabel} {selectedProduct.startTime}</span>
+              <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-lg bg-surface/70 px-2 py-2">
+                  <p className="text-[9px] font-bold italic uppercase tracking-wider text-muted">{t.buy.startTimeLabel}</p>
+                  <p className="text-sm font-black italic text-foreground">{selectedProduct.startTime}</p>
+                  <p className="text-[9px] uppercase text-muted">{t.buy.todaySuffix}</p>
+                </div>
+                <div className="rounded-lg bg-surface/70 px-2 py-2">
+                  <p className="text-[9px] font-bold italic uppercase tracking-wider text-muted">{t.buy.jumpTimeLabel}</p>
+                  <p className="text-sm font-black italic text-foreground">{selectedProductDurationLabel}</p>
+                </div>
+                <div className="rounded-lg bg-surface/70 px-2 py-2">
+                  <p className="text-[9px] font-bold italic uppercase tracking-wider text-muted">{t.buy.jumpersLabel}</p>
+                  <p className="text-sm font-black italic text-foreground">{jumperCount}</p>
+                </div>
               </div>
               <div className="space-y-2">
                 {basketLines.map((line) => (

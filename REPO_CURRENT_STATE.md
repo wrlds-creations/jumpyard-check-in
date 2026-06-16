@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-16
-- Current branch: `codex/t0130-starttid-datum`
-- Current status: No active ticket after T0130 buy-entry start-time/date clarification. The time-selection step now presents start time with today's date context.
-- Current ticket: None active after T0130
-- Completed tickets: archived in `docs/history/completed-tickets.md` (129 completed tickets; latest `T0130`).
-- Recommended next step: activate `T0131` to clarify the product step as jump duration after the selected start time.
+- Current branch: `codex/t0131-hopptid-produktsteg`
+- Current status: No active ticket after T0131.
+- Current ticket: `NO_ACTIVE_TICKET`
+- Completed tickets: archived in `docs/history/completed-tickets.md` (130 completed tickets; latest `T0131`).
+- Recommended next step: activate `T0132` to present jump socks as an important manual choice.
 
 ## Current Structure
 
@@ -41,28 +41,28 @@ Major implementation roots remain unchanged by T0128: `infra/`, `jumpyard-checki
 | `node scripts/validate-history-archives.js` | Verify required history/backlog files exist and active docs link to them. | Added in T0128. |
 | `npm run validate` | Run the root documentation/workflow validators. | Required after source-of-truth changes. |
 | `git diff --check` | Check whitespace in the working diff. | Required before closeout/commit. |
-| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Required for T0130 because it touched phone UI. |
-| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | T0130 does not create, change, deploy, or delete AWS resources. |
+| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Required for T0131 because it touched phone UI. |
+| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | T0131 did not create, change, deploy, or delete AWS resources. |
 
 ## Completed Tickets
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 129
-- Latest completed ticket: `T0130`
-- Current active ticket: None active after T0130
+- Archived completed-ticket count: 130
+- Latest completed ticket: `T0131`
+- Current active ticket: None active after T0131
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active after T0130 | No active Codex ticket. | Complete | T0130 clarified the buy-entry time-selection step as start time and showed today's date context near the available times. |
+| `NO_ACTIVE_TICKET` | No active ticket. | Closed | Activate `T0132` next. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0131` | Clarify the product step as jump duration after a selected start time. | Ready | Next ticket in the buy-flow/check-in UX sequence documented in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). |
+| `T0132` | Present jump socks as an important manual choice with warm copy. | Ready | Next ticket in the buy-flow/check-in UX sequence documented in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -84,6 +84,7 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - T0126 safe readiness checks passed for JumpYard Cloud lookup, public guest/admin page load, dev availability, and existing-booking add-on quote. A dev ready-for-staff handoff was created for booking `5166996` as `JY3829`.
 - T0129 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0130 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
+- T0131 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 
 ## Current Risks And Open Questions
 
@@ -91,5 +92,6 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - The T0126 rehearsal touched Roller Playground and JumpYard Cloud dev operational state only. It did not redeem tickets and did not change app/backend/AWS/Roller Live/SMS/email behavior.
 - T0129 was docs-only; no phone/admin/kiosk/backend/AWS/Roller/payment/SMS/email behavior changed.
 - T0130 changed phone UI copy/display only; no backend, AWS, Roller, payment, draft, SMS, email, or future-date booking behavior changed.
+- T0131 changed phone UI copy/display only; no backend, AWS, Roller, payment, draft, SMS, email, or flow-order behavior changed.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before this branch was created.

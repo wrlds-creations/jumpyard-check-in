@@ -4,18 +4,18 @@
 NO_ACTIVE_TICKET
 
 ## Goal
-No active Codex ticket.
+No active ticket. Activate `T0132` next to present jump socks as an important manual choice with warm copy.
 
 ## Context
 - T0126 completed the Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15.
 - T0129 completed the buy-flow/check-in UX backlog intake on 2026-06-16.
 - T0130 completed the buy-entry start-time/date clarification on 2026-06-16.
+- T0131 completed the buy-entry jump-duration clarification on 2026-06-16.
 - Historical project memory lives in `docs/history/` and broad forward planning lives in `docs/roadmap/backlog.md`.
-- Select and activate the next scoped ticket before making further repository changes.
-- Recommended next ticket: `T0131`.
+- `T0132` is the next buy-flow/check-in UX ticket documented in `docs/roadmap/backlog.md`.
 
 ## Allowed Areas
-- None until a new ticket is selected.
+- None until the next ticket is activated.
 
 ## Do Not Touch
 - Roller Live
@@ -34,11 +34,8 @@ No active Codex ticket.
 - unrelated local prompt files
 
 ## Requirements
-1. Select and activate a new scoped ticket before making further repository changes.
+- No active implementation requirements.
+- Start the next ticket by reading the source-of-truth files and activating `T0132`.
 
 ## Validation
-- `node scripts/validate-current-ticket.js`
-- `node scripts/validate-followups.js`
-- `node scripts/validate-history-archives.js`
-- `npm run validate`
-- `git diff --check`
+- No active ticket validation beyond the repository workflow validators.
