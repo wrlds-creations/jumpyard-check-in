@@ -2,6 +2,18 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0138 Buy-Entry Small UI Polish Validation
+
+- 2026-06-16: T0138 was activated as a narrow phone buy-entry UI polish ticket for socks checkbox visibility, review metadata icons, payment-code helper text, and post-payment sync display.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now shows the `Vi har redan godkända hoppstrumpor.` checkbox only while selected socks quantity is zero. Adding one or more socks hides the checkbox without auto-adding socks.
+- 2026-06-16: Buy-entry review metadata now uses generated JumpYard icons for `Starttid`, `Hopptid`, and `Antal hoppare`: `time`, `trampoline-jump`, and `group`.
+- 2026-06-16: Empty-state helper text under Presentkort and Klippkort inputs is no longer rendered, while ready/applied/rejected feedback remains conditional on actual input state.
+- 2026-06-16: After the payment drop-in reports approved payment, the buy-entry payment step now swaps the Roller payment card out for the booking-sync state with the generated `booking-confirmed` icon plus spinner and `Hämtar bokningen...` copy. The previous `Betalning klar` approved card no longer remains visible underneath.
+- 2026-06-16: Local Playwright smoke used a temporary mock JumpYard Cloud API at `http://127.0.0.1:43218` and Next dev at `http://127.0.0.1:3038/?park=1`. The smoke verified socks checkbox count `1 -> 0` after adding socks, review icon sources `time.png`, `trampoline-jump.png`, and `group.png`, empty payment-code helper count `0`, approved callback reached through the rendered `RollerPaymentDropIn` component boundary, sync card visible, Roller payment card count `0`, `Betalning klar` count `0`, `Hämtar bokningen...` count `1`, and `booking-confirmed.png` visible. One expected mock lookup HTTP 404 appeared while the UI stayed in the sync/loading state.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `node scripts/validate-current-ticket.js`, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0137 Channel-Aware Final Confirmation Validation
 
 - 2026-06-16: T0137 was activated as a phone confirmation/final-step UX ticket to make the final copy lighter and channel-aware without changing redeem behavior, staff/admin queue semantics, backend, AWS, Roller, quote, draft, payment, session, SMS, or email contracts.

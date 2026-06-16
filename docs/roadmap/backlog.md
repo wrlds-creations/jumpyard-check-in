@@ -25,7 +25,7 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| None | - | No queued ticket in the current batch. | - | - | - | - | Idle |
+| `T0139` | Buy-flow recovery | Persist the pre-payment buy-flow position locally so a refresh returns the guest to the correct step before payment is completed. | T0136/T0138 completed | Medium | Phone buy-entry client state only unless explicitly expanded; do not store raw payment JWTs, payment-provider secrets, or unnecessary raw gift-card/Klippkort codes. | Phone lint/build plus browser smoke for reload recovery before payment. | Queued |
 | TBD | Guest-facing add-on catalog | Review which Roller add-ons should be exposed to guests beyond SkyRider, socks, padlock, and coffee. | FU-044/FU-084 | Medium | Product/UX review before implementation. | Approved catalog and scope before code changes. | Planned |
 | TBD | Payment method verification | Reverify visible payment methods during the first controlled Live payment test. | FU-071 archived note/T0054/T0075 | High | Do not infer Live methods from Playground without smoke. | Live payment surface evidence. | Planned |
 | TBD | Production readiness sequence | Resume staging/live config, auth, retention, cutover, monitoring, and rollback work after demo scope is stable. | FU-055-FU-061 | High | Separate scoped readiness tickets. | Readiness gates and runbooks pass. | Planned |
