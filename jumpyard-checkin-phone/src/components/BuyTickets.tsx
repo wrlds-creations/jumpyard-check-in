@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, ArrowLeft, Check, ChevronDown, Minus, Phone, Plus, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, ChevronDown, Minus, Plus, RefreshCw } from 'lucide-react';
 import {
   CloudBookingError,
   createDraftBooking,
@@ -67,6 +67,7 @@ type AddonQuantityMap = Record<AddonId, number>;
 type PaymentOptionInputState = 'empty' | 'ready' | 'applied' | 'rejected';
 
 const PAYMENT_OPTION_CODE_MAX_LENGTH = 32;
+const SOCKS_UNLIMITED_MAX = Number.MAX_SAFE_INTEGER;
 const PAYMENT_OPTION_INPUT_CLASS =
   'w-full bg-surface border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:ring-2 focus:ring-primary/10 outline-none transition-all';
 
@@ -276,6 +277,7 @@ function getAddonMaxQuantity(
   addonAvailability: NewBookingProduct | null,
   jumperCount: number
 ) {
+  if (addon.id === 'socks') return SOCKS_UNLIMITED_MAX;
   const baseMax = Math.max(1, jumperCount * addon.maxPerGuest);
   if (!addon.requiresAvailability) return baseMax;
   if (!addonAvailability?.available || !addonAvailability.productId) return 0;
@@ -688,6 +690,8 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   const socksAddon = visibleBuyAddons.find((addon) => addon.id === 'socks') ?? null;
   const otherBuyAddons = visibleBuyAddons.filter((addon) => addon.id !== 'socks');
   const socksQty = addonQty.socks;
+  const socksRecommendedVisibleCount = Math.min(Math.max(0, jumperCount), 5);
+  const socksRecommendationProgress = Math.min(100, Math.round((socksQty / Math.max(1, jumperCount)) * 100));
   const showSocksConfirmation = socksQty === 0;
   const selectedAddons: Addon[] = buyAddons.flatMap((addon) => {
     if (addonQty[addon.id] <= 0 || getBuyAddonMax(addon) <= 0 || !isPricedAddon(addon)) return [];
@@ -1559,11 +1563,36 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                 </div>
 
                 {!alreadyHasApprovedSocks && (
-                  <div className="mt-3 flex items-center justify-between rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
-                    <span className="text-[10px] font-black italic uppercase tracking-wider text-muted">
-                      {t.addons.socksRecommendedCount}
-                    </span>
-                    <span className="text-xl font-black italic text-primary">{jumperCount}</span>
+                  <div className="mt-3 rounded-xl border border-border bg-surface-strong px-3 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-black italic uppercase tracking-wider text-muted">
+                        {t.addons.socksRecommendedCount}
+                      </span>
+                      <span className="rounded-full bg-white px-3 py-1 text-sm font-black italic text-primary shadow-sm">
+                        {jumperCount}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1">
+                        {Array.from({ length: socksRecommendedVisibleCount }).map((_, index) => (
+                          <JumpyardIcon key={index} name="grip-socks" className="h-5 w-5" />
+                        ))}
+                        {jumperCount > socksRecommendedVisibleCount && (
+                          <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-black italic text-muted shadow-sm">
+                            +{jumperCount - socksRecommendedVisibleCount}
+                          </span>
+                        )}
+                      </div>
+                      <span className="shrink-0 text-[11px] font-black italic text-foreground">
+                        {t.addons.socksSelectedCount} {socksQty}/{jumperCount}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all"
+                        style={{ width: `${socksRecommendationProgress}%` }}
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -1692,7 +1721,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
 
             <label className="block mb-5">
               <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
-                <Phone size={14} className="text-primary" /> {t.buy.phoneLabel}
+                <JumpyardIcon name="phone" className="h-5 w-5" /> {t.buy.phoneLabel}
               </span>
               <input
                 type="tel"
@@ -1957,7 +1986,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                   <div className="relative mx-auto mb-4 h-20 w-20" aria-hidden="true">
                     <div className="absolute inset-0 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
                     <div className="absolute inset-2 flex items-center justify-center rounded-full bg-white border border-border shadow-sm">
-                      <Check size={30} className="text-primary" />
+                      <JumpyardIcon name="success-check" className="h-11 w-11" />
                     </div>
                   </div>
                 )}

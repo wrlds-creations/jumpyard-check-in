@@ -20,6 +20,7 @@ export type JumpyardIconName =
     | 'no-running'
     | 'padlock'
     | 'payment-card'
+    | 'phone'
     | 'points-star'
     | 'presentkort'
     | 'safe-tricks'

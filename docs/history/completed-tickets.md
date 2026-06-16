@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 140
-Latest archived completed ticket: `T0141`
+Archived count: 141
+Latest archived completed ticket: `T0142`
 
 ## Completed Tickets
 
@@ -152,3 +152,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0139` | Pre-payment buy-flow recovery. | 2026-06-16 | Phone buy-entry now stores a safe local recovery snapshot before draft/payment, restores refreshed guests to the safest matching internal step after reloading availability, preserves time/product/quantity/add-ons/socks/SkyRider consent/contact where safe, re-quotes review without raw payment codes, and keeps raw payment JWTs, payment-provider secrets, raw Presentkort/Klippkort codes, backend, AWS, Roller, quote/draft/session/redeem/SMS/email contracts unchanged. |
 | `T0140` | Buy-entry final polish follow-up. | 2026-06-16 | Phone buy-entry now labels the final action `Gör en ny bokning`, uses the group/family icon for family jump-time products, shortens the review metadata label to `Hoppare`, shows the approved-payment sync card as `Betalning genomförd` with a capacity-loader-style spinner and green check, and changes buy-entry safety video copy to `Säkerhetsgenomgång` without the header icon while preserving payment provider, backend, AWS, Roller, quote, draft, session, redeem, SMS, and email contracts. |
 | `T0141` | Buy-entry final polish follow-up. | 2026-06-16 | Phone buy-entry now uses a red approved-payment sync check, adds a short `Rekommenderat antal` socks recommendation based on the current jumper count without auto-adding socks, changes the buy-entry safety-rules step to `Sista steget` with no header icon, shows only the consistent circular loader during buy-flow recovery checking, makes the final `Gör en ny bokning` action smaller/red with the white generated icon, and lets the main phone surface scroll vertically instead of locking overflow while preserving payment provider, backend, AWS, Roller, quote, draft, session, redeem, SMS, and email contracts. |
+| `T0142` | Buy-entry final front polish. | 2026-06-16 | Phone buy-entry now shows a richer socks recommendation panel with sock icons and selected count, removes the manual socks quantity cap, adds and uses a generated JumpYard-style `phone.png` icon for contact phone fields, uses the generated `success-check` icon in the completed-payment loader, changes buy-entry safety/final copy away from check-in QR language, removes the guest-facing QR/code card from final confirmation, and places `Gör en ny bokning` below the confirmation card while preserving backend QR/session data and backend, AWS, Roller, quote, draft, payment provider, session, redeem, staff/admin handoff, SMS, and email contracts. |
