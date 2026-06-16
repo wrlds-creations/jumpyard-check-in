@@ -399,6 +399,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [paymentSyncing, setPaymentSyncing] = useState(false);
   const [paymentSyncError, setPaymentSyncError] = useState<string | null>(null);
+  const [paymentApprovedForSync, setPaymentApprovedForSync] = useState(false);
 
   const selectedSlot = availability?.slots.find((slot) => slot.startTime === selectedTime) ?? null;
   const entryProducts = selectedSlot?.products.filter((product) => product.type === 'entry') ?? [];
@@ -507,6 +508,12 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const discountCodeAppliedAmount = getDiscountCodeAppliedAmount(quote);
   const draftAmountOwing = getDraftAmountOwing(draft);
   const noPaymentRequired = draftAmountOwing !== null && draftAmountOwing <= 0;
+  const showPaymentSyncCard = paymentApprovedForSync || paymentSyncing || Boolean(paymentSyncError);
+
+  const clearPaymentSyncState = () => {
+    setPaymentSyncError(null);
+    setPaymentApprovedForSync(false);
+  };
   const basketLines = [
     ...(selectedProduct
       ? [
@@ -559,7 +566,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setAddonQty(createEmptyAddonQty());
     setQuote(null);
     setDraft(null);
-    setPaymentSyncError(null);
+    clearPaymentSyncState();
     setGiftCardNumber('');
     setClipCardCode('');
     setPaymentOptionsOpen(false);
@@ -577,7 +584,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setAddonQty(createEmptyAddonQty());
     setQuote(null);
     setDraft(null);
-    setPaymentSyncError(null);
+    clearPaymentSyncState();
     setSkyriderConsentConfirmed(false);
     setAlreadyHasApprovedSocks(false);
     setStep('QUANTITY');
@@ -596,7 +603,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     });
     setQuote(null);
     setDraft(null);
-    setPaymentSyncError(null);
+    clearPaymentSyncState();
     setSkyriderConsentConfirmed(false);
   };
 
@@ -604,7 +611,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setGiftCardNumber(clampPaymentOptionCode(value));
     setSubmitError(null);
     setDraft(null);
-    setPaymentSyncError(null);
+    clearPaymentSyncState();
     if (quote) setGiftCardInputDirty(true);
   };
 
@@ -612,7 +619,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setClipCardCode(clampPaymentOptionCode(value));
     setSubmitError(null);
     setDraft(null);
-    setPaymentSyncError(null);
+    clearPaymentSyncState();
     if (quote) setClipCardInputDirty(true);
   };
 
@@ -620,7 +627,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setSubmitError(null);
     setQuote(null);
     setDraft(null);
-    setPaymentSyncError(null);
+    clearPaymentSyncState();
     const addon = buyAddons.find((entry) => entry.id === id);
     const max = addon ? getBuyAddonMax(addon) : 0;
     if (id === 'skyrider') setSkyriderConsentConfirmed(false);
@@ -632,7 +639,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setSubmitError(null);
     setQuote(null);
     setDraft(null);
-    setPaymentSyncError(null);
+    clearPaymentSyncState();
     if (checked) {
       setAddonQty((current) => ({ ...current, socks: 0 }));
     }
@@ -728,7 +735,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
         discountCodeInputs
       );
       setDraft(result);
-      setPaymentSyncError(null);
+      clearPaymentSyncState();
       if (getDraftAmountOwing(result) !== null && getDraftAmountOwing(result)! <= 0) {
         setStep('PENDING');
         void resolvePaidDraftBooking(result);
@@ -1419,26 +1426,62 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
               amountLabel={formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
               paymentSession={draft.paymentSession}
               onApproved={() => {
+                setPaymentApprovedForSync(true);
                 void resolvePaidDraftBooking();
               }}
               onFailed={() => undefined}
             />
 
-            {paymentSyncing && (
-              <p className="mt-4 text-xs text-muted font-bold italic uppercase">{t.buy.paymentSyncing}</p>
-            )}
-
-            {paymentSyncError && (
-              <>
-                <p className="mt-4 text-sm text-danger font-bold italic">{paymentSyncError}</p>
-                <button
-                  onClick={() => void resolvePaidDraftBooking()}
-                  disabled={paymentSyncing}
-                  className="mt-3 w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-sm py-3 rounded-xl transition-all active:scale-[0.98]"
+            {showPaymentSyncCard && (
+              <div
+                className={`mt-4 rounded-xl border bg-white p-4 text-center ${
+                  paymentSyncError ? 'border-danger/30' : 'border-primary/30'
+                }`}
+                data-payment-sync-card="true"
+                data-payment-sync-error={paymentSyncError ? 'true' : 'false'}
+              >
+                <div
+                  className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full ${
+                    paymentSyncError ? 'bg-danger/10 text-danger' : 'bg-primary/10 text-primary'
+                  }`}
                 >
-                  {t.buy.paymentRetrySync}
-                </button>
-              </>
+                  {paymentSyncError ? (
+                    <AlertCircle size={24} />
+                  ) : paymentSyncing ? (
+                    <RefreshCw size={24} className="animate-spin" />
+                  ) : (
+                    <Check size={24} />
+                  )}
+                </div>
+                <h2 className="text-xl font-black italic uppercase text-foreground">
+                  {t.buy.paymentApprovedTitle}
+                </h2>
+                <p className="mt-2 text-sm text-muted">{t.buy.paymentApprovedDesc}</p>
+
+                {!paymentSyncError && (
+                  <div className="mt-4 rounded-lg bg-surface/70 px-3 py-3">
+                    <div className="flex items-center justify-center gap-2 text-xs font-black italic uppercase text-primary">
+                      <RefreshCw size={15} className="animate-spin" />
+                      {t.buy.paymentSyncing}
+                    </div>
+                    <p className="mt-1 text-xs text-muted">{t.buy.paymentSyncLoader}</p>
+                  </div>
+                )}
+
+                {paymentSyncError && (
+                  <>
+                    <p className="mt-4 text-sm font-bold text-danger">{paymentSyncError}</p>
+                    <p className="mt-1 text-xs text-muted">{t.buy.paymentSyncFallback}</p>
+                    <button
+                      onClick={() => void resolvePaidDraftBooking()}
+                      disabled={paymentSyncing}
+                      className="mt-3 w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-sm py-3 rounded-xl transition-all active:scale-[0.98]"
+                    >
+                      {t.buy.paymentRetrySync}
+                    </button>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </motion.div>

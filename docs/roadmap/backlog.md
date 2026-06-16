@@ -19,14 +19,13 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| None | Ticket selection | No active Codex ticket. Choose the next scoped ticket from active followups, roadmap priorities, or user direction before editing. | T0133 completed | Low | Activate `CODEX_TASK.md` before implementation. | Root validators should pass before new ticket work starts. | Ready for selection |
+| None | Ticket selection | No active Codex ticket. Choose the next scoped ticket from active followups, roadmap priorities, or user direction before editing. | T0134 completed | Low | Activate `CODEX_TASK.md` before implementation. | Root validators should pass before new ticket work starts. | Ready for selection |
 
 ## Next
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0134` | Payment UX | Add a clear post-payment loading state while the paid booking is fetched and check-in is prepared. | T0133 | High | Directly after approved buy-entry payment; no payment provider or backend contract changes unless explicitly activated. | Phone lint/build plus payment-return mock smoke for loading, retry, and fallback copy. | Ready |
-| `T0135` | Safety UX | Add buy-entry-specific context before the safety video after purchase. | T0134 | Medium | Buy-entry safety copy only; existing-booking safety copy can stay simpler. | Phone lint/build plus smoke of paid buy-entry safety-video and rules copy. | Planned |
+| `T0135` | Safety UX | Add buy-entry-specific context before the safety video after purchase. | T0134 completed | Medium | Buy-entry safety copy only; existing-booking safety copy can stay simpler. | Phone lint/build plus smoke of paid buy-entry safety-video and rules copy. | Ready |
 | `T0136` | Flow recovery | Persist local buy-flow state so refresh can resume after purchase and during safety steps. | T0135 | High | Client-side buy-flow recovery only unless the activated ticket explicitly scopes server resume changes. | Phone lint/build plus refresh/resume smoke for paid and unsafe-to-resume states. | Planned |
 | `T0137` | Confirmation UX | Make the final confirmation view lighter and channel-aware. | T0136 | Medium | Confirmation/final-step copy and handout summary only; no redeem or staff workflow changes. | Phone lint/build plus smoke of on-site, SMS/home, and kiosk copy if those channels are in scope. | Planned |
 | TBD | Guest-facing add-on catalog | Review which Roller add-ons should be exposed to guests beyond SkyRider, socks, padlock, and coffee. | FU-044/FU-084 | Medium | Product/UX review before implementation. | Approved catalog and scope before code changes. | Planned |
@@ -36,34 +35,6 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 ## Buy-Flow UX Ticket Intake
 
 These tickets use the repository's normal `T####` ticket language. The source brief's external labels are intentionally not used as ticket identifiers.
-
-### T0134 Add Clear Post-Payment Loading State
-
-Priority: P0/P1
-
-Scope: Immediately after approved buy-entry payment.
-
-Goal: After payment, clearly tell the guest that payment is complete and the booking is being fetched. The guest should not wonder where the purchase went.
-
-Proposed copy:
-
-- Heading: `Betalning klar`
-- Text: `Vi hämtar din bokning och förbereder check-in.`
-- Loader text: `Det tar bara några sekunder.`
-- Fallback copy: `Försök igen eller visa detta för personalen.`
-
-Acceptance criteria:
-
-- Show a clear spinner or loading card after approved payment.
-- The status is larger and clearer than a small line below the payment box.
-- If sync takes too long, show retry.
-- Use the fallback copy when retry/recovery is needed.
-- Do not use `Personalkod`.
-
-Non-goals:
-
-- Do not change payment provider integration.
-- Do not change server payment settlement rules unless explicitly scoped when the ticket is activated.
 
 ### T0135 Add Buy-Entry Safety-Video Context
 

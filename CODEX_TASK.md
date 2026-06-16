@@ -4,7 +4,7 @@
 NO_ACTIVE_TICKET
 
 ## Goal
-No active ticket. Activate `T0134` next to add a clear post-payment loading state while the paid booking is fetched and check-in is prepared.
+No active ticket. Activate `T0135` next to add buy-entry-specific context before the safety video after purchase.
 
 ## Context
 - T0126 completed the Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15.
@@ -13,8 +13,9 @@ No active ticket. Activate `T0134` next to add a clear post-payment loading stat
 - T0131 completed the buy-entry jump-duration clarification on 2026-06-16.
 - T0132 completed the jump-socks manual-choice clarification on 2026-06-16.
 - T0133 completed the SkyRider attestation copy tightening on 2026-06-16.
+- T0134 completed the post-payment loading-state clarification on 2026-06-16.
 - Historical project memory lives in `docs/history/` and broad forward planning lives in `docs/roadmap/backlog.md`.
-- `T0134` is the next buy-flow/check-in UX ticket documented in `docs/roadmap/backlog.md`.
+- `T0135` is the next buy-flow/check-in UX ticket documented in `docs/roadmap/backlog.md`.
 
 ## Allowed Areas
 - None until the next ticket is activated.
@@ -37,7 +38,7 @@ No active ticket. Activate `T0134` next to add a clear post-payment loading stat
 
 ## Requirements
 - No active implementation requirements.
-- Start the next ticket by reading the source-of-truth files and activating `T0134`.
+- Start the next ticket by reading the source-of-truth files and activating `T0135`.
 
 ## Validation
 - No active ticket validation beyond the repository workflow validators.
