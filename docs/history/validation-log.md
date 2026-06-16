@@ -2,10 +2,29 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0129 Buy-Flow UX Backlog Intake Validation
+
+- 2026-06-16: T0129 was activated by explicit user request as a documentation-only backlog intake ticket.
+- 2026-06-16: `docs/roadmap/backlog.md` now documents the next scoped buy-flow/check-in UX tickets `T0130` through `T0137` and the backlog lifecycle rule that completed tickets are removed from backlog and recorded in `docs/history/completed-tickets.md`.
+- 2026-06-16: T0129 changed source-of-truth documentation only. It did not change app/backend/infra/AWS/Roller/payment/SMS/email behavior, credentials, bookings, drafts, payments, or redemptions.
+- 2026-06-16: Initial `npm run validate` caught that recommended next ticket `T0130` needed to be listed under `REPO_CURRENT_STATE.md` Confirmed Next Tickets; the state file was updated accordingly.
+- 2026-06-16: `node scripts/validate-current-ticket.js`, `node scripts/validate-followups.js`, `node scripts/validate-history-archives.js`, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0128 Closeout Validation
 
 - 2026-06-15: `node scripts/validate-current-ticket.js`, `node scripts/validate-followups.js`, `node scripts/validate-history-archives.js`, and `npm run validate` passed after `CODEX_TASK.md` moved to `NO_ACTIVE_TICKET`, `REPO_CURRENT_STATE.md` moved to none active, and `docs/history/completed-tickets.md` listed T0128 as completed.
 - 2026-06-15: `git diff --check` is part of the final T0128 handoff validation for this branch.
+
+## T0126 Pelle/Anders Demo Rehearsal Validation
+
+- 2026-06-15: T0126 was activated by explicit user request after T0128. Baseline `npm run validate`, `node scripts/validate-current-ticket.js`, and `git diff --check` passed before Playground writes.
+- 2026-06-15: Roller env guard passed with `ROLLER_ENV=playground` and Playground base URL.
+- 2026-06-15: Dev availability for 15:00, 15:30, 16:00, and 16:30 returned entry, family, SkyRider, JumpSocks, hänglås, and Bryggkaffe as available.
+- 2026-06-15: Guarded Roller Playground booking write created same-day rehearsal bookings `5166994`, `5166995`, `5166996`, and `5166997` with zero write errors.
+- 2026-06-15: JumpYard Cloud lookup returned `5166994`, `5166996`, and `5166997` as paid/ready and `5166995` as pending/payment-required.
+- 2026-06-15: Public guest and staff/admin Cloudflare pages returned HTTP `200`.
+- 2026-06-15: Existing-booking add-on quote for `5166997` returned `quoted`, total `165`, and `wroteBooking=false`.
+- 2026-06-15: A ready-for-staff dev handoff was created for SkyRider booking `5166996`: handoff `JY3829`, session `jycs_mqf5s3e1_c6e6d961`. This does not redeem Roller tickets.
 
 ## Archived REPO_CURRENT_STATE.md Validation Status
 

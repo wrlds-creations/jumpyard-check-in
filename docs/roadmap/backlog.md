@@ -2,6 +2,14 @@
 
 This backlog was created in T0128 so broad future planning does not bloat `REPO_CURRENT_STATE.md`. It is a planning surface, not proof that a ticket is active or completed.
 
+## Backlog Lifecycle
+
+- Backlog is for planned or active tickets only.
+- When a ticket is completed, remove it from the active backlog sections during closeout.
+- Record completed tickets in [docs/history/completed-tickets.md](../history/completed-tickets.md).
+- Record closeout validation evidence in [docs/history/validation-log.md](../history/validation-log.md) when validation is performed.
+- Keep `REPO_CURRENT_STATE.md` focused on the current ticket state and the recommended next ticket.
+
 ## Backlog Columns
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
@@ -11,16 +19,257 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| None | Ticket selection | No active Codex ticket. Choose the next scoped ticket from active followups, roadmap priorities, or user direction before editing. | T0128 completed | Low | Activate `CODEX_TASK.md` before implementation. | Root validators should pass before new ticket work starts. | Ready for selection |
+| None | Ticket selection | No active Codex ticket. Choose the next scoped ticket from active followups, roadmap priorities, or user direction before editing. | T0129 completed | Low | Activate `CODEX_TASK.md` before implementation. | Root validators should pass before new ticket work starts. | Ready for selection |
 
 ## Next
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| Manual | Demo rehearsal | Run the final Pelle/Anders demo rehearsal outside Codex. | T0123-T0125 | Medium | Manual rehearsal only; do not mark T0126 completed. | Record new scoped tickets for any findings. | Manual outside Codex |
+| `T0130` | Buy-flow UX | Clarify on-site time selection as start time and show that times apply today. | T0129 | Medium | Phone buy-entry time step only; no future-booking flow rebuild. | Phone lint/build plus focused smoke of time-step copy. | Ready |
+| `T0131` | Buy-flow UX | Clarify the product step as jump duration after a selected start time. | T0130 | Medium | Product step and review summary copy only; no first-version flow rebuild. | Phone lint/build plus smoke of start time, jump duration, and jumper count in review. | Planned |
+| `T0132` | Buy-flow UX | Present jump socks as an important manual choice with warm copy. | T0131 | Medium | Add-ons step sock section only; no automatic sock insertion. | Phone lint/build plus smoke of manual sock quantity and already-have-socks confirmation. | Planned |
+| `T0133` | Buy-flow UX | Tighten SkyRider attestation copy around height and timing only. | T0132 | Medium | SkyRider attestation copy only; preserve existing consent gate and capacity logic. | Phone lint/build plus smoke of SkyRider copy and checkbox wording. | Planned |
+| `T0134` | Payment UX | Add a clear post-payment loading state while the paid booking is fetched and check-in is prepared. | T0133 | High | Directly after approved buy-entry payment; no payment provider or backend contract changes unless explicitly activated. | Phone lint/build plus payment-return mock smoke for loading, retry, and fallback copy. | Planned |
+| `T0135` | Safety UX | Add buy-entry-specific context before the safety video after purchase. | T0134 | Medium | Buy-entry safety copy only; existing-booking safety copy can stay simpler. | Phone lint/build plus smoke of paid buy-entry safety-video and rules copy. | Planned |
+| `T0136` | Flow recovery | Persist local buy-flow state so refresh can resume after purchase and during safety steps. | T0135 | High | Client-side buy-flow recovery only unless the activated ticket explicitly scopes server resume changes. | Phone lint/build plus refresh/resume smoke for paid and unsafe-to-resume states. | Planned |
+| `T0137` | Confirmation UX | Make the final confirmation view lighter and channel-aware. | T0136 | Medium | Confirmation/final-step copy and handout summary only; no redeem or staff workflow changes. | Phone lint/build plus smoke of on-site, SMS/home, and kiosk copy if those channels are in scope. | Planned |
 | TBD | Guest-facing add-on catalog | Review which Roller add-ons should be exposed to guests beyond SkyRider, socks, padlock, and coffee. | FU-044/FU-084 | Medium | Product/UX review before implementation. | Approved catalog and scope before code changes. | Planned |
 | TBD | Payment method verification | Reverify visible payment methods during the first controlled Live payment test. | FU-071 archived note/T0054/T0075 | High | Do not infer Live methods from Playground without smoke. | Live payment surface evidence. | Planned |
 | TBD | Production readiness sequence | Resume staging/live config, auth, retention, cutover, monitoring, and rollback work after demo scope is stable. | FU-055-FU-061 | High | Separate scoped readiness tickets. | Readiness gates and runbooks pass. | Planned |
+
+## Buy-Flow UX Ticket Intake
+
+These tickets use the repository's normal `T####` ticket language. The source brief's external labels are intentionally not used as ticket identifiers.
+
+### T0130 Clarify Start Time And Date
+
+Priority: P1
+
+Scope: Mobile on-site buy-entry flow, time-selection step.
+
+Goal: Change the time-selection step from a generic time choice to a clear start-time choice and make it obvious that the available times apply today.
+
+Proposed copy:
+
+- Heading: `Välj starttid`
+- Subtext: `Idag, [datum]`
+- Help text: `Välj när ni vill börja hoppa.`
+
+Acceptance criteria:
+
+- The time step shows `Välj starttid`.
+- `Idag` or the date is visible near the time options.
+- The guest understands this is on-site drop-in for today, not future booking.
+- No user-facing copy introduced by the ticket uses en dashes, em dashes, or long dash punctuation.
+
+Non-goals:
+
+- Do not add future-date booking.
+- Do not change Roller availability, payment, draft, or check-in APIs.
+
+### T0131 Clarify Jump Duration After Start Time
+
+Priority: P1
+
+Scope: Product step after selected start time.
+
+Goal: Make the next step clearly about how long the guest wants to jump, not about choosing a second time.
+
+Proposed copy:
+
+- Heading: `Välj hopptid`
+- Subtext: `Starttid [tid] idag`
+- Product cards: `60 min`, `90 min`, `120 min`
+- Quantity step: `Antal hoppare`
+
+Acceptance criteria:
+
+- The product step shows the selected start time as static context.
+- The guest can distinguish start time from jump duration.
+- Review clearly shows start time, jump duration, and number of jumpers.
+- No first-version flow rebuild is required.
+
+Non-goals:
+
+- Do not rebuild the buy-entry step order.
+- Do not change quote, draft, payment, or Roller product selection semantics.
+
+### T0132 Present Jump Socks As Important Manual Choice
+
+Priority: P1
+
+Scope: Add-ons step in the buy-entry flow.
+
+Goal: Make socks feel important without aggressive copy. Guests should understand approved jump socks are needed, but the app must not add socks automatically.
+
+Proposed copy:
+
+- Section: `Hoppstrumpor`
+- Help text: `Alla som hoppar behöver godkända hoppstrumpor.`
+- Checkbox: `Vi har redan godkända hoppstrumpor.`
+- Alternative text when the checkbox is not selected: `Lägg till de strumpor ni behöver.`
+
+Acceptance criteria:
+
+- Socks are shown at the top or in their own clearly visible section.
+- The app does not add socks automatically.
+- The guest can choose sock quantity manually.
+- The guest can confirm that they already have approved socks.
+- Copy is warm and helpful, not guilt-driven.
+
+Non-goals:
+
+- Do not force a sock purchase.
+- Do not change add-on pricing, availability, payment, or Roller draft payloads except where the existing selected add-on model already applies.
+
+### T0133 Tighten SkyRider Copy
+
+Priority: P1
+
+Scope: SkyRider attestation.
+
+Goal: Focus the SkyRider step on the height requirement and recommended timing. Remove separate safety-check copy.
+
+Proposed copy:
+
+- Heading: `Innan SkyRider`
+- Point 1: `Minst 100 cm`
+- Text: `Alla som åker SkyRider behöver vara minst 100 cm.`
+- Point 2: `Passar bäst efter hopptiden`
+- Text: `Vi rekommenderar att SkyRider görs efter hoppasset.`
+- Checkbox: `Jag bekräftar att alla SkyRider-åkare är minst 100 cm.`
+
+Acceptance criteria:
+
+- Remove the separate point about a safety check.
+- The checkbox mentions only the height requirement.
+- Copy feels short and clear.
+- `SkyRider` is written consistently.
+
+Non-goals:
+
+- Do not change the existing height-confirmation requirement.
+- Do not change SkyRider capacity, quote, draft, payment, handout, or staff grouping behavior.
+
+### T0134 Add Clear Post-Payment Loading State
+
+Priority: P0/P1
+
+Scope: Immediately after approved buy-entry payment.
+
+Goal: After payment, clearly tell the guest that payment is complete and the booking is being fetched. The guest should not wonder where the purchase went.
+
+Proposed copy:
+
+- Heading: `Betalning klar`
+- Text: `Vi hämtar din bokning och förbereder check-in.`
+- Loader text: `Det tar bara några sekunder.`
+- Fallback copy: `Försök igen eller visa detta för personalen.`
+
+Acceptance criteria:
+
+- Show a clear spinner or loading card after approved payment.
+- The status is larger and clearer than a small line below the payment box.
+- If sync takes too long, show retry.
+- Use the fallback copy when retry/recovery is needed.
+- Do not use `Personalkod`.
+
+Non-goals:
+
+- Do not change payment provider integration.
+- Do not change server payment settlement rules unless explicitly scoped when the ticket is activated.
+
+### T0135 Add Buy-Entry Safety-Video Context
+
+Priority: P1
+
+Scope: Safety video in the buy-entry flow.
+
+Goal: When the safety video appears after payment, the guest should understand that purchase is complete and safety is the next step before the check-in QR appears.
+
+Proposed copy:
+
+- Heading: `Betalning klar`
+- Subtext: `Titta på säkerhetsfilmen innan ni får er check-in QR.`
+- Button after video: `Fortsätt`
+- Rules copy after video: `Nästan klar. Bekräfta reglerna så visar vi din check-in QR.`
+
+Acceptance criteria:
+
+- Buy-entry flow gets its own safety-video copy.
+- Existing-booking flow may keep simpler safety copy.
+- The guest understands that purchase is complete.
+- The guest understands check-in is not fully complete until the safety steps are complete.
+- No user-facing copy introduced by the ticket uses en dashes, em dashes, long dash punctuation, or `Personalkod`.
+
+Non-goals:
+
+- Do not change video completion tracking semantics unless explicitly required by the existing component contract.
+- Do not change final redeem or staff handoff behavior.
+
+### T0136 Persist Buy-Flow State For Refresh Recovery
+
+Priority: P1
+
+Scope: Mobile flow, especially after purchase and during safety steps.
+
+Goal: If the guest refreshes after buying a booking, the app should be able to resume locally and avoid losing the guest.
+
+Example recovery copy:
+
+- `Vi hittade din senaste check-in. Fortsätt där du var.`
+
+Acceptance criteria:
+
+- Store relevant buy-flow state in local storage or equivalent.
+- At minimum, store booking reference, draft/payment state, selected start time, selected product, jumper count, and current flow step.
+- After refresh, the app tries to resume the booking.
+- If the app cannot safely resume, it shows clear recovery copy.
+- Recovery copy must not feel like an error if payment is already complete.
+
+Non-goals:
+
+- Do not store raw payment JWTs.
+- Do not expose Roller credentials or make frontend Roller API calls.
+- Do not introduce server-owned resume changes unless explicitly scoped when the ticket is activated.
+
+### T0137 Lighten And Channel-Aware Final View
+
+Priority: P1
+
+Scope: Confirmation/final step.
+
+Goal: Make the final view simple and guest-friendly. Prefer check-in QR language over internal staff-state language.
+
+Proposed copy for mobile on-site:
+
+- Heading: `Check-in klar`
+- Text: `Visa din check-in QR när ni hämtar armband.`
+- Section: `Att hämta`
+- Button: `Börja om`
+
+Proposed copy for SMS/home:
+
+- Heading: `Check-in klar`
+- Text: `Visa din check-in QR när ni kommer till parken.`
+
+Proposed copy for kiosk later:
+
+- Heading: `Check-in klar`
+- Text: `Ta utskriften och visa den när ni hämtar armband.`
+
+Acceptance criteria:
+
+- Final-view copy adapts by channel.
+- Use `check-in QR` or `QR-kod`, not `Personalkod`.
+- Clearly show what the guest should pick up, for example wristbands, socks, SkyRider, or coffee.
+- Keep copy short and light.
+
+Non-goals:
+
+- Do not change redeem behavior.
+- Do not change staff/admin queue semantics.
+- Do not add new handout categories unless a scoped implementation ticket requires it.
 
 ## Later
 

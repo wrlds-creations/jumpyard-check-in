@@ -7,9 +7,11 @@ NO_ACTIVE_TICKET
 No active Codex ticket.
 
 ## Context
-- T0128 completed the full context-hygiene migration.
-- Historical project memory now lives in `docs/history/` and broad forward planning lives in `docs/roadmap/backlog.md`.
-- T0126 remains a manual Pelle/Anders demo rehearsal outside Codex and is not marked completed.
+- T0126 completed the Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15.
+- T0129 completed the buy-flow/check-in UX backlog intake on 2026-06-16.
+- Historical project memory lives in `docs/history/` and broad forward planning lives in `docs/roadmap/backlog.md`.
+- Select and activate the next scoped ticket before making further repository changes.
+- Recommended next ticket: `T0130`.
 
 ## Allowed Areas
 - None until a new ticket is selected.

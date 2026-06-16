@@ -4,12 +4,12 @@ Use this file as the short operational snapshot of what actually exists in the r
 
 ## Snapshot
 
-- Date: 2026-06-15
-- Current branch: `codex/t0128-full-context-hygiene-migration`
-- Current status: No active ticket after T0128. The full context-hygiene migration is complete, with old project memory moved into `docs/history` and `docs/roadmap`, active source-of-truth files shortened, and validators protecting the new structure. T0126 is handled manually outside Codex and is not a completed ticket.
-- Current ticket: None active after T0128
-- Completed tickets: archived in `docs/history/completed-tickets.md` (126 completed tickets; latest `T0128`).
-- Recommended next step: choose the next scoped Codex ticket from the roadmap or active followups, then activate it in `CODEX_TASK.md` before editing.
+- Date: 2026-06-16
+- Current branch: `codex/t0129-buy-flow-ux-backlog`
+- Current status: No active ticket after T0129 buy-flow/check-in UX backlog intake. The next planned buy-flow UX tickets are documented in `docs/roadmap/backlog.md` as `T0130` through `T0137`.
+- Current ticket: None active after T0129
+- Completed tickets: archived in `docs/history/completed-tickets.md` (128 completed tickets; latest `T0129`).
+- Recommended next step: activate `T0130` to clarify the on-site buy-entry start-time/date step, then implement tickets one at a time.
 
 ## Current Structure
 
@@ -41,27 +41,30 @@ Major implementation roots remain unchanged by T0128: `infra/`, `jumpyard-checki
 | `node scripts/validate-history-archives.js` | Verify required history/backlog files exist and active docs link to them. | Added in T0128. |
 | `npm run validate` | Run the root documentation/workflow validators. | Required after source-of-truth changes. |
 | `git diff --check` | Check whitespace in the working diff. | Required before closeout/commit. |
-| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Not required for T0128 because it is docs/tooling-only. |
-| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | T0128 does not create, change, deploy, or delete AWS resources. |
+| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Not required for T0129 because it is docs-only. |
+| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | T0129 does not create, change, deploy, or delete AWS resources. |
 
 ## Completed Tickets
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 126
-- Latest completed ticket: `T0128`
-- Current active ticket: None active after T0128
-- T0126 is handled manually outside Codex and is not marked completed.
+- Archived completed-ticket count: 128
+- Latest completed ticket: `T0129`
+- Current active ticket: None active after T0129
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active after T0128 | No active Codex ticket. | Complete | T0128 finished the full context-hygiene migration. Select a new scoped ticket before making further changes. T0126 is handled manually outside Codex and must not be marked completed. |
+| None active after T0129 | No active Codex ticket. | Complete | T0129 documented `T0130` through `T0137` in the roadmap backlog and added the backlog lifecycle rule for removing completed tickets from backlog. |
 
 ## Confirmed Next Tickets
 
-No next Codex ticket is confirmed. Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). T0126 is handled manually outside Codex and is not marked completed.
+| Ticket | Goal | Status | Notes |
+|---|---|---|---|
+| `T0130` | Clarify the on-site buy-entry start-time/date step. | Ready | First ticket in the `T0130`-`T0137` buy-flow/check-in UX sequence documented in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). |
+
+Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
 ## Validation Status
 
@@ -75,11 +78,16 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - T0128 Phase 6 project-context split passed after moving ticket narrative into history.
 - T0128 Phase 7 roadmap/backlog split passed after moving broad future planning out of this file.
 - T0128 Phase 8 current-snapshot compression and history-archive validation passed.
-- T0128 closeout validation is recorded in the final handoff for this branch.
+- T0128 closeout validation is recorded in the final handoff for that branch.
+- T0126 baseline validation passed before activating Playground booking rehearsal work.
+- T0126 created Playground bookings `5166994`, `5166995`, `5166996`, and `5166997` dated 2026-06-15.
+- T0126 safe readiness checks passed for JumpYard Cloud lookup, public guest/admin page load, dev availability, and existing-booking add-on quote. A dev ready-for-staff handoff was created for booking `5166996` as `JY3829`.
+- T0129 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 
 ## Current Risks And Open Questions
 
 - T0128 was docs/tooling-only; no phone/admin/kiosk/backend/AWS/Roller/payment/SMS/email behavior changed.
-- T0126 remains a manual Pelle/Anders demo rehearsal outside Codex and must not be marked completed automatically.
+- The T0126 rehearsal touched Roller Playground and JumpYard Cloud dev operational state only. It did not redeem tickets and did not change app/backend/AWS/Roller Live/SMS/email behavior.
+- T0129 was docs-only; no phone/admin/kiosk/backend/AWS/Roller/payment/SMS/email behavior changed.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before this branch was created.
