@@ -2,6 +2,18 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0134 Post-Payment Loading State Validation
+
+- 2026-06-16: T0134 was activated as a phone UI ticket to add a clear post-payment loading state after approved buy-entry payment while the paid booking is fetched for check-in.
+- 2026-06-16: `jumpyard-checkin-phone/src/context/LanguageContext.tsx` changed the approved-payment description to `Vi hämtar din bokning och förbereder check-in.`, added loader copy `Det tar bara några sekunder.`, added fallback copy `Försök igen eller visa detta för personalen.`, and kept matching English copy.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now tracks approved-payment sync separately from the lookup request, renders a prominent `Betalning klar` sync card with spinner/retry states under the payment drop-in, and clears stale sync state when the guest changes the basket, time, product, add-ons, or payment inputs.
+- 2026-06-16: Code review confirmed the new sync card is only shown from the approved-payment/paid-booking sync path, the retry action reuses the existing paid-draft lookup, and no quote, draft, backend, AWS, Roller, payment provider, SMS, or email contract changed.
+- 2026-06-16: Local in-app browser smoke used a temporary mock JumpYard Cloud API for availability, quote, and draft only. The flow reached the buy-entry `PAYMENT` step with a fake local payment session. The actual approved-payment callback was not exercised through visible UI because no real payment provider was present and no product-code test hook was added for this ticket.
+- 2026-06-16: Copy/source checks confirmed the T0134 copy is present and no `Personalkod` copy was introduced by the ticket.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `node scripts/validate-current-ticket.js`, `node scripts/validate-followups.js`, `node scripts/validate-history-archives.js`, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0133 SkyRider Attestation Copy Validation
 
 - 2026-06-16: T0133 was activated as a phone UI copy ticket to tighten SkyRider attestation around height and timing only.
