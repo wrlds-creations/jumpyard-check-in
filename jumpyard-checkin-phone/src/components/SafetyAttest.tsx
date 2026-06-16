@@ -38,6 +38,7 @@ const AGE_BULLETS = ['adultInArea35', 'adultInVenue610', 'canJumpAlone11'] as co
 export const SafetyAttest = ({ buyEntryFlow = false, isSubmitting = false, submitError = null, onComplete }: SafetyAttestProps) => {
     const { t } = useTranslation();
     const [checked, setChecked] = useState<Record<string, boolean>>({});
+    const title = buyEntryFlow ? t.safetyAttest.buyTitle : t.safetyAttest.title;
     const description = buyEntryFlow ? t.safetyAttest.buyDescription : t.safetyAttest.description;
 
     const toggle = (key: string) => setChecked(prev => ({ ...prev, [key]: !prev[key] }));
@@ -53,8 +54,8 @@ export const SafetyAttest = ({ buyEntryFlow = false, isSubmitting = false, submi
             exit={{ opacity: 0, y: -20 }}
         >
             <div className="flex items-center gap-2 mb-0.5">
-                <JumpyardIcon name="safety-check" className="w-8 h-8" />
-                <h1 className="text-xl font-black italic uppercase text-foreground">{t.safetyAttest.title}</h1>
+                {!buyEntryFlow && <JumpyardIcon name="safety-check" className="w-8 h-8" />}
+                <h1 className="text-xl font-black italic uppercase text-foreground">{title}</h1>
             </div>
             <p className="text-muted text-xs mb-3 text-center">{description}</p>
 

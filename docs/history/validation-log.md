@@ -2,6 +2,19 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0141 Buy-Entry Final Polish Follow-Up Validation
+
+- 2026-06-16: T0141 was activated as a narrow phone buy-entry polish ticket after T0140.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now renders the approved-payment sync check in the red primary color and adds a short `Rekommenderat antal` socks recommendation row based on the current jumper count without auto-adding socks.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/SafetyAttest.tsx` and `jumpyard-checkin-phone/src/context/LanguageContext.tsx` now show the buy-entry safety-rules step as `Sista steget` with `Bekräfta säkerhetsreglerna.` and hide the header `safety-check` icon only for the buy-entry variant.
+- 2026-06-16: `jumpyard-checkin-phone/src/app/page.tsx` now shows only the consistent circular loader while checking a saved buy-flow recovery booking, and the main phone surface uses dynamic viewport height plus vertical page overflow instead of locking all overflow.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx` now makes the final `Gör en ny bokning` action smaller/red and renders the generated `add-jump-session` icon as white.
+- 2026-06-16: Source checks confirmed the red payment sync check, socks recommendation key/copy, buy-entry-only safety header icon condition, recovery `role="status"` loader, mobile `min-h-dvh`/`overflow-x-hidden` surface, and red final action styling.
+- 2026-06-16: Local dev server started at `http://127.0.0.1:3041` and returned HTTP 200. The in-app Browser plugin smoke could not run because the installed Browser plugin cache is missing `scripts/browser-client.mjs`; no standalone Playwright/browser fallback was used.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `node scripts/validate-current-ticket.js`, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0140 Buy-Entry Final Polish Follow-Up Validation
 
 - 2026-06-16: T0140 was activated as a small phone buy-entry polish ticket after T0138/T0139.

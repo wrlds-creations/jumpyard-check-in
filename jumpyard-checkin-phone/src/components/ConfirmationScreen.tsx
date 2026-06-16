@@ -156,10 +156,10 @@ export const ConfirmationScreen = ({
                     <button
                         type="button"
                         onClick={onStartOver}
-                        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-3 text-sm font-black italic uppercase text-foreground transition-all active:scale-[0.98]"
+                        className="mt-1 inline-flex w-auto min-w-[190px] items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-black italic uppercase text-white shadow-sm transition-all active:scale-[0.98]"
                         data-testid="confirmation-start-over"
                     >
-                        <JumpyardIcon name="add-jump-session" className="h-7 w-7" />
+                        <JumpyardIcon name="add-jump-session" className="h-6 w-6 brightness-0 invert" />
                         {t.confirm.done}
                     </button>
                 )}

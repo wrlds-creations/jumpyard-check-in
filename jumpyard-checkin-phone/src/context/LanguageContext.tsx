@@ -230,7 +230,8 @@ const sv = {
   safetyAttest: {
     title: 'Säkerhetsregler',
     description: 'Bekräfta varje regel innan du fortsätter.',
-    buyDescription: 'Nästan klar. Bekräfta reglerna så visar vi din check-in QR.',
+    buyTitle: 'Sista steget',
+    buyDescription: 'Bekräfta säkerhetsreglerna.',
     ageRulesTitle: 'Åldersregler',
     ageRules: {
       adultInArea35: '3–5 år: vuxen måste medfölja i aktivitetsområdet.',
@@ -257,6 +258,7 @@ const sv = {
     socksHelp: 'Alla som hoppar behöver godkända hoppstrumpor.',
     socksAlreadyHave: 'Vi har redan godkända hoppstrumpor.',
     socksAddPrompt: 'Lägg till de strumpor ni behöver.',
+    socksRecommendedCount: 'Rekommenderat antal',
     alreadyInBooking: 'Ingår redan',
     total: 'Tillägg totalt',
     perJumper: 'per hoppare',
@@ -611,7 +613,8 @@ const en: typeof sv = {
   safetyAttest: {
     title: 'Safety rules',
     description: 'Confirm each rule before continuing.',
-    buyDescription: 'Almost done. Confirm the rules and we will show your check-in QR.',
+    buyTitle: 'Final step',
+    buyDescription: 'Confirm the safety rules.',
     ageRulesTitle: 'Age rules',
     ageRules: {
       adultInArea35: 'Ages 3–5: an adult must accompany the child inside the activity area.',
@@ -638,6 +641,7 @@ const en: typeof sv = {
     socksHelp: 'Everyone who jumps needs approved jump socks.',
     socksAlreadyHave: 'We already have approved jump socks.',
     socksAddPrompt: 'Add the socks you need.',
+    socksRecommendedCount: 'Recommended count',
     alreadyInBooking: 'Already included',
     total: 'Add-ons total',
     perJumper: 'per jumper',
