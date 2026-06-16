@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 136
-Latest archived completed ticket: `T0137`
+Archived count: 137
+Latest archived completed ticket: `T0138`
 
 ## Completed Tickets
 
@@ -148,3 +148,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0135` | Buy-entry safety context. | 2026-06-16 | Phone buy-entry safety video now uses purchase-complete context with `Betalning klar`, explains that guests must watch the safety film before receiving their check-in QR, uses `Fortsätt` after video completion, and shows the rules context `Nästan klar. Bekräfta reglerna så visar vi din check-in QR.` without changing existing-booking safety copy, video completion tracking, final redeem, staff handoff, backend, AWS, Roller, quote, draft, payment, SMS, or email behavior. |
 | `T0136` | Buy-flow refresh recovery. | 2026-06-16 | Phone buy-entry now stores a safe local recovery snapshot after draft/payment state exists and during buy-entry safety steps, resumes by looking up the saved booking after refresh, shows calm recovery retry/start-over copy when the booking cannot be loaded, and stores no raw payment JWTs while leaving quote, draft, payment provider, session, redeem, staff handoff, backend, AWS, Roller, SMS, and email contracts unchanged. |
 | `T0137` | Channel-aware final confirmation. | 2026-06-16 | Phone confirmation now uses short channel-aware guest copy, labels the handoff as `Check-in QR` instead of `Personalkod`, shows wristbands plus selected handout/add-on items such as socks, SkyRider, and coffee in the final summary, and keeps redeem behavior, staff/admin queue semantics, backend, AWS, Roller, quote, draft, payment, session, SMS, and email contracts unchanged. |
+| `T0138` | Buy-entry small UI polish. | 2026-06-16 | Phone buy-entry now hides the approved-socks checkbox after socks are selected, shows generated icons for start time, jump duration, and jumper count in review, removes empty-state helper text under Presentkort/Klippkort, and replaces the payment-approved card with a booking-sync loading state while preserving payment provider integration, quote/draft payloads, session/redeem behavior, backend, AWS, Roller, SMS, and email contracts. |

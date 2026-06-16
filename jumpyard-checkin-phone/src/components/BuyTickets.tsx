@@ -481,6 +481,8 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const visibleBuyAddons = buyAddons.filter((addon) => getBuyAddonMax(addon) > 0 && isPricedAddon(addon));
   const socksAddon = visibleBuyAddons.find((addon) => addon.id === 'socks') ?? null;
   const otherBuyAddons = visibleBuyAddons.filter((addon) => addon.id !== 'socks');
+  const socksQty = addonQty.socks;
+  const showSocksConfirmation = socksQty === 0;
   const selectedAddons: Addon[] = buyAddons.flatMap((addon) => {
     if (addonQty[addon.id] <= 0 || getBuyAddonMax(addon) <= 0 || !isPricedAddon(addon)) return [];
 
@@ -512,7 +514,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const clipCardInputState = getPaymentOptionInputState(clipCardCode, clipCardInputDirty, discountCodeErrors);
   const giftCardInputFeedback =
     giftCardInputState === 'empty'
-      ? t.buy.giftCardHelp
+      ? null
       : giftCardInputState === 'ready' && giftCardNumber.length >= PAYMENT_OPTION_CODE_MAX_LENGTH
         ? t.buy.paymentCodeMaxLength
         : giftCardInputState === 'ready'
@@ -522,7 +524,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             : t.buy.paymentCodeDone;
   const clipCardInputFeedback =
     clipCardInputState === 'empty'
-      ? t.buy.clipCardHelp
+      ? null
       : clipCardInputState === 'ready' && clipCardCode.length >= PAYMENT_OPTION_CODE_MAX_LENGTH
         ? t.buy.paymentCodeMaxLength
         : clipCardInputState === 'ready'
@@ -1115,17 +1117,19 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
                   </div>
                 </div>
 
-                <label className="mt-3 flex items-start gap-2 rounded-lg bg-surface/70 px-3 py-2 text-left">
-                  <input
-                    type="checkbox"
-                    checked={alreadyHasApprovedSocks}
-                    onChange={(event) => setSocksConfirmation(event.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                  />
-                  <span className="text-xs font-bold italic text-foreground">
-                    {t.addons.socksAlreadyHave}
-                  </span>
-                </label>
+                {showSocksConfirmation && (
+                  <label className="mt-3 flex items-start gap-2 rounded-lg bg-surface/70 px-3 py-2 text-left">
+                    <input
+                      type="checkbox"
+                      checked={alreadyHasApprovedSocks}
+                      onChange={(event) => setSocksConfirmation(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                    />
+                    <span className="text-xs font-bold italic text-foreground">
+                      {t.addons.socksAlreadyHave}
+                    </span>
+                  </label>
+                )}
 
                 {!alreadyHasApprovedSocks && (
                   <div className="mt-3 flex items-center justify-between gap-3">
@@ -1282,15 +1286,18 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             <div className="bg-white border border-border rounded-xl p-3 mb-4">
               <div className="mb-3 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg bg-surface/70 px-2 py-2">
+                  <JumpyardIcon name="time" className="mx-auto mb-1 h-7 w-7" />
                   <p className="text-[9px] font-bold italic uppercase tracking-wider text-muted">{t.buy.startTimeLabel}</p>
                   <p className="text-sm font-black italic text-foreground">{selectedProduct.startTime}</p>
                   <p className="text-[9px] uppercase text-muted">{t.buy.todaySuffix}</p>
                 </div>
                 <div className="rounded-lg bg-surface/70 px-2 py-2">
+                  <JumpyardIcon name="trampoline-jump" className="mx-auto mb-1 h-7 w-7" />
                   <p className="text-[9px] font-bold italic uppercase tracking-wider text-muted">{t.buy.jumpTimeLabel}</p>
                   <p className="text-sm font-black italic text-foreground">{selectedProductDurationLabel}</p>
                 </div>
                 <div className="rounded-lg bg-surface/70 px-2 py-2">
+                  <JumpyardIcon name="group" className="mx-auto mb-1 h-7 w-7" />
                   <p className="text-[9px] font-bold italic uppercase tracking-wider text-muted">{t.buy.jumpersLabel}</p>
                   <p className="text-sm font-black italic text-foreground">{jumperCount}</p>
                 </div>
@@ -1342,16 +1349,18 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
                       placeholder={t.buy.giftCardPlaceholder}
                       maxLength={PAYMENT_OPTION_CODE_MAX_LENGTH}
                       autoComplete="off"
-                      aria-describedby="gift-card-feedback"
+                      aria-describedby={giftCardInputFeedback ? 'gift-card-feedback' : undefined}
                       aria-invalid={giftCardInputState === 'rejected'}
                       className={getPaymentOptionInputClass(giftCardInputState)}
                     />
-                    <p
-                      id="gift-card-feedback"
-                      className={`mt-1 text-[11px] font-bold ${getPaymentOptionFeedbackClass(giftCardInputState)}`}
-                    >
-                      {giftCardInputFeedback}
-                    </p>
+                    {giftCardInputFeedback && (
+                      <p
+                        id="gift-card-feedback"
+                        className={`mt-1 text-[11px] font-bold ${getPaymentOptionFeedbackClass(giftCardInputState)}`}
+                      >
+                        {giftCardInputFeedback}
+                      </p>
+                    )}
                   </label>
 
                   <label className="block">
@@ -1365,16 +1374,18 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
                       placeholder={t.buy.clipCardPlaceholder}
                       maxLength={PAYMENT_OPTION_CODE_MAX_LENGTH}
                       autoComplete="off"
-                      aria-describedby="clip-card-feedback"
+                      aria-describedby={clipCardInputFeedback ? 'clip-card-feedback' : undefined}
                       aria-invalid={clipCardInputState === 'rejected'}
                       className={getPaymentOptionInputClass(clipCardInputState)}
                     />
-                    <p
-                      id="clip-card-feedback"
-                      className={`mt-1 text-[11px] font-bold ${getPaymentOptionFeedbackClass(clipCardInputState)}`}
-                    >
-                      {clipCardInputFeedback}
-                    </p>
+                    {clipCardInputFeedback && (
+                      <p
+                        id="clip-card-feedback"
+                        className={`mt-1 text-[11px] font-bold ${getPaymentOptionFeedbackClass(clipCardInputState)}`}
+                      >
+                        {clipCardInputFeedback}
+                      </p>
+                    )}
                   </label>
 
                   {paymentInputsNeedQuoteRefresh && (
@@ -1483,55 +1494,36 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
           style={{ minHeight: 'calc(100dvh - 160px)' }}
         >
           <div className="w-full bg-surface border border-border p-5 rounded-2xl">
-            <RollerPaymentDropIn
-              amountLabel={formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
-              paymentSession={draft.paymentSession}
-              onApproved={() => {
-                setPaymentApprovedForSync(true);
-                void resolvePaidDraftBooking();
-              }}
-              onFailed={() => undefined}
-            />
-
-            {showPaymentSyncCard && (
+            {showPaymentSyncCard ? (
               <div
-                className={`mt-4 rounded-xl border bg-white p-4 text-center ${
+                className={`rounded-xl border bg-white p-5 text-center ${
                   paymentSyncError ? 'border-danger/30' : 'border-primary/30'
                 }`}
                 data-payment-sync-card="true"
                 data-payment-sync-error={paymentSyncError ? 'true' : 'false'}
               >
                 <div
-                  className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full ${
+                  className={`relative mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full ${
                     paymentSyncError ? 'bg-danger/10 text-danger' : 'bg-primary/10 text-primary'
                   }`}
                 >
                   {paymentSyncError ? (
                     <AlertCircle size={24} />
-                  ) : paymentSyncing ? (
-                    <RefreshCw size={24} className="animate-spin" />
                   ) : (
-                    <Check size={24} />
+                    <>
+                      <JumpyardIcon name="booking-confirmed" className="h-10 w-10" />
+                      <RefreshCw size={18} className="absolute -right-1 -top-1 animate-spin text-primary" />
+                    </>
                   )}
                 </div>
                 <h2 className="text-xl font-black italic uppercase text-foreground">
-                  {t.buy.paymentApprovedTitle}
+                  {paymentSyncError ? t.buy.paymentSyncFailed : t.buy.paymentSyncing}
                 </h2>
-                <p className="mt-2 text-sm text-muted">{t.buy.paymentApprovedDesc}</p>
-
-                {!paymentSyncError && (
-                  <div className="mt-4 rounded-lg bg-surface/70 px-3 py-3">
-                    <div className="flex items-center justify-center gap-2 text-xs font-black italic uppercase text-primary">
-                      <RefreshCw size={15} className="animate-spin" />
-                      {t.buy.paymentSyncing}
-                    </div>
-                    <p className="mt-1 text-xs text-muted">{t.buy.paymentSyncLoader}</p>
-                  </div>
-                )}
+                {!paymentSyncError && <p className="mt-2 text-sm text-muted">{t.buy.paymentSyncLoader}</p>}
 
                 {paymentSyncError && (
                   <>
-                    <p className="mt-4 text-sm font-bold text-danger">{paymentSyncError}</p>
+                    <p className="mt-3 text-sm font-bold text-danger">{paymentSyncError}</p>
                     <p className="mt-1 text-xs text-muted">{t.buy.paymentSyncFallback}</p>
                     <button
                       onClick={() => void resolvePaidDraftBooking()}
@@ -1543,6 +1535,16 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
                   </>
                 )}
               </div>
+            ) : (
+              <RollerPaymentDropIn
+                amountLabel={formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
+                paymentSession={draft.paymentSession}
+                onApproved={() => {
+                  setPaymentApprovedForSync(true);
+                  void resolvePaidDraftBooking();
+                }}
+                onFailed={() => undefined}
+              />
             )}
           </div>
         </motion.div>

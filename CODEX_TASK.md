@@ -7,11 +7,11 @@ NO_ACTIVE_TICKET
 No active ticket.
 
 ## Context
-- T0137 completed on 2026-06-16.
+- T0138 completed on 2026-06-16.
 - Historical project memory lives in `docs/history/` and broad future planning lives in `docs/roadmap/backlog.md`.
 - Completed tickets are removed from backlog and recorded in `docs/history/completed-tickets.md`.
 - Closeout validation evidence is recorded in `docs/history/validation-log.md`.
-- No next ticket is currently selected.
+- T0139 is queued in backlog for pre-payment local buy-flow recovery if the user starts it next.
 
 ## Allowed Areas
 - None until a new ticket is activated.
