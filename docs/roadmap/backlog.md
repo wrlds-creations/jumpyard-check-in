@@ -19,15 +19,14 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| None | Ticket selection | No active Codex ticket. Choose the next scoped ticket from active followups, roadmap priorities, or user direction before editing. | T0134 completed | Low | Activate `CODEX_TASK.md` before implementation. | Root validators should pass before new ticket work starts. | Ready for selection |
+| None active | - | Activate the next scoped ticket before implementation work. | - | - | - | - | Idle |
 
 ## Next
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0135` | Safety UX | Add buy-entry-specific context before the safety video after purchase. | T0134 completed | Medium | Buy-entry safety copy only; existing-booking safety copy can stay simpler. | Phone lint/build plus smoke of paid buy-entry safety-video and rules copy. | Ready |
-| `T0136` | Flow recovery | Persist local buy-flow state so refresh can resume after purchase and during safety steps. | T0135 | High | Client-side buy-flow recovery only unless the activated ticket explicitly scopes server resume changes. | Phone lint/build plus refresh/resume smoke for paid and unsafe-to-resume states. | Planned |
-| `T0137` | Confirmation UX | Make the final confirmation view lighter and channel-aware. | T0136 | Medium | Confirmation/final-step copy and handout summary only; no redeem or staff workflow changes. | Phone lint/build plus smoke of on-site, SMS/home, and kiosk copy if those channels are in scope. | Planned |
+| `T0136` | Flow recovery | Persist local buy-flow state so refresh can resume after purchase and during safety steps. | T0135 completed | High | Client-side buy-flow recovery only unless the activated ticket explicitly scopes server resume changes. | Phone lint/build plus refresh/resume smoke for paid and unsafe-to-resume states. | Ready |
+| `T0137` | Confirmation UX | Make the final confirmation view lighter and channel-aware. | T0136 | Medium | Confirmation/final-step copy and handout summary only; no redeem or staff workflow changes. | Phone lint/build plus smoke of on-site, SMS/home, and kiosk copy if those channels are in scope. | Ready after T0136 |
 | TBD | Guest-facing add-on catalog | Review which Roller add-ons should be exposed to guests beyond SkyRider, socks, padlock, and coffee. | FU-044/FU-084 | Medium | Product/UX review before implementation. | Approved catalog and scope before code changes. | Planned |
 | TBD | Payment method verification | Reverify visible payment methods during the first controlled Live payment test. | FU-071 archived note/T0054/T0075 | High | Do not infer Live methods from Playground without smoke. | Live payment surface evidence. | Planned |
 | TBD | Production readiness sequence | Resume staging/live config, auth, retention, cutover, monitoring, and rollback work after demo scope is stable. | FU-055-FU-061 | High | Separate scoped readiness tickets. | Readiness gates and runbooks pass. | Planned |
@@ -35,34 +34,6 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 ## Buy-Flow UX Ticket Intake
 
 These tickets use the repository's normal `T####` ticket language. The source brief's external labels are intentionally not used as ticket identifiers.
-
-### T0135 Add Buy-Entry Safety-Video Context
-
-Priority: P1
-
-Scope: Safety video in the buy-entry flow.
-
-Goal: When the safety video appears after payment, the guest should understand that purchase is complete and safety is the next step before the check-in QR appears.
-
-Proposed copy:
-
-- Heading: `Betalning klar`
-- Subtext: `Titta på säkerhetsfilmen innan ni får er check-in QR.`
-- Button after video: `Fortsätt`
-- Rules copy after video: `Nästan klar. Bekräfta reglerna så visar vi din check-in QR.`
-
-Acceptance criteria:
-
-- Buy-entry flow gets its own safety-video copy.
-- Existing-booking flow may keep simpler safety copy.
-- The guest understands that purchase is complete.
-- The guest understands check-in is not fully complete until the safety steps are complete.
-- No user-facing copy introduced by the ticket uses en dashes, em dashes, long dash punctuation, or `Personalkod`.
-
-Non-goals:
-
-- Do not change video completion tracking semantics unless explicitly required by the existing component contract.
-- Do not change final redeem or staff handoff behavior.
 
 ### T0136 Persist Buy-Flow State For Refresh Recovery
 

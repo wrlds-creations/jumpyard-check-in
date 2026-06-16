@@ -6,6 +6,7 @@ import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import type { SessionIssue } from '@/flow/cloudClient';
 
 interface SafetyAttestProps {
+    buyEntryFlow?: boolean;
     isSubmitting?: boolean;
     submitError?: SessionIssue | null;
     onComplete: (attestedAt: string) => void;
@@ -34,9 +35,10 @@ const SAFETY_RULE_ICONS: Record<SafetyRuleKey, JumpyardIconName> = {
 
 const AGE_BULLETS = ['adultInArea35', 'adultInVenue610', 'canJumpAlone11'] as const;
 
-export const SafetyAttest = ({ isSubmitting = false, submitError = null, onComplete }: SafetyAttestProps) => {
+export const SafetyAttest = ({ buyEntryFlow = false, isSubmitting = false, submitError = null, onComplete }: SafetyAttestProps) => {
     const { t } = useTranslation();
     const [checked, setChecked] = useState<Record<string, boolean>>({});
+    const description = buyEntryFlow ? t.safetyAttest.buyDescription : t.safetyAttest.description;
 
     const toggle = (key: string) => setChecked(prev => ({ ...prev, [key]: !prev[key] }));
     const allChecked = ALL_KEYS.every(k => checked[k]);
@@ -54,7 +56,7 @@ export const SafetyAttest = ({ isSubmitting = false, submitError = null, onCompl
                 <JumpyardIcon name="safety-check" className="w-8 h-8" />
                 <h1 className="text-xl font-black italic uppercase text-foreground">{t.safetyAttest.title}</h1>
             </div>
-            <p className="text-muted text-xs mb-3 text-center">{t.safetyAttest.description}</p>
+            <p className="text-muted text-xs mb-3 text-center">{description}</p>
 
             <div className="w-full flex flex-col gap-2 mb-4">
                 {/* Age rules — single checkbox covering all three brackets */}

@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 133
-Latest archived completed ticket: `T0134`
+Archived count: 134
+Latest archived completed ticket: `T0135`
 
 ## Completed Tickets
 
@@ -145,3 +145,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0132` | Jump-socks manual choice. | 2026-06-16 | Phone buy-entry add-ons now show `Hoppstrumpor` in a separate top section, explain that all jumpers need approved jump socks, let guests manually choose sock quantity, and let guests confirm they already have approved socks without forcing a purchase or changing add-on pricing, availability, quote, draft, payment, backend, AWS, Roller, SMS, or email behavior. |
 | `T0133` | SkyRider attestation copy. | 2026-06-16 | Phone SkyRider attestation now focuses on the 100 cm height requirement and recommendation to use SkyRider after the jump session, removes the separate safety-check point, and keeps the confirmation gate while not changing SkyRider capacity, quote, draft, payment, handout, staff grouping, backend, AWS, Roller, SMS, or email behavior. |
 | `T0134` | Post-payment loading state. | 2026-06-16 | Phone buy-entry payment now shows a prominent `Betalning klar` sync card after approved payment while the paid booking is fetched, includes clear loading and retry/fallback copy, and avoids `Personalkod` without changing payment provider integration, backend, AWS, Roller, quote, draft, SMS, or email behavior. |
+| `T0135` | Buy-entry safety context. | 2026-06-16 | Phone buy-entry safety video now uses purchase-complete context with `Betalning klar`, explains that guests must watch the safety film before receiving their check-in QR, uses `Fortsätt` after video completion, and shows the rules context `Nästan klar. Bekräfta reglerna så visar vi din check-in QR.` without changing existing-booking safety copy, video completion tracking, final redeem, staff handoff, backend, AWS, Roller, quote, draft, payment, SMS, or email behavior. |

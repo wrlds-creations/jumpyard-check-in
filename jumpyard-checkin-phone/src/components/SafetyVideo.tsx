@@ -7,14 +7,18 @@ import { JumpyardIcon } from '@/components/JumpyardIcon';
 
 interface SafetyVideoProps {
     onComplete: (seenAt: string) => void;
+    buyEntryFlow?: boolean;
 }
 
-export const SafetyVideo = ({ onComplete }: SafetyVideoProps) => {
+export const SafetyVideo = ({ onComplete, buyEntryFlow = false }: SafetyVideoProps) => {
     const { t } = useTranslation();
     const videoRef = useRef<HTMLVideoElement>(null);
     const [playing, setPlaying] = useState(false);
     const [done, setDone] = useState(false);
     const [progress, setProgress] = useState(0);
+    const title = buyEntryFlow ? t.safetyVideo.buyTitle : t.safetyVideo.title;
+    const description = buyEntryFlow ? t.safetyVideo.buyDescription : t.safetyVideo.description;
+    const doneLabel = buyEntryFlow ? t.safetyVideo.buyDone : t.safetyVideo.done;
 
     const handlePlay = () => {
         setPlaying(true);
@@ -43,9 +47,9 @@ export const SafetyVideo = ({ onComplete }: SafetyVideoProps) => {
             <div className="flex flex-col items-center">
                 <div className="flex items-center gap-2 mb-0.5">
                     <JumpyardIcon name="safety-check" className="w-8 h-8" />
-                    <h1 className="text-xl font-black italic uppercase text-foreground">{t.safetyVideo.title}</h1>
+                    <h1 className="text-xl font-black italic uppercase text-foreground">{title}</h1>
                 </div>
-                <p className="text-muted text-xs mb-2">{t.safetyVideo.description}</p>
+                <p className="text-muted text-xs mb-2 text-center">{description}</p>
             </div>
 
             <div className="flex-1 flex items-center justify-center">
@@ -94,7 +98,7 @@ export const SafetyVideo = ({ onComplete }: SafetyVideoProps) => {
                     disabled={!done}
                     className="w-full bg-primary hover:bg-surface hover:text-primary hover:border-primary border border-transparent text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all disabled:opacity-40 shadow-sm"
                 >
-                    {done ? t.safetyVideo.done : t.safetyVideo.watchFull}
+                    {done ? doneLabel : t.safetyVideo.watchFull}
                 </button>
             </div>
         </motion.div>

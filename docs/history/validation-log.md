@@ -2,6 +2,20 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0135 Buy-Entry Safety Context Validation
+
+- 2026-06-16: T0135 was activated as a phone UI ticket to add buy-entry-specific context before the safety video after purchase/payment while keeping existing-booking safety copy simpler.
+- 2026-06-16: `jumpyard-checkin-phone/src/context/LanguageContext.tsx` added buy-entry safety-video copy for `Betalning klar`, `Titta på säkerhetsfilmen innan ni får er check-in QR.`, and `Fortsätt`, plus rules context `Nästan klar. Bekräfta reglerna så visar vi din check-in QR.`, with matching English copy.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/SafetyVideo.tsx` and `jumpyard-checkin-phone/src/components/SafetyAttest.tsx` now accept a buy-entry flow flag and select buy-entry-specific copy only for that path. Existing-booking defaults remain unchanged.
+- 2026-06-16: `jumpyard-checkin-phone/src/app/page.tsx` passes `ctx.buyEntryFlow` into the safety video and safety attest components. Video completion tracking, final redeem, staff handoff, backend, AWS, Roller, quote, draft, payment, SMS, and email behavior were not changed.
+- 2026-06-16: Local in-app browser smoke used a temporary mock JumpYard Cloud API. The buy-entry flow reached the safety-video step and confirmed the visible copy `Betalning klar`, `Titta på säkerhetsfilmen innan ni får er check-in QR.`, and the pre-completion disabled button `Titta hela videon`.
+- 2026-06-16: Existing-booking browser smoke with the same temporary mock API reached the safety-video step and confirmed it still showed the simpler existing copy `Säkerhetsvideo` and `Titta på videon innan du kan gå vidare.`
+- 2026-06-16: Browser playback could not complete the local video in the hidden/in-app environment because the media stayed paused at `currentTime=0`; source review confirmed the rules copy is wired through `SafetyAttest` for the buy-entry flow, and a full rules-screen browser check remains a playable-media environment check if needed.
+- 2026-06-16: Copy/source checks confirmed the required T0135 copy is present. Existing older strings still contain `Personalkod` and dash punctuation, but the new T0135 user-facing copy does not introduce `Personalkod`, en dashes, em dashes, or long dash punctuation.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `node scripts/validate-current-ticket.js`, `node scripts/validate-followups.js`, `node scripts/validate-history-archives.js`, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0134 Post-Payment Loading State Validation
 
 - 2026-06-16: T0134 was activated as a phone UI ticket to add a clear post-payment loading state after approved buy-entry payment while the paid booking is fetched for check-in.

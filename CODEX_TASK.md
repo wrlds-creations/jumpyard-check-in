@@ -4,21 +4,17 @@
 NO_ACTIVE_TICKET
 
 ## Goal
-No active ticket. Activate `T0135` next to add buy-entry-specific context before the safety video after purchase.
+No active ticket.
 
 ## Context
-- T0126 completed the Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15.
-- T0129 completed the buy-flow/check-in UX backlog intake on 2026-06-16.
-- T0130 completed the buy-entry start-time/date clarification on 2026-06-16.
-- T0131 completed the buy-entry jump-duration clarification on 2026-06-16.
-- T0132 completed the jump-socks manual-choice clarification on 2026-06-16.
-- T0133 completed the SkyRider attestation copy tightening on 2026-06-16.
-- T0134 completed the post-payment loading-state clarification on 2026-06-16.
+- T0135 completed the buy-entry safety-video context ticket on 2026-06-16.
 - Historical project memory lives in `docs/history/` and broad forward planning lives in `docs/roadmap/backlog.md`.
-- `T0135` is the next buy-flow/check-in UX ticket documented in `docs/roadmap/backlog.md`.
+- Completed tickets are removed from backlog and recorded in `docs/history/completed-tickets.md`.
+- Closeout validation evidence is recorded in `docs/history/validation-log.md`.
+- The recommended next ticket is `T0136`, which persists local buy-flow state so refresh can resume after purchase and during safety steps.
 
 ## Allowed Areas
-- None until the next ticket is activated.
+- None until a new ticket is activated.
 
 ## Do Not Touch
 - Roller Live
@@ -26,19 +22,14 @@ No active ticket. Activate `T0135` next to add buy-entry-specific context before
 - `.env`
 - AWS resources or deploys
 - Aurora migrations
-- Phone application source
-- Admin application behavior
-- Kiosk application source
-- JumpYard Cloud backend source
-- Payment package/vendor source
-- Roller bookings, drafts, payments, or redemptions
-- SMS/email sending
-- Vendor assets or icons
+- Application source outside an activated ticket
 - unrelated local prompt files
 
 ## Requirements
-- No active implementation requirements.
-- Start the next ticket by reading the source-of-truth files and activating `T0135`.
+1. Activate exactly one ticket before making implementation changes.
+2. Read `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, and this file at the start of the ticket.
+3. Keep completed tickets out of backlog and archive completion/validation evidence in `docs/history/`.
 
 ## Validation
-- No active ticket validation beyond the repository workflow validators.
+- `node scripts/validate-current-ticket.js`
+- `npm run validate`
