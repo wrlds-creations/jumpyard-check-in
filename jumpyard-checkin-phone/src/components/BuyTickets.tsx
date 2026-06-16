@@ -392,6 +392,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const [giftCardInputDirty, setGiftCardInputDirty] = useState(false);
   const [clipCardInputDirty, setClipCardInputDirty] = useState(false);
   const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
+  const [alreadyHasApprovedSocks, setAlreadyHasApprovedSocks] = useState(false);
   const [quote, setQuote] = useState<NewBookingQuote | null>(null);
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -430,6 +431,8 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const getBuyAddonMax = (addon: BuyAddonEntry, nextJumperCount = jumperCount) =>
     getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null, nextJumperCount);
   const visibleBuyAddons = buyAddons.filter((addon) => getBuyAddonMax(addon) > 0 && isPricedAddon(addon));
+  const socksAddon = visibleBuyAddons.find((addon) => addon.id === 'socks') ?? null;
+  const otherBuyAddons = visibleBuyAddons.filter((addon) => addon.id !== 'socks');
   const selectedAddons: Addon[] = buyAddons.flatMap((addon) => {
     if (addonQty[addon.id] <= 0 || getBuyAddonMax(addon) <= 0 || !isPricedAddon(addon)) return [];
 
@@ -563,6 +566,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setGiftCardInputDirty(false);
     setClipCardInputDirty(false);
     setSkyriderConsentConfirmed(false);
+    setAlreadyHasApprovedSocks(false);
   };
 
   const handleProductSelect = (product: NewBookingProduct) => {
@@ -575,6 +579,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setDraft(null);
     setPaymentSyncError(null);
     setSkyriderConsentConfirmed(false);
+    setAlreadyHasApprovedSocks(false);
     setStep('QUANTITY');
   };
 
@@ -620,6 +625,17 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     const max = addon ? getBuyAddonMax(addon) : 0;
     if (id === 'skyrider') setSkyriderConsentConfirmed(false);
     setAddonQty((current) => ({ ...current, [id]: Math.max(0, Math.min(max, nextQty)) }));
+  };
+
+  const setSocksConfirmation = (checked: boolean) => {
+    setAlreadyHasApprovedSocks(checked);
+    setSubmitError(null);
+    setQuote(null);
+    setDraft(null);
+    setPaymentSyncError(null);
+    if (checked) {
+      setAddonQty((current) => ({ ...current, socks: 0 }));
+    }
   };
 
   const needsSkyRiderConsent = () => skyriderSelected && !skyriderConsentConfirmed;
@@ -803,6 +819,31 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
           {formatMoney(product.unitPrice)}
         </p>
       </button>
+    );
+  };
+
+  const renderAddonStepper = (addon: BuyAddonEntry, disabled = false) => {
+    const value = addonQty[addon.id];
+    const max = getBuyAddonMax(addon);
+
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setOneAddon(addon.id, value - 1)}
+          disabled={disabled || value <= 0}
+          className="w-9 h-9 rounded-full bg-surface-strong border border-border flex items-center justify-center text-foreground disabled:opacity-30"
+        >
+          <Minus size={16} />
+        </button>
+        <span className="text-xl font-black italic text-foreground w-7 text-center">{value}</span>
+        <button
+          onClick={() => setOneAddon(addon.id, Math.min(max, value + 1))}
+          disabled={disabled || value >= max}
+          className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center disabled:opacity-30"
+        >
+          <Plus size={16} />
+        </button>
+      </div>
     );
   };
 
@@ -994,10 +1035,47 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
           </div>
 
           <div className="flex-1 flex flex-col gap-2 mb-4">
-            {visibleBuyAddons.map((addon) => {
-              const value = addonQty[addon.id];
-              const max = getBuyAddonMax(addon);
+            {socksAddon && (
+              <section className="bg-white border border-border rounded-xl p-3">
+                <div className="flex items-start gap-3">
+                  <JumpyardIcon name={socksAddon.icon} className="w-9 h-9 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-black italic text-foreground uppercase">
+                      {t.addons.socksSectionTitle}
+                    </h3>
+                    <p className="mt-1 text-[11px] text-muted">{t.addons.socksHelp}</p>
+                  </div>
+                </div>
 
+                <label className="mt-3 flex items-start gap-2 rounded-lg bg-surface/70 px-3 py-2 text-left">
+                  <input
+                    type="checkbox"
+                    checked={alreadyHasApprovedSocks}
+                    onChange={(event) => setSocksConfirmation(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  />
+                  <span className="text-xs font-bold italic text-foreground">
+                    {t.addons.socksAlreadyHave}
+                  </span>
+                </label>
+
+                {!alreadyHasApprovedSocks && (
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold italic text-muted">
+                        {t.addons.socksAddPrompt}
+                      </p>
+                      <p className="text-[11px] text-muted">
+                        {formatMoney(socksAddon.price)} - {socksAddon.unit}
+                      </p>
+                    </div>
+                    {renderAddonStepper(socksAddon)}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {otherBuyAddons.map((addon) => {
               return (
                 <div
                   key={addon.id}
@@ -1012,23 +1090,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setOneAddon(addon.id, value - 1)}
-                      disabled={value <= 0}
-                      className="w-9 h-9 rounded-full bg-surface-strong border border-border flex items-center justify-center text-foreground disabled:opacity-30"
-                    >
-                      <Minus size={16} />
-                    </button>
-                    <span className="text-xl font-black italic text-foreground w-7 text-center">{value}</span>
-                    <button
-                      onClick={() => setOneAddon(addon.id, Math.min(max, value + 1))}
-                      disabled={value >= max}
-                      className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center disabled:opacity-30"
-                    >
-                      <Plus size={16} />
-                    </button>
-                  </div>
+                  {renderAddonStepper(addon)}
                 </div>
               );
             })}

@@ -2,6 +2,17 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0132 Jump-Socks Manual Choice Validation
+
+- 2026-06-16: T0132 was activated as a phone UI ticket to present jump socks as an important manual choice in the buy-entry add-ons step.
+- 2026-06-16: `jumpyard-checkin-phone/src/context/LanguageContext.tsx` added socks-section copy for `Hoppstrumpor`, `Alla som hoppar behöver godkända hoppstrumpor.`, `Vi har redan godkända hoppstrumpor.`, and `Lägg till de strumpor ni behöver.`, with matching English copy.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now separates socks into a prominent top add-ons section, keeps sock quantity at `0` until the guest increments it, and clears selected socks when the guest confirms they already have approved socks. The existing selected add-on quantity model remains the only path into quote/draft payloads.
+- 2026-06-16: Browser smoke at `http://localhost:3000` used a local mock JumpYard Cloud API only for availability. It confirmed `Hoppstrumpor` was shown above other add-ons, the approved-socks help and checkbox copy were visible, sock quantity stayed `0` by default, manually adding one pair changed total from `199 kr` to `244 kr`, and checking the already-have-socks box hid/cleared the sock quantity and returned total to `199 kr`. No bookings, drafts, payments, redemptions, AWS resources, SMS, or email were created or changed.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `npm run validate` passed.
+- 2026-06-16: `git diff --check` passed with CRLF conversion notices only.
+
 ## T0131 Buy-Entry Jump-Duration Clarification Validation
 
 - 2026-06-16: T0131 was activated as a phone UI ticket to clarify the buy-entry product step as jump duration after the selected start time.
