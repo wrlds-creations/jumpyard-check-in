@@ -19,58 +19,16 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| None active | - | Activate the next scoped ticket before implementation work. | - | - | - | - | Idle |
+| None | - | No active ticket. | - | - | - | - | Idle |
 
 ## Next
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0137` | Confirmation UX | Make the final confirmation view lighter and channel-aware. | T0136 completed | Medium | Confirmation/final-step copy and handout summary only; no redeem or staff workflow changes. | Phone lint/build plus smoke of on-site, SMS/home, and kiosk copy if those channels are in scope. | Ready |
+| None | - | No queued ticket in the current batch. | - | - | - | - | Idle |
 | TBD | Guest-facing add-on catalog | Review which Roller add-ons should be exposed to guests beyond SkyRider, socks, padlock, and coffee. | FU-044/FU-084 | Medium | Product/UX review before implementation. | Approved catalog and scope before code changes. | Planned |
 | TBD | Payment method verification | Reverify visible payment methods during the first controlled Live payment test. | FU-071 archived note/T0054/T0075 | High | Do not infer Live methods from Playground without smoke. | Live payment surface evidence. | Planned |
 | TBD | Production readiness sequence | Resume staging/live config, auth, retention, cutover, monitoring, and rollback work after demo scope is stable. | FU-055-FU-061 | High | Separate scoped readiness tickets. | Readiness gates and runbooks pass. | Planned |
-
-## Buy-Flow UX Ticket Intake
-
-These tickets use the repository's normal `T####` ticket language. The source brief's external labels are intentionally not used as ticket identifiers.
-
-### T0137 Lighten And Channel-Aware Final View
-
-Priority: P1
-
-Scope: Confirmation/final step.
-
-Goal: Make the final view simple and guest-friendly. Prefer check-in QR language over internal staff-state language.
-
-Proposed copy for mobile on-site:
-
-- Heading: `Check-in klar`
-- Text: `Visa din check-in QR när ni hämtar armband.`
-- Section: `Att hämta`
-- Button: `Börja om`
-
-Proposed copy for SMS/home:
-
-- Heading: `Check-in klar`
-- Text: `Visa din check-in QR när ni kommer till parken.`
-
-Proposed copy for kiosk later:
-
-- Heading: `Check-in klar`
-- Text: `Ta utskriften och visa den när ni hämtar armband.`
-
-Acceptance criteria:
-
-- Final-view copy adapts by channel.
-- Use `check-in QR` or `QR-kod`, not `Personalkod`.
-- Clearly show what the guest should pick up, for example wristbands, socks, SkyRider, or coffee.
-- Keep copy short and light.
-
-Non-goals:
-
-- Do not change redeem behavior.
-- Do not change staff/admin queue semantics.
-- Do not add new handout categories unless a scoped implementation ticket requires it.
 
 ## Later
 

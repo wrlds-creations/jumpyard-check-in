@@ -7,11 +7,11 @@ NO_ACTIVE_TICKET
 No active ticket.
 
 ## Context
-- T0136 completed the buy-flow refresh recovery ticket on 2026-06-16.
-- Historical project memory lives in `docs/history/` and broad forward planning lives in `docs/roadmap/backlog.md`.
+- T0137 completed on 2026-06-16.
+- Historical project memory lives in `docs/history/` and broad future planning lives in `docs/roadmap/backlog.md`.
 - Completed tickets are removed from backlog and recorded in `docs/history/completed-tickets.md`.
 - Closeout validation evidence is recorded in `docs/history/validation-log.md`.
-- The recommended next ticket is `T0137`, which makes the final confirmation view lighter and channel-aware.
+- No next ticket is currently selected.
 
 ## Allowed Areas
 - None until a new ticket is activated.

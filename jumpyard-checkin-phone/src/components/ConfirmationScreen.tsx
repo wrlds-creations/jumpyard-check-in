@@ -1,16 +1,19 @@
 'use client';
 import { motion } from 'framer-motion';
+import { RotateCcw } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { QrCode } from '@/components/QrCode';
-import type { Addon, Booking, CheckInSession } from '@/flow/types';
+import type { Addon, Booking, Channel, CheckInSession } from '@/flow/types';
 
 interface ConfirmationScreenProps {
     booking: Booking;
     checkinSession: CheckInSession | null;
     jumperCount: number;
     selectedAddons: Addon[];
+    channel?: Channel;
     alreadyCheckedIn?: boolean;
+    onStartOver?: () => void;
 }
 
 // Items that staff hand out at check-in.
@@ -35,16 +38,23 @@ export const ConfirmationScreen = ({
     checkinSession,
     jumperCount,
     selectedAddons,
+    channel = 'park-qr',
     alreadyCheckedIn = false,
+    onStartOver,
 }: ConfirmationScreenProps) => {
     const { t } = useTranslation();
     const completed = alreadyCheckedIn || isCompletedSession(checkinSession);
+    const subtitle = channel === 'sms'
+        ? t.confirm.smsSubtitle
+        : channel === 'kiosk'
+            ? t.confirm.kioskSubtitle
+            : t.confirm.onsiteSubtitle;
     const handoffCode = checkinSession?.handoffCode ?? '';
     const qrPayload = handoffCode
         ? `JY_HANDOFF:${handoffCode}:${checkinSession?.checkinSessionId ?? booking.id}`
         : `JY_SESSION:${checkinSession?.checkinSessionId ?? booking.id}`;
 
-    const entryHandoutLabel = booking.productLabel?.trim() || t.confirm.wristbands;
+    const entryHandoutLabel = t.confirm.wristbands;
     const handoutItems: { label: string; qty: number; icon: JumpyardIconName }[] = [
         { label: entryHandoutLabel, qty: jumperCount, icon: 'admission-ticket' },
     ];
@@ -67,6 +77,7 @@ export const ConfirmationScreen = ({
             data-handoff-code={handoffCode}
             data-handoff-status={checkinSession?.handoffStatus ?? ''}
             data-already-checked-in={String(completed)}
+            data-confirmation-channel={channel}
         >
             <div className="bg-surface p-5 rounded-2xl border border-border w-full shadow-sm text-foreground">
 
@@ -75,8 +86,8 @@ export const ConfirmationScreen = ({
                     <h1 className="text-2xl font-black italic uppercase text-foreground mb-0.5">
                         {completed ? t.confirm.alreadyCheckedInTitle : t.confirm.title}
                     </h1>
-                    <p className="text-muted text-sm">
-                        {completed ? t.confirm.alreadyCheckedInSubtitle : t.confirm.subtitle}
+                    <p className="text-muted text-sm" data-testid="confirmation-subtitle">
+                        {completed ? t.confirm.alreadyCheckedInSubtitle : subtitle}
                     </p>
 
                     {completed ? (
@@ -140,6 +151,18 @@ export const ConfirmationScreen = ({
                             ))}
                         </div>
                     </div>
+                )}
+
+                {!completed && onStartOver && (
+                    <button
+                        type="button"
+                        onClick={onStartOver}
+                        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-3 text-sm font-black italic uppercase text-foreground transition-all active:scale-[0.98]"
+                        data-testid="confirmation-start-over"
+                    >
+                        <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                        {t.confirm.done}
+                    </button>
                 )}
             </div>
         </motion.div>

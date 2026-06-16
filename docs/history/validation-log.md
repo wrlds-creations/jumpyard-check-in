@@ -2,6 +2,19 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0137 Channel-Aware Final Confirmation Validation
+
+- 2026-06-16: T0137 was activated as a phone confirmation/final-step UX ticket to make the final copy lighter and channel-aware without changing redeem behavior, staff/admin queue semantics, backend, AWS, Roller, quote, draft, payment, session, SMS, or email contracts.
+- 2026-06-16: `jumpyard-checkin-phone/src/context/LanguageContext.tsx` now uses `Check-in klar`, channel-specific short subtitles for park-QR/on-site, SMS/home, and kiosk copy, `Check-in QR` instead of `Personalkod`, and a shorter `Att hÃ¤mta` handout heading.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx` now selects final-view subtitle by channel, keeps the existing QR payload shape unchanged, labels the QR as `Check-in QR`, shows wristbands as the entry handout, and renders the existing handout/add-on summary with a park-QR `BÃ¶rja om` action when provided.
+- 2026-06-16: `jumpyard-checkin-phone/src/app/page.tsx` now passes the effective channel into confirmation and carries existing booking add-ons into `selectedAddons` when SMS/home links or park-QR lookup resume directly to a ready-for-staff final view, so socks, SkyRider, coffee, and similar selected items remain visible in the final summary.
+- 2026-06-16: SMS/home browser smoke used a temporary local mock JumpYard Cloud API at `http://127.0.0.1:3037/?jy_token=sms-t0137`. The final view reported channel `sms`, title `Check-in klar`, subtitle `Visa din check-in QR nÃ¤r ni kommer till parken.`, QR label `Check-in QR`, no `Personalkod`/`Staff code` copy, and visible armband, strumpor, SkyRider, and Bryggkaffe summary items.
+- 2026-06-16: On-site park-QR browser smoke used the real phone UI with mocked lookup/session responses at `http://127.0.0.1:3037/?park=1`. The final view reported channel `park-qr`, title `Check-in klar`, subtitle `Visa din check-in QR nÃ¤r ni hÃ¤mtar armband.`, QR label `Check-in QR`, `BÃ¶rja om`, no `Personalkod`/`Staff code` copy, and visible armband, strumpor, SkyRider, and Bryggkaffe summary items.
+- 2026-06-16: Kiosk copy is source-supported through `channel === 'kiosk'` and `kioskSubtitle`, but the phone app intentionally maps bare/kiosk entry to `park-qr`; a browser kiosk final-view check was therefore not reachable without broad route changes outside T0137 scope.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `node scripts/validate-current-ticket.js`, `node scripts/validate-followups.js`, `node scripts/validate-history-archives.js`, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0136 Buy-Flow Refresh Recovery Validation
 
 - 2026-06-16: T0136 was activated as a phone UI ticket to persist safe client-side buy-flow recovery state after draft/payment creation and during buy-entry safety steps.
