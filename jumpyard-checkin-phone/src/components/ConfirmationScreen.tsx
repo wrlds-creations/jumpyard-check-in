@@ -2,7 +2,6 @@
 import { motion } from 'framer-motion';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
-import { QrCode } from '@/components/QrCode';
 import type { Addon, Booking, Channel, CheckInSession } from '@/flow/types';
 
 interface ConfirmationScreenProps {
@@ -49,9 +48,6 @@ export const ConfirmationScreen = ({
             ? t.confirm.kioskSubtitle
             : t.confirm.onsiteSubtitle;
     const handoffCode = checkinSession?.handoffCode ?? '';
-    const qrPayload = handoffCode
-        ? `JY_HANDOFF:${handoffCode}:${checkinSession?.checkinSessionId ?? booking.id}`
-        : `JY_SESSION:${checkinSession?.checkinSessionId ?? booking.id}`;
 
     const entryHandoutLabel = t.confirm.wristbands;
     const handoutItems: { label: string; qty: number; icon: JumpyardIconName }[] = [
@@ -89,7 +85,7 @@ export const ConfirmationScreen = ({
                         {completed ? t.confirm.alreadyCheckedInSubtitle : subtitle}
                     </p>
 
-                    {completed ? (
+                    {completed && (
                         <div
                             className="mt-4 bg-success/10 p-4 rounded-xl border border-success/30 shadow-sm flex flex-col items-center"
                             data-testid="already-checked-in-card"
@@ -97,18 +93,6 @@ export const ConfirmationScreen = ({
                             <p className="text-[11px] text-muted uppercase tracking-widest mb-0.5">{t.booking.ref}</p>
                             <p className="text-2xl font-black tracking-widest text-success">{booking.id}</p>
                             <p className="text-xs text-foreground mt-2">{t.confirm.alreadyCheckedInHelp}</p>
-                        </div>
-                    ) : (
-                        <div
-                            className="mt-4 bg-white p-4 rounded-xl border border-border shadow-sm flex flex-col items-center"
-                            data-testid="handoff-qr-card"
-                            data-qr-payload={qrPayload}
-                        >
-                            <QrCode value={qrPayload} className="w-36 h-36 mb-2" testId="handoff-qr-code" />
-                            <p className="text-[11px] text-muted uppercase tracking-widest mb-0.5">{t.confirm.pickupCode}</p>
-                            <p className="text-2xl font-black tracking-widest text-primary">
-                                {handoffCode || '----'}
-                            </p>
                         </div>
                     )}
 
@@ -152,18 +136,19 @@ export const ConfirmationScreen = ({
                     </div>
                 )}
 
-                {!completed && onStartOver && (
-                    <button
-                        type="button"
-                        onClick={onStartOver}
-                        className="mt-1 inline-flex w-auto min-w-[190px] items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-black italic uppercase text-white shadow-sm transition-all active:scale-[0.98]"
-                        data-testid="confirmation-start-over"
-                    >
-                        <JumpyardIcon name="add-jump-session" className="h-6 w-6 brightness-0 invert" />
-                        {t.confirm.done}
-                    </button>
-                )}
             </div>
+
+            {!completed && onStartOver && (
+                <button
+                    type="button"
+                    onClick={onStartOver}
+                    className="mt-3 inline-flex w-auto min-w-[190px] items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-black italic uppercase text-white shadow-sm transition-all active:scale-[0.98]"
+                    data-testid="confirmation-start-over"
+                >
+                    <JumpyardIcon name="add-jump-session" className="h-6 w-6 brightness-0 invert" />
+                    {t.confirm.done}
+                </button>
+            )}
         </motion.div>
     );
 };

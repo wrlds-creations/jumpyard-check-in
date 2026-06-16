@@ -2,6 +2,21 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0142 Buy-Entry Final Front Polish Validation
+
+- 2026-06-16: T0142 was activated as a narrow phone frontend polish ticket after T0141.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now shows the socks recommendation as a compact visual panel with sock icons, the recommended jumper count, selected count, and progress bar. The panel remains visible after the recommended quantity is reached unless the guest confirms they already have approved socks.
+- 2026-06-16: Manual socks quantity is no longer capped by jumper count or add-on `maxPerGuest`; other add-ons keep their existing caps and availability rules.
+- 2026-06-16: A generated transparent JumpYard-style phone handset icon was added at `jumpyard-checkin-phone/public/jumpyard-next-icons/phone.png` and wired through `JumpyardIcon` for the contact phone label.
+- 2026-06-16: The completed-payment loading check now uses the generated `success-check` JumpYard icon instead of a lucide check.
+- 2026-06-16: Buy-entry safety/video/final copy no longer promises a check-in QR, and final confirmation no longer renders the guest-facing QR/code card. Backend/session/handoff data remains untouched and available to staff/server flows.
+- 2026-06-16: The final `Gör en ny bokning` action now renders below the grey confirmation card instead of inside it.
+- 2026-06-16: Source checks confirmed the uncapped socks max, socks selected-count copy, `phone` icon mapping/usage, no active confirmation QR card/import, no active check-in QR/personalkod copy in the changed phone surfaces, and `phone.png` as a 1024x1024 alpha PNG with transparent corners.
+- 2026-06-16: Local dev server started at `http://127.0.0.1:3041` and returned HTTP 200 for preview in the already-open in-app browser.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `node scripts/validate-current-ticket.js`, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0141 Buy-Entry Final Polish Follow-Up Validation
 
 - 2026-06-16: T0141 was activated as a narrow phone buy-entry polish ticket after T0140.
