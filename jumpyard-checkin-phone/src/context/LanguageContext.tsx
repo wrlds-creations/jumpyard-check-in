@@ -237,6 +237,10 @@ const sv = {
   addons: {
     title: 'Tillägg',
     description: 'Välj till extra, hoppa över det du inte vill ha.',
+    socksSectionTitle: 'Hoppstrumpor',
+    socksHelp: 'Alla som hoppar behöver godkända hoppstrumpor.',
+    socksAlreadyHave: 'Vi har redan godkända hoppstrumpor.',
+    socksAddPrompt: 'Lägg till de strumpor ni behöver.',
     alreadyInBooking: 'Ingår redan',
     total: 'Tillägg totalt',
     perJumper: 'per hoppare',
@@ -597,6 +601,10 @@ const en: typeof sv = {
   addons: {
     title: 'Add-ons',
     description: "Pick extras, skip anything you don't want.",
+    socksSectionTitle: 'Jump socks',
+    socksHelp: 'Everyone who jumps needs approved jump socks.',
+    socksAlreadyHave: 'We already have approved jump socks.',
+    socksAddPrompt: 'Add the socks you need.',
     alreadyInBooking: 'Already included',
     total: 'Add-ons total',
     perJumper: 'per jumper',

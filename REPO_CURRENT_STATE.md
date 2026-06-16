@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-16
-- Current branch: `codex/t0131-hopptid-produktsteg`
-- Current status: No active ticket after T0131.
-- Current ticket: `NO_ACTIVE_TICKET`
-- Completed tickets: archived in `docs/history/completed-tickets.md` (130 completed tickets; latest `T0131`).
-- Recommended next step: activate `T0132` to present jump socks as an important manual choice.
+- Current branch: `codex/t0132-hoppstrumpor-manualt-val`
+- Current status: No active ticket after T0132 closeout.
+- Current ticket: None active
+- Completed tickets: archived in `docs/history/completed-tickets.md` (131 completed tickets; latest `T0132`).
+- Recommended next step: activate `T0133` to tighten SkyRider attestation copy around height and timing only.
 
 ## Current Structure
 
@@ -41,28 +41,28 @@ Major implementation roots remain unchanged by T0128: `infra/`, `jumpyard-checki
 | `node scripts/validate-history-archives.js` | Verify required history/backlog files exist and active docs link to them. | Added in T0128. |
 | `npm run validate` | Run the root documentation/workflow validators. | Required after source-of-truth changes. |
 | `git diff --check` | Check whitespace in the working diff. | Required before closeout/commit. |
-| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Required for T0131 because it touched phone UI. |
-| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | T0131 did not create, change, deploy, or delete AWS resources. |
+| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Required when the active ticket touches app code. |
+| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | No active ticket currently allows AWS work. |
 
 ## Completed Tickets
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 130
-- Latest completed ticket: `T0131`
-- Current active ticket: None active after T0131
+- Archived completed-ticket count: 131
+- Latest completed ticket: `T0132`
+- Current active ticket: None
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `NO_ACTIVE_TICKET` | No active ticket. | Closed | Activate `T0132` next. |
+| None active | No active ticket. | Closed | Activate `T0133` before further implementation. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0132` | Present jump socks as an important manual choice with warm copy. | Ready | Next ticket in the buy-flow/check-in UX sequence documented in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). |
+| `T0133` | Tighten SkyRider attestation copy around height and timing only. | Ready | Next ticket in the buy-flow/check-in UX sequence documented in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -85,6 +85,7 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - T0129 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0130 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0131 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
+- T0132 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 
 ## Current Risks And Open Questions
 
@@ -93,5 +94,6 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - T0129 was docs-only; no phone/admin/kiosk/backend/AWS/Roller/payment/SMS/email behavior changed.
 - T0130 changed phone UI copy/display only; no backend, AWS, Roller, payment, draft, SMS, email, or future-date booking behavior changed.
 - T0131 changed phone UI copy/display only; no backend, AWS, Roller, payment, draft, SMS, email, or flow-order behavior changed.
+- T0132 changed phone UI copy/display and local add-on selection state only; socks are not added automatically, already-have-socks confirmation clears selected socks, and no backend, AWS, Roller, payment, draft, SMS, email, pricing, or availability behavior changed.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before this branch was created.

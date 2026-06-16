@@ -19,14 +19,13 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| None | Ticket selection | No active Codex ticket. Choose the next scoped ticket from active followups, roadmap priorities, or user direction before editing. | T0129 completed | Low | Activate `CODEX_TASK.md` before implementation. | Root validators should pass before new ticket work starts. | Ready for selection |
+| None | Ticket selection | No active Codex ticket. Choose the next scoped ticket from active followups, roadmap priorities, or user direction before editing. | T0132 completed | Low | Activate `CODEX_TASK.md` before implementation. | Root validators should pass before new ticket work starts. | Ready for selection |
 
 ## Next
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0132` | Buy-flow UX | Present jump socks as an important manual choice with warm copy. | T0131 | Medium | Add-ons step sock section only; no automatic sock insertion. | Phone lint/build plus smoke of manual sock quantity and already-have-socks confirmation. | Ready |
-| `T0133` | Buy-flow UX | Tighten SkyRider attestation copy around height and timing only. | T0132 | Medium | SkyRider attestation copy only; preserve existing consent gate and capacity logic. | Phone lint/build plus smoke of SkyRider copy and checkbox wording. | Planned |
+| `T0133` | Buy-flow UX | Tighten SkyRider attestation copy around height and timing only. | T0132 | Medium | SkyRider attestation copy only; preserve existing consent gate and capacity logic. | Phone lint/build plus smoke of SkyRider copy and checkbox wording. | Ready |
 | `T0134` | Payment UX | Add a clear post-payment loading state while the paid booking is fetched and check-in is prepared. | T0133 | High | Directly after approved buy-entry payment; no payment provider or backend contract changes unless explicitly activated. | Phone lint/build plus payment-return mock smoke for loading, retry, and fallback copy. | Planned |
 | `T0135` | Safety UX | Add buy-entry-specific context before the safety video after purchase. | T0134 | Medium | Buy-entry safety copy only; existing-booking safety copy can stay simpler. | Phone lint/build plus smoke of paid buy-entry safety-video and rules copy. | Planned |
 | `T0136` | Flow recovery | Persist local buy-flow state so refresh can resume after purchase and during safety steps. | T0135 | High | Client-side buy-flow recovery only unless the activated ticket explicitly scopes server resume changes. | Phone lint/build plus refresh/resume smoke for paid and unsafe-to-resume states. | Planned |
@@ -38,34 +37,6 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 ## Buy-Flow UX Ticket Intake
 
 These tickets use the repository's normal `T####` ticket language. The source brief's external labels are intentionally not used as ticket identifiers.
-
-### T0132 Present Jump Socks As Important Manual Choice
-
-Priority: P1
-
-Scope: Add-ons step in the buy-entry flow.
-
-Goal: Make socks feel important without aggressive copy. Guests should understand approved jump socks are needed, but the app must not add socks automatically.
-
-Proposed copy:
-
-- Section: `Hoppstrumpor`
-- Help text: `Alla som hoppar behöver godkända hoppstrumpor.`
-- Checkbox: `Vi har redan godkända hoppstrumpor.`
-- Alternative text when the checkbox is not selected: `Lägg till de strumpor ni behöver.`
-
-Acceptance criteria:
-
-- Socks are shown at the top or in their own clearly visible section.
-- The app does not add socks automatically.
-- The guest can choose sock quantity manually.
-- The guest can confirm that they already have approved socks.
-- Copy is warm and helpful, not guilt-driven.
-
-Non-goals:
-
-- Do not force a sock purchase.
-- Do not change add-on pricing, availability, payment, or Roller draft payloads except where the existing selected add-on model already applies.
 
 ### T0133 Tighten SkyRider Copy
 
