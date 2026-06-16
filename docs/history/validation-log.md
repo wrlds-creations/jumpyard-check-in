@@ -2,6 +2,17 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0131 Buy-Entry Jump-Duration Clarification Validation
+
+- 2026-06-16: T0131 was activated as a phone UI ticket to clarify the buy-entry product step as jump duration after the selected start time.
+- 2026-06-16: `jumpyard-checkin-phone/src/context/LanguageContext.tsx` added buy-entry labels for `Välj hopptid`, `Starttid`, `idag`, and `Antal hoppare`, with matching English copy.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now derives a duration display from the existing Roller product label, shows `Starttid [tid] idag` as static context, keeps Roller product selection semantics unchanged, and makes review show start time, jump duration, and jumper count separately.
+- 2026-06-16: Browser smoke at `http://127.0.0.1:3031/?codexSmoke=t0131-*` used a local mock JumpYard Cloud API only for availability/quote. It confirmed the product step showed `Välj hopptid`, `Starttid 14:30 idag`, and `60 min`/`90 min`/`120 min`; the quantity step showed `Antal hoppare` and `2`; review showed `Starttid 14:30 idag`, `Hopptid 60 min`, and `Antal hoppare 2`. The live dev API was reachable from terminal but blocked by browser CORS from localhost, so the browser smoke stayed local and created no bookings, drafts, payments, redemptions, AWS resources, SMS, or email.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `npm run validate` passed.
+- 2026-06-16: `git diff --check` passed with CRLF conversion notices only.
+
 ## T0130 Buy-Entry Start-Time/Date Clarification Validation
 
 - 2026-06-16: T0130 was activated as a phone UI ticket to clarify the buy-entry time-selection step as start time with today's date context.

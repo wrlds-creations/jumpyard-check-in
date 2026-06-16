@@ -25,8 +25,7 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0131` | Buy-flow UX | Clarify the product step as jump duration after a selected start time. | T0130 | Medium | Product step and review summary copy only; no first-version flow rebuild. | Phone lint/build plus smoke of start time, jump duration, and jumper count in review. | Ready |
-| `T0132` | Buy-flow UX | Present jump socks as an important manual choice with warm copy. | T0131 | Medium | Add-ons step sock section only; no automatic sock insertion. | Phone lint/build plus smoke of manual sock quantity and already-have-socks confirmation. | Planned |
+| `T0132` | Buy-flow UX | Present jump socks as an important manual choice with warm copy. | T0131 | Medium | Add-ons step sock section only; no automatic sock insertion. | Phone lint/build plus smoke of manual sock quantity and already-have-socks confirmation. | Ready |
 | `T0133` | Buy-flow UX | Tighten SkyRider attestation copy around height and timing only. | T0132 | Medium | SkyRider attestation copy only; preserve existing consent gate and capacity logic. | Phone lint/build plus smoke of SkyRider copy and checkbox wording. | Planned |
 | `T0134` | Payment UX | Add a clear post-payment loading state while the paid booking is fetched and check-in is prepared. | T0133 | High | Directly after approved buy-entry payment; no payment provider or backend contract changes unless explicitly activated. | Phone lint/build plus payment-return mock smoke for loading, retry, and fallback copy. | Planned |
 | `T0135` | Safety UX | Add buy-entry-specific context before the safety video after purchase. | T0134 | Medium | Buy-entry safety copy only; existing-booking safety copy can stay simpler. | Phone lint/build plus smoke of paid buy-entry safety-video and rules copy. | Planned |
@@ -39,33 +38,6 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 ## Buy-Flow UX Ticket Intake
 
 These tickets use the repository's normal `T####` ticket language. The source brief's external labels are intentionally not used as ticket identifiers.
-
-### T0131 Clarify Jump Duration After Start Time
-
-Priority: P1
-
-Scope: Product step after selected start time.
-
-Goal: Make the next step clearly about how long the guest wants to jump, not about choosing a second time.
-
-Proposed copy:
-
-- Heading: `Välj hopptid`
-- Subtext: `Starttid [tid] idag`
-- Product cards: `60 min`, `90 min`, `120 min`
-- Quantity step: `Antal hoppare`
-
-Acceptance criteria:
-
-- The product step shows the selected start time as static context.
-- The guest can distinguish start time from jump duration.
-- Review clearly shows start time, jump duration, and number of jumpers.
-- No first-version flow rebuild is required.
-
-Non-goals:
-
-- Do not rebuild the buy-entry step order.
-- Do not change quote, draft, payment, or Roller product selection semantics.
 
 ### T0132 Present Jump Socks As Important Manual Choice
 
