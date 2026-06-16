@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft } from 'lucide-react';
+import { AlertCircle, ArrowLeft, RefreshCw, RotateCcw } from 'lucide-react';
 import { BookingSummary } from '@/components/BookingSummary';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { SafetyAttest } from '@/components/SafetyAttest';
@@ -15,8 +15,16 @@ import { ConfirmationScreen } from '@/components/ConfirmationScreen';
 import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import { detectChannel, initialContext, initialState, nextState } from '@/flow/machine';
 import type { Branch } from '@/flow/machine';
-import { CloudSessionError, markSessionReadyForStaff, resolveCheckInSessionLink, startCheckInSession, type SessionIssue } from '@/flow/cloudClient';
+import { CloudSessionError, lookupBooking, markSessionReadyForStaff, resolveCheckInSessionLink, startCheckInSession, type SessionIssue } from '@/flow/cloudClient';
 import type { Booking, CheckInSession, ConnectedProfile, FlowContext, FlowState } from '@/flow/types';
+import {
+    clearBuyFlowRecovery,
+    getBuyFlowRecoveryIdentifier,
+    getBuyFlowRecoveryTargetState,
+    readBuyFlowRecovery,
+    writeBuyFlowRecovery,
+    type BuyFlowRecoverySnapshot,
+} from '@/flow/buyFlowRecovery';
 import { ParkChoice } from '@/components/ParkChoice';
 import { BookingLookup } from '@/components/BookingLookup';
 import { BuyTickets } from '@/components/BuyTickets';
@@ -85,6 +93,111 @@ function getBackState(state: FlowState, ctx: FlowContext): FlowState | null {
         case 'APP_SAFETY_ATTEST': return 'APP_SAFETY_VIDEO';
         default: return null;
     }
+}
+
+type BuyRecoveryStatus = 'checking' | 'failed' | 'unsafe';
+
+function isBuyEntryRecoveryState(state: FlowState): state is 'APP_SAFETY_VIDEO' | 'APP_SAFETY_ATTEST' | 'APP_CONFIRM' | 'APP_PRESENT' {
+    return state === 'APP_SAFETY_VIDEO' || state === 'APP_SAFETY_ATTEST' || state === 'APP_CONFIRM' || state === 'APP_PRESENT';
+}
+
+function writeSafetyRecovery(state: FlowState, ctx: FlowContext) {
+    if (!isBuyEntryRecoveryState(state) || !ctx.buyEntryFlow || !ctx.booking) return;
+
+    writeBuyFlowRecovery({
+        bookingReference: ctx.booking.id,
+        currentFlowStep: state,
+        draftState: {
+            amountOwing: ctx.booking.amountOwing ?? 0,
+            bookingReference: ctx.booking.id,
+            paymentApproved: true,
+            paymentRequired: false,
+            prepaymentDraftId: null,
+            status: ctx.booking.paymentStatus ?? 'paid',
+            uniqueId: ctx.booking.rollerUniqueId ?? null,
+        },
+        draftUniqueId: ctx.booking.rollerUniqueId ?? null,
+        jumperCount: ctx.booking.jumpers,
+        selectedProduct: {
+            durationMinutes: ctx.baseDurationMinutes || ctx.booking.durationMinutes || null,
+            label: ctx.baseProductLabel ?? ctx.booking.productLabel ?? null,
+            productId: ctx.baseProductId,
+            startTime: ctx.booking.time,
+            type: ctx.baseProductType ?? ctx.booking.productType ?? null,
+            unitPrice: ctx.baseUnitPrice || null,
+        },
+        selectedStartTime: ctx.booking.time,
+    });
+}
+
+function BuyRecoveryCard({
+    status,
+    onRestart,
+    onRetry,
+}: {
+    status: BuyRecoveryStatus;
+    onRestart: () => void;
+    onRetry: () => void;
+}) {
+    const { t } = useTranslation();
+    const checking = status === 'checking';
+    const unsafe = status === 'unsafe';
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            className="w-full max-w-md px-4"
+            data-buy-recovery-card="true"
+            data-buy-recovery-status={status}
+        >
+            <div className="bg-surface border border-border rounded-2xl p-5 text-center shadow-sm">
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white border border-border">
+                    {checking ? (
+                        <RefreshCw size={26} className="text-primary animate-spin" />
+                    ) : (
+                        <AlertCircle size={26} className="text-primary" />
+                    )}
+                </div>
+                <h2 className="text-xl font-black italic uppercase text-foreground">
+                    {checking ? t.buyRecovery.title : t.buyRecovery.failedTitle}
+                </h2>
+                <p className="mt-2 text-sm text-muted">
+                    {checking
+                        ? t.buyRecovery.description
+                        : unsafe
+                          ? t.buyRecovery.unsafeDescription
+                          : t.buyRecovery.failedDescription}
+                </p>
+
+                {checking ? (
+                    <div className="mt-4 rounded-xl bg-white border border-border px-3 py-3 text-xs font-black italic uppercase text-primary">
+                        {t.buyRecovery.checking}
+                    </div>
+                ) : (
+                    <div className="mt-4 flex flex-col gap-2">
+                        {!unsafe && (
+                            <button
+                                type="button"
+                                onClick={onRetry}
+                                className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                            >
+                                <RefreshCw size={16} /> {t.buyRecovery.retry}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={onRestart}
+                            className="w-full bg-white hover:bg-surface border border-border text-foreground font-black italic uppercase text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                        >
+                            <RotateCcw size={16} /> {t.buyRecovery.startOver}
+                        </button>
+                    </div>
+                )}
+            </div>
+        </motion.div>
+    );
 }
 
 function ProgressBar({ state, buyEntryFlow }: { state: FlowState; buyEntryFlow: boolean }) {
@@ -165,6 +278,8 @@ function CheckInFlow() {
     const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
     const [addonsStep, setAddonsStep] = useState<AddonsOfferStep>('SELECT');
     const [addonsBackRequest, setAddonsBackRequest] = useState(0);
+    const [buyRecoverySnapshot, setBuyRecoverySnapshot] = useState<BuyFlowRecoverySnapshot | null>(null);
+    const [buyRecoveryStatus, setBuyRecoveryStatus] = useState<BuyRecoveryStatus | null>(null);
 
     const scrollToTop = () => {
         window.scrollTo(0, 0);
@@ -237,7 +352,7 @@ function CheckInFlow() {
         }
     };
 
-    const handlePaidNewBookingReady = async (booking: Booking) => {
+    const handlePaidNewBookingReady = async (booking: Booking, recoveryTargetState: FlowState | null = null) => {
         const bookingAddons = booking.existingAddons ?? [];
         const bookingPatch: Partial<FlowContext> = {
             booking,
@@ -269,10 +384,13 @@ function CheckInFlow() {
             const checkinSession = await startCheckInSession(booking);
             const resumeState = getResumeState(checkinSession);
             const nextCtx = { ...ctx, ...bookingPatch, checkinSession };
+            const targetState =
+                recoveryTargetState === 'APP_SAFETY_ATTEST' ? 'APP_SAFETY_ATTEST' : 'APP_SAFETY_VIDEO';
 
             setAlreadyCheckedIn(isCompletedSession(checkinSession));
             setCtx(nextCtx);
-            setState(resumeState ?? 'APP_SAFETY_VIDEO');
+            setState(resumeState ?? targetState);
+            setBuyRecoveryStatus(null);
             scrollToTop();
         } catch (error) {
             if (error instanceof CloudSessionError && error.reason === 'already_redeemed') {
@@ -283,6 +401,39 @@ function CheckInFlow() {
             setSessionStartError(error instanceof CloudSessionError ? error.reason : 'session_failed');
             advance({ ...bookingPatch, buyEntryFlow: false });
         }
+    };
+
+    const resumeBuyFlowRecovery = async (snapshot: BuyFlowRecoverySnapshot | null = buyRecoverySnapshot) => {
+        if (!snapshot) return;
+
+        const identifier = getBuyFlowRecoveryIdentifier(snapshot);
+        if (!identifier) {
+            setBuyRecoveryStatus('unsafe');
+            scrollToTop();
+            return;
+        }
+
+        setBuyRecoveryStatus('checking');
+        setSessionStartError(null);
+        try {
+            const booking = await lookupBooking(identifier);
+            await handlePaidNewBookingReady(booking, getBuyFlowRecoveryTargetState(snapshot));
+        } catch {
+            setBuyRecoveryStatus('failed');
+            scrollToTop();
+        }
+    };
+
+    const restartAfterBuyRecovery = () => {
+        clearBuyFlowRecovery();
+        setBuyRecoverySnapshot(null);
+        setBuyRecoveryStatus(null);
+        setAlreadyCheckedIn(false);
+        setSessionStartError(null);
+        setReadyForStaffError(null);
+        setCtx({ ...initialContext(effectiveChannel), token });
+        setState('KIOSK_CHOICE');
+        scrollToTop();
     };
 
     const startExistingBookingCheckIn = async () => {
@@ -334,6 +485,20 @@ function CheckInFlow() {
     useEffect(() => {
         scrollToTop();
     }, [state]);
+
+    useEffect(() => {
+        if (state !== 'KIOSK_CHOICE' || linkToken || buyRecoveryStatus !== null) return;
+        const snapshot = readBuyFlowRecovery();
+        if (!snapshot) return;
+
+        setBuyRecoverySnapshot(snapshot);
+        void resumeBuyFlowRecovery(snapshot);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state, linkToken, buyRecoveryStatus]);
+
+    useEffect(() => {
+        writeSafetyRecovery(state, ctx);
+    }, [ctx, state]);
 
     useEffect(() => {
         if (state !== 'APP_ADDONS') setAddonsStep('SELECT');
@@ -425,7 +590,16 @@ function CheckInFlow() {
                         </motion.div>
                     )}
 
-                    {state === 'KIOSK_CHOICE' && (
+                    {state === 'KIOSK_CHOICE' && buyRecoveryStatus && (
+                        <BuyRecoveryCard
+                            key="buy-recovery"
+                            status={buyRecoveryStatus}
+                            onRetry={() => void resumeBuyFlowRecovery()}
+                            onRestart={restartAfterBuyRecovery}
+                        />
+                    )}
+
+                    {state === 'KIOSK_CHOICE' && !buyRecoveryStatus && (
                         <ParkChoice
                             key="park-choice"
                             onSelect={choice => advance({}, choice === 'BOOKING' ? 'booking' : 'buy')}

@@ -25,8 +25,7 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0136` | Flow recovery | Persist local buy-flow state so refresh can resume after purchase and during safety steps. | T0135 completed | High | Client-side buy-flow recovery only unless the activated ticket explicitly scopes server resume changes. | Phone lint/build plus refresh/resume smoke for paid and unsafe-to-resume states. | Ready |
-| `T0137` | Confirmation UX | Make the final confirmation view lighter and channel-aware. | T0136 | Medium | Confirmation/final-step copy and handout summary only; no redeem or staff workflow changes. | Phone lint/build plus smoke of on-site, SMS/home, and kiosk copy if those channels are in scope. | Ready after T0136 |
+| `T0137` | Confirmation UX | Make the final confirmation view lighter and channel-aware. | T0136 completed | Medium | Confirmation/final-step copy and handout summary only; no redeem or staff workflow changes. | Phone lint/build plus smoke of on-site, SMS/home, and kiosk copy if those channels are in scope. | Ready |
 | TBD | Guest-facing add-on catalog | Review which Roller add-ons should be exposed to guests beyond SkyRider, socks, padlock, and coffee. | FU-044/FU-084 | Medium | Product/UX review before implementation. | Approved catalog and scope before code changes. | Planned |
 | TBD | Payment method verification | Reverify visible payment methods during the first controlled Live payment test. | FU-071 archived note/T0054/T0075 | High | Do not infer Live methods from Playground without smoke. | Live payment surface evidence. | Planned |
 | TBD | Production readiness sequence | Resume staging/live config, auth, retention, cutover, monitoring, and rollback work after demo scope is stable. | FU-055-FU-061 | High | Separate scoped readiness tickets. | Readiness gates and runbooks pass. | Planned |
@@ -34,32 +33,6 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 ## Buy-Flow UX Ticket Intake
 
 These tickets use the repository's normal `T####` ticket language. The source brief's external labels are intentionally not used as ticket identifiers.
-
-### T0136 Persist Buy-Flow State For Refresh Recovery
-
-Priority: P1
-
-Scope: Mobile flow, especially after purchase and during safety steps.
-
-Goal: If the guest refreshes after buying a booking, the app should be able to resume locally and avoid losing the guest.
-
-Example recovery copy:
-
-- `Vi hittade din senaste check-in. Fortsätt där du var.`
-
-Acceptance criteria:
-
-- Store relevant buy-flow state in local storage or equivalent.
-- At minimum, store booking reference, draft/payment state, selected start time, selected product, jumper count, and current flow step.
-- After refresh, the app tries to resume the booking.
-- If the app cannot safely resume, it shows clear recovery copy.
-- Recovery copy must not feel like an error if payment is already complete.
-
-Non-goals:
-
-- Do not store raw payment JWTs.
-- Do not expose Roller credentials or make frontend Roller API calls.
-- Do not introduce server-owned resume changes unless explicitly scoped when the ticket is activated.
 
 ### T0137 Lighten And Channel-Aware Final View
 

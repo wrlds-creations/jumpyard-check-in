@@ -7,11 +7,11 @@ NO_ACTIVE_TICKET
 No active ticket.
 
 ## Context
-- T0135 completed the buy-entry safety-video context ticket on 2026-06-16.
+- T0136 completed the buy-flow refresh recovery ticket on 2026-06-16.
 - Historical project memory lives in `docs/history/` and broad forward planning lives in `docs/roadmap/backlog.md`.
 - Completed tickets are removed from backlog and recorded in `docs/history/completed-tickets.md`.
 - Closeout validation evidence is recorded in `docs/history/validation-log.md`.
-- The recommended next ticket is `T0136`, which persists local buy-flow state so refresh can resume after purchase and during safety steps.
+- The recommended next ticket is `T0137`, which makes the final confirmation view lighter and channel-aware.
 
 ## Allowed Areas
 - None until a new ticket is activated.
