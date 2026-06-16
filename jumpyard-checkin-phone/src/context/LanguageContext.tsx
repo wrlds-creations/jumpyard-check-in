@@ -209,14 +209,18 @@ const sv = {
   safetyVideo: {
     title: 'Säkerhetsvideo',
     description: 'Titta på videon innan du kan gå vidare.',
+    buyTitle: 'Betalning klar',
+    buyDescription: 'Titta på säkerhetsfilmen innan ni får er check-in QR.',
     play: 'Spela upp',
     playing: 'Videon spelas…',
     watchFull: 'Titta hela videon',
     done: 'Klart, fortsätt',
+    buyDone: 'Fortsätt',
   },
   safetyAttest: {
     title: 'Säkerhetsregler',
     description: 'Bekräfta varje regel innan du fortsätter.',
+    buyDescription: 'Nästan klar. Bekräfta reglerna så visar vi din check-in QR.',
     ageRulesTitle: 'Åldersregler',
     ageRules: {
       adultInArea35: '3–5 år: vuxen måste medfölja i aktivitetsområdet.',
@@ -573,14 +577,18 @@ const en: typeof sv = {
   safetyVideo: {
     title: 'Safety video',
     description: 'Watch the video before you can continue.',
+    buyTitle: 'Payment complete',
+    buyDescription: 'Watch the safety video before you get your check-in QR.',
     play: 'Play',
     playing: 'Video playing…',
     watchFull: 'Watch the full video',
     done: 'Done, continue',
+    buyDone: 'Continue',
   },
   safetyAttest: {
     title: 'Safety rules',
     description: 'Confirm each rule before continuing.',
+    buyDescription: 'Almost done. Confirm the rules and we will show your check-in QR.',
     ageRulesTitle: 'Age rules',
     ageRules: {
       adultInArea35: 'Ages 3–5: an adult must accompany the child inside the activity area.',

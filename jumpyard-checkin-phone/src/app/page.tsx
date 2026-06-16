@@ -465,6 +465,7 @@ function CheckInFlow() {
                     {state === 'APP_SAFETY_VIDEO' && (
                         <SafetyVideo
                             key="safety-video"
+                            buyEntryFlow={ctx.buyEntryFlow}
                             onComplete={seenAt => advance({ safetyVideoSeenAt: seenAt })}
                         />
                     )}
@@ -472,6 +473,7 @@ function CheckInFlow() {
                     {state === 'APP_SAFETY_ATTEST' && (
                         <SafetyAttest
                             key="safety-attest"
+                            buyEntryFlow={ctx.buyEntryFlow}
                             isSubmitting={isMarkingReadyForStaff}
                             submitError={readyForStaffError}
                             onComplete={completeSafetyAndReadyForStaff}

@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-16
-- Current branch: `codex/t0134-post-payment-loading`
-- Current status: No active ticket after completing T0134.
+- Current branch: `codex/t0135-buy-entry-safety-context`
+- Current status: No active ticket after T0135 closeout.
 - Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (133 completed tickets; latest `T0134`).
-- Recommended next step: activate `T0135` to add buy-entry-specific safety-video context.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (134 completed tickets; latest `T0135`).
+- Recommended next step: activate `T0136` to persist buy-flow state so refresh can resume after purchase and during safety steps.
 
 ## Current Structure
 
@@ -41,28 +41,29 @@ Major implementation roots remain unchanged by T0128: `infra/`, `jumpyard-checki
 | `node scripts/validate-history-archives.js` | Verify required history/backlog files exist and active docs link to them. | Added in T0128. |
 | `npm run validate` | Run the root documentation/workflow validators. | Required after source-of-truth changes. |
 | `git diff --check` | Check whitespace in the working diff. | Required before closeout/commit. |
-| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Required for T0134 because it touches phone UI. |
-| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | T0134 does not create, change, deploy, or delete AWS resources. |
+| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Required for T0135 because it touches phone UI. |
+| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | T0135 does not create, change, deploy, or delete AWS resources. |
 
 ## Completed Tickets
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 133
-- Latest completed ticket: `T0134`
+- Archived completed-ticket count: 134
+- Latest completed ticket: `T0135`
 - Current active ticket: None active
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | No active implementation ticket. | Ready for selection | Activate `T0135` next before editing. |
+| None active | Activate the next scoped ticket before implementation work. | Idle | Recommended next ticket is `T0136`. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0135` | Add buy-entry-specific context before the safety video after purchase. | Ready | Next ticket in the buy-flow/check-in UX sequence documented in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). |
+| `T0136` | Persist local buy-flow state so refresh can resume after purchase and during safety steps. | Ready | Next ticket in the buy-flow/check-in UX sequence documented in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). |
+| `T0137` | Make the final confirmation view lighter and channel-aware. | Planned | Depends on `T0136`. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -88,6 +89,7 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - T0132 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0133 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0134 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
+- T0135 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 
 ## Current Risks And Open Questions
 
@@ -99,5 +101,6 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - T0132 changed phone UI copy/display and local add-on selection state only; socks are not added automatically, already-have-socks confirmation clears selected socks, and no backend, AWS, Roller, payment, draft, SMS, email, pricing, or availability behavior changed.
 - T0133 changed phone SkyRider attestation copy/display only; the confirmation gate remains and no capacity, quote, draft, payment, handout, staff grouping, backend, AWS, Roller, SMS, or email behavior changed.
 - T0134 changed phone post-payment sync UI copy/display only; the payment provider integration, backend, AWS, Roller, quote, draft, SMS, and email behavior remain unchanged. Local browser smoke reached the payment step with a fake session, but approved-provider callback verification still requires a real provider event or a separately scoped test hook.
+- T0135 changed phone buy-entry safety-video and safety-rules context copy only; existing-booking safety copy remains simpler, and no video completion tracking, final redeem, staff handoff, backend, AWS, Roller, quote, draft, payment, SMS, or email behavior changed. Local browser smoke verified buy-entry safety-video copy and existing-booking separation; full browser progression into rules still needs a playable media environment because local in-app video playback stayed paused.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before this branch was created.
