@@ -1558,6 +1558,15 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                   </div>
                 </div>
 
+                {!alreadyHasApprovedSocks && (
+                  <div className="mt-3 flex items-center justify-between rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
+                    <span className="text-[10px] font-black italic uppercase tracking-wider text-muted">
+                      {t.addons.socksRecommendedCount}
+                    </span>
+                    <span className="text-xl font-black italic text-primary">{jumperCount}</span>
+                  </div>
+                )}
+
                 {showSocksConfirmation && (
                   <label className="mt-3 flex items-start gap-2 rounded-lg bg-surface/70 px-3 py-2 text-left">
                     <input
@@ -1576,9 +1585,6 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                   <div className="mt-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-[11px] font-bold italic text-muted">
-                        {t.addons.socksAddPrompt}
-                      </p>
-                      <p className="text-[11px] text-muted">
                         {formatMoney(socksAddon.price)} - {socksAddon.unit}
                       </p>
                     </div>
@@ -1951,7 +1957,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                   <div className="relative mx-auto mb-4 h-20 w-20" aria-hidden="true">
                     <div className="absolute inset-0 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
                     <div className="absolute inset-2 flex items-center justify-center rounded-full bg-white border border-border shadow-sm">
-                      <Check size={30} className="text-success" />
+                      <Check size={30} className="text-primary" />
                     </div>
                   </div>
                 )}

@@ -154,47 +154,49 @@ function BuyRecoveryCard({
             data-buy-recovery-status={status}
         >
             <div className="bg-surface border border-border rounded-2xl p-5 text-center shadow-sm">
-                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white border border-border">
-                    {checking ? (
-                        <RefreshCw size={26} className="text-primary animate-spin" />
-                    ) : (
-                        <AlertCircle size={26} className="text-primary" />
-                    )}
-                </div>
-                <h2 className="text-xl font-black italic uppercase text-foreground">
-                    {checking ? t.buyRecovery.title : t.buyRecovery.failedTitle}
-                </h2>
-                <p className="mt-2 text-sm text-muted">
-                    {checking
-                        ? t.buyRecovery.description
-                        : unsafe
-                          ? t.buyRecovery.unsafeDescription
-                          : t.buyRecovery.failedDescription}
-                </p>
-
                 {checking ? (
-                    <div className="mt-4 rounded-xl bg-white border border-border px-3 py-3 text-xs font-black italic uppercase text-primary">
-                        {t.buyRecovery.checking}
+                    <div className="flex min-h-[180px] items-center justify-center">
+                        <div
+                            className="relative h-20 w-20"
+                            role="status"
+                            aria-label={t.common.loading}
+                        >
+                            <div className="absolute inset-0 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+                            <div className="absolute inset-2 flex items-center justify-center rounded-full bg-white border border-border shadow-sm">
+                                <JumpyardIcon name="jump" className="h-12 w-12 animate-pulse" />
+                            </div>
+                        </div>
                     </div>
                 ) : (
-                    <div className="mt-4 flex flex-col gap-2">
-                        {!unsafe && (
+                    <>
+                        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white border border-border">
+                            <AlertCircle size={26} className="text-primary" />
+                        </div>
+                        <h2 className="text-xl font-black italic uppercase text-foreground">
+                            {t.buyRecovery.failedTitle}
+                        </h2>
+                        <p className="mt-2 text-sm text-muted">
+                            {unsafe ? t.buyRecovery.unsafeDescription : t.buyRecovery.failedDescription}
+                        </p>
+                        <div className="mt-4 flex flex-col gap-2">
+                            {!unsafe && (
+                                <button
+                                    type="button"
+                                    onClick={onRetry}
+                                    className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                                >
+                                    <RefreshCw size={16} /> {t.buyRecovery.retry}
+                                </button>
+                            )}
                             <button
                                 type="button"
-                                onClick={onRetry}
-                                className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                                onClick={onRestart}
+                                className="w-full bg-white hover:bg-surface border border-border text-foreground font-black italic uppercase text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                             >
-                                <RefreshCw size={16} /> {t.buyRecovery.retry}
+                                <RotateCcw size={16} /> {t.buyRecovery.startOver}
                             </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={onRestart}
-                            className="w-full bg-white hover:bg-surface border border-border text-foreground font-black italic uppercase text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
-                        >
-                            <RotateCcw size={16} /> {t.buyRecovery.startOver}
-                        </button>
-                    </div>
+                        </div>
+                    </>
                 )}
             </div>
         </motion.div>
@@ -776,7 +778,7 @@ function isCompletedSession(session: CheckInSession) {
 export default function Home() {
     return (
         <LanguageProvider>
-            <main className="flex min-h-screen flex-col items-center justify-start pt-3 p-3 overflow-hidden relative text-foreground bg-background selection:bg-primary selection:text-white">
+            <main className="flex min-h-dvh w-full flex-col items-center justify-start p-3 pt-3 overflow-x-hidden relative text-foreground bg-background selection:bg-primary selection:text-white">
                 <Suspense
                     fallback={
                         <div className="text-foreground z-10 flex flex-col justify-center items-center h-full w-full">
