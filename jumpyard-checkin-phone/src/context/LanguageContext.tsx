@@ -180,6 +180,16 @@ const sv = {
     noPaymentDesc: 'Presentkortet eller klippkortet täcker hela beloppet. Vi hämtar bokningen och fortsätter check-in.',
     noPaymentStatus: 'Ingen kortbetalning behövs',
   },
+  buyRecovery: {
+    title: 'Vi hittade din senaste check-in.',
+    description: 'Fortsätt där du var.',
+    checking: 'Hämtar bokningen',
+    failedTitle: 'Vi hittade din senaste check-in.',
+    failedDescription: 'Bokningen är sparad här, men vi kunde inte hämta den just nu. Försök igen eller börja om.',
+    unsafeDescription: 'Vi hittade en sparad check-in, men den saknar bokningsnummer. Börja om så skapar vi en ny säker väg.',
+    retry: 'Försök igen',
+    startOver: 'Börja om',
+  },
   booking: {
     ref: 'Bokning',
     today: 'Idag',
@@ -547,6 +557,16 @@ const en: typeof sv = {
     noPaymentTitle: 'Booking ready',
     noPaymentDesc: 'The gift card or clip card covers the full amount. We are loading the booking and continuing check-in.',
     noPaymentStatus: 'No card payment needed',
+  },
+  buyRecovery: {
+    title: 'We found your latest check-in.',
+    description: 'Continue where you left off.',
+    checking: 'Loading booking',
+    failedTitle: 'We found your latest check-in.',
+    failedDescription: 'The booking is saved here, but we could not load it right now. Try again or start over.',
+    unsafeDescription: 'We found a saved check-in, but it is missing a booking number. Start over to create a new safe path.',
+    retry: 'Try again',
+    startOver: 'Start over',
   },
   booking: {
     ref: 'Booking',

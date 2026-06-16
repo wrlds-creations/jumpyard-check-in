@@ -2,6 +2,19 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0136 Buy-Flow Refresh Recovery Validation
+
+- 2026-06-16: T0136 was activated as a phone UI ticket to persist safe client-side buy-flow recovery state after draft/payment creation and during buy-entry safety steps.
+- 2026-06-16: `jumpyard-checkin-phone/src/flow/buyFlowRecovery.ts` now owns a typed local-storage snapshot with booking/draft identifiers, selected start time/product, jumper count, payment/draft status, and current flow step. The snapshot shape has no raw payment JWT or provider-token field.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` writes the recovery snapshot after a new-booking draft exists and updates it when the paid draft lookup hands off toward safety.
+- 2026-06-16: `jumpyard-checkin-phone/src/app/page.tsx` reads the recovery snapshot on app start, tries to look up the saved booking through JumpYard Cloud, starts/resumes the server-owned check-in session, and routes recovered buy-entry guests back to safety video or safety rules. Server session state still controls ready-for-staff/final states.
+- 2026-06-16: `jumpyard-checkin-phone/src/context/LanguageContext.tsx` added calm recovery copy including `Vi hittade din senaste check-in.`, `Fortsätt där du var.`, retry, and start-over copy, with matching English copy.
+- 2026-06-16: Browser smoke used a temporary local mock JumpYard Cloud API and the real phone UI. The flow selected the first visible dynamic start time, created a buy-entry draft with prepayment draft id `jypre_t0136`, reloaded the app, and recovered to `APP_SAFETY_VIDEO` with check-in session `jycs_t0136_resume`.
+- 2026-06-16: Browser smoke then stopped the mock API and reloaded with the saved recovery snapshot. The app showed the recovery fallback copy `Vi hittade din senaste check-in.` and `Bokningen är sparad här, men vi kunde inte hämta den just nu. Försök igen eller börja om.`, and `Börja om` cleared recovery back to the normal park choice.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `node scripts/validate-current-ticket.js`, `node scripts/validate-followups.js`, `node scripts/validate-history-archives.js`, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0135 Buy-Entry Safety Context Validation
 
 - 2026-06-16: T0135 was activated as a phone UI ticket to add buy-entry-specific context before the safety video after purchase/payment while keeping existing-booking safety copy simpler.

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, ArrowLeft, Check, ChevronDown, Minus, Phone, Plus, RefreshCw } from 'lucide-react';
 import {
@@ -20,6 +20,7 @@ import {
 } from '@/flow/cloudClient';
 import type { Addon, AddonId, Booking } from '@/flow/types';
 import { ADDON_CATALOG_CONFIG, BUY_ENTRY_ADDON_IDS } from '@/flow/addonCatalog';
+import { writeBuyFlowRecovery, type BuyFlowRecoveryStep } from '@/flow/buyFlowRecovery';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
@@ -177,6 +178,52 @@ function formatBuyFlowError(
 
 function getDraftAmountOwing(draft: NewBookingDraftResult | null) {
   return draft?.prepayment?.amountOwing ?? draft?.draft.costs.amountOwing ?? null;
+}
+
+function getDraftRecoveryStep(step: Step, paymentApprovedForSync: boolean): BuyFlowRecoveryStep {
+  if (step === 'PENDING') return 'PENDING';
+  if (paymentApprovedForSync) return 'PAYMENT';
+  return 'PAYMENT';
+}
+
+function writeDraftRecovery(
+  currentFlowStep: BuyFlowRecoveryStep,
+  draft: NewBookingDraftResult | null,
+  selectedProduct: NewBookingProduct | null,
+  selectedTime: string | null,
+  jumperCount: number,
+  paymentApproved: boolean
+) {
+  if (!draft || !selectedProduct || !selectedTime) return;
+
+  const amountOwing = getDraftAmountOwing(draft);
+  const bookingReference = draft.draft.bookingReference ?? null;
+  const uniqueId = draft.draft.uniqueId ?? null;
+
+  writeBuyFlowRecovery({
+    bookingReference,
+    currentFlowStep,
+    draftState: {
+      amountOwing,
+      bookingReference,
+      paymentApproved,
+      paymentRequired: amountOwing === null || amountOwing > 0,
+      prepaymentDraftId: draft.prepayment?.prepaymentDraftId ?? null,
+      status: draft.prepayment?.status ?? null,
+      uniqueId,
+    },
+    draftUniqueId: uniqueId,
+    jumperCount,
+    selectedProduct: {
+      durationMinutes: selectedProduct.durationMinutes,
+      label: selectedProduct.label,
+      productId: selectedProduct.productId,
+      startTime: selectedProduct.startTime,
+      type: selectedProduct.type === 'family' ? 'family' : 'entry',
+      unitPrice: selectedProduct.unitPrice,
+    },
+    selectedStartTime: selectedTime,
+  });
 }
 
 function getMaxQuantity(product: NewBookingProduct | null) {
@@ -514,6 +561,19 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setPaymentSyncError(null);
     setPaymentApprovedForSync(false);
   };
+
+  useEffect(() => {
+    if (!draft) return;
+    writeDraftRecovery(
+      getDraftRecoveryStep(step, paymentApprovedForSync),
+      draft,
+      selectedProduct,
+      selectedTime,
+      jumperCount,
+      paymentApprovedForSync || noPaymentRequired
+    );
+  }, [draft, jumperCount, noPaymentRequired, paymentApprovedForSync, selectedProduct, selectedTime, step]);
+
   const basketLines = [
     ...(selectedProduct
       ? [
@@ -760,6 +820,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       for (let attempt = 0; attempt < 8; attempt += 1) {
         try {
           const booking = await lookupBooking(identifier);
+          writeDraftRecovery('APP_SAFETY_VIDEO', activeDraft, selectedProduct, selectedTime, jumperCount, true);
           onBookingReady(booking);
           return;
         } catch {
