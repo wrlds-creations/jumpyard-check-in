@@ -21,6 +21,7 @@ import {
     clearBuyFlowRecovery,
     getBuyFlowRecoveryIdentifier,
     getBuyFlowRecoveryTargetState,
+    isPrePaymentBuyFlowRecovery,
     readBuyFlowRecovery,
     writeBuyFlowRecovery,
     type BuyFlowRecoverySnapshot,
@@ -498,6 +499,13 @@ function CheckInFlow() {
         if (!snapshot) return;
 
         setBuyRecoverySnapshot(snapshot);
+        if (isPrePaymentBuyFlowRecovery(snapshot)) {
+            setBuyRecoveryStatus(null);
+            setState('KIOSK_BUY');
+            scrollToTop();
+            return;
+        }
+
         void resumeBuyFlowRecovery(snapshot);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state, linkToken, buyRecoveryStatus]);
@@ -626,7 +634,15 @@ function CheckInFlow() {
                     {state === 'KIOSK_BUY' && (
                         <BuyTickets
                             key="park-buy"
-                            onBack={() => { setState('KIOSK_CHOICE'); scrollToTop(); }}
+                            recoverySnapshot={
+                                isPrePaymentBuyFlowRecovery(buyRecoverySnapshot) ? buyRecoverySnapshot : null
+                            }
+                            onBack={() => {
+                                clearBuyFlowRecovery();
+                                setBuyRecoverySnapshot(null);
+                                setState('KIOSK_CHOICE');
+                                scrollToTop();
+                            }}
                             onBookingReady={booking => {
                                 void handlePaidNewBookingReady(booking);
                             }}
