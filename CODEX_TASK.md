@@ -9,9 +9,10 @@ No active Codex ticket.
 ## Context
 - T0126 completed the Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15.
 - T0129 completed the buy-flow/check-in UX backlog intake on 2026-06-16.
+- T0130 completed the buy-entry start-time/date clarification on 2026-06-16.
 - Historical project memory lives in `docs/history/` and broad forward planning lives in `docs/roadmap/backlog.md`.
 - Select and activate the next scoped ticket before making further repository changes.
-- Recommended next ticket: `T0130`.
+- Recommended next ticket: `T0131`.
 
 ## Allowed Areas
 - None until a new ticket is selected.

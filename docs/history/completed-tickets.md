@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 128
-Latest archived completed ticket: `T0129`
+Archived count: 129
+Latest archived completed ticket: `T0130`
 
 ## Completed Tickets
 
@@ -140,3 +140,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0128` | Full context-hygiene migration. | 2026-06-15 | Moved completed-ticket, validation, project-context narrative, done followup, and roadmap planning history into `docs/history/` and `docs/roadmap/`; added followup and history-archive validators; compressed active source-of-truth files. |
 | `T0126` | Pelle/Anders demo rehearsal bookings. | 2026-06-15 | Created same-day Roller Playground rehearsal bookings `5166994`, `5166995`, `5166996`, and `5166997`; verified JumpYard Cloud lookup/payment readiness, public guest/admin load, dev availability, add-on quote, and a ready-for-staff SkyRider handoff `JY3829` without redeeming tickets. |
 | `T0129` | Buy-flow UX backlog intake. | 2026-06-16 | Documented the next buy-flow/check-in UX tickets `T0130` through `T0137` in `docs/roadmap/backlog.md` using normal `T####` ticket language, added the backlog lifecycle rule that completed tickets are removed from backlog and recorded here, and made no app/backend/infra/AWS/Roller/payment/SMS/email behavior changes. |
+| `T0130` | Buy-entry start-time/date clarification. | 2026-06-16 | Phone buy-entry time selection now uses `Välj starttid`, shows `Idag` plus a Stockholm-formatted date near the time options, and uses the help text `Välj när ni vill börja hoppa.` without changing availability, future-date booking, quote, draft, payment, backend, AWS, Roller, SMS, or email behavior. |

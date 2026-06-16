@@ -80,6 +80,14 @@ function generateSlots(): string[] {
   return slots;
 }
 
+function formatTodayDate(lang: 'sv' | 'en') {
+  return new Intl.DateTimeFormat(lang === 'sv' ? 'sv-SE' : 'en-GB', {
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'Europe/Stockholm',
+  }).format(new Date());
+}
+
 function formatMoney(value: number | null | undefined) {
   if (value === null || value === undefined) return '-';
   return `${Math.round(value)} kr`;
@@ -354,8 +362,12 @@ function BuyEntryProgress({ step }: { step: Step }) {
 }
 
 export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
-  const { t } = useTranslation();
+  const { lang, t } = useTranslation();
   const slots = useMemo(() => generateSlots(), []);
+  const todayLabel = useMemo(
+    () => `${t.buy.selectTimeToday}, ${formatTodayDate(lang)}`,
+    [lang, t.buy.selectTimeToday]
+  );
 
   const [step, setStep] = useState<Step>('TIMESLOT');
   const [availability, setAvailability] = useState<NewBookingAvailability | null>(null);
@@ -806,6 +818,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
           <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">
             {t.buy.selectTime}
           </h2>
+          <p className="text-foreground text-xs font-black italic uppercase text-center mb-1">{todayLabel}</p>
           <p className="text-muted text-xs mb-4 text-center">{t.buy.selectTimeDesc}</p>
 
           {availabilityError && (
