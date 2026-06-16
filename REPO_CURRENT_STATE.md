@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-16
-- Current branch: `codex/t0132-hoppstrumpor-manualt-val`
-- Current status: No active ticket after T0132 closeout.
+- Current branch: `codex/t0133-skyrider-attestation-copy`
+- Current status: No active ticket after T0133 closeout.
 - Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (131 completed tickets; latest `T0132`).
-- Recommended next step: activate `T0133` to tighten SkyRider attestation copy around height and timing only.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (132 completed tickets; latest `T0133`).
+- Recommended next step: activate `T0134` to add a clear post-payment loading state.
 
 ## Current Structure
 
@@ -48,21 +48,21 @@ Major implementation roots remain unchanged by T0128: `infra/`, `jumpyard-checki
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 131
-- Latest completed ticket: `T0132`
+- Archived completed-ticket count: 132
+- Latest completed ticket: `T0133`
 - Current active ticket: None
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | No active ticket. | Closed | Activate `T0133` before further implementation. |
+| None active | No active ticket. | Closed | Activate `T0134` before further implementation. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0133` | Tighten SkyRider attestation copy around height and timing only. | Ready | Next ticket in the buy-flow/check-in UX sequence documented in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). |
+| `T0134` | Add a clear post-payment loading state while the paid booking is fetched and check-in is prepared. | Ready | Next ticket in the buy-flow/check-in UX sequence documented in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -86,6 +86,7 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - T0130 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0131 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0132 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
+- T0133 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 
 ## Current Risks And Open Questions
 
@@ -95,5 +96,6 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - T0130 changed phone UI copy/display only; no backend, AWS, Roller, payment, draft, SMS, email, or future-date booking behavior changed.
 - T0131 changed phone UI copy/display only; no backend, AWS, Roller, payment, draft, SMS, email, or flow-order behavior changed.
 - T0132 changed phone UI copy/display and local add-on selection state only; socks are not added automatically, already-have-socks confirmation clears selected socks, and no backend, AWS, Roller, payment, draft, SMS, email, pricing, or availability behavior changed.
+- T0133 changed phone SkyRider attestation copy/display only; the confirmation gate remains and no capacity, quote, draft, payment, handout, staff grouping, backend, AWS, Roller, SMS, or email behavior changed.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before this branch was created.

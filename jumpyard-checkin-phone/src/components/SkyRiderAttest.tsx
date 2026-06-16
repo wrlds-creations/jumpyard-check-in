@@ -13,7 +13,6 @@ export const SkyRiderAttest = ({ onComplete }: SkyRiderAttestProps) => {
     const [confirmed, setConfirmed] = useState(false);
     const infoItems = [
         { title: t.skyrider.requirementTitle, text: t.skyrider.requirementText },
-        { title: t.skyrider.safetyTitle, text: t.skyrider.safetyText },
         { title: t.skyrider.timingTitle, text: t.skyrider.timingText },
     ];
 
