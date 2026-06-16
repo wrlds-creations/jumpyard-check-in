@@ -2,6 +2,16 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0143 Phone Contact Icon Style Correction Validation
+
+- 2026-06-16: T0143 was handled as a narrow follow-up after T0142 to correct only the phone contact icon asset style.
+- 2026-06-16: `jumpyard-checkin-phone/public/jumpyard-next-icons/phone.png` was replaced with the selected built-in-imagegen iPhone/contact-screen option: black phone frame, red screen, white contact glyph, and JumpYard-style motion accents.
+- 2026-06-16: Source scope was limited to the phone icon asset and source-of-truth ticket/archive docs. No backend, AWS, Roller, quote, draft, payment provider, session, redeem, staff/admin handoff, SMS, email, or app copy/contracts changed.
+- 2026-06-16: PNG validation confirmed `phone.png` remains a 1024x1024 RGBA asset with transparent corners and non-empty alpha content.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `node scripts/validate-current-ticket.js`, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0142 Buy-Entry Final Front Polish Validation
 
 - 2026-06-16: T0142 was activated as a narrow phone frontend polish ticket after T0141.

@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-16
-- Current branch: `codex/t0142-buy-entry-final-front-polish`
-- Current status: T0142 is completed; no active ticket is currently selected.
+- Current branch: `codex/t0143-phone-icon-style`
+- Current status: T0143 is completed; no active ticket is currently selected.
 - Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (141 completed tickets; latest `T0142`).
-- Recommended next step: review the completed branch locally, then commit/merge it if approved.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (142 completed tickets; latest `T0143`).
+- Recommended next step: review the icon branch, then commit/merge it if approved.
 
 ## Current Structure
 
@@ -48,15 +48,15 @@ Major implementation roots remain unchanged by T0128: `infra/`, `jumpyard-checki
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 141
-- Latest completed ticket: `T0142`
+- Archived completed-ticket count: 142
+- Latest completed ticket: `T0143`
 - Current active ticket: None active
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | No active ticket is selected. | Idle | T0142 is complete and ready for review/commit if approved. |
+| None active | No active ticket is selected. | Idle | T0143 is complete and ready for review/commit if approved. |
 
 ## Confirmed Next Tickets
 
@@ -96,6 +96,7 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - T0140 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0141 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0142 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
+- T0143 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 
 ## Current Risks And Open Questions
 
@@ -115,5 +116,6 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - T0140 changed phone UI/client copy and display polish only after the T0138/T0139 buy-entry changes: final action copy, family product icon, review jumper label, post-payment sync card styling, and buy-entry safety-video copy/header icon. Payment provider integration, backend, AWS, Roller, quote, draft, session, redeem, SMS, and email contracts remain unchanged.
 - T0141 changed phone UI/client display polish only after T0140: approved-payment sync check color, socks recommendation display, buy-entry safety-rules title/copy/header icon, recovery loading display, final new-booking action styling, and the main phone surface vertical overflow behavior. Payment provider integration, backend, AWS, Roller, quote, draft, session, redeem, SMS, and email contracts remain unchanged.
 - T0142 changed phone UI/client display and local socks quantity behavior only: socks recommendation visualization, uncapped manual socks quantity, generated phone icon usage, payment loader icon, buy-entry safety/final copy without check-in QR, final confirmation QR/code removal, and new-booking action placement. Backend, AWS, Roller, quote, draft, payment provider, session, redeem, staff/admin handoff, SMS, and email contracts remain unchanged.
+- T0143 changed only the phone contact icon asset to the selected imagegen iPhone/contact-screen icon. App behavior and backend/AWS/Roller/payment/session/SMS/email contracts remain unchanged.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before this branch was created.
