@@ -45,8 +45,8 @@ export const SafetyVideo = ({ onComplete, buyEntryFlow = false }: SafetyVideoPro
             exit={{ opacity: 0, y: -20 }}
         >
             <div className="flex flex-col items-center">
-                <div className="flex items-center gap-2 mb-0.5">
-                    <JumpyardIcon name="safety-check" className="w-8 h-8" />
+                <div className="flex items-center justify-center gap-2 mb-0.5 text-center">
+                    {!buyEntryFlow && <JumpyardIcon name="safety-check" className="w-8 h-8" />}
                     <h1 className="text-xl font-black italic uppercase text-foreground">{title}</h1>
                 </div>
                 <p className="text-muted text-xs mb-2 text-center">{description}</p>

@@ -1,6 +1,5 @@
 'use client';
 import { motion } from 'framer-motion';
-import { RotateCcw } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { QrCode } from '@/components/QrCode';
@@ -160,7 +159,7 @@ export const ConfirmationScreen = ({
                         className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-3 text-sm font-black italic uppercase text-foreground transition-all active:scale-[0.98]"
                         data-testid="confirmation-start-over"
                     >
-                        <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                        <JumpyardIcon name="add-jump-session" className="h-7 w-7" />
                         {t.confirm.done}
                     </button>
                 )}

@@ -2,6 +2,32 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0140 Buy-Entry Final Polish Follow-Up Validation
+
+- 2026-06-16: T0140 was activated as a small phone buy-entry polish ticket after T0138/T0139.
+- 2026-06-16: `jumpyard-checkin-phone/src/context/LanguageContext.tsx` now uses `Gör en ny bokning` / `Make a new booking` for the final action, shortens the buy-entry review metadata label to `Hoppare` / `Jumpers`, changes the payment sync title to `Betalning genomförd`, and changes buy-entry safety-video copy to `Säkerhetsgenomgång` plus short check-in QR handoff text.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx` now uses the generated `add-jump-session` icon for the final action instead of a restart icon.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now uses the generated `group` icon for family product cards in jump-time selection and renders the approved-payment sync state with the same spinner structure as the availability loader plus a green check in the center.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/SafetyVideo.tsx` now hides the leading `safety-check` header icon only for the buy-entry safety-video variant while keeping the existing-booking safety video header icon unchanged.
+- 2026-06-16: Local in-app browser smoke used a temporary mock JumpYard Cloud API at `http://127.0.0.1:43220` and Next dev at `http://127.0.0.1:3040/?park=1`. The smoke confirmed the family product card image source was `/jumpyard-next-icons/group.png`, the review restored/visible label was `Hoppare`, and `Antal hoppare` was not present in the review metadata.
+- 2026-06-16: Source checks confirmed `Gör en ny bokning`, `Betalning genomförd`, `Säkerhetsgenomgång`, the capacity-loader-style payment sync spinner, and the buy-entry-only safety header icon condition are present.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `node scripts/validate-current-ticket.js`, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
+## T0139 Pre-Payment Buy-Flow Recovery Validation
+
+- 2026-06-16: T0139 was activated as a phone buy-entry client recovery ticket for safe local recovery before draft/payment exists.
+- 2026-06-16: `jumpyard-checkin-phone/src/flow/buyFlowRecovery.ts` now supports pre-payment internal buy steps, selected product key, quantity, add-on quantities, socks confirmation, SkyRider consent, contact fields, and a boolean marker for payment-option values without storing raw Presentkort/Klippkort codes, raw payment JWTs, or payment-provider secrets.
+- 2026-06-16: `jumpyard-checkin-phone/src/app/page.tsx` now routes pre-payment recovery snapshots back into `KIOSK_BUY` while keeping the existing T0136 post-draft/payment recovery lookup path unchanged.
+- 2026-06-16: `jumpyard-checkin-phone/src/components/BuyTickets.tsx` now writes a safe pre-payment snapshot, restores from it after refresh, reloads availability before trusting saved time/product/add-ons, clamps unavailable or over-limit choices, falls back to safer earlier steps when needed, and clears pre-payment recovery when leaving buy-entry or moving into the existing post-draft/payment recovery path.
+- 2026-06-16: Local in-app browser smoke used a temporary mock JumpYard Cloud API at `http://127.0.0.1:43219` and Next dev at `http://127.0.0.1:3039/?park=1`. The smoke selected `17:00`, `60 min`, 2 jumpers, 1 socks, 1 lock, filled contact, reached `REVIEW`, refreshed, and restored to `KIOSK_BUY` / `REVIEW` with `17:00`, `60 min`, 2 jumpers, socks, lock, and amount `496 kr`.
+- 2026-06-16: The same browser smoke confirmed the socks checkbox count changed from `1` to `0` after socks quantity became 1 and that review recovery re-issued availability/quote calls with item ids only; the mock quote request contained no gift-card, Klippkort, raw JWT, payment session, configuration id, integration id, or API URL fields.
+- 2026-06-16: Source search confirmed the pre-payment snapshot write stores only `paymentOptionsHadValues` for payment-option state and does not write `giftCardNumber`, `clipCardCode`, raw `jwt`, `paymentSession`, `apiUrl`, `configurationId`, or `integrationId`.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings.
+- 2026-06-16: `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` age notices.
+- 2026-06-16: `node scripts/validate-current-ticket.js`, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0138 Buy-Entry Small UI Polish Validation
 
 - 2026-06-16: T0138 was activated as a narrow phone buy-entry UI polish ticket for socks checkbox visibility, review metadata icons, payment-code helper text, and post-payment sync display.

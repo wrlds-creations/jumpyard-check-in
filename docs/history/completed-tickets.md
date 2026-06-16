@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 137
-Latest archived completed ticket: `T0138`
+Archived count: 139
+Latest archived completed ticket: `T0140`
 
 ## Completed Tickets
 
@@ -149,3 +149,5 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0136` | Buy-flow refresh recovery. | 2026-06-16 | Phone buy-entry now stores a safe local recovery snapshot after draft/payment state exists and during buy-entry safety steps, resumes by looking up the saved booking after refresh, shows calm recovery retry/start-over copy when the booking cannot be loaded, and stores no raw payment JWTs while leaving quote, draft, payment provider, session, redeem, staff handoff, backend, AWS, Roller, SMS, and email contracts unchanged. |
 | `T0137` | Channel-aware final confirmation. | 2026-06-16 | Phone confirmation now uses short channel-aware guest copy, labels the handoff as `Check-in QR` instead of `Personalkod`, shows wristbands plus selected handout/add-on items such as socks, SkyRider, and coffee in the final summary, and keeps redeem behavior, staff/admin queue semantics, backend, AWS, Roller, quote, draft, payment, session, SMS, and email contracts unchanged. |
 | `T0138` | Buy-entry small UI polish. | 2026-06-16 | Phone buy-entry now hides the approved-socks checkbox after socks are selected, shows generated icons for start time, jump duration, and jumper count in review, removes empty-state helper text under Presentkort/Klippkort, and replaces the payment-approved card with a booking-sync loading state while preserving payment provider integration, quote/draft payloads, session/redeem behavior, backend, AWS, Roller, SMS, and email contracts. |
+| `T0139` | Pre-payment buy-flow recovery. | 2026-06-16 | Phone buy-entry now stores a safe local recovery snapshot before draft/payment, restores refreshed guests to the safest matching internal step after reloading availability, preserves time/product/quantity/add-ons/socks/SkyRider consent/contact where safe, re-quotes review without raw payment codes, and keeps raw payment JWTs, payment-provider secrets, raw Presentkort/Klippkort codes, backend, AWS, Roller, quote/draft/session/redeem/SMS/email contracts unchanged. |
+| `T0140` | Buy-entry final polish follow-up. | 2026-06-16 | Phone buy-entry now labels the final action `Gör en ny bokning`, uses the group/family icon for family jump-time products, shortens the review metadata label to `Hoppare`, shows the approved-payment sync card as `Betalning genomförd` with a capacity-loader-style spinner and green check, and changes buy-entry safety video copy to `Säkerhetsgenomgång` without the header icon while preserving payment provider, backend, AWS, Roller, quote, draft, session, redeem, SMS, and email contracts. |

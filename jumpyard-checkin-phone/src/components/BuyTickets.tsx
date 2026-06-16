@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, ArrowLeft, Check, ChevronDown, Minus, Phone, Plus, RefreshCw } from 'lucide-react';
 import {
@@ -20,18 +20,29 @@ import {
 } from '@/flow/cloudClient';
 import type { Addon, AddonId, Booking } from '@/flow/types';
 import { ADDON_CATALOG_CONFIG, BUY_ENTRY_ADDON_IDS } from '@/flow/addonCatalog';
-import { writeBuyFlowRecovery, type BuyFlowRecoveryStep } from '@/flow/buyFlowRecovery';
+import {
+  clearBuyFlowRecovery,
+  isPrePaymentBuyFlowRecovery,
+  writeBuyFlowRecovery,
+  type BuyFlowRecoveryAddonQty,
+  type BuyFlowRecoveryBuyStep,
+  type BuyFlowRecoveryContact,
+  type BuyFlowRecoveryProduct,
+  type BuyFlowRecoverySnapshot,
+  type BuyFlowRecoveryStep,
+} from '@/flow/buyFlowRecovery';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 
 interface BuyTicketsProps {
+  recoverySnapshot?: BuyFlowRecoverySnapshot | null;
   onBack: () => void;
   onBookingReady: (booking: Booking) => void;
 }
 
-type Step = 'TIMESLOT' | 'PRODUCT' | 'QUANTITY' | 'ADDONS' | 'SKYRIDER_ATTEST' | 'CONTACT' | 'REVIEW' | 'PAYMENT' | 'PENDING';
+type Step = BuyFlowRecoveryBuyStep | 'PAYMENT' | 'PENDING';
 
 const BUY_PROGRESS_ICONS: JumpyardIconName[] = [
   'admission-ticket',
@@ -216,6 +227,7 @@ function writeDraftRecovery(
     jumperCount,
     selectedProduct: {
       durationMinutes: selectedProduct.durationMinutes,
+      key: selectedProduct.key,
       label: selectedProduct.label,
       productId: selectedProduct.productId,
       startTime: selectedProduct.startTime,
@@ -319,12 +331,210 @@ function numberProductId(value: string | null | undefined) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function isKnownBuyAddonId(value: string): value is AddonId {
+  return BUY_ENTRY_ADDON_IDS.includes(value as AddonId);
+}
+
 function getDynamicAddonProduct(slot: NewBookingAvailability['slots'][number] | null, id: AddonId) {
   return slot?.products.find((product) => product.type === 'addon' && product.key === id) ?? null;
 }
 
+function getAddonAvailabilityById(slot: NewBookingAvailability['slots'][number] | null) {
+  const byId = new Map<AddonId, NewBookingProduct>();
+  for (const product of slot?.products ?? []) {
+    if (product.type === 'addon' && isKnownBuyAddonId(product.key)) {
+      byId.set(product.key, product);
+    }
+  }
+  return byId;
+}
+
+function getBuyAddonEntriesForSlot(
+  slot: NewBookingAvailability['slots'][number] | null,
+  labels: ReturnType<typeof useTranslation>['t']['addons'],
+): BuyAddonEntry[] {
+  return BUY_ENTRY_ADDON_IDS.map((id) => {
+    const config = ADDON_CATALOG_CONFIG[id];
+    const dynamicProduct = getDynamicAddonProduct(slot, id);
+    return {
+      id,
+      icon: config.icon as JumpyardIconName,
+      label: getAddonLabel(id, labels.products),
+      maxPerGuest: config.maxPerGuest,
+      price: dynamicProduct?.unitPrice ?? null,
+      requiresAvailability: config.requiresAvailability,
+      rollerProductId: numberProductId(dynamicProduct?.productId) ?? config.rollerProductId,
+      unit: getAddonUnit(id, labels),
+    };
+  });
+}
+
 function isPricedAddon(addon: BuyAddonEntry): addon is BuyAddonEntry & { price: number; rollerProductId: number } {
   return addon.price !== null && addon.rollerProductId !== null;
+}
+
+function toRecoveryProduct(product: NewBookingProduct): BuyFlowRecoveryProduct {
+  return {
+    durationMinutes: product.durationMinutes,
+    key: product.key,
+    label: product.label,
+    productId: product.productId,
+    startTime: product.startTime,
+    type: product.type === 'family' ? 'family' : 'entry',
+    unitPrice: product.unitPrice,
+  };
+}
+
+function findRecoveredProduct(
+  slot: NewBookingAvailability['slots'][number] | null,
+  recovered: BuyFlowRecoveryProduct | null
+) {
+  if (!slot || !recovered) return null;
+  const candidates = slot.products.filter(
+    (product) =>
+      (product.type === 'entry' || product.type === 'family') &&
+      product.available &&
+      product.productId !== null &&
+      getMaxQuantity(product) > 0
+  );
+
+  if (recovered.productId) {
+    const byProductId = candidates.find((product) => product.productId === recovered.productId);
+    if (byProductId) return byProductId;
+  }
+
+  if (recovered.key) {
+    const byKey = candidates.find((product) => product.key === recovered.key);
+    if (byKey) return byKey;
+  }
+
+  return (
+    candidates.find(
+      (product) =>
+        product.type === recovered.type &&
+        product.startTime === recovered.startTime &&
+        product.durationMinutes === recovered.durationMinutes
+    ) ?? null
+  );
+}
+
+function getRecoveredQuantity(snapshot: BuyFlowRecoverySnapshot, product: NewBookingProduct) {
+  if (snapshot.quantity && snapshot.quantity > 0) return snapshot.quantity;
+  if (!snapshot.jumperCount || snapshot.jumperCount <= 0) return 1;
+  if (product.type === 'family') {
+    return Math.ceil(snapshot.jumperCount / Math.max(1, product.jumpersPerUnit));
+  }
+  return snapshot.jumperCount;
+}
+
+function clampRecoveredAddonQty(
+  recovered: BuyFlowRecoveryAddonQty | undefined,
+  slot: NewBookingAvailability['slots'][number] | null,
+  buyAddons: BuyAddonEntry[],
+  jumperCount: number
+) {
+  const addonAvailabilityById = getAddonAvailabilityById(slot);
+  const next = createEmptyAddonQty();
+
+  for (const addon of buyAddons) {
+    const rawQty = recovered?.[addon.id] ?? 0;
+    const qty = Number.isInteger(rawQty) ? rawQty : 0;
+    const max = getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null, jumperCount);
+    if (qty > 0 && max > 0 && isPricedAddon(addon)) {
+      next[addon.id] = Math.min(qty, max);
+    }
+  }
+
+  return next;
+}
+
+function getSelectedAddonsForState(
+  addonQty: AddonQuantityMap,
+  slot: NewBookingAvailability['slots'][number] | null,
+  buyAddons: BuyAddonEntry[],
+  jumperCount: number
+) {
+  const addonAvailabilityById = getAddonAvailabilityById(slot);
+  return buyAddons.flatMap((addon): Addon[] => {
+    const max = getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null, jumperCount);
+    const qty = Math.min(addonQty[addon.id], max);
+    if (qty <= 0 || !isPricedAddon(addon)) return [];
+
+    return [
+      {
+        id: addon.id,
+        label: addon.label,
+        price: addon.price,
+        qty,
+        requiresAvailability: addon.requiresAvailability,
+        rollerProductId: addon.rollerProductId,
+      },
+    ];
+  });
+}
+
+function buildItemsForState(
+  availability: NewBookingAvailability,
+  product: NewBookingProduct,
+  quantity: number,
+  selectedAddons: Addon[]
+): NewBookingItemRequest[] {
+  const productId = Number(product.productId);
+  if (!Number.isInteger(productId) || productId <= 0) return [];
+
+  return [
+    {
+      bookingDate: availability.date,
+      productId,
+      quantity,
+      requiresAvailability: true,
+      startTime: product.startTime,
+    },
+    ...selectedAddons.flatMap((addon) => {
+      const addonProductId = Number(addon.rollerProductId);
+      if (!Number.isInteger(addonProductId) || addonProductId <= 0) return [];
+      return [
+        {
+          bookingDate: availability.date,
+          productId: addonProductId,
+          quantity: addon.qty,
+          requiresAvailability: addon.requiresAvailability === true,
+          startTime: product.startTime,
+        },
+      ];
+    }),
+  ];
+}
+
+function hasSavedPaymentOptions(snapshot: BuyFlowRecoverySnapshot) {
+  return snapshot.paymentOptionsHadValues === true;
+}
+
+function getSafeContact(contact: BuyFlowRecoveryContact | null | undefined): BuyFlowRecoveryContact {
+  return {
+    email: contact?.email ?? '',
+    firstName: contact?.firstName ?? '',
+    lastName: contact?.lastName ?? '',
+    phone: contact?.phone ?? '',
+  };
+}
+
+function isValidRecoveredCustomer(contact: BuyFlowRecoveryContact) {
+  return (
+    contact.firstName.trim().length > 0 &&
+    contact.lastName.trim().length > 0 &&
+    isValidEmail(contact.email) &&
+    isValidPhone(contact.phone)
+  );
+}
+
+function toRecoveredCustomer(contact: BuyFlowRecoveryContact): NewBookingCustomer {
+  return {
+    email: contact.email.trim(),
+    firstName: contact.firstName.trim(),
+    lastName: contact.lastName.trim(),
+    phone: contact.phone.trim(),
+  };
 }
 
 function wait(ms: number) {
@@ -335,6 +545,18 @@ function getBuyProgressIndex(step: Step) {
   if (step === 'ADDONS' || step === 'SKYRIDER_ATTEST') return 1;
   if (step === 'CONTACT' || step === 'REVIEW' || step === 'PAYMENT' || step === 'PENDING') return 2;
   return 0;
+}
+
+function isBuyStep(step: Step): step is BuyFlowRecoveryBuyStep {
+  return step !== 'PAYMENT' && step !== 'PENDING';
+}
+
+function toRecoveryAddonQty(addonQty: AddonQuantityMap): BuyFlowRecoveryAddonQty {
+  const next: BuyFlowRecoveryAddonQty = {};
+  for (const id of BUY_ENTRY_ADDON_IDS) {
+    if (addonQty[id] > 0) next[id] = addonQty[id];
+  }
+  return next;
 }
 
 function AvailabilityLoadingCard({ selectedTime }: { selectedTime: string | null }) {
@@ -413,9 +635,11 @@ function BuyEntryProgress({ step }: { step: Step }) {
   );
 }
 
-export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
+export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: BuyTicketsProps) => {
   const { lang, t } = useTranslation();
   const slots = useMemo(() => generateSlots(), []);
+  const restoringPrePaymentRef = useRef(false);
+  const restoredSnapshotUpdatedAtRef = useRef<string | null>(null);
   const todayLabel = useMemo(
     () => `${t.buy.selectTimeToday}, ${formatTodayDate(lang)}`,
     [lang, t.buy.selectTimeToday]
@@ -454,28 +678,10 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
   const maxQuantity = getMaxQuantity(selectedProduct);
   const jumperCount = getJumperCount(selectedProduct, quantity);
   const buyAddons = useMemo<BuyAddonEntry[]>(
-    () =>
-      BUY_ENTRY_ADDON_IDS.map((id) => {
-        const config = ADDON_CATALOG_CONFIG[id];
-        return {
-          id,
-          icon: config.icon as JumpyardIconName,
-          label: getAddonLabel(id, t.addons.products),
-          maxPerGuest: config.maxPerGuest,
-          price: getDynamicAddonProduct(selectedSlot, id)?.unitPrice ?? null,
-          requiresAvailability: config.requiresAvailability,
-          rollerProductId: numberProductId(getDynamicAddonProduct(selectedSlot, id)?.productId) ?? config.rollerProductId,
-          unit: getAddonUnit(id, t.addons),
-        };
-      }),
-    [selectedSlot, t]
+    () => getBuyAddonEntriesForSlot(selectedSlot, t.addons),
+    [selectedSlot, t.addons]
   );
-  const addonAvailabilityById = new Map<AddonId, NewBookingProduct>();
-  for (const product of selectedSlot?.products ?? []) {
-    if (product.type === 'addon') {
-      addonAvailabilityById.set(product.key as AddonId, product);
-    }
-  }
+  const addonAvailabilityById = useMemo(() => getAddonAvailabilityById(selectedSlot), [selectedSlot]);
   const getBuyAddonMax = (addon: BuyAddonEntry, nextJumperCount = jumperCount) =>
     getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null, nextJumperCount);
   const visibleBuyAddons = buyAddons.filter((addon) => getBuyAddonMax(addon) > 0 && isPricedAddon(addon));
@@ -563,6 +769,235 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     setPaymentSyncError(null);
     setPaymentApprovedForSync(false);
   };
+
+  useEffect(() => {
+    if (!isPrePaymentBuyFlowRecovery(recoverySnapshot)) return;
+    if (restoredSnapshotUpdatedAtRef.current === recoverySnapshot.updatedAt) return;
+
+    let alive = true;
+    restoringPrePaymentRef.current = true;
+
+    const restorePrePaymentSnapshot = async () => {
+      const savedContact = getSafeContact(recoverySnapshot.contact);
+      const savedStartTime = recoverySnapshot.selectedStartTime;
+
+      setLoadingAvailability(Boolean(savedStartTime));
+      setAvailabilityError(null);
+      setSubmitError(null);
+      setQuote(null);
+      setDraft(null);
+      setPaymentSyncing(false);
+      setPaymentSyncError(null);
+      setPaymentApprovedForSync(false);
+      setGiftCardNumber('');
+      setClipCardCode('');
+      setGiftCardInputDirty(false);
+      setClipCardInputDirty(false);
+      setPaymentOptionsOpen(hasSavedPaymentOptions(recoverySnapshot));
+      setFirstName(savedContact.firstName);
+      setLastName(savedContact.lastName);
+      setEmail(savedContact.email);
+      setPhone(savedContact.phone);
+
+      if (!savedStartTime) {
+        setSelectedTime(null);
+        setSelectedProduct(null);
+        setQuantity(1);
+        setAddonQty(createEmptyAddonQty());
+        setAlreadyHasApprovedSocks(false);
+        setSkyriderConsentConfirmed(false);
+        setLoadingAvailability(false);
+        restoringPrePaymentRef.current = false;
+        restoredSnapshotUpdatedAtRef.current = recoverySnapshot.updatedAt;
+        setStep('TIMESLOT');
+        return;
+      }
+
+      try {
+        const freshAvailability = await getNewBookingAvailability([savedStartTime]);
+        if (!alive) return;
+
+        const freshSlot = freshAvailability.slots.find((slot) => slot.startTime === savedStartTime) ?? null;
+        setAvailability(freshAvailability);
+        setSelectedTime(savedStartTime);
+
+        if (!freshSlot) {
+          setSelectedProduct(null);
+          setQuantity(1);
+          setAddonQty(createEmptyAddonQty());
+          setAlreadyHasApprovedSocks(false);
+          setSkyriderConsentConfirmed(false);
+          setStep('TIMESLOT');
+          return;
+        }
+
+        const recoveredProduct = findRecoveredProduct(freshSlot, recoverySnapshot.selectedProduct);
+        if (!recoveredProduct) {
+          setSelectedProduct(null);
+          setQuantity(1);
+          setAddonQty(createEmptyAddonQty());
+          setAlreadyHasApprovedSocks(false);
+          setSkyriderConsentConfirmed(false);
+          setStep(recoverySnapshot.currentFlowStep === 'TIMESLOT' ? 'TIMESLOT' : 'PRODUCT');
+          return;
+        }
+
+        const recoveredQuantity = Math.max(
+          1,
+          Math.min(getMaxQuantity(recoveredProduct) || 1, getRecoveredQuantity(recoverySnapshot, recoveredProduct))
+        );
+        const recoveredJumperCount = getJumperCount(recoveredProduct, recoveredQuantity);
+        const recoveredBuyAddons = getBuyAddonEntriesForSlot(freshSlot, t.addons);
+        const recoveredAddonQty = clampRecoveredAddonQty(
+          recoverySnapshot.addonQty,
+          freshSlot,
+          recoveredBuyAddons,
+          recoveredJumperCount
+        );
+        const recoveredSelectedAddons = getSelectedAddonsForState(
+          recoveredAddonQty,
+          freshSlot,
+          recoveredBuyAddons,
+          recoveredJumperCount
+        );
+        const recoveredSkyRiderSelected = recoveredSelectedAddons.some((addon) => addon.id === 'skyrider');
+        const recoveredSkyRiderConsent = recoveredSkyRiderSelected && recoverySnapshot.skyriderConsentConfirmed === true;
+        const recoveredAlreadyHasSocks =
+          recoveredAddonQty.socks === 0 && recoverySnapshot.alreadyHasApprovedSocks === true;
+        const recoveredCustomerValid = isValidRecoveredCustomer(savedContact);
+        const needsRecoveredSkyRiderConsent = recoveredSkyRiderSelected && !recoveredSkyRiderConsent;
+
+        setSelectedProduct(recoveredProduct);
+        setQuantity(recoveredQuantity);
+        setAddonQty(recoveredAddonQty);
+        setAlreadyHasApprovedSocks(recoveredAlreadyHasSocks);
+        setSkyriderConsentConfirmed(recoveredSkyRiderConsent);
+
+        if (recoverySnapshot.currentFlowStep === 'TIMESLOT') {
+          setStep('TIMESLOT');
+          return;
+        }
+        if (recoverySnapshot.currentFlowStep === 'PRODUCT') {
+          setStep('PRODUCT');
+          return;
+        }
+        if (recoverySnapshot.currentFlowStep === 'QUANTITY') {
+          setStep('QUANTITY');
+          return;
+        }
+        if (recoverySnapshot.currentFlowStep === 'ADDONS') {
+          setStep('ADDONS');
+          return;
+        }
+        if (recoverySnapshot.currentFlowStep === 'SKYRIDER_ATTEST') {
+          setStep(needsRecoveredSkyRiderConsent ? 'SKYRIDER_ATTEST' : 'CONTACT');
+          return;
+        }
+        if (recoverySnapshot.currentFlowStep === 'CONTACT') {
+          setStep(needsRecoveredSkyRiderConsent ? 'SKYRIDER_ATTEST' : 'CONTACT');
+          return;
+        }
+
+        if (
+          needsRecoveredSkyRiderConsent ||
+          !recoveredCustomerValid ||
+          hasSavedPaymentOptions(recoverySnapshot)
+        ) {
+          setStep(needsRecoveredSkyRiderConsent ? 'SKYRIDER_ATTEST' : 'CONTACT');
+          return;
+        }
+
+        const recoveredItems = buildItemsForState(
+          freshAvailability,
+          recoveredProduct,
+          recoveredQuantity,
+          recoveredSelectedAddons
+        );
+        if (recoveredItems.length === 0) {
+          setStep('CONTACT');
+          return;
+        }
+
+        try {
+          const recoveredQuote = await quoteNewBooking(toRecoveredCustomer(savedContact), recoveredItems, true);
+          if (!alive) return;
+          setQuote(recoveredQuote);
+          setStep('REVIEW');
+        } catch (error) {
+          if (!alive) return;
+          const productLabelsForRestore = buildProductLabelMap(recoveredProduct, recoveredBuyAddons);
+          setSubmitError(formatBuyFlowError(error, t.buy, productLabelsForRestore, t.buy.quoteFailed));
+          setStep('CONTACT');
+        }
+      } catch (error) {
+        if (!alive) return;
+        setAvailabilityError(
+          error instanceof CloudBookingError ? error.message : t.buy.availabilityFailed
+        );
+        setSelectedProduct(null);
+        setQuantity(1);
+        setAddonQty(createEmptyAddonQty());
+        setAlreadyHasApprovedSocks(false);
+        setSkyriderConsentConfirmed(false);
+        setStep('TIMESLOT');
+      } finally {
+        if (alive) {
+          setLoadingAvailability(false);
+          restoringPrePaymentRef.current = false;
+          restoredSnapshotUpdatedAtRef.current = recoverySnapshot.updatedAt;
+        }
+      }
+    };
+
+    void restorePrePaymentSnapshot();
+
+    return () => {
+      alive = false;
+      restoringPrePaymentRef.current = false;
+    };
+  }, [recoverySnapshot, t.addons, t.buy]);
+
+  useEffect(() => {
+    if (draft || restoringPrePaymentRef.current || !isBuyStep(step)) return;
+    if (!selectedTime && !selectedProduct && step === 'TIMESLOT') return;
+
+    writeBuyFlowRecovery({
+      addonQty: toRecoveryAddonQty(addonQty),
+      alreadyHasApprovedSocks: showSocksConfirmation && alreadyHasApprovedSocks,
+      bookingReference: null,
+      contact: {
+        email,
+        firstName,
+        lastName,
+        phone,
+      },
+      currentFlowStep: step,
+      draftState: null,
+      draftUniqueId: null,
+      jumperCount: selectedProduct ? jumperCount : null,
+      paymentOptionsHadValues: paymentInputsHaveValues,
+      quantity: selectedProduct ? quantity : null,
+      selectedProduct: selectedProduct ? toRecoveryProduct(selectedProduct) : null,
+      selectedStartTime: selectedTime,
+      skyriderConsentConfirmed,
+    });
+  }, [
+    addonQty,
+    alreadyHasApprovedSocks,
+    draft,
+    email,
+    firstName,
+    jumperCount,
+    lastName,
+    paymentInputsHaveValues,
+    phone,
+    quantity,
+    selectedProduct,
+    selectedTime,
+    showSocksConfirmation,
+    skyriderConsentConfirmed,
+    step,
+  ]);
 
   useEffect(() => {
     if (!draft) return;
@@ -796,6 +1231,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
         giftCardInputs,
         discountCodeInputs
       );
+      clearBuyFlowRecovery();
       setDraft(result);
       clearPaymentSyncState();
       if (getDraftAmountOwing(result) !== null && getDraftAmountOwing(result)! <= 0) {
@@ -842,6 +1278,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
       return;
     }
     if (step === 'PENDING') {
+      clearBuyFlowRecovery();
       onBack();
       return;
     }
@@ -851,7 +1288,10 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     else if (step === 'ADDONS') setStep('QUANTITY');
     else if (step === 'QUANTITY') setStep('PRODUCT');
     else if (step === 'PRODUCT') setStep('TIMESLOT');
-    else onBack();
+    else {
+      clearBuyFlowRecovery();
+      onBack();
+    }
   };
 
   const renderProductCard = (product: NewBookingProduct) => {
@@ -859,6 +1299,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
     const available = product.available && max > 0 && product.productId !== null;
     const durationLabel = getProductDurationLabel(product);
     const capacityLabel = getCapacityLabel(product, t.buy.spotsAvailable, t.buy.spotsLeft);
+    const iconName: JumpyardIconName = product.type === 'family' ? 'group' : 'admission-ticket';
     const productMeta =
       product.type === 'family' ? `${t.buy.familyNote} · ${capacityLabel}` : capacityLabel;
     return (
@@ -872,7 +1313,7 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
             : 'bg-surface-strong border-border opacity-50 cursor-not-allowed'
         }`}
       >
-        <JumpyardIcon name="admission-ticket" className="w-9 h-9 flex-shrink-0" />
+        <JumpyardIcon name={iconName} className="w-9 h-9 flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <p className={`text-lg font-black italic uppercase ${available ? 'text-foreground' : 'text-muted'}`}>
             {durationLabel}
@@ -1502,20 +1943,18 @@ export const BuyTickets = ({ onBack, onBookingReady }: BuyTicketsProps) => {
                 data-payment-sync-card="true"
                 data-payment-sync-error={paymentSyncError ? 'true' : 'false'}
               >
-                <div
-                  className={`relative mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full ${
-                    paymentSyncError ? 'bg-danger/10 text-danger' : 'bg-primary/10 text-primary'
-                  }`}
-                >
-                  {paymentSyncError ? (
+                {paymentSyncError ? (
+                  <div className="relative mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-danger/10 text-danger">
                     <AlertCircle size={24} />
-                  ) : (
-                    <>
-                      <JumpyardIcon name="booking-confirmed" className="h-10 w-10" />
-                      <RefreshCw size={18} className="absolute -right-1 -top-1 animate-spin text-primary" />
-                    </>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="relative mx-auto mb-4 h-20 w-20" aria-hidden="true">
+                    <div className="absolute inset-0 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+                    <div className="absolute inset-2 flex items-center justify-center rounded-full bg-white border border-border shadow-sm">
+                      <Check size={30} className="text-success" />
+                    </div>
+                  </div>
+                )}
                 <h2 className="text-xl font-black italic uppercase text-foreground">
                   {paymentSyncError ? t.buy.paymentSyncFailed : t.buy.paymentSyncing}
                 </h2>
