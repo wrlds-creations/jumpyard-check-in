@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 142
-Latest archived completed ticket: `T0143`
+Archived count: 143
+Latest archived completed ticket: `T0144`
 
 ## Completed Tickets
 
@@ -154,3 +154,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0141` | Buy-entry final polish follow-up. | 2026-06-16 | Phone buy-entry now uses a red approved-payment sync check, adds a short `Rekommenderat antal` socks recommendation based on the current jumper count without auto-adding socks, changes the buy-entry safety-rules step to `Sista steget` with no header icon, shows only the consistent circular loader during buy-flow recovery checking, makes the final `Gör en ny bokning` action smaller/red with the white generated icon, and lets the main phone surface scroll vertically instead of locking overflow while preserving payment provider, backend, AWS, Roller, quote, draft, session, redeem, SMS, and email contracts. |
 | `T0142` | Buy-entry final front polish. | 2026-06-16 | Phone buy-entry now shows a richer socks recommendation panel with sock icons and selected count, removes the manual socks quantity cap, adds and uses a generated JumpYard-style `phone.png` icon for contact phone fields, uses the generated `success-check` icon in the completed-payment loader, changes buy-entry safety/final copy away from check-in QR language, removes the guest-facing QR/code card from final confirmation, and places `Gör en ny bokning` below the confirmation card while preserving backend QR/session data and backend, AWS, Roller, quote, draft, payment provider, session, redeem, staff/admin handoff, SMS, and email contracts. |
 | `T0143` | Phone contact icon style correction. | 2026-06-16 | Replaced `phone.png` with the selected imagegen iPhone/contact-screen icon: black phone frame, red screen, white contact glyph, and matching JumpYard motion accents. No backend, AWS, Roller, quote, draft, payment provider, session, redeem, staff/admin handoff, SMS, email, or app copy/contracts changed. |
+| `T0144` | Park-test backlog intake. | 2026-06-17 | Documented the park-test sequence `T0145` through `T0162` in `docs/roadmap/backlog.md`, recorded the gated rollout decision/context, and kept the work docs-only with no app/backend/infra/AWS/Roller/payment/SMS/email behavior changes. |
