@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). T0128 completed the documentation/tooling-only context-hygiene migration. T0126 completed the final Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15. T0144 documented the planned park-test ticket sequence `T0145` through `T0162` in [docs/roadmap/backlog.md](docs/roadmap/backlog.md); no park-test resources, Roller Live calls, webhooks, payments, or redemptions are active from that documentation ticket.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). T0128 completed the documentation/tooling-only context-hygiene migration. T0126 completed the final Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15. T0144 documented the planned park-test ticket sequence `T0145` through `T0162` in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). T0145 completed the read-only current-state audit in [docs/t0145-current-state-audit.md](docs/t0145-current-state-audit.md). No park-test resources, Roller Live calls, webhooks, payments, or redemptions are active from those documentation tickets.
 
 ## Context Archives
 
@@ -26,6 +26,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Sprint 1 ticket narrative: [docs/history/sprint-1-ticket-history.md](docs/history/sprint-1-ticket-history.md)
 - Done followups: [docs/history/followups-done.md](docs/history/followups-done.md)
 - Forward roadmap/backlog: [docs/roadmap/backlog.md](docs/roadmap/backlog.md)
+- Park-test current-state audit: [docs/t0145-current-state-audit.md](docs/t0145-current-state-audit.md)
 
 ## Durable Architecture Facts
 

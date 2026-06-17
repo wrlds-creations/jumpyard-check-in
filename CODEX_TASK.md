@@ -4,9 +4,10 @@
 NO_ACTIVE_TICKET
 
 ## Status
-No active ticket.
+No active Codex ticket.
 
 ## Notes
-- T0144 completed on 2026-06-17.
-- Park-test tickets `T0145` through `T0162` are documented in `docs/roadmap/backlog.md`.
-- Recommended next ticket: `T0145`.
+- T0145 completed the read-only current-state audit for the existing dev/Playground implementation.
+- Audit output: `docs/t0145-current-state-audit.md`.
+- T0145 changed source-of-truth documentation only. It did not change app/backend/infra code, AWS resources, Roller state, Cloudflare settings, credentials, bookings, drafts, payments, redemptions, SMS, or email.
+- Recommended next ticket: T0146 environment contract.
