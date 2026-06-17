@@ -46,6 +46,20 @@ T0089 guest messaging production unlock notes:
 - Source-of-truth unlock document: `GUEST_MESSAGING_PRODUCTION_UNLOCK.md`.
 - Safety state: dev scheduled due-message processing remains planning-only with `confirmSend=false`; controlled manual smokes remain possible only within current sandbox limitations.
 
+T0146 park-test environment contract notes:
+
+- AWS resources changed: none.
+- Park-test resources created: none.
+- Contract document: `docs/t0146-park-test-environment-contract.md`.
+- Planned environment name: `park-test`.
+- Planned AWS target: same account as dev, `376129878018`, and same region, `eu-north-1`.
+- Planned resource namespace: `jumpyard-check-in-park-test`.
+- Planned stack name: `jumpyard-check-in-park-test-stack`.
+- Planned separation: own API, Aurora cluster/database, Secrets Manager names, SSM parameters, SQS/DLQ, EventBridge schedules, CloudWatch logs/alarms, S3 storage, and frontend API target. No park-test resource should reuse the existing `jumpyard-check-in-dev` resources.
+- Planned Roller target: Roller Live / JumpYard Nacka through JumpYard Cloud only. Frontend apps must not call Roller directly.
+- Planned park-test WRLDS tags: `WRLDS:Client=JumpYard`, `WRLDS:Project=jumpyard-check-in`, `WRLDS:Environment=park-test`, `WRLDS:Owner=love`, `WRLDS:Repository=wrlds-creations/jumpyard-check-in`, `WRLDS:ManagedBy=cdk`, `WRLDS:DataClassification=confidential`, `WRLDS:Exportable=true`, `WRLDS:CostCenter=unassigned`, and `WRLDS:CreatedBy=love`.
+- Deploy gate: no park-test resources may be created until a later scoped ticket explicitly approves deploy work and reconfirms account, region, environment, owner, tags, data classification, exportability, and cost center.
+
 T0091 gift-card checkout notes:
 
 - AWS resources changed: existing booking Lambda code only.
@@ -727,6 +741,23 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`.
 | Async processing | EventBridge | Per environment | Webhook and reconciliation event bus. | Deployed to `dev` |
 | JumpYard logs | CloudWatch Logs | Per environment | Operational logs and error traces with Lambda log retention. | Deployed to `dev` |
 | Infrastructure deployment | CDK TypeScript | Per environment | Repeatable infrastructure with WRLDS tags. | `dev` deployed |
+
+## Planned Park-Test Target
+
+T0146 defines `park-test` as a planned separate environment only. This section is a contract, not proof of deployed resources.
+
+| Field | Planned Value |
+|---|---|
+| AWS account ID | `376129878018` |
+| AWS region | `eu-north-1` |
+| Environment | `park-test` |
+| Resource prefix | `jumpyard-check-in-park-test` |
+| Stack name | `jumpyard-check-in-park-test-stack` |
+| Roller target | Roller Live / JumpYard Nacka, server-side only |
+| Database | Dedicated park-test Aurora/database; not shared with dev |
+| Secrets/SSM | Dedicated `/jumpyard-check-in-park-test/...` names |
+| Frontend | Same phone/admin source, separate deployment/API target |
+| Status | Planned; no resources created |
 
 ## Governance Notes
 

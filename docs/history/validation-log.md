@@ -2,6 +2,15 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0146 Park-Test Environment Contract Validation
+
+- 2026-06-17: T0146 was activated after T0145 was merged to `main` and the branch `codex/t0146-park-test-environment-contract` was created from updated `main`.
+- 2026-06-17: Read `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, `CODEX_TASK.md`, local `project-context-hygiene` and `aws-project-infrastructure` skills, `AWS_RESOURCES.md`, T0145 audit output, `infra/config/dev.json`, `infra/config/dev.example.json`, and `infra/lib/config.ts`.
+- 2026-06-17: Added `docs/t0146-park-test-environment-contract.md` to lock `park-test` as a separate WRLDS environment in account `376129878018`, region `eu-north-1`, with planned namespace `jumpyard-check-in-park-test`, own future database/resources/secrets/API, and Roller Live JumpYard Nacka access only through JumpYard Cloud.
+- 2026-06-17: Updated `PROJECT_CONTEXT.md`, `DECISIONS.md`, and `AWS_RESOURCES.md` with the durable park-test environment contract and planned metadata. No AWS resources were created, changed, deployed, or deleted.
+- 2026-06-17: T0146 changed source-of-truth documentation only. It did not create credentials, config files, Live API calls, deploys, webhooks, payments, redemptions, SMS, email, or app/backend/infra behavior changes.
+- 2026-06-17: `npm run validate` and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0145 Current-State Audit Validation
 
 - 2026-06-17: T0145 was activated after T0144 was merged to `main` and the branch `codex/t0145-current-state-audit` was created from updated `main`.

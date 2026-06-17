@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). T0128 completed the documentation/tooling-only context-hygiene migration. T0126 completed the final Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15. T0144 documented the planned park-test ticket sequence `T0145` through `T0162` in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). T0145 completed the read-only current-state audit in [docs/t0145-current-state-audit.md](docs/t0145-current-state-audit.md). No park-test resources, Roller Live calls, webhooks, payments, or redemptions are active from those documentation tickets.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). T0128 completed the documentation/tooling-only context-hygiene migration. T0126 completed the final Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15. T0144 documented the planned park-test ticket sequence `T0145` through `T0162` in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). T0145 completed the read-only current-state audit in [docs/t0145-current-state-audit.md](docs/t0145-current-state-audit.md). T0146 locked the park-test environment contract in [docs/t0146-park-test-environment-contract.md](docs/t0146-park-test-environment-contract.md). No park-test resources, Roller Live calls, webhooks, payments, or redemptions are active from those documentation tickets.
 
 ## Context Archives
 
@@ -27,6 +27,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Done followups: [docs/history/followups-done.md](docs/history/followups-done.md)
 - Forward roadmap/backlog: [docs/roadmap/backlog.md](docs/roadmap/backlog.md)
 - Park-test current-state audit: [docs/t0145-current-state-audit.md](docs/t0145-current-state-audit.md)
+- Park-test environment contract: [docs/t0146-park-test-environment-contract.md](docs/t0146-park-test-environment-contract.md)
 
 ## Durable Architecture Facts
 
@@ -39,6 +40,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
 - AWS dev is the current implementation environment; non-dev/staging/live work requires separate reviewed config and preflight.
 - Park-test work is gated by scoped tickets; AWS resource creation, Roller Live reads/writes, webhook registration, payments, and redemptions require the explicit approvals listed in the active ticket/backlog.
+- Park-test is a separate WRLDS environment in the same AWS account and region as dev: account `376129878018`, region `eu-north-1`, planned resource namespace `jumpyard-check-in-park-test`, its own database/secrets/API/resources, and Roller Live JumpYard Nacka access only through JumpYard Cloud.
 
 ## Current Implemented Flow Facts
 
