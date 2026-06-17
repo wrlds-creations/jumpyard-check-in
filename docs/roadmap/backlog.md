@@ -19,13 +19,12 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0148` | CDK synth skeleton | Add a synthable park-test CDK/config skeleton with separate naming, tags, resource prefix, and no accidental reuse of dev resources. | T0147 | High | Synthesis only. No AWS deploy, no secrets, no Roller calls. | CDK synth/diff for dev and park-test; generated plan shows separate park-test resources and dev remains unchanged. | Ready |
+| `T0149` | Deploy/rollback preflight | Create the deployment and rollback runbook for park-test, including account/region, tags, data classification, cost, preflight checks, CDK diff approval, and stop criteria. | T0148 | High | Docs plus read-only AWS/resource checks only. No deploy, no migration, no Roller changes. | Preflight checklist completed; rollback plan covers frontend, API, live-write gates, secrets rotation, webhook removal, and schedule shutdown. | Ready |
 
 ## Next
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0149` | Deploy/rollback preflight | Create the deployment and rollback runbook for park-test, including account/region, tags, data classification, cost, preflight checks, CDK diff approval, and stop criteria. | T0148 | High | Docs plus read-only AWS/resource checks only. No deploy, no migration, no Roller changes. | Preflight checklist completed; rollback plan covers frontend, API, live-write gates, secrets rotation, webhook removal, and schedule shutdown. | Planned |
 | `T0150` | Deploy park-test foundation | Deploy the separate park-test JumpYard Cloud foundation in the same AWS account using separate resources. | T0149; explicit user approval to deploy | High | AWS deploy to park-test only. No Roller Live secret activated, no live calls, no app UX changes. | Approved CDK diff, successful deploy, park-test API health check, dev API/DB unchanged, resources tagged correctly. | Planned |
 | `T0151` | Database migrations | Apply existing migrations to the dedicated park-test database and verify schema readiness. | T0150 | High | Park-test database only. Do not touch dev DB. No Roller calls, no live bookings. | `schema_migrations` verified in park-test; core tables exist; dev `schema_migrations` unchanged; migration rollback notes documented. | Planned |
 | `T0152` | Secrets and kill switches | Create separate park-test secret references and explicit live-write gates for Roller Live, staff auth, webhook token, draft/payment/redeem execution, and emergency stop. | T0151 | High | Secret references and guards only. Do not print secret values. No Live API calls or writes. | Park-test resolves only park-test secret names; live-write flags default off; logs mask values; dev still uses dev/Playground settings. | Planned |
@@ -45,7 +44,7 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 ## Park-Test Ticket Intake
 
-T0144 captured the park-test plan from `C:/Users/lovea/Downloads/jumpyard_park_test_tickets.xlsx`. T0145 completed the read-only current-state audit in [docs/t0145-current-state-audit.md](../t0145-current-state-audit.md). T0146 locked the park-test environment contract in [docs/t0146-park-test-environment-contract.md](../t0146-park-test-environment-contract.md). T0147 added fail-closed config guards for dev versus park-test. The remaining sequence is intentionally one ticket at a time: synth and deploy preflight, then explicitly approved AWS/Live steps, then controlled quote, draft, payment, redeem, and visitor tests.
+T0144 captured the park-test plan from `C:/Users/lovea/Downloads/jumpyard_park_test_tickets.xlsx`. T0145 completed the read-only current-state audit in [docs/t0145-current-state-audit.md](../t0145-current-state-audit.md). T0146 locked the park-test environment contract in [docs/t0146-park-test-environment-contract.md](../t0146-park-test-environment-contract.md). T0147 added fail-closed config guards for dev versus park-test. T0148 added the synthable park-test CDK/config skeleton in [docs/t0148-park-test-synth-skeleton.md](../t0148-park-test-synth-skeleton.md). The remaining sequence is intentionally one ticket at a time: deploy preflight, then explicitly approved AWS/Live steps, then controlled quote, draft, payment, redeem, and visitor tests.
 
 Guardrails:
 

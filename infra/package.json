@@ -8,6 +8,7 @@
     "synth": "cdk synth",
     "synth:example": "cdk synth -c config=./config/dev.example.json",
     "synth:dev": "cdk synth -c config=./config/dev.json",
+    "synth:park-test": "cdk synth -c config=./config/park-test.json",
     "diff:dev": "cdk diff -c config=./config/dev.json --profile wrlds-dev",
     "deploy:dev": "cdk deploy -c config=./config/dev.json --profile wrlds-dev --require-approval never",
     "migrate:dev": "ts-node --prefer-ts-exts scripts/run-migrations.ts --config ./config/dev.json --profile wrlds-dev",
@@ -23,7 +24,8 @@
     "register:webhook:dev": "ts-node --prefer-ts-exts scripts/register-roller-webhook.ts --config ./config/dev.json --profile wrlds-dev",
     "register:webhook:dev:apply": "ts-node --prefer-ts-exts scripts/register-roller-webhook.ts --config ./config/dev.json --profile wrlds-dev --apply",
     "validate:config-guards": "ts-node --prefer-ts-exts scripts/validate-config-guards.ts",
-    "check": "npm run build && npm run validate:config-guards && npm run synth:example"
+    "validate:park-test-synth": "ts-node --prefer-ts-exts scripts/validate-park-test-synth.ts",
+    "check": "npm run build && npm run validate:config-guards && npm run validate:park-test-synth && npm run synth:example"
   },
   "dependencies": {
     "@aws-sdk/client-rds-data": "^3.1050.0",

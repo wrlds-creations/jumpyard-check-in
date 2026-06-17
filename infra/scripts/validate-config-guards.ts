@@ -83,57 +83,12 @@ function expectFail(name: string, config: TestConfig, expectedMessage: RegExp): 
   throw new Error(`${name}: expected config validation to fail.`);
 }
 
-function makeParkTestConfig(): TestConfig {
-  return {
-    awsAccount: '376129878018',
-    awsRegion: 'eu-north-1',
-    resourcePrefix: 'jumpyard-check-in-park-test',
-    api: {
-      allowedCorsOrigins: ['https://park-test.jumpyard.example'],
-      throttlingBurstLimit: 50,
-      throttlingRateLimit: 25,
-    },
-    roller: {
-      environment: 'live',
-      baseUrl: 'https://api.roller.app',
-    },
-    bookingTimeSms: {
-      scheduleEnabled: false,
-      confirmSend: false,
-      confirmedSendApproval: '',
-      checkinBaseUrl: 'https://park-test.jumpyard.example/',
-      rateMinutes: 5,
-      leadMinutes: 30,
-      windowMinutes: 10,
-      limit: 10,
-    },
-    guestEmail: {
-      provider: 'aws_ses',
-      checkinBaseUrl: 'https://park-test.jumpyard.example/',
-      fromAddress: '',
-      replyToAddresses: [],
-    },
-    tags: {
-      'WRLDS:Client': 'JumpYard',
-      'WRLDS:Project': 'jumpyard-check-in',
-      'WRLDS:Environment': 'park-test',
-      'WRLDS:Owner': 'love',
-      'WRLDS:Repository': 'wrlds-creations/jumpyard-check-in',
-      'WRLDS:ManagedBy': 'cdk',
-      'WRLDS:DataClassification': 'confidential',
-      'WRLDS:Exportable': 'true',
-      'WRLDS:CostCenter': 'unassigned',
-      'WRLDS:CreatedBy': 'love',
-    },
-  };
-}
-
 const devConfig = readConfig('config/dev.json');
 const unsafeDevLiveConfig = cloneConfig(devConfig);
 unsafeDevLiveConfig.roller.environment = 'live';
 unsafeDevLiveConfig.roller.baseUrl = 'https://api.roller.app';
 
-const parkTestConfig = makeParkTestConfig();
+const parkTestConfig = readConfig('config/park-test.json');
 const parkTestMissingPrefix = cloneConfig(parkTestConfig);
 delete parkTestMissingPrefix.resourcePrefix;
 
