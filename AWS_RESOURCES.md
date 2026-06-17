@@ -70,6 +70,19 @@ T0147 config guard notes:
 - Validation added: `infra/scripts/validate-config-guards.ts` and `npm --prefix infra run validate:config-guards` prove dev Playground passes, unsafe dev-to-Live fails, reviewed park-test Live config passes, and missing/unsafe park-test values fail closed.
 - Deploy gate: T0147 does not add `infra/config/park-test.json`, does not synthesize a park-test stack, does not deploy, and does not create or change AWS resources.
 
+T0148 park-test CDK synth skeleton notes:
+
+- AWS resources changed: none.
+- Park-test resources created: none.
+- Added config: `infra/config/park-test.json`.
+- Added validation: `infra/scripts/validate-park-test-synth.ts` and `npm --prefix infra run validate:park-test-synth`.
+- Synth target: stack `jumpyard-check-in-park-test-stack`, account `376129878018`, region `eu-north-1`, resource prefix `jumpyard-check-in-park-test`, Roller Live base URL `https://api.roller.app`, and WRLDS tags from the T0146 contract.
+- Placeholder CORS origins: `https://park-test.jumpyard.example` and `https://park-test-admin.jumpyard.example`; T0156 must replace or confirm real park-test phone/admin origins before visitor testing.
+- Park-test raw payload bucket synth name: `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`. The compact `-raw-` suffix is required because the standard `-raw-payloads-` suffix would exceed S3's 63-character bucket-name limit for this prefix.
+- Dev bucket naming remains unchanged because shorter prefixes still use the existing `${resourcePrefix}-raw-payloads-${account}-${region}` pattern.
+- Local validation: dev synth remains Playground and contains no park-test prefix; park-test synth uses separate Secrets Manager names, SSM parameters, API, Aurora identifiers, SQS queues, EventBridge rule names, CloudWatch dashboard/alarms, log groups, and Lambda names.
+- Deploy gate: T0148 does not deploy, create credentials, call AWS, call Roller, create resources, register webhooks, create drafts/payments, redeem tickets, send SMS/email, or change app behavior. T0149/T0150 remain required before any resource creation.
+
 T0091 gift-card checkout notes:
 
 - AWS resources changed: existing booking Lambda code only.
@@ -767,7 +780,8 @@ T0146 defines `park-test` as a planned separate environment only. This section i
 | Database | Dedicated park-test Aurora/database; not shared with dev |
 | Secrets/SSM | Dedicated `/jumpyard-check-in-park-test/...` names |
 | Frontend | Same phone/admin source, separate deployment/API target |
-| Status | Planned; no resources created |
+| Raw payload bucket | Synthesizes as `jumpyard-check-in-park-test-raw-376129878018-eu-north-1` to satisfy S3 length limits |
+| Status | Synthable config exists; no resources created |
 
 ## Governance Notes
 

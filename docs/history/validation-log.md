@@ -2,6 +2,17 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0148 Park-Test CDK Synth Skeleton Validation
+
+- 2026-06-17: T0148 was activated after T0147 was merged to `main` and the branch `codex/t0148-park-test-cdk-skeleton` was created from updated `main`.
+- 2026-06-17: Added synthable `infra/config/park-test.json` for stack `jumpyard-check-in-park-test-stack`, account `376129878018`, region `eu-north-1`, resource prefix `jumpyard-check-in-park-test`, Roller Live base URL `https://api.roller.app`, and T0146 WRLDS tags.
+- 2026-06-17: Added `infra/scripts/validate-park-test-synth.ts` and wired `npm --prefix infra run validate:park-test-synth` into `npm run infra:check`.
+- 2026-06-17: Initial park-test synth found that `jumpyard-check-in-park-test-raw-payloads-376129878018-eu-north-1` exceeds S3's 63-character bucket-name limit. CDK now preserves the existing dev bucket naming pattern for shorter prefixes and uses compact `-raw-` suffix only when needed.
+- 2026-06-17: `npm --prefix infra run build`, `npm --prefix infra run validate:config-guards`, and `npm --prefix infra run validate:park-test-synth` passed.
+- 2026-06-17: `npm --prefix infra run synth:dev`, `npm --prefix infra run synth:park-test`, and `npm run infra:check` passed. The CDK CLI printed the existing feature-flag and aws-cdk-lib notice `37949`; validation still exited 0.
+- 2026-06-17: Final `npm run infra:check`, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+- 2026-06-17: T0148 did not deploy, create credentials, call AWS, call Roller, create resources, register webhooks, create drafts/payments, redeem tickets, send SMS/email, or change app behavior.
+
 ## T0147 Config Guards Validation
 
 - 2026-06-17: T0147 was activated after T0146 was merged to `main` and the branch `codex/t0147-config-guards` was created from updated `main`.

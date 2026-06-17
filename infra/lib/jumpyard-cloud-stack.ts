@@ -167,7 +167,7 @@ export class JumpYardCloudStack extends Stack {
     });
 
     const rawPayloadBucket = new s3.Bucket(this, 'RawPayloadBucket', {
-      bucketName: `${config.resourcePrefix}-raw-payloads-${this.account}-${this.region}`,
+      bucketName: buildRawPayloadBucketName(config.resourcePrefix, this.account, this.region),
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -900,4 +900,18 @@ function applyRequiredTags(stack: Stack, config: JumpYardCloudConfig): void {
   for (const [key, value] of Object.entries(config.tags)) {
     Tags.of(stack).add(key, value);
   }
+}
+
+function buildRawPayloadBucketName(resourcePrefix: string, account: string, region: string): string {
+  const standardName = `${resourcePrefix}-raw-payloads-${account}-${region}`;
+  if (standardName.length <= 63) {
+    return standardName;
+  }
+
+  const compactName = `${resourcePrefix}-raw-${account}-${region}`;
+  if (compactName.length <= 63) {
+    return compactName;
+  }
+
+  throw new Error(`Raw payload bucket name is too long for resource prefix ${resourcePrefix}.`);
 }
