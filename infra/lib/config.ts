@@ -19,6 +19,14 @@ export const REQUIRED_WRLDS_TAGS = [
 
 type RequiredWrlDsTag = (typeof REQUIRED_WRLDS_TAGS)[number];
 
+type DeploymentEnvironment = 'dev' | 'park-test';
+
+const ROLLER_PLAYGROUND_BASE_URL = 'https://api.play.roller.app';
+const ROLLER_LIVE_BASE_URL = 'https://api.roller.app';
+const PARK_TEST_AWS_ACCOUNT = '376129878018';
+const PARK_TEST_AWS_REGION = 'eu-north-1';
+const PARK_TEST_RESOURCE_PREFIX = 'jumpyard-check-in-park-test';
+
 export interface JumpYardCloudConfig {
   readonly api: {
     readonly allowedCorsOrigins: readonly string[];
@@ -103,7 +111,8 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   const guestEmail = readGuestEmailConfig(raw.guestEmail);
   const resourcePrefix = readString(raw.resourcePrefix, 'resourcePrefix');
   const rollerEnvironment = readString(raw.roller?.environment, 'roller.environment');
-  const rollerBaseUrl = readString(raw.roller?.baseUrl, 'roller.baseUrl');
+  const rollerBaseUrl = normalizeBaseUrl(readString(raw.roller?.baseUrl, 'roller.baseUrl'), 'roller.baseUrl');
+  const deploymentEnvironment = readDeploymentEnvironment(tags['WRLDS:Environment']);
 
   if (!/^\d{12}$/.test(awsAccount)) {
     throw new Error('awsAccount must be a 12 digit AWS account id.');
@@ -117,17 +126,20 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     throw new Error('resourcePrefix must use lowercase letters, numbers, and hyphens only.');
   }
 
-  if (rollerEnvironment !== 'playground') {
-    throw new Error('T0004 infra foundation is Playground-only. roller.environment must be playground.');
-  }
-
-  if (!/^https:\/\/api\.play\.roller\.app\/?$/.test(rollerBaseUrl)) {
-    throw new Error('roller.baseUrl must be the documented Roller Playground API URL.');
-  }
-
   if (tags['WRLDS:ManagedBy'] !== 'cdk') {
     throw new Error('WRLDS:ManagedBy must be cdk for this infrastructure app.');
   }
+
+  validateEnvironmentContract({
+    awsAccount,
+    awsRegion,
+    bookingTimeSms,
+    deploymentEnvironment,
+    resourcePrefix,
+    rollerBaseUrl,
+    rollerEnvironment,
+    tags,
+  });
 
   return {
     api,
@@ -138,10 +150,105 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     resourcePrefix,
     roller: {
       environment: rollerEnvironment,
-      baseUrl: rollerBaseUrl.replace(/\/$/, ''),
+      baseUrl: rollerBaseUrl,
     },
     tags,
   };
+}
+
+interface EnvironmentContractInput {
+  readonly awsAccount: string;
+  readonly awsRegion: string;
+  readonly bookingTimeSms: JumpYardCloudConfig['bookingTimeSms'];
+  readonly deploymentEnvironment: DeploymentEnvironment;
+  readonly resourcePrefix: string;
+  readonly rollerBaseUrl: string;
+  readonly rollerEnvironment: string;
+  readonly tags: Record<RequiredWrlDsTag, string>;
+}
+
+function validateEnvironmentContract(input: EnvironmentContractInput): void {
+  if (input.deploymentEnvironment === 'dev') {
+    validateDevRollerContract(input.rollerEnvironment, input.rollerBaseUrl);
+    return;
+  }
+
+  validateParkTestContract(input);
+}
+
+function validateDevRollerContract(rollerEnvironment: string, rollerBaseUrl: string): void {
+  if (rollerEnvironment !== 'playground') {
+    throw new Error('dev config must use Roller Playground. roller.environment must be playground.');
+  }
+
+  if (rollerBaseUrl !== ROLLER_PLAYGROUND_BASE_URL) {
+    throw new Error(`dev config must use Roller Playground base URL ${ROLLER_PLAYGROUND_BASE_URL}.`);
+  }
+}
+
+function validateParkTestContract(input: EnvironmentContractInput): void {
+  if (input.awsAccount !== PARK_TEST_AWS_ACCOUNT) {
+    throw new Error(`park-test awsAccount must be ${PARK_TEST_AWS_ACCOUNT}.`);
+  }
+
+  if (input.awsRegion !== PARK_TEST_AWS_REGION) {
+    throw new Error(`park-test awsRegion must be ${PARK_TEST_AWS_REGION}.`);
+  }
+
+  if (input.resourcePrefix !== PARK_TEST_RESOURCE_PREFIX) {
+    throw new Error(`park-test resourcePrefix must be ${PARK_TEST_RESOURCE_PREFIX}.`);
+  }
+
+  if (input.rollerEnvironment !== 'live') {
+    throw new Error('park-test config must explicitly use Roller Live. roller.environment must be live.');
+  }
+
+  if (input.rollerBaseUrl !== ROLLER_LIVE_BASE_URL) {
+    throw new Error(`park-test config must use Roller Live base URL ${ROLLER_LIVE_BASE_URL}.`);
+  }
+
+  if (input.tags['WRLDS:Project'] !== 'jumpyard-check-in') {
+    throw new Error('park-test WRLDS:Project must be jumpyard-check-in.');
+  }
+
+  if (input.tags['WRLDS:Repository'] !== 'wrlds-creations/jumpyard-check-in') {
+    throw new Error('park-test WRLDS:Repository must be wrlds-creations/jumpyard-check-in.');
+  }
+
+  if (input.tags['WRLDS:DataClassification'] !== 'confidential') {
+    throw new Error('park-test WRLDS:DataClassification must be confidential.');
+  }
+
+  if (input.bookingTimeSms.confirmSend) {
+    throw new Error('park-test bookingTimeSms.confirmSend must stay false until a scoped messaging ticket enables it.');
+  }
+}
+
+function readDeploymentEnvironment(value: string): DeploymentEnvironment {
+  if (value === 'dev' || value === 'park-test') {
+    return value;
+  }
+
+  throw new Error('WRLDS:Environment must be dev or park-test for this infrastructure app.');
+}
+
+function normalizeBaseUrl(value: string, fieldName: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`Config field ${fieldName} must be a valid URL.`);
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`Config field ${fieldName} must use https.`);
+  }
+
+  if (parsed.pathname !== '/' || parsed.search.length > 0 || parsed.hash.length > 0) {
+    throw new Error(`Config field ${fieldName} must not include a path, query, or hash.`);
+  }
+
+  return parsed.origin;
 }
 
 function readApiConfig(raw: RawConfig['api']): JumpYardCloudConfig['api'] {

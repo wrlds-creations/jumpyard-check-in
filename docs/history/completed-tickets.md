@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 145
-Latest archived completed ticket: `T0146`
+Archived count: 146
+Latest archived completed ticket: `T0147`
 
 ## Completed Tickets
 
@@ -157,3 +157,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0144` | Park-test backlog intake. | 2026-06-17 | Documented the park-test sequence `T0145` through `T0162` in `docs/roadmap/backlog.md`, recorded the gated rollout decision/context, and kept the work docs-only with no app/backend/infra/AWS/Roller/payment/SMS/email behavior changes. |
 | `T0145` | Current-state audit. | 2026-06-17 | Added `docs/t0145-current-state-audit.md` with the current dev/Playground implementation surfaces, park-test blockers, and likely file/resource touch points for T0146 through T0162. T0145 was read-only and changed source-of-truth documentation only; no app/backend/infra behavior, AWS resources, Roller state, Cloudflare settings, credentials, bookings, drafts, payments, redemptions, SMS, or email changed. |
 | `T0146` | Park-test environment contract. | 2026-06-17 | Added `docs/t0146-park-test-environment-contract.md` and locked `park-test` as a separate WRLDS environment in AWS account `376129878018`, region `eu-north-1`, with planned namespace `jumpyard-check-in-park-test`, own future database/resources/secrets/API, Roller Live JumpYard Nacka server-side only, and dev/Playground left untouched. T0146 changed source-of-truth documentation only and created no resources, credentials, config files, Live calls, deploys, webhooks, payments, redemptions, SMS, or email. |
+| `T0147` | Config guards. | 2026-06-17 | Updated CDK config validation so `dev` remains Roller Playground-only while `park-test` is allowed only with the T0146 contract: account `376129878018`, region `eu-north-1`, resource prefix `jumpyard-check-in-park-test`, Roller Live base URL `https://api.roller.app`, confidential data classification, and confirmed scheduled sends off. Added `npm --prefix infra run validate:config-guards`. No deploys, credentials, AWS/Roller calls, resources, webhooks, payments, redemptions, SMS, email, or app behavior changed. |

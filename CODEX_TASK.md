@@ -7,7 +7,8 @@ NO_ACTIVE_TICKET
 No active Codex ticket.
 
 ## Notes
-- T0146 completed the park-test environment contract.
-- Contract output: `docs/t0146-park-test-environment-contract.md`.
-- T0146 changed source-of-truth documentation only. It did not create resources, credentials, config files, Live API calls, deploys, code/config guard implementation, AWS/Roller writes, webhooks, payments, redemptions, SMS, email, or app behavior changes.
-- Recommended next ticket: T0147 config guards.
+- T0147 completed config guards for explicit `park-test` support.
+- Dev config remains fail-closed to Roller Playground only.
+- Park-test config is allowed only when it matches the T0146 contract and keeps confirmed scheduled sends off.
+- T0147 did not deploy, create credentials, call AWS or Roller, create resources, webhooks, payments, redemptions, SMS, email, or change app behavior.
+- Recommended next ticket: T0148 CDK synth skeleton.
