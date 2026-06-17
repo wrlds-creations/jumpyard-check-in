@@ -2,6 +2,15 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0145 Current-State Audit Validation
+
+- 2026-06-17: T0145 was activated after T0144 was merged to `main` and the branch `codex/t0145-current-state-audit` was created from updated `main`.
+- 2026-06-17: The audit reviewed repository source-of-truth docs, infra config, CDK route/resource definitions, Lambda guard surfaces, app API-target code, app deploy docs, package scripts, local `.env` key names with values redacted, and `AWS_RESOURCES.md`.
+- 2026-06-17: Read-only AWS identity check with `aws sts get-caller-identity --profile wrlds-dev --region eu-north-1` confirmed account `376129878018`. No AWS resources were created, changed, deployed, or deleted.
+- 2026-06-17: `docs/t0145-current-state-audit.md` documents current dev surfaces, park-test blockers, and likely file/resource touch points for `T0146` through `T0162`.
+- 2026-06-17: T0145 changed source-of-truth documentation only. It did not change app/backend/infra code, AWS state, Roller state, Cloudflare settings, credentials, bookings, drafts, payments, redemptions, SMS, or email.
+- 2026-06-17: `npm run validate` and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0144 Park-Test Backlog Intake Validation
 
 - 2026-06-17: T0144 was activated by explicit user request as a documentation-only backlog intake ticket using `C:/Users/lovea/Downloads/jumpyard_park_test_tickets.xlsx` as the ticket source.
