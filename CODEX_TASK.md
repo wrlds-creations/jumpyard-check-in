@@ -7,7 +7,7 @@ NO_ACTIVE_TICKET
 No active Codex ticket.
 
 ## Notes
-- T0145 completed the read-only current-state audit for the existing dev/Playground implementation.
-- Audit output: `docs/t0145-current-state-audit.md`.
-- T0145 changed source-of-truth documentation only. It did not change app/backend/infra code, AWS resources, Roller state, Cloudflare settings, credentials, bookings, drafts, payments, redemptions, SMS, or email.
-- Recommended next ticket: T0146 environment contract.
+- T0146 completed the park-test environment contract.
+- Contract output: `docs/t0146-park-test-environment-contract.md`.
+- T0146 changed source-of-truth documentation only. It did not create resources, credentials, config files, Live API calls, deploys, code/config guard implementation, AWS/Roller writes, webhooks, payments, redemptions, SMS, email, or app behavior changes.
+- Recommended next ticket: T0147 config guards.

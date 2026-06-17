@@ -19,13 +19,12 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0146` | Environment contract | Lock the technical contract for environment name `park-test`: same AWS account as dev, separate resources, own database, Roller Live JumpYard Nacka, dev/Playground left untouched. | T0145 | Medium | Docs/config contract only. No resource creation, no credentials, no Live API calls. | Update durable decisions/project context if needed and validate that the contract clearly defines dev vs park-test ownership and rollback expectations. | Ready |
+| `T0147` | Config guards | Allow `park-test` as an explicit environment in config validation while keeping dev fail-closed against Roller Live and keeping park-test fail-closed without reviewed config. | T0146 | High | Code/config validation only. No deploy, no credentials, no AWS/Roller calls. | Unit/local validation proves dev Playground config still passes, unsafe dev to Live config fails, missing park-test values fail closed. | Ready |
 
 ## Next
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0147` | Config guards | Allow `park-test` as an explicit environment in config validation while keeping dev fail-closed against Roller Live and keeping park-test fail-closed without reviewed config. | T0146 | High | Code/config validation only. No deploy, no credentials, no AWS/Roller calls. | Unit/local validation proves dev Playground config still passes, unsafe dev to Live config fails, missing park-test values fail closed. | Planned |
 | `T0148` | CDK synth skeleton | Add a synthable park-test CDK/config skeleton with separate naming, tags, resource prefix, and no accidental reuse of dev resources. | T0147 | High | Synthesis only. No AWS deploy, no secrets, no Roller calls. | CDK synth/diff for dev and park-test; generated plan shows separate park-test resources and dev remains unchanged. | Planned |
 | `T0149` | Deploy/rollback preflight | Create the deployment and rollback runbook for park-test, including account/region, tags, data classification, cost, preflight checks, CDK diff approval, and stop criteria. | T0148 | High | Docs plus read-only AWS/resource checks only. No deploy, no migration, no Roller changes. | Preflight checklist completed; rollback plan covers frontend, API, live-write gates, secrets rotation, webhook removal, and schedule shutdown. | Planned |
 | `T0150` | Deploy park-test foundation | Deploy the separate park-test JumpYard Cloud foundation in the same AWS account using separate resources. | T0149; explicit user approval to deploy | High | AWS deploy to park-test only. No Roller Live secret activated, no live calls, no app UX changes. | Approved CDK diff, successful deploy, park-test API health check, dev API/DB unchanged, resources tagged correctly. | Planned |
@@ -47,7 +46,7 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 ## Park-Test Ticket Intake
 
-T0144 captured the park-test plan from `C:/Users/lovea/Downloads/jumpyard_park_test_tickets.xlsx`. T0145 completed the read-only current-state audit in [docs/t0145-current-state-audit.md](../t0145-current-state-audit.md). The remaining sequence is intentionally one ticket at a time: contract/config, then synth and deploy preflight, then explicitly approved AWS/Live steps, then controlled quote, draft, payment, redeem, and visitor tests.
+T0144 captured the park-test plan from `C:/Users/lovea/Downloads/jumpyard_park_test_tickets.xlsx`. T0145 completed the read-only current-state audit in [docs/t0145-current-state-audit.md](../t0145-current-state-audit.md). T0146 locked the park-test environment contract in [docs/t0146-park-test-environment-contract.md](../t0146-park-test-environment-contract.md). The remaining sequence is intentionally one ticket at a time: config guards, then synth and deploy preflight, then explicitly approved AWS/Live steps, then controlled quote, draft, payment, redeem, and visitor tests.
 
 Guardrails:
 
