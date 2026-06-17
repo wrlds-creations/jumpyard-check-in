@@ -7,5 +7,6 @@ NO_ACTIVE_TICKET
 No active ticket.
 
 ## Notes
-- T0143 completed on 2026-06-16.
-- Activate one scoped ticket before implementation resumes.
+- T0144 completed on 2026-06-17.
+- Park-test tickets `T0145` through `T0162` are documented in `docs/roadmap/backlog.md`.
+- Recommended next ticket: `T0145`.

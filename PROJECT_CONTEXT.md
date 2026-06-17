@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). T0128 completed the documentation/tooling-only context-hygiene migration. T0126 completed the final Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). T0128 completed the documentation/tooling-only context-hygiene migration. T0126 completed the final Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15. T0144 documented the planned park-test ticket sequence `T0145` through `T0162` in [docs/roadmap/backlog.md](docs/roadmap/backlog.md); no park-test resources, Roller Live calls, webhooks, payments, or redemptions are active from that documentation ticket.
 
 ## Context Archives
 
@@ -30,12 +30,14 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 ## Durable Architecture Facts
 
 - Frontend apps must not call Roller directly in the real production architecture.
+- Park-test planning preserves the same boundary: phone/admin deployments may point at a park-test JumpYard Cloud API by environment config, but Roller Live access remains server-side only.
 - Roller remains the source of truth for bookings, products, payments, and ticket redemption.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, session status, idempotency, audit events, and guest messaging state.
 - Check-in is modeled as ticket-level redemption through Roller `POST /redemptions`, not a booking-level flag.
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
 - AWS dev is the current implementation environment; non-dev/staging/live work requires separate reviewed config and preflight.
+- Park-test work is gated by scoped tickets; AWS resource creation, Roller Live reads/writes, webhook registration, payments, and redemptions require the explicit approvals listed in the active ticket/backlog.
 
 ## Current Implemented Flow Facts
 

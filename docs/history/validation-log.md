@@ -2,6 +2,14 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0144 Park-Test Backlog Intake Validation
+
+- 2026-06-17: T0144 was activated by explicit user request as a documentation-only backlog intake ticket using `C:/Users/lovea/Downloads/jumpyard_park_test_tickets.xlsx` as the ticket source.
+- 2026-06-17: `docs/roadmap/backlog.md` now documents the planned park-test sequence `T0145` through `T0162`, with T0145 as the recommended next read-only audit ticket.
+- 2026-06-17: `PROJECT_CONTEXT.md` and `DECISIONS.md` record the durable park-test guardrail: same frontend-to-JumpYard-Cloud boundary, shared phone/admin source code with environment-specific API targets, and separate approvals for AWS, Roller Live, webhook, payment, redeem, and visitor-test steps.
+- 2026-06-17: T0144 changed source-of-truth documentation only. It did not change app/backend/infra/AWS/Roller/payment/SMS/email behavior, credentials, bookings, drafts, payments, redemptions, or deploys.
+- 2026-06-17: `node scripts/validate-current-ticket.js`, `node scripts/validate-followups.js`, `node scripts/validate-history-archives.js`, `npm run validate`, and `git diff --check` passed.
+
 ## T0143 Phone Contact Icon Style Correction Validation
 
 - 2026-06-16: T0143 was handled as a narrow follow-up after T0142 to correct only the phone contact icon asset style.
