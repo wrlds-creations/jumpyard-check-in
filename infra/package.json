@@ -22,7 +22,8 @@
     "import:data-api-backfill:dev:apply": "ts-node --prefer-ts-exts scripts/import-data-api-backfill.ts --config ./config/dev.json --profile wrlds-dev --apply",
     "register:webhook:dev": "ts-node --prefer-ts-exts scripts/register-roller-webhook.ts --config ./config/dev.json --profile wrlds-dev",
     "register:webhook:dev:apply": "ts-node --prefer-ts-exts scripts/register-roller-webhook.ts --config ./config/dev.json --profile wrlds-dev --apply",
-    "check": "npm run build && npm run synth:example"
+    "validate:config-guards": "ts-node --prefer-ts-exts scripts/validate-config-guards.ts",
+    "check": "npm run build && npm run validate:config-guards && npm run synth:example"
   },
   "dependencies": {
     "@aws-sdk/client-rds-data": "^3.1050.0",

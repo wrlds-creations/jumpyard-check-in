@@ -2,6 +2,16 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0147 Config Guards Validation
+
+- 2026-06-17: T0147 was activated after T0146 was merged to `main` and the branch `codex/t0147-config-guards` was created from updated `main`.
+- 2026-06-17: `infra/lib/config.ts` now reads `WRLDS:Environment` as `dev` or `park-test`. Dev must use Roller Playground and `https://api.play.roller.app`; park-test must match the T0146 account, region, resource prefix, Roller Live base URL, confidential data classification, and `bookingTimeSms.confirmSend=false`.
+- 2026-06-17: Added `infra/scripts/validate-config-guards.ts` and wired `npm --prefix infra run validate:config-guards` into `npm --prefix infra run check`.
+- 2026-06-17: `npm --prefix infra run validate:config-guards` passed, proving dev Playground config passes, unsafe dev-to-Live config fails, reviewed park-test Live config passes, park-test missing `resourcePrefix` fails closed, park-test Playground config fails closed, park-test wrong data classification fails closed, and park-test confirmed scheduled sends fail closed.
+- 2026-06-17: `npm run infra:check` passed; it ran TypeScript build, config-guard validation, and CDK synth with `infra/config/dev.example.json`.
+- 2026-06-17: Final `npm run validate` and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+- 2026-06-17: T0147 did not add `infra/config/park-test.json`, did not deploy, did not create credentials, did not call AWS or Roller, and did not change resources, webhooks, payments, redemptions, SMS, email, or app behavior.
+
 ## T0146 Park-Test Environment Contract Validation
 
 - 2026-06-17: T0146 was activated after T0145 was merged to `main` and the branch `codex/t0146-park-test-environment-contract` was created from updated `main`.

@@ -60,6 +60,16 @@ T0146 park-test environment contract notes:
 - Planned park-test WRLDS tags: `WRLDS:Client=JumpYard`, `WRLDS:Project=jumpyard-check-in`, `WRLDS:Environment=park-test`, `WRLDS:Owner=love`, `WRLDS:Repository=wrlds-creations/jumpyard-check-in`, `WRLDS:ManagedBy=cdk`, `WRLDS:DataClassification=confidential`, `WRLDS:Exportable=true`, `WRLDS:CostCenter=unassigned`, and `WRLDS:CreatedBy=love`.
 - Deploy gate: no park-test resources may be created until a later scoped ticket explicitly approves deploy work and reconfirms account, region, environment, owner, tags, data classification, exportability, and cost center.
 
+T0147 config guard notes:
+
+- AWS resources changed: none.
+- Park-test resources created: none.
+- IaC/config validation changed: `infra/lib/config.ts` now treats `WRLDS:Environment` as the environment selector for `dev` or `park-test`.
+- Dev guard: `dev` config must use Roller Playground with base URL `https://api.play.roller.app`.
+- Park-test guard: `park-test` config must use account `376129878018`, region `eu-north-1`, resource prefix `jumpyard-check-in-park-test`, Roller Live base URL `https://api.roller.app`, `WRLDS:DataClassification=confidential`, and `bookingTimeSms.confirmSend=false`.
+- Validation added: `infra/scripts/validate-config-guards.ts` and `npm --prefix infra run validate:config-guards` prove dev Playground passes, unsafe dev-to-Live fails, reviewed park-test Live config passes, and missing/unsafe park-test values fail closed.
+- Deploy gate: T0147 does not add `infra/config/park-test.json`, does not synthesize a park-test stack, does not deploy, and does not create or change AWS resources.
+
 T0091 gift-card checkout notes:
 
 - AWS resources changed: existing booking Lambda code only.
