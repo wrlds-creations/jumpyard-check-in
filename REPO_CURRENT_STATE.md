@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-18
-- Current branch: `main` after T0149 merge
-- Current status: No active ticket. T0149 is complete.
+- Current branch: `main` after T0150 merge
+- Current status: No active ticket. T0150 is complete.
 - Current ticket: `NO_ACTIVE_TICKET`
-- Completed tickets: archived in `docs/history/completed-tickets.md` (148 completed tickets; latest `T0149`).
-- Recommended next step: start T0150 only if the user explicitly approves park-test AWS resource creation.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (149 completed tickets; latest `T0150`).
+- Recommended next step: start T0151 to apply existing migrations to the dedicated park-test database, without touching dev DB or calling Roller.
 
 ## Current Structure
 
@@ -33,8 +33,9 @@ History and planning archives:
 - Park-test environment contract: [docs/t0146-park-test-environment-contract.md](docs/t0146-park-test-environment-contract.md)
 - Park-test synth skeleton: [docs/t0148-park-test-synth-skeleton.md](docs/t0148-park-test-synth-skeleton.md)
 - Park-test deploy/rollback preflight: [docs/t0149-park-test-deploy-rollback-preflight.md](docs/t0149-park-test-deploy-rollback-preflight.md)
+- Park-test foundation deploy: [docs/t0150-park-test-foundation-deploy.md](docs/t0150-park-test-foundation-deploy.md)
 
-T0149 touched only deploy/rollback preflight docs and source-of-truth docs. App roots remain unchanged: `jumpyard-checkin-phone/`, `jumpyard-checkin-admin/`, and `jumpyard-checkin-kiosk/`.
+T0150 deployed the separate park-test AWS foundation and updated source-of-truth docs. App roots remain unchanged: `jumpyard-checkin-phone/`, `jumpyard-checkin-admin/`, and `jumpyard-checkin-kiosk/`.
 
 ## Known Validation Commands
 
@@ -49,28 +50,28 @@ T0149 touched only deploy/rollback preflight docs and source-of-truth docs. App 
 | `npm --prefix infra run synth:park-test` | Synthesize the park-test CDK stack from `infra/config/park-test.json`. | Added in T0148; local only, no deploy. |
 | `npm --prefix infra run validate:park-test-synth` | Synthesize dev and park-test templates locally and verify separation. | Added in T0148; no AWS or Roller calls. |
 | `npm run infra:check` | Type-check infra, run config-guard validation, and synthesize the example dev stack. | Local synth only; does not deploy or call Roller. |
-| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Not required for T0149 because app code is unchanged. |
-| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | T0150 may deploy park-test only with explicit user approval and the T0149 preflight. Do not deploy, migrate, populate credentials, call Roller, or create resources outside the scoped ticket. |
+| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Not required for T0150 because app code was unchanged. |
+| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | T0151 may apply migrations to the park-test database only. Do not touch dev DB, populate credentials, call Roller, connect frontend traffic, or create unrelated resources. |
 
 ## Completed Tickets
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 148
-- Latest completed ticket: `T0149`
+- Archived completed-ticket count: 149
+- Latest completed ticket: `T0150`
 - Current active ticket: none
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `NO_ACTIVE_TICKET` | No active ticket. | Closed | T0149 is complete; start T0150 only with explicit approval for park-test AWS resource creation. |
+| `NO_ACTIVE_TICKET` | No active ticket. | Closed | T0150 is complete; start T0151 next for park-test database migrations only. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0150` | Deploy the separate park-test JumpYard Cloud foundation in the same AWS account using separate resources. | Ready | Requires explicit user approval for AWS resource creation, the T0149 preflight, clean dev template diff, reviewed additive park-test diff, and no Roller Live credentials/calls. |
+| `T0151` | Apply existing migrations to the dedicated park-test database and verify schema readiness. | Ready | Park-test database only. Do not touch dev DB, call Roller, populate Live credentials, connect frontend traffic, or run visitor flow. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -78,6 +79,7 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
+- T0150 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0149 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0148 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0147 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
@@ -89,8 +91,9 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 
 ## Current Risks And Open Questions
 
-- T0149 did not deploy park-test, populate credentials, call Roller, run migrations, register webhooks, create drafts/payments, redeem tickets, send SMS/email, or change app behavior.
-- T0149 found that default CDK change-set diff for a never-deployed park-test stack can leave an empty CloudFormation `REVIEW_IN_PROGRESS` stack shell. The shell had no stack resources or change sets, was deleted in T0149, and the park-test stack no longer exists. Future first-stack preflight should prefer `cdk diff --method=template` and sequential CDK commands.
+- T0150 deployed `jumpyard-check-in-park-test-stack` to `CREATE_COMPLETE`. API endpoint: `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`; Aurora cluster: `jumpyard-check-in-park-test-aurora`; raw bucket: `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`.
+- T0150 did not populate Roller Live credentials, call Roller Live, run migrations, register webhooks, create drafts/payments, redeem tickets, send SMS/email, connect frontend traffic, or change app behavior.
+- T0150 found and fixed a park-test deploy stop risk: SNS SMS delivery-status custom resource would have changed account-wide SNS SMS attributes. That custom resource is now dev-only, and account SMS attributes still point to the dev delivery-status role.
 - The park-test plan is not an approval to create AWS resources, call Roller Live, register Live webhooks, create drafts/payments, redeem tickets, or run visitor traffic; those actions remain gated by scoped future tickets and explicit approvals.
 - The T0146 contract keeps park-test in AWS account `376129878018`, region `eu-north-1`, but requires separate future resources under namespace `jumpyard-check-in-park-test` and its own database, secrets, API, queues, schedules, logs, alarms, and frontend API target.
 - T0147 config guards make dev fail closed against Roller Live and make park-test fail closed unless the config matches the T0146 contract and keeps confirmed scheduled sends off.

@@ -7,11 +7,11 @@ NO_ACTIVE_TICKET
 No active ticket
 
 ## Goal
-T0149 is complete. The recommended next ticket is T0150, but it must start only with explicit user approval for park-test AWS resource creation.
+T0150 is complete. The recommended next ticket is T0151 for park-test database migrations only.
 
 ## Scope
 - No active implementation scope.
-- Do not deploy, migrate, populate credentials, call Roller, register webhooks, create drafts/payments, redeem tickets, send SMS/email, or change app behavior without a new active ticket.
+- Do not deploy, migrate, populate credentials, call Roller, register webhooks, create drafts/payments, redeem tickets, send SMS/email, connect frontend traffic, or change app behavior without a new active ticket.
 
 ## Validation
 - `REPO_CURRENT_STATE.md` and this file must agree that no ticket is active.

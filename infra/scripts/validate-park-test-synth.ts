@@ -140,6 +140,7 @@ function validateDevTemplate(dev: SynthResult): void {
   expectContains(strings, DEV_PREFIX, 'dev');
   expectContains(strings, 'https://api.play.roller.app', 'dev');
   expectContains(strings, 'playground', 'dev');
+  expectContains(strings, `${DEV_PREFIX}-sns-sms-delivery-status`, 'dev');
   expectNotContains(strings, PARK_TEST_PREFIX, 'dev');
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/env`);
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/base-url`);
@@ -162,6 +163,7 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   expectContains(strings, 'WRLDS:DataClassification', 'park-test');
   expectContains(strings, 'confidential', 'park-test');
   expectNotContains(strings, DEV_PREFIX, 'park-test');
+  expectNotContains(strings, `${PARK_TEST_PREFIX}-sns-sms-delivery-status`, 'park-test');
 
   const expectedNames = [
     `/${PARK_TEST_PREFIX}/roller/credentials`,
