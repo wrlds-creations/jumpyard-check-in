@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 147
-Latest archived completed ticket: `T0148`
+Archived count: 148
+Latest archived completed ticket: `T0149`
 
 ## Completed Tickets
 
@@ -159,3 +159,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0146` | Park-test environment contract. | 2026-06-17 | Added `docs/t0146-park-test-environment-contract.md` and locked `park-test` as a separate WRLDS environment in AWS account `376129878018`, region `eu-north-1`, with planned namespace `jumpyard-check-in-park-test`, own future database/resources/secrets/API, Roller Live JumpYard Nacka server-side only, and dev/Playground left untouched. T0146 changed source-of-truth documentation only and created no resources, credentials, config files, Live calls, deploys, webhooks, payments, redemptions, SMS, or email. |
 | `T0147` | Config guards. | 2026-06-17 | Updated CDK config validation so `dev` remains Roller Playground-only while `park-test` is allowed only with the T0146 contract: account `376129878018`, region `eu-north-1`, resource prefix `jumpyard-check-in-park-test`, Roller Live base URL `https://api.roller.app`, confidential data classification, and confirmed scheduled sends off. Added `npm --prefix infra run validate:config-guards`. No deploys, credentials, AWS/Roller calls, resources, webhooks, payments, redemptions, SMS, email, or app behavior changed. |
 | `T0148` | Park-test CDK synth skeleton. | 2026-06-17 | Added synthable `infra/config/park-test.json`, `npm --prefix infra run synth:park-test`, and `npm --prefix infra run validate:park-test-synth`. Local validation proves dev synth remains Playground-only and park-test synth uses separate names, tags, resource prefix, Roller Live base URL, and compact raw payload bucket name `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`. T0148 did not deploy, create credentials, call AWS/Roller, create resources, register webhooks, create drafts/payments, redeem tickets, send SMS/email, or change app behavior. |
+| `T0149` | Park-test deploy/rollback preflight. | 2026-06-18 | Added `docs/t0149-park-test-deploy-rollback-preflight.md` with the required T0150 preflight, WRLDS metadata confirmation, sequential CDK diff guidance, stop criteria, post-deploy smoke boundary, and rollback plan covering frontend, API, live-write gates, secrets rotation, webhook removal, schedule shutdown, and migrations. Read-only/local checks confirmed AWS account `376129878018`, dev stack `UPDATE_COMPLETE`, clean dev template diff, additive park-test template diff, and no park-test stack after cleanup. T0149 did not deploy, populate credentials, call Roller, run migrations, register webhooks, create drafts/payments, redeem tickets, send SMS/email, or change app behavior. |

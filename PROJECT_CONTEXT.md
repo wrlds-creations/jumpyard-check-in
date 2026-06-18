@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). T0128 completed the documentation/tooling-only context-hygiene migration. T0126 completed the final Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15. T0144 documented the planned park-test ticket sequence `T0145` through `T0162` in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). T0145 completed the read-only current-state audit in [docs/t0145-current-state-audit.md](docs/t0145-current-state-audit.md). T0146 locked the park-test environment contract in [docs/t0146-park-test-environment-contract.md](docs/t0146-park-test-environment-contract.md). T0147 added config guards for `dev` versus `park-test`. T0148 added a synthable park-test CDK/config skeleton in [docs/t0148-park-test-synth-skeleton.md](docs/t0148-park-test-synth-skeleton.md). No park-test resources, Roller Live calls, webhooks, payments, or redemptions are active from those tickets.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). T0128 completed the documentation/tooling-only context-hygiene migration. T0126 completed the final Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15. T0144 documented the planned park-test ticket sequence `T0145` through `T0162` in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). T0145 completed the read-only current-state audit in [docs/t0145-current-state-audit.md](docs/t0145-current-state-audit.md). T0146 locked the park-test environment contract in [docs/t0146-park-test-environment-contract.md](docs/t0146-park-test-environment-contract.md). T0147 added config guards for `dev` versus `park-test`. T0148 added a synthable park-test CDK/config skeleton in [docs/t0148-park-test-synth-skeleton.md](docs/t0148-park-test-synth-skeleton.md). T0149 added the park-test deploy/rollback preflight in [docs/t0149-park-test-deploy-rollback-preflight.md](docs/t0149-park-test-deploy-rollback-preflight.md). No park-test resources, Roller Live calls, webhooks, payments, or redemptions are active from those tickets.
 
 ## Context Archives
 
@@ -29,6 +29,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Park-test current-state audit: [docs/t0145-current-state-audit.md](docs/t0145-current-state-audit.md)
 - Park-test environment contract: [docs/t0146-park-test-environment-contract.md](docs/t0146-park-test-environment-contract.md)
 - Park-test synth skeleton: [docs/t0148-park-test-synth-skeleton.md](docs/t0148-park-test-synth-skeleton.md)
+- Park-test deploy/rollback preflight: [docs/t0149-park-test-deploy-rollback-preflight.md](docs/t0149-park-test-deploy-rollback-preflight.md)
 
 ## Durable Architecture Facts
 
@@ -45,6 +46,8 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - CDK config validation now separates `dev` and `park-test`: dev remains Roller Playground-only, while park-test must match the T0146 account/region/resource-prefix/Live-base/data-classification contract and keep `bookingTimeSms.confirmSend=false`.
 - `infra/config/park-test.json` is synthable and uses separate park-test naming/tags/resource prefix. It is not a deploy approval, does not contain credentials, and uses placeholder explicit CORS origins until T0156 confirms the real phone/admin park-test origins.
 - Park-test raw payload storage synthesizes as `jumpyard-check-in-park-test-raw-376129878018-eu-north-1` so the bucket name stays within S3's 63-character limit without changing the existing dev raw-payload bucket naming pattern.
+- The first park-test deploy must follow the T0149 preflight: verify AWS identity and metadata, run sequential CDK commands, require a clean dev template diff, review the additive park-test template diff, and get explicit T0150 deploy approval before creating resources.
+- For a never-deployed park-test stack, template diff (`cdk diff --method=template`) is the preferred preflight check; default CDK change-set diff can leave an empty CloudFormation `REVIEW_IN_PROGRESS` stack shell that must be verified empty and deleted before continuing.
 
 ## Current Implemented Flow Facts
 
