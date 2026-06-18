@@ -7,7 +7,7 @@ NO_ACTIVE_TICKET
 No active ticket
 
 ## Goal
-T0150 is complete. The recommended next ticket is T0151 for park-test database migrations only.
+T0151 is complete. The recommended next ticket is T0152 for park-test secrets and kill switches/live-write gates.
 
 ## Scope
 - No active implementation scope.

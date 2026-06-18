@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). T0128 completed the documentation/tooling-only context-hygiene migration. T0126 completed the final Pelle/Anders same-day Playground booking rehearsal preparation on 2026-06-15. T0144 documented the planned park-test ticket sequence `T0145` through `T0162` in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). T0145 completed the read-only current-state audit in [docs/t0145-current-state-audit.md](docs/t0145-current-state-audit.md). T0146 locked the park-test environment contract in [docs/t0146-park-test-environment-contract.md](docs/t0146-park-test-environment-contract.md). T0147 added config guards for `dev` versus `park-test`. T0148 added a synthable park-test CDK/config skeleton in [docs/t0148-park-test-synth-skeleton.md](docs/t0148-park-test-synth-skeleton.md). T0149 added the park-test deploy/rollback preflight in [docs/t0149-park-test-deploy-rollback-preflight.md](docs/t0149-park-test-deploy-rollback-preflight.md). T0150 deployed the separate park-test AWS foundation in [docs/t0150-park-test-foundation-deploy.md](docs/t0150-park-test-foundation-deploy.md). Park-test AWS resources now exist, but no Roller Live calls, migrations, frontend traffic, webhooks, payments, or redemptions are active from those tickets.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md), with detailed reports linked below. Current park-test state: the separate AWS foundation is deployed, database migrations through `0008` are applied, and no Roller Live calls, frontend traffic, webhooks, payments, or redemptions are active.
 
 ## Context Archives
 
@@ -31,6 +31,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Park-test synth skeleton: [docs/t0148-park-test-synth-skeleton.md](docs/t0148-park-test-synth-skeleton.md)
 - Park-test deploy/rollback preflight: [docs/t0149-park-test-deploy-rollback-preflight.md](docs/t0149-park-test-deploy-rollback-preflight.md)
 - Park-test foundation deploy: [docs/t0150-park-test-foundation-deploy.md](docs/t0150-park-test-foundation-deploy.md)
+- Park-test database migrations: [docs/t0151-park-test-db-migrations.md](docs/t0151-park-test-db-migrations.md)
 
 ## Durable Architecture Facts
 
@@ -50,6 +51,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - The first park-test deploy must follow the T0149 preflight: verify AWS identity and metadata, run sequential CDK commands, require a clean dev template diff, review the additive park-test template diff, and get explicit T0150 deploy approval before creating resources.
 - For a never-deployed park-test stack, template diff (`cdk diff --method=template`) is the preferred preflight check; default CDK change-set diff can leave an empty CloudFormation `REVIEW_IN_PROGRESS` stack shell that must be verified empty and deleted before continuing.
 - T0150 deployed `jumpyard-check-in-park-test-stack` to `CREATE_COMPLETE`. The park-test API endpoint is `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`, Aurora cluster is `jumpyard-check-in-park-test-aurora`, and raw payload bucket is `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`.
+- T0151 applied the existing SQL migrations `0001` through `0008` to the dedicated park-test Aurora database. Park-test now has the `jumpyard` schema and 19 schema tables, while operational data tables verified in T0151 remained empty.
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
 
 ## Current Implemented Flow Facts
