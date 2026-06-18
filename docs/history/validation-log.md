@@ -2,6 +2,21 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0149 Park-Test Deploy And Rollback Preflight Validation
+
+- 2026-06-18: T0149 was activated after T0148 was merged to `main` and the branch `codex/t0149-park-test-deploy-rollback-preflight` was created from updated `main`.
+- 2026-06-18: Read `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, `CODEX_TASK.md`, `AWS_RESOURCES.md`, local `skills/aws-project-infrastructure/`, the T0146 environment contract, the T0148 synth skeleton, `infra/config/park-test.json`, and the active backlog row.
+- 2026-06-18: `aws sso login --profile wrlds-dev` succeeded after user-assisted browser login.
+- 2026-06-18: `aws sts get-caller-identity --profile wrlds-dev --output json` confirmed account `376129878018` and assumed role `AWSReservedSSO_AdministratorAccess_8a2502e60c822ae0/Love`.
+- 2026-06-18: Read-only CloudFormation check confirmed `jumpyard-check-in-dev-stack` is `UPDATE_COMPLETE` in `eu-north-1`, last updated `2026-06-09T12:36:07.525000+00:00`.
+- 2026-06-18: A default CDK change-set diff for the never-deployed park-test stack briefly left an empty CloudFormation stack shell `jumpyard-check-in-park-test-stack` in `REVIEW_IN_PROGRESS`. `list-stack-resources` returned `[]`, `list-change-sets` returned `[]`, and T0149 deleted that empty shell. A post-cleanup lookup confirmed the park-test stack no longer exists.
+- 2026-06-18: `npm --prefix infra run validate:config-guards`, `npm --prefix infra run validate:park-test-synth`, `npm --prefix infra run synth:dev`, `npm --prefix infra run synth:park-test`, and `npm run infra:check` passed.
+- 2026-06-18: `npx cdk diff -c config=./config/dev.json --profile wrlds-dev --method=template` passed with `There were no differences` and `Number of stacks with differences: 0`.
+- 2026-06-18: `npx cdk diff -c config=./config/park-test.json --profile wrlds-dev --method=template` passed and showed one new additive park-test stack with separate VPC, Aurora, Secrets Manager, SSM, S3, SQS, EventBridge, CloudWatch, Lambda, API Gateway, and IAM resources.
+- 2026-06-18: Added `docs/t0149-park-test-deploy-rollback-preflight.md` covering the T0150 preflight checklist, CDK diff handling, approval gates, stop criteria, post-deploy smoke boundary, and rollback steps for frontend, API, live-write gates, secrets rotation, webhook removal, schedule shutdown, and migrations.
+- 2026-06-18: Final `npm run validate`, `npm run infra:check`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+- 2026-06-18: T0149 did not deploy park-test, populate credentials, call Roller, run migrations, register webhooks, create drafts/payments, redeem tickets, send SMS/email, or change app behavior.
+
 ## T0148 Park-Test CDK Synth Skeleton Validation
 
 - 2026-06-17: T0148 was activated after T0147 was merged to `main` and the branch `codex/t0148-park-test-cdk-skeleton` was created from updated `main`.

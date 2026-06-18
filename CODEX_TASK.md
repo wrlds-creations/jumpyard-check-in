@@ -4,11 +4,15 @@
 NO_ACTIVE_TICKET
 
 ## Status
-No active Codex ticket.
+No active ticket
 
-## Notes
-- T0148 completed the synthesis-only park-test CDK/config skeleton.
-- Added `infra/config/park-test.json`, `npm --prefix infra run synth:park-test`, and `npm --prefix infra run validate:park-test-synth`.
-- Dev synth remains Roller Playground-only; park-test synth uses separate names, tags, resource prefix, Roller Live base URL, and a compact raw-payload bucket name that satisfies S3 length limits.
-- T0148 did not deploy, create credentials, call AWS or Roller, create resources, register webhooks, create drafts/payments, redeem tickets, send SMS/email, or change app behavior.
-- Recommended next ticket: T0149 deploy/rollback preflight.
+## Goal
+T0149 is complete. The recommended next ticket is T0150, but it must start only with explicit user approval for park-test AWS resource creation.
+
+## Scope
+- No active implementation scope.
+- Do not deploy, migrate, populate credentials, call Roller, register webhooks, create drafts/payments, redeem tickets, send SMS/email, or change app behavior without a new active ticket.
+
+## Validation
+- `REPO_CURRENT_STATE.md` and this file must agree that no ticket is active.
+- Start the next ticket by reading the source-of-truth files listed in `AGENTS.md`.

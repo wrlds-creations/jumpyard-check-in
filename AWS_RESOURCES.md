@@ -46,6 +46,18 @@ T0089 guest messaging production unlock notes:
 - Source-of-truth unlock document: `GUEST_MESSAGING_PRODUCTION_UNLOCK.md`.
 - Safety state: dev scheduled due-message processing remains planning-only with `confirmSend=false`; controlled manual smokes remain possible only within current sandbox limitations.
 
+T0149 park-test deploy/rollback preflight notes:
+
+- Project AWS resources changed: none.
+- Park-test resources created: none.
+- Runbook document: `docs/t0149-park-test-deploy-rollback-preflight.md`.
+- AWS SSO profile `wrlds-dev` was refreshed and read-only identity check confirmed account `376129878018` with role `AWSReservedSSO_AdministratorAccess_8a2502e60c822ae0/Love`.
+- Dev stack check: `jumpyard-check-in-dev-stack` is `UPDATE_COMPLETE` in `eu-north-1`, last updated `2026-06-09T12:36:07.525000+00:00`.
+- Park-test stack check after cleanup: `jumpyard-check-in-park-test-stack` does not exist, which is expected before T0150 deploy.
+- CDK preflight: `npx cdk diff -c config=./config/dev.json --profile wrlds-dev --method=template` showed no dev differences; `npx cdk diff -c config=./config/park-test.json --profile wrlds-dev --method=template` showed one new additive park-test stack.
+- CDK handling note: a default change-set diff for the never-deployed park-test stack briefly left an empty CloudFormation stack shell in `REVIEW_IN_PROGRESS`. It had no stack resources and no change sets, was deleted in T0149, and a post-cleanup lookup confirmed the park-test stack no longer exists. Future first-stack preflight should prefer `--method=template` and run CDK commands sequentially.
+- Deploy gate: T0149 is not a deploy approval. T0150 must explicitly approve AWS resource creation, reconfirm target metadata, review the park-test diff, keep dev untouched, and follow the rollback plan before running any deploy.
+
 T0146 park-test environment contract notes:
 
 - AWS resources changed: none.
@@ -781,7 +793,7 @@ T0146 defines `park-test` as a planned separate environment only. This section i
 | Secrets/SSM | Dedicated `/jumpyard-check-in-park-test/...` names |
 | Frontend | Same phone/admin source, separate deployment/API target |
 | Raw payload bucket | Synthesizes as `jumpyard-check-in-park-test-raw-376129878018-eu-north-1` to satisfy S3 length limits |
-| Status | Synthable config exists; no resources created |
+| Status | Synthable config and T0149 deploy/rollback preflight exist; no resources created |
 
 ## Governance Notes
 
