@@ -6,6 +6,8 @@ All AWS resources created for this project must be represented here if they are 
 
 JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `0007` have been applied, the dev lookup endpoint uses Aurora-first booking lookup with Roller REST refresh, the dev booking endpoint reads Roller Playground availability including SkyRider as a capacity-gated add-on plus stock add-on product ids/prices from the Roller product catalog cache, quotes costs, creates Roller Playground draft bookings server-side, persists safe pre-payment draft rows, and creates separate linked add-product draft bookings for existing bookings, the dev webhook endpoint records and enriches Roller webhook intake events, the dev data-sync Lambda is scheduled by EventBridge for daily Roller Data API reconciliation, the dev redeem endpoint plans/audits redemption, supports controlled Playground redemption behind a dev token, and exposes staff-confirmed session redeem protected by T0047 staff auth, the dev session endpoint creates/resumes server-owned check-in sessions, exposes staff-auth-protected handoff list/detail routes, creates/resolves hashed check-in session links with safe booking summaries for phone resume, can dry-run or explicitly send those links through AWS SNS with safe provider/Sender ID diagnostics, can dry-run or explicitly send SES-backed check-in email links with safe audit rows through verified dev identity `love@wrlds.com`, can plan booking-time guest messages for both SMS and email from one due-booking processor, and is invoked by a dev EventBridge booking-time messaging schedule in planning mode with a config/runtime guard for future confirmed sends, SNS SMS delivery diagnostics are configured for dev, the real Roller Playground booking webhook is registered, dev API CORS uses explicit allowed origins, API Gateway stage throttling is configured for dev, CloudWatch dashboard/alarms/API access logs are deployed for dev observability, safe Roller outbound API call counters and API throttled request counters are emitted through CloudWatch, and dev Aurora contains bookingitems, product catalog cache data, tickets, customer contact data, lookup-refreshed records, webhook-enriched records, scheduled sync run rows, session rows, check-in token hashes, SMS delivery audit rows, email delivery audit rows, pre-payment draft rows, booking links, idempotency rows, event logs, and redeem attempt audit rows.
 
+T0150 deployed the separate park-test AWS foundation stack `jumpyard-check-in-park-test-stack` in account `376129878018`, region `eu-north-1`, with API `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`, Aurora cluster `jumpyard-check-in-park-test-aurora`, and raw payload bucket `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`. Park-test resources exist, but Roller Live credentials are not populated, no Roller Live calls have been made, migrations are not applied, frontend traffic is not connected, and no webhooks, drafts/payments, redemptions, SMS, or email sends are active.
+
 T0058 production-readiness audit notes:
 
 - AWS resources changed: none.
@@ -45,6 +47,20 @@ T0089 guest messaging production unlock notes:
 - SES state: `ProductionAccessEnabled=false`, `SendingEnabled=true`, enforcement `HEALTHY`, sandbox quota `200/day` and `1/sec`, only verified email identity `love@wrlds.com`, and no dedicated configuration set named `jumpyard-check-in-dev-email`.
 - Source-of-truth unlock document: `GUEST_MESSAGING_PRODUCTION_UNLOCK.md`.
 - Safety state: dev scheduled due-message processing remains planning-only with `confirmSend=false`; controlled manual smokes remain possible only within current sandbox limitations.
+
+T0150 park-test foundation deploy notes:
+
+- AWS resources changed: created the separate park-test foundation stack `jumpyard-check-in-park-test-stack`.
+- Deploy document: `docs/t0150-park-test-foundation-deploy.md`.
+- Deploy command: `npx cdk deploy -c config=./config/park-test.json --profile wrlds-dev --require-approval never`.
+- Deploy result: CloudFormation stack `CREATE_COMPLETE`; stack ARN `arn:aws:cloudformation:eu-north-1:376129878018:stack/jumpyard-check-in-park-test-stack/159bdd20-6ae4-11f1-8f4c-069284999d99`.
+- Outputs: API endpoint `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`, Aurora cluster ARN `arn:aws:rds:eu-north-1:376129878018:cluster:jumpyard-check-in-park-test-aurora`, raw payload bucket `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`, and Roller credentials secret name `/jumpyard-check-in-park-test/roller/credentials`.
+- Created park-test resource inventory includes separate API Gateway, Aurora, VPC/subnets/security group, Secrets Manager secrets, SSM parameters, S3 bucket, SQS queue/DLQ, EventBridge event bus and daily data-sync rule, Lambda handlers, CloudWatch dashboard/alarms/log groups, and IAM roles/policies.
+- Park-test stack tags include all required WRLDS tags: `WRLDS:Client=JumpYard`, `WRLDS:Project=jumpyard-check-in`, `WRLDS:Environment=park-test`, `WRLDS:Owner=love`, `WRLDS:Repository=wrlds-creations/jumpyard-check-in`, `WRLDS:ManagedBy=cdk`, `WRLDS:DataClassification=confidential`, `WRLDS:Exportable=true`, `WRLDS:CostCenter=unassigned`, and `WRLDS:CreatedBy=love`.
+- Pre-deploy safety fix: park-test no longer creates the account-wide SNS SMS delivery-status custom resource. Post-deploy `aws sns get-sms-attributes` still points delivery diagnostics at `arn:aws:iam::376129878018:role/jumpyard-check-in-dev-sns-sms-delivery-status`, and no park-test SMS delivery-status role exists.
+- Post-deploy validation: park-test stack is `CREATE_COMPLETE`; Aurora is `available`, encrypted, deletion-protected, and Data API enabled; API CORS preflight returned HTTP `204` for `https://park-test.jumpyard.example`; dev stack remained `UPDATE_COMPLETE`; dev and park-test template diffs are clean; 17 park-test CloudWatch alarms were `OK`; Resource Groups Tagging API found 54 resources tagged `WRLDS:Environment=park-test`.
+- Live/traffic gate: T0150 did not populate Roller Live credentials, call Roller Live, run migrations, register webhooks, create drafts/payments, redeem tickets, send SMS/email, connect frontend traffic, or change app behavior.
+- Schedule note: `jumpyard-check-in-park-test-data-api-daily-sync` exists and is enabled at `cron(0 2 * * ? *)`. It must remain fail-closed/no-Live-credentials until T0152/T0153 decide the next gate. Booking-time guest messaging remains unscheduled because `bookingTimeSms.scheduleEnabled=false`.
 
 T0149 park-test deploy/rollback preflight notes:
 
@@ -689,6 +705,38 @@ Confirmed T0006 dev target:
 | Resource Name | AWS Service | Environment | Region | Managed By | Notes |
 |---|---|---|---|---|---|
 | `jumpyard-check-in-dev-stack` | CloudFormation | `dev` | `eu-north-1` | `cdk` | `CREATE_COMPLETE`. |
+| `jumpyard-check-in-park-test-stack` | CloudFormation | `park-test` | `eu-north-1` | `cdk` | T0150 foundation stack; `CREATE_COMPLETE`; stack ARN `arn:aws:cloudformation:eu-north-1:376129878018:stack/jumpyard-check-in-park-test-stack/159bdd20-6ae4-11f1-8f4c-069284999d99`. |
+| `ij4rnaui2b` | API Gateway HTTP API | `park-test` | `eu-north-1` | `cdk` | Endpoint `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`; routes are deployed but frontend traffic is not connected and no Live credentials/migrations are active. CORS currently uses placeholder origins until T0156. |
+| `jumpyard-check-in-park-test-ops` | CloudWatch Dashboard | `park-test` | `eu-north-1` | `cdk` | T0150 operations dashboard for the park-test foundation. |
+| `jumpyard-check-in-park-test-*` CloudWatch alarms | CloudWatch Alarms | `park-test` | `eu-north-1` | `cdk` | 17 T0150 alarms for API, Lambda, Roller API, and DLQ signals; all were `OK` after deploy. |
+| `jumpyard-check-in-park-test-stack-lookup` | Lambda | `park-test` | `eu-north-1` | `cdk` | Lookup handler deployed for park-test. Do not use for visitor traffic before migrations, secrets, and frontend gates. |
+| `jumpyard-check-in-park-test-stack-booking` | Lambda | `park-test` | `eu-north-1` | `cdk` | Booking handler deployed for park-test. Roller Live credentials are not populated and no Live calls are approved in T0150. |
+| `jumpyard-check-in-park-test-stack-redeem` | Lambda | `park-test` | `eu-north-1` | `cdk` | Redeem handler deployed for park-test. Redeem remains gated by later tickets. |
+| `jumpyard-check-in-park-test-stack-session` | Lambda | `park-test` | `eu-north-1` | `cdk` | Session/staff/message handler deployed for park-test. Booking-time guest messaging schedule is absent. |
+| `jumpyard-check-in-park-test-stack-webhook` | Lambda | `park-test` | `eu-north-1` | `cdk` | Webhook handler deployed for park-test. No Live webhook is registered. |
+| `jumpyard-check-in-park-test-stack-data-sync` | Lambda | `park-test` | `eu-north-1` | `cdk` | Data-sync handler deployed for park-test. Daily rule exists but must stay fail-closed/no-Live-credentials until later gates. |
+| `/aws/lambda/jumpyard-check-in-park-test-stack-*` | CloudWatch Logs | `park-test` | `eu-north-1` | `cdk` | Six Lambda log groups with 30-day retention. |
+| `/aws/apigateway/jumpyard-check-in-park-test-api-access` | CloudWatch Logs | `park-test` | `eu-north-1` | `cdk` | API Gateway access log group for the park-test API. |
+| `jumpyard-check-in-park-test-aurora` | Aurora PostgreSQL Serverless v2 | `park-test` | `eu-north-1` | `cdk` | Engine `aurora-postgresql 16.13`, database `jumpyard_cloud`, encrypted, deletion protection enabled, Data API enabled. Migrations are pending T0151. |
+| `jumpyard-check-in-park-test-aurora-writer` | RDS DB instance | `park-test` | `eu-north-1` | `cdk` | Serverless writer instance for the park-test cluster. |
+| `jumpyard-check-in-park-test-aurora-subnets` | RDS DB subnet group | `park-test` | `eu-north-1` | `cdk` | Uses isolated subnets `subnet-0dfe19348e09a46be` and `subnet-0da9943155e44511d`. |
+| `/jumpyard-check-in-park-test/aurora/admin` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Generated Aurora admin credentials for park-test. Do not print secret values. |
+| `/jumpyard-check-in-park-test/roller/credentials` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Secret container exists; Roller Live credential values were not populated by T0150. |
+| `/jumpyard-check-in-park-test/webhooks/dev-token` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Generated token container for future webhook work; no Live webhook is registered. |
+| `/jumpyard-check-in-park-test/redeem/dev-token` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Generated token container; redeem remains gated by later tickets. |
+| `/jumpyard-check-in-park-test/staff/auth` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Generated staff auth container; frontend/admin traffic is not connected. |
+| `/jumpyard-check-in-park-test/checkin-links/dev-token` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Generated token container for future check-in links. |
+| `/jumpyard-check-in-park-test/roller/env` | SSM Parameter Store | `park-test` | `eu-north-1` | `cdk` | Value `live`; do not use until T0152/T0153 gates approve. |
+| `/jumpyard-check-in-park-test/roller/base-url` | SSM Parameter Store | `park-test` | `eu-north-1` | `cdk` | Value `https://api.roller.app`; no Live calls were made in T0150. |
+| `jumpyard-check-in-park-test-raw-376129878018-eu-north-1` | S3 | `park-test` | `eu-north-1` | `cdk` | Encrypted, public access blocked, versioned, 30-day lifecycle, retained on stack deletion; WRLDS tags verified. |
+| `jumpyard-check-in-park-test-roller-ops` | SQS | `park-test` | `eu-north-1` | `cdk` | Roller operations queue with DLQ redrive. |
+| `jumpyard-check-in-park-test-roller-ops-dlq` | SQS | `park-test` | `eu-north-1` | `cdk` | Dead-letter queue. |
+| `jumpyard-check-in-park-test-events` | EventBridge | `park-test` | `eu-north-1` | `cdk` | Internal park-test event bus. |
+| `jumpyard-check-in-park-test-data-api-daily-sync` | EventBridge Rule | `park-test` | `eu-north-1` | `cdk` | Enabled at `cron(0 2 * * ? *)`; no Live credentials are populated, so it must remain fail-closed until later gates. |
+| `vpc-0fb3aec1a310d3600` | VPC | `park-test` | `eu-north-1` | `cdk` | CIDR `10.72.0.0/16`. |
+| `subnet-0dfe19348e09a46be` | EC2 subnet | `park-test` | `eu-north-1a` | `cdk` | Isolated subnet A. |
+| `subnet-0da9943155e44511d` | EC2 subnet | `park-test` | `eu-north-1b` | `cdk` | Isolated subnet B. |
+| `sg-0f143d36f71241c8a` | EC2 security group | `park-test` | `eu-north-1` | `cdk` | Aurora boundary security group. |
 | `m0uo5g4mde` | API Gateway HTTP API | `dev` | `eu-north-1` | `cdk` | Endpoint `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com`; lookup, booking availability/quote/draft, existing-booking add-product quote/draft, session, check-in session link, SMS/email link, staff auth/handoff, webhook, and redeem routes are implemented; CORS uses explicit dev origins; `$default` stage throttling is rate `25` requests/second and burst `50`. |
 | `jumpyard-check-in-dev-ops` | CloudWatch Dashboard | `dev` | `eu-north-1` | `cdk` | T0060 operations dashboard for API requests/errors/latency, Lambda metrics, SQS/DLQ metrics, and Roller outbound API call/error metrics. |
 | `jumpyard-check-in-dev-*` CloudWatch alarms | CloudWatch Alarms | `dev` | `eu-north-1` | `cdk` | T0060 alarms for API 5xx, high API 4xx, Roller API errors, Roller ops DLQ messages, and Lambda errors/throttles; T0061 adds API throttled request alarm `jumpyard-check-in-dev-api-throttled-requests`. |
@@ -793,7 +841,7 @@ T0146 defines `park-test` as a planned separate environment only. This section i
 | Secrets/SSM | Dedicated `/jumpyard-check-in-park-test/...` names |
 | Frontend | Same phone/admin source, separate deployment/API target |
 | Raw payload bucket | Synthesizes as `jumpyard-check-in-park-test-raw-376129878018-eu-north-1` to satisfy S3 length limits |
-| Status | Synthable config and T0149 deploy/rollback preflight exist; no resources created |
+| Status | T0150 foundation deployed; migrations, Live credentials/calls, frontend traffic, webhooks, payment, redeem, SMS, and email remain gated |
 
 ## Governance Notes
 

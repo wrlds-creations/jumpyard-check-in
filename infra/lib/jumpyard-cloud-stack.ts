@@ -251,7 +251,10 @@ export class JumpYardCloudStack extends Stack {
       eventBusName: `${config.resourcePrefix}-events`,
     });
 
-    this.configureSmsDeliveryStatusLogging(config);
+    // SNS SMS attributes are account-wide, so keep delivery-status ownership on dev until park-test messaging is scoped.
+    if (config.tags['WRLDS:Environment'] === 'dev') {
+      this.configureSmsDeliveryStatusLogging(config);
+    }
 
     const api = new apigatewayv2.CfnApi(this, 'HttpApi', {
       name: `${config.resourcePrefix}-api`,

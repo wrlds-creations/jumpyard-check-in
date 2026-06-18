@@ -2,6 +2,27 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0150 Park-Test Foundation Deploy Validation
+
+- 2026-06-18: T0150 was activated after T0149 was merged to `main` and the branch `codex/t0150-deploy-park-test-foundation` was created from updated `main`.
+- 2026-06-18: Read `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, `CODEX_TASK.md`, `AWS_RESOURCES.md`, local `skills/aws-project-infrastructure/`, the T0149 deploy/rollback preflight, and the active backlog row.
+- 2026-06-18: User explicitly approved proceeding with T0150, including park-test AWS resource creation. Scope remained limited to the park-test foundation deploy; no Roller Live credentials/calls, migrations, frontend traffic, webhooks, drafts/payments, redemptions, SMS/email sends, or app behavior changes.
+- 2026-06-18: `aws sts get-caller-identity --profile wrlds-dev --output json` confirmed account `376129878018` and assumed role `AWSReservedSSO_AdministratorAccess_8a2502e60c822ae0/Love`.
+- 2026-06-18: Read-only CloudFormation check confirmed `jumpyard-check-in-dev-stack` was `UPDATE_COMPLETE`, last updated `2026-06-09T12:36:07.525000+00:00`.
+- 2026-06-18: Pre-deploy check confirmed `jumpyard-check-in-park-test-stack` did not exist.
+- 2026-06-18: T0150 found that the park-test synth would create a second SNS SMS delivery-status custom resource, but SNS SMS attributes are account-wide. `infra/lib/jumpyard-cloud-stack.ts` now creates that custom resource only for `WRLDS:Environment=dev`, and `infra/scripts/validate-park-test-synth.ts` verifies park-test does not include `jumpyard-check-in-park-test-sns-sms-delivery-status`.
+- 2026-06-18: `npm --prefix infra run validate:config-guards`, `npm --prefix infra run validate:park-test-synth`, `npm --prefix infra run build`, `npm --prefix infra run synth:dev`, and `npm --prefix infra run synth:park-test` passed after the safety fix.
+- 2026-06-18: `npx cdk diff -c config=./config/dev.json --profile wrlds-dev --method=template` passed with no dev differences.
+- 2026-06-18: `npx cdk diff -c config=./config/park-test.json --profile wrlds-dev --method=template` passed with one additive park-test stack and zero `SmsDeliveryStatus`/`setSMSAttributes` matches.
+- 2026-06-18: `npx cdk deploy -c config=./config/park-test.json --profile wrlds-dev --require-approval never` completed successfully. Stack `jumpyard-check-in-park-test-stack` reached `CREATE_COMPLETE` after about 8.5 minutes.
+- 2026-06-18: Stack outputs are API endpoint `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`, Aurora cluster ARN `arn:aws:rds:eu-north-1:376129878018:cluster:jumpyard-check-in-park-test-aurora`, raw payload bucket `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`, and Roller credentials secret name `/jumpyard-check-in-park-test/roller/credentials`.
+- 2026-06-18: Post-deploy checks confirmed stack `CREATE_COMPLETE`, required WRLDS stack tags, 54 resources tagged `WRLDS:Environment=park-test`, Aurora `available` with Data API enabled, 17 park-test alarms `OK`, six Lambda log groups with 30-day retention, and daily data-sync rule `ENABLED` at `cron(0 2 * * ? *)`.
+- 2026-06-18: API Gateway CORS preflight `OPTIONS /v1/check-in/lookup` from `https://park-test.jumpyard.example` returned HTTP `204` with expected CORS headers. This did not invoke Lambda or Roller.
+- 2026-06-18: `aws sns get-sms-attributes` confirmed account SMS diagnostics still point to `arn:aws:iam::376129878018:role/jumpyard-check-in-dev-sns-sms-delivery-status`; `aws iam get-role --role-name jumpyard-check-in-park-test-sns-sms-delivery-status` confirmed no park-test SMS delivery-status role exists.
+- 2026-06-18: Post-deploy `npx cdk diff -c config=./config/dev.json --profile wrlds-dev --method=template` and `npx cdk diff -c config=./config/park-test.json --profile wrlds-dev --method=template` both passed with no differences.
+- 2026-06-18: Added `docs/t0150-park-test-foundation-deploy.md` and updated source-of-truth docs plus AWS inventory with the created park-test resources.
+- 2026-06-18: Final `npm run validate`, `npm run infra:check`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0149 Park-Test Deploy And Rollback Preflight Validation
 
 - 2026-06-18: T0149 was activated after T0148 was merged to `main` and the branch `codex/t0149-park-test-deploy-rollback-preflight` was created from updated `main`.
