@@ -2,6 +2,23 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0151 Park-Test Database Migrations Validation
+
+- 2026-06-18: T0151 was activated after T0150 was merged to `main` and the branch `codex/t0151-park-test-db-migrations` was created from updated `main`.
+- 2026-06-18: Read `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, `CODEX_TASK.md`, `AWS_RESOURCES.md`, local `skills/aws-project-infrastructure/`, AWS tagging/resource-inventory/CDK references, and the active backlog row.
+- 2026-06-18: `aws sts get-caller-identity --profile wrlds-dev --output json` confirmed account `376129878018` and assumed role `AWSReservedSSO_AdministratorAccess_8a2502e60c822ae0/Love`.
+- 2026-06-18: Read-only AWS preflight confirmed `jumpyard-check-in-park-test-stack` was `CREATE_COMPLETE`, `jumpyard-check-in-dev-stack` was `UPDATE_COMPLETE`, and park-test Aurora `jumpyard-check-in-park-test-aurora` was `available`, encrypted, deletion-protected, and Data API enabled.
+- 2026-06-18: Park-test stack tags matched required WRLDS metadata: `WRLDS:Client=JumpYard`, `WRLDS:Project=jumpyard-check-in`, `WRLDS:Environment=park-test`, `WRLDS:Owner=love`, `WRLDS:Repository=wrlds-creations/jumpyard-check-in`, `WRLDS:ManagedBy=cdk`, `WRLDS:DataClassification=confidential`, `WRLDS:Exportable=true`, `WRLDS:CostCenter=unassigned`, and `WRLDS:CreatedBy=love`.
+- 2026-06-18: Pre-migration read-only Aurora Data API query showed park-test had `0` `jumpyard` schemas and `0` `jumpyard` tables.
+- 2026-06-18: Pre-migration dev read-only Aurora Data API query showed `jumpyard.schema_migrations` contained `0001` through `0008`; this reconciled the older `AWS_RESOURCES.md` top-level docs drift that said `0007`.
+- 2026-06-18: From `infra/`, `npx ts-node --prefer-ts-exts scripts/run-migrations.ts --config ./config/park-test.json --profile wrlds-dev` applied `0001 initial schema`, `0002 related data sources`, `0003 checkin sessions`, `0004 prepayment booking drafts`, `0005 add product draft links`, `0006 sms deliveries`, `0007 email deliveries`, and `0008 prepayment draft customer names` to park-test.
+- 2026-06-18: `npx ts-node --prefer-ts-exts scripts/run-migrations.ts --config ./config/park-test.json --profile wrlds-dev --status` reported `0001` through `0008` as `applied`.
+- 2026-06-18: Post-migration read-only Aurora Data API queries confirmed park-test `jumpyard.schema_migrations` contains the same `0001` through `0008` versions and checksums as dev, 19 `jumpyard` tables exist, `prepayment_booking_drafts` contains `customer_first_name` and `customer_last_name`, and park-test row counts remained `0` for `roller_bookings`, `guest_profiles`, `prepayment_booking_drafts`, and `roller_webhook_events`.
+- 2026-06-18: Post-migration dev read-only Aurora Data API query showed `jumpyard.schema_migrations` still contained the same `0001` through `0008` versions and checksums.
+- 2026-06-18: Added `docs/t0151-park-test-db-migrations.md` and updated source-of-truth docs plus AWS inventory with the park-test migration evidence and rollback notes.
+- 2026-06-18: T0151 did not populate Roller Live credentials, call Roller Live, run imports, connect frontend traffic, register webhooks, create drafts/payments, redeem tickets, send SMS/email, change app behavior, or write to dev DB.
+- 2026-06-18: Final `npm run validate`, `npm run infra:check`, and `git diff --check` passed. `git diff --check` printed CRLF conversion notices only.
+
 ## T0150 Park-Test Foundation Deploy Validation
 
 - 2026-06-18: T0150 was activated after T0149 was merged to `main` and the branch `codex/t0150-deploy-park-test-foundation` was created from updated `main`.

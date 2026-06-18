@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-18
-- Current branch: `main` after T0150 merge
-- Current status: No active ticket. T0150 is complete.
+- Current branch: `main` after T0151 merge
+- Current status: No active ticket. T0151 is complete.
 - Current ticket: `NO_ACTIVE_TICKET`
-- Completed tickets: archived in `docs/history/completed-tickets.md` (149 completed tickets; latest `T0150`).
-- Recommended next step: start T0151 to apply existing migrations to the dedicated park-test database, without touching dev DB or calling Roller.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (150 completed tickets; latest `T0151`).
+- Recommended next step: start T0152 for park-test secrets and kill switches/live-write gates, without printing secret values or calling Roller Live.
 
 ## Current Structure
 
@@ -34,8 +34,9 @@ History and planning archives:
 - Park-test synth skeleton: [docs/t0148-park-test-synth-skeleton.md](docs/t0148-park-test-synth-skeleton.md)
 - Park-test deploy/rollback preflight: [docs/t0149-park-test-deploy-rollback-preflight.md](docs/t0149-park-test-deploy-rollback-preflight.md)
 - Park-test foundation deploy: [docs/t0150-park-test-foundation-deploy.md](docs/t0150-park-test-foundation-deploy.md)
+- Park-test database migrations: [docs/t0151-park-test-db-migrations.md](docs/t0151-park-test-db-migrations.md)
 
-T0150 deployed the separate park-test AWS foundation and updated source-of-truth docs. App roots remain unchanged: `jumpyard-checkin-phone/`, `jumpyard-checkin-admin/`, and `jumpyard-checkin-kiosk/`.
+T0151 applied the existing SQL migrations through `0008` to the dedicated park-test Aurora database and updated source-of-truth docs. App roots remain unchanged: `jumpyard-checkin-phone/`, `jumpyard-checkin-admin/`, and `jumpyard-checkin-kiosk/`.
 
 ## Known Validation Commands
 
@@ -50,28 +51,28 @@ T0150 deployed the separate park-test AWS foundation and updated source-of-truth
 | `npm --prefix infra run synth:park-test` | Synthesize the park-test CDK stack from `infra/config/park-test.json`. | Added in T0148; local only, no deploy. |
 | `npm --prefix infra run validate:park-test-synth` | Synthesize dev and park-test templates locally and verify separation. | Added in T0148; no AWS or Roller calls. |
 | `npm run infra:check` | Type-check infra, run config-guard validation, and synthesize the example dev stack. | Local synth only; does not deploy or call Roller. |
-| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Not required for T0150 because app code was unchanged. |
-| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | T0151 may apply migrations to the park-test database only. Do not touch dev DB, populate credentials, call Roller, connect frontend traffic, or create unrelated resources. |
+| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Not required for T0151 because app code was unchanged. |
+| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | T0152 may inspect and configure park-test secret references and live-write gates only. Do not print secret values, call Roller Live, connect frontend traffic, or create unrelated resources unless the active ticket explicitly allows it. |
 
 ## Completed Tickets
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 149
-- Latest completed ticket: `T0150`
+- Archived completed-ticket count: 150
+- Latest completed ticket: `T0151`
 - Current active ticket: none
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `NO_ACTIVE_TICKET` | No active ticket. | Closed | T0150 is complete; start T0151 next for park-test database migrations only. |
+| `NO_ACTIVE_TICKET` | No active ticket. | Closed | T0151 is complete; start T0152 next for park-test secrets and kill switches/live-write gates. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0151` | Apply existing migrations to the dedicated park-test database and verify schema readiness. | Ready | Park-test database only. Do not touch dev DB, call Roller, populate Live credentials, connect frontend traffic, or run visitor flow. |
+| `T0152` | Create separate park-test secret references and explicit live-write gates. | Ready | Secret references and guards only. Do not print secret values, call Roller Live, or perform writes. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -79,6 +80,7 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
+- T0151 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0150 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0149 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0148 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
@@ -92,13 +94,14 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 ## Current Risks And Open Questions
 
 - T0150 deployed `jumpyard-check-in-park-test-stack` to `CREATE_COMPLETE`. API endpoint: `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`; Aurora cluster: `jumpyard-check-in-park-test-aurora`; raw bucket: `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`.
-- T0150 did not populate Roller Live credentials, call Roller Live, run migrations, register webhooks, create drafts/payments, redeem tickets, send SMS/email, connect frontend traffic, or change app behavior.
+- T0151 applied existing SQL migrations `0001` through `0008` to the dedicated park-test Aurora database. Park-test now has the `jumpyard` schema and 19 `jumpyard` tables; key operational data tables checked in T0151 remained empty.
+- T0151 did not populate Roller Live credentials, call Roller Live, run imports, register webhooks, create drafts/payments, redeem tickets, send SMS/email, connect frontend traffic, change app behavior, or write to dev DB.
 - T0150 found and fixed a park-test deploy stop risk: SNS SMS delivery-status custom resource would have changed account-wide SNS SMS attributes. That custom resource is now dev-only, and account SMS attributes still point to the dev delivery-status role.
 - The park-test plan is not an approval to create AWS resources, call Roller Live, register Live webhooks, create drafts/payments, redeem tickets, or run visitor traffic; those actions remain gated by scoped future tickets and explicit approvals.
 - The T0146 contract keeps park-test in AWS account `376129878018`, region `eu-north-1`, but requires separate future resources under namespace `jumpyard-check-in-park-test` and its own database, secrets, API, queues, schedules, logs, alarms, and frontend API target.
 - T0147 config guards make dev fail closed against Roller Live and make park-test fail closed unless the config matches the T0146 contract and keeps confirmed scheduled sends off.
 - T0148 found and handled the S3 bucket name limit for park-test raw payload storage; park-test uses compact `-raw-` bucket suffix while dev keeps its existing `-raw-payloads-` pattern.
 - T0148 uses placeholder explicit CORS origins in `infra/config/park-test.json`; T0156 must replace or confirm real park-test phone/admin origins before visitor testing.
-- T0145 identified docs drift in `AWS_RESOURCES.md`: one top-level status sentence says Aurora migrations through `0007`, while the schema inventory and migration files show `0008` as the latest known migration. Verify and reconcile this before T0151 park-test database work.
+- T0151 reconciled the older `AWS_RESOURCES.md` docs drift: dev read-only verification showed migrations through `0008`, matching the schema inventory and migration files.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before the T0128 branch was created.
