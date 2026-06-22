@@ -10,6 +10,8 @@ T0150 deployed the separate park-test AWS foundation stack `jumpyard-check-in-pa
 
 T0152 deployed park-test safety gates for staff auth, guest message sends, webhook processing, booking draft/payment-start writes, redeem writes, and emergency stop. Park-test Lambda environment readback confirmed `JUMPYARD_EMERGENCY_STOP=true` and the sensitive operation gates set to `false`. No Roller Live calls, secret value reads/prints, webhooks, drafts/payments, redemptions, SMS/email sends, frontend traffic, or visitor flows were performed.
 
+T0153 added local Roller Live read-only preflight tooling and performed read-only AWS config/secret checks only. AWS resources changed: none. The park-test Roller credentials secret `/jumpyard-check-in-park-test/roller/credentials` was placeholder-only, and the explicitly documented fallback source `/jumpyard-check-in-dev/roller/credentials` failed Roller Live auth with HTTP `400` at `POST /token`. No secret values or tokens were printed, no AWS secret values were changed, and no Roller Live data reads, drafts/payments, redemptions, webhooks, frontend traffic, SMS, or email occurred.
+
 T0058 production-readiness audit notes:
 
 - AWS resources changed: none.
