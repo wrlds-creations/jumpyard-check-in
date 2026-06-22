@@ -4,7 +4,7 @@
 T0153
 
 ## Status
-Blocked
+Complete
 
 ## Goal
 Run a Roller Live read-only preflight for JumpYard Nacka using the park-test configuration.
@@ -29,6 +29,6 @@ Run a Roller Live read-only preflight for JumpYard Nacka using the park-test con
 - Run relevant local validators.
 
 ## Result
-T0153 is blocked on Roller Live credentials.
+T0153 passed after the park-test Roller credentials secret was populated through AWS Console.
 
-The park-test Roller credentials secret is placeholder-only. The explicitly documented fallback source `/jumpyard-check-in-dev/roller/credentials` was tried only for the Live auth step, but `POST https://api.roller.app/token` returned HTTP `400`. No Live venue/product/availability data reads were made.
+The read-only preflight authenticated against Roller Live using `/jumpyard-check-in-park-test/roller/credentials`, confirmed venue `JumpYard Nacka Forum` with venue id `50871`, read the Live product catalog, found `Entré 60 min` product id `1189805` and `Entré 60 min - Familj` product id `1189814`, and confirmed availability reads for those product ids. No quote, draft, payment, webhook registration, redeem, frontend traffic, SMS, or email was performed.

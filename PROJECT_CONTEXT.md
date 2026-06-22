@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md), with detailed reports linked below. Current park-test state: AWS foundation, migrations through `0008`, and T0153 preflight tooling exist, but Roller Live reads are blocked by missing Live-capable credentials. No frontend traffic, webhooks, payments, or redemptions are active.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md), with detailed reports linked below. Current park-test state: AWS foundation, migrations through `0008`, and T0153 successful Roller Live read-only preflight exist. No frontend traffic, webhooks, payments, or redemptions are active.
 
 ## Context Archives
 
@@ -56,7 +56,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database; operational data tables checked in T0151 remained empty.
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
 - T0152 deployed park-test safety gates in CDK/config and Lambda runtime for staff auth, guest message sends, webhook processing, Roller booking draft writes, Roller redemption writes, and an emergency stop. Dev remains configured for existing Playground behavior; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
-- T0153 added hard-allowlisted Roller Live read-only preflight tooling. Park-test credentials are placeholder-only, and the explicit dev fallback failed Live token auth with HTTP `400`, so no Live data reads or writes occurred.
+- T0153 added hard-allowlisted Roller Live read-only preflight tooling and confirmed Live auth, Nacka venue, products, availability, and payment settings without writes.
 
 ## Current Implemented Flow Facts
 

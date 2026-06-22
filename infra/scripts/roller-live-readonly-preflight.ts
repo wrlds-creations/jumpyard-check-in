@@ -710,13 +710,15 @@ function flattenProducts(products: readonly ProductNode[], parent: ProductSummar
 }
 
 function find60MinuteEntryCandidates(products: readonly ProductSummary[]): ProductSummary[] {
-  const direct = products.filter((product) => isLikely60MinuteEntry(product));
+  const direct = products
+    .filter((product) => isLikely60MinuteEntry(product))
+    .sort((left, right) => score60MinuteEntryCandidate(right) - score60MinuteEntryCandidate(left));
   if (direct.length > 0) return direct;
 
   return products.filter((product) => {
     const text = productSearchText(product);
     return product.durationMinutes === 60 || /\b60\s*(m|min|minute|minutes|minuter)\b/i.test(text);
-  });
+  }).sort((left, right) => score60MinuteEntryCandidate(right) - score60MinuteEntryCandidate(left));
 }
 
 function isLikely60MinuteEntry(product: ProductSummary): boolean {
@@ -729,8 +731,23 @@ function isLikely60MinuteEntry(product: ProductSummary): boolean {
   return has60Minutes && looksLikeEntry;
 }
 
+function score60MinuteEntryCandidate(product: ProductSummary): number {
+  const text = productSearchText(product);
+  let score = 0;
+
+  if (product.durationMinutes === 60) score += 20;
+  if (/\b60\s*(m|min|minute|minutes|minuter)?\b/i.test(text)) score += 10;
+  if (/(entry|admission|entre|entree)/i.test(text)) score += 40;
+  if (/(jump|jumping|hopptid|hoppa|trampoline)/i.test(text)) score += 8;
+  if (/^entre 60 min\b/i.test(text)) score += 60;
+  if (/(familj|family)/i.test(text)) score -= 10;
+  if (/(school|skola|skolgrupp|foreningsgrupp|konferens|trampolin|extra|kamp|cup)/i.test(text)) score -= 20;
+
+  return score;
+}
+
 function productSearchText(product: ProductSummary): string {
-  return [
+  return normalizeSearchText([
     product.name,
     product.parentProductName,
     product.productType,
@@ -739,7 +756,11 @@ function productSearchText(product: ProductSummary): string {
     product.parentProductId,
   ]
     .filter(isNonEmptyString)
-    .join(" ");
+    .join(" "));
+}
+
+function normalizeSearchText(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function dedupeProducts(products: readonly ProductSummary[]): ProductSummary[] {
