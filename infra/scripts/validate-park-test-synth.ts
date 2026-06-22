@@ -133,6 +133,40 @@ function expectNoBookingTimeMessagingSchedule(template: CloudFormationTemplate):
   expect(!hasBookingTimeRule, 'park-test synth must keep booking-time guest messaging schedule disabled.');
 }
 
+function getLambdaEnvironment(template: CloudFormationTemplate, functionName: string): Record<string, unknown> {
+  const lambdaResource = Object.values(getResources(template)).find((resource) => {
+    return resource.Type === 'AWS::Lambda::Function' && resource.Properties?.FunctionName === functionName;
+  });
+
+  expect(Boolean(lambdaResource), `Expected Lambda function ${functionName}.`);
+  const environment = lambdaResource?.Properties?.Environment;
+  if (!environment || typeof environment !== 'object' || Array.isArray(environment)) {
+    throw new Error(`Expected Lambda ${functionName} to have environment variables.`);
+  }
+
+  const variables = (environment as Record<string, unknown>).Variables;
+  if (!variables || typeof variables !== 'object' || Array.isArray(variables)) {
+    throw new Error(`Expected Lambda ${functionName} to have environment variables.`);
+  }
+
+  return variables as Record<string, unknown>;
+}
+
+function expectLambdaEnvironment(
+  template: CloudFormationTemplate,
+  functionName: string,
+  expectedValues: Record<string, string>,
+): void {
+  const variables = getLambdaEnvironment(template, functionName);
+
+  for (const [name, expectedValue] of Object.entries(expectedValues)) {
+    expect(
+      variables[name] === expectedValue,
+      `Expected ${functionName} environment ${name}=${expectedValue}, got ${JSON.stringify(variables[name])}.`,
+    );
+  }
+}
+
 function validateDevTemplate(dev: SynthResult): void {
   const strings = collectStrings(dev.template);
 
@@ -144,6 +178,27 @@ function validateDevTemplate(dev: SynthResult): void {
   expectNotContains(strings, PARK_TEST_PREFIX, 'dev');
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/env`);
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/base-url`);
+  expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-booking`, {
+    ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
+    JUMPYARD_ENVIRONMENT: 'dev',
+  });
+  expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-redeem`, {
+    ENABLE_ROLLER_REDEEM_WRITES: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
+    JUMPYARD_ENVIRONMENT: 'dev',
+  });
+  expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-session`, {
+    ENABLE_GUEST_MESSAGE_SENDS: 'true',
+    ENABLE_STAFF_AUTH: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
+    JUMPYARD_ENVIRONMENT: 'dev',
+  });
+  expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-webhook`, {
+    ENABLE_ROLLER_WEBHOOK_PROCESSING: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
+    JUMPYARD_ENVIRONMENT: 'dev',
+  });
 
   console.log('[pass] dev synth keeps Playground resource names');
 }
@@ -200,6 +255,27 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   expectNamedResource(parkTest.template, 'AWS::Events::Rule', 'Name', `${PARK_TEST_PREFIX}-data-api-daily-sync`);
   expectNoBookingTimeMessagingSchedule(parkTest.template);
   expect(countResourcesByType(parkTest.template, 'AWS::ApiGatewayV2::Api') === 1, 'Expected one park-test HTTP API.');
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
+    ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
+    ENABLE_ROLLER_REDEEM_WRITES: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
+    ENABLE_GUEST_MESSAGE_SENDS: 'false',
+    ENABLE_STAFF_AUTH: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
+    ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
 
   console.log('[pass] park-test synth uses separate names, tags, and Live config');
 }

@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 150
-Latest archived completed ticket: `T0151`
+Archived count: 151
+Latest archived completed ticket: `T0152`
 
 ## Completed Tickets
 
@@ -162,3 +162,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0149` | Park-test deploy/rollback preflight. | 2026-06-18 | Added `docs/t0149-park-test-deploy-rollback-preflight.md` with the required T0150 preflight, WRLDS metadata confirmation, sequential CDK diff guidance, stop criteria, post-deploy smoke boundary, and rollback plan covering frontend, API, live-write gates, secrets rotation, webhook removal, schedule shutdown, and migrations. Read-only/local checks confirmed AWS account `376129878018`, dev stack `UPDATE_COMPLETE`, clean dev template diff, additive park-test template diff, and no park-test stack after cleanup. T0149 did not deploy, populate credentials, call Roller, run migrations, register webhooks, create drafts/payments, redeem tickets, send SMS/email, or change app behavior. |
 | `T0150` | Park-test foundation deploy. | 2026-06-18 | Deployed `jumpyard-check-in-park-test-stack` to AWS account `376129878018`, region `eu-north-1`, with API `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`, Aurora cluster `jumpyard-check-in-park-test-aurora`, raw bucket `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`, separate secrets/SSM/SQS/EventBridge/CloudWatch/Lambda resources, and WRLDS tags. T0150 also kept account-wide SNS SMS delivery diagnostics dev-owned. No Roller Live credentials were populated; no Roller Live calls, migrations, frontend traffic, webhooks, drafts/payments, redemptions, SMS/email sends, or app behavior changes occurred. |
 | `T0151` | Park-test database migrations. | 2026-06-18 | Applied existing SQL migrations `0001` through `0008` to the dedicated park-test Aurora database `jumpyard-check-in-park-test-aurora`, verified `jumpyard.schema_migrations`, 19 `jumpyard` tables, `0008` customer name columns, empty key operational data tables, and unchanged dev migration state. T0151 did not populate Roller Live credentials, call Roller Live, run imports, connect frontend traffic, register webhooks, create drafts/payments, redeem tickets, send SMS/email, change app behavior, or write to dev DB. |
+| `T0152` | Park-test secrets and gates. | 2026-06-22 | Added explicit park-test safety gates for staff auth, guest message sends, webhook processing, booking draft/payment-start writes, redeem writes, and emergency stop. Deployed scoped Lambda code/env updates to `jumpyard-check-in-park-test-stack`; post-deploy readback confirmed `JUMPYARD_EMERGENCY_STOP=true` and all sensitive gates off, and safe API smokes returned `staff_auth_disabled` and `roller_booking_draft_writes_disabled`. T0152 did not populate secret values, call Roller Live, register webhooks, create drafts/payments, redeem tickets, send SMS/email, connect frontend traffic, or run visitor flows. |

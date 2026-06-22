@@ -56,6 +56,14 @@ export interface JumpYardCloudConfig {
     readonly environment: string;
     readonly baseUrl: string;
   };
+  readonly safetyGates: {
+    readonly emergencyStop: boolean;
+    readonly guestMessagingSendsEnabled: boolean;
+    readonly rollerBookingDraftWritesEnabled: boolean;
+    readonly rollerRedeemWritesEnabled: boolean;
+    readonly rollerWebhookProcessingEnabled: boolean;
+    readonly staffAuthEnabled: boolean;
+  };
   readonly tags: Record<RequiredWrlDsTag, string>;
 }
 
@@ -88,6 +96,14 @@ interface RawConfig {
     readonly environment?: unknown;
     readonly baseUrl?: unknown;
   };
+  readonly safetyGates?: {
+    readonly emergencyStop?: unknown;
+    readonly guestMessagingSendsEnabled?: unknown;
+    readonly rollerBookingDraftWritesEnabled?: unknown;
+    readonly rollerRedeemWritesEnabled?: unknown;
+    readonly rollerWebhookProcessingEnabled?: unknown;
+    readonly staffAuthEnabled?: unknown;
+  };
   readonly tags?: Record<string, unknown>;
 }
 
@@ -112,6 +128,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   const resourcePrefix = readString(raw.resourcePrefix, 'resourcePrefix');
   const rollerEnvironment = readString(raw.roller?.environment, 'roller.environment');
   const rollerBaseUrl = normalizeBaseUrl(readString(raw.roller?.baseUrl, 'roller.baseUrl'), 'roller.baseUrl');
+  const safetyGates = readSafetyGatesConfig(raw.safetyGates);
   const deploymentEnvironment = readDeploymentEnvironment(tags['WRLDS:Environment']);
 
   if (!/^\d{12}$/.test(awsAccount)) {
@@ -138,6 +155,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     resourcePrefix,
     rollerBaseUrl,
     rollerEnvironment,
+    safetyGates,
     tags,
   });
 
@@ -152,6 +170,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
       environment: rollerEnvironment,
       baseUrl: rollerBaseUrl,
     },
+    safetyGates,
     tags,
   };
 }
@@ -164,6 +183,7 @@ interface EnvironmentContractInput {
   readonly resourcePrefix: string;
   readonly rollerBaseUrl: string;
   readonly rollerEnvironment: string;
+  readonly safetyGates: JumpYardCloudConfig['safetyGates'];
   readonly tags: Record<RequiredWrlDsTag, string>;
 }
 
@@ -221,6 +241,23 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
 
   if (input.bookingTimeSms.confirmSend) {
     throw new Error('park-test bookingTimeSms.confirmSend must stay false until a scoped messaging ticket enables it.');
+  }
+
+  if (!input.safetyGates.emergencyStop) {
+    throw new Error('park-test safetyGates.emergencyStop must stay true until a scoped ticket enables park-test traffic.');
+  }
+
+  const blockedGates: Array<keyof JumpYardCloudConfig['safetyGates']> = [
+    'guestMessagingSendsEnabled',
+    'rollerBookingDraftWritesEnabled',
+    'rollerRedeemWritesEnabled',
+    'rollerWebhookProcessingEnabled',
+    'staffAuthEnabled',
+  ];
+  for (const gate of blockedGates) {
+    if (input.safetyGates[gate]) {
+      throw new Error(`park-test safetyGates.${gate} must stay false until a scoped ticket enables it.`);
+    }
   }
 }
 
@@ -362,6 +399,33 @@ function readGuestEmailConfig(raw: RawConfig['guestEmail']): JumpYardCloudConfig
   }
 
   return config;
+}
+
+function readSafetyGatesConfig(raw: RawConfig['safetyGates']): JumpYardCloudConfig['safetyGates'] {
+  return {
+    emergencyStop: readOptionalBoolean(raw?.emergencyStop, false, 'safetyGates.emergencyStop'),
+    guestMessagingSendsEnabled: readOptionalBoolean(
+      raw?.guestMessagingSendsEnabled,
+      false,
+      'safetyGates.guestMessagingSendsEnabled',
+    ),
+    rollerBookingDraftWritesEnabled: readOptionalBoolean(
+      raw?.rollerBookingDraftWritesEnabled,
+      false,
+      'safetyGates.rollerBookingDraftWritesEnabled',
+    ),
+    rollerRedeemWritesEnabled: readOptionalBoolean(
+      raw?.rollerRedeemWritesEnabled,
+      false,
+      'safetyGates.rollerRedeemWritesEnabled',
+    ),
+    rollerWebhookProcessingEnabled: readOptionalBoolean(
+      raw?.rollerWebhookProcessingEnabled,
+      false,
+      'safetyGates.rollerWebhookProcessingEnabled',
+    ),
+    staffAuthEnabled: readOptionalBoolean(raw?.staffAuthEnabled, false, 'safetyGates.staffAuthEnabled'),
+  };
 }
 
 function readRequiredTags(rawTags: Record<string, unknown> | undefined): Record<RequiredWrlDsTag, string> {

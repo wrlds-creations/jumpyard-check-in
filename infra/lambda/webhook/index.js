@@ -48,6 +48,15 @@ exports.handler = async (event) => {
       });
     }
 
+    if (!isRollerWebhookProcessingEnabled()) {
+      return jsonResponse(200, correlationId, {
+        status: 'ignored_disabled',
+        webhook: {
+          reason: 'roller_webhook_processing_disabled',
+        },
+      });
+    }
+
     const intake = normalizeWebhookEvent(event, request);
     const writeResult = await persistWebhookEvent(intake, auth.mode, correlationId);
 
@@ -174,6 +183,14 @@ function logUnauthorizedWebhook(event, request, code) {
       status: 'ignored_unauthorized',
     }),
   );
+}
+
+function isRollerWebhookProcessingEnabled() {
+  return process.env.ENABLE_ROLLER_WEBHOOK_PROCESSING === 'true' && !isEmergencyStopEnabled();
+}
+
+function isEmergencyStopEnabled() {
+  return process.env.JUMPYARD_EMERGENCY_STOP === 'true';
 }
 
 async function getWebhookToken() {

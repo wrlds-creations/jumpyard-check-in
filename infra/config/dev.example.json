@@ -34,6 +34,14 @@
     "fromAddress": "",
     "replyToAddresses": []
   },
+  "safetyGates": {
+    "emergencyStop": false,
+    "guestMessagingSendsEnabled": true,
+    "rollerBookingDraftWritesEnabled": true,
+    "rollerRedeemWritesEnabled": true,
+    "rollerWebhookProcessingEnabled": true,
+    "staffAuthEnabled": true
+  },
   "tags": {
     "WRLDS:Client": "JumpYard",
     "WRLDS:Project": "JumpYard Next",

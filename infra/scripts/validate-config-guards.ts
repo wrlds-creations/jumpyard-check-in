@@ -34,6 +34,14 @@ interface TestConfig {
     baseUrl: string;
     environment: string;
   };
+  readonly safetyGates: {
+    emergencyStop: boolean;
+    guestMessagingSendsEnabled: boolean;
+    rollerBookingDraftWritesEnabled: boolean;
+    rollerRedeemWritesEnabled: boolean;
+    rollerWebhookProcessingEnabled: boolean;
+    staffAuthEnabled: boolean;
+  };
   readonly tags: Record<string, string>;
 }
 
@@ -103,6 +111,12 @@ const parkTestConfirmedSend = cloneConfig(parkTestConfig);
 parkTestConfirmedSend.bookingTimeSms.confirmSend = true;
 parkTestConfirmedSend.bookingTimeSms.confirmedSendApproval = 'I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS';
 
+const parkTestEmergencyStopOff = cloneConfig(parkTestConfig);
+parkTestEmergencyStopOff.safetyGates.emergencyStop = false;
+
+const parkTestDraftWritesOn = cloneConfig(parkTestConfig);
+parkTestDraftWritesOn.safetyGates.rollerBookingDraftWritesEnabled = true;
+
 expectPass('dev Playground config passes', devConfig, 'dev');
 expectFail('unsafe dev-to-Live config fails', unsafeDevLiveConfig, /dev config must use Roller Playground/);
 expectPass('reviewed park-test Live config passes', parkTestConfig, 'park-test');
@@ -110,5 +124,7 @@ expectFail('park-test missing resourcePrefix fails closed', parkTestMissingPrefi
 expectFail('park-test Playground config fails closed', parkTestPlaygroundConfig, /park-test config must explicitly use Roller Live/);
 expectFail('park-test wrong data classification fails closed', parkTestWrongClassification, /DataClassification/);
 expectFail('park-test confirmed scheduled send fails closed', parkTestConfirmedSend, /confirmSend must stay false/);
+expectFail('park-test emergency stop off fails closed', parkTestEmergencyStopOff, /emergencyStop must stay true/);
+expectFail('park-test draft writes enabled fails closed', parkTestDraftWritesOn, /rollerBookingDraftWritesEnabled/);
 
 console.log('Config guard validation passed.');

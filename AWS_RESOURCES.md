@@ -8,6 +8,8 @@ JumpYard Check-in dev AWS foundation is deployed, Aurora migrations through `000
 
 T0150 deployed the separate park-test AWS foundation stack `jumpyard-check-in-park-test-stack` in account `376129878018`, region `eu-north-1`, with API `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`, Aurora cluster `jumpyard-check-in-park-test-aurora`, and raw payload bucket `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`. T0151 applied existing SQL migrations through `0008` to the dedicated park-test Aurora database. Park-test resources and schema exist, but Roller Live credentials are not populated, no Roller Live calls have been made, frontend traffic is not connected, and no webhooks, drafts/payments, redemptions, SMS, or email sends are active.
 
+T0152 deployed park-test safety gates for staff auth, guest message sends, webhook processing, booking draft/payment-start writes, redeem writes, and emergency stop. Park-test Lambda environment readback confirmed `JUMPYARD_EMERGENCY_STOP=true` and the sensitive operation gates set to `false`. No Roller Live calls, secret value reads/prints, webhooks, drafts/payments, redemptions, SMS/email sends, frontend traffic, or visitor flows were performed.
+
 T0058 production-readiness audit notes:
 
 - AWS resources changed: none.
@@ -73,6 +75,17 @@ T0151 park-test database migration notes:
 - Post-migration verification: park-test `jumpyard.schema_migrations` contains `0001` through `0008` with checksums matching dev; 19 `jumpyard` tables exist; `prepayment_booking_drafts` includes `customer_first_name` and `customer_last_name`; park-test Aurora remained `available`.
 - Data boundary: park-test row counts remained `0` for `roller_bookings`, `guest_profiles`, `prepayment_booking_drafts`, and `roller_webhook_events`.
 - Live/traffic gate: T0151 did not populate Roller Live credentials, call Roller Live, run imports, connect frontend traffic, register webhooks, create drafts/payments, redeem tickets, send SMS/email, change app behavior, or write to dev DB.
+
+T0152 park-test secrets and gates notes:
+
+- AWS resources changed: existing park-test Lambda code/environment only.
+- Changed resources: `jumpyard-check-in-park-test-stack-booking`, `jumpyard-check-in-park-test-stack-redeem`, `jumpyard-check-in-park-test-stack-session`, `jumpyard-check-in-park-test-stack-webhook`, plus `JUMPYARD_ENVIRONMENT` and `JUMPYARD_EMERGENCY_STOP` env vars on lookup/data-sync.
+- Gate defaults deployed: `JUMPYARD_EMERGENCY_STOP=true`, `ENABLE_ROLLER_BOOKING_DRAFT_WRITES=false`, `ENABLE_ROLLER_REDEEM_WRITES=false`, `ENABLE_STAFF_AUTH=false`, `ENABLE_GUEST_MESSAGE_SENDS=false`, and `ENABLE_ROLLER_WEBHOOK_PROCESSING=false`.
+- Park-test secret references remain environment-scoped under `/jumpyard-check-in-park-test/...`; no secret values were printed or changed.
+- Deploy command: `npx cdk deploy -c config=./config/park-test.json --profile wrlds-dev --require-approval never` from `infra/`.
+- Deploy result: CloudFormation stack `jumpyard-check-in-park-test-stack` reached `UPDATE_COMPLETE` on `2026-06-22T09:06:57.672000+00:00`.
+- Post-deploy validation: park-test CDK diff showed no differences; Lambda env readback confirmed all gates; safe API smokes returned `409 staff_auth_disabled` and `409 roller_booking_draft_writes_disabled`.
+- Live/traffic gate: T0152 did not populate Roller Live credentials, call Roller Live, register webhooks, create drafts/payments, redeem tickets, send SMS/email, connect frontend traffic, or run visitor flows.
 
 T0149 park-test deploy/rollback preflight notes:
 

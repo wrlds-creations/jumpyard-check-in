@@ -36,6 +36,14 @@
       "love@wrlds.com"
     ]
   },
+  "safetyGates": {
+    "emergencyStop": false,
+    "guestMessagingSendsEnabled": true,
+    "rollerBookingDraftWritesEnabled": true,
+    "rollerRedeemWritesEnabled": true,
+    "rollerWebhookProcessingEnabled": true,
+    "staffAuthEnabled": true
+  },
   "tags": {
     "WRLDS:Client": "JumpYard",
     "WRLDS:Project": "jumpyard-check-in",
