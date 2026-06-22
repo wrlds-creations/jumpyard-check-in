@@ -12,6 +12,8 @@ T0152 deployed park-test safety gates for staff auth, guest message sends, webho
 
 T0153 added local Roller Live read-only preflight tooling and passed the first Roller Live read-only preflight for JumpYard Nacka Forum. AWS resources changed: none. The existing park-test Roller credentials secret `/jumpyard-check-in-park-test/roller/credentials` was populated by the user through AWS Console; no secret values or tokens were printed or committed. Read-only Roller Live calls confirmed auth, venue `JumpYard Nacka Forum` id `50871`, product catalog, `Entré 60 min` id `1189805`, `Entré 60 min - Familj` id `1189814`, availability reads, and payment settings visibility. No drafts/payments, redemptions, webhooks, frontend traffic, SMS, or email occurred.
 
+T0154 added dry-run-only Live webhook planning tooling. AWS resources changed: none. The dry-run read AWS identity, CloudFormation stack output, SSM Roller env/base-url parameters, and Secrets Manager metadata for `/jumpyard-check-in-park-test/webhooks/dev-token` without reading or printing secret values. The planned endpoint is `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com/v1/roller/webhooks/bookings`, with Roller delivery header `x-roller-apikey`, booking events `Created`, `Updated`, and `Cancelled`, and `tickets=true`. No Roller Live requests, webhook registration, AWS writes, frontend traffic, payments, redemptions, SMS, or email occurred.
+
 T0058 production-readiness audit notes:
 
 - AWS resources changed: none.
@@ -749,7 +751,7 @@ Confirmed T0006 dev target:
 | `jumpyard-check-in-park-test-aurora-subnets` | RDS DB subnet group | `park-test` | `eu-north-1` | `cdk` | Uses isolated subnets `subnet-0dfe19348e09a46be` and `subnet-0da9943155e44511d`. |
 | `/jumpyard-check-in-park-test/aurora/admin` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Generated Aurora admin credentials for park-test. Do not print secret values. |
 | `/jumpyard-check-in-park-test/roller/credentials` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Secret container exists; Roller Live credential values were not populated by T0150. |
-| `/jumpyard-check-in-park-test/webhooks/dev-token` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Generated token container for future webhook work; no Live webhook is registered. |
+| `/jumpyard-check-in-park-test/webhooks/dev-token` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Generated token container for future webhook work; T0154 references this secret as the planned `x-roller-apikey` value source without printing the value; no Live webhook is registered. |
 | `/jumpyard-check-in-park-test/redeem/dev-token` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Generated token container; redeem remains gated by later tickets. |
 | `/jumpyard-check-in-park-test/staff/auth` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Generated staff auth container; frontend/admin traffic is not connected. |
 | `/jumpyard-check-in-park-test/checkin-links/dev-token` | Secrets Manager | `park-test` | `eu-north-1` | `cdk` | Generated token container for future check-in links. |

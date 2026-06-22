@@ -1,34 +1,36 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0153
+T0154
 
 ## Status
 Complete
 
 ## Goal
-Run a Roller Live read-only preflight for JumpYard Nacka using the park-test configuration.
+Prepare park-test Roller Live webhook registration tooling/config in dry-run mode.
 
 ## Scope
 - Use the park-test Roller base URL `https://api.roller.app`.
-- Prefer the park-test Roller credentials secret when it contains real credentials.
-- If park-test credentials are still placeholders, use only an explicitly documented read-only fallback credential source.
-- Make read-only Roller Live requests only.
-- Confirm reachable venue/context, product/catalog candidates, 60-minute entry candidates, availability-relevant inputs, and payment/settings read-only facts where available.
-- Document differences from Playground assumptions and the exact next gate required before quote/cost, draft, payment, webhook, redeem, frontend, SMS, or email work.
-- Do not print or commit secret values, access tokens, raw PII, or broad raw Roller payloads.
+- Show the exact park-test JumpYard Cloud booking webhook endpoint.
+- Show the Roller webhook registration endpoint, expected delivery header, event list, include settings, duplicate behavior, and rollback command template.
+- Treat this ticket as dry-run only.
+- Do not register, update, disable, delete, or otherwise change Roller Live webhooks.
+- Do not call Roller Live in this ticket.
 - Do not create or update AWS resources.
-- Do not call Roller write endpoints, including draft creation/publish, booking mutation, redemption, webhook registration, payment execution, SMS/email, or frontend traffic.
+- Do not print or commit secret values, access tokens, raw PII, raw Roller payloads, or raw webhook payloads.
+- Do not enable park-test webhook processing, frontend traffic, payments, redemptions, SMS, or email.
 
 ## Validation
 - Read source-of-truth docs and AWS infrastructure workflow before changes.
-- Validate AWS account/region before reading AWS config/secrets.
-- Add or use a script with a hard allowlist of read-only Roller endpoints.
-- Prove the script refuses write-like endpoints/methods.
-- Run the read-only preflight and record sanitized results.
+- Validate AWS account/region before reading AWS metadata.
+- Add a dry-run command that has no apply/register/delete mode.
+- Prove the script rejects write-like arguments.
+- Run the dry-run and record sanitized output.
 - Run relevant local validators.
 
 ## Result
-T0153 passed after the park-test Roller credentials secret was populated through AWS Console.
+T0154 added `infra/scripts/roller-live-webhook-dry-run.ts`, `npm --prefix infra run webhook:live:park-test:dry-run`, and `npm --prefix infra run validate:roller-live-webhook-dry-run`.
 
-The read-only preflight authenticated against Roller Live using `/jumpyard-check-in-park-test/roller/credentials`, confirmed venue `JumpYard Nacka Forum` with venue id `50871`, read the Live product catalog, found `Entré 60 min` product id `1189805` and `Entré 60 min - Familj` product id `1189814`, and confirmed availability reads for those product ids. No quote, draft, payment, webhook registration, redeem, frontend traffic, SMS, or email was performed.
+The dry-run plan confirmed the park-test endpoint `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com/v1/roller/webhooks/bookings`, Roller registration endpoint `POST https://api.roller.app/webhooks`, delivery header `x-roller-apikey`, header value source `/jumpyard-check-in-park-test/webhooks/dev-token`, booking events `Created`, `Updated`, and `Cancelled`, `tickets=true`, duplicate behavior, and rollback template. The script rejects apply/register/delete modes.
+
+T0154 made no Roller Live requests, did not register or change webhooks, did not create or update AWS resources, did not print secret values, and did not enable webhook processing, frontend traffic, payments, redemptions, SMS, or email.
