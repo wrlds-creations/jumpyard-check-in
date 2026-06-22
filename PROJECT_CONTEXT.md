@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md), with detailed reports linked below. Current park-test state: the separate AWS foundation is deployed, database migrations through `0008` are applied, and no Roller Live calls, frontend traffic, webhooks, payments, or redemptions are active.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md), with detailed reports linked below. Current park-test state: AWS foundation, migrations through `0008`, and T0153 successful Roller Live read-only preflight exist. No frontend traffic, webhooks, payments, or redemptions are active.
 
 ## Context Archives
 
@@ -33,6 +33,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Park-test foundation deploy: [docs/t0150-park-test-foundation-deploy.md](docs/t0150-park-test-foundation-deploy.md)
 - Park-test database migrations: [docs/t0151-park-test-db-migrations.md](docs/t0151-park-test-db-migrations.md)
 - Park-test secrets and gates: [docs/t0152-park-test-secrets-gates.md](docs/t0152-park-test-secrets-gates.md)
+- Park-test Roller Live read-only preflight: [docs/t0153-roller-live-readonly-preflight.md](docs/t0153-roller-live-readonly-preflight.md)
 
 ## Durable Architecture Facts
 
@@ -51,10 +52,11 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Park-test raw payload storage synthesizes as `jumpyard-check-in-park-test-raw-376129878018-eu-north-1` so the bucket name stays within S3's 63-character limit without changing the existing dev raw-payload bucket naming pattern.
 - The first park-test deploy must follow the T0149 preflight: verify AWS identity and metadata, run sequential CDK commands, require a clean dev template diff, review the additive park-test template diff, and get explicit T0150 deploy approval before creating resources.
 - For a never-deployed park-test stack, template diff (`cdk diff --method=template`) is the preferred preflight check; default CDK change-set diff can leave an empty CloudFormation `REVIEW_IN_PROGRESS` stack shell that must be verified empty and deleted before continuing.
-- T0150 deployed `jumpyard-check-in-park-test-stack` to `CREATE_COMPLETE`. The park-test API endpoint is `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`, Aurora cluster is `jumpyard-check-in-park-test-aurora`, and raw payload bucket is `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`.
-- T0151 applied the existing SQL migrations `0001` through `0008` to the dedicated park-test Aurora database. Park-test now has the `jumpyard` schema and 19 schema tables, while operational data tables verified in T0151 remained empty.
+- T0150 deployed `jumpyard-check-in-park-test-stack` with separate API, Aurora, raw bucket, secrets, parameters, queues, schedules, logs, alarms, and tags; details are in the T0150 report.
+- T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database; operational data tables checked in T0151 remained empty.
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
 - T0152 deployed park-test safety gates in CDK/config and Lambda runtime for staff auth, guest message sends, webhook processing, Roller booking draft writes, Roller redemption writes, and an emergency stop. Dev remains configured for existing Playground behavior; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
+- T0153 added hard-allowlisted Roller Live read-only preflight tooling and confirmed Live auth, Nacka venue, products, availability, and payment settings without writes.
 
 ## Current Implemented Flow Facts
 
