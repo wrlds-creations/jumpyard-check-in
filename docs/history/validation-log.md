@@ -2,6 +2,18 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0154 Live Webhook Dry-Run Validation
+
+- 2026-06-22: T0154 was activated after T0153 was squash-merged to `main` and the branch `codex/t0154-live-webhook-dry-run` was created from updated `main`.
+- 2026-06-22: Read `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, `CODEX_TASK.md`, `AWS_RESOURCES.md`, local `skills/aws-project-infrastructure/`, AWS tagging/resource-inventory/CDK references, and the active backlog row.
+- 2026-06-22: Read-only AWS identity check confirmed account `376129878018`, region `eu-north-1`, and assumed role `AWSReservedSSO_AdministratorAccess_8a2502e60c822ae0/Love`.
+- 2026-06-22: Read-only CloudFormation and Secrets Manager metadata checks confirmed stack `jumpyard-check-in-park-test-stack` outputs API endpoint `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com` and that secret `/jumpyard-check-in-park-test/webhooks/dev-token` exists. Secret values were not read or printed.
+- 2026-06-22: Added `infra/scripts/roller-live-webhook-dry-run.ts`, `npm --prefix infra run webhook:live:park-test:dry-run`, and `npm --prefix infra run validate:roller-live-webhook-dry-run`.
+- 2026-06-22: The dry-run output planned `POST https://api.roller.app/webhooks` with endpoint `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com/v1/roller/webhooks/bookings`, header `x-roller-apikey`, value source `/jumpyard-check-in-park-test/webhooks/dev-token`, events `Created`, `Updated`, `Cancelled`, and `tickets=true`.
+- 2026-06-22: T0154 documented duplicate behavior and rollback template requiring the recorded Live webhook id from T0155.
+- 2026-06-22: T0154 did not call Roller Live, inspect existing Live webhooks, register/change/delete webhooks, create/update AWS resources, read/print secret values, connect frontend traffic, create drafts/payments, redeem tickets, or send SMS/email.
+- 2026-06-22: `npm --prefix infra run check`, direct JSON dry-run, `npm run validate`, and `git diff --check` passed. `git diff --check` printed CRLF conversion warnings only.
+
 ## T0151 Park-Test Database Migrations Validation
 
 - 2026-06-18: T0151 was activated after T0150 was merged to `main` and the branch `codex/t0151-park-test-db-migrations` was created from updated `main`.

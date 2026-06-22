@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md), with detailed reports linked below. Current park-test state: AWS foundation, migrations through `0008`, and T0153 successful Roller Live read-only preflight exist. No frontend traffic, webhooks, payments, or redemptions are active.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, migrations through `0008`, T0153 Live read-only preflight, and T0154 webhook dry-run tooling. No frontend traffic, Live webhook, payment, or redeem is active.
 
 ## Context Archives
 
@@ -34,6 +34,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Park-test database migrations: [docs/t0151-park-test-db-migrations.md](docs/t0151-park-test-db-migrations.md)
 - Park-test secrets and gates: [docs/t0152-park-test-secrets-gates.md](docs/t0152-park-test-secrets-gates.md)
 - Park-test Roller Live read-only preflight: [docs/t0153-roller-live-readonly-preflight.md](docs/t0153-roller-live-readonly-preflight.md)
+- T0154 webhook dry-run: [docs/t0154-live-webhook-dry-run.md](docs/t0154-live-webhook-dry-run.md)
 
 ## Durable Architecture Facts
 
@@ -45,8 +46,8 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
 - AWS dev is the current implementation environment; non-dev/staging/live work requires separate reviewed config and preflight.
-- Park-test work is gated by scoped tickets; AWS resource creation, Roller Live reads/writes, webhook registration, payments, and redemptions require the explicit approvals listed in the active ticket/backlog.
-- Park-test is a separate WRLDS environment in the same AWS account and region as dev: account `376129878018`, region `eu-north-1`, planned resource namespace `jumpyard-check-in-park-test`, its own database/secrets/API/resources, and Roller Live JumpYard Nacka access only through JumpYard Cloud.
+- Park-test work is gated by scoped tickets; AWS creation, Roller Live reads/writes, webhook registration, payments, and redemptions require the approvals listed in the active ticket/backlog.
+- Park-test is a separate WRLDS environment in dev's AWS account/region: `376129878018`, `eu-north-1`, namespace `jumpyard-check-in-park-test`, own database/secrets/API/resources, and Roller Live Nacka access only through JumpYard Cloud.
 - CDK config validation now separates `dev` and `park-test`: dev remains Roller Playground-only, while park-test must match the T0146 account/region/resource-prefix/Live-base/data-classification contract and keep `bookingTimeSms.confirmSend=false`.
 - `infra/config/park-test.json` is synthable and uses separate park-test naming/tags/resource prefix. It is not a deploy approval, does not contain credentials, and uses placeholder explicit CORS origins until T0156 confirms the real phone/admin park-test origins.
 - Park-test raw payload storage synthesizes as `jumpyard-check-in-park-test-raw-376129878018-eu-north-1` so the bucket name stays within S3's 63-character limit without changing the existing dev raw-payload bucket naming pattern.
@@ -57,6 +58,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
 - T0152 deployed park-test safety gates in CDK/config and Lambda runtime for staff auth, guest message sends, webhook processing, Roller booking draft writes, Roller redemption writes, and an emergency stop. Dev remains configured for existing Playground behavior; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
 - T0153 added hard-allowlisted Roller Live read-only preflight tooling and confirmed Live auth, Nacka venue, products, availability, and payment settings without writes.
+- T0154 added a dry-run-only Live webhook plan; it made no Roller requests and registered no webhook.
 
 ## Current Implemented Flow Facts
 
