@@ -1017,7 +1017,11 @@ function isUsedRedeemStatus(status) {
 }
 
 function isRollerRedeemWriteEnabled() {
-  return process.env.ENABLE_ROLLER_REDEEM_WRITES === 'true';
+  return process.env.ENABLE_ROLLER_REDEEM_WRITES === 'true' && !isEmergencyStopEnabled();
+}
+
+function isEmergencyStopEnabled() {
+  return process.env.JUMPYARD_EMERGENCY_STOP === 'true';
 }
 
 async function verifyRedeemDevToken(event) {

@@ -40,6 +40,8 @@ interface HandlerResources {
   readonly staffAuthSecret: secretsmanager.Secret;
   readonly checkinLinkDevTokenSecret: secretsmanager.Secret;
   readonly resourcePrefix: string;
+  readonly safetyGates: JumpYardCloudConfig['safetyGates'];
+  readonly wrldsEnvironment: string;
 }
 
 interface ObservabilityResources {
@@ -323,6 +325,8 @@ export class JumpYardCloudStack extends Stack {
       staffAuthSecret,
       checkinLinkDevTokenSecret,
       resourcePrefix: config.resourcePrefix,
+      safetyGates: config.safetyGates,
+      wrldsEnvironment: config.tags['WRLDS:Environment'],
     };
 
     const lookupHandler = this.createHandler('LookupHandler', 'lookup', handlerResources, {
@@ -746,6 +750,8 @@ export class JumpYardCloudStack extends Stack {
       ROLLER_OPERATIONS_QUEUE_URL: resources.rollerOperationsQueue.queueUrl,
       EVENT_BUS_NAME: resources.eventBus.eventBusName,
       RESOURCE_PREFIX: resources.resourcePrefix,
+      JUMPYARD_EMERGENCY_STOP: String(resources.safetyGates.emergencyStop),
+      JUMPYARD_ENVIRONMENT: resources.wrldsEnvironment,
     };
 
     if (handlerName === 'data-sync') {
@@ -753,6 +759,7 @@ export class JumpYardCloudStack extends Stack {
     }
 
     if (handlerName === 'webhook') {
+      environment.ENABLE_ROLLER_WEBHOOK_PROCESSING = String(resources.safetyGates.rollerWebhookProcessingEnabled);
       environment.WEBHOOK_DEV_TOKEN_SECRET_ARN = resources.webhookDevTokenSecret.secretArn;
     }
 
@@ -763,13 +770,21 @@ export class JumpYardCloudStack extends Stack {
       environment.EMAIL_FROM_ADDRESS = resources.checkinEmailFromAddress;
       environment.EMAIL_PROVIDER = 'aws_ses';
       environment.EMAIL_REPLY_TO_ADDRESSES = resources.checkinEmailReplyToAddresses.join(',');
+      environment.ENABLE_GUEST_MESSAGE_SENDS = String(resources.safetyGates.guestMessagingSendsEnabled);
+      environment.ENABLE_STAFF_AUTH = String(resources.safetyGates.staffAuthEnabled);
       environment.SMS_PROVIDER = 'aws_sns';
       environment.SMS_SENDER_ID = 'JumpYard';
       environment.STAFF_AUTH_SECRET_ARN = resources.staffAuthSecret.secretArn;
     }
 
+    if (handlerName === 'booking') {
+      environment.ENABLE_ROLLER_BOOKING_DRAFT_WRITES = String(
+        resources.safetyGates.rollerBookingDraftWritesEnabled,
+      );
+    }
+
     if (handlerName === 'redeem') {
-      environment.ENABLE_ROLLER_REDEEM_WRITES = 'true';
+      environment.ENABLE_ROLLER_REDEEM_WRITES = String(resources.safetyGates.rollerRedeemWritesEnabled);
       environment.REDEEM_DEV_TOKEN_SECRET_ARN = resources.redeemDevTokenSecret.secretArn;
       environment.STAFF_AUTH_SECRET_ARN = resources.staffAuthSecret.secretArn;
     }

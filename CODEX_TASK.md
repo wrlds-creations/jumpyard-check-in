@@ -4,15 +4,14 @@
 NO_ACTIVE_TICKET
 
 ## Status
-No active ticket
+None
 
 ## Goal
-T0151 is complete. The recommended next ticket is T0152 for park-test secrets and kill switches/live-write gates.
+No active ticket is currently assigned.
 
 ## Scope
-- No active implementation scope.
-- Do not deploy, migrate, populate credentials, call Roller, register webhooks, create drafts/payments, redeem tickets, send SMS/email, connect frontend traffic, or change app behavior without a new active ticket.
+- Do not make code, infrastructure, AWS, Roller, payment, SMS, email, or frontend changes until a new ticket is selected.
+- Use `REPO_CURRENT_STATE.md` and `docs/roadmap/backlog.md` to choose the next scoped ticket.
 
 ## Validation
-- `REPO_CURRENT_STATE.md` and this file must agree that no ticket is active.
-- Start the next ticket by reading the source-of-truth files listed in `AGENTS.md`.
+- `node scripts/validate-current-ticket.js` should pass with `NO_ACTIVE_TICKET`.

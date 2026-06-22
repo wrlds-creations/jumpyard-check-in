@@ -30,6 +30,14 @@
     "fromAddress": "",
     "replyToAddresses": []
   },
+  "safetyGates": {
+    "emergencyStop": true,
+    "guestMessagingSendsEnabled": false,
+    "rollerBookingDraftWritesEnabled": false,
+    "rollerRedeemWritesEnabled": false,
+    "rollerWebhookProcessingEnabled": false,
+    "staffAuthEnabled": false
+  },
   "tags": {
     "WRLDS:Client": "JumpYard",
     "WRLDS:Project": "jumpyard-check-in",

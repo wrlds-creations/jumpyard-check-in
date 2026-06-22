@@ -311,6 +311,10 @@ async function handleDraft(event, body, correlationId) {
     });
   }
 
+  if (!isRollerBookingDraftWriteEnabled()) {
+    return safetyGateBlockedResponse(correlationId, 'roller_booking_draft_writes_disabled');
+  }
+
   const requestHash = hashJson({
     customer: maskCustomerForHash(request.customer),
     discounts: hashDiscountsForHash(request.discounts),
@@ -638,6 +642,10 @@ async function handleAddProductDraft(event, body, correlationId) {
       status: 'invalid_request',
       error: validationError,
     });
+  }
+
+  if (!isRollerBookingDraftWriteEnabled()) {
+    return safetyGateBlockedResponse(correlationId, 'roller_booking_draft_writes_disabled');
   }
 
   const config = await getRollerConfig();
@@ -1130,6 +1138,24 @@ function redactPaymentInputSecrets(value, requestOrGiftCards = []) {
 
 function validateQuoteRequest(request) {
   return validateItems(request.items);
+}
+
+function isEmergencyStopEnabled() {
+  return process.env.JUMPYARD_EMERGENCY_STOP === 'true';
+}
+
+function isRollerBookingDraftWriteEnabled() {
+  return process.env.ENABLE_ROLLER_BOOKING_DRAFT_WRITES === 'true' && !isEmergencyStopEnabled();
+}
+
+function safetyGateBlockedResponse(correlationId, code) {
+  return jsonResponse(409, correlationId, {
+    status: 'blocked',
+    error: {
+      code,
+      message: 'This JumpYard Cloud environment is not enabled for Roller booking draft writes.',
+    },
+  });
 }
 
 function validateDraftRequest(request) {

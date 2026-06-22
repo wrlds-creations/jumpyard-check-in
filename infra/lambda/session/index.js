@@ -411,6 +411,10 @@ async function handleStaffAuthLogin(body, correlationId) {
     });
   }
 
+  if (!isStaffAuthEnabled()) {
+    return safetyGateBlockedResponse(correlationId, 'staff_auth_disabled', 'Staff authentication is disabled for this JumpYard Cloud environment.');
+  }
+
   const config = await getStaffAuthConfig();
   if (!safeEquals(request.passcode, config.passcode)) {
     return jsonResponse(403, correlationId, {
@@ -520,6 +524,10 @@ async function handleSendSessionLinkSms(event, body, correlationId, options = {}
       status: 'invalid_request',
       error: validationError,
     });
+  }
+
+  if (!request.dryRun && !isGuestMessagingSendEnabled()) {
+    return safetyGateBlockedResponse(correlationId, 'guest_message_sends_disabled', 'Guest message sends are disabled for this JumpYard Cloud environment.');
   }
 
   const context = await getBookingContext(request.identifier);
@@ -739,6 +747,10 @@ async function handleSendSessionLinkEmail(event, body, correlationId) {
       status: 'invalid_request',
       error: validationError,
     });
+  }
+
+  if (!request.dryRun && !isGuestMessagingSendEnabled()) {
+    return safetyGateBlockedResponse(correlationId, 'guest_message_sends_disabled', 'Guest message sends are disabled for this JumpYard Cloud environment.');
   }
 
   const context = await getBookingContext(request.identifier);
@@ -977,6 +989,17 @@ async function handleSendDueSessionLinkMessages(event, body, correlationId, opti
     return jsonResponse(400, correlationId, {
       status: 'invalid_request',
       error: validationError,
+    });
+  }
+
+  if (request.confirmSend && !isGuestMessagingSendEnabled()) {
+    return jsonResponse(409, correlationId, {
+      status: options.legacySmsResponse ? 'booking_time_sms_blocked' : 'booking_time_messages_blocked',
+      error: {
+        code: 'guest_message_sends_disabled',
+        message: 'Guest message sends are disabled for this JumpYard Cloud environment.',
+      },
+      trigger: buildDueSmsTriggerSummary(request, window, true),
     });
   }
 
@@ -3547,6 +3570,28 @@ function isResolveSessionLinkRoute(routeKey, event) {
     routeKey === 'POST /v1/check-in/session-links/resolve' ||
     event?.rawPath === '/v1/check-in/session-links/resolve'
   );
+}
+
+function isEmergencyStopEnabled() {
+  return process.env.JUMPYARD_EMERGENCY_STOP === 'true';
+}
+
+function isGuestMessagingSendEnabled() {
+  return process.env.ENABLE_GUEST_MESSAGE_SENDS === 'true' && !isEmergencyStopEnabled();
+}
+
+function isStaffAuthEnabled() {
+  return process.env.ENABLE_STAFF_AUTH === 'true' && !isEmergencyStopEnabled();
+}
+
+function safetyGateBlockedResponse(correlationId, code, message) {
+  return jsonResponse(409, correlationId, {
+    status: 'blocked',
+    error: {
+      code,
+      message,
+    },
+  });
 }
 
 function extractSessionIdFromPath(rawPath) {

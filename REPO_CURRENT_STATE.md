@@ -4,12 +4,12 @@ Use this file as the short operational snapshot of what actually exists in the r
 
 ## Snapshot
 
-- Date: 2026-06-18
-- Current branch: `main` after T0151 merge
-- Current status: No active ticket. T0151 is complete.
+- Date: 2026-06-22
+- Current branch: `codex/t0152-park-test-secrets-gates`
+- Current status: No active ticket. T0152 implementation/deploy is complete on this branch and ready to merge.
 - Current ticket: `NO_ACTIVE_TICKET`
-- Completed tickets: archived in `docs/history/completed-tickets.md` (150 completed tickets; latest `T0151`).
-- Recommended next step: start T0152 for park-test secrets and kill switches/live-write gates, without printing secret values or calling Roller Live.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (151 completed tickets; latest `T0152`).
+- Recommended next step: merge the completed branch, then start `T0153` Roller Live read-only preflight only after access/approval is confirmed.
 
 ## Current Structure
 
@@ -35,8 +35,9 @@ History and planning archives:
 - Park-test deploy/rollback preflight: [docs/t0149-park-test-deploy-rollback-preflight.md](docs/t0149-park-test-deploy-rollback-preflight.md)
 - Park-test foundation deploy: [docs/t0150-park-test-foundation-deploy.md](docs/t0150-park-test-foundation-deploy.md)
 - Park-test database migrations: [docs/t0151-park-test-db-migrations.md](docs/t0151-park-test-db-migrations.md)
+- Park-test secrets and gates: [docs/t0152-park-test-secrets-gates.md](docs/t0152-park-test-secrets-gates.md)
 
-T0151 applied the existing SQL migrations through `0008` to the dedicated park-test Aurora database and updated source-of-truth docs. App roots remain unchanged: `jumpyard-checkin-phone/`, `jumpyard-checkin-admin/`, and `jumpyard-checkin-kiosk/`.
+T0152 deployed park-test secret references and runtime gates to the park-test stack. App roots remain unchanged: `jumpyard-checkin-phone/`, `jumpyard-checkin-admin/`, and `jumpyard-checkin-kiosk/`.
 
 ## Known Validation Commands
 
@@ -51,28 +52,28 @@ T0151 applied the existing SQL migrations through `0008` to the dedicated park-t
 | `npm --prefix infra run synth:park-test` | Synthesize the park-test CDK stack from `infra/config/park-test.json`. | Added in T0148; local only, no deploy. |
 | `npm --prefix infra run validate:park-test-synth` | Synthesize dev and park-test templates locally and verify separation. | Added in T0148; no AWS or Roller calls. |
 | `npm run infra:check` | Type-check infra, run config-guard validation, and synthesize the example dev stack. | Local synth only; does not deploy or call Roller. |
-| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Not required for T0151 because app code was unchanged. |
-| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | T0152 may inspect and configure park-test secret references and live-write gates only. Do not print secret values, call Roller Live, connect frontend traffic, or create unrelated resources unless the active ticket explicitly allows it. |
+| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code. | Not required for T0152 because app code was unchanged. |
+| AWS/infra commands | Validate or deploy infra only when a scoped ticket allows AWS work. | No active AWS work is currently approved. T0153 may use read-only Roller Live preflight only after access/approval is confirmed. |
 
 ## Completed Tickets
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 150
-- Latest completed ticket: `T0151`
+- Archived completed-ticket count: 151
+- Latest completed ticket: `T0152`
 - Current active ticket: none
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `NO_ACTIVE_TICKET` | No active ticket. | Closed | T0151 is complete; start T0152 next for park-test secrets and kill switches/live-write gates. |
+| `NO_ACTIVE_TICKET` | No active ticket is currently assigned. | None | T0152 is complete; next planned ticket is T0153. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0152` | Create separate park-test secret references and explicit live-write gates. | Ready | Secret references and guards only. Do not print secret values, call Roller Live, or perform writes. |
+| `T0153` | Run Roller Live read-only preflight for JumpYard Nacka. | Planned | Requires Roller Live access approval. Read-only only; no drafts, bookings, payments, redemptions, webhook registration, or data mutation. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -80,6 +81,7 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
+- T0152 local and deploy validation is recorded in [docs/t0152-park-test-secrets-gates.md](docs/t0152-park-test-secrets-gates.md).
 - T0151 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0150 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
 - T0149 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
@@ -96,6 +98,7 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - T0150 deployed `jumpyard-check-in-park-test-stack` to `CREATE_COMPLETE`. API endpoint: `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`; Aurora cluster: `jumpyard-check-in-park-test-aurora`; raw bucket: `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`.
 - T0151 applied existing SQL migrations `0001` through `0008` to the dedicated park-test Aurora database. Park-test now has the `jumpyard` schema and 19 `jumpyard` tables; key operational data tables checked in T0151 remained empty.
 - T0151 did not populate Roller Live credentials, call Roller Live, run imports, register webhooks, create drafts/payments, redeem tickets, send SMS/email, connect frontend traffic, change app behavior, or write to dev DB.
+- T0152 deployed park-test gates for staff auth, guest message sends, webhook processing, booking draft/payment-start writes, redeem writes, and emergency stop. Park-test Lambda env readback confirmed `JUMPYARD_EMERGENCY_STOP=true` and all sensitive operation gates closed.
 - T0150 found and fixed a park-test deploy stop risk: SNS SMS delivery-status custom resource would have changed account-wide SNS SMS attributes. That custom resource is now dev-only, and account SMS attributes still point to the dev delivery-status role.
 - The park-test plan is not an approval to create AWS resources, call Roller Live, register Live webhooks, create drafts/payments, redeem tickets, or run visitor traffic; those actions remain gated by scoped future tickets and explicit approvals.
 - The T0146 contract keeps park-test in AWS account `376129878018`, region `eu-north-1`, but requires separate future resources under namespace `jumpyard-check-in-park-test` and its own database, secrets, API, queues, schedules, logs, alarms, and frontend API target.
