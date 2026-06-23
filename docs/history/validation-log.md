@@ -2,6 +2,26 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0156 Park-Test Frontend Target Validation
+
+- 2026-06-23: T0156 was activated after T0155 was squash-merged to `main` and the branch `codex/t0156-park-test-frontend-target` was created from updated `main`.
+- 2026-06-23: Read `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, `CODEX_TASK.md`, `AWS_RESOURCES.md`, local `skills/aws-project-infrastructure/`, AWS tagging/resource-inventory/CDK references, and the active backlog row.
+- 2026-06-23: Inspected phone/admin API base URL wiring. Both apps default to dev API `https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com` and support `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL`; neither source file hardcodes the park-test API.
+- 2026-06-23: Added park-test target docs for Cloudflare Pages projects `jumpyard-check-in-park-test` and `jumpyard-checkin-admin-park-test`, both using `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`.
+- 2026-06-23: Updated `infra/config/park-test.json` CORS origins to `https://jumpyard-check-in-park-test.pages.dev` and `https://jumpyard-checkin-admin-park-test.pages.dev`, and pointed disabled guest-message base URLs at the park-test phone Pages URL.
+- 2026-06-23: Updated admin CSP `connect-src` to allow the park-test API while preserving the dev API.
+- 2026-06-23: `npx --yes wrangler whoami` reported Wrangler was not logged in, so T0156 did not create or update Cloudflare Pages projects from the local terminal.
+- 2026-06-23: `node scripts/validate-park-test-frontend-target.js`, `npm --prefix infra run validate:config-guards`, and `npm --prefix infra run validate:park-test-synth` passed.
+- 2026-06-23: Phone build passed with `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`; Next printed the existing `baseline-browser-mapping` age warning.
+- 2026-06-23: Admin build passed with the same park-test API env var; Next printed the existing `baseline-browser-mapping` age warning.
+- 2026-06-23: AWS identity check confirmed account `376129878018` and assumed role `AWSReservedSSO_AdministratorAccess_8a2502e60c822ae0/Love`.
+- 2026-06-23: Pre-deploy CDK diff for park-test showed only API Gateway CORS origins and `SessionHandler` disabled guest-message base URL environment values changing.
+- 2026-06-23: `npx cdk deploy -c config=./config/park-test.json --profile wrlds-dev --require-approval never` updated `jumpyard-check-in-park-test-stack`; CloudFormation reached `UPDATE_COMPLETE`.
+- 2026-06-23: Post-deploy CDK diff for park-test showed no differences.
+- 2026-06-23: CORS preflight returned HTTP `204` with matching `access-control-allow-origin` for `https://jumpyard-check-in-park-test.pages.dev` on `OPTIONS /v1/check-in/lookup` and for `https://jumpyard-checkin-admin-park-test.pages.dev` on `OPTIONS /v1/staff/auth/login`.
+- 2026-06-23: T0156 did not call Roller, create quotes/drafts/bookings/payments, redeem tickets, enable webhook processing, insert Aurora rows, send SMS/email, print secret values, duplicate frontend source, or change dev frontend/API targets.
+- 2026-06-23: Closeout validation passed: `npm run validate`, `npm run infra:check`, and `git diff --check`. CDK synth printed existing CLI notice `37949`; `git diff --check` printed CRLF conversion notices only.
+
 ## T0155 Live Webhook Registration Validation
 
 - 2026-06-23: T0155 was activated after T0154 was squash-merged to `main` and the branch `codex/t0155-register-live-webhook` was created from updated `main`.
