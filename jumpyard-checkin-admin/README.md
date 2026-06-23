@@ -19,7 +19,7 @@ NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://m0uo5g4mde.execute-api.eu-north-
 
 ## Cloudflare Pages
 
-T0087 target:
+Dev / Playground target:
 
 | Setting | Value |
 |---|---|
@@ -32,9 +32,24 @@ T0087 target:
 | Build output directory | `out` |
 | Public environment variable | `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com` |
 
-The app is static-exported with `output: "export"`. The staff handoff view reads JumpYard Cloud dev API list/detail endpoints and does not redeem tickets.
+Park-test / Roller Live target:
+
+| Setting | Value |
+|---|---|
+| Cloudflare Pages project name | `jumpyard-checkin-admin-park-test` |
+| Expected Pages URL | `https://jumpyard-checkin-admin-park-test.pages.dev` |
+| GitHub repository | `wrlds-creations/jumpyard-check-in` |
+| Production branch | `main` |
+| Root directory | `jumpyard-checkin-admin` |
+| Build command | `npm run build` |
+| Build output directory | `out` |
+| Public environment variable | `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com` |
+
+The app is static-exported with `output: "export"`. The same admin source can target dev or park-test through the public API environment variable. The staff handoff view reads JumpYard Cloud list/detail endpoints and does not call Roller directly.
 
 The dev JumpYard Cloud API CORS config must include the exact Pages origin before the public admin URL can call staff APIs. T0087 prepares `https://jumpyard-checkin-admin.pages.dev` in `infra/config/dev.json`; if the Cloudflare project gets another hostname, update the CORS origin and deploy the dev stack before testing.
+
+The park-test JumpYard Cloud API CORS config must include `https://jumpyard-checkin-admin-park-test.pages.dev` before the park-test admin URL can call staff APIs. The static Cloudflare `_headers` CSP allows both the dev API and park-test API so the same source can be deployed to either target without editing app code.
 
 Cloudflare credentials, API tokens, staff passcodes, and JumpYard Cloud secrets must not be stored in this app or in the repository. Staff auth stays server-owned through JumpYard Cloud.
 

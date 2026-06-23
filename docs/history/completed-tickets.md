@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 154
-Latest archived completed ticket: `T0155`
+Archived count: 155
+Latest archived completed ticket: `T0156`
 
 ## Completed Tickets
 
@@ -166,3 +166,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0153` | Roller Live read-only preflight. | 2026-06-22 | Added hard-allowlisted Roller Live read-only preflight tooling and confirmed auth against JumpYard Nacka Forum through the park-test secret. Read-only calls verified venue id `50871`, entry products including `1189805` and `1189814`, availability reads, and payment settings visibility. T0153 made no Roller writes, webhook registration, drafts/payments, redemptions, frontend traffic, SMS, or email changes. |
 | `T0154` | Live webhook dry-run. | 2026-06-22 | Added dry-run-only tooling and docs for the park-test Roller Live booking webhook endpoint, `x-roller-apikey` value source, events `Created`, `Updated`, `Cancelled`, `tickets=true`, duplicate handling, and rollback template. T0154 made no Roller Live requests, registered no webhook, changed no AWS resources, and did not enable frontend traffic, payment, redeem, SMS, or email. |
 | `T0155` | Live webhook registration. | 2026-06-23 | Added guarded registration tooling and registered/matched Roller Live webhook id `1465` for the park-test endpoint. The script listed existing webhooks before writing, avoided duplicates, recorded rollback endpoint `https://api.roller.app/webhooks/1465`, and safe intake smoke returned `ignored_disabled` with zero Aurora rows before and after. T0155 changed no AWS resources and did not enable webhook processing, frontend traffic, bookings/drafts/payments, redemptions, SMS, or email. |
+| `T0156` | Park-test frontend target. | 2026-06-23 | Configured the same phone/admin source for separate park-test Cloudflare Pages targets and deployed park-test API CORS for `https://jumpyard-check-in-park-test.pages.dev` and `https://jumpyard-checkin-admin-park-test.pages.dev`. Phone/admin builds passed with the park-test API env var, post-deploy CDK diff was clean, and CORS preflight returned HTTP `204` for both origins. Cloudflare project creation/update was not performed because Wrangler was not logged in; no visitor flow, Roller quote/draft/payment/redeem, webhook processing, SMS, or email was enabled. |

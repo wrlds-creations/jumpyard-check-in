@@ -4,18 +4,16 @@
 NO_ACTIVE_TICKET
 
 ## Status
-None active
+Idle
 
 ## Goal
-No active ticket is currently open.
+No active ticket.
 
 ## Scope
-- T0155 is complete and archived.
-- The recommended next scoped ticket is T0156.
-- Do not start new AWS, Roller, frontend, payment, redeem, SMS, or email work until the next ticket is explicitly opened.
+No active ticket. Start the next ticket by updating this file from the approved backlog.
 
 ## Validation
-- Use `REPO_CURRENT_STATE.md` and `docs/roadmap/backlog.md` before starting the next ticket.
+Run the standard start-ticket source-of-truth checks before new work.
 
 ## Result
-T0155 registered the park-test Roller Live booking webhook and verified safe intake while webhook processing remained disabled.
+T0156 completed on 2026-06-23. Park-test frontend targets and AWS CORS are documented and configured; no ticket is currently active.
