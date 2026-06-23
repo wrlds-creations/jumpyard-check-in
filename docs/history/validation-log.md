@@ -2,6 +2,21 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0155 Live Webhook Registration Validation
+
+- 2026-06-23: T0155 was activated after T0154 was squash-merged to `main` and the branch `codex/t0155-register-live-webhook` was created from updated `main`.
+- 2026-06-23: Read `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, `CODEX_TASK.md`, `AWS_RESOURCES.md`, local `skills/aws-project-infrastructure/`, AWS tagging/resource-inventory/CDK references, and the active backlog row.
+- 2026-06-23: AWS SSO profile `wrlds-dev` was refreshed with user-assisted browser login.
+- 2026-06-23: Added `infra/scripts/roller-live-webhook-register.ts`, `npm --prefix infra run register:webhook:live:park-test`, `npm --prefix infra run register:webhook:live:park-test:apply`, and `npm --prefix infra run validate:roller-live-webhook-register`.
+- 2026-06-23: `npm --prefix infra run build` passed.
+- 2026-06-23: `npm --prefix infra run validate:roller-live-webhook-register` passed, proving the write phrase is required and non-scoped Roller endpoints are blocked.
+- 2026-06-23: Initial dry-run/list mode confirmed AWS account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-park-test-stack` status `UPDATE_COMPLETE`, Roller Live base URL `https://api.roller.app`, one existing Live webhook, and no exact match for the park-test endpoint. No webhook was created in dry-run mode.
+- 2026-06-23: Guarded registration used `ROLLER_LIVE_WEBHOOK_REGISTER_ALLOW_WRITE=I_UNDERSTAND_THIS_REGISTERS_LIVE_WEBHOOK_FOR_JUMPYARD_NACKA` and registered the missing park-test Live webhook.
+- 2026-06-23: Follow-up list mode confirmed two Live webhooks total and exactly one enabled match for `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com/v1/roller/webhooks/bookings`: webhook id `1465`, events `Created`, `Updated`, `Cancelled`, and `tickets=true`.
+- 2026-06-23: Safe intake smoke in guarded apply mode reused existing webhook `1465` without creating a duplicate, returned HTTP `200` with `ignored_disabled`, and confirmed Aurora rows for smoke event `t0155-smoke-20260623060627-1d738702-a5f3-41a6-a75f-0fc005d12a39` stayed `0` before and `0` after.
+- 2026-06-23: T0155 did not create/update AWS resources, enable park-test webhook processing, insert webhook rows, connect frontend traffic, create bookings/drafts/payments, redeem tickets, send SMS/email, print secret values, or touch the dev Playground webhook `238`.
+- 2026-06-23: Closeout validation passed: `npm --prefix infra run build`, `npm --prefix infra run validate:roller-live-webhook-register`, `npm --prefix infra run check`, `npm run validate`, and `git diff --check`. CDK synth printed the existing CLI feature-flag/notice output and exited `0`; `git diff --check` printed CRLF conversion notices only.
+
 ## T0154 Live Webhook Dry-Run Validation
 
 - 2026-06-22: T0154 was activated after T0153 was squash-merged to `main` and the branch `codex/t0154-live-webhook-dry-run` was created from updated `main`.

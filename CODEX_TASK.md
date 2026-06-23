@@ -1,36 +1,21 @@
 # CODEX_TASK.md
 
 ## Ticket ID
-T0154
+NO_ACTIVE_TICKET
 
 ## Status
-Complete
+None active
 
 ## Goal
-Prepare park-test Roller Live webhook registration tooling/config in dry-run mode.
+No active ticket is currently open.
 
 ## Scope
-- Use the park-test Roller base URL `https://api.roller.app`.
-- Show the exact park-test JumpYard Cloud booking webhook endpoint.
-- Show the Roller webhook registration endpoint, expected delivery header, event list, include settings, duplicate behavior, and rollback command template.
-- Treat this ticket as dry-run only.
-- Do not register, update, disable, delete, or otherwise change Roller Live webhooks.
-- Do not call Roller Live in this ticket.
-- Do not create or update AWS resources.
-- Do not print or commit secret values, access tokens, raw PII, raw Roller payloads, or raw webhook payloads.
-- Do not enable park-test webhook processing, frontend traffic, payments, redemptions, SMS, or email.
+- T0155 is complete and archived.
+- The recommended next scoped ticket is T0156.
+- Do not start new AWS, Roller, frontend, payment, redeem, SMS, or email work until the next ticket is explicitly opened.
 
 ## Validation
-- Read source-of-truth docs and AWS infrastructure workflow before changes.
-- Validate AWS account/region before reading AWS metadata.
-- Add a dry-run command that has no apply/register/delete mode.
-- Prove the script rejects write-like arguments.
-- Run the dry-run and record sanitized output.
-- Run relevant local validators.
+- Use `REPO_CURRENT_STATE.md` and `docs/roadmap/backlog.md` before starting the next ticket.
 
 ## Result
-T0154 added `infra/scripts/roller-live-webhook-dry-run.ts`, `npm --prefix infra run webhook:live:park-test:dry-run`, and `npm --prefix infra run validate:roller-live-webhook-dry-run`.
-
-The dry-run plan confirmed the park-test endpoint `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com/v1/roller/webhooks/bookings`, Roller registration endpoint `POST https://api.roller.app/webhooks`, delivery header `x-roller-apikey`, header value source `/jumpyard-check-in-park-test/webhooks/dev-token`, booking events `Created`, `Updated`, and `Cancelled`, `tickets=true`, duplicate behavior, and rollback template. The script rejects apply/register/delete modes.
-
-T0154 made no Roller Live requests, did not register or change webhooks, did not create or update AWS resources, did not print secret values, and did not enable webhook processing, frontend traffic, payments, redemptions, SMS, or email.
+T0155 registered the park-test Roller Live booking webhook and verified safe intake while webhook processing remained disabled.
