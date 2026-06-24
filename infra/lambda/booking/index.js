@@ -8,6 +8,7 @@ const MAX_BOOKING_ITEMS = 10;
 const MAX_AVAILABILITY_SLOTS = 6;
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
+const ROLLER_LIVE_BASE_URL = 'https://api.roller.app';
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
 
 const PHONE_BOOKING_PRODUCTS = [
@@ -55,6 +56,14 @@ const PHONE_ADDON_PRODUCTS = [
     durationMinutes: 0,
     jumpersPerUnit: 1,
     requiresAvailability: false,
+  },
+];
+
+const T0159_LIVE_PAYMENT_SMOKE_PRODUCTS = [
+  {
+    key: 'E60',
+    parentProductId: '1189805',
+    productId: '1189808',
   },
 ];
 
@@ -128,7 +137,8 @@ async function handleAvailability(body, correlationId) {
   const token = await getRollerAccessToken(config);
   const parentProducts = await loadPhoneBookingParentProducts(config.env);
   const addonProducts = await loadPhoneAddonProducts(config.env);
-  const missingParents = PHONE_BOOKING_PRODUCTS.filter((product) => !parentProducts.some((parent) => parent.key === product.key));
+  const requiredProducts = getRequiredPhoneBookingProducts(config.env);
+  const missingParents = requiredProducts.filter((product) => !parentProducts.some((parent) => parent.key === product.key));
 
   if (missingParents.length > 0) {
     return jsonResponse(409, correlationId, {
@@ -1145,7 +1155,17 @@ function isEmergencyStopEnabled() {
 }
 
 function isRollerBookingDraftWriteEnabled() {
-  return process.env.ENABLE_ROLLER_BOOKING_DRAFT_WRITES === 'true' && !isEmergencyStopEnabled();
+  return (
+    process.env.ENABLE_ROLLER_BOOKING_DRAFT_WRITES === 'true' &&
+    (!isEmergencyStopEnabled() || isT0159LivePaymentSmokeEnabled())
+  );
+}
+
+function isT0159LivePaymentSmokeEnabled() {
+  return (
+    process.env.JUMPYARD_ENVIRONMENT === 'park-test' &&
+    process.env.ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES === 'true'
+  );
 }
 
 function safetyGateBlockedResponse(correlationId, code) {
@@ -1389,8 +1409,13 @@ async function readSecret(secretId) {
 function validateRollerConfig(config) {
   const errors = [];
   let parsedBaseUrl = null;
+  const livePaymentSmokeEnabled = isT0159LivePaymentSmokeEnabled();
 
-  if (config.env !== 'playground') {
+  if (livePaymentSmokeEnabled) {
+    if (config.env !== 'live') {
+      errors.push('Roller environment must be live for T0159 park-test payment smoke.');
+    }
+  } else if (config.env !== 'playground') {
     errors.push('Roller environment must be playground.');
   }
 
@@ -1405,11 +1430,17 @@ function validateRollerConfig(config) {
     if (parsedBaseUrl.protocol !== 'https:') {
       errors.push('Roller base URL must use https.');
     }
-    if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
-      errors.push('Roller base URL looks like production/live.');
-    }
-    if (!PLAYGROUND_URL_MARKER.test(searchableUrl)) {
-      errors.push('Roller base URL must point to Playground.');
+    if (livePaymentSmokeEnabled) {
+      if (parsedBaseUrl.origin !== ROLLER_LIVE_BASE_URL || parsedBaseUrl.pathname !== '/') {
+        errors.push(`Roller base URL must be ${ROLLER_LIVE_BASE_URL} for T0159 park-test payment smoke.`);
+      }
+    } else {
+      if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
+        errors.push('Roller base URL looks like production/live.');
+      }
+      if (!PLAYGROUND_URL_MARKER.test(searchableUrl)) {
+        errors.push('Roller base URL must point to Playground.');
+      }
     }
   }
 
@@ -1836,9 +1867,26 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
     [stringParameter('rollerEnv', rollerEnv)],
   );
   const rows = mappedRows(result);
+  const fallbackRows = isT0159LivePaymentSmokeEnabled() && rollerEnv === 'live'
+    ? T0159_LIVE_PAYMENT_SMOKE_PRODUCTS
+        .filter((product) => !rows.some((row) => row.parent_product_id === product.parentProductId || row.id === product.productId))
+        .map((product) => ({
+          parent_product_id: product.parentProductId,
+          parent_product_name: null,
+          id: product.productId,
+          name: null,
+          smoke_key: product.key,
+        }))
+    : [];
+  const candidateRows = [...rows, ...fallbackRows];
 
   return PHONE_BOOKING_PRODUCTS.map((product) => {
-    const row = rows.find((candidate) => candidate.parent_product_name === product.parentName || candidate.name === product.parentName);
+    const row = candidateRows.find(
+      (candidate) =>
+        candidate.parent_product_name === product.parentName ||
+        candidate.name === product.parentName ||
+        candidate.smoke_key === product.key,
+    );
     const parentProductId = stringOrNull(row?.parent_product_id) || stringOrNull(row?.id);
     if (!parentProductId) return null;
 
@@ -1847,6 +1895,14 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
       parentProductId,
     };
   }).filter(Boolean);
+}
+
+function getRequiredPhoneBookingProducts(rollerEnv) {
+  if (isT0159LivePaymentSmokeEnabled() && rollerEnv === 'live') {
+    return PHONE_BOOKING_PRODUCTS.filter((product) => product.key === 'E60');
+  }
+
+  return PHONE_BOOKING_PRODUCTS;
 }
 
 async function loadPhoneAddonProducts(rollerEnv) {
@@ -1975,10 +2031,21 @@ async function loadParentProductsForChildIds(rollerEnv, productIds) {
     ],
   );
 
-  return mappedRows(result).map((row) => ({
+  const rows = mappedRows(result).map((row) => ({
     parentProductId: stringOrNull(row.parent_product_id),
     productId: stringOrNull(row.product_id),
   }));
+  if (!isT0159LivePaymentSmokeEnabled() || rollerEnv !== 'live') return rows;
+
+  const existingIds = new Set(rows.map((row) => row.productId));
+  const fallbackRows = T0159_LIVE_PAYMENT_SMOKE_PRODUCTS
+    .filter((product) => productIds.map(String).includes(product.productId) && !existingIds.has(product.productId))
+    .map((product) => ({
+      parentProductId: product.parentProductId,
+      productId: product.productId,
+    }));
+
+  return [...rows, ...fallbackRows];
 }
 
 function buildPhoneAvailability(request, parentProducts, rollerBody) {

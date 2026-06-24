@@ -26,6 +26,7 @@ const ROLLER_LIVE_BASE_URL = 'https://api.roller.app';
 const PARK_TEST_AWS_ACCOUNT = '376129878018';
 const PARK_TEST_AWS_REGION = 'eu-north-1';
 const PARK_TEST_RESOURCE_PREFIX = 'jumpyard-check-in-park-test';
+export const PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL = 'T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED';
 
 export interface JumpYardCloudConfig {
   readonly api: {
@@ -59,6 +60,7 @@ export interface JumpYardCloudConfig {
   readonly safetyGates: {
     readonly emergencyStop: boolean;
     readonly guestMessagingSendsEnabled: boolean;
+    readonly livePaymentSmokeApproval?: string;
     readonly rollerBookingDraftWritesEnabled: boolean;
     readonly rollerRedeemWritesEnabled: boolean;
     readonly rollerWebhookProcessingEnabled: boolean;
@@ -99,6 +101,7 @@ interface RawConfig {
   readonly safetyGates?: {
     readonly emergencyStop?: unknown;
     readonly guestMessagingSendsEnabled?: unknown;
+    readonly livePaymentSmokeApproval?: unknown;
     readonly rollerBookingDraftWritesEnabled?: unknown;
     readonly rollerRedeemWritesEnabled?: unknown;
     readonly rollerWebhookProcessingEnabled?: unknown;
@@ -243,13 +246,29 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     throw new Error('park-test bookingTimeSms.confirmSend must stay false until a scoped messaging ticket enables it.');
   }
 
+  const livePaymentSmokeApproved =
+    input.safetyGates.livePaymentSmokeApproval === PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL;
+
   if (!input.safetyGates.emergencyStop) {
-    throw new Error('park-test safetyGates.emergencyStop must stay true until a scoped ticket enables park-test traffic.');
+    throw new Error(
+      'park-test safetyGates.emergencyStop must stay true until a scoped ticket enables park-test traffic.',
+    );
+  }
+
+  if (input.safetyGates.rollerBookingDraftWritesEnabled && !livePaymentSmokeApproved) {
+    throw new Error(
+      'park-test safetyGates.rollerBookingDraftWritesEnabled must stay false until a scoped ticket enables it.',
+    );
+  }
+
+  if (livePaymentSmokeApproved && !input.safetyGates.rollerBookingDraftWritesEnabled) {
+    throw new Error(
+      'park-test live payment smoke approval requires safetyGates.rollerBookingDraftWritesEnabled=true.',
+    );
   }
 
   const blockedGates: Array<keyof JumpYardCloudConfig['safetyGates']> = [
     'guestMessagingSendsEnabled',
-    'rollerBookingDraftWritesEnabled',
     'rollerRedeemWritesEnabled',
     'rollerWebhookProcessingEnabled',
     'staffAuthEnabled',
@@ -408,6 +427,11 @@ function readSafetyGatesConfig(raw: RawConfig['safetyGates']): JumpYardCloudConf
       raw?.guestMessagingSendsEnabled,
       false,
       'safetyGates.guestMessagingSendsEnabled',
+    ),
+    livePaymentSmokeApproval: readOptionalString(
+      raw?.livePaymentSmokeApproval,
+      '',
+      'safetyGates.livePaymentSmokeApproval',
     ),
     rollerBookingDraftWritesEnabled: readOptionalBoolean(
       raw?.rollerBookingDraftWritesEnabled,

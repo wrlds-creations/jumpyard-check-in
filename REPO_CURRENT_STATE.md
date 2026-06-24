@@ -4,12 +4,12 @@ Use this file as the short operational snapshot of what actually exists in the r
 
 ## Snapshot
 
-- Date: 2026-06-23
-- Current branch: `codex/t0158-controlled-live-draft-smoke`
-- Current status: No active ticket after T0158 completion.
+- Date: 2026-06-24
+- Current branch: `codex/t0159-internal-live-payment-smoke`
+- Current status: No active ticket after T0159 closeout.
 - Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (157 completed tickets; latest `T0158`).
-- Recommended next step: start T0159 internal Live payment smoke only after explicit approval.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (158 completed tickets; latest `T0159`).
+- Recommended next step: start `T0160` only after explicit approval, using paid booking `166447399` as the controlled Live lookup target or another approved paid booking.
 
 ## Current Structure
 
@@ -42,12 +42,15 @@ History and planning archives:
 - Park-test frontend target: [docs/t0156-park-test-frontend-target.md](docs/t0156-park-test-frontend-target.md)
 - Park-test Live quote/cost smoke: [docs/t0157-live-quote-cost-smoke.md](docs/t0157-live-quote-cost-smoke.md)
 - Park-test Live draft smoke: [docs/t0158-controlled-live-draft-smoke.md](docs/t0158-controlled-live-draft-smoke.md)
+- Park-test internal Live payment smoke: [docs/t0159-internal-live-payment-smoke.md](docs/t0159-internal-live-payment-smoke.md)
 
-T0156-T0158 current park-test status:
+T0156-T0159 current park-test status:
 
 - Park-test Cloudflare Pages projects exist for phone/admin and point at `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`.
 - T0157 passed a guarded Roller Live quote/cost smoke; T0158 created one controlled Roller Live draft `f81e46e5-5cf7-4193-b578-44a1b8140599`.
-- Public API draft writes, visitor flow, payment/redeem writes, webhook processing, SMS, and email remain gated.
+- T0159 completed one internal paid Live booking through the park-test phone PWA: Roller booking reference `166447399`, status `Paid`, total `200`, amount owing `0`.
+- T0159 confirmed the post-payment phone sync fails because Live lookup remains gated; `T0160` owns that next controlled gate.
+- Public API draft writes were closed again after T0159; visitor flow, lookup Live sync, payment/redeem writes, webhook processing, SMS, and email remain gated.
 
 ## Known Validation Commands
 
@@ -65,21 +68,20 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 157
-- Latest completed ticket: `T0158`
+- Archived completed-ticket count: 158
+- Latest completed ticket: `T0159`
 - Current active ticket: None active
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | No active ticket. | Idle | T0158 is complete; next recommended ticket is T0159 after explicit approval. |
+| None active | No active ticket. | None active | T0159 is complete; do not start T0160 until explicitly approved. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0159` | Internal Live payment smoke. | Planned | One internal paid test booking, then manual refund/cancel outside the app. |
 | `T0160` | Live existing-booking lookup smoke. | Planned | Prove booking-code lookup for one controlled Live booking through JumpYard Cloud; no all-day guest list. |
 | `T0161` | Existing-booking add-on smoke. | Planned | Prove one controlled add-on path for an existing booking; original booking should not be directly mutated under current decisions. |
 | `T0162` | Controlled Live redeem smoke. | Planned | Controlled booking only; no normal visitor traffic. |
@@ -92,13 +94,13 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- Latest validation is recorded in [docs/t0158-controlled-live-draft-smoke.md](docs/t0158-controlled-live-draft-smoke.md).
+- Latest validation is recorded in [docs/t0159-internal-live-payment-smoke.md](docs/t0159-internal-live-payment-smoke.md).
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions
 
 - Park-test AWS exists with dedicated API, Aurora, raw bucket, secrets, and gates; current resource details are in [AWS_RESOURCES.md](AWS_RESOURCES.md).
-- Roller Live access, webhook registration, frontend target setup, first quote/cost smoke, and first controlled draft smoke have passed for Nacka, but public API writes and guest-data reads remain scoped-ticket gated.
+- Roller Live access, webhook registration, frontend target setup, first quote/cost smoke, first controlled draft smoke, and first internal paid booking smoke have passed for Nacka, but public API writes are closed again and guest-data reads remain scoped-ticket gated.
 - The park-test plan is not an approval to create additional AWS resources, call new Roller Live endpoints, create drafts/payments, redeem tickets, or run visitor traffic.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before the T0128 branch was created.

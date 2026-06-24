@@ -257,6 +257,7 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   expect(countResourcesByType(parkTest.template, 'AWS::ApiGatewayV2::Api') === 1, 'Expected one park-test HTTP API.');
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
     ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'false',
+    ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
@@ -280,10 +281,49 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   console.log('[pass] park-test synth uses separate names, tags, and Live config');
 }
 
+function validateParkTestPaymentSmokeTemplate(parkTest: SynthResult): void {
+  const strings = collectStrings(parkTest.template);
+
+  expect(
+    parkTest.stackName === `${PARK_TEST_PREFIX}-stack`,
+    `Expected park-test payment smoke stack name ${PARK_TEST_PREFIX}-stack.`,
+  );
+  expectContains(strings, PARK_TEST_PREFIX, 'park-test payment smoke');
+  expectContains(strings, 'https://api.roller.app', 'park-test payment smoke');
+  expectContains(strings, 'live', 'park-test payment smoke');
+  expectNoBookingTimeMessagingSchedule(parkTest.template);
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
+    ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'true',
+    ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
+    ENABLE_ROLLER_REDEEM_WRITES: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
+    ENABLE_GUEST_MESSAGE_SENDS: 'false',
+    ENABLE_STAFF_AUTH: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
+    ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+
+  console.log('[pass] park-test Live payment smoke synth opens only booking draft writes');
+}
+
 const dev = synthConfig('config/dev.json');
 const parkTest = synthConfig('config/park-test.json');
+const parkTestPaymentSmoke = synthConfig('config/park-test-live-payment-smoke.json');
 
 validateDevTemplate(dev);
 validateParkTestTemplate(parkTest);
+validateParkTestPaymentSmokeTemplate(parkTestPaymentSmoke);
 
 console.log('Park-test synth validation passed.');

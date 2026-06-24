@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 157
-Latest archived completed ticket: `T0158`
+Archived count: 158
+Latest archived completed ticket: `T0159`
 
 ## Completed Tickets
 
@@ -169,3 +169,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0156` | Park-test frontend target. | 2026-06-23 | Configured the same phone/admin source for separate park-test Cloudflare Pages targets and deployed park-test API CORS for `https://jumpyard-check-in-park-test.pages.dev` and `https://jumpyard-checkin-admin-park-test.pages.dev`. Phone/admin builds passed with the park-test API env var, post-deploy CDK diff was clean, and CORS preflight returned HTTP `204` for both origins. Cloudflare project creation/update was not performed because Wrangler was not logged in; no visitor flow, Roller quote/draft/payment/redeem, webhook processing, SMS, or email was enabled. |
 | `T0157` | Live quote/cost smoke. | 2026-06-23 | Added guarded local Roller Live quote/cost smoke tooling and passed one costs-only Nacka quote for parent product `1189805`, child product `1189808`, date `2026-06-29`, start `10:00`, quantity `1`: total `200`, tax `11.32`, fees `0`, discount `0`, amount owing `200`. T0157 changed no AWS resources, did not deploy, did not call the public API, and did not create drafts/payments, redeem tickets, write Aurora rows, enable webhook processing, send frontend traffic, SMS, or email. |
 | `T0158` | Controlled Live draft smoke. | 2026-06-23 | Added guarded local Roller Live draft smoke tooling and created one controlled Nacka Live draft for parent product `1189805`, child product `1189808`, date `2026-06-29`, start `10:00`, quantity `1`. Quote returned total `200`, tax `11.32`, fees `0`, discount `0`, amount owing `200`; draft creation returned HTTP `201`, Roller draft unique id `f81e46e5-5cf7-4193-b578-44a1b8140599`, no booking reference, and `paymentJwtPresent=true` without printing or persisting the raw JWT. T0158 changed no AWS resources, kept park-test runtime gates closed, did not call the public API, wrote no Aurora rows, did not start payment, publish the draft, redeem tickets, enable webhook processing, send frontend traffic, SMS, or email. |
+| `T0159` | Internal Live payment smoke. | 2026-06-24 | Opened only the scoped park-test booking draft/payment-start path for one internal phone-PWA payment, then closed it again. The user completed one real Roller Live payment for booking reference `166447399`; read-only Roller verification returned status `Paid`, total `200`, amount owing `0`, and one item. Aurora stored safe prepayment draft `jypd_56a8f1ca817c42a4b7` for draft unique id `68b3bbb4-9a46-4379-96ac-bc7157f2fb3e` without raw payment JWT storage. Post-payment phone sync failed because Live lookup remains gated for T0160; T0159 did not enable lookup, redeem, webhook processing, SMS, email, normal visitor traffic, refund automation, or cancellation automation. |

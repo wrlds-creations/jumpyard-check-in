@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, migrations through `0008`, Live read-only preflight, Live webhook `1465`, frontend target/CORS config, two Cloudflare park-test Pages projects, a successful guarded Live quote/cost smoke, and one controlled Live draft created through local guarded tooling. The forward park-test sequence now explicitly includes existing-booking lookup and existing-booking add-on smokes before redeem and assisted visitor testing. Public API draft writes, webhook processing, visitor traffic, payment, and redeem remain inactive.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, migrations through `0008`, Live read-only preflight, Live webhook `1465`, frontend target/CORS config, two Cloudflare park-test Pages projects, a successful guarded Live quote/cost smoke, one controlled Live draft created through local guarded tooling, and one internal paid Live booking smoke through the phone PWA. The forward park-test sequence now explicitly includes existing-booking lookup and existing-booking add-on smokes before redeem and assisted visitor testing. Public API draft writes were closed again after T0159; Live lookup/sync, webhook processing, visitor traffic, payment-start writes, and redeem remain gated.
 
 ## Context Archives
 
@@ -49,7 +49,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database; operational data tables checked in T0151 remained empty.
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
 - T0152 deployed park-test safety gates in CDK/config and Lambda runtime for staff auth, guest message sends, webhook processing, Roller booking draft writes, Roller redemption writes, and an emergency stop. Dev remains configured for existing Playground behavior; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
-- T0153-T0158 confirmed Roller Live read-only access, registered Live booking webhook `1465`, configured same-source park-test frontend targets/CORS, created the two park-test Cloudflare Pages projects, passed the first guarded Roller Live quote/cost smoke, and created one controlled Roller Live draft for one 60-minute Nacka entry through local guarded tooling. Public API draft writes, webhook processing, visitor traffic, payment, redeem, SMS, and email remain disabled.
+- T0153-T0159 confirmed Roller Live read-only access, registered Live booking webhook `1465`, configured same-source park-test frontend targets/CORS, created the two park-test Cloudflare Pages projects, passed the first guarded Roller Live quote/cost smoke, created one controlled Roller Live draft for one 60-minute Nacka entry through local guarded tooling, and completed one internal paid Live booking through the park-test phone PWA. Public API draft writes were closed again after T0159; Live lookup/sync, webhook processing, visitor traffic, redeem, SMS, and email remain disabled.
 
 ## Current Implemented Flow Facts
 
@@ -87,7 +87,7 @@ Repository source-of-truth workflow docs, ticket summaries, decisions, validator
 
 - Production readiness remains partial and should be handled through scoped future tickets, not opportunistic context hygiene.
 - Main staging/live blockers include production environment config, route auth/WAF or equivalent edge protection, alarm notification routing, SMS/SES production access, sender/domain setup, dev-token replacement, retention policy, deployment rollback, live backfill/cutover, and webhook production verification.
-- Payment path should stay on Roller's approved payment package; Swish/Apple Pay visibility remains governed by the venue/payment configuration and should be reverified during the first controlled Live payment test.
+- Payment path should stay on Roller's approved payment package. T0159 proved one internal card payment could complete in Roller Live for Nacka, but Swish/Apple Pay visibility remains governed by the venue/payment configuration and should be reverified if those methods matter for the park test.
 
 ## Current Open Questions
 
