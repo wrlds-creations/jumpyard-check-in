@@ -2,6 +2,34 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0158 Controlled Live Draft Smoke Validation
+
+- 2026-06-23: T0158 was activated after user approval and branch `codex/t0158-controlled-live-draft-smoke` was created from the current T0157 working tree.
+- 2026-06-23: Read `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, `CODEX_TASK.md`, `AWS_RESOURCES.md`, local `skills/aws-project-infrastructure/`, AWS tagging/resource-inventory/CDK references, and the active backlog row.
+- 2026-06-23: Added guarded local Roller Live draft smoke tooling in `infra/scripts/roller-live-draft-smoke.ts`, plus `npm --prefix infra run validate:roller-live-draft-smoke` and `npm --prefix infra run draft:live:park-test`.
+- 2026-06-23: `npm --prefix infra run build`, `npm --prefix infra run validate:roller-live-draft-smoke`, and `node scripts/validate-current-ticket.js` passed before the Live write. The self-test allows only `GET /product-availability`, `POST /bookings/draft/costs`, and `POST /bookings/draft`, blocks publish/payment/redeem/webhook/customer/guest/booking-detail endpoints, and requires both `--apply` and `ROLLER_LIVE_DRAFT_SMOKE_ALLOW_WRITE`.
+- 2026-06-23: First draft-smoke attempt stopped before Roller calls because AWS SSO had expired. `aws sso login --profile wrlds-dev` refreshed the session.
+- 2026-06-23: Guarded draft smoke passed with `ROLLER_LIVE_DRAFT_SMOKE_ALLOW_WRITE=I_UNDERSTAND_THIS_CREATES_ONE_ROLLER_LIVE_DRAFT_FOR_JUMPYARD_NACKA` and direct command `npx ts-node --prefer-ts-exts scripts/roller-live-draft-smoke.ts --config ./config/park-test.json --profile wrlds-dev --date 2026-06-29 --start-time 10:00 --apply`.
+- 2026-06-23: The smoke used AWS account `376129878018`, Roller Live base `https://api.roller.app`, and credential source `/jumpyard-check-in-park-test/roller/credentials` without printing secret values.
+- 2026-06-23: The smoke made exactly one Roller auth request, one `GET /product-availability`, one `POST /bookings/draft/costs`, and one `POST /bookings/draft`. Selected Nacka parent product `1189805`, child product `1189808`, `Biljetter (200 kr)`, date `2026-06-29`, start `10:00`, quantity `1`, capacity remaining `160`.
+- 2026-06-23: Roller Live quote returned HTTP `200`, total `200`, tax `11.32`, fees `0`, discount `0`, and amount owing `200`. Draft creation returned HTTP `201`, Roller draft unique id `f81e46e5-5cf7-4193-b578-44a1b8140599`, no booking reference, and `paymentJwtPresent=true`.
+- 2026-06-23: Read-only Lambda environment checks confirmed park-test emergency stop stayed `true`; booking draft writes, redeem writes, staff auth, guest message sends, and webhook processing stayed `false`.
+- 2026-06-23: Read-only Aurora row-count check returned `0` rows for `prepayment_booking_drafts`, `event_log`, `idempotency_records`, and `roller_webhook_events`.
+- 2026-06-23: T0158 did not deploy, create/update AWS resources, open public API/Lambda draft writes, call the public park-test API, write Aurora rows, start payment, publish a draft, redeem tickets, enable webhook processing, send frontend visitor traffic, send SMS/email, or print secret/JWT values.
+
+## T0157 Live Quote/Cost Smoke Validation
+
+- 2026-06-23: T0157 was activated after user approval and the branch `codex/t0157-live-quote-cost-smoke` was created from `main`.
+- 2026-06-23: Read `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, `CODEX_TASK.md`, `AWS_RESOURCES.md`, local `skills/aws-project-infrastructure/`, AWS tagging/resource-inventory/CDK references, and the active backlog row.
+- 2026-06-23: Added guarded local Roller Live quote/cost smoke tooling in `infra/scripts/roller-live-quote-smoke.ts`, plus `npm --prefix infra run validate:roller-live-quote-smoke` and `npm --prefix infra run quote:live:park-test`.
+- 2026-06-23: `npm --prefix infra run build` and `npm --prefix infra run validate:roller-live-quote-smoke` passed. The self-test allows only `GET /product-availability` and `POST /bookings/draft/costs`, and blocks draft, publish, payment, redeem, webhook, customer, guest, and booking-detail endpoints.
+- 2026-06-23: Read-only Lambda environment checks confirmed park-test emergency stop stayed `true`; booking draft writes, redeem writes, staff auth, guest message sends, and webhook processing stayed `false`.
+- 2026-06-23: Initial `npm --prefix infra run quote:live:park-test -- --date 2026-06-29` stopped at local argument validation before AWS or Roller requests because Windows/npm did not forward the `--date` flag as expected.
+- 2026-06-23: Direct smoke command `npx ts-node --prefer-ts-exts scripts/roller-live-quote-smoke.ts --config ./config/park-test.json --profile wrlds-dev --date 2026-06-29` passed. It used AWS account `376129878018`, Roller Live base `https://api.roller.app`, and credential source `/jumpyard-check-in-park-test/roller/credentials` without printing secret values.
+- 2026-06-23: The smoke made exactly one Roller auth request, one `GET /product-availability`, and one `POST /bookings/draft/costs`. Selected Nacka parent product `1189805`, child product `1189808`, `Biljetter (200 kr)`, date `2026-06-29`, start `10:00`, quantity `1`, capacity remaining `160`.
+- 2026-06-23: Roller Live quote returned HTTP `200`, total `200`, tax `11.32`, fees `0`, discount `0`, and amount owing `200`. The Live costs response shape used `bookingCosts`.
+- 2026-06-23: T0157 did not deploy, create/update AWS resources, call the public park-test API, write Aurora rows, create a booking draft, start payment, redeem tickets, enable webhook processing, send frontend visitor traffic, send SMS/email, or print secret values.
+
 ## T0156 Park-Test Frontend Target Validation
 
 - 2026-06-23: T0156 was activated after T0155 was squash-merged to `main` and the branch `codex/t0156-park-test-frontend-target` was created from updated `main`.

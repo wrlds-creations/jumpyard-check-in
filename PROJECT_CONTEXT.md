@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, migrations through `0008`, Live read-only preflight, Live webhook `1465`, and frontend target/CORS config. Cloudflare park-test project creation, webhook processing, payment, and redeem remain inactive.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, migrations through `0008`, Live read-only preflight, Live webhook `1465`, frontend target/CORS config, two Cloudflare park-test Pages projects, a successful guarded Live quote/cost smoke, and one controlled Live draft created through local guarded tooling. The forward park-test sequence now explicitly includes existing-booking lookup and existing-booking add-on smokes before redeem and assisted visitor testing. Public API draft writes, webhook processing, visitor traffic, payment, and redeem remain inactive.
 
 ## Context Archives
 
@@ -38,7 +38,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
 - AWS dev is the current implementation environment; non-dev/staging/live work requires separate reviewed config and preflight.
-- Park-test work is gated by scoped tickets; AWS creation, Roller Live reads/writes, webhook registration, payments, and redemptions require the approvals listed in the active ticket/backlog.
+- Park-test work is gated by scoped tickets; AWS creation, Roller Live reads/writes, existing-booking lookup, existing-booking add-ons, webhook registration, payments, and redemptions require the approvals listed in the active ticket/backlog.
 - Park-test is a separate WRLDS environment in dev's AWS account/region: `376129878018`, `eu-north-1`, namespace `jumpyard-check-in-park-test`, own database/secrets/API/resources, and Roller Live Nacka access only through JumpYard Cloud.
 - CDK config validation now separates `dev` and `park-test`: dev remains Roller Playground-only, while park-test must match the T0146 account/region/resource-prefix/Live-base/data-classification contract and keep `bookingTimeSms.confirmSend=false`.
 - `infra/config/park-test.json` is synthable and uses separate park-test naming/tags/resource prefix. It does not contain credentials and now uses the reviewed park-test Cloudflare Pages origins for API CORS.
@@ -49,7 +49,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database; operational data tables checked in T0151 remained empty.
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
 - T0152 deployed park-test safety gates in CDK/config and Lambda runtime for staff auth, guest message sends, webhook processing, Roller booking draft writes, Roller redemption writes, and an emergency stop. Dev remains configured for existing Playground behavior; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
-- T0153-T0156 confirmed Roller Live read-only access, registered Live booking webhook `1465`, and configured same-source park-test frontend targets/CORS; webhook processing, visitor traffic, payment, redeem, SMS, and email remain disabled.
+- T0153-T0158 confirmed Roller Live read-only access, registered Live booking webhook `1465`, configured same-source park-test frontend targets/CORS, created the two park-test Cloudflare Pages projects, passed the first guarded Roller Live quote/cost smoke, and created one controlled Roller Live draft for one 60-minute Nacka entry through local guarded tooling. Public API draft writes, webhook processing, visitor traffic, payment, redeem, SMS, and email remain disabled.
 
 ## Current Implemented Flow Facts
 

@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 155
-Latest archived completed ticket: `T0156`
+Archived count: 157
+Latest archived completed ticket: `T0158`
 
 ## Completed Tickets
 
@@ -167,3 +167,5 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0154` | Live webhook dry-run. | 2026-06-22 | Added dry-run-only tooling and docs for the park-test Roller Live booking webhook endpoint, `x-roller-apikey` value source, events `Created`, `Updated`, `Cancelled`, `tickets=true`, duplicate handling, and rollback template. T0154 made no Roller Live requests, registered no webhook, changed no AWS resources, and did not enable frontend traffic, payment, redeem, SMS, or email. |
 | `T0155` | Live webhook registration. | 2026-06-23 | Added guarded registration tooling and registered/matched Roller Live webhook id `1465` for the park-test endpoint. The script listed existing webhooks before writing, avoided duplicates, recorded rollback endpoint `https://api.roller.app/webhooks/1465`, and safe intake smoke returned `ignored_disabled` with zero Aurora rows before and after. T0155 changed no AWS resources and did not enable webhook processing, frontend traffic, bookings/drafts/payments, redemptions, SMS, or email. |
 | `T0156` | Park-test frontend target. | 2026-06-23 | Configured the same phone/admin source for separate park-test Cloudflare Pages targets and deployed park-test API CORS for `https://jumpyard-check-in-park-test.pages.dev` and `https://jumpyard-checkin-admin-park-test.pages.dev`. Phone/admin builds passed with the park-test API env var, post-deploy CDK diff was clean, and CORS preflight returned HTTP `204` for both origins. Cloudflare project creation/update was not performed because Wrangler was not logged in; no visitor flow, Roller quote/draft/payment/redeem, webhook processing, SMS, or email was enabled. |
+| `T0157` | Live quote/cost smoke. | 2026-06-23 | Added guarded local Roller Live quote/cost smoke tooling and passed one costs-only Nacka quote for parent product `1189805`, child product `1189808`, date `2026-06-29`, start `10:00`, quantity `1`: total `200`, tax `11.32`, fees `0`, discount `0`, amount owing `200`. T0157 changed no AWS resources, did not deploy, did not call the public API, and did not create drafts/payments, redeem tickets, write Aurora rows, enable webhook processing, send frontend traffic, SMS, or email. |
+| `T0158` | Controlled Live draft smoke. | 2026-06-23 | Added guarded local Roller Live draft smoke tooling and created one controlled Nacka Live draft for parent product `1189805`, child product `1189808`, date `2026-06-29`, start `10:00`, quantity `1`. Quote returned total `200`, tax `11.32`, fees `0`, discount `0`, amount owing `200`; draft creation returned HTTP `201`, Roller draft unique id `f81e46e5-5cf7-4193-b578-44a1b8140599`, no booking reference, and `paymentJwtPresent=true` without printing or persisting the raw JWT. T0158 changed no AWS resources, kept park-test runtime gates closed, did not call the public API, wrote no Aurora rows, did not start payment, publish the draft, redeem tickets, enable webhook processing, send frontend traffic, SMS, or email. |

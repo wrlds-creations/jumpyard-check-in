@@ -16,4 +16,4 @@ No active ticket. Start the next ticket by updating this file from the approved 
 Run the standard start-ticket source-of-truth checks before new work.
 
 ## Result
-T0156 completed on 2026-06-23. Park-test frontend targets and AWS CORS are documented and configured; no ticket is currently active.
+T0158 completed on 2026-06-23. Roller Live draft smoke created one controlled Nacka draft `f81e46e5-5cf7-4193-b578-44a1b8140599`; no ticket is currently active.
