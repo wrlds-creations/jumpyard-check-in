@@ -15,7 +15,11 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import * as path from 'path';
-import { JumpYardCloudConfig, PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL } from './config';
+import {
+  JumpYardCloudConfig,
+  PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL,
+  PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL,
+} from './config';
 
 interface JumpYardCloudStackProps extends StackProps {
   readonly config: JumpYardCloudConfig;
@@ -784,6 +788,14 @@ export class JumpYardCloudStack extends Stack {
       environment.ENABLE_ROLLER_BOOKING_DRAFT_WRITES = String(
         resources.safetyGates.rollerBookingDraftWritesEnabled,
       );
+    }
+
+    if (handlerName === 'lookup') {
+      environment.ENABLE_T0160_LIVE_LOOKUP_SMOKE = String(
+        resources.safetyGates.liveLookupSmokeApproval === PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL,
+      );
+      environment.T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS =
+        resources.safetyGates.liveLookupSmokeAllowedIdentifiers.join(',');
     }
 
     if (handlerName === 'redeem') {

@@ -178,6 +178,12 @@ function validateDevTemplate(dev: SynthResult): void {
   expectNotContains(strings, PARK_TEST_PREFIX, 'dev');
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/env`);
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/base-url`);
+  expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-lookup`, {
+    ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'false',
+    T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '',
+    JUMPYARD_EMERGENCY_STOP: 'false',
+    JUMPYARD_ENVIRONMENT: 'dev',
+  });
   expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-booking`, {
     ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'true',
     JUMPYARD_EMERGENCY_STOP: 'false',
@@ -255,6 +261,12 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   expectNamedResource(parkTest.template, 'AWS::Events::Rule', 'Name', `${PARK_TEST_PREFIX}-data-api-daily-sync`);
   expectNoBookingTimeMessagingSchedule(parkTest.template);
   expect(countResourcesByType(parkTest.template, 'AWS::ApiGatewayV2::Api') === 1, 'Expected one park-test HTTP API.');
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-lookup`, {
+    ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'false',
+    T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
     ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'false',
     ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
@@ -318,12 +330,57 @@ function validateParkTestPaymentSmokeTemplate(parkTest: SynthResult): void {
   console.log('[pass] park-test Live payment smoke synth opens only booking draft writes');
 }
 
+function validateParkTestLookupSmokeTemplate(parkTest: SynthResult): void {
+  const strings = collectStrings(parkTest.template);
+
+  expect(
+    parkTest.stackName === `${PARK_TEST_PREFIX}-stack`,
+    `Expected park-test lookup smoke stack name ${PARK_TEST_PREFIX}-stack.`,
+  );
+  expectContains(strings, PARK_TEST_PREFIX, 'park-test lookup smoke');
+  expectContains(strings, 'https://api.roller.app', 'park-test lookup smoke');
+  expectContains(strings, 'live', 'park-test lookup smoke');
+  expectNoBookingTimeMessagingSchedule(parkTest.template);
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-lookup`, {
+    ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'true',
+    T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '166447399,68b3bbb4-9a46-4379-96ac-bc7157f2fb3e',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
+    ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'false',
+    ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
+    ENABLE_ROLLER_REDEEM_WRITES: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
+    ENABLE_GUEST_MESSAGE_SENDS: 'false',
+    ENABLE_STAFF_AUTH: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
+    ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+
+  console.log('[pass] park-test Live lookup smoke synth opens only controlled lookup');
+}
+
 const dev = synthConfig('config/dev.json');
 const parkTest = synthConfig('config/park-test.json');
+const parkTestLookupSmoke = synthConfig('config/park-test-live-lookup-smoke.json');
 const parkTestPaymentSmoke = synthConfig('config/park-test-live-payment-smoke.json');
 
 validateDevTemplate(dev);
 validateParkTestTemplate(parkTest);
+validateParkTestLookupSmokeTemplate(parkTestLookupSmoke);
 validateParkTestPaymentSmokeTemplate(parkTestPaymentSmoke);
 
 console.log('Park-test synth validation passed.');

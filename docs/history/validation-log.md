@@ -2,6 +2,28 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0160 Live Existing-Booking Lookup Smoke Validation
+
+- 2026-06-24: T0160 was activated after user approval on branch `codex/t0160-live-existing-booking-lookup-smoke`, created from updated `main` after T0159 was squash-merged.
+- 2026-06-24: Read `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, `CODEX_TASK.md`, `AWS_RESOURCES.md`, local `skills/aws-project-infrastructure/`, AWS tagging/resource-inventory/CDK references, and the active backlog row.
+- 2026-06-24: Added `infra/config/park-test-live-lookup-smoke.json`, T0160 approval phrase `T0160_LIVE_LOOKUP_SMOKE_APPROVED`, exact lookup identifier allowlist, config guard tests, park-test synth tests, and narrow lookup-Lambda runtime handling for the controlled Live lookup smoke.
+- 2026-06-24: `npm --prefix infra run build`, `npm --prefix infra run validate:config-guards`, `npm --prefix infra run validate:park-test-synth`, `git diff --check`, `npm run validate`, and `npm run infra:check` passed. CDK output included existing notice `37949`.
+- 2026-06-24: AWS identity confirmed account `376129878018`, region `eu-north-1`, assumed role `AWSReservedSSO_AdministratorAccess_8a2502e60c822ae0/Love`.
+- 2026-06-24: Opening diff for `infra/config/park-test-live-lookup-smoke.json` changed only `LookupHandler` code plus `ENABLE_T0160_LIVE_LOOKUP_SMOKE` and `T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS`.
+- 2026-06-24: Opening deploy used `npx cdk deploy -c config=./config/park-test-live-lookup-smoke.json --profile wrlds-dev --require-approval never`; CloudFormation stack `jumpyard-check-in-park-test-stack` reached `UPDATE_COMPLETE`. No new AWS resources were created.
+- 2026-06-24: Open-gate Lambda readback confirmed lookup `JUMPYARD_EMERGENCY_STOP=true`, `ENABLE_T0160_LIVE_LOOKUP_SMOKE=true`, allowlist `166447399,68b3bbb4-9a46-4379-96ac-bc7157f2fb3e`, and `JUMPYARD_ENVIRONMENT=park-test`.
+- 2026-06-24: Park-test API lookup smoke for booking reference `166447399` returned HTTP `200`, status `found`, Roller Live status `Paid`, payment status `Paid`, total `200`, amount owing `0`, date `2026-06-24`, start `12:00`, one item, one ticket, eligibility `ready`, source `roller`, environment `live`, and no public PII fields in the summarized response.
+- 2026-06-24: Park-test API lookup smoke for unique id `68b3bbb4-9a46-4379-96ac-bc7157f2fb3e` returned HTTP `200`, status `found`, source `jumpyard_cloud`, lookup path `aurora:roller_unique_id`, freshness `fresh`, and no public PII fields in the summarized response.
+- 2026-06-24: Negative park-test API lookup smoke for identifier `123456789` returned HTTP `403`, status `blocked`, and error code `live_lookup_not_allowed`.
+- 2026-06-24: Aurora Data API readback found one normalized Live booking row for `166447399`/`68b3bbb4-9a46-4379-96ac-bc7157f2fb3e`, status `Paid`, payment status `Paid`, amount owing `0`, total `20000` cents, date `2026-06-24`, start `12:00:00`, freshness `fresh`, source `roller_live_lookup`, item count `1`, and ticket count `1`.
+- 2026-06-24: Aurora Data API readback found prepayment draft `jypd_56a8f1ca817c42a4b7` moved to status `published`, amount owing `0`, total `20000` cents, `payment_jwt_present=true`, and `payment_config_available=true`.
+- 2026-06-24: Aurora `event_log` readback found one `prepayment_draft.published` event for subject `166447399`.
+- 2026-06-24: Closing deploy used `npx cdk deploy -c config=./config/park-test.json --profile wrlds-dev --require-approval never`; CloudFormation stack `jumpyard-check-in-park-test-stack` reached `UPDATE_COMPLETE`.
+- 2026-06-24: Closed-gate Lambda readback confirmed `ENABLE_T0160_LIVE_LOOKUP_SMOKE=false`, allowlist empty, `JUMPYARD_EMERGENCY_STOP=true`, and `JUMPYARD_ENVIRONMENT=park-test`.
+- 2026-06-24: Closed-gate API smoke for `166447399` returned HTTP `409`, status `blocked`, and error code `live_lookup_disabled`.
+- 2026-06-24: Closing `npx cdk diff -c config=./config/park-test.json --profile wrlds-dev --method=template` showed no differences.
+- 2026-06-24: T0160 did not create bookings/payments/refunds/redemptions/webhooks, leave lookup enabled, enable public draft/payment writes, enable redeem writes, enable webhook processing, enable staff auth, send SMS/email, create new AWS resources, print secrets, print/persist raw payment JWTs, or expose raw names/email/phone in public validation output.
+
 ## T0159 Internal Live Payment Smoke Validation
 
 - 2026-06-24: T0159 was activated after user approval and branch `codex/t0159-internal-live-payment-smoke` was created from updated `main` after T0158 was squash-merged.

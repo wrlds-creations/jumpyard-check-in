@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, migrations through `0008`, Live read-only preflight, Live webhook `1465`, frontend target/CORS config, two Cloudflare park-test Pages projects, a successful guarded Live quote/cost smoke, one controlled Live draft created through local guarded tooling, and one internal paid Live booking smoke through the phone PWA. The forward park-test sequence now explicitly includes existing-booking lookup and existing-booking add-on smokes before redeem and assisted visitor testing. Public API draft writes were closed again after T0159; Live lookup/sync, webhook processing, visitor traffic, payment-start writes, and redeem remain gated.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, migrations, Live read-only/webhook/frontend setup, two Cloudflare Pages projects, quote/draft/payment smokes, and one controlled Live lookup for booking `166447399`. Public draft writes and Live lookup were closed again after their smokes; webhook processing, visitor traffic, payment-start writes, and redeem remain gated.
 
 ## Context Archives
 
@@ -26,7 +26,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Sprint 1 ticket narrative: [docs/history/sprint-1-ticket-history.md](docs/history/sprint-1-ticket-history.md)
 - Done followups: [docs/history/followups-done.md](docs/history/followups-done.md)
 - Forward roadmap/backlog: [docs/roadmap/backlog.md](docs/roadmap/backlog.md)
-- Park-test reports T0145-T0156 live under `docs/` and are linked from [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
+- Park-test reports live under `docs/` and are linked from [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
 ## Durable Architecture Facts
 
@@ -49,7 +49,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database; operational data tables checked in T0151 remained empty.
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
 - T0152 deployed park-test safety gates in CDK/config and Lambda runtime for staff auth, guest message sends, webhook processing, Roller booking draft writes, Roller redemption writes, and an emergency stop. Dev remains configured for existing Playground behavior; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
-- T0153-T0159 confirmed Roller Live read-only access, registered Live booking webhook `1465`, configured same-source park-test frontend targets/CORS, created the two park-test Cloudflare Pages projects, passed the first guarded Roller Live quote/cost smoke, created one controlled Roller Live draft for one 60-minute Nacka entry through local guarded tooling, and completed one internal paid Live booking through the park-test phone PWA. Public API draft writes were closed again after T0159; Live lookup/sync, webhook processing, visitor traffic, redeem, SMS, and email remain disabled.
+- Park-test has confirmed Roller Live access, webhook `1465`, frontend targets/CORS, quote/draft/payment smokes, and one controlled existing-booking lookup for `166447399`. Public draft writes and Live lookup are closed again; webhook processing, visitor traffic, redeem, SMS, and email remain disabled.
 
 ## Current Implemented Flow Facts
 
@@ -71,6 +71,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Booking webhooks are registered in Roller Playground and use the confirmed `x-roller-apikey` header in dev; production webhook auth/signature/IP policy remains open.
 - Daily dev Data API sync runs internally from EventBridge to Lambda in planning/operational dev mode.
 - Guest messaging through SMS/email uses opaque `jy_token` links resolved server-side by JumpYard Cloud.
+- Park-test Aurora now contains the controlled Live booking snapshot for `166447399` from T0160 and the matching prepayment draft `jypd_56a8f1ca817c42a4b7` is marked `published`; this is not a broad booking import or all-day guest list.
 
 ## Security And Operational Constraints
 

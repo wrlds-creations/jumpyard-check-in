@@ -37,6 +37,8 @@ interface TestConfig {
   readonly safetyGates: {
     emergencyStop: boolean;
     guestMessagingSendsEnabled: boolean;
+    liveLookupSmokeAllowedIdentifiers?: string[];
+    liveLookupSmokeApproval?: string;
     livePaymentSmokeApproval?: string;
     rollerBookingDraftWritesEnabled: boolean;
     rollerRedeemWritesEnabled: boolean;
@@ -135,6 +137,23 @@ parkTestApprovalWithoutDraftWrites.safetyGates.rollerBookingDraftWritesEnabled =
 const parkTestPaymentSmokeWithWebhook = cloneConfig(parkTestApprovedPaymentSmoke);
 parkTestPaymentSmokeWithWebhook.safetyGates.rollerWebhookProcessingEnabled = true;
 
+const parkTestApprovedLookupSmoke = cloneConfig(parkTestConfig);
+parkTestApprovedLookupSmoke.safetyGates.emergencyStop = true;
+parkTestApprovedLookupSmoke.safetyGates.liveLookupSmokeApproval = 'T0160_LIVE_LOOKUP_SMOKE_APPROVED';
+parkTestApprovedLookupSmoke.safetyGates.liveLookupSmokeAllowedIdentifiers = [
+  '166447399',
+  '68b3bbb4-9a46-4379-96ac-bc7157f2fb3e',
+];
+
+const parkTestLookupSmokeWithoutAllowedIdentifiers = cloneConfig(parkTestApprovedLookupSmoke);
+parkTestLookupSmokeWithoutAllowedIdentifiers.safetyGates.liveLookupSmokeAllowedIdentifiers = [];
+
+const parkTestAllowedIdentifiersWithoutLookupApproval = cloneConfig(parkTestApprovedLookupSmoke);
+delete parkTestAllowedIdentifiersWithoutLookupApproval.safetyGates.liveLookupSmokeApproval;
+
+const parkTestLookupSmokeWithRedeem = cloneConfig(parkTestApprovedLookupSmoke);
+parkTestLookupSmokeWithRedeem.safetyGates.rollerRedeemWritesEnabled = true;
+
 expectPass('dev Playground config passes', devConfig, 'dev');
 expectFail('unsafe dev-to-Live config fails', unsafeDevLiveConfig, /dev config must use Roller Playground/);
 expectPass('reviewed park-test Live config passes', parkTestConfig, 'park-test');
@@ -159,6 +178,22 @@ expectFail(
   'park-test payment smoke still blocks webhook processing',
   parkTestPaymentSmokeWithWebhook,
   /rollerWebhookProcessingEnabled/,
+);
+expectPass('approved park-test Live lookup smoke config passes', parkTestApprovedLookupSmoke, 'park-test');
+expectFail(
+  'park-test lookup smoke approval without allowed identifiers fails closed',
+  parkTestLookupSmokeWithoutAllowedIdentifiers,
+  /liveLookupSmokeAllowedIdentifiers/,
+);
+expectFail(
+  'park-test lookup smoke allowlist without approval fails closed',
+  parkTestAllowedIdentifiersWithoutLookupApproval,
+  /liveLookupSmokeAllowedIdentifiers must stay empty/,
+);
+expectFail(
+  'park-test lookup smoke still blocks redeem writes',
+  parkTestLookupSmokeWithRedeem,
+  /rollerRedeemWritesEnabled/,
 );
 
 console.log('Config guard validation passed.');
