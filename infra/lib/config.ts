@@ -27,6 +27,7 @@ const PARK_TEST_AWS_ACCOUNT = '376129878018';
 const PARK_TEST_AWS_REGION = 'eu-north-1';
 const PARK_TEST_RESOURCE_PREFIX = 'jumpyard-check-in-park-test';
 export const PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL = 'T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED';
+export const PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL = 'T0160_LIVE_LOOKUP_SMOKE_APPROVED';
 
 export interface JumpYardCloudConfig {
   readonly api: {
@@ -60,6 +61,8 @@ export interface JumpYardCloudConfig {
   readonly safetyGates: {
     readonly emergencyStop: boolean;
     readonly guestMessagingSendsEnabled: boolean;
+    readonly liveLookupSmokeAllowedIdentifiers: readonly string[];
+    readonly liveLookupSmokeApproval?: string;
     readonly livePaymentSmokeApproval?: string;
     readonly rollerBookingDraftWritesEnabled: boolean;
     readonly rollerRedeemWritesEnabled: boolean;
@@ -101,6 +104,8 @@ interface RawConfig {
   readonly safetyGates?: {
     readonly emergencyStop?: unknown;
     readonly guestMessagingSendsEnabled?: unknown;
+    readonly liveLookupSmokeAllowedIdentifiers?: unknown;
+    readonly liveLookupSmokeApproval?: unknown;
     readonly livePaymentSmokeApproval?: unknown;
     readonly rollerBookingDraftWritesEnabled?: unknown;
     readonly rollerRedeemWritesEnabled?: unknown;
@@ -248,6 +253,8 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
 
   const livePaymentSmokeApproved =
     input.safetyGates.livePaymentSmokeApproval === PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL;
+  const liveLookupSmokeApproved =
+    input.safetyGates.liveLookupSmokeApproval === PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL;
 
   if (!input.safetyGates.emergencyStop) {
     throw new Error(
@@ -264,6 +271,18 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
   if (livePaymentSmokeApproved && !input.safetyGates.rollerBookingDraftWritesEnabled) {
     throw new Error(
       'park-test live payment smoke approval requires safetyGates.rollerBookingDraftWritesEnabled=true.',
+    );
+  }
+
+  if (liveLookupSmokeApproved && input.safetyGates.liveLookupSmokeAllowedIdentifiers.length === 0) {
+    throw new Error(
+      'park-test live lookup smoke approval requires safetyGates.liveLookupSmokeAllowedIdentifiers.',
+    );
+  }
+
+  if (!liveLookupSmokeApproved && input.safetyGates.liveLookupSmokeAllowedIdentifiers.length > 0) {
+    throw new Error(
+      'park-test safetyGates.liveLookupSmokeAllowedIdentifiers must stay empty until a scoped lookup ticket enables it.',
     );
   }
 
@@ -427,6 +446,15 @@ function readSafetyGatesConfig(raw: RawConfig['safetyGates']): JumpYardCloudConf
       raw?.guestMessagingSendsEnabled,
       false,
       'safetyGates.guestMessagingSendsEnabled',
+    ),
+    liveLookupSmokeAllowedIdentifiers: readOptionalStringArray(
+      raw?.liveLookupSmokeAllowedIdentifiers,
+      'safetyGates.liveLookupSmokeAllowedIdentifiers',
+    ),
+    liveLookupSmokeApproval: readOptionalString(
+      raw?.liveLookupSmokeApproval,
+      '',
+      'safetyGates.liveLookupSmokeApproval',
     ),
     livePaymentSmokeApproval: readOptionalString(
       raw?.livePaymentSmokeApproval,

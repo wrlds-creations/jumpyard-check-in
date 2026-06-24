@@ -6,6 +6,8 @@ const crypto = require('crypto');
 const DATABASE_NAME = 'jumpyard_cloud';
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
+const ROLLER_PLAYGROUND_BASE_URL = 'https://api.play.roller.app';
+const ROLLER_LIVE_BASE_URL = 'https://api.roller.app';
 const PRODUCT_CACHE_TTL_MS = 15 * 60 * 1000;
 
 const rdsClient = new RDSDataClient({});
@@ -31,6 +33,28 @@ exports.handler = async (event) => {
           message: 'identifier is required.',
         },
       });
+    }
+
+    if (isParkTestEnvironment()) {
+      if (!isT0160LiveLookupSmokeEnabled()) {
+        return jsonResponse(409, correlationId, {
+          status: 'blocked',
+          error: {
+            code: 'live_lookup_disabled',
+            message: 'Live lookup is disabled for park-test.',
+          },
+        });
+      }
+
+      if (!isT0160LiveLookupSmokeIdentifierAllowed(request.identifier)) {
+        return jsonResponse(403, correlationId, {
+          status: 'blocked',
+          error: {
+            code: 'live_lookup_not_allowed',
+            message: 'This booking identifier is not approved for the T0160 Live lookup smoke.',
+          },
+        });
+      }
     }
 
     const localResult = await getLocalBooking(request);
@@ -61,7 +85,7 @@ exports.handler = async (event) => {
         status: 'not_found',
         error: {
           code: 'booking_not_found',
-          message: 'No Roller Playground booking was found for the supplied identifier.',
+          message: 'No Roller booking was found for the supplied identifier.',
         },
       });
     }
@@ -396,9 +420,14 @@ async function readSecret(secretId) {
 function validateRollerConfig(config) {
   const errors = [];
   let parsedBaseUrl = null;
+  const liveLookupSmokeEnabled = isT0160LiveLookupSmokeEnabled();
 
-  if (config.env !== 'playground') {
+  if (!liveLookupSmokeEnabled && config.env !== 'playground') {
     errors.push('Roller environment must be playground.');
+  }
+
+  if (liveLookupSmokeEnabled && config.env !== 'live') {
+    errors.push('Roller environment must be live for the T0160 park-test lookup smoke.');
   }
 
   try {
@@ -412,11 +441,17 @@ function validateRollerConfig(config) {
     if (parsedBaseUrl.protocol !== 'https:') {
       errors.push('Roller base URL must use https.');
     }
-    if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
-      errors.push('Roller base URL looks like production/live.');
-    }
-    if (!PLAYGROUND_URL_MARKER.test(searchableUrl)) {
-      errors.push('Roller base URL must point to Playground.');
+    if (liveLookupSmokeEnabled) {
+      if (parsedBaseUrl.origin !== ROLLER_LIVE_BASE_URL || parsedBaseUrl.pathname !== '/') {
+        errors.push(`Roller base URL must be ${ROLLER_LIVE_BASE_URL} for the T0160 park-test lookup smoke.`);
+      }
+    } else {
+      if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
+        errors.push('Roller base URL looks like production/live.');
+      }
+      if (!PLAYGROUND_URL_MARKER.test(searchableUrl) || parsedBaseUrl.origin !== ROLLER_PLAYGROUND_BASE_URL) {
+        errors.push('Roller base URL must point to Playground.');
+      }
     }
   }
 
@@ -583,7 +618,7 @@ function normalizeBooking(booking, products) {
     total: numberOrNull(booking.total ?? booking.costs?.total),
     amountOwing: numberOrNull(booking.amountOwing ?? booking.remainder ?? booking.costs?.amountOwing),
     createdDate: stringOrNull(booking.createdDate),
-    customerId: stringOrNull(booking.customerId),
+    customerId: null,
     items: items.map((item) => normalizeBookingItem(item, products.byId)),
   };
 }
@@ -606,11 +641,29 @@ function normalizeBookingItem(item, productById) {
     endTime: stringOrNull(item.endTime ?? item.sessionEndTime),
     tickets: tickets.map((ticket) => ({
       ticketId: stringOrNull(ticket.ticketId ?? ticket.id),
-      name: stringOrNull(ticket.name),
-      ticketHolderName: stringOrNull(ticket.ticketHolderName),
+      name: null,
+      ticketHolderName: null,
       locations: Array.isArray(ticket.locations) ? ticket.locations : [],
     })),
   };
+}
+
+function isParkTestEnvironment() {
+  return process.env.JUMPYARD_ENVIRONMENT === 'park-test';
+}
+
+function isT0160LiveLookupSmokeEnabled() {
+  return isParkTestEnvironment() && process.env.ENABLE_T0160_LIVE_LOOKUP_SMOKE === 'true';
+}
+
+function isT0160LiveLookupSmokeIdentifierAllowed(identifier) {
+  const allowed = String(process.env.T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (allowed.length === 0) return false;
+  return allowed.includes(String(identifier ?? '').trim());
 }
 
 async function upsertLiveBooking(booking, rollerEnv, venueId) {
@@ -1180,7 +1233,7 @@ function classifyError(error) {
       statusCode: 502,
       status: 'roller_error',
       code: 'roller_token_failed',
-      message: 'JumpYard Cloud could not authenticate with Roller Playground.',
+      message: 'JumpYard Cloud could not authenticate with Roller.',
     };
   }
 

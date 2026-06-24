@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-24
-- Current branch: `codex/t0159-internal-live-payment-smoke`
-- Current status: No active ticket after T0159 closeout.
+- Current branch: `codex/t0160-live-existing-booking-lookup-smoke`
+- Current status: No active ticket after T0160 closeout; T0160 is complete in the working tree but not yet committed/pushed/merged.
 - Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (158 completed tickets; latest `T0159`).
-- Recommended next step: start `T0160` only after explicit approval, using paid booking `166447399` as the controlled Live lookup target or another approved paid booking.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (159 completed tickets; latest `T0160`).
+- Recommended next step: commit/push/merge the completed lookup branch when approved, then start `T0161` only after explicit approval.
 
 ## Current Structure
 
@@ -43,14 +43,15 @@ History and planning archives:
 - Park-test Live quote/cost smoke: [docs/t0157-live-quote-cost-smoke.md](docs/t0157-live-quote-cost-smoke.md)
 - Park-test Live draft smoke: [docs/t0158-controlled-live-draft-smoke.md](docs/t0158-controlled-live-draft-smoke.md)
 - Park-test internal Live payment smoke: [docs/t0159-internal-live-payment-smoke.md](docs/t0159-internal-live-payment-smoke.md)
+- Park-test Live existing-booking lookup smoke: [docs/t0160-live-existing-booking-lookup-smoke.md](docs/t0160-live-existing-booking-lookup-smoke.md)
 
-T0156-T0159 current park-test status:
+T0156-T0160 current park-test status:
 
 - Park-test Cloudflare Pages projects exist for phone/admin and point at `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`.
 - T0157 passed a guarded Roller Live quote/cost smoke; T0158 created one controlled Roller Live draft `f81e46e5-5cf7-4193-b578-44a1b8140599`.
 - T0159 completed one internal paid Live booking through the park-test phone PWA: Roller booking reference `166447399`, status `Paid`, total `200`, amount owing `0`.
-- T0159 confirmed the post-payment phone sync fails because Live lookup remains gated; `T0160` owns that next controlled gate.
-- Public API draft writes were closed again after T0159; visitor flow, lookup Live sync, payment/redeem writes, webhook processing, SMS, and email remain gated.
+- T0160 proved controlled Live existing-booking lookup for `166447399`; Aurora now contains the safe normalized booking snapshot, prepayment draft `jypd_56a8f1ca817c42a4b7` is `published`, and one `prepayment_draft.published` event is recorded.
+- Public API draft writes and Live lookup were closed again after their scoped smokes; visitor flow, payment/redeem writes, webhook processing, SMS, and email remain gated.
 
 ## Known Validation Commands
 
@@ -68,21 +69,20 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 158
-- Latest completed ticket: `T0159`
+- Archived completed-ticket count: 159
+- Latest completed ticket: `T0160`
 - Current active ticket: None active
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | No active ticket. | None active | T0159 is complete; do not start T0160 until explicitly approved. |
+| None active | No active ticket. | None active | T0160 is complete in the working tree; do not start T0161 until explicitly approved. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0160` | Live existing-booking lookup smoke. | Planned | Prove booking-code lookup for one controlled Live booking through JumpYard Cloud; no all-day guest list. |
 | `T0161` | Existing-booking add-on smoke. | Planned | Prove one controlled add-on path for an existing booking; original booking should not be directly mutated under current decisions. |
 | `T0162` | Controlled Live redeem smoke. | Planned | Controlled booking only; no normal visitor traffic. |
 | `T0163` | Staff-assisted visitor test. | Planned | Limited assisted visitor test after controlled smokes and park approval. |
@@ -94,7 +94,7 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- Latest validation is recorded in [docs/t0159-internal-live-payment-smoke.md](docs/t0159-internal-live-payment-smoke.md).
+- Latest validation is recorded in [docs/t0160-live-existing-booking-lookup-smoke.md](docs/t0160-live-existing-booking-lookup-smoke.md).
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions

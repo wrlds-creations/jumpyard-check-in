@@ -10,10 +10,10 @@ None active
 No active ticket.
 
 ## Scope
-T0159 is complete. Do not start T0160 until explicitly approved.
+T0160 is complete in the working tree. Do not start T0161 until explicitly approved.
 
 ## Validation
-See `docs/t0159-internal-live-payment-smoke.md` and `docs/history/validation-log.md`.
+See `docs/t0160-live-existing-booking-lookup-smoke.md` and `docs/history/validation-log.md`.
 
 ## Result
-T0159 completed the first internal paid Roller Live booking through the park-test phone PWA. Roller booking `166447399` is paid, Aurora has the safe prepayment draft row, and park-test draft-write gates were closed again. Post-payment phone sync failed because Live lookup remains gated for T0160.
+T0160 proved controlled Live existing-booking lookup for booking reference `166447399` and unique id `68b3bbb4-9a46-4379-96ac-bc7157f2fb3e` through JumpYard Cloud. The API returned the paid booking with one item and one ticket, Aurora stored the safe normalized snapshot, the matching prepayment draft `jypd_56a8f1ca817c42a4b7` is now `published`, and the lookup gate was closed again. T0160 is not yet committed, pushed, or merged.
