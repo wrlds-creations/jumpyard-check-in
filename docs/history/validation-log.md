@@ -2,6 +2,25 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0159 Internal Live Payment Smoke Validation
+
+- 2026-06-24: T0159 was activated after user approval and branch `codex/t0159-internal-live-payment-smoke` was created from updated `main` after T0158 was squash-merged.
+- 2026-06-24: Read `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REPO_CURRENT_STATE.md`, `CODEX_TASK.md`, `AWS_RESOURCES.md`, local `skills/aws-project-infrastructure/`, AWS tagging/resource-inventory/CDK references, and the active backlog row.
+- 2026-06-24: Added `infra/config/park-test-live-payment-smoke.json`, T0159 approval phrase `T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED`, config guard tests, park-test synth tests, and narrow booking-Lambda runtime handling for the internal Live payment smoke.
+- 2026-06-24: `npm run validate`, `npm --prefix infra run check`, `npm --prefix infra run build`, `npm --prefix infra run validate:park-test-synth`, and CDK diff checks passed during the ticket. CDK output included existing notice `37949`.
+- 2026-06-24: AWS identity confirmed account `376129878018`, region `eu-north-1`, assumed role `AWSReservedSSO_AdministratorAccess_8a2502e60c822ae0/Love`.
+- 2026-06-24: Opening deploy used `npx cdk deploy -c config=./config/park-test-live-payment-smoke.json --profile wrlds-dev --require-approval never`; CloudFormation stack `jumpyard-check-in-park-test-stack` reached `UPDATE_COMPLETE`. No new AWS resources were created.
+- 2026-06-24: Open-gate Lambda readback confirmed booking `JUMPYARD_EMERGENCY_STOP=true`, `ENABLE_ROLLER_BOOKING_DRAFT_WRITES=true`, and `ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES=true`; redeem, webhook, staff auth, and guest sends remained disabled.
+- 2026-06-24: Park-test API availability smoke from phone origin returned HTTP `200` for date `2026-06-24`, start times `11:30`, `12:00`, `12:30`, product `1189808`, and `wroteBooking=false`.
+- 2026-06-24: Park-test API quote smoke returned HTTP `200` for one `1189808` item, total `200`, tax `11.32`, fees `0`, discount `0`, amount owing `200`, and `wroteBooking=false`.
+- 2026-06-24: User completed the real internal payment through `https://jumpyard-check-in-park-test.pages.dev`; user observed a `200 SEK` card charge and confirmed the booking existed in Roller.
+- 2026-06-24: Read-only Roller Live verification with `GET /bookings/{uniqueId}` returned HTTP `200` for unique id `68b3bbb4-9a46-4379-96ac-bc7157f2fb3e`, booking reference `166447399`, status `Paid`, total `200`, amount owing `0`, and one item. Secret values and raw payment JWT values were not printed.
+- 2026-06-24: Aurora Data API readback found safe prepayment draft `jypd_56a8f1ca817c42a4b7`, status `payment_pending`, total `20000`, amount owing `20000`, `payment_jwt_present=true`, and `payment_config_available=true`. `jumpyard.roller_bookings` remained empty.
+- 2026-06-24: Post-payment phone sync failed with the expected fallback card because `POST /v1/check-in/lookup` returned HTTP `500`, status `config_error`, code `lookup_config_error`; root cause is that lookup Lambda still blocks Roller Live and T0160 owns that gate.
+- 2026-06-24: Closing deploy used `npx cdk deploy -c config=./config/park-test.json --profile wrlds-dev --require-approval never`; the close diff changed only `ENABLE_ROLLER_BOOKING_DRAFT_WRITES` and `ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES` from `true` to `false`.
+- 2026-06-24: Post-close Lambda readback confirmed booking draft writes and T0159 override `false`, emergency stop `true`, lookup emergency stop `true`, redeem writes `false`, and webhook processing `false`.
+- 2026-06-24: T0159 did not create new AWS resources, leave draft writes enabled, enable Live lookup sync, enable webhook processing, enable redeem writes, enable staff auth, enable guest message sends, send SMS/email, print secrets, print/persist raw payment JWTs, or implement refund/cancel automation.
+
 ## T0158 Controlled Live Draft Smoke Validation
 
 - 2026-06-23: T0158 was activated after user approval and branch `codex/t0158-controlled-live-draft-smoke` was created from the current T0157 working tree.

@@ -37,6 +37,7 @@ interface TestConfig {
   readonly safetyGates: {
     emergencyStop: boolean;
     guestMessagingSendsEnabled: boolean;
+    livePaymentSmokeApproval?: string;
     rollerBookingDraftWritesEnabled: boolean;
     rollerRedeemWritesEnabled: boolean;
     rollerWebhookProcessingEnabled: boolean;
@@ -113,9 +114,26 @@ parkTestConfirmedSend.bookingTimeSms.confirmedSendApproval = 'I_APPROVE_CONFIRME
 
 const parkTestEmergencyStopOff = cloneConfig(parkTestConfig);
 parkTestEmergencyStopOff.safetyGates.emergencyStop = false;
+delete parkTestEmergencyStopOff.safetyGates.livePaymentSmokeApproval;
 
 const parkTestDraftWritesOn = cloneConfig(parkTestConfig);
+parkTestDraftWritesOn.safetyGates.emergencyStop = true;
 parkTestDraftWritesOn.safetyGates.rollerBookingDraftWritesEnabled = true;
+delete parkTestDraftWritesOn.safetyGates.livePaymentSmokeApproval;
+
+const parkTestApprovedPaymentSmoke = cloneConfig(parkTestConfig);
+parkTestApprovedPaymentSmoke.safetyGates.emergencyStop = true;
+parkTestApprovedPaymentSmoke.safetyGates.rollerBookingDraftWritesEnabled = true;
+parkTestApprovedPaymentSmoke.safetyGates.livePaymentSmokeApproval = 'T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED';
+
+const parkTestApprovedPaymentSmokeEmergencyOff = cloneConfig(parkTestApprovedPaymentSmoke);
+parkTestApprovedPaymentSmokeEmergencyOff.safetyGates.emergencyStop = false;
+
+const parkTestApprovalWithoutDraftWrites = cloneConfig(parkTestApprovedPaymentSmoke);
+parkTestApprovalWithoutDraftWrites.safetyGates.rollerBookingDraftWritesEnabled = false;
+
+const parkTestPaymentSmokeWithWebhook = cloneConfig(parkTestApprovedPaymentSmoke);
+parkTestPaymentSmokeWithWebhook.safetyGates.rollerWebhookProcessingEnabled = true;
 
 expectPass('dev Playground config passes', devConfig, 'dev');
 expectFail('unsafe dev-to-Live config fails', unsafeDevLiveConfig, /dev config must use Roller Playground/);
@@ -126,5 +144,21 @@ expectFail('park-test wrong data classification fails closed', parkTestWrongClas
 expectFail('park-test confirmed scheduled send fails closed', parkTestConfirmedSend, /confirmSend must stay false/);
 expectFail('park-test emergency stop off fails closed', parkTestEmergencyStopOff, /emergencyStop must stay true/);
 expectFail('park-test draft writes enabled fails closed', parkTestDraftWritesOn, /rollerBookingDraftWritesEnabled/);
+expectPass('approved park-test Live payment smoke config passes', parkTestApprovedPaymentSmoke, 'park-test');
+expectFail(
+  'park-test payment smoke keeps global emergency stop on',
+  parkTestApprovedPaymentSmokeEmergencyOff,
+  /emergencyStop must stay true/,
+);
+expectFail(
+  'park-test payment smoke approval without draft writes fails closed',
+  parkTestApprovalWithoutDraftWrites,
+  /requires safetyGates\.rollerBookingDraftWritesEnabled=true/,
+);
+expectFail(
+  'park-test payment smoke still blocks webhook processing',
+  parkTestPaymentSmokeWithWebhook,
+  /rollerWebhookProcessingEnabled/,
+);
 
 console.log('Config guard validation passed.');

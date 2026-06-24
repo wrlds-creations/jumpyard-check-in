@@ -1,0 +1,54 @@
+{
+  "awsAccount": "376129878018",
+  "awsRegion": "eu-north-1",
+  "resourcePrefix": "jumpyard-check-in-park-test",
+  "api": {
+    "allowedCorsOrigins": [
+      "https://jumpyard-check-in-park-test.pages.dev",
+      "https://jumpyard-checkin-admin-park-test.pages.dev"
+    ],
+    "throttlingBurstLimit": 50,
+    "throttlingRateLimit": 25
+  },
+  "roller": {
+    "environment": "live",
+    "baseUrl": "https://api.roller.app"
+  },
+  "bookingTimeSms": {
+    "scheduleEnabled": false,
+    "confirmSend": false,
+    "confirmedSendApproval": "",
+    "checkinBaseUrl": "https://jumpyard-check-in-park-test.pages.dev/",
+    "rateMinutes": 5,
+    "leadMinutes": 30,
+    "windowMinutes": 10,
+    "limit": 10
+  },
+  "guestEmail": {
+    "provider": "aws_ses",
+    "checkinBaseUrl": "https://jumpyard-check-in-park-test.pages.dev/",
+    "fromAddress": "",
+    "replyToAddresses": []
+  },
+  "safetyGates": {
+    "emergencyStop": true,
+    "guestMessagingSendsEnabled": false,
+    "livePaymentSmokeApproval": "T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED",
+    "rollerBookingDraftWritesEnabled": true,
+    "rollerRedeemWritesEnabled": false,
+    "rollerWebhookProcessingEnabled": false,
+    "staffAuthEnabled": false
+  },
+  "tags": {
+    "WRLDS:Client": "JumpYard",
+    "WRLDS:Project": "jumpyard-check-in",
+    "WRLDS:Environment": "park-test",
+    "WRLDS:Owner": "love",
+    "WRLDS:Repository": "wrlds-creations/jumpyard-check-in",
+    "WRLDS:ManagedBy": "cdk",
+    "WRLDS:DataClassification": "confidential",
+    "WRLDS:Exportable": "true",
+    "WRLDS:CostCenter": "unassigned",
+    "WRLDS:CreatedBy": "love"
+  }
+}

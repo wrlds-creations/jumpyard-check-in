@@ -4,16 +4,16 @@
 NO_ACTIVE_TICKET
 
 ## Status
-Idle
+None active
 
 ## Goal
 No active ticket.
 
 ## Scope
-No active ticket. Start the next ticket by updating this file from the approved backlog.
+T0159 is complete. Do not start T0160 until explicitly approved.
 
 ## Validation
-Run the standard start-ticket source-of-truth checks before new work.
+See `docs/t0159-internal-live-payment-smoke.md` and `docs/history/validation-log.md`.
 
 ## Result
-T0158 completed on 2026-06-23. Roller Live draft smoke created one controlled Nacka draft `f81e46e5-5cf7-4193-b578-44a1b8140599`; no ticket is currently active.
+T0159 completed the first internal paid Roller Live booking through the park-test phone PWA. Roller booking `166447399` is paid, Aurora has the safe prepayment draft row, and park-test draft-write gates were closed again. Post-payment phone sync failed because Live lookup remains gated for T0160.
