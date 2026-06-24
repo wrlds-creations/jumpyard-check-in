@@ -48,14 +48,16 @@ NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://ij4rnaui2b.execute-api.eu-north-
 
 ## Cloudflare Status
 
-`npx --yes wrangler whoami` reported that Wrangler is not logged in, so T0156 did not create or update Cloudflare Pages projects from the local terminal.
+`npx --yes wrangler whoami` reported that Wrangler was not logged in during T0156, so the ticket did not create or update Cloudflare Pages projects from the local terminal.
 
-Create or verify these Cloudflare Pages projects manually or through an authenticated Cloudflare workflow:
+Post-closeout on 2026-06-23, the two park-test Cloudflare Pages projects were created through the authenticated Cloudflare Dashboard:
 
-| Project | Root directory | Build command | Output directory | Public env var |
-|---|---|---|---|---|
-| `jumpyard-check-in-park-test` | `jumpyard-checkin-phone` | `npm run build` | `out` | `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com` |
-| `jumpyard-checkin-admin-park-test` | `jumpyard-checkin-admin` | `npm run build` | `out` | `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com` |
+| Project | URL | Root directory | Branch | Build command | Output directory | Build watch paths | Public env var |
+|---|---|---|---|---|---|---|---|
+| `jumpyard-check-in-park-test` | `https://jumpyard-check-in-park-test.pages.dev` | `jumpyard-checkin-phone` | `main` | `npm run build` | `out` | `jumpyard-checkin-phone/**` | `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com` |
+| `jumpyard-checkin-admin-park-test` | `https://jumpyard-checkin-admin-park-test.pages.dev` | `jumpyard-checkin-admin` | `main` | `npm run build` | `out` | `jumpyard-checkin-admin/**` | `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com` |
+
+Both projects are connected to GitHub repository `wrlds-creations/jumpyard-check-in`. Automatic production deployments are enabled for `main`; automatic preview branch deployments are disabled.
 
 ## AWS CORS
 
@@ -107,6 +109,15 @@ CORS preflight results:
 | `https://jumpyard-checkin-admin-park-test.pages.dev` | `OPTIONS /v1/staff/auth/login` | HTTP `204`; `access-control-allow-origin` returned the admin origin. |
 
 These `OPTIONS` requests did not invoke Roller, create Aurora rows, or run check-in logic.
+
+Post-closeout Cloudflare validation on 2026-06-23:
+
+| Check | Result |
+|---|---|
+| `curl.exe -I https://jumpyard-check-in-park-test.pages.dev` | HTTP `200`. |
+| `curl.exe -I https://jumpyard-checkin-admin-park-test.pages.dev` | HTTP `200`. |
+| Phone static JS bundle scan | Found `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`; did not find the dev API URL. |
+| Admin static JS bundle scan | Found `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`; did not find the dev API URL. |
 
 ## Safety Outcome
 

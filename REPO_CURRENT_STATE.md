@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-23
-- Current branch: `codex/t0156-park-test-frontend-target`
-- Current status: No active ticket after T0156 completion.
+- Current branch: `codex/t0158-controlled-live-draft-smoke`
+- Current status: No active ticket after T0158 completion.
 - Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (155 completed tickets; latest `T0156`).
-- Recommended next step: start T0157 Live quote/cost smoke only after explicit approval.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (157 completed tickets; latest `T0158`).
+- Recommended next step: start T0159 internal Live payment smoke only after explicit approval.
 
 ## Current Structure
 
@@ -40,53 +40,51 @@ History and planning archives:
 - Park-test Live webhook dry-run: [docs/t0154-live-webhook-dry-run.md](docs/t0154-live-webhook-dry-run.md)
 - Park-test Live webhook registration: [docs/t0155-live-webhook-registration.md](docs/t0155-live-webhook-registration.md)
 - Park-test frontend target: [docs/t0156-park-test-frontend-target.md](docs/t0156-park-test-frontend-target.md)
+- Park-test Live quote/cost smoke: [docs/t0157-live-quote-cost-smoke.md](docs/t0157-live-quote-cost-smoke.md)
+- Park-test Live draft smoke: [docs/t0158-controlled-live-draft-smoke.md](docs/t0158-controlled-live-draft-smoke.md)
 
-T0156 configured the same phone/admin source for separate park-test frontend targets. The intended park-test Cloudflare Pages projects are `jumpyard-check-in-park-test` and `jumpyard-checkin-admin-park-test`, both pointing `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL` to `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`.
+T0156-T0158 current park-test status:
 
-T0156 deployed the park-test API CORS update for `https://jumpyard-check-in-park-test.pages.dev` and `https://jumpyard-checkin-admin-park-test.pages.dev`. Cloudflare Pages project creation/update was not performed from the local terminal because Wrangler is not logged in. No visitor flow, Roller quote/draft/payment/redeem, webhook processing, SMS, or email was enabled.
+- Park-test Cloudflare Pages projects exist for phone/admin and point at `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`.
+- T0157 passed a guarded Roller Live quote/cost smoke; T0158 created one controlled Roller Live draft `f81e46e5-5cf7-4193-b578-44a1b8140599`.
+- Public API draft writes, visitor flow, payment/redeem writes, webhook processing, SMS, and email remain gated.
 
 ## Known Validation Commands
 
-| Command | Purpose | Notes |
-|---|---|---|
-| `node scripts/validate-current-ticket.js` | Verify `CODEX_TASK.md` and `REPO_CURRENT_STATE.md` agree on active/no-active ticket state. | Does not call GitHub, AWS, Roller, or the network. |
-| `node scripts/validate-followups.js` | Verify active followups have unique ids and no Done/Closed rows under Open. | Reads `FOLLOWUPS.md` and `docs/history/followups-done.md`. |
-| `node scripts/validate-history-archives.js` | Verify required history/backlog files exist and active docs link to them. | Added in T0128. |
-| `npm run validate` | Run the root documentation/workflow validators. | Required after source-of-truth changes. |
-| `git diff --check` | Check whitespace in the working diff. | Required before closeout/commit. |
-| `npm --prefix infra run validate:config-guards` | Prove dev/park-test config guard behavior. | Local only; no AWS or Roller calls. |
-| `npm --prefix infra run validate:park-test-synth` | Synthesize dev and park-test templates locally and verify separation. | Local only; no AWS or Roller calls. |
-| `npm --prefix infra run validate:roller-live-readonly-preflight` | Prove the T0153 Roller Live preflight script refuses write-like and sensitive endpoints. | Local only; no AWS or Roller calls. |
-| `npm --prefix infra run preflight:roller-live:park-test` | Run the T0153 Roller Live read-only preflight. | Reads AWS config/secrets and calls only hard-allowlisted Roller Live read endpoints. |
-| `npm --prefix infra run validate:roller-live-webhook-dry-run` | Prove the T0154 webhook dry-run rejects write-like args and unsafe config. | Local only; no AWS or Roller calls. |
-| `npm --prefix infra run webhook:live:park-test:dry-run` | Print the T0154 Live webhook dry-run plan. | Read-only AWS metadata only; no Roller calls, no AWS writes, no secret values. |
-| `npm --prefix infra run validate:roller-live-webhook-register` | Prove the T0155 registration guard blocks non-scoped Roller endpoints and requires the Live write phrase. | Local only; no AWS or Roller calls. |
-| `npm --prefix infra run register:webhook:live:park-test` | List/check the park-test Roller Live webhook registration. | Calls Roller Live auth and `GET /webhooks`; no webhook writes. |
-| `npm --prefix infra run register:webhook:live:park-test:apply` | Register or match the park-test Roller Live webhook. | Requires `ROLLER_LIVE_WEBHOOK_REGISTER_ALLOW_WRITE=I_UNDERSTAND_THIS_REGISTERS_LIVE_WEBHOOK_FOR_JUMPYARD_NACKA`; no duplicate is created when id `1465` already matches. |
-| `node scripts/validate-park-test-frontend-target.js` | Verify T0156 dev/park-test frontend API target config and docs. | Local only; no AWS, Cloudflare, or Roller calls. |
-| `npm run infra:check` | Type-check infra, run config guards, run park-test synth validation, run local Live guard self-tests, and synthesize the example dev stack. | Local synth/self-tests only; does not deploy or call Roller. |
-| App-specific lint/build commands | Validate phone/admin/kiosk app changes when a ticket touches app code or deployment target config. | T0156 used phone/admin builds with the park-test API env var. |
+Current closeout entrypoints:
+
+- `npm run validate`
+- `npm run infra:check`
+- `git diff --check`
+- `npm --prefix infra run validate:roller-live-quote-smoke`
+- `npm --prefix infra run validate:roller-live-draft-smoke`
+
+Historical command evidence lives in [docs/history/validation-log.md](docs/history/validation-log.md) and ticket-specific docs.
 
 ## Completed Tickets
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 155
-- Latest completed ticket: `T0156`
+- Archived completed-ticket count: 157
+- Latest completed ticket: `T0158`
 - Current active ticket: None active
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | No active ticket. | Idle | T0156 is complete; next recommended ticket is T0157 after explicit approval. |
+| None active | No active ticket. | Idle | T0158 is complete; next recommended ticket is T0159 after explicit approval. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0157` | Run Live quote/cost smoke. | Planned | Quote/cost only after explicit ticket start. No draft, payment, redeem, webhook registration, frontend traffic, SMS, or email. |
-| `T0158` | Controlled Live draft smoke. | Planned | One controlled draft only after explicit approval and write-gate handling. No payment or redeem. |
+| `T0159` | Internal Live payment smoke. | Planned | One internal paid test booking, then manual refund/cancel outside the app. |
+| `T0160` | Live existing-booking lookup smoke. | Planned | Prove booking-code lookup for one controlled Live booking through JumpYard Cloud; no all-day guest list. |
+| `T0161` | Existing-booking add-on smoke. | Planned | Prove one controlled add-on path for an existing booking; original booking should not be directly mutated under current decisions. |
+| `T0162` | Controlled Live redeem smoke. | Planned | Controlled booking only; no normal visitor traffic. |
+| `T0163` | Staff-assisted visitor test. | Planned | Limited assisted visitor test after controlled smokes and park approval. |
+| `T0164` | Outcome and go/no-go. | Planned | Documentation/report only. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -94,21 +92,13 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- T0156 local builds, AWS CORS deploy, CORS preflight, and closeout validation are recorded in [docs/t0156-park-test-frontend-target.md](docs/t0156-park-test-frontend-target.md).
-- T0155 local validation, Roller Live webhook registration, duplicate check, and safe intake smoke are recorded in [docs/t0155-live-webhook-registration.md](docs/t0155-live-webhook-registration.md).
-- T0154 local validation and dry-run output are recorded in [docs/t0154-live-webhook-dry-run.md](docs/t0154-live-webhook-dry-run.md).
-- T0153 local validation and successful Live read-only preflight are recorded in [docs/t0153-roller-live-readonly-preflight.md](docs/t0153-roller-live-readonly-preflight.md).
-- T0145 through T0152 closeout validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
-- Recent closeout validation for T0128 through T0144 is recorded in [docs/history/validation-log.md](docs/history/validation-log.md).
+- Latest validation is recorded in [docs/t0158-controlled-live-draft-smoke.md](docs/t0158-controlled-live-draft-smoke.md).
+- Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions
 
-- T0150 deployed `jumpyard-check-in-park-test-stack` to `CREATE_COMPLETE`. API endpoint: `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`; Aurora cluster: `jumpyard-check-in-park-test-aurora`; raw bucket: `jumpyard-check-in-park-test-raw-376129878018-eu-north-1`.
-- T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database; key operational data tables checked in T0151 remained empty.
-- T0152 deployed park-test gates for staff auth, guest message sends, webhook processing, booking draft/payment-start writes, redeem writes, and emergency stop. Park-test has `JUMPYARD_EMERGENCY_STOP=true` and all sensitive operation gates closed.
-- T0153 passed the first Roller Live read-only preflight for JumpYard Nacka Forum using `/jumpyard-check-in-park-test/roller/credentials`. Confirmed venue id `50871`, 60-minute entry product ids, availability reads, and payment settings visibility.
-- T0155 registered Roller Live webhook id `1465`, but park-test webhook processing remains disabled. A real Roller delivery should currently be acknowledged and ignored until a future scoped ticket opens processing.
-- T0156 replaced the park-test placeholder CORS origins with the two reviewed Cloudflare Pages origins and deployed that CORS change. Cloudflare Pages project creation/update still requires an authenticated Cloudflare workflow.
-- The park-test plan is not an approval to create additional AWS resources, call new Roller Live endpoints, create drafts/payments, redeem tickets, or run visitor traffic; those actions remain gated by scoped future tickets and explicit approvals.
+- Park-test AWS exists with dedicated API, Aurora, raw bucket, secrets, and gates; current resource details are in [AWS_RESOURCES.md](AWS_RESOURCES.md).
+- Roller Live access, webhook registration, frontend target setup, first quote/cost smoke, and first controlled draft smoke have passed for Nacka, but public API writes and guest-data reads remain scoped-ticket gated.
+- The park-test plan is not an approval to create additional AWS resources, call new Roller Live endpoints, create drafts/payments, redeem tickets, or run visitor traffic.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before the T0128 branch was created.
