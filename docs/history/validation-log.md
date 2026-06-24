@@ -2,6 +2,19 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0161 Live Catalog And Booking Index Readiness Validation
+
+- 2026-06-24: T0161 was activated after user approval on branch `codex/t0161-live-catalog-index-readiness`.
+- 2026-06-24: Added `infra/scripts/roller-live-catalog-index-readiness.ts` and npm scripts `catalog:index:live:park-test` plus `validate:roller-live-catalog-index-readiness`.
+- 2026-06-24: `npm --prefix infra run build` passed.
+- 2026-06-24: `npm --prefix infra run validate:roller-live-catalog-index-readiness` passed; guard self-test allowed only venue/products/availability reads and rejected 11 write/sensitive endpoint cases.
+- 2026-06-24: Initial Live readiness run stopped before AWS/Roller calls because AWS SSO had expired; `aws sso login --profile wrlds-dev` refreshed the session.
+- 2026-06-24: `npx ts-node --prefer-ts-exts scripts/roller-live-catalog-index-readiness.ts --config ./config/park-test.json --profile wrlds-dev --date 2026-06-29` passed.
+- 2026-06-24: Live readiness confirmed AWS account `376129878018`, region `eu-north-1`, Roller Live `https://api.roller.app`, venue `JumpYard Nacka Forum` id `50871`, 100 top-level products, 506 flattened product rows, 6/6 required entry parent products, 4/4 required add-ons, and product availability HTTP `200` with 108 online-sales-open sessions.
+- 2026-06-24: Live add-on ids documented for T0162: SkyRider parent `970335` with availability child such as `970336`, socks `970338`, lock `970334`, and coffee `970352`.
+- 2026-06-24: T0161 selected REST-on-demand lookup by guest-entered booking code for the first assisted park test; broad same-day booking export/Data API indexing remains deferred until explicitly scoped.
+- 2026-06-24: T0161 did not create AWS resources, deploy, write Aurora rows, read bookings/Data API/customers/guests/tickets/payments, create drafts/payments/refunds/redemptions/webhooks, open public API gates, enable webhook processing/staff auth/SMS/email, print secrets, or expose public PII.
+
 ## T0160 Live Existing-Booking Lookup Smoke Validation
 
 - 2026-06-24: T0160 was activated after user approval on branch `codex/t0160-live-existing-booking-lookup-smoke`, created from updated `main` after T0159 was squash-merged.
