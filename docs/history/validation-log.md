@@ -2,6 +2,17 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0162 Existing-Booking Add-On Smoke Validation
+
+- 2026-06-25: T0162 was activated on branch `codex/t0162-existing-booking-addon-smoke` for controlled Live booking `166490323`.
+- 2026-06-25: `npm --prefix infra run build`, `npm --prefix infra run validate:config-guards`, `npm --prefix infra run validate:park-test-synth`, `npm run validate`, `npm run infra:check`, and `git diff --check` passed.
+- 2026-06-25: Opening CDK diff for `infra/config/park-test-live-addon-smoke.json` changed only existing `LookupHandler` environment and existing `BookingHandler` code/environment; no new AWS resources were planned.
+- 2026-06-25: Opening deploy reached `UPDATE_COMPLETE`; readback confirmed exact lookup allowlist `166490323`, T0162 add-on allowlist `166490323`, T0159 payment smoke off, emergency stop on, redeem off, webhook processing off, staff auth off, SMS off, and email off.
+- 2026-06-25: API lookup for `166490323` returned `found`, source Roller Live, eligibility `ready`, and no public raw customer name/email/phone fields.
+- 2026-06-25: API availability for 2026-06-25 11:00 returned Live add-ons SkyRider `970336`, socks `970338`, lock `970334`, and coffee `970352`.
+- 2026-06-25: Add-product quote for one socks add-on failed closed with `original_booking_contact_unresolved`; safe Aurora readback found one `roller_bookings` row for `166490323`, no original customer id, no matching local contact, no add-on draft rows, no booking links, and no add-product events.
+- 2026-06-25: Closing deploy with normal `park-test.json` reached `UPDATE_COMPLETE`; readback confirmed lookup/add-on/draft gates closed again. Closed-gate lookup returned `live_lookup_disabled`, and closed-gate add-product quote returned `live_addon_smoke_disabled`.
+
 ## T0161 Live Catalog And Booking Index Readiness Validation
 
 - 2026-06-24: T0161 was activated after user approval on branch `codex/t0161-live-catalog-index-readiness`.

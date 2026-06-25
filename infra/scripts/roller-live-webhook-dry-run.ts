@@ -532,6 +532,7 @@ function buildValidSelfTestConfig(): ConfigValidationTarget {
     safetyGates: {
       emergencyStop: true,
       guestMessagingSendsEnabled: false,
+      liveAddOnSmokeAllowedIdentifiers: [],
       liveLookupSmokeAllowedIdentifiers: [],
       rollerBookingDraftWritesEnabled: false,
       rollerRedeemWritesEnabled: false,
