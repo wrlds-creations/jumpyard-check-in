@@ -2,6 +2,41 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0165 Linked Add-On Settlement Reconciliation Validation
+
+- 2026-06-25: T0165 was activated on branch `codex/t0165-linked-addon-settlement-reconciliation` after T0164 completed but before T0164 docs were committed.
+- 2026-06-25: Added separate CDK/config gate `infra/config/park-test-live-addon-settlement-smoke.json`, mapped `ENABLE_T0165_LINKED_ADDON_SETTLEMENT` and `T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS` to `LookupHandler`, and kept the gate independent from T0160 lookup smoke and T0162 add-on payment smoke.
+- 2026-06-25: Updated lookup/webhook reconciliation so a settled linked add-on Roller booking marks both the matching `prepayment_booking_drafts` row and `booking_links` row as `published`, sets amount owing to `0`, records linked booking reference, and writes `prepayment_draft.published` plus `booking_link.published` events.
+- 2026-06-25: `npm --prefix infra run build`, `npm --prefix infra run validate:config-guards`, `npm --prefix infra run validate:park-test-synth`, `npm --prefix infra run synth:park-test-addon-settlement-smoke`, and `git diff --check` passed before the smoke. Config guards prove T0165 settlement allows only exact identifiers and still blocks draft writes, redeem writes, webhook processing, staff auth, SMS, and email.
+- 2026-06-25: AWS identity verified account `376129878018`, region `eu-north-1`, through profile `wrlds-dev`.
+- 2026-06-25: Before-state Aurora readback showed prepayment draft `jypd_8bdb1d1035b84d30b2` and booking link `jyl_f35c09033efb40ba94` both `payment_pending`, link `linked_booking_reference=null`, and no settlement events for linked unique id `4a092241-6947-436a-97ea-04813a8404aa`.
+- 2026-06-25: Opening CDK diff for `infra/config/park-test-live-addon-settlement-smoke.json` changed only existing `LookupHandler` code/env and existing `WebhookHandler` code; no new AWS resources were planned.
+- 2026-06-25: Opening deploy reached `UPDATE_COMPLETE`; readback confirmed T0165 settlement `true`, allowlist `166497194,4a092241-6947-436a-97ea-04813a8404aa`, T0160 lookup smoke `false`, emergency stop `true`, and no booking/redeem/webhook/staff/SMS/email gates opened.
+- 2026-06-25: Public park-test API lookup for `166497194` returned HTTP `200`, status `found`, Roller unique id `4a092241-6947-436a-97ea-04813a8404aa`, status/payment status `Paid`, total `45`, amount owing `0`, one item, one ticket, source `roller`, and `refreshedFromRoller=true`.
+- 2026-06-25: After-state Aurora readback showed prepayment draft `jypd_8bdb1d1035b84d30b2` is `published` with amount owing `0`, booking link `jyl_f35c09033efb40ba94` is `published` with linked booking reference `166497194`, and settlement events `prepayment_draft.published` plus `booking_link.published` exist.
+- 2026-06-25: Closing deploy with normal `park-test.json` reached `UPDATE_COMPLETE`; readback confirmed T0160/T0165 lookup gates closed, booking draft/T0159/T0162 gates closed, webhook processing closed, and emergency stop still `true`.
+- 2026-06-25: Closed-gate API checks returned HTTP `409` with `live_lookup_disabled` for lookup and HTTP `409` with `live_addon_smoke_disabled` for add-product quote.
+- 2026-06-25: Closing `npx cdk diff -c config=./config/park-test.json --profile wrlds-dev --method=template` showed no differences.
+- 2026-06-25: T0165 did not create new AWS resources, create payments, refund, redeem, process webhooks, send SMS/email, enable staff auth, run normal visitor traffic, print secrets, print/persist raw payment JWTs, print full PII, mutate the original Roller booking, or leave public gates open.
+
+## T0164 Existing-Booking Add-On Payment Smoke Validation
+
+- 2026-06-25: T0164 was activated on branch `codex/t0164-existing-booking-addon-payment-smoke` after T0163 was squash-merged through PR #163.
+- 2026-06-25: AWS identity verified account `376129878018`, region `eu-north-1`, through profile `wrlds-dev`.
+- 2026-06-25: Opening CDK diff for `infra/config/park-test-live-addon-smoke.json` changed only existing `LookupHandler` and `BookingHandler` environment variables: exact lookup/add-on allowlists for `166490323`, booking draft writes on, and T0162 add-on smoke on. No new AWS resources were planned.
+- 2026-06-25: Opening deploy reached `UPDATE_COMPLETE`; readback confirmed lookup smoke `true`, add-on smoke `true`, draft writes `true`, allowlists `166490323`, emergency stop `true`, T0159 internal payment smoke `false`, redeem off, webhook processing off, staff auth off, SMS off, and email off.
+- 2026-06-25: Preflight `POST /v1/check-in/lookup` returned HTTP `200`, status `found`, payment status `Paid`, amount owing `0`, eligibility `ready`, and no raw PII in the summarized output.
+- 2026-06-25: Preflight `POST /v1/bookings/166490323/add-products/quote` returned HTTP `200`, status `quoted`, mode `separate_draft_booking`, one item, total `45`, amount owing `45`, and `wroteBooking=false`.
+- 2026-06-25: User completed the phone frontend flow on `https://jumpyard-check-in-park-test.pages.dev`, added one socks add-on, and reported successful payment.
+- 2026-06-25: Aurora Data API readback found add-product prepayment draft `jypd_8bdb1d1035b84d30b2`, Roller draft unique id `4a092241-6947-436a-97ea-04813a8404aa`, original booking `166490323`, add-on group `jyao_6024ae4dcd3b43ea9a`, total `4500`, amount owing `4500`, `payment_jwt_present=true`, `payment_config_available=true`, and local status `payment_pending`.
+- 2026-06-25: Aurora link readback found booking link `jyl_f35c09033efb40ba94`, original booking `166490323`, linked Roller unique id `4a092241-6947-436a-97ea-04813a8404aa`, linked booking reference `null`, and status `payment_pending`.
+- 2026-06-25: Aurora event readback found `booking.add_product_quote_succeeded` and `booking.add_product_draft_succeeded` events for `166490323`.
+- 2026-06-25: Direct read-only Roller Live verification of linked unique id `4a092241-6947-436a-97ea-04813a8404aa` returned HTTP `200`, booking reference `166497194`, status `Paid`, total `45`, amount owing `0`, one item, and one ticket. Secret values and raw payment JWT values were not printed.
+- 2026-06-25: Closing deploy with normal `park-test.json` reached `UPDATE_COMPLETE`; readback confirmed lookup smoke `false`, add-on smoke `false`, draft writes `false`, allowlists empty, and emergency stop `true`.
+- 2026-06-25: Closed-gate API checks returned HTTP `409` with `live_lookup_disabled` for lookup and HTTP `409` with `live_addon_smoke_disabled` for add-product quote.
+- 2026-06-25: Closing `npx cdk diff -c config=./config/park-test.json --profile wrlds-dev --method=template` showed no differences.
+- 2026-06-25: T0164 did not create AWS resources, leave public gates open, mutate the original Roller booking directly, redeem tickets, process webhooks, send SMS/email, run normal visitor traffic, print secrets, print/persist raw payment JWTs, or print full PII.
+
 ## T0163 Live Existing-Booking Contact Resolver Validation
 
 - 2026-06-25: T0163 was activated on branch `codex/t0163-live-booking-contact-resolver` after T0162 was squash-merged through PR #162.

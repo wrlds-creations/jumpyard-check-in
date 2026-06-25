@@ -39,6 +39,8 @@ interface TestConfig {
     guestMessagingSendsEnabled: boolean;
     liveAddOnSmokeAllowedIdentifiers?: string[];
     liveAddOnSmokeApproval?: string;
+    liveLinkedAddOnSettlementAllowedIdentifiers?: string[];
+    liveLinkedAddOnSettlementApproval?: string;
     liveLookupSmokeAllowedIdentifiers?: string[];
     liveLookupSmokeApproval?: string;
     livePaymentSmokeApproval?: string;
@@ -175,6 +177,27 @@ parkTestAddOnSmokeWithoutDraftWrites.safetyGates.rollerBookingDraftWritesEnabled
 const parkTestAddOnSmokeWithWebhook = cloneConfig(parkTestApprovedAddOnSmoke);
 parkTestAddOnSmokeWithWebhook.safetyGates.rollerWebhookProcessingEnabled = true;
 
+const parkTestApprovedLinkedAddOnSettlement = cloneConfig(parkTestConfig);
+parkTestApprovedLinkedAddOnSettlement.safetyGates.emergencyStop = true;
+parkTestApprovedLinkedAddOnSettlement.safetyGates.liveLinkedAddOnSettlementApproval =
+  'T0165_LINKED_ADDON_SETTLEMENT_RECONCILIATION_APPROVED';
+parkTestApprovedLinkedAddOnSettlement.safetyGates.liveLinkedAddOnSettlementAllowedIdentifiers = [
+  '166497194',
+  '4a092241-6947-436a-97ea-04813a8404aa',
+];
+
+const parkTestLinkedAddOnSettlementWithoutAllowedIdentifiers = cloneConfig(parkTestApprovedLinkedAddOnSettlement);
+parkTestLinkedAddOnSettlementWithoutAllowedIdentifiers.safetyGates.liveLinkedAddOnSettlementAllowedIdentifiers = [];
+
+const parkTestAllowedSettlementIdentifiersWithoutApproval = cloneConfig(parkTestApprovedLinkedAddOnSettlement);
+delete parkTestAllowedSettlementIdentifiersWithoutApproval.safetyGates.liveLinkedAddOnSettlementApproval;
+
+const parkTestLinkedAddOnSettlementWithDraftWrites = cloneConfig(parkTestApprovedLinkedAddOnSettlement);
+parkTestLinkedAddOnSettlementWithDraftWrites.safetyGates.rollerBookingDraftWritesEnabled = true;
+
+const parkTestLinkedAddOnSettlementWithRedeem = cloneConfig(parkTestApprovedLinkedAddOnSettlement);
+parkTestLinkedAddOnSettlementWithRedeem.safetyGates.rollerRedeemWritesEnabled = true;
+
 expectPass('dev Playground config passes', devConfig, 'dev');
 expectFail('unsafe dev-to-Live config fails', unsafeDevLiveConfig, /dev config must use Roller Playground/);
 expectPass('reviewed park-test Live config passes', parkTestConfig, 'park-test');
@@ -236,6 +259,27 @@ expectFail(
   'park-test add-on smoke still blocks webhook processing',
   parkTestAddOnSmokeWithWebhook,
   /rollerWebhookProcessingEnabled/,
+);
+expectPass('approved park-test linked add-on settlement config passes', parkTestApprovedLinkedAddOnSettlement, 'park-test');
+expectFail(
+  'park-test linked add-on settlement approval without allowed identifiers fails closed',
+  parkTestLinkedAddOnSettlementWithoutAllowedIdentifiers,
+  /liveLinkedAddOnSettlementAllowedIdentifiers/,
+);
+expectFail(
+  'park-test linked add-on settlement allowlist without approval fails closed',
+  parkTestAllowedSettlementIdentifiersWithoutApproval,
+  /liveLinkedAddOnSettlementAllowedIdentifiers must stay empty/,
+);
+expectFail(
+  'park-test linked add-on settlement still blocks draft writes',
+  parkTestLinkedAddOnSettlementWithDraftWrites,
+  /rollerBookingDraftWritesEnabled/,
+);
+expectFail(
+  'park-test linked add-on settlement still blocks redeem writes',
+  parkTestLinkedAddOnSettlementWithRedeem,
+  /rollerRedeemWritesEnabled/,
 );
 
 console.log('Config guard validation passed.');

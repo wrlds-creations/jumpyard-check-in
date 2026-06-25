@@ -29,6 +29,8 @@ const PARK_TEST_RESOURCE_PREFIX = 'jumpyard-check-in-park-test';
 export const PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL = 'T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED';
 export const PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL = 'T0160_LIVE_LOOKUP_SMOKE_APPROVED';
 export const PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL = 'T0162_EXISTING_BOOKING_ADDON_SMOKE_APPROVED';
+export const PARK_TEST_LINKED_ADD_ON_SETTLEMENT_APPROVAL =
+  'T0165_LINKED_ADDON_SETTLEMENT_RECONCILIATION_APPROVED';
 
 export interface JumpYardCloudConfig {
   readonly api: {
@@ -64,6 +66,8 @@ export interface JumpYardCloudConfig {
     readonly guestMessagingSendsEnabled: boolean;
     readonly liveAddOnSmokeAllowedIdentifiers: readonly string[];
     readonly liveAddOnSmokeApproval?: string;
+    readonly liveLinkedAddOnSettlementAllowedIdentifiers: readonly string[];
+    readonly liveLinkedAddOnSettlementApproval?: string;
     readonly liveLookupSmokeAllowedIdentifiers: readonly string[];
     readonly liveLookupSmokeApproval?: string;
     readonly livePaymentSmokeApproval?: string;
@@ -109,6 +113,8 @@ interface RawConfig {
     readonly guestMessagingSendsEnabled?: unknown;
     readonly liveAddOnSmokeAllowedIdentifiers?: unknown;
     readonly liveAddOnSmokeApproval?: unknown;
+    readonly liveLinkedAddOnSettlementAllowedIdentifiers?: unknown;
+    readonly liveLinkedAddOnSettlementApproval?: unknown;
     readonly liveLookupSmokeAllowedIdentifiers?: unknown;
     readonly liveLookupSmokeApproval?: unknown;
     readonly livePaymentSmokeApproval?: unknown;
@@ -262,6 +268,8 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     input.safetyGates.liveLookupSmokeApproval === PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL;
   const liveAddOnSmokeApproved =
     input.safetyGates.liveAddOnSmokeApproval === PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL;
+  const liveLinkedAddOnSettlementApproved =
+    input.safetyGates.liveLinkedAddOnSettlementApproval === PARK_TEST_LINKED_ADD_ON_SETTLEMENT_APPROVAL;
 
   if (!input.safetyGates.emergencyStop) {
     throw new Error(
@@ -290,6 +298,24 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
   if (!liveAddOnSmokeApproved && input.safetyGates.liveAddOnSmokeAllowedIdentifiers.length > 0) {
     throw new Error(
       'park-test safetyGates.liveAddOnSmokeAllowedIdentifiers must stay empty until a scoped add-on ticket enables it.',
+    );
+  }
+
+  if (
+    liveLinkedAddOnSettlementApproved &&
+    input.safetyGates.liveLinkedAddOnSettlementAllowedIdentifiers.length === 0
+  ) {
+    throw new Error(
+      'park-test linked add-on settlement approval requires safetyGates.liveLinkedAddOnSettlementAllowedIdentifiers.',
+    );
+  }
+
+  if (
+    !liveLinkedAddOnSettlementApproved &&
+    input.safetyGates.liveLinkedAddOnSettlementAllowedIdentifiers.length > 0
+  ) {
+    throw new Error(
+      'park-test safetyGates.liveLinkedAddOnSettlementAllowedIdentifiers must stay empty until a scoped settlement ticket enables it.',
     );
   }
 
@@ -474,6 +500,15 @@ function readSafetyGatesConfig(raw: RawConfig['safetyGates']): JumpYardCloudConf
       raw?.liveAddOnSmokeApproval,
       '',
       'safetyGates.liveAddOnSmokeApproval',
+    ),
+    liveLinkedAddOnSettlementAllowedIdentifiers: readOptionalStringArray(
+      raw?.liveLinkedAddOnSettlementAllowedIdentifiers,
+      'safetyGates.liveLinkedAddOnSettlementAllowedIdentifiers',
+    ),
+    liveLinkedAddOnSettlementApproval: readOptionalString(
+      raw?.liveLinkedAddOnSettlementApproval,
+      '',
+      'safetyGates.liveLinkedAddOnSettlementApproval',
     ),
     liveLookupSmokeAllowedIdentifiers: readOptionalStringArray(
       raw?.liveLookupSmokeAllowedIdentifiers,

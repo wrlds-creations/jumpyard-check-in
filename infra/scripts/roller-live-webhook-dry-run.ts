@@ -533,6 +533,7 @@ function buildValidSelfTestConfig(): ConfigValidationTarget {
       emergencyStop: true,
       guestMessagingSendsEnabled: false,
       liveAddOnSmokeAllowedIdentifiers: [],
+      liveLinkedAddOnSettlementAllowedIdentifiers: [],
       liveLookupSmokeAllowedIdentifiers: [],
       rollerBookingDraftWritesEnabled: false,
       rollerRedeemWritesEnabled: false,
