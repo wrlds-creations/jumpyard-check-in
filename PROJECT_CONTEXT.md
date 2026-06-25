@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, migrations, Live setup, Cloudflare targets, quote/draft/payment/lookup/add-on/settlement/redeem smokes, and all sensitive gates closed again. Receipt/confirmation handling, frontend redeem rehearsal, UI/UX readiness, webhook processing, visitor traffic, payment-start writes, SMS, and email remain gated.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, migrations, Live setup, Cloudflare targets, quote/draft/payment/lookup/add-on/settlement/redeem smokes, and all sensitive gates closed again. Receipt/confirmation delivery proof, frontend redeem rehearsal, UI/UX readiness, webhook processing, visitor traffic, payment-start writes, SMS, and email remain gated.
 
 ## Context Archives
 
@@ -56,6 +56,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Staff/admin handoff uses server-owned staff auth in dev and can list, search, inspect, and staff-confirm redeem ready sessions.
 - Buy-entry can create a Roller draft/payment path through JumpYard Cloud using the approved Roller payment package.
 - Existing-booking add-products create a separate linked add-on draft booking; the original Roller booking is not mutated in that path.
+- Park-test PWA new-booking and existing-booking add-on drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; actual Live delivery still needs proof on the next controlled paid PWA transaction after deployment.
 - Gift card and Klippkort inputs are payment-prep inputs because Roller applies them during booking costs/draft creation.
 - Current V1 membership/`10-Kort` behavior is code validation/amount reduction through `discounts: [{ code }]`, not remaining-visit balance display.
 - SkyRider is the first capacity-gated add-on and requires height/consent before quote/draft/payment side effects.

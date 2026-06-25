@@ -2,6 +2,17 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0167 Receipt And Confirmation Handling Validation
+
+- 2026-06-25: T0167 was activated on branch `codex/t0167-receipt-confirmation-handling` after T0166 was squash-merged through PR #165.
+- 2026-06-25: Code trace found the phone frontend sent `sendConfirmations=false` for both new-booking drafts and existing-booking add-on drafts, while the booking Lambda already normalized and forwarded `sendConfirmations` to Roller `POST /bookings/draft`.
+- 2026-06-25: Updated `jumpyard-checkin-phone/src/flow/cloudClient.ts` so `createDraftBooking` and `createAddProductDraft` send `sendConfirmations=true`.
+- 2026-06-25: Updated `infra/lambda/booking/index.js` so `booking.draft_published_no_payment`, `booking.draft_succeeded`, and `booking.add_product_draft_succeeded` event payloads include the safe boolean `sendConfirmations`.
+- 2026-06-25: Updated payment-complete guest copy so new-booking and add-on payment states say Roller sends confirmation/receipt to the booking email.
+- 2026-06-25: Documented the receipt model in `docs/t0167-receipt-confirmation-handling.md`: Roller remains the receipt sender for park-test, JumpYard does not send a separate receipt email in this ticket, and actual Live email delivery must be proven on the next controlled paid PWA transaction after deployment.
+- 2026-06-25: `node --check infra/lambda/booking/index.js`, `npm --prefix infra run build`, `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, `npm run validate`, `git diff --check`, and `npm run infra:check` passed. Frontend lint reported four existing `@next/next/no-img-element` warnings only.
+- 2026-06-25: T0167 did not create AWS resources, deploy, create a new paid Live smoke, refund, redeem, process webhooks, send SMS/email, run visitor traffic, print secrets, print/persist raw payment JWTs, or expose public PII output.
+
 ## T0166 Controlled Live Redeem Smoke Validation
 
 - 2026-06-25: T0166 was activated on branch `codex/t0166-controlled-live-redeem-smoke` after T0165 was squash-merged through PR #164.
