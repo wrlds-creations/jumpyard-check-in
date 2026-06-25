@@ -619,7 +619,7 @@ export async function createDraftBooking(
         items,
         name: `${customer.firstName} ${customer.lastName}`.trim() || 'JumpYard booking',
         requireAvailability,
-        sendConfirmations: false,
+        sendConfirmations: true,
       }),
     });
     body = await parseBookingResponse<DraftResponse>(response);
@@ -712,7 +712,7 @@ export async function createAddProductDraft(
     items,
     name: `Add-on for ${bookingReference}`,
     requireAvailability,
-    sendConfirmations: false,
+    sendConfirmations: true,
   };
   if (customer) payload.customer = customer;
 

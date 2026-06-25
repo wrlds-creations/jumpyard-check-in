@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-25
-- Current branch: `codex/t0166-controlled-live-redeem-smoke`
-- Current status: No active ticket; T0166 completed and changes are uncommitted on the ticket branch.
+- Current branch: `codex/t0167-receipt-confirmation-handling`
+- Current status: No active ticket; T0167 completed locally and pushed on the ticket branch.
 - Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (165 completed tickets; latest `T0166`).
-- Recommended next step: run T0167 receipt and confirmation handling when ready.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (166 completed tickets; latest `T0167`).
+- Recommended next step: deploy the latest receipt branch when ready, then run the controlled receipt email proof on 2026-06-26 before T0168 frontend redeem rehearsal.
 
 ## Current Structure
 
@@ -50,8 +50,9 @@ History and planning archives:
 - Park-test existing-booking add-on payment smoke: [docs/t0164-existing-booking-addon-payment-smoke.md](docs/t0164-existing-booking-addon-payment-smoke.md)
 - Park-test linked add-on settlement reconciliation: [docs/t0165-linked-addon-settlement-reconciliation.md](docs/t0165-linked-addon-settlement-reconciliation.md)
 - Park-test controlled Live redeem smoke: [docs/t0166-controlled-live-redeem-smoke.md](docs/t0166-controlled-live-redeem-smoke.md)
+- Park-test receipt and confirmation handling: [docs/t0167-receipt-confirmation-handling.md](docs/t0167-receipt-confirmation-handling.md)
 
-T0156-T0166 current park-test status:
+T0156-T0167 current park-test status:
 
 - Park-test Cloudflare Pages projects exist for phone/admin and point at `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`.
 - T0157 passed a guarded Roller Live quote/cost smoke; T0158 created one controlled Roller Live draft `f81e46e5-5cf7-4193-b578-44a1b8140599`.
@@ -64,6 +65,7 @@ T0156-T0166 current park-test status:
 - T0164 completed the controlled retry of the existing-booking add-on payment path through the park-test phone frontend for booking `166490323`. The user paid one socks add-on; Roller Live readback returned linked add-on booking `166497194`, status `Paid`, total `45`, amount owing `0`.
 - T0165 reconciled the paid linked add-on booking through a scoped settlement gate. Aurora now marks prepayment draft `jypd_8bdb1d1035b84d30b2` and booking link `jyl_f35c09033efb40ba94` as `published`, with linked booking reference `166497194`, and the normal closed config is redeployed.
 - T0166 completed one controlled Live ticket redemption for original booking `166490323`, Roller unique id `9ae484b0-d9a9-4dad-b3d5-4ad3b0e25088`, and ticket `166490323-560714728`. The smoke used the park-test phone/admin session flow and Roller Live `POST /redemptions` returned HTTP `200`; Aurora marks session `jycs_mqtimdxf_bb33c94c` as `redeemed` and handoff `completed`.
+- T0167 fixed the PWA receipt/confirmation code path after the T0159 and T0164 payments produced no guest receipt email. Code trace found the PWA sent `sendConfirmations=false`; phone new-booking and add-on draft requests now send `sendConfirmations=true`, backend event logs expose the safe flag, and guest copy points to Roller confirmation/receipt email. Actual Roller email delivery remains to be proven on the next controlled paid PWA transaction after deployment.
 - Public API draft writes, Live lookup, redeem writes, staff auth, webhook processing, SMS, and email are closed again; normal visitor traffic remains gated.
 
 ## Known Validation Commands
@@ -86,21 +88,20 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 165
-- Latest completed ticket: `T0166`
+- Archived completed-ticket count: 166
+- Latest completed ticket: `T0167`
 - Current active ticket: None active
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | - | No active ticket. | T0166 completed on branch `codex/t0166-controlled-live-redeem-smoke`; not committed yet. |
+| None active | - | No active ticket. | T0167 completed locally on branch `codex/t0167-receipt-confirmation-handling`; actual Live receipt email delivery still needs proof on the next controlled paid PWA transaction after deployment. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0167` | Receipt and confirmation handling. | Planned | Define and verify receipts/confirmation for both new bookings and existing-booking add-on purchases before park-test. |
 | `T0168` | Frontend redeem rehearsal. | Planned | Love tests the deployed phone/admin redeem flow end to end before a real visitor; exact booking/ticket scope only if another redeem is needed. |
 | `T0169` | Park-test UI/UX readiness. | Planned | Final guest/staff UI pass before assisted visitor testing; no new Live unlock by itself. |
 | `T0170` | Staff-assisted visitor test. | Planned | Limited assisted visitor test after controlled smokes, receipt handling, frontend redeem rehearsal, UI/UX readiness, and park approval. |
@@ -112,7 +113,7 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- Latest validation is recorded in [docs/t0166-controlled-live-redeem-smoke.md](docs/t0166-controlled-live-redeem-smoke.md).
+- Latest validation is recorded in [docs/t0167-receipt-confirmation-handling.md](docs/t0167-receipt-confirmation-handling.md).
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions
