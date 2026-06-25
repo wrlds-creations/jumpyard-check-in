@@ -195,14 +195,18 @@ function validateDevTemplate(dev: SynthResult): void {
   });
   expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'true',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'dev',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-session`, {
     ENABLE_GUEST_MESSAGE_SENDS: 'true',
     ENABLE_STAFF_AUTH: 'true',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'dev',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'true',
@@ -283,14 +287,18 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
@@ -322,14 +330,18 @@ function validateParkTestPaymentSmokeTemplate(parkTest: SynthResult): void {
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
@@ -369,14 +381,18 @@ function validateParkTestLookupSmokeTemplate(parkTest: SynthResult): void {
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
@@ -416,14 +432,18 @@ function validateParkTestAddOnSmokeTemplate(parkTest: SynthResult): void {
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
@@ -464,14 +484,18 @@ function validateParkTestAddOnSettlementSmokeTemplate(parkTest: SynthResult): vo
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
@@ -482,12 +506,66 @@ function validateParkTestAddOnSettlementSmokeTemplate(parkTest: SynthResult): vo
   console.log('[pass] park-test linked add-on settlement synth opens only controlled lookup reconciliation');
 }
 
+function validateParkTestRedeemSmokeTemplate(parkTest: SynthResult): void {
+  const strings = collectStrings(parkTest.template);
+
+  expect(
+    parkTest.stackName === `${PARK_TEST_PREFIX}-stack`,
+    `Expected park-test redeem smoke stack name ${PARK_TEST_PREFIX}-stack.`,
+  );
+  expectContains(strings, PARK_TEST_PREFIX, 'park-test redeem smoke');
+  expectContains(strings, 'https://api.roller.app', 'park-test redeem smoke');
+  expectContains(strings, 'live', 'park-test redeem smoke');
+  expectNoBookingTimeMessagingSchedule(parkTest.template);
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-lookup`, {
+    ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'true',
+    ENABLE_T0165_LINKED_ADDON_SETTLEMENT: 'false',
+    T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '166490323,9ae484b0-d9a9-4dad-b3d5-4ad3b0e25088',
+    T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS: '',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
+    ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'false',
+    ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
+    ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
+    T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
+    ENABLE_ROLLER_REDEEM_WRITES: 'true',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS:
+      '166490323,9ae484b0-d9a9-4dad-b3d5-4ad3b0e25088,166490323-560714728',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
+    ENABLE_GUEST_MESSAGE_SENDS: 'false',
+    ENABLE_STAFF_AUTH: 'true',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS:
+      '166490323,9ae484b0-d9a9-4dad-b3d5-4ad3b0e25088,166490323-560714728',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
+    ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+
+  console.log('[pass] park-test Live redeem smoke synth opens only controlled lookup, staff auth, and redeem');
+}
+
 const dev = synthConfig('config/dev.json');
 const parkTest = synthConfig('config/park-test.json');
 const parkTestAddOnSmoke = synthConfig('config/park-test-live-addon-smoke.json');
 const parkTestAddOnSettlementSmoke = synthConfig('config/park-test-live-addon-settlement-smoke.json');
 const parkTestLookupSmoke = synthConfig('config/park-test-live-lookup-smoke.json');
 const parkTestPaymentSmoke = synthConfig('config/park-test-live-payment-smoke.json');
+const parkTestRedeemSmoke = synthConfig('config/park-test-live-redeem-smoke.json');
 
 validateDevTemplate(dev);
 validateParkTestTemplate(parkTest);
@@ -495,5 +573,6 @@ validateParkTestLookupSmokeTemplate(parkTestLookupSmoke);
 validateParkTestAddOnSmokeTemplate(parkTestAddOnSmoke);
 validateParkTestAddOnSettlementSmokeTemplate(parkTestAddOnSettlementSmoke);
 validateParkTestPaymentSmokeTemplate(parkTestPaymentSmoke);
+validateParkTestRedeemSmokeTemplate(parkTestRedeemSmoke);
 
 console.log('Park-test synth validation passed.');

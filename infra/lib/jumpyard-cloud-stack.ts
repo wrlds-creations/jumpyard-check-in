@@ -21,6 +21,7 @@ import {
   PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL,
   PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL,
   PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL,
+  PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL,
 } from './config';
 
 interface JumpYardCloudStackProps extends StackProps {
@@ -778,6 +779,11 @@ export class JumpYardCloudStack extends Stack {
       environment.EMAIL_REPLY_TO_ADDRESSES = resources.checkinEmailReplyToAddresses.join(',');
       environment.ENABLE_GUEST_MESSAGE_SENDS = String(resources.safetyGates.guestMessagingSendsEnabled);
       environment.ENABLE_STAFF_AUTH = String(resources.safetyGates.staffAuthEnabled);
+      environment.ENABLE_T0166_LIVE_REDEEM_SMOKE = String(
+        resources.safetyGates.liveRedeemSmokeApproval === PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL,
+      );
+      environment.T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS =
+        resources.safetyGates.liveRedeemSmokeAllowedIdentifiers.join(',');
       environment.SMS_PROVIDER = 'aws_sns';
       environment.SMS_SENDER_ID = 'JumpYard';
       environment.STAFF_AUTH_SECRET_ARN = resources.staffAuthSecret.secretArn;
@@ -812,8 +818,13 @@ export class JumpYardCloudStack extends Stack {
 
     if (handlerName === 'redeem') {
       environment.ENABLE_ROLLER_REDEEM_WRITES = String(resources.safetyGates.rollerRedeemWritesEnabled);
+      environment.ENABLE_T0166_LIVE_REDEEM_SMOKE = String(
+        resources.safetyGates.liveRedeemSmokeApproval === PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL,
+      );
       environment.REDEEM_DEV_TOKEN_SECRET_ARN = resources.redeemDevTokenSecret.secretArn;
       environment.STAFF_AUTH_SECRET_ARN = resources.staffAuthSecret.secretArn;
+      environment.T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS =
+        resources.safetyGates.liveRedeemSmokeAllowedIdentifiers.join(',');
     }
 
     const fn = new lambda.Function(this, id, {

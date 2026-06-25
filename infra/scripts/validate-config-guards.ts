@@ -44,6 +44,8 @@ interface TestConfig {
     liveLookupSmokeAllowedIdentifiers?: string[];
     liveLookupSmokeApproval?: string;
     livePaymentSmokeApproval?: string;
+    liveRedeemSmokeAllowedIdentifiers?: string[];
+    liveRedeemSmokeApproval?: string;
     rollerBookingDraftWritesEnabled: boolean;
     rollerRedeemWritesEnabled: boolean;
     rollerWebhookProcessingEnabled: boolean;
@@ -198,6 +200,37 @@ parkTestLinkedAddOnSettlementWithDraftWrites.safetyGates.rollerBookingDraftWrite
 const parkTestLinkedAddOnSettlementWithRedeem = cloneConfig(parkTestApprovedLinkedAddOnSettlement);
 parkTestLinkedAddOnSettlementWithRedeem.safetyGates.rollerRedeemWritesEnabled = true;
 
+const parkTestApprovedRedeemSmoke = cloneConfig(parkTestConfig);
+parkTestApprovedRedeemSmoke.safetyGates.emergencyStop = true;
+parkTestApprovedRedeemSmoke.safetyGates.liveRedeemSmokeApproval = 'T0166_CONTROLLED_LIVE_REDEEM_SMOKE_APPROVED';
+parkTestApprovedRedeemSmoke.safetyGates.liveRedeemSmokeAllowedIdentifiers = [
+  '166490323',
+  '9ae484b0-d9a9-4dad-b3d5-4ad3b0e25088',
+  '166490323-560714728',
+];
+parkTestApprovedRedeemSmoke.safetyGates.rollerRedeemWritesEnabled = true;
+parkTestApprovedRedeemSmoke.safetyGates.staffAuthEnabled = true;
+
+const parkTestRedeemSmokeWithoutAllowedIdentifiers = cloneConfig(parkTestApprovedRedeemSmoke);
+parkTestRedeemSmokeWithoutAllowedIdentifiers.safetyGates.liveRedeemSmokeAllowedIdentifiers = [];
+
+const parkTestAllowedRedeemIdentifiersWithoutApproval = cloneConfig(parkTestApprovedRedeemSmoke);
+delete parkTestAllowedRedeemIdentifiersWithoutApproval.safetyGates.liveRedeemSmokeApproval;
+parkTestAllowedRedeemIdentifiersWithoutApproval.safetyGates.rollerRedeemWritesEnabled = false;
+parkTestAllowedRedeemIdentifiersWithoutApproval.safetyGates.staffAuthEnabled = false;
+
+const parkTestRedeemSmokeWithoutRedeemWrites = cloneConfig(parkTestApprovedRedeemSmoke);
+parkTestRedeemSmokeWithoutRedeemWrites.safetyGates.rollerRedeemWritesEnabled = false;
+
+const parkTestRedeemSmokeWithoutStaffAuth = cloneConfig(parkTestApprovedRedeemSmoke);
+parkTestRedeemSmokeWithoutStaffAuth.safetyGates.staffAuthEnabled = false;
+
+const parkTestRedeemSmokeWithDraftWrites = cloneConfig(parkTestApprovedRedeemSmoke);
+parkTestRedeemSmokeWithDraftWrites.safetyGates.rollerBookingDraftWritesEnabled = true;
+
+const parkTestRedeemSmokeWithWebhook = cloneConfig(parkTestApprovedRedeemSmoke);
+parkTestRedeemSmokeWithWebhook.safetyGates.rollerWebhookProcessingEnabled = true;
+
 expectPass('dev Playground config passes', devConfig, 'dev');
 expectFail('unsafe dev-to-Live config fails', unsafeDevLiveConfig, /dev config must use Roller Playground/);
 expectPass('reviewed park-test Live config passes', parkTestConfig, 'park-test');
@@ -280,6 +313,37 @@ expectFail(
   'park-test linked add-on settlement still blocks redeem writes',
   parkTestLinkedAddOnSettlementWithRedeem,
   /rollerRedeemWritesEnabled/,
+);
+expectPass('approved park-test Live redeem smoke config passes', parkTestApprovedRedeemSmoke, 'park-test');
+expectFail(
+  'park-test redeem smoke approval without allowed identifiers fails closed',
+  parkTestRedeemSmokeWithoutAllowedIdentifiers,
+  /liveRedeemSmokeAllowedIdentifiers/,
+);
+expectFail(
+  'park-test redeem smoke allowlist without approval fails closed',
+  parkTestAllowedRedeemIdentifiersWithoutApproval,
+  /liveRedeemSmokeAllowedIdentifiers must stay empty/,
+);
+expectFail(
+  'park-test redeem smoke approval without redeem writes fails closed',
+  parkTestRedeemSmokeWithoutRedeemWrites,
+  /rollerRedeemWritesEnabled=true/,
+);
+expectFail(
+  'park-test redeem smoke approval without staff auth fails closed',
+  parkTestRedeemSmokeWithoutStaffAuth,
+  /staffAuthEnabled=true/,
+);
+expectFail(
+  'park-test redeem smoke still blocks draft writes',
+  parkTestRedeemSmokeWithDraftWrites,
+  /rollerBookingDraftWritesEnabled/,
+);
+expectFail(
+  'park-test redeem smoke still blocks webhook processing',
+  parkTestRedeemSmokeWithWebhook,
+  /rollerWebhookProcessingEnabled/,
 );
 
 console.log('Config guard validation passed.');

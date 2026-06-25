@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-25
-- Current branch: `codex/t0165-linked-addon-settlement-reconciliation`
-- Current status: No active ticket; T0165 completed and changes are uncommitted on the ticket branch.
+- Current branch: `codex/t0166-controlled-live-redeem-smoke`
+- Current status: No active ticket; T0166 completed and changes are uncommitted on the ticket branch.
 - Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (164 completed tickets; latest `T0165`).
-- Recommended next step: run T0166 controlled Live redeem smoke when ready.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (165 completed tickets; latest `T0166`).
+- Recommended next step: run T0167 receipt and confirmation handling when ready.
 
 ## Current Structure
 
@@ -49,8 +49,9 @@ History and planning archives:
 - Park-test Live contact resolver: [docs/t0163-live-contact-resolver.md](docs/t0163-live-contact-resolver.md)
 - Park-test existing-booking add-on payment smoke: [docs/t0164-existing-booking-addon-payment-smoke.md](docs/t0164-existing-booking-addon-payment-smoke.md)
 - Park-test linked add-on settlement reconciliation: [docs/t0165-linked-addon-settlement-reconciliation.md](docs/t0165-linked-addon-settlement-reconciliation.md)
+- Park-test controlled Live redeem smoke: [docs/t0166-controlled-live-redeem-smoke.md](docs/t0166-controlled-live-redeem-smoke.md)
 
-T0156-T0165 current park-test status:
+T0156-T0166 current park-test status:
 
 - Park-test Cloudflare Pages projects exist for phone/admin and point at `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`.
 - T0157 passed a guarded Roller Live quote/cost smoke; T0158 created one controlled Roller Live draft `f81e46e5-5cf7-4193-b578-44a1b8140599`.
@@ -62,7 +63,8 @@ T0156-T0165 current park-test status:
 - T0163 found the missing contact path: booking detail exposes `customerId`, and `GET /guests/{customerId}` exposes complete first/last/email/phone. The BookingHandler now has this fallback deployed with normal park-test gates closed.
 - T0164 completed the controlled retry of the existing-booking add-on payment path through the park-test phone frontend for booking `166490323`. The user paid one socks add-on; Roller Live readback returned linked add-on booking `166497194`, status `Paid`, total `45`, amount owing `0`.
 - T0165 reconciled the paid linked add-on booking through a scoped settlement gate. Aurora now marks prepayment draft `jypd_8bdb1d1035b84d30b2` and booking link `jyl_f35c09033efb40ba94` as `published`, with linked booking reference `166497194`, and the normal closed config is redeployed.
-- Public API draft writes and Live lookup are closed again; visitor flow, redeem writes, webhook processing, SMS, and email remain gated.
+- T0166 completed one controlled Live ticket redemption for original booking `166490323`, Roller unique id `9ae484b0-d9a9-4dad-b3d5-4ad3b0e25088`, and ticket `166490323-560714728`. The smoke used the park-test phone/admin session flow and Roller Live `POST /redemptions` returned HTTP `200`; Aurora marks session `jycs_mqtimdxf_bb33c94c` as `redeemed` and handoff `completed`.
+- Public API draft writes, Live lookup, redeem writes, staff auth, webhook processing, SMS, and email are closed again; normal visitor traffic remains gated.
 
 ## Known Validation Commands
 
@@ -76,6 +78,7 @@ Current closeout entrypoints:
 - `npm --prefix infra run validate:roller-live-catalog-index-readiness`
 - `npm --prefix infra run validate:roller-live-contact-resolver`
 - `npm --prefix infra run synth:park-test-addon-settlement-smoke`
+- `npm --prefix infra run synth:park-test-redeem-smoke`
 
 Historical command evidence lives in [docs/history/validation-log.md](docs/history/validation-log.md) and ticket-specific docs.
 
@@ -83,25 +86,25 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 164
-- Latest completed ticket: `T0165`
+- Archived completed-ticket count: 165
+- Latest completed ticket: `T0166`
 - Current active ticket: None active
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | - | No active ticket. | T0165 completed on branch `codex/t0165-linked-addon-settlement-reconciliation`; not committed yet. |
+| None active | - | No active ticket. | T0166 completed on branch `codex/t0166-controlled-live-redeem-smoke`; not committed yet. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0166` | Controlled Live redeem smoke. | Planned | Controlled booking only; no normal visitor traffic. |
 | `T0167` | Receipt and confirmation handling. | Planned | Define and verify receipts/confirmation for both new bookings and existing-booking add-on purchases before park-test. |
-| `T0168` | Park-test UI/UX readiness. | Planned | Final guest/staff UI pass before assisted visitor testing; no new Live unlock by itself. |
-| `T0169` | Staff-assisted visitor test. | Planned | Limited assisted visitor test after controlled smokes, receipt handling, UI/UX readiness, and park approval. |
-| `T0170` | Outcome and go/no-go. | Planned | Documentation/report only. |
+| `T0168` | Frontend redeem rehearsal. | Planned | Love tests the deployed phone/admin redeem flow end to end before a real visitor; exact booking/ticket scope only if another redeem is needed. |
+| `T0169` | Park-test UI/UX readiness. | Planned | Final guest/staff UI pass before assisted visitor testing; no new Live unlock by itself. |
+| `T0170` | Staff-assisted visitor test. | Planned | Limited assisted visitor test after controlled smokes, receipt handling, frontend redeem rehearsal, UI/UX readiness, and park approval. |
+| `T0171` | Outcome and go/no-go. | Planned | Documentation/report only. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -109,13 +112,13 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- Latest validation is recorded in [docs/t0165-linked-addon-settlement-reconciliation.md](docs/t0165-linked-addon-settlement-reconciliation.md).
+- Latest validation is recorded in [docs/t0166-controlled-live-redeem-smoke.md](docs/t0166-controlled-live-redeem-smoke.md).
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions
 
 - Park-test AWS exists with dedicated API, Aurora, raw bucket, secrets, and gates; current resource details are in [AWS_RESOURCES.md](AWS_RESOURCES.md).
-- Roller Live access, webhook registration, frontend target setup, first quote/cost smoke, first controlled draft smoke, first internal paid booking smoke, controlled lookup, Live catalog/index readiness, guest-detail contact resolution, controlled existing-booking add-on payment, and scoped linked add-on settlement reconciliation have passed for Nacka, but public API writes are closed again and guest-data reads remain scoped-ticket gated.
-- The park-test plan is not an approval to create additional AWS resources, call new Roller Live endpoints, create drafts/payments, redeem tickets, or run visitor traffic.
+- Roller Live access, webhook registration, frontend target setup, first quote/cost smoke, first controlled draft smoke, first internal paid booking smoke, controlled lookup, Live catalog/index readiness, guest-detail contact resolution, controlled existing-booking add-on payment, scoped linked add-on settlement reconciliation, and controlled Live redeem have passed for Nacka, but public API writes, staff auth, and redeem are closed again and guest-data reads remain scoped-ticket gated.
+- The park-test plan is not an approval to create additional AWS resources, call new Roller Live endpoints, create drafts/payments, redeem additional tickets, or run visitor traffic.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before the T0128 branch was created.

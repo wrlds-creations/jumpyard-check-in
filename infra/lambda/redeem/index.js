@@ -38,6 +38,8 @@ const DEFAULT_STAFF_AUTH_TTL_MINUTES = 12 * 60;
 const STAFF_AUTH_CONFIG_CACHE_MS = 30 * 1000;
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
+const ROLLER_LIVE_BASE_URL = 'https://api.roller.app';
+const PRODUCT_CACHE_TTL_MS = 15 * 60 * 1000;
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
@@ -48,6 +50,7 @@ let cachedToken = null;
 let cachedRedeemDevToken = null;
 let cachedStaffAuthConfig = null;
 let cachedStaffAuthConfigExpiresAt = 0;
+let cachedProducts = null;
 
 exports.handler = async (event) => {
   let correlationId = getHeader(event, 'x-correlation-id') || createCorrelationId();
@@ -148,11 +151,12 @@ exports.handler = async (event) => {
       });
     }
 
-    if (!isRollerRedeemWriteEnabled()) {
+    const writeGate = evaluateRedeemWriteGate(redeemContext, request, decision);
+    if (!writeGate.enabled) {
       await persistCheckinAttempt({
         booking: redeemContext.booking,
         correlationId,
-        errorCode: 'redeem_write_disabled',
+        errorCode: writeGate.reason,
         idempotencyKey: request.idempotencyKey,
         selectedTicketIds: decision.selectedTicketIds,
         status: 'write_disabled',
@@ -161,8 +165,8 @@ exports.handler = async (event) => {
       return jsonResponse(409, correlationId, {
         status: 'blocked',
         error: {
-          code: 'redeem_write_disabled',
-          message: 'Roller redemption writes are disabled for this JumpYard Cloud environment.',
+          code: writeGate.reason,
+          message: writeGate.message,
         },
         redeemPlan: buildRedeemPlan(redeemContext, decision, false),
       });
@@ -233,6 +237,27 @@ exports.handler = async (event) => {
       });
     }
 
+    const refreshedWriteGate = evaluateRedeemWriteGate(refreshedContext, request, refreshedDecision);
+    if (!refreshedWriteGate.enabled) {
+      await persistCheckinAttempt({
+        booking: refreshedContext.booking,
+        correlationId,
+        errorCode: refreshedWriteGate.reason,
+        idempotencyKey: request.idempotencyKey,
+        selectedTicketIds: refreshedDecision.selectedTicketIds,
+        status: 'write_disabled',
+      });
+
+      return jsonResponse(409, correlationId, {
+        status: 'blocked',
+        error: {
+          code: refreshedWriteGate.reason,
+          message: refreshedWriteGate.message,
+        },
+        redeemPlan: buildRedeemPlan(refreshedContext, refreshedDecision, false),
+      });
+    }
+
     const requestHash = hashJson({
       bookingReference: refreshedContext.booking.bookingReference,
       redemptionDevice: request.redemptionDevice,
@@ -272,7 +297,7 @@ exports.handler = async (event) => {
           ticketCount: refreshedDecision.selectedTicketIds.length,
           refreshedFromRoller: true,
         },
-        summary: 'Redeem completed through Roller Playground.',
+        summary: 'Redeem completed through Roller.',
       });
 
       return jsonResponse(200, correlationId, {
@@ -947,6 +972,10 @@ function getTicketRedeemEligibility(ticket) {
     return { reason: `non_redeemable_product_type:${nonRedeemableMarker}`, redeemable: false };
   }
 
+  if (isT0166LiveRedeemSmokeTicketAllowed(ticket.ticketId)) {
+    return { reason: 't0166_allowlisted_ticket', redeemable: true };
+  }
+
   if (markers.some((marker) => REDEEMABLE_PRODUCT_KEYS.has(marker))) {
     return { reason: 'redeemable_product_type', redeemable: true };
   }
@@ -1016,12 +1045,89 @@ function isUsedRedeemStatus(status) {
   return normalized.includes('redeemed') || normalized.includes('used') || normalized.includes('exhausted');
 }
 
-function isRollerRedeemWriteEnabled() {
-  return process.env.ENABLE_ROLLER_REDEEM_WRITES === 'true' && !isEmergencyStopEnabled();
+function evaluateRedeemWriteGate(context, request, decision) {
+  const disabled = (reason, message) => ({
+    enabled: false,
+    message,
+    reason,
+  });
+
+  if (process.env.ENABLE_ROLLER_REDEEM_WRITES !== 'true') {
+    return disabled(
+      'redeem_write_disabled',
+      'Roller redemption writes are disabled for this JumpYard Cloud environment.',
+    );
+  }
+
+  if (!isEmergencyStopEnabled()) {
+    return {
+      enabled: true,
+      message: null,
+      reason: 'enabled',
+    };
+  }
+
+  if (process.env.ENABLE_T0166_LIVE_REDEEM_SMOKE !== 'true') {
+    return disabled(
+      'redeem_write_disabled',
+      'Roller redemption writes are disabled while the JumpYard emergency stop is active.',
+    );
+  }
+
+  if (!isT0166LiveRedeemAllowed(context, request, decision)) {
+    return disabled(
+      't0166_live_redeem_not_allowed',
+      'This controlled Live redeem smoke only allows the approved booking and ticket identifiers.',
+    );
+  }
+
+  return {
+    enabled: true,
+    message: null,
+    reason: 't0166_live_redeem_smoke_enabled',
+  };
 }
 
 function isEmergencyStopEnabled() {
   return process.env.JUMPYARD_EMERGENCY_STOP === 'true';
+}
+
+function isT0166LiveRedeemAllowed(context, request, decision) {
+  const allowed = parseIdentifierSet(process.env.T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS);
+  if (allowed.size === 0) return false;
+
+  const bookingIdentifiers = [
+    request.identifier,
+    request.bookingReference,
+    request.rollerUniqueId,
+    context?.booking?.bookingReference,
+    context?.booking?.rollerUniqueId,
+  ].map(normalizeIdentifier).filter(Boolean);
+  const selectedTicketIds = (decision?.selectedTicketIds ?? []).map(normalizeIdentifier).filter(Boolean);
+  const bookingAllowed = bookingIdentifiers.some((identifier) => allowed.has(identifier));
+  const ticketsAllowed = selectedTicketIds.length > 0 && selectedTicketIds.every((ticketId) => allowed.has(ticketId));
+
+  return bookingAllowed && ticketsAllowed;
+}
+
+function isT0166LiveRedeemSmokeTicketAllowed(ticketId) {
+  if (!isT0166LiveRedeemSmokeRuntimeEnabled()) return false;
+  const normalizedTicketId = normalizeIdentifier(ticketId);
+  if (!normalizedTicketId) return false;
+  return parseIdentifierSet(process.env.T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS).has(normalizedTicketId);
+}
+
+function parseIdentifierSet(value) {
+  return new Set(
+    String(value ?? '')
+      .split(',')
+      .map(normalizeIdentifier)
+      .filter(Boolean),
+  );
+}
+
+function normalizeIdentifier(value) {
+  return stringOrNull(value)?.toLowerCase() ?? null;
 }
 
 async function verifyRedeemDevToken(event) {
@@ -1221,7 +1327,8 @@ async function refreshRedeemContextFromRoller(config, token, existingContext, re
     };
   }
 
-  const booking = normalizeBooking(bookingResult.body);
+  const products = await getProductCatalogBestEffort(config, token);
+  const booking = normalizeBooking(bookingResult.body, products);
   if (!booking.bookingReference || !booking.rollerUniqueId) {
     return {
       ok: false,
@@ -1440,8 +1547,13 @@ async function readSecret(secretId) {
 function validateRollerConfig(config) {
   const errors = [];
   let parsedBaseUrl = null;
+  const liveRedeemSmokeEnabled = isT0166LiveRedeemSmokeRuntimeEnabled();
 
-  if (config.env !== 'playground') {
+  if (liveRedeemSmokeEnabled) {
+    if (config.env !== 'live') {
+      errors.push('T0166 Live redeem smoke requires Roller environment live.');
+    }
+  } else if (config.env !== 'playground') {
     errors.push('Roller environment must be playground.');
   }
 
@@ -1456,11 +1568,17 @@ function validateRollerConfig(config) {
     if (parsedBaseUrl.protocol !== 'https:') {
       errors.push('Roller base URL must use https.');
     }
-    if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
-      errors.push('Roller base URL looks like production/live.');
-    }
-    if (!PLAYGROUND_URL_MARKER.test(searchableUrl)) {
-      errors.push('Roller base URL must point to Playground.');
+    if (liveRedeemSmokeEnabled) {
+      if (parsedBaseUrl.origin !== ROLLER_LIVE_BASE_URL || parsedBaseUrl.pathname !== '/') {
+        errors.push(`T0166 Live redeem smoke requires Roller base URL ${ROLLER_LIVE_BASE_URL}.`);
+      }
+    } else {
+      if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
+        errors.push('Roller base URL looks like production/live.');
+      }
+      if (!PLAYGROUND_URL_MARKER.test(searchableUrl)) {
+        errors.push('Roller base URL must point to Playground.');
+      }
     }
   }
 
@@ -1477,6 +1595,15 @@ function validateRollerConfig(config) {
     error.code = 'redeem_config_error';
     throw error;
   }
+}
+
+function isT0166LiveRedeemSmokeRuntimeEnabled() {
+  return (
+    process.env.JUMPYARD_ENVIRONMENT === 'park-test' &&
+    process.env.ENABLE_T0166_LIVE_REDEEM_SMOKE === 'true' &&
+    process.env.ENABLE_ROLLER_REDEEM_WRITES === 'true' &&
+    parseIdentifierSet(process.env.T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS).size > 0
+  );
 }
 
 async function getRollerAccessToken(config) {
@@ -1544,14 +1671,83 @@ async function getBookingDetail(config, token, identifier) {
   };
 }
 
-function normalizeBooking(booking) {
+async function getProductCatalogBestEffort(config, token) {
+  if (cachedProducts && cachedProducts.expiresAt > Date.now()) return cachedProducts;
+
+  try {
+    const response = await fetch(buildRollerUrl(config.baseUrl, '/products'), {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+      },
+    });
+    emitRollerApiMetric({ method: 'GET', operation: 'list_products', status: response.status, ok: response.ok });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const body = await response.json();
+    const products = Array.isArray(body) ? body : body.items ?? body.products ?? body.data;
+    const byId = new Map();
+
+    if (Array.isArray(products)) {
+      for (const product of flattenProducts(products)) {
+        if (product.id) byId.set(String(product.id), product);
+      }
+    }
+
+    cachedProducts = {
+      byId,
+      expiresAt: Date.now() + PRODUCT_CACHE_TTL_MS,
+      status: 'available',
+    };
+  } catch {
+    cachedProducts = {
+      byId: new Map(),
+      expiresAt: Date.now() + 60_000,
+      status: 'unavailable',
+    };
+  }
+
+  return cachedProducts;
+}
+
+function flattenProducts(products, parent = null) {
+  const flattened = [];
+
+  for (const product of products) {
+    const normalized = {
+      id: String(product.id ?? product.productId ?? product.parentProductId ?? ''),
+      name: product.name ?? product.productName ?? product.title ?? null,
+      parentProductId: product.parentProductId ? String(product.parentProductId) : parent?.id ?? null,
+      parentProductName: product.parentProductName ?? parent?.name ?? null,
+      parentType: parent?.type ?? product.parentProductType ?? null,
+      type: product.type ?? product.productType ?? product.productSubType ?? null,
+    };
+
+    if (normalized.id || normalized.name) {
+      flattened.push(normalized);
+    }
+
+    const childCollections = [product.products, product.variations, product.productVariations].filter(Array.isArray);
+    for (const children of childCollections) {
+      flattened.push(...flattenProducts(children, normalized));
+    }
+  }
+
+  return flattened;
+}
+
+function normalizeBooking(booking, products) {
   const items = Array.isArray(booking?.items) ? booking.items : [];
 
   return {
     amountOwing: numberOrNull(booking?.amountOwing ?? booking?.remainder ?? booking?.costs?.amountOwing),
     bookingReference: stringOrNull(booking?.bookingReference ?? booking?.reference),
     externalId: stringOrNull(booking?.externalId),
-    items: items.map(normalizeBookingItem),
+    items: items.map((item) => normalizeBookingItem(item, products.byId)),
     paymentStatus: stringOrNull(booking?.paymentStatus ?? booking?.status ?? booking?.bookingStatus),
     rollerUniqueId: stringOrNull(booking?.uniqueId ?? booking?.id),
     status: stringOrNull(booking?.status ?? booking?.bookingStatus),
@@ -1559,18 +1755,20 @@ function normalizeBooking(booking) {
   };
 }
 
-function normalizeBookingItem(item) {
+function normalizeBookingItem(item, productById) {
+  const productId = item?.productId != null ? String(item.productId) : null;
+  const product = productId ? productById.get(productId) : null;
   const tickets = Array.isArray(item?.tickets) ? item.tickets : [];
 
   return {
     bookingDate: stringOrNull(item?.bookingDate),
     bookingItemId: stringOrNull(item?.bookingItemId ?? item?.id),
     endTime: stringOrNull(item?.endTime ?? item?.sessionEndTime),
-    parentProductId: numberOrNull(item?.parentProductId),
-    parentProductName: stringOrNull(item?.parentProductName),
+    parentProductId: numberOrNull(item?.parentProductId ?? product?.parentProductId),
+    parentProductName: stringOrNull(item?.parentProductName ?? product?.parentProductName),
     productId: numberOrNull(item?.productId),
-    productName: stringOrNull(item?.productName),
-    productType: stringOrNull(item?.productType ?? item?.productSubType),
+    productName: stringOrNull(item?.productName ?? product?.name),
+    productType: stringOrNull(item?.productType ?? item?.productSubType ?? product?.type ?? product?.parentType),
     quantity: numberOrNull(item?.quantity),
     startTime: stringOrNull(item?.startTime ?? item?.sessionStartTime),
     tickets: tickets.map((ticket) => ({
@@ -1729,7 +1927,8 @@ async function upsertLiveBookingItem(rollerUniqueId, item) {
       booking_date = EXCLUDED.booking_date,
       start_time = EXCLUDED.start_time,
       end_time = EXCLUDED.end_time,
-      item_summary = EXCLUDED.item_summary,
+      item_summary = COALESCE(jumpyard.roller_booking_items.item_summary, '{}'::jsonb)
+        || jsonb_strip_nulls(EXCLUDED.item_summary),
       updated_at = now()`,
     [
       stringParameter('bookingItemKey', bookingItemKey),
@@ -1790,7 +1989,8 @@ async function upsertLiveTicket(rollerUniqueId, bookingItemKey, item, ticket) {
       last_seen_from_roller_at = now(),
       product_id = EXCLUDED.product_id,
       booking_date = EXCLUDED.booking_date,
-      ticket_summary = EXCLUDED.ticket_summary,
+      ticket_summary = COALESCE(jumpyard.roller_booking_tickets.ticket_summary, '{}'::jsonb)
+        || jsonb_strip_nulls(EXCLUDED.ticket_summary),
       updated_at = now()`,
     [
       stringParameter('ticketId', ticket.ticketId),
@@ -2109,7 +2309,7 @@ function classifyError(error) {
       statusCode: 502,
       status: 'roller_error',
       code: 'roller_token_failed',
-      message: 'JumpYard Cloud could not authenticate with Roller Playground.',
+      message: 'JumpYard Cloud could not authenticate with Roller.',
     };
   }
 
