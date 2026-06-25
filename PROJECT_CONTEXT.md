@@ -49,7 +49,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database.
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
 - T0152 deployed park-test safety gates in CDK/config and Lambda runtime for staff auth, guest message sends, webhook processing, Roller booking draft writes, Roller redemption writes, and an emergency stop. Dev remains configured for existing Playground behavior; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
-- Park-test has confirmed Roller Live access, webhook `1465`, frontend targets/CORS, quote/draft/payment smokes, controlled existing-booking lookup, Live catalog/index readiness, and a contact-resolution blocker for the first add-on smoke. Public draft writes and Live lookup are closed again; webhook processing, visitor traffic, redeem, SMS, and email remain disabled.
+- Park-test has confirmed Roller Live access, webhook `1465`, frontend targets/CORS, quote/draft/payment smokes, controlled existing-booking lookup, Live catalog/index readiness, and server-side guest-detail contact resolution for existing-booking add-ons. Public draft writes and Live lookup are closed again; webhook processing, visitor traffic, redeem, SMS, and email remain disabled.
 
 ## Current Implemented Flow Facts
 
@@ -73,7 +73,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Guest messaging through SMS/email uses opaque `jy_token` links resolved server-side by JumpYard Cloud.
 - Park-test Aurora now contains the controlled Live booking snapshot for `166447399` from T0160 and the matching prepayment draft `jypd_56a8f1ca817c42a4b7` is marked `published`; this is not a broad booking import or all-day guest list.
 - T0161 selected REST-on-demand lookup by entered booking code for the first assisted park test; broad same-day booking indexing remains deferred.
-- Existing-booking add-ons require server-resolved or explicitly approved customer contact for the separate linked draft; the first Live add-on smoke stopped safely when contact was unavailable.
+- Existing-booking add-ons require server-resolved customer contact for the separate linked draft. T0163 confirmed Roller Live booking detail may expose `customerId` while `GET /guests/{customerId}` contains the complete first/last/email/phone contact needed server-side.
 
 ## Security And Operational Constraints
 

@@ -2,6 +2,21 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0163 Live Existing-Booking Contact Resolver Validation
+
+- 2026-06-25: T0163 was activated on branch `codex/t0163-live-booking-contact-resolver` after T0162 was squash-merged through PR #162.
+- 2026-06-25: AWS identity verified account `376129878018`, region `eu-north-1`, through profile `wrlds-dev`.
+- 2026-06-25: Added `infra/scripts/roller-live-contact-resolver.ts` and npm scripts `contact:live:park-test` plus `validate:roller-live-contact-resolver`.
+- 2026-06-25: `npm --prefix infra run validate:roller-live-contact-resolver` passed; guard self-test allowed only `GET /bookings/166490323` and `GET /guests/{id}` and rejected 10 write/sensitive endpoint cases.
+- 2026-06-25: `npm --prefix infra run build` and `node --check infra/lambda/booking/index.js` passed.
+- 2026-06-25: Guarded Live contact resolver run called only Roller auth, `GET /bookings/166490323`, and `GET /guests/{customerId}`; booking detail had no direct contact fields, `body.customerId` was present, and guest detail returned complete first/last/email/phone contact without printing full PII.
+- 2026-06-25: Updated `BookingHandler` to fall back to `GET /guests/{customerId}` server-side when existing-booking add-on contact is incomplete after booking detail and local contact sources.
+- 2026-06-25: Pre-deploy CDK diff for normal `park-test.json` showed only existing `BookingHandler` Lambda code asset changed; no environment gates or new resources changed.
+- 2026-06-25: Closed-config deploy reached `UPDATE_COMPLETE`; post-deploy readback confirmed `JUMPYARD_EMERGENCY_STOP=true`, `ENABLE_ROLLER_BOOKING_DRAFT_WRITES=false`, `ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES=false`, `ENABLE_T0162_LIVE_ADDON_SMOKE=false`, and empty T0162 allowlist.
+- 2026-06-25: Post-deploy `npx cdk diff -c config=./config/park-test.json --profile wrlds-dev --method=template` showed no differences.
+- 2026-06-25: Closeout validation `npm run validate`, `npm run infra:check`, `git diff --check`, and `node --check infra/lambda/booking/index.js` passed.
+- 2026-06-25: T0163 did not create AWS resources, open public API gates, write Aurora rows, create add-on drafts/payments, redeem tickets, process webhooks, send SMS/email, run visitor traffic, print secrets, print raw payment JWTs, or print full PII.
+
 ## T0162 Existing-Booking Add-On Smoke Validation
 
 - 2026-06-25: T0162 was activated on branch `codex/t0162-existing-booking-addon-smoke` for controlled Live booking `166490323`.
