@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-25
-- Current branch: `codex/t0162-existing-booking-addon-smoke`
-- Current status: T0162 in closeout after a safe contact-resolution blocker; temporary AWS gates have been closed again.
-- Current ticket: `T0162`
-- Completed tickets: archived in `docs/history/completed-tickets.md` (160 completed tickets; latest `T0161`).
-- Recommended next step: close T0162 and start T0163 as a Live existing-booking contact resolver investigation before retrying existing-booking add-on payment.
+- Current branch: `codex/t0163-live-booking-contact-resolver`
+- Current status: No active ticket; T0163 completed and changes are uncommitted on the ticket branch.
+- Current ticket: None active
+- Completed tickets: archived in `docs/history/completed-tickets.md` (162 completed tickets; latest `T0163`).
+- Recommended next step: review/commit the completed contact-resolver branch, then start T0164 to retry the existing-booking add-on payment smoke through the phone frontend.
 
 ## Current Structure
 
@@ -45,8 +45,10 @@ History and planning archives:
 - Park-test internal Live payment smoke: [docs/t0159-internal-live-payment-smoke.md](docs/t0159-internal-live-payment-smoke.md)
 - Park-test Live existing-booking lookup smoke: [docs/t0160-live-existing-booking-lookup-smoke.md](docs/t0160-live-existing-booking-lookup-smoke.md)
 - Park-test Live catalog and booking-index readiness: [docs/t0161-live-catalog-index-readiness.md](docs/t0161-live-catalog-index-readiness.md)
+- Park-test existing-booking add-on smoke: [docs/t0162-existing-booking-addon-smoke.md](docs/t0162-existing-booking-addon-smoke.md)
+- Park-test Live contact resolver: [docs/t0163-live-contact-resolver.md](docs/t0163-live-contact-resolver.md)
 
-T0156-T0161 current park-test status:
+T0156-T0163 current park-test status:
 
 - Park-test Cloudflare Pages projects exist for phone/admin and point at `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`.
 - T0157 passed a guarded Roller Live quote/cost smoke; T0158 created one controlled Roller Live draft `f81e46e5-5cf7-4193-b578-44a1b8140599`.
@@ -55,6 +57,7 @@ T0156-T0161 current park-test status:
 - The user manually refunded the T0159 internal paid booking after T0160; refund handling remains outside the app unless a later ticket explicitly scopes it.
 - T0161 verified Live catalog/index readiness: 6/6 entry parents and 4/4 park-test add-ons were found for Nacka; first assisted park test should use REST-on-demand booking lookup rather than broad same-day import.
 - T0162 opened a scoped gate for booking `166490323`, proved exact Live lookup and Live add-on availability, then stopped safely at add-product quote with `original_booking_contact_unresolved`; no add-on draft, payment, booking link, or add-product event was created, and the normal closed `park-test.json` config was redeployed.
+- T0163 found the missing contact path: booking detail exposes `customerId`, and `GET /guests/{customerId}` exposes complete first/last/email/phone. The BookingHandler now has this fallback deployed with normal park-test gates closed.
 - Public API draft writes and Live lookup were closed again after their scoped smokes; visitor flow, payment/redeem writes, webhook processing, SMS, and email remain gated.
 
 ## Known Validation Commands
@@ -67,6 +70,7 @@ Current closeout entrypoints:
 - `npm --prefix infra run validate:roller-live-quote-smoke`
 - `npm --prefix infra run validate:roller-live-draft-smoke`
 - `npm --prefix infra run validate:roller-live-catalog-index-readiness`
+- `npm --prefix infra run validate:roller-live-contact-resolver`
 
 Historical command evidence lives in [docs/history/validation-log.md](docs/history/validation-log.md) and ticket-specific docs.
 
@@ -74,22 +78,21 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 160
-- Latest completed ticket: `T0161`
+- Archived completed-ticket count: 162
+- Latest completed ticket: `T0163`
 - Current active ticket: None active
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0162` | Existing-booking add-on smoke. | In closeout - blocker documented | Scoped gate for booking `166490323` was opened and closed again; quote stopped at `original_booking_contact_unresolved`; original booking was not mutated; no draft/payment/link was created. |
+| None active | - | No active ticket. | T0163 completed on branch `codex/t0163-live-booking-contact-resolver`; not committed yet. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0163` | Live existing-booking contact resolver investigation. | Planned | Find where Roller Live exposes customer contact for existing bookings; no writes or public PII. |
-| `T0164` | Existing-booking add-on payment smoke. | Planned | Retry frontend add-on payment after T0163 resolves/contact-handling is documented. |
+| `T0164` | Existing-booking add-on payment smoke. | Planned | Retry frontend add-on payment after T0163 resolved Live contact through guest detail. |
 | `T0165` | Controlled Live redeem smoke. | Planned | Controlled booking only; no normal visitor traffic. |
 | `T0166` | Staff-assisted visitor test. | Planned | Limited assisted visitor test after controlled smokes and park approval. |
 | `T0167` | Outcome and go/no-go. | Planned | Documentation/report only. |
@@ -100,13 +103,13 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- Latest validation is recorded in [docs/t0161-live-catalog-index-readiness.md](docs/t0161-live-catalog-index-readiness.md).
+- Latest validation is recorded in [docs/t0163-live-contact-resolver.md](docs/t0163-live-contact-resolver.md).
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions
 
 - Park-test AWS exists with dedicated API, Aurora, raw bucket, secrets, and gates; current resource details are in [AWS_RESOURCES.md](AWS_RESOURCES.md).
-- Roller Live access, webhook registration, frontend target setup, first quote/cost smoke, first controlled draft smoke, first internal paid booking smoke, controlled lookup, and Live catalog/index readiness have passed for Nacka, but public API writes are closed again and guest-data reads remain scoped-ticket gated.
+- Roller Live access, webhook registration, frontend target setup, first quote/cost smoke, first controlled draft smoke, first internal paid booking smoke, controlled lookup, Live catalog/index readiness, and guest-detail contact resolution have passed for Nacka, but public API writes are closed again and guest-data reads remain scoped-ticket gated.
 - The park-test plan is not an approval to create additional AWS resources, call new Roller Live endpoints, create drafts/payments, redeem tickets, or run visitor traffic.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before the T0128 branch was created.

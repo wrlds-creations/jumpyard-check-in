@@ -1749,10 +1749,29 @@ async function resolveOriginalBookingContext(config, token, bookingReference) {
   );
   original.customer = mergeOriginalBookingCustomer(original.customer, localCustomer, original.bookingName);
 
+  if (validateCustomer(original.customer)) {
+    const rollerGuestCustomer = await resolveOriginalBookingCustomerFromGuestDetail(config, token, rollerResult.body);
+    original.customer = mergeOriginalBookingCustomer(original.customer, rollerGuestCustomer, original.bookingName);
+  }
+
   return {
     ok: true,
     ...original,
   };
+}
+
+async function resolveOriginalBookingCustomerFromGuestDetail(config, token, bookingBody) {
+  const candidates = collectOriginalBookingGuestCandidates(bookingBody).slice(0, 8);
+
+  for (const candidate of candidates) {
+    const result = await getRollerJson(config, token, `/guests/${encodeURIComponent(candidate)}`);
+    if (!result.ok) continue;
+
+    const customer = normalizeOriginalBookingGuestDetailCustomer(result.body);
+    if (!validateCustomer(customer)) return customer;
+  }
+
+  return null;
 }
 
 async function findLocalOriginalBooking(bookingReference) {
@@ -1914,6 +1933,16 @@ function normalizeOriginalBookingCustomer(booking) {
   };
 }
 
+function normalizeOriginalBookingGuestDetailCustomer(body) {
+  const guest = firstPlainObject([
+    body?.guest,
+    body?.customer,
+    body?.data,
+    body,
+  ]);
+  return normalizeOriginalBookingCustomer(guest);
+}
+
 function mergeOriginalBookingCustomer(primary, fallback, fallbackName) {
   const nameParts = splitCustomerName(fallbackName);
 
@@ -1923,6 +1952,44 @@ function mergeOriginalBookingCustomer(primary, fallback, fallbackName) {
     lastName: stringOrNull(primary?.lastName) || nameParts.lastName,
     phone: stringOrNull(primary?.phone) || stringOrNull(fallback?.phone),
   };
+}
+
+function collectOriginalBookingGuestCandidates(value) {
+  const candidates = [];
+  collectOriginalBookingGuestCandidatesInto(value, candidates, 0);
+  return [...new Set(candidates)];
+}
+
+function collectOriginalBookingGuestCandidatesInto(value, candidates, depth) {
+  if (depth > 10) return;
+
+  if (Array.isArray(value)) {
+    for (const item of value) collectOriginalBookingGuestCandidatesInto(item, candidates, depth + 1);
+    return;
+  }
+
+  if (!isPlainObject(value)) return;
+
+  for (const [key, child] of Object.entries(value)) {
+    if (isOriginalBookingGuestCandidateKey(key)) {
+      const candidate = stringOrNull(child);
+      if (candidate && /^[A-Za-z0-9-]{3,80}$/.test(candidate)) candidates.push(candidate);
+    }
+    collectOriginalBookingGuestCandidatesInto(child, candidates, depth + 1);
+  }
+}
+
+function isOriginalBookingGuestCandidateKey(key) {
+  return ['bookingcustomerid', 'customerid', 'guestid', 'rollercustomerid'].includes(
+    String(key || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase(),
+  );
+}
+
+function firstPlainObject(values) {
+  for (const value of values) {
+    if (isPlainObject(value)) return value;
+  }
+  return null;
 }
 
 function resolveAddProductCustomer(request, original) {
@@ -2899,6 +2966,7 @@ function rollerOperationFromEndpointPath(endpointPath, method) {
   if (path === '/product-availability') return 'get_product_availability';
   if (path === '/venues/me') return 'get_venue_detail';
   if (/^\/bookings\/[^/]+$/.test(path)) return 'get_booking_detail';
+  if (/^\/guests\/[^/]+$/.test(path)) return 'get_guest_detail';
   return method === 'POST' ? 'roller_post' : 'roller_get';
 }
 
