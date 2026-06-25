@@ -37,6 +37,8 @@ interface TestConfig {
   readonly safetyGates: {
     emergencyStop: boolean;
     guestMessagingSendsEnabled: boolean;
+    liveAddOnSmokeAllowedIdentifiers?: string[];
+    liveAddOnSmokeApproval?: string;
     liveLookupSmokeAllowedIdentifiers?: string[];
     liveLookupSmokeApproval?: string;
     livePaymentSmokeApproval?: string;
@@ -154,6 +156,25 @@ delete parkTestAllowedIdentifiersWithoutLookupApproval.safetyGates.liveLookupSmo
 const parkTestLookupSmokeWithRedeem = cloneConfig(parkTestApprovedLookupSmoke);
 parkTestLookupSmokeWithRedeem.safetyGates.rollerRedeemWritesEnabled = true;
 
+const parkTestApprovedAddOnSmoke = cloneConfig(parkTestConfig);
+parkTestApprovedAddOnSmoke.safetyGates.emergencyStop = true;
+parkTestApprovedAddOnSmoke.safetyGates.rollerBookingDraftWritesEnabled = true;
+parkTestApprovedAddOnSmoke.safetyGates.liveAddOnSmokeApproval = 'T0162_EXISTING_BOOKING_ADDON_SMOKE_APPROVED';
+parkTestApprovedAddOnSmoke.safetyGates.liveAddOnSmokeAllowedIdentifiers = ['166490323'];
+
+const parkTestAddOnSmokeWithoutAllowedIdentifiers = cloneConfig(parkTestApprovedAddOnSmoke);
+parkTestAddOnSmokeWithoutAllowedIdentifiers.safetyGates.liveAddOnSmokeAllowedIdentifiers = [];
+
+const parkTestAllowedAddOnIdentifiersWithoutApproval = cloneConfig(parkTestApprovedAddOnSmoke);
+delete parkTestAllowedAddOnIdentifiersWithoutApproval.safetyGates.liveAddOnSmokeApproval;
+parkTestAllowedAddOnIdentifiersWithoutApproval.safetyGates.rollerBookingDraftWritesEnabled = false;
+
+const parkTestAddOnSmokeWithoutDraftWrites = cloneConfig(parkTestApprovedAddOnSmoke);
+parkTestAddOnSmokeWithoutDraftWrites.safetyGates.rollerBookingDraftWritesEnabled = false;
+
+const parkTestAddOnSmokeWithWebhook = cloneConfig(parkTestApprovedAddOnSmoke);
+parkTestAddOnSmokeWithWebhook.safetyGates.rollerWebhookProcessingEnabled = true;
+
 expectPass('dev Playground config passes', devConfig, 'dev');
 expectFail('unsafe dev-to-Live config fails', unsafeDevLiveConfig, /dev config must use Roller Playground/);
 expectPass('reviewed park-test Live config passes', parkTestConfig, 'park-test');
@@ -194,6 +215,27 @@ expectFail(
   'park-test lookup smoke still blocks redeem writes',
   parkTestLookupSmokeWithRedeem,
   /rollerRedeemWritesEnabled/,
+);
+expectPass('approved park-test Live add-on smoke config passes', parkTestApprovedAddOnSmoke, 'park-test');
+expectFail(
+  'park-test add-on smoke approval without allowed identifiers fails closed',
+  parkTestAddOnSmokeWithoutAllowedIdentifiers,
+  /liveAddOnSmokeAllowedIdentifiers/,
+);
+expectFail(
+  'park-test add-on smoke allowlist without approval fails closed',
+  parkTestAllowedAddOnIdentifiersWithoutApproval,
+  /liveAddOnSmokeAllowedIdentifiers must stay empty/,
+);
+expectFail(
+  'park-test add-on smoke approval without draft writes fails closed',
+  parkTestAddOnSmokeWithoutDraftWrites,
+  /requires safetyGates\.rollerBookingDraftWritesEnabled=true/,
+);
+expectFail(
+  'park-test add-on smoke still blocks webhook processing',
+  parkTestAddOnSmokeWithWebhook,
+  /rollerWebhookProcessingEnabled/,
 );
 
 console.log('Config guard validation passed.');

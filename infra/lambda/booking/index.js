@@ -67,6 +67,50 @@ const T0159_LIVE_PAYMENT_SMOKE_PRODUCTS = [
   },
 ];
 
+const T0162_LIVE_ADDON_SMOKE_PRODUCTS = [
+  { key: 'E60', parentProductId: '1189805' },
+  { key: 'E90', parentProductId: '1189823' },
+  { key: 'E120', parentProductId: '1189771' },
+  { key: 'F60', parentProductId: '1189814' },
+  { key: 'F90', parentProductId: '1189832' },
+  { key: 'F120', parentProductId: '1189794' },
+];
+
+const T0162_LIVE_ADDON_SMOKE_ADDONS = [
+  {
+    key: 'skyrider',
+    parentProductId: '970335',
+    parentProductName: 'SkyRider',
+    productId: '970335',
+    productName: 'SkyRider',
+    priceCents: null,
+  },
+  {
+    key: 'socks',
+    parentProductId: '970337',
+    parentProductName: 'JumpSocks',
+    productId: '970338',
+    productName: 'Antal',
+    priceCents: 4500,
+  },
+  {
+    key: 'lock',
+    parentProductId: '970333',
+    parentProductName: 'Lock',
+    productId: '970334',
+    productName: 'Lock',
+    priceCents: 4500,
+  },
+  {
+    key: 'coffee',
+    parentProductId: '970346',
+    parentProductName: 'Coffee',
+    productId: '970352',
+    productName: 'Coffee',
+    priceCents: 3500,
+  },
+];
+
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
 const ssmClient = new SSMClient({});
@@ -321,7 +365,7 @@ async function handleDraft(event, body, correlationId) {
     });
   }
 
-  if (!isRollerBookingDraftWriteEnabled()) {
+  if (!isNewBookingDraftWriteEnabled()) {
     return safetyGateBlockedResponse(correlationId, 'roller_booking_draft_writes_disabled');
   }
 
@@ -534,6 +578,11 @@ async function handleAddProductQuote(event, body, correlationId) {
     });
   }
 
+  const smokeGate = validateT0162AddOnSmokeAccess(bookingReference);
+  if (!smokeGate.ok) {
+    return addOnSmokeGateBlockedResponse(correlationId, smokeGate);
+  }
+
   const config = await getRollerConfig();
   const token = await getRollerAccessToken(config);
   const original = await resolveOriginalBookingContext(config, token, bookingReference);
@@ -608,7 +657,7 @@ async function handleAddProductQuote(event, body, correlationId) {
       amountOwing: costs.amountOwing,
     },
     subjectRef: original.bookingReference,
-    summary: 'Roller Playground add-product quote succeeded.',
+    summary: 'Roller add-product quote succeeded.',
   });
 
   return jsonResponse(200, correlationId, {
@@ -654,7 +703,12 @@ async function handleAddProductDraft(event, body, correlationId) {
     });
   }
 
-  if (!isRollerBookingDraftWriteEnabled()) {
+  const smokeGate = validateT0162AddOnSmokeAccess(bookingReference);
+  if (!smokeGate.ok) {
+    return addOnSmokeGateBlockedResponse(correlationId, smokeGate);
+  }
+
+  if (!isAddProductDraftWriteEnabled()) {
     return safetyGateBlockedResponse(correlationId, 'roller_booking_draft_writes_disabled');
   }
 
@@ -788,7 +842,7 @@ async function handleAddProductDraft(event, body, correlationId) {
       amountOwing: draft.costs.amountOwing,
     },
     subjectRef: original.bookingReference,
-    summary: 'Roller Playground add-product draft booking created and linked.',
+    summary: 'Roller add-product draft booking created and linked.',
   });
 
   return jsonResponse(201, correlationId, {
@@ -1154,10 +1208,17 @@ function isEmergencyStopEnabled() {
   return process.env.JUMPYARD_EMERGENCY_STOP === 'true';
 }
 
-function isRollerBookingDraftWriteEnabled() {
+function isNewBookingDraftWriteEnabled() {
   return (
     process.env.ENABLE_ROLLER_BOOKING_DRAFT_WRITES === 'true' &&
     (!isEmergencyStopEnabled() || isT0159LivePaymentSmokeEnabled())
+  );
+}
+
+function isAddProductDraftWriteEnabled() {
+  return (
+    process.env.ENABLE_ROLLER_BOOKING_DRAFT_WRITES === 'true' &&
+    (!isEmergencyStopEnabled() || isT0162LiveAddOnSmokeEnabled())
   );
 }
 
@@ -1166,6 +1227,61 @@ function isT0159LivePaymentSmokeEnabled() {
     process.env.JUMPYARD_ENVIRONMENT === 'park-test' &&
     process.env.ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES === 'true'
   );
+}
+
+function isT0162LiveAddOnSmokeEnabled() {
+  return (
+    process.env.JUMPYARD_ENVIRONMENT === 'park-test' &&
+    process.env.ENABLE_T0162_LIVE_ADDON_SMOKE === 'true'
+  );
+}
+
+function validateT0162AddOnSmokeAccess(identifier) {
+  if (process.env.JUMPYARD_ENVIRONMENT !== 'park-test') {
+    return { ok: true };
+  }
+
+  if (!isT0162LiveAddOnSmokeEnabled()) {
+    return {
+      ok: false,
+      code: 'live_addon_smoke_disabled',
+      message: 'Live add-product access is disabled in park-test outside the scoped T0162 smoke.',
+      statusCode: 409,
+    };
+  }
+
+  if (!isT0162LiveAddOnSmokeIdentifierAllowed(identifier)) {
+    return {
+      ok: false,
+      code: 'live_addon_booking_not_allowed',
+      message: 'This booking identifier is not approved for the T0162 Live add-on smoke.',
+      statusCode: 403,
+    };
+  }
+
+  return { ok: true };
+}
+
+function isT0162LiveAddOnSmokeIdentifierAllowed(identifier) {
+  const normalized = stringOrNull(identifier);
+  if (!normalized) return false;
+
+  const allowed = String(process.env.T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return allowed.includes(normalized);
+}
+
+function addOnSmokeGateBlockedResponse(correlationId, gate) {
+  return jsonResponse(gate.statusCode, correlationId, {
+    status: 'blocked',
+    error: {
+      code: gate.code,
+      message: gate.message,
+    },
+  });
 }
 
 function safetyGateBlockedResponse(correlationId, code) {
@@ -1410,10 +1526,12 @@ function validateRollerConfig(config) {
   const errors = [];
   let parsedBaseUrl = null;
   const livePaymentSmokeEnabled = isT0159LivePaymentSmokeEnabled();
+  const liveAddOnSmokeEnabled = isT0162LiveAddOnSmokeEnabled();
+  const liveSmokeEnabled = livePaymentSmokeEnabled || liveAddOnSmokeEnabled;
 
-  if (livePaymentSmokeEnabled) {
+  if (liveSmokeEnabled) {
     if (config.env !== 'live') {
-      errors.push('Roller environment must be live for T0159 park-test payment smoke.');
+      errors.push('Roller environment must be live for the scoped park-test Live smoke.');
     }
   } else if (config.env !== 'playground') {
     errors.push('Roller environment must be playground.');
@@ -1430,9 +1548,9 @@ function validateRollerConfig(config) {
     if (parsedBaseUrl.protocol !== 'https:') {
       errors.push('Roller base URL must use https.');
     }
-    if (livePaymentSmokeEnabled) {
+    if (liveSmokeEnabled) {
       if (parsedBaseUrl.origin !== ROLLER_LIVE_BASE_URL || parsedBaseUrl.pathname !== '/') {
-        errors.push(`Roller base URL must be ${ROLLER_LIVE_BASE_URL} for T0159 park-test payment smoke.`);
+        errors.push(`Roller base URL must be ${ROLLER_LIVE_BASE_URL} for the scoped park-test Live smoke.`);
       }
     } else {
       if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
@@ -1578,7 +1696,7 @@ async function resolveOriginalBookingContext(config, token, bookingReference) {
       statusCode: 404,
       error: {
         code: 'original_booking_not_found',
-        message: `Original booking ${normalizedReference} was not found in Roller Playground.`,
+        message: `Original booking ${normalizedReference} was not found in Roller.`,
       },
     };
   }
@@ -1867,8 +1985,9 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
     [stringParameter('rollerEnv', rollerEnv)],
   );
   const rows = mappedRows(result);
-  const fallbackRows = isT0159LivePaymentSmokeEnabled() && rollerEnv === 'live'
-    ? T0159_LIVE_PAYMENT_SMOKE_PRODUCTS
+  const liveFallbackProducts = getLiveSmokeBookingProductFallbacks(rollerEnv);
+  const fallbackRows = liveFallbackProducts.length > 0
+    ? liveFallbackProducts
         .filter((product) => !rows.some((row) => row.parent_product_id === product.parentProductId || row.id === product.productId))
         .map((product) => ({
           parent_product_id: product.parentProductId,
@@ -1905,6 +2024,13 @@ function getRequiredPhoneBookingProducts(rollerEnv) {
   return PHONE_BOOKING_PRODUCTS;
 }
 
+function getLiveSmokeBookingProductFallbacks(rollerEnv) {
+  if (rollerEnv !== 'live') return [];
+  if (isT0159LivePaymentSmokeEnabled()) return T0159_LIVE_PAYMENT_SMOKE_PRODUCTS;
+  if (isT0162LiveAddOnSmokeEnabled()) return T0162_LIVE_ADDON_SMOKE_PRODUCTS;
+  return [];
+}
+
 async function loadPhoneAddonProducts(rollerEnv) {
   const clauses = [];
   const parameters = [stringParameter('rollerEnv', rollerEnv)];
@@ -1937,12 +2063,26 @@ async function loadPhoneAddonProducts(rollerEnv) {
     parameters,
   );
   const rows = mappedRows(result);
+  const fallbackRows = isT0162LiveAddOnSmokeEnabled() && rollerEnv === 'live'
+    ? T0162_LIVE_ADDON_SMOKE_ADDONS
+        .filter((product) => !rows.some((row) => row.id === product.productId || row.parent_product_id === product.parentProductId))
+        .map((product) => ({
+          parent_product_id: product.parentProductId,
+          parent_product_name: product.parentProductName,
+          id: product.productId,
+          name: product.productName,
+          price_cents: product.priceCents,
+          smoke_key: product.key,
+        }))
+    : [];
+  const candidateRows = [...rows, ...fallbackRows];
 
   return PHONE_ADDON_PRODUCTS.map((product) => {
-    const row = rows.find(
+    const row = candidateRows.find(
       (candidate) =>
         (product.productId && candidate.id === product.productId) ||
-        (product.parentName && (candidate.parent_product_name === product.parentName || candidate.name === product.parentName)),
+        (product.parentName && (candidate.parent_product_name === product.parentName || candidate.name === product.parentName)) ||
+        candidate.smoke_key === product.key,
     );
     const productId = stringOrNull(row?.id) || stringOrNull(product.productId);
     const parentProductId = stringOrNull(row?.parent_product_id) || stringOrNull(row?.id);

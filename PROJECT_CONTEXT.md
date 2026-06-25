@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, migrations, Live read-only/webhook/frontend setup, two Cloudflare Pages projects, quote/draft/payment smokes, one controlled Live lookup for booking `166447399`, and Live catalog/index readiness. Public draft writes and Live lookup were closed again after their smokes; add-on smoke, webhook processing, visitor traffic, payment-start writes, and redeem remain gated.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, migrations, Live read-only/webhook/frontend setup, Cloudflare Pages targets, quote/draft/payment smokes, controlled Live lookup, and Live catalog/index readiness. Public draft writes and Live lookup were closed again after their smokes; add-on smoke, webhook processing, visitor traffic, payment-start writes, and redeem remain gated.
 
 ## Context Archives
 
@@ -45,11 +45,11 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Park-test raw payload storage synthesizes as `jumpyard-check-in-park-test-raw-376129878018-eu-north-1` so the bucket name stays within S3's 63-character limit without changing the existing dev raw-payload bucket naming pattern.
 - The first park-test deploy must follow the T0149 preflight: verify AWS identity and metadata, run sequential CDK commands, require a clean dev template diff, review the additive park-test template diff, and get explicit T0150 deploy approval before creating resources.
 - For a never-deployed park-test stack, template diff (`cdk diff --method=template`) is the preferred preflight check; default CDK change-set diff can leave an empty CloudFormation `REVIEW_IN_PROGRESS` stack shell that must be verified empty and deleted before continuing.
-- T0150 deployed `jumpyard-check-in-park-test-stack` with separate API, Aurora, raw bucket, secrets, parameters, queues, schedules, logs, alarms, and tags; details are in the T0150 report.
-- T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database; operational data tables checked in T0151 remained empty.
+- T0150 deployed `jumpyard-check-in-park-test-stack`; details are in the T0150 report.
+- T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database.
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
 - T0152 deployed park-test safety gates in CDK/config and Lambda runtime for staff auth, guest message sends, webhook processing, Roller booking draft writes, Roller redemption writes, and an emergency stop. Dev remains configured for existing Playground behavior; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
-- Park-test has confirmed Roller Live access, webhook `1465`, frontend targets/CORS, quote/draft/payment smokes, one controlled existing-booking lookup for `166447399`, and T0161 Live catalog/index readiness. The next planned gate is the controlled existing-booking add-on smoke. Public draft writes and Live lookup are closed again; webhook processing, visitor traffic, redeem, SMS, and email remain disabled.
+- Park-test has confirmed Roller Live access, webhook `1465`, frontend targets/CORS, quote/draft/payment smokes, controlled existing-booking lookup, Live catalog/index readiness, and a contact-resolution blocker for the first add-on smoke. Public draft writes and Live lookup are closed again; webhook processing, visitor traffic, redeem, SMS, and email remain disabled.
 
 ## Current Implemented Flow Facts
 
@@ -73,6 +73,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Guest messaging through SMS/email uses opaque `jy_token` links resolved server-side by JumpYard Cloud.
 - Park-test Aurora now contains the controlled Live booking snapshot for `166447399` from T0160 and the matching prepayment draft `jypd_56a8f1ca817c42a4b7` is marked `published`; this is not a broad booking import or all-day guest list.
 - T0161 selected REST-on-demand lookup by entered booking code for the first assisted park test; broad same-day booking indexing remains deferred.
+- Existing-booking add-ons require server-resolved or explicitly approved customer contact for the separate linked draft; the first Live add-on smoke stopped safely when contact was unavailable.
 
 ## Security And Operational Constraints
 

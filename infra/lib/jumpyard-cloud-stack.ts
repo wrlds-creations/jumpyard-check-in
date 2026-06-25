@@ -17,6 +17,7 @@ import { Construct } from 'constructs';
 import * as path from 'path';
 import {
   JumpYardCloudConfig,
+  PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL,
   PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL,
   PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL,
 } from './config';
@@ -785,6 +786,11 @@ export class JumpYardCloudStack extends Stack {
       environment.ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES = String(
         resources.safetyGates.livePaymentSmokeApproval === PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL,
       );
+      environment.ENABLE_T0162_LIVE_ADDON_SMOKE = String(
+        resources.safetyGates.liveAddOnSmokeApproval === PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL,
+      );
+      environment.T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS =
+        resources.safetyGates.liveAddOnSmokeAllowedIdentifiers.join(',');
       environment.ENABLE_ROLLER_BOOKING_DRAFT_WRITES = String(
         resources.safetyGates.rollerBookingDraftWritesEnabled,
       );

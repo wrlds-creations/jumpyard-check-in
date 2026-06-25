@@ -186,6 +186,8 @@ function validateDevTemplate(dev: SynthResult): void {
   });
   expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-booking`, {
     ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'true',
+    ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
+    T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
     JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'dev',
   });
@@ -270,6 +272,8 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
     ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'false',
     ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
+    ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
+    T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
@@ -307,6 +311,8 @@ function validateParkTestPaymentSmokeTemplate(parkTest: SynthResult): void {
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
     ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'true',
     ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'true',
+    ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
+    T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
@@ -350,6 +356,8 @@ function validateParkTestLookupSmokeTemplate(parkTest: SynthResult): void {
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
     ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'false',
     ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
+    ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
+    T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
@@ -373,14 +381,61 @@ function validateParkTestLookupSmokeTemplate(parkTest: SynthResult): void {
   console.log('[pass] park-test Live lookup smoke synth opens only controlled lookup');
 }
 
+function validateParkTestAddOnSmokeTemplate(parkTest: SynthResult): void {
+  const strings = collectStrings(parkTest.template);
+
+  expect(
+    parkTest.stackName === `${PARK_TEST_PREFIX}-stack`,
+    `Expected park-test add-on smoke stack name ${PARK_TEST_PREFIX}-stack.`,
+  );
+  expectContains(strings, PARK_TEST_PREFIX, 'park-test add-on smoke');
+  expectContains(strings, 'https://api.roller.app', 'park-test add-on smoke');
+  expectContains(strings, 'live', 'park-test add-on smoke');
+  expectNoBookingTimeMessagingSchedule(parkTest.template);
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-lookup`, {
+    ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'true',
+    T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '166490323',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
+    ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'true',
+    ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
+    ENABLE_T0162_LIVE_ADDON_SMOKE: 'true',
+    T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '166490323',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
+    ENABLE_ROLLER_REDEEM_WRITES: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
+    ENABLE_GUEST_MESSAGE_SENDS: 'false',
+    ENABLE_STAFF_AUTH: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
+    ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+
+  console.log('[pass] park-test Live add-on smoke synth opens only controlled lookup and add-on draft writes');
+}
+
 const dev = synthConfig('config/dev.json');
 const parkTest = synthConfig('config/park-test.json');
+const parkTestAddOnSmoke = synthConfig('config/park-test-live-addon-smoke.json');
 const parkTestLookupSmoke = synthConfig('config/park-test-live-lookup-smoke.json');
 const parkTestPaymentSmoke = synthConfig('config/park-test-live-payment-smoke.json');
 
 validateDevTemplate(dev);
 validateParkTestTemplate(parkTest);
 validateParkTestLookupSmokeTemplate(parkTestLookupSmoke);
+validateParkTestAddOnSmokeTemplate(parkTestAddOnSmoke);
 validateParkTestPaymentSmokeTemplate(parkTestPaymentSmoke);
 
 console.log('Park-test synth validation passed.');

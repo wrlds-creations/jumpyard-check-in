@@ -4,12 +4,12 @@ Use this file as the short operational snapshot of what actually exists in the r
 
 ## Snapshot
 
-- Date: 2026-06-24
-- Current branch: `codex/t0161-roadmap-resequence`
-- Current status: No active ticket after T0161 closeout; T0161 is complete in the working tree but not yet committed/pushed/merged.
-- Current ticket: None active
+- Date: 2026-06-25
+- Current branch: `codex/t0162-existing-booking-addon-smoke`
+- Current status: T0162 in closeout after a safe contact-resolution blocker; temporary AWS gates have been closed again.
+- Current ticket: `T0162`
 - Completed tickets: archived in `docs/history/completed-tickets.md` (160 completed tickets; latest `T0161`).
-- Recommended next step: start `T0162` only after the completed readiness branch is commit/push/merged with explicit approval.
+- Recommended next step: close T0162 and start T0163 as a Live existing-booking contact resolver investigation before retrying existing-booking add-on payment.
 
 ## Current Structure
 
@@ -54,6 +54,7 @@ T0156-T0161 current park-test status:
 - T0160 proved controlled Live existing-booking lookup for `166447399`; Aurora now contains the safe normalized booking snapshot, prepayment draft `jypd_56a8f1ca817c42a4b7` is `published`, and one `prepayment_draft.published` event is recorded.
 - The user manually refunded the T0159 internal paid booking after T0160; refund handling remains outside the app unless a later ticket explicitly scopes it.
 - T0161 verified Live catalog/index readiness: 6/6 entry parents and 4/4 park-test add-ons were found for Nacka; first assisted park test should use REST-on-demand booking lookup rather than broad same-day import.
+- T0162 opened a scoped gate for booking `166490323`, proved exact Live lookup and Live add-on availability, then stopped safely at add-product quote with `original_booking_contact_unresolved`; no add-on draft, payment, booking link, or add-product event was created, and the normal closed `park-test.json` config was redeployed.
 - Public API draft writes and Live lookup were closed again after their scoped smokes; visitor flow, payment/redeem writes, webhook processing, SMS, and email remain gated.
 
 ## Known Validation Commands
@@ -81,16 +82,17 @@ Completed-ticket history is archived in [docs/history/completed-tickets.md](docs
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | No active ticket. | None active | T0161 is complete in the working tree; do not start T0162 until explicitly approved. |
+| `T0162` | Existing-booking add-on smoke. | In closeout - blocker documented | Scoped gate for booking `166490323` was opened and closed again; quote stopped at `original_booking_contact_unresolved`; original booking was not mutated; no draft/payment/link was created. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0162` | Existing-booking add-on smoke. | Planned | Use T0161 Live product mapping/index decision; prove one controlled add-on path for an existing booking; original booking should not be directly mutated under current decisions. |
-| `T0163` | Controlled Live redeem smoke. | Planned | Controlled booking only; no normal visitor traffic. |
-| `T0164` | Staff-assisted visitor test. | Planned | Limited assisted visitor test after controlled smokes and park approval. |
-| `T0165` | Outcome and go/no-go. | Planned | Documentation/report only. |
+| `T0163` | Live existing-booking contact resolver investigation. | Planned | Find where Roller Live exposes customer contact for existing bookings; no writes or public PII. |
+| `T0164` | Existing-booking add-on payment smoke. | Planned | Retry frontend add-on payment after T0163 resolves/contact-handling is documented. |
+| `T0165` | Controlled Live redeem smoke. | Planned | Controlled booking only; no normal visitor traffic. |
+| `T0166` | Staff-assisted visitor test. | Planned | Limited assisted visitor test after controlled smokes and park approval. |
+| `T0167` | Outcome and go/no-go. | Planned | Documentation/report only. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
