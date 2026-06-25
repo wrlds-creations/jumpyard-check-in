@@ -31,6 +31,7 @@ export const PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL = 'T0160_LIVE_LOOKUP_SMOKE_APP
 export const PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL = 'T0162_EXISTING_BOOKING_ADDON_SMOKE_APPROVED';
 export const PARK_TEST_LINKED_ADD_ON_SETTLEMENT_APPROVAL =
   'T0165_LINKED_ADDON_SETTLEMENT_RECONCILIATION_APPROVED';
+export const PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL = 'T0166_CONTROLLED_LIVE_REDEEM_SMOKE_APPROVED';
 
 export interface JumpYardCloudConfig {
   readonly api: {
@@ -71,6 +72,8 @@ export interface JumpYardCloudConfig {
     readonly liveLookupSmokeAllowedIdentifiers: readonly string[];
     readonly liveLookupSmokeApproval?: string;
     readonly livePaymentSmokeApproval?: string;
+    readonly liveRedeemSmokeAllowedIdentifiers: readonly string[];
+    readonly liveRedeemSmokeApproval?: string;
     readonly rollerBookingDraftWritesEnabled: boolean;
     readonly rollerRedeemWritesEnabled: boolean;
     readonly rollerWebhookProcessingEnabled: boolean;
@@ -118,6 +121,8 @@ interface RawConfig {
     readonly liveLookupSmokeAllowedIdentifiers?: unknown;
     readonly liveLookupSmokeApproval?: unknown;
     readonly livePaymentSmokeApproval?: unknown;
+    readonly liveRedeemSmokeAllowedIdentifiers?: unknown;
+    readonly liveRedeemSmokeApproval?: unknown;
     readonly rollerBookingDraftWritesEnabled?: unknown;
     readonly rollerRedeemWritesEnabled?: unknown;
     readonly rollerWebhookProcessingEnabled?: unknown;
@@ -270,6 +275,8 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     input.safetyGates.liveAddOnSmokeApproval === PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL;
   const liveLinkedAddOnSettlementApproved =
     input.safetyGates.liveLinkedAddOnSettlementApproval === PARK_TEST_LINKED_ADD_ON_SETTLEMENT_APPROVAL;
+  const liveRedeemSmokeApproved =
+    input.safetyGates.liveRedeemSmokeApproval === PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL;
 
   if (!input.safetyGates.emergencyStop) {
     throw new Error(
@@ -331,11 +338,41 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     );
   }
 
+  if (liveRedeemSmokeApproved && input.safetyGates.liveRedeemSmokeAllowedIdentifiers.length === 0) {
+    throw new Error(
+      'park-test live redeem smoke approval requires safetyGates.liveRedeemSmokeAllowedIdentifiers.',
+    );
+  }
+
+  if (!liveRedeemSmokeApproved && input.safetyGates.liveRedeemSmokeAllowedIdentifiers.length > 0) {
+    throw new Error(
+      'park-test safetyGates.liveRedeemSmokeAllowedIdentifiers must stay empty until a scoped redeem ticket enables it.',
+    );
+  }
+
+  if (liveRedeemSmokeApproved && !input.safetyGates.rollerRedeemWritesEnabled) {
+    throw new Error(
+      'park-test live redeem smoke approval requires safetyGates.rollerRedeemWritesEnabled=true.',
+    );
+  }
+
+  if (liveRedeemSmokeApproved && !input.safetyGates.staffAuthEnabled) {
+    throw new Error(
+      'park-test live redeem smoke approval requires safetyGates.staffAuthEnabled=true.',
+    );
+  }
+
+  if (!liveRedeemSmokeApproved && input.safetyGates.rollerRedeemWritesEnabled) {
+    throw new Error('park-test safetyGates.rollerRedeemWritesEnabled must stay false until a scoped ticket enables it.');
+  }
+
+  if (!liveRedeemSmokeApproved && input.safetyGates.staffAuthEnabled) {
+    throw new Error('park-test safetyGates.staffAuthEnabled must stay false until a scoped ticket enables it.');
+  }
+
   const blockedGates: Array<keyof JumpYardCloudConfig['safetyGates']> = [
     'guestMessagingSendsEnabled',
-    'rollerRedeemWritesEnabled',
     'rollerWebhookProcessingEnabled',
-    'staffAuthEnabled',
   ];
   for (const gate of blockedGates) {
     if (input.safetyGates[gate]) {
@@ -523,6 +560,15 @@ function readSafetyGatesConfig(raw: RawConfig['safetyGates']): JumpYardCloudConf
       raw?.livePaymentSmokeApproval,
       '',
       'safetyGates.livePaymentSmokeApproval',
+    ),
+    liveRedeemSmokeAllowedIdentifiers: readOptionalStringArray(
+      raw?.liveRedeemSmokeAllowedIdentifiers,
+      'safetyGates.liveRedeemSmokeAllowedIdentifiers',
+    ),
+    liveRedeemSmokeApproval: readOptionalString(
+      raw?.liveRedeemSmokeApproval,
+      '',
+      'safetyGates.liveRedeemSmokeApproval',
     ),
     rollerBookingDraftWritesEnabled: readOptionalBoolean(
       raw?.rollerBookingDraftWritesEnabled,

@@ -535,6 +535,7 @@ function buildValidSelfTestConfig(): ConfigValidationTarget {
       liveAddOnSmokeAllowedIdentifiers: [],
       liveLinkedAddOnSettlementAllowedIdentifiers: [],
       liveLookupSmokeAllowedIdentifiers: [],
+      liveRedeemSmokeAllowedIdentifiers: [],
       rollerBookingDraftWritesEnabled: false,
       rollerRedeemWritesEnabled: false,
       rollerWebhookProcessingEnabled: false,

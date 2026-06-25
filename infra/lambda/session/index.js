@@ -2839,6 +2839,10 @@ function getTicketRedeemEligibility(ticket) {
     return { reason: `non_redeemable_product_type:${nonRedeemableMarker}`, redeemable: false };
   }
 
+  if (isT0166LiveRedeemSmokeTicketAllowed(ticket.ticketId)) {
+    return { reason: 't0166_allowlisted_ticket', redeemable: true };
+  }
+
   if (markers.some((marker) => REDEEMABLE_PRODUCT_KEYS.has(marker))) {
     return { reason: 'redeemable_product_type', redeemable: true };
   }
@@ -2854,6 +2858,28 @@ function getTicketRedeemEligibility(ticket) {
 function productKey(value) {
   const normalized = String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '').trim();
   return normalized || null;
+}
+
+function isT0166LiveRedeemSmokeTicketAllowed(ticketId) {
+  if (process.env.JUMPYARD_ENVIRONMENT !== 'park-test') return false;
+  if (process.env.ENABLE_T0166_LIVE_REDEEM_SMOKE !== 'true') return false;
+
+  const normalizedTicketId = normalizeIdentifier(ticketId);
+  if (!normalizedTicketId) return false;
+  return parseIdentifierSet(process.env.T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS).has(normalizedTicketId);
+}
+
+function parseIdentifierSet(value) {
+  return new Set(
+    String(value ?? '')
+      .split(',')
+      .map(normalizeIdentifier)
+      .filter(Boolean),
+  );
+}
+
+function normalizeIdentifier(value) {
+  return stringOrNull(value)?.toLowerCase() ?? null;
 }
 
 function blocked(reason, message, selectedTicketIds, visitDate) {
@@ -3581,7 +3607,10 @@ function isGuestMessagingSendEnabled() {
 }
 
 function isStaffAuthEnabled() {
-  return process.env.ENABLE_STAFF_AUTH === 'true' && !isEmergencyStopEnabled();
+  return (
+    process.env.ENABLE_STAFF_AUTH === 'true' &&
+    (!isEmergencyStopEnabled() || process.env.ENABLE_T0166_LIVE_REDEEM_SMOKE === 'true')
+  );
 }
 
 function safetyGateBlockedResponse(correlationId, code, message) {

@@ -2,6 +2,25 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0166 Controlled Live Redeem Smoke Validation
+
+- 2026-06-25: T0166 was activated on branch `codex/t0166-controlled-live-redeem-smoke` after T0165 was squash-merged through PR #164.
+- 2026-06-25: Added separate CDK/config gate `infra/config/park-test-live-redeem-smoke.json`, approval phrase `T0166_CONTROLLED_LIVE_REDEEM_SMOKE_APPROVED`, and `ENABLE_T0166_LIVE_REDEEM_SMOKE` / `T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS` environment mapping for `SessionHandler` and `RedeemHandler`.
+- 2026-06-25: Config validation now requires exact redeem allowlist identifiers, staff auth enabled, and redeem writes enabled only when the T0166 approval phrase is present; without the approval phrase, park-test staff auth and redeem writes must stay disabled.
+- 2026-06-25: `npm --prefix infra run build`, `node --check infra\lambda\redeem\index.js`, `node --check infra\lambda\session\index.js`, `npm --prefix infra run validate:config-guards`, `npm --prefix infra run validate:park-test-synth`, and `npm --prefix infra run synth:park-test-redeem-smoke` passed.
+- 2026-06-25: AWS identity verified account `376129878018`, region `eu-north-1`, through profile `wrlds-dev`.
+- 2026-06-25: Opening CDK diff for `infra/config/park-test-live-redeem-smoke.json` changed only existing Lambda code/environment. No new AWS resources were planned.
+- 2026-06-25: Opening deploy reached `UPDATE_COMPLETE`; readback confirmed lookup allowlist `166490323,9ae484b0-d9a9-4dad-b3d5-4ad3b0e25088`, staff auth `true`, redeem writes `true`, T0166 `true`, redeem allowlist `166490323,9ae484b0-d9a9-4dad-b3d5-4ad3b0e25088,166490323-560714728`, emergency stop `true`, and draft/add-on/webhook/SMS/email gates off.
+- 2026-06-25: The controlled phone/admin flow looked up booking `166490323`, started session `jycs_mqtimdxf_bb33c94c`, completed guest safety, and moved the session to `ready_for_staff`.
+- 2026-06-25: The first staff redeem attempt failed closed because the redeem handler still rejected Roller Live config outside Playground; no Roller redemption call was made before this guard was corrected.
+- 2026-06-25: A later staff redeem attempt failed closed with `no_redeemable_tickets` because the final Roller refresh replaced local product classification with less complete detail; no Roller redemption call was made before this was corrected.
+- 2026-06-25: The final T0166 staff redeem retry returned HTTP `200`, status `redeemed`, Roller response ref `roller_redemptions:http_200`, and redeemed ticket id `166490323-560714728`.
+- 2026-06-25: Safe Aurora readback showed session `jycs_mqtimdxf_bb33c94c` status `redeemed`, handoff `completed`, selected ticket `166490323-560714728`, ticket `166490323-560714728` with `redeem_status_last_seen='redeemed'`, and redeem attempt `redeem_attempt:701798...` status `redeemed`.
+- 2026-06-25: Closing deploy with normal `park-test.json` reached `UPDATE_COMPLETE`; readback confirmed lookup/staff/redeem gates closed, draft/add-on/webhook/SMS/email gates closed, and emergency stop still `true`.
+- 2026-06-25: Closed-gate API checks returned HTTP `409` with `live_lookup_disabled` for lookup and HTTP `409` with `staff_auth_disabled` for staff auth.
+- 2026-06-25: Closing `npx cdk diff -c config=./config/park-test.json --profile wrlds-dev --method=template` showed no differences.
+- 2026-06-25: T0166 did not create new AWS resources, create additional bookings/payments/refunds, enable broad lookup, leave staff auth or redeem enabled, process webhooks, send SMS/email, run normal visitor traffic, print secrets, print/persist raw payment JWTs, or expose public PII output.
+
 ## T0165 Linked Add-On Settlement Reconciliation Validation
 
 - 2026-06-25: T0165 was activated on branch `codex/t0165-linked-addon-settlement-reconciliation` after T0164 completed but before T0164 docs were committed.
