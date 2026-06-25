@@ -1368,7 +1368,50 @@ async function reconcilePrepaymentDraftFromPaidBooking(booking, source) {
     await recordPrepaymentDraftPublishedEvent(booking, draft, source);
   }
 
+  const updatedLinks = await reconcileLinkedAddOnBookingLinks(booking, source);
+  for (const link of updatedLinks) {
+    await recordBookingLinkPublishedEvent(booking, link, source);
+  }
+
   return updatedDrafts;
+}
+
+async function reconcileLinkedAddOnBookingLinks(booking, source) {
+  if (!booking?.rollerUniqueId || !booking.bookingReference || !isPaymentSettled(booking)) return [];
+
+  const result = await executeStatement(
+    `UPDATE jumpyard.booking_links
+     SET status = 'published',
+         linked_booking_reference = COALESCE(NULLIF(linked_booking_reference, ''), :bookingReference)
+     WHERE linked_roller_unique_id = :rollerUniqueId
+       AND link_type = 'add_product_draft'
+       AND status IN ('payment_pending', 'payment_blocked')
+     RETURNING
+       link_id,
+       link_type,
+       original_booking_reference,
+       original_roller_unique_id,
+       linked_booking_reference,
+       linked_roller_unique_id,
+       add_on_group_id,
+       status`,
+    [
+      stringParameter('rollerUniqueId', booking.rollerUniqueId),
+      stringParameter('bookingReference', booking.bookingReference),
+    ],
+  );
+
+  return mappedRows(result).map((row) => ({
+    addOnGroupId: stringOrNull(row.add_on_group_id),
+    linkId: stringOrNull(row.link_id),
+    linkType: stringOrNull(row.link_type),
+    linkedBookingReference: stringOrNull(row.linked_booking_reference),
+    linkedRollerUniqueId: stringOrNull(row.linked_roller_unique_id),
+    originalBookingReference: stringOrNull(row.original_booking_reference),
+    originalRollerUniqueId: stringOrNull(row.original_roller_unique_id),
+    source,
+    status: stringOrNull(row.status),
+  }));
 }
 
 async function recordPrepaymentDraftPublishedEvent(booking, draft, source) {
@@ -1404,6 +1447,51 @@ async function recordPrepaymentDraftPublishedEvent(booking, draft, source) {
           bookingReference: booking.bookingReference,
           flowType: stringOrNull(draft.flow_type),
           prepaymentDraftId: draftId,
+          rollerUniqueId: booking.rollerUniqueId,
+          source,
+        }),
+      ),
+    ],
+  );
+}
+
+async function recordBookingLinkPublishedEvent(booking, link, source) {
+  const linkId = stringOrNull(link.linkId);
+  if (!linkId) return;
+
+  await executeStatement(
+    `INSERT INTO jumpyard.event_log (
+      event_id,
+      correlation_id,
+      event_type,
+      subject_ref,
+      summary,
+      event_payload
+    )
+    VALUES (
+      :eventId,
+      :correlationId,
+      'booking_link.published',
+      :subjectRef,
+      :summary,
+      CAST(:eventPayload AS jsonb)
+    )
+    ON CONFLICT (event_id) DO NOTHING`,
+    [
+      stringParameter('eventId', `booking-link-published:${linkId}`),
+      stringParameter('correlationId', createCorrelationId()),
+      stringParameter('subjectRef', link.originalBookingReference || booking.bookingReference || booking.rollerUniqueId),
+      stringParameter('summary', 'Marked linked add-on booking link as published after paid Roller booking confirmation.'),
+      stringParameter(
+        'eventPayload',
+        JSON.stringify({
+          addOnGroupId: link.addOnGroupId,
+          linkId,
+          linkedBookingReference: link.linkedBookingReference,
+          linkedRollerUniqueId: link.linkedRollerUniqueId,
+          originalBookingReference: link.originalBookingReference,
+          originalRollerUniqueId: link.originalRollerUniqueId,
+          rollerBookingReference: booking.bookingReference,
           rollerUniqueId: booking.rollerUniqueId,
           source,
         }),

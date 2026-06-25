@@ -17,6 +17,7 @@ import { Construct } from 'constructs';
 import * as path from 'path';
 import {
   JumpYardCloudConfig,
+  PARK_TEST_LINKED_ADD_ON_SETTLEMENT_APPROVAL,
   PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL,
   PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL,
   PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL,
@@ -797,6 +798,11 @@ export class JumpYardCloudStack extends Stack {
     }
 
     if (handlerName === 'lookup') {
+      environment.ENABLE_T0165_LINKED_ADDON_SETTLEMENT = String(
+        resources.safetyGates.liveLinkedAddOnSettlementApproval === PARK_TEST_LINKED_ADD_ON_SETTLEMENT_APPROVAL,
+      );
+      environment.T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS =
+        resources.safetyGates.liveLinkedAddOnSettlementAllowedIdentifiers.join(',');
       environment.ENABLE_T0160_LIVE_LOOKUP_SMOKE = String(
         resources.safetyGates.liveLookupSmokeApproval === PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL,
       );
