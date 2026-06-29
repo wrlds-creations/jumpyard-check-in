@@ -26,6 +26,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Sprint 1 ticket narrative: [docs/history/sprint-1-ticket-history.md](docs/history/sprint-1-ticket-history.md)
 - Done followups: [docs/history/followups-done.md](docs/history/followups-done.md)
 - Forward roadmap/backlog: [docs/roadmap/backlog.md](docs/roadmap/backlog.md)
+- Park-test gate naming/runbook: [docs/t0170-park-test-gate-runbook.md](docs/t0170-park-test-gate-runbook.md)
 - Park-test reports live under `docs/` and are linked from [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
 ## Durable Architecture Facts
@@ -46,6 +47,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database.
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
 - T0152 deployed park-test safety gates in CDK/config and Lambda runtime; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
+- Park-test human gate names are documented as aliases in [docs/t0170-park-test-gate-runbook.md](docs/t0170-park-test-gate-runbook.md); the current CDK/Lambda runtime variable names remain technical and ticket-numbered until a separate migration is scoped.
 - Park-test has confirmed Roller Live access, webhook `1465`, frontend targets/CORS, controlled Live smokes, guest-detail contact resolution, one new-booking Roller email proof, and the T0168 add-on visibility fix. Public writes/lookup/redeem/webhooks/staff auth/visitor traffic/SMS/email remain gated.
 
 ## Current Implemented Flow Facts

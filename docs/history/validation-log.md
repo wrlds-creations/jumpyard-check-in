@@ -2,6 +2,14 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0170 Park-Test Gate Naming And Runbook Validation
+
+- 2026-06-29: T0170 was completed locally on branch `codex/t0170-park-test-gate-runbook`.
+- 2026-06-29: Added `docs/t0170-park-test-gate-runbook.md` with human-readable gate names mapped to current CDK config keys, Lambda environment variables, default closed state, risk/owner posture, park-test-day plan, and close/readback guidance.
+- 2026-06-29: Recorded D0124 so the friendly gate names are explicit aliases, not deployed runtime variable renames, and added FU-093 for any future dedicated runtime gate-name migration.
+- 2026-06-29: T0170 did not rename AWS/CDK/Lambda variables, deploy AWS, call Roller, create drafts/payments, redeem tickets, process webhooks, send SMS/email, run visitor traffic, print secrets, print raw payment JWTs, or expose public PII.
+- 2026-06-29: `npm --prefix infra run validate:config-guards`, `npm --prefix infra run synth:park-test`, `npm run validate`, and `git diff --check` passed. The first `npm run validate` attempt correctly failed because the completed-ticket archive count still said `167`; the count was updated to `168` and the rerun passed. `git diff --check` reported line-ending normalization warnings only. `npm --prefix infra run synth:park-test` printed existing CDK notice `37949`.
+
 ## T0168 New-Booking Add-On Visibility Validation
 
 - 2026-06-29: T0168 was completed on branch `codex/t0168-new-booking-addon-visibility`.
