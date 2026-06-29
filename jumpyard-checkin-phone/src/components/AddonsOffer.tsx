@@ -261,7 +261,7 @@ export const AddonsOffer = ({
     }, [existingAddons]);
 
     const [step, setStep] = useState<AddonsOfferStep>('SELECT');
-    const [qty, setQty] = useState<Record<AddonId, number>>(() => ({ ...minQty }));
+    const [qty, setQty] = useState<Record<AddonId, number>>(() => getRecommendedAddonQty(minQty, guestCount));
     const [quote, setQuote] = useState<NewBookingQuote | null>(null);
     const [draft, setDraft] = useState<AddProductDraftResult | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -290,6 +290,27 @@ export const AddonsOffer = ({
         if (step === 'SELECT' || step === 'APPROVED') return;
         returnToSelect();
     }, [backRequest, returnToSelect, step]);
+
+    useEffect(() => {
+        setQty((current) => {
+            let changed = false;
+            const next = { ...current };
+
+            for (const id of Object.keys(minQty) as AddonId[]) {
+                if (next[id] < minQty[id]) {
+                    next[id] = minQty[id];
+                    changed = true;
+                }
+            }
+
+            if (minQty.socks === 0 && next.socks === 0 && guestCount > 0) {
+                next.socks = guestCount;
+                changed = true;
+            }
+
+            return changed ? next : current;
+        });
+    }, [guestCount, minQty]);
 
     const setOne = (id: AddonId, nextQty: number) => {
         setSubmitError(null);
@@ -481,7 +502,9 @@ export const AddonsOffer = ({
                     <div className="text-center">
                         <h1 className="text-xl font-black italic uppercase text-foreground">{t.addons.title}</h1>
                         <p className="text-muted text-xs mt-0.5">{t.addons.description}</p>
-                        <p className="text-muted text-[10px] mb-3">{catalog.length} {t.addons.scrollHint}</p>
+                        <p className="text-muted text-[10px] mb-3">
+                            {catalogLoading ? t.addons.loading : `${catalog.length} ${t.addons.scrollHint}`}
+                        </p>
                     </div>
 
                     {existingAddons.length > 0 && (
@@ -508,12 +531,15 @@ export const AddonsOffer = ({
                     )}
 
                     <div className="flex-1 overflow-y-auto -mx-1 px-1">
+                        {catalogLoading ? (
+                            <AddonsLoadingCard label={t.addons.loading} />
+                        ) : (
                         <div className="w-full flex flex-col gap-1.5">
                             {catalog.map((entry) => {
                                 const value = qty[entry.id];
                                 const max = Math.max(1, guestCount * entry.maxPerGuest);
                                 const locked = minQty[entry.id];
-                                const isHighlighted = entry.id === 'connected' || entry.id === 'skyrider';
+                                const isHighlighted = entry.id === 'connected';
                                 const isEnabled = isPricedCatalogEntry(entry) && !catalogLoading;
 
                                 return (
@@ -558,6 +584,7 @@ export const AddonsOffer = ({
                                 );
                             })}
                         </div>
+                        )}
                     </div>
 
                     <div className="pt-3 border-t border-border mt-3">
@@ -600,9 +627,12 @@ export const AddonsOffer = ({
                                 <div key={addon.id} className="flex justify-between items-center gap-3 text-sm font-bold text-foreground py-1">
                                     <div className="flex items-center gap-2 min-w-0">
                                         <JumpyardIcon name={entry?.icon ?? 'addons-bag'} className="w-7 h-7 flex-shrink-0" />
-                                        <span className="truncate">{addon.label}</span>
+                                        <span className="min-w-0">
+                                            <span className="block truncate">{addon.label} x {addon.qty}</span>
+                                            <span className="block text-[11px] font-normal text-muted">{formatMoney(addon.price)} / st</span>
+                                        </span>
                                     </div>
-                                    <span className="flex-shrink-0">{addon.qty} st</span>
+                                    <span className="flex-shrink-0">{formatMoney(addon.price * addon.qty)}</span>
                                 </div>
                             );
                         })}
@@ -679,3 +709,22 @@ export const AddonsOffer = ({
         </motion.div>
     );
 };
+
+function getRecommendedAddonQty(minQty: Record<AddonId, number>, guestCount: number): Record<AddonId, number> {
+    return {
+        ...minQty,
+        socks: minQty.socks > 0 ? minQty.socks : Math.max(0, guestCount),
+    };
+}
+
+function AddonsLoadingCard({ label }: { label: string }) {
+    return (
+        <div className="w-full min-h-[260px] rounded-2xl border border-border bg-surface p-6 shadow-sm flex flex-col items-center justify-center text-center">
+            <div className="relative mb-4 flex h-20 w-20 items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-4 border-primary/15 border-t-primary animate-spin" />
+                <JumpyardIcon name="addons-bag" className="h-11 w-11" />
+            </div>
+            <p className="text-sm font-black italic uppercase text-foreground">{label}</p>
+        </div>
+    );
+}

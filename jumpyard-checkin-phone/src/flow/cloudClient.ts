@@ -112,7 +112,13 @@ interface CloudLookupSource {
 }
 
 interface CloudBooking {
+  bookingName?: string | null;
   bookingReference: string | null;
+  customer?: {
+    firstName?: string | null;
+    fullName?: string | null;
+    lastName?: string | null;
+  } | null;
   rollerUniqueId: string | null;
   status: string | null;
   paymentStatus: string | null;
@@ -861,6 +867,7 @@ function toBooking(booking: CloudBooking, reason: string, source?: CloudLookupSo
   const primaryItems = getPrimaryItems(booking.items);
   const sessionItem = primaryItems[0] ?? booking.items[0] ?? null;
   const existingAddons = getExistingAddons(booking.items);
+  const guestName = getBookingGuestName(booking);
 
   return {
     id: booking.bookingReference ?? booking.rollerUniqueId ?? '',
@@ -874,11 +881,41 @@ function toBooking(booking: CloudBooking, reason: string, source?: CloudLookupSo
     paid: isPaidBooking(reason, booking),
     paymentStatus: booking.paymentStatus ?? booking.status,
     amountOwing: booking.amountOwing,
+    guestName: guestName.firstName ?? undefined,
+    lastName: guestName.lastName ?? undefined,
     existingAddons,
     productLabel: getProductLabel(sessionItem),
     productType: 'entry',
     lookupSource: normalizeLookupSource(source),
   };
+}
+
+function getBookingGuestName(booking: CloudBooking) {
+  const firstName = normalizeOptionalString(booking.customer?.firstName);
+  const lastName = normalizeOptionalString(booking.customer?.lastName);
+  if (firstName || lastName) return { firstName, lastName };
+
+  return splitDisplayName(
+    normalizeOptionalString(booking.customer?.fullName) ?? normalizeOptionalString(booking.bookingName)
+  );
+}
+
+function splitDisplayName(value?: string | null) {
+  const name = normalizeOptionalString(value);
+  if (!name) return { firstName: null, lastName: null };
+
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return { firstName: name, lastName: null };
+
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  };
+}
+
+function normalizeOptionalString(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed || null;
 }
 
 function getSessionStartIdempotencyKey(booking: Booking) {

@@ -350,7 +350,7 @@ async function handleStaffSessionList(event, correlationId) {
   }
 
   const request = normalizeStaffListRequest(event);
-  const sessions = await findReadyStaffSessions(request);
+  const sessions = filterT0176FrontendRedeemRehearsalSessions(await findReadyStaffSessions(request));
 
   return jsonResponse(200, correlationId, {
     status: 'found',
@@ -378,6 +378,16 @@ async function handleStaffSessionDetail(event, correlationId) {
       error: {
         code: 'session_id_required',
         message: 'checkinSessionId is required.',
+      },
+    });
+  }
+
+  if (!isT0176FrontendRedeemRehearsalSessionAllowed(checkinSessionId)) {
+    return jsonResponse(403, correlationId, {
+      status: 'blocked',
+      error: {
+        code: 't0176_session_not_allowed',
+        message: 'This staff rehearsal session is not approved for the active park-test frontend redeem rehearsal.',
       },
     });
   }
@@ -2869,6 +2879,28 @@ function isT0166LiveRedeemSmokeTicketAllowed(ticketId) {
   return parseIdentifierSet(process.env.T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS).has(normalizedTicketId);
 }
 
+function filterT0176FrontendRedeemRehearsalSessions(sessions) {
+  if (!isT0176FrontendRedeemRehearsalEnabled()) return sessions;
+  return sessions.filter((session) =>
+    isT0176FrontendRedeemRehearsalSessionAllowed(session?.checkinSessionId),
+  );
+}
+
+function isT0176FrontendRedeemRehearsalEnabled() {
+  return (
+    process.env.JUMPYARD_ENVIRONMENT === 'park-test' &&
+    process.env.ENABLE_T0176_FRONTEND_REDEEM_REHEARSAL === 'true'
+  );
+}
+
+function isT0176FrontendRedeemRehearsalSessionAllowed(checkinSessionId) {
+  if (!isT0176FrontendRedeemRehearsalEnabled()) return true;
+
+  const normalizedSessionId = normalizeIdentifier(checkinSessionId);
+  if (!normalizedSessionId) return false;
+  return parseIdentifierSet(process.env.T0176_FRONTEND_REDEEM_REHEARSAL_ALLOWED_SESSION_IDS).has(normalizedSessionId);
+}
+
 function parseIdentifierSet(value) {
   return new Set(
     String(value ?? '')
@@ -3609,7 +3641,10 @@ function isGuestMessagingSendEnabled() {
 function isStaffAuthEnabled() {
   return (
     process.env.ENABLE_STAFF_AUTH === 'true' &&
-    (!isEmergencyStopEnabled() || process.env.ENABLE_T0166_LIVE_REDEEM_SMOKE === 'true')
+    (!isEmergencyStopEnabled() ||
+      process.env.ENABLE_T0166_LIVE_REDEEM_SMOKE === 'true' ||
+      process.env.ENABLE_T0176_FULL_FLOW_REHEARSAL === 'true' ||
+      isT0176FrontendRedeemRehearsalEnabled())
   );
 }
 

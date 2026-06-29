@@ -757,6 +757,7 @@ async function getRedeemContext(identifier) {
        b.amount_owing_cents,
        b.total_cents,
        b.booking_date::text AS booking_date,
+       b.venue_id,
        b.start_time::text AS start_time,
        b.end_time::text AS end_time,
        b.freshness_status,
@@ -821,6 +822,7 @@ async function getRedeemContext(identifier) {
        b.amount_owing_cents,
        b.total_cents,
        b.booking_date,
+       b.venue_id,
        b.start_time,
        b.end_time,
        b.freshness_status,
@@ -867,6 +869,7 @@ async function getRedeemContext(identifier) {
       rollerUniqueId: stringOrNull(row.roller_unique_id),
       startTime: stringOrNull(row.start_time),
       totalCents: numberOrNull(row.total_cents),
+      venueId: stringOrNull(row.venue_id),
     },
     tickets,
   };
@@ -1067,29 +1070,76 @@ function evaluateRedeemWriteGate(context, request, decision) {
     };
   }
 
-  if (process.env.ENABLE_T0166_LIVE_REDEEM_SMOKE !== 'true') {
-    return disabled(
-      'redeem_write_disabled',
-      'Roller redemption writes are disabled while the JumpYard emergency stop is active.',
-    );
+  if (isT0166LiveRedeemSmokeRuntimeEnabled()) {
+    if (!isT0166LiveRedeemAllowed(context, request, decision)) {
+      return disabled(
+        't0166_live_redeem_not_allowed',
+        'This controlled Live redeem smoke only allows the approved booking and ticket identifiers.',
+      );
+    }
+
+    return {
+      enabled: true,
+      message: null,
+      reason: 't0166_live_redeem_smoke_enabled',
+    };
   }
 
-  if (!isT0166LiveRedeemAllowed(context, request, decision)) {
-    return disabled(
-      't0166_live_redeem_not_allowed',
-      'This controlled Live redeem smoke only allows the approved booking and ticket identifiers.',
-    );
+  if (isT0176FullFlowRehearsalEnabled()) {
+    if (!isT0176FullFlowRedeemAllowed(context, request)) {
+      return disabled(
+        't0176_full_flow_redeem_not_allowed',
+        'This T0176 full-flow rehearsal only allows the approved park-test date and venue.',
+      );
+    }
+
+    return {
+      enabled: true,
+      message: null,
+      reason: 't0176_full_flow_rehearsal_enabled',
+    };
   }
 
-  return {
-    enabled: true,
-    message: null,
-    reason: 't0166_live_redeem_smoke_enabled',
-  };
+  return disabled(
+    'redeem_write_disabled',
+    'Roller redemption writes are disabled while the JumpYard emergency stop is active.',
+  );
 }
 
 function isEmergencyStopEnabled() {
   return process.env.JUMPYARD_EMERGENCY_STOP === 'true';
+}
+
+function isT0176FullFlowRehearsalEnabled() {
+  return (
+    process.env.JUMPYARD_ENVIRONMENT === 'park-test' &&
+    process.env.ENABLE_T0176_FULL_FLOW_REHEARSAL === 'true' &&
+    process.env.ENABLE_ROLLER_REDEEM_WRITES === 'true'
+  );
+}
+
+function isT0176FullFlowRedeemAllowed(context, request) {
+  const allowedDates = getT0176FullFlowAllowedOperatingDates();
+  if (allowedDates.length === 0) return false;
+
+  const requestedDate = normalizeDate(request?.expectedDate);
+  const bookingDate = normalizeDate(context?.booking?.bookingDate);
+  const ticketDates = (context?.tickets ?? []).map((ticket) => normalizeDate(ticket?.bookingDate)).filter(Boolean);
+  const candidateDates = Array.from(new Set([requestedDate, bookingDate, ...ticketDates].filter(Boolean)));
+  if (candidateDates.length === 0 || candidateDates.some((date) => !allowedDates.includes(date))) return false;
+
+  const approvedVenueId = stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID);
+  const bookingVenueId = stringOrNull(context?.booking?.venueId);
+  if (approvedVenueId && bookingVenueId && approvedVenueId !== bookingVenueId) return false;
+
+  return true;
+}
+
+function getT0176FullFlowAllowedOperatingDates() {
+  return String(process.env.T0176_FULL_FLOW_ALLOWED_OPERATING_DATES || '')
+    .split(',')
+    .map((value) => normalizeDate(value))
+    .filter(Boolean);
 }
 
 function isT0166LiveRedeemAllowed(context, request, decision) {
@@ -1548,10 +1598,12 @@ function validateRollerConfig(config) {
   const errors = [];
   let parsedBaseUrl = null;
   const liveRedeemSmokeEnabled = isT0166LiveRedeemSmokeRuntimeEnabled();
+  const fullFlowRehearsalEnabled = isT0176FullFlowRehearsalEnabled();
+  const liveRedeemEnabled = liveRedeemSmokeEnabled || fullFlowRehearsalEnabled;
 
-  if (liveRedeemSmokeEnabled) {
+  if (liveRedeemEnabled) {
     if (config.env !== 'live') {
-      errors.push('T0166 Live redeem smoke requires Roller environment live.');
+      errors.push('Park-test Live redeem requires Roller environment live.');
     }
   } else if (config.env !== 'playground') {
     errors.push('Roller environment must be playground.');
@@ -1568,9 +1620,9 @@ function validateRollerConfig(config) {
     if (parsedBaseUrl.protocol !== 'https:') {
       errors.push('Roller base URL must use https.');
     }
-    if (liveRedeemSmokeEnabled) {
+    if (liveRedeemEnabled) {
       if (parsedBaseUrl.origin !== ROLLER_LIVE_BASE_URL || parsedBaseUrl.pathname !== '/') {
-        errors.push(`T0166 Live redeem smoke requires Roller base URL ${ROLLER_LIVE_BASE_URL}.`);
+        errors.push(`Park-test Live redeem requires Roller base URL ${ROLLER_LIVE_BASE_URL}.`);
       }
     } else {
       if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
@@ -2187,6 +2239,13 @@ function getHeader(event, name) {
 function stringOrNull(value) {
   if (value === undefined || value === null || value === '') return null;
   return String(value).trim() || null;
+}
+
+function normalizeDate(value) {
+  const raw = stringOrNull(value);
+  if (!raw) return null;
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
 }
 
 function numberOrNull(value) {

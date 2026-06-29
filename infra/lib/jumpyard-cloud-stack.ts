@@ -17,6 +17,8 @@ import { Construct } from 'constructs';
 import * as path from 'path';
 import {
   JumpYardCloudConfig,
+  PARK_TEST_FRONTEND_REDEEM_REHEARSAL_APPROVAL,
+  PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL,
   PARK_TEST_LINKED_ADD_ON_SETTLEMENT_APPROVAL,
   PARK_TEST_ASSISTED_LOOKUP_APPROVAL,
   PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL,
@@ -773,6 +775,8 @@ export class JumpYardCloudStack extends Stack {
     }
 
     if (handlerName === 'session') {
+      const fullFlowRehearsalEnabled =
+        resources.safetyGates.fullFlowRehearsalApproval === PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL;
       environment.CHECKIN_EMAIL_BASE_URL = resources.checkinEmailBaseUrl;
       environment.CHECKIN_SMS_BASE_URL = resources.checkinSmsBaseUrl;
       environment.CHECKIN_LINK_DEV_TOKEN_SECRET_ARN = resources.checkinLinkDevTokenSecret.secretArn;
@@ -786,26 +790,43 @@ export class JumpYardCloudStack extends Stack {
       );
       environment.T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS =
         resources.safetyGates.liveRedeemSmokeAllowedIdentifiers.join(',');
+      environment.ENABLE_T0176_FRONTEND_REDEEM_REHEARSAL = String(
+        resources.safetyGates.frontendRedeemRehearsalApproval === PARK_TEST_FRONTEND_REDEEM_REHEARSAL_APPROVAL,
+      );
+      environment.T0176_FRONTEND_REDEEM_REHEARSAL_ALLOWED_SESSION_IDS =
+        resources.safetyGates.frontendRedeemRehearsalAllowedSessionIds.join(',');
+      environment.ENABLE_T0176_FULL_FLOW_REHEARSAL = String(fullFlowRehearsalEnabled);
       environment.SMS_PROVIDER = 'aws_sns';
       environment.SMS_SENDER_ID = 'JumpYard';
       environment.STAFF_AUTH_SECRET_ARN = resources.staffAuthSecret.secretArn;
     }
 
     if (handlerName === 'booking') {
+      const fullFlowRehearsalEnabled =
+        resources.safetyGates.fullFlowRehearsalApproval === PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL;
       environment.ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES = String(
-        resources.safetyGates.livePaymentSmokeApproval === PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL,
+        resources.safetyGates.livePaymentSmokeApproval === PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL ||
+          fullFlowRehearsalEnabled,
       );
       environment.ENABLE_T0162_LIVE_ADDON_SMOKE = String(
-        resources.safetyGates.liveAddOnSmokeApproval === PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL,
+        resources.safetyGates.liveAddOnSmokeApproval === PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL ||
+          fullFlowRehearsalEnabled,
       );
       environment.T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS =
         resources.safetyGates.liveAddOnSmokeAllowedIdentifiers.join(',');
+      environment.ENABLE_T0176_FULL_FLOW_REHEARSAL = String(fullFlowRehearsalEnabled);
+      environment.T0176_FULL_FLOW_ALLOWED_OPERATING_DATES =
+        resources.safetyGates.fullFlowRehearsalAllowedOperatingDates.join(',');
+      environment.T0176_FULL_FLOW_VENUE_ID =
+        resources.safetyGates.fullFlowRehearsalVenueId ?? '';
       environment.ENABLE_ROLLER_BOOKING_DRAFT_WRITES = String(
         resources.safetyGates.rollerBookingDraftWritesEnabled,
       );
     }
 
     if (handlerName === 'lookup') {
+      const fullFlowRehearsalEnabled =
+        resources.safetyGates.fullFlowRehearsalApproval === PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL;
       environment.ENABLE_T0165_LINKED_ADDON_SETTLEMENT = String(
         resources.safetyGates.liveLinkedAddOnSettlementApproval === PARK_TEST_LINKED_ADD_ON_SETTLEMENT_APPROVAL,
       );
@@ -817,22 +838,36 @@ export class JumpYardCloudStack extends Stack {
       environment.T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS =
         resources.safetyGates.liveLookupSmokeAllowedIdentifiers.join(',');
       environment.ENABLE_T0169_POST_PAYMENT_SYNC = String(
-        resources.safetyGates.livePostPaymentSyncApproval === PARK_TEST_POST_PAYMENT_SYNC_APPROVAL,
+        resources.safetyGates.livePostPaymentSyncApproval === PARK_TEST_POST_PAYMENT_SYNC_APPROVAL ||
+          fullFlowRehearsalEnabled,
       );
       environment.ENABLE_T0171_ASSISTED_LOOKUP = String(
-        resources.safetyGates.liveAssistedLookupApproval === PARK_TEST_ASSISTED_LOOKUP_APPROVAL,
+        resources.safetyGates.liveAssistedLookupApproval === PARK_TEST_ASSISTED_LOOKUP_APPROVAL ||
+          fullFlowRehearsalEnabled,
       );
       environment.T0171_ASSISTED_LOOKUP_ALLOWED_OPERATING_DATES =
-        resources.safetyGates.liveAssistedLookupAllowedOperatingDates.join(',');
+        (fullFlowRehearsalEnabled
+          ? resources.safetyGates.fullFlowRehearsalAllowedOperatingDates
+          : resources.safetyGates.liveAssistedLookupAllowedOperatingDates
+        ).join(',');
       environment.T0171_ASSISTED_LOOKUP_VENUE_ID =
-        resources.safetyGates.liveAssistedLookupVenueId ?? '';
+        (fullFlowRehearsalEnabled
+          ? resources.safetyGates.fullFlowRehearsalVenueId
+          : resources.safetyGates.liveAssistedLookupVenueId) ?? '';
     }
 
     if (handlerName === 'redeem') {
+      const fullFlowRehearsalEnabled =
+        resources.safetyGates.fullFlowRehearsalApproval === PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL;
       environment.ENABLE_ROLLER_REDEEM_WRITES = String(resources.safetyGates.rollerRedeemWritesEnabled);
       environment.ENABLE_T0166_LIVE_REDEEM_SMOKE = String(
         resources.safetyGates.liveRedeemSmokeApproval === PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL,
       );
+      environment.ENABLE_T0176_FULL_FLOW_REHEARSAL = String(fullFlowRehearsalEnabled);
+      environment.T0176_FULL_FLOW_ALLOWED_OPERATING_DATES =
+        resources.safetyGates.fullFlowRehearsalAllowedOperatingDates.join(',');
+      environment.T0176_FULL_FLOW_VENUE_ID =
+        resources.safetyGates.fullFlowRehearsalVenueId ?? '';
       environment.REDEEM_DEV_TOKEN_SECRET_ARN = resources.redeemDevTokenSecret.secretArn;
       environment.STAFF_AUTH_SECRET_ARN = resources.staffAuthSecret.secretArn;
       environment.T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS =

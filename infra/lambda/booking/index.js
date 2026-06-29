@@ -596,6 +596,10 @@ async function handleAddProductQuote(event, body, correlationId) {
       error: original.error,
     });
   }
+  const fullFlowGate = validateT0176FullFlowOriginalBookingAccess(original);
+  if (!fullFlowGate.ok) {
+    return addOnSmokeGateBlockedResponse(correlationId, fullFlowGate);
+  }
 
   const customerResult = resolveAddProductCustomer(request, original);
   if (!customerResult.ok) {
@@ -724,6 +728,10 @@ async function handleAddProductDraft(event, body, correlationId) {
       status: original.status,
       error: original.error,
     });
+  }
+  const fullFlowGate = validateT0176FullFlowOriginalBookingAccess(original);
+  if (!fullFlowGate.ok) {
+    return addOnSmokeGateBlockedResponse(correlationId, fullFlowGate);
   }
 
   const customerResult = resolveAddProductCustomer(request, original);
@@ -1216,14 +1224,14 @@ function isEmergencyStopEnabled() {
 function isNewBookingDraftWriteEnabled() {
   return (
     process.env.ENABLE_ROLLER_BOOKING_DRAFT_WRITES === 'true' &&
-    (!isEmergencyStopEnabled() || isT0159LivePaymentSmokeEnabled())
+    (!isEmergencyStopEnabled() || isT0159LivePaymentSmokeEnabled() || isT0176FullFlowRehearsalEnabled())
   );
 }
 
 function isAddProductDraftWriteEnabled() {
   return (
     process.env.ENABLE_ROLLER_BOOKING_DRAFT_WRITES === 'true' &&
-    (!isEmergencyStopEnabled() || isT0162LiveAddOnSmokeEnabled())
+    (!isEmergencyStopEnabled() || isT0162LiveAddOnSmokeEnabled() || isT0176FullFlowRehearsalEnabled())
   );
 }
 
@@ -1241,8 +1249,19 @@ function isT0162LiveAddOnSmokeEnabled() {
   );
 }
 
+function isT0176FullFlowRehearsalEnabled() {
+  return (
+    process.env.JUMPYARD_ENVIRONMENT === 'park-test' &&
+    process.env.ENABLE_T0176_FULL_FLOW_REHEARSAL === 'true'
+  );
+}
+
 function validateT0162AddOnSmokeAccess(identifier) {
   if (process.env.JUMPYARD_ENVIRONMENT !== 'park-test') {
+    return { ok: true };
+  }
+
+  if (isT0176FullFlowRehearsalEnabled()) {
     return { ok: true };
   }
 
@@ -1265,6 +1284,48 @@ function validateT0162AddOnSmokeAccess(identifier) {
   }
 
   return { ok: true };
+}
+
+function validateT0176FullFlowOriginalBookingAccess(original) {
+  if (!isT0176FullFlowRehearsalEnabled()) return { ok: true };
+
+  const allowedDates = parseCsvValues(process.env.T0176_FULL_FLOW_ALLOWED_OPERATING_DATES);
+  const bookingDate = normalizeDate(original?.bookingDate);
+  if (allowedDates.length === 0 || !bookingDate || !allowedDates.includes(bookingDate)) {
+    return {
+      ok: false,
+      code: 't0176_full_flow_booking_not_allowed',
+      message: 'This booking is outside the approved T0176 full-flow test operating date.',
+      statusCode: 403,
+    };
+  }
+
+  const approvedVenueId = stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID);
+  const bookingVenueId = stringOrNull(original?.venueId);
+  if (approvedVenueId && bookingVenueId && approvedVenueId !== bookingVenueId) {
+    return {
+      ok: false,
+      code: 't0176_full_flow_booking_not_allowed',
+      message: 'This booking is outside the approved T0176 full-flow test venue.',
+      statusCode: 403,
+    };
+  }
+
+  return { ok: true };
+}
+
+function parseCsvValues(value) {
+  return String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function normalizeDate(value) {
+  const raw = stringOrNull(value);
+  if (!raw) return null;
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
 }
 
 function isT0162LiveAddOnSmokeIdentifierAllowed(identifier) {
@@ -1532,11 +1593,12 @@ function validateRollerConfig(config) {
   let parsedBaseUrl = null;
   const livePaymentSmokeEnabled = isT0159LivePaymentSmokeEnabled();
   const liveAddOnSmokeEnabled = isT0162LiveAddOnSmokeEnabled();
-  const liveSmokeEnabled = livePaymentSmokeEnabled || liveAddOnSmokeEnabled;
+  const fullFlowRehearsalEnabled = isT0176FullFlowRehearsalEnabled();
+  const liveSmokeEnabled = livePaymentSmokeEnabled || liveAddOnSmokeEnabled || fullFlowRehearsalEnabled;
 
   if (liveSmokeEnabled) {
     if (config.env !== 'live') {
-      errors.push('Roller environment must be live for the scoped park-test Live smoke.');
+      errors.push('Roller environment must be live for the scoped park-test Live smoke/rehearsal.');
     }
   } else if (config.env !== 'playground') {
     errors.push('Roller environment must be playground.');
@@ -1555,7 +1617,7 @@ function validateRollerConfig(config) {
     }
     if (liveSmokeEnabled) {
       if (parsedBaseUrl.origin !== ROLLER_LIVE_BASE_URL || parsedBaseUrl.pathname !== '/') {
-        errors.push(`Roller base URL must be ${ROLLER_LIVE_BASE_URL} for the scoped park-test Live smoke.`);
+        errors.push(`Roller base URL must be ${ROLLER_LIVE_BASE_URL} for the scoped park-test Live smoke/rehearsal.`);
       }
     } else {
       if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
@@ -1789,6 +1851,7 @@ async function findLocalOriginalBooking(bookingReference) {
        booking_status,
        payment_status,
        booking_date::text AS booking_date,
+       venue_id,
        start_time::text AS start_time,
        normalized_summary ->> 'bookingCustomerId' AS booking_customer_id,
        freshness_status
@@ -1890,7 +1953,30 @@ function normalizeOriginalBookingContext(body, bookingReference, localBooking) {
     rollerCustomerId: stringOrNull(booking?.customerId ?? booking?.customer?.id ?? localBooking?.booking_customer_id),
     rollerUniqueId: stringOrNull(booking?.uniqueId ?? booking?.id ?? booking?.bookingUniqueId ?? localBooking?.roller_unique_id),
     startTime: stringOrNull(booking?.startTime ?? firstItem.startTime ?? firstItem.sessionStartTime ?? localBooking?.start_time),
+    venueId: extractVenueId(booking) || stringOrNull(localBooking?.venue_id),
   };
+}
+
+function extractVenueId(booking) {
+  const candidates = [
+    booking?.venueId,
+    booking?.venueID,
+    booking?.venue_id,
+    booking?.venue?.id,
+    booking?.venue?.venueId,
+    booking?.venue?.venueID,
+    ...(Array.isArray(booking?.items)
+      ? booking.items.flatMap((item) => [
+          item?.venueId,
+          item?.venueID,
+          item?.venue_id,
+          item?.venue?.id,
+          item?.venue?.venueId,
+          item?.venue?.venueID,
+        ])
+      : []),
+  ];
+  return candidates.map(stringOrNull).find(Boolean) ?? null;
 }
 
 function normalizeOriginalBookingCustomer(booking) {

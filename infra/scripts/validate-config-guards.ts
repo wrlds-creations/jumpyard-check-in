@@ -50,6 +50,11 @@ interface TestConfig {
     livePostPaymentSyncApproval?: string;
     liveRedeemSmokeAllowedIdentifiers?: string[];
     liveRedeemSmokeApproval?: string;
+    frontendRedeemRehearsalAllowedSessionIds?: string[];
+    frontendRedeemRehearsalApproval?: string;
+    fullFlowRehearsalAllowedOperatingDates?: string[];
+    fullFlowRehearsalApproval?: string;
+    fullFlowRehearsalVenueId?: string;
     rollerBookingDraftWritesEnabled: boolean;
     rollerRedeemWritesEnabled: boolean;
     rollerWebhookProcessingEnabled: boolean;
@@ -266,6 +271,97 @@ parkTestRedeemSmokeWithDraftWrites.safetyGates.rollerBookingDraftWritesEnabled =
 const parkTestRedeemSmokeWithWebhook = cloneConfig(parkTestApprovedRedeemSmoke);
 parkTestRedeemSmokeWithWebhook.safetyGates.rollerWebhookProcessingEnabled = true;
 
+const parkTestApprovedFrontendRedeemRehearsal = cloneConfig(parkTestConfig);
+parkTestApprovedFrontendRedeemRehearsal.safetyGates.emergencyStop = true;
+parkTestApprovedFrontendRedeemRehearsal.safetyGates.staffAuthEnabled = true;
+parkTestApprovedFrontendRedeemRehearsal.safetyGates.frontendRedeemRehearsalApproval =
+  'T0176_FRONTEND_REDEEM_REHEARSAL_APPROVED';
+parkTestApprovedFrontendRedeemRehearsal.safetyGates.frontendRedeemRehearsalAllowedSessionIds = [
+  'jycs_mqtimdxf_bb33c94c',
+];
+
+const parkTestFrontendRedeemRehearsalWithoutAllowedSession = cloneConfig(parkTestApprovedFrontendRedeemRehearsal);
+parkTestFrontendRedeemRehearsalWithoutAllowedSession.safetyGates.frontendRedeemRehearsalAllowedSessionIds = [];
+
+const parkTestFrontendRedeemSessionWithoutApproval = cloneConfig(parkTestApprovedFrontendRedeemRehearsal);
+delete parkTestFrontendRedeemSessionWithoutApproval.safetyGates.frontendRedeemRehearsalApproval;
+parkTestFrontendRedeemSessionWithoutApproval.safetyGates.staffAuthEnabled = false;
+
+const parkTestFrontendRedeemRehearsalWithoutStaffAuth = cloneConfig(parkTestApprovedFrontendRedeemRehearsal);
+parkTestFrontendRedeemRehearsalWithoutStaffAuth.safetyGates.staffAuthEnabled = false;
+
+const parkTestFrontendRedeemRehearsalWithRedeemWrites = cloneConfig(parkTestApprovedFrontendRedeemRehearsal);
+parkTestFrontendRedeemRehearsalWithRedeemWrites.safetyGates.rollerRedeemWritesEnabled = true;
+
+const parkTestFrontendRedeemRehearsalWithPaymentSmoke = cloneConfig(parkTestApprovedFrontendRedeemRehearsal);
+parkTestFrontendRedeemRehearsalWithPaymentSmoke.safetyGates.rollerBookingDraftWritesEnabled = true;
+parkTestFrontendRedeemRehearsalWithPaymentSmoke.safetyGates.livePaymentSmokeApproval =
+  'T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED';
+
+const parkTestFrontendRedeemRehearsalWithLiveRedeem = cloneConfig(parkTestApprovedFrontendRedeemRehearsal);
+parkTestFrontendRedeemRehearsalWithLiveRedeem.safetyGates.liveRedeemSmokeApproval =
+  'T0166_CONTROLLED_LIVE_REDEEM_SMOKE_APPROVED';
+parkTestFrontendRedeemRehearsalWithLiveRedeem.safetyGates.liveRedeemSmokeAllowedIdentifiers = [
+  '166490323',
+  '166490323-560714728',
+];
+
+const parkTestApprovedFullFlowRehearsal = cloneConfig(parkTestConfig);
+parkTestApprovedFullFlowRehearsal.safetyGates.emergencyStop = true;
+parkTestApprovedFullFlowRehearsal.safetyGates.rollerBookingDraftWritesEnabled = true;
+parkTestApprovedFullFlowRehearsal.safetyGates.rollerRedeemWritesEnabled = true;
+parkTestApprovedFullFlowRehearsal.safetyGates.staffAuthEnabled = true;
+parkTestApprovedFullFlowRehearsal.safetyGates.fullFlowRehearsalApproval =
+  'T0176_FULL_FLOW_REHEARSAL_APPROVED';
+parkTestApprovedFullFlowRehearsal.safetyGates.fullFlowRehearsalAllowedOperatingDates = [
+  '2026-06-29',
+  '2026-06-30',
+];
+parkTestApprovedFullFlowRehearsal.safetyGates.fullFlowRehearsalVenueId = '50871';
+
+const parkTestFullFlowWithoutDates = cloneConfig(parkTestApprovedFullFlowRehearsal);
+parkTestFullFlowWithoutDates.safetyGates.fullFlowRehearsalAllowedOperatingDates = [];
+
+const parkTestFullFlowWithoutVenue = cloneConfig(parkTestApprovedFullFlowRehearsal);
+delete parkTestFullFlowWithoutVenue.safetyGates.fullFlowRehearsalVenueId;
+
+const parkTestFullFlowDatesWithoutApproval = cloneConfig(parkTestApprovedFullFlowRehearsal);
+delete parkTestFullFlowDatesWithoutApproval.safetyGates.fullFlowRehearsalApproval;
+parkTestFullFlowDatesWithoutApproval.safetyGates.rollerBookingDraftWritesEnabled = false;
+parkTestFullFlowDatesWithoutApproval.safetyGates.rollerRedeemWritesEnabled = false;
+parkTestFullFlowDatesWithoutApproval.safetyGates.staffAuthEnabled = false;
+delete parkTestFullFlowDatesWithoutApproval.safetyGates.fullFlowRehearsalVenueId;
+
+const parkTestFullFlowVenueWithoutApproval = cloneConfig(parkTestApprovedFullFlowRehearsal);
+delete parkTestFullFlowVenueWithoutApproval.safetyGates.fullFlowRehearsalApproval;
+parkTestFullFlowVenueWithoutApproval.safetyGates.fullFlowRehearsalAllowedOperatingDates = [];
+parkTestFullFlowVenueWithoutApproval.safetyGates.rollerBookingDraftWritesEnabled = false;
+parkTestFullFlowVenueWithoutApproval.safetyGates.rollerRedeemWritesEnabled = false;
+parkTestFullFlowVenueWithoutApproval.safetyGates.staffAuthEnabled = false;
+
+const parkTestFullFlowWithoutDraftWrites = cloneConfig(parkTestApprovedFullFlowRehearsal);
+parkTestFullFlowWithoutDraftWrites.safetyGates.rollerBookingDraftWritesEnabled = false;
+
+const parkTestFullFlowWithoutRedeemWrites = cloneConfig(parkTestApprovedFullFlowRehearsal);
+parkTestFullFlowWithoutRedeemWrites.safetyGates.rollerRedeemWritesEnabled = false;
+
+const parkTestFullFlowWithoutStaffAuth = cloneConfig(parkTestApprovedFullFlowRehearsal);
+parkTestFullFlowWithoutStaffAuth.safetyGates.staffAuthEnabled = false;
+
+const parkTestFullFlowWithWebhook = cloneConfig(parkTestApprovedFullFlowRehearsal);
+parkTestFullFlowWithWebhook.safetyGates.rollerWebhookProcessingEnabled = true;
+
+const parkTestFullFlowWithFrontendRehearsal = cloneConfig(parkTestApprovedFullFlowRehearsal);
+parkTestFullFlowWithFrontendRehearsal.safetyGates.frontendRedeemRehearsalApproval =
+  'T0176_FRONTEND_REDEEM_REHEARSAL_APPROVED';
+parkTestFullFlowWithFrontendRehearsal.safetyGates.frontendRedeemRehearsalAllowedSessionIds = [
+  'jycs_mqtimdxf_bb33c94c',
+];
+
+const parkTestFullFlowWithPaymentSmoke = cloneConfig(parkTestApprovedFullFlowRehearsal);
+parkTestFullFlowWithPaymentSmoke.safetyGates.livePaymentSmokeApproval =
+  'T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED';
+
 expectPass('dev Playground config passes', devConfig, 'dev');
 expectFail('unsafe dev-to-Live config fails', unsafeDevLiveConfig, /dev config must use Roller Playground/);
 expectPass('reviewed park-test Live config passes', parkTestConfig, 'park-test');
@@ -411,6 +507,88 @@ expectFail(
   'park-test redeem smoke still blocks webhook processing',
   parkTestRedeemSmokeWithWebhook,
   /rollerWebhookProcessingEnabled/,
+);
+expectPass('approved park-test frontend redeem rehearsal config passes', parkTestApprovedFrontendRedeemRehearsal, 'park-test');
+expectFail(
+  'park-test frontend redeem rehearsal approval without allowed session fails closed',
+  parkTestFrontendRedeemRehearsalWithoutAllowedSession,
+  /frontendRedeemRehearsalAllowedSessionIds/,
+);
+expectFail(
+  'park-test frontend redeem rehearsal session allowlist without approval fails closed',
+  parkTestFrontendRedeemSessionWithoutApproval,
+  /frontendRedeemRehearsalAllowedSessionIds must stay empty/,
+);
+expectFail(
+  'park-test frontend redeem rehearsal approval without staff auth fails closed',
+  parkTestFrontendRedeemRehearsalWithoutStaffAuth,
+  /staffAuthEnabled=true/,
+);
+expectFail(
+  'park-test frontend redeem rehearsal keeps redeem writes closed',
+  parkTestFrontendRedeemRehearsalWithRedeemWrites,
+  /rollerRedeemWritesEnabled=false/,
+);
+expectFail(
+  'park-test frontend redeem rehearsal does not combine with payment smoke',
+  parkTestFrontendRedeemRehearsalWithPaymentSmoke,
+  /must not be combined/,
+);
+expectFail(
+  'park-test frontend redeem rehearsal does not combine with live redeem smoke',
+  parkTestFrontendRedeemRehearsalWithLiveRedeem,
+  /must not be combined/,
+);
+expectPass('approved park-test full-flow rehearsal config passes', parkTestApprovedFullFlowRehearsal, 'park-test');
+expectFail(
+  'park-test full-flow rehearsal approval without operating dates fails closed',
+  parkTestFullFlowWithoutDates,
+  /fullFlowRehearsalAllowedOperatingDates/,
+);
+expectFail(
+  'park-test full-flow rehearsal approval without venue id fails closed',
+  parkTestFullFlowWithoutVenue,
+  /fullFlowRehearsalVenueId/,
+);
+expectFail(
+  'park-test full-flow rehearsal operating dates without approval fail closed',
+  parkTestFullFlowDatesWithoutApproval,
+  /fullFlowRehearsalAllowedOperatingDates must stay empty/,
+);
+expectFail(
+  'park-test full-flow rehearsal venue id without approval fails closed',
+  parkTestFullFlowVenueWithoutApproval,
+  /fullFlowRehearsalVenueId must stay empty/,
+);
+expectFail(
+  'park-test full-flow rehearsal approval without draft writes fails closed',
+  parkTestFullFlowWithoutDraftWrites,
+  /rollerBookingDraftWritesEnabled=true/,
+);
+expectFail(
+  'park-test full-flow rehearsal approval without redeem writes fails closed',
+  parkTestFullFlowWithoutRedeemWrites,
+  /rollerRedeemWritesEnabled=true/,
+);
+expectFail(
+  'park-test full-flow rehearsal approval without staff auth fails closed',
+  parkTestFullFlowWithoutStaffAuth,
+  /staffAuthEnabled=true/,
+);
+expectFail(
+  'park-test full-flow rehearsal still blocks webhook processing',
+  parkTestFullFlowWithWebhook,
+  /rollerWebhookProcessingEnabled/,
+);
+expectFail(
+  'park-test full-flow rehearsal does not combine with frontend-only rehearsal',
+  parkTestFullFlowWithFrontendRehearsal,
+  /must not be combined/,
+);
+expectFail(
+  'park-test full-flow rehearsal does not combine with payment smoke',
+  parkTestFullFlowWithPaymentSmoke,
+  /must not be combined/,
 );
 
 console.log('Config guard validation passed.');

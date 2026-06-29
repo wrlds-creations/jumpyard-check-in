@@ -254,6 +254,7 @@ const sv = {
   addons: {
     title: 'Tillägg',
     description: 'Välj till extra, hoppa över det du inte vill ha.',
+    loading: 'H\u00e4mtar till\u00e4gg',
     socksSectionTitle: 'Hoppstrumpor',
     socksHelp: 'Alla som hoppar behöver godkända hoppstrumpor.',
     socksAlreadyHave: 'Vi har redan godkända hoppstrumpor.',
@@ -642,6 +643,7 @@ const en: typeof sv = {
   addons: {
     title: 'Add-ons',
     description: "Pick extras, skip anything you don't want.",
+    loading: 'Loading add-ons',
     socksSectionTitle: 'Jump socks',
     socksHelp: 'Everyone who jumps needs approved jump socks.',
     socksAlreadyHave: 'We already have approved jump socks.',

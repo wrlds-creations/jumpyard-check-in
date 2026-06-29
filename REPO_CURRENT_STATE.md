@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-29
-- Current branch: `main`
-- Current status: No active ticket. Park-test payment-sync smoke gates are open for Love's Apple Pay/card checkout test; phone PWA and backend point at the park-test API.
-- Current ticket: `NO_ACTIVE_TICKET`
+- Current branch: `codex/t0176-frontend-redeem-rehearsal`
+- Current status: T0176 full-flow rehearsal is deployed for Love's manual test. Nacka/date-scoped payment, lookup, add-ons, staff auth, and redeem are open; webhook processing, SMS, and JumpYard email remain closed.
+- Current ticket: `T0176`
 - Completed tickets: archived in `docs/history/completed-tickets.md` (174 completed tickets; latest closed `T0175`).
-- Recommended next step: start T0176 frontend redeem rehearsal.
+- Recommended next step: Commit/merge/deploy the T0176 manual feedback fix pass, then Love retests the park-test phone/admin flow before closing the window with normal `park-test.json`.
 
 ## Current Structure
 
@@ -58,21 +58,23 @@ History and planning archives:
 - Park-test webhook and reconciliation readiness: [docs/t0173-webhook-reconciliation-readiness.md](docs/t0173-webhook-reconciliation-readiness.md)
 - Park-test ready-for-entry handout UI: [docs/t0174-ready-entry-handout-ui.md](docs/t0174-ready-entry-handout-ui.md)
 - Park-test payment method readiness: [docs/t0175-payment-method-readiness.md](docs/t0175-payment-method-readiness.md)
+- Park-test frontend redeem rehearsal: [docs/t0176-frontend-redeem-rehearsal.md](docs/t0176-frontend-redeem-rehearsal.md)
 
 Current park-test status:
 
 - Park-test phone/admin Cloudflare Pages targets exist; phone was direct-deployed with the park-test API URL after an incorrect dev-fallback build was found.
-- Roller Live access, webhook registration, quote/cost, controlled draft/payment, exact lookup, Live catalog readiness, existing-booking add-on payment, linked add-on settlement, one exact redeem, new-booking Roller email proof, add-on visibility, and post-payment booking sync have passed for Nacka.
+- Roller Live access and controlled quote/draft/payment/lookup/add-on/settlement/redeem/receipt/sync smokes have passed for Nacka.
 - Aurora contains only scoped smoke/test state, including controlled booking `166447399`, add-on booking `166497194`, and redeem session `jycs_mqtimdxf_bb33c94c`; this is not a broad same-day booking import.
 - T0168 found the missing new-booking add-ons were caused by backend Live phone add-on mapping being tied to the T0162 existing-booking add-on gate. BookingHandler now has a read-only `LIVE_PHONE_ADDON_PRODUCTS` mapping for Nacka Live add-ons while keeping write gates unchanged.
 - T0170 documents the human park-test gate names and maps them to current CDK config keys and Lambda environment variables. The current runtime variable names still include ticket numbers until a separate migration is scoped.
-- Park-test new-booking/payment and T0169 post-payment sync are open through `park-test-live-payment-sync-smoke`; broad lookup, existing-booking add-ons, redeem, staff auth, webhooks, SMS, and JumpYard email remain closed.
+- Park-test payment-sync smoke mode was closed after Apple Pay was paused pending external diagnostics.
 - BookingHandler accepts Live child variations only when Roller availability returns them under approved Nacka entry/family parents; quote smokes passed for E60 `1189809` and F60 `1189818`.
-- T0171 assisted lookup was proven for `2026-06-29` through `2026-07-05`, but is temporarily closed while payment-sync smoke mode is deployed.
+- T0171 assisted lookup was proven for `2026-06-29` through `2026-07-05`, but is temporarily closed while T0176 frontend redeem rehearsal mode is deployed.
 - T0172 found no documented safe Roller Rest API path for public guest email lookup. If a visitor lacks their booking code, staff should search Roller Venue Manager by email and enter the discovered booking code into the T0171 PWA lookup.
 - T0173 recommends keeping Live webhook processing closed for the first assisted park-test. Payment/add-on confirmation should use scoped REST refresh; redeem confirmation should use the synchronous Roller `POST /redemptions` success plus Aurora audit and manual Roller fallback if the result is uncertain.
 - T0174 restores the ready-for-entry handout UI: the phone final screen shows a visible QR/handoff code and entry product/duration, and the admin handout detail groups wristbands by duration when available.
 - T0175 adds the Apple Pay domain-association file and Cloudflare `_headers` rule to the phone app. The association file is live on `https://jumpyard-check-in-park-test.pages.dev/.well-known/apple-developer-merchantid-domain-association`; Apple Pay opens on iPhone but collapses at processing, so the code track is paused pending Pabel/Roller/Adyen logs and card remains fallback.
+- T0176 currently deploys an assisted full-flow rehearsal window; webhook/message gates remain closed. A code-only manual feedback fix pass now updates ready-for-entry handout copy/icons, product quantities, existing-booking add-on loading/review/socks defaults, and POS booking display-name normalization; it still needs deploy/merge before the park-test URLs show it.
 
 ## Known Validation Commands
 
@@ -87,6 +89,8 @@ Current closeout entrypoints:
 - `npm --prefix infra run validate:roller-live-contact-resolver`
 - `npm --prefix infra run synth:park-test-addon-settlement-smoke`
 - `npm --prefix infra run synth:park-test-redeem-smoke`
+- `npm --prefix infra run synth:park-test-frontend-redeem-rehearsal`
+- `npm --prefix infra run synth:park-test-full-flow-rehearsal`
 
 Historical command evidence lives in [docs/history/validation-log.md](docs/history/validation-log.md) and ticket-specific docs.
 
@@ -96,19 +100,18 @@ Completed-ticket history is archived in [docs/history/completed-tickets.md](docs
 
 - Archived completed-ticket count: 174
 - Latest closed ticket: `T0175`
-- Current active ticket: None
+- Current active ticket: `T0176`
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `NO_ACTIVE_TICKET` | None active. | Closed | T0175 is merged and the Apple Pay association file is deployed. Park-test payment-sync smoke gates are open for Love's iPhone Apple Pay/card checkout test; recommended next repo ticket remains T0176 after the test window is closed or deliberately carried forward. |
+| `T0176` | Frontend redeem and assisted full-flow rehearsal. | Manual test window open | Full-flow gate is deployed for Nacka/date scope; webhook processing and JumpYard guest sends remain closed. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0176` | Frontend redeem rehearsal. | Planned | Love tests the deployed phone/admin redeem flow end to end before a real visitor; exact booking/ticket scope only if another redeem is needed. |
 | `T0177` | Park-test UI/UX readiness. | Planned | Final guest/staff UI pass before assisted visitor testing; no new Live unlock by itself. |
 | `T0178` | Staff-assisted visitor test. | Planned | Limited assisted test after readiness gates, park approval, and runbook. |
 | `T0179` | Outcome and go/no-go. | Planned | Documentation/report only. |
@@ -119,13 +122,13 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- Latest validation is recorded in [docs/t0175-payment-method-readiness.md](docs/t0175-payment-method-readiness.md) and [docs/history/validation-log.md](docs/history/validation-log.md).
+- Latest validation is recorded in [docs/t0176-frontend-redeem-rehearsal.md](docs/t0176-frontend-redeem-rehearsal.md).
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions
 
 - Park-test AWS exists with dedicated API, Aurora, raw bucket, secrets, and gates; current resource details are in [AWS_RESOURCES.md](AWS_RESOURCES.md).
-- Roller Live access, controlled smokes through receipt/sync/redeem, T0171 lookup, T0173 webhook-off readiness, T0174 handout UI, and T0175 Apple Pay domain-association readiness have passed locally for Nacka. Public draft writes, staff auth, broad lookup, add-ons, redeem, webhooks, SMS, and email remain gated.
-- The park-test plan is not an approval to create additional AWS resources, call new Roller Live endpoints, create drafts/payments, redeem additional tickets, or run visitor traffic.
+- Roller Live access and controlled smokes through receipt/sync/redeem have passed for Nacka. The T0176 full-flow rehearsal window is currently open for Love's manual test.
+- The current window allows real Live bookings/payments/add-ons and scoped redeem through the deployed park-test flow. It does not allow webhooks, JumpYard-owned guest messages, broad same-day imports, new AWS resources, or broader venue/date scope.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before the T0128 branch was created.
