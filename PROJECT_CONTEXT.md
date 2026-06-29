@@ -62,7 +62,7 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 - Park-test product validation uses approved Nacka entry/family parents plus Roller Live slot availability, not static child ids.
 - Park-test assisted existing-booking lookup is a single-code/date/venue-scoped read gate for `2026-06-29` through `2026-07-05`; it does not import same-day lists or open writes.
 - Park-test PWA drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; new-booking delivery is proven.
-- Ready-for-entry/staff handout UI shows QR/handoff code plus entry duration/ticket type before visitor testing.
+- Ready-for-entry/staff handout UI shows a QR plus entry duration/ticket type before visitor testing; the visible guest fallback is now name-to-staff rather than a displayed handoff code.
 - Park-test Apple Pay has the Adyen domain-association file live on the park-test Cloudflare Pages domain. The iPhone sheet opens but collapses at processing; the code track is paused pending Pabel/Roller/Adyen merchant-validation/session/payment logs, with card as fallback.
 - Park-test T0176 full-flow rehearsal opens Nacka/date-scoped payment, lookup, add-ons, staff auth, and redeem while keeping webhook processing and JumpYard-owned guest sends closed.
 - Gift card and Klippkort inputs are payment-prep inputs because Roller applies them during booking costs/draft creation.

@@ -19,7 +19,7 @@ This backlog was created in T0128 so broad future planning does not bloat `REPO_
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0176` | Frontend redeem and assisted full-flow rehearsal | Let Love manually test new booking/card payment, post-payment sync, POS-created booking lookup, add-ons, safety, staff admin, and redeem in the deployed park-test flow. | T0166; T0174; T0175 | High | Scoped to JumpYard Nacka Forum `50871` and dates `2026-06-29` through `2026-07-05`. Webhook processing, JumpYard-owned SMS/email, and broad same-day imports stay closed. | Love can run the full phone/admin rehearsal and dictate required fixes; after testing, close the window by redeploying normal `park-test.json`. | Manual test window open |
+| None active | No active backlog ticket | T0176 is completed and closed in the repository. | T0176 | Low | No code or infrastructure work is active. The T0176 runtime full-flow gate posture remains open until a separate close-window deploy is run. | `CODEX_TASK.md` and `REPO_CURRENT_STATE.md` agree that no ticket is active. | Closed |
 
 ## Next
 

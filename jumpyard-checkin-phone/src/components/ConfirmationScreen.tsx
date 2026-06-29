@@ -49,7 +49,6 @@ export const ConfirmationScreen = ({
             ? t.confirm.kioskSubtitle
             : t.confirm.onsiteSubtitle;
     const handoffCode = checkinSession?.handoffCode ?? '';
-    const handoffDisplayCode = handoffCode || booking.id;
     const handoffQrValue = buildHandoffPayload(checkinSession, handoffCode);
     const entryTicketLabel = getEntryTicketLabel(booking, t.confirm.entryTicketFallback);
 
@@ -106,26 +105,18 @@ export const ConfirmationScreen = ({
 
                 </div>
 
-                {!completed && (handoffQrValue || handoffDisplayCode) && (
+                {!completed && handoffQrValue && (
                     <div
                         className="mb-3 rounded-xl border border-primary/20 bg-white p-3 text-center shadow-sm"
                         data-testid="ready-entry-handoff-card"
                     >
-                        {handoffQrValue && (
-                            <QrCode
-                                value={handoffQrValue}
-                                className="mx-auto h-36 w-36 rounded-lg border border-border p-2"
-                                testId="ready-entry-handoff-qr"
-                            />
-                        )}
+                        <QrCode
+                            value={handoffQrValue}
+                            className="mx-auto h-36 w-36 rounded-lg border border-border p-2"
+                            testId="ready-entry-handoff-qr"
+                        />
                         <p className="mt-2 text-[10px] font-bold italic uppercase tracking-widest text-muted">
                             {t.confirm.handoffTitle}
-                        </p>
-                        <p
-                            className="mt-0.5 text-3xl font-black tracking-[0.22em] text-primary"
-                            data-testid="ready-entry-handoff-code"
-                        >
-                            {handoffDisplayCode}
                         </p>
                         <p className="mt-1 text-xs text-foreground/65">{t.confirm.qrHelp}</p>
                     </div>

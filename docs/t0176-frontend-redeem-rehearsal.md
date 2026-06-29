@@ -169,9 +169,21 @@ After Love tested a real card purchase, a POS-created booking, add-ons, safety, 
 - Existing-booking summary now displays the entry product with quantity, for example `Entré 60 minuter x 1`.
 - Existing-booking add-ons now show a clean add-on loading state instead of dimmed product cards while the Live catalog loads.
 - SkyRider no longer gets the red/primary highlight only in the existing-booking add-on flow; the view is aligned with the new-booking add-on treatment.
-- Existing-booking add-ons prefill socks to the number of jumpers when no socks are already on the booking, while still letting the guest reduce the quantity.
+- Existing-booking add-ons now use the same socks section pattern as new bookings: socks are recommended at the jumper count, but no socks are automatically added when none are already on the booking.
 - Add-on review rows now show product, quantity, unit price, and row total before payment.
 - Lookup normalization now keeps Roller booking/customer display name and customer id when returned by Roller, and assisted lookup refreshes from Roller when the local cache lacks a display name. This is intended to prevent POS-created bookings from appearing as only `Gäst` in the phone/admin handoff surfaces.
+
+## Closeout UI Quickfixes
+
+After the deployed manual feedback pass, Love requested final phone UI cleanups before closing T0176:
+
+- The ready-for-entry card no longer displays the visible `JY-...` handoff code. It keeps the QR, `Visa vid entrén`, and the guest instruction `Skanna QR-kod eller ange ditt namn till personalen.`
+- Existing-booking add-ons use the same socks card structure as new booking: socks at the top, recommended count, and the approved-socks checkbox.
+- Existing-booking add-ons no longer auto-add socks when a booking has no socks.
+- Existing add-ons still show `Ingår redan` on the relevant add-on card, but the duplicate top-level `Ingår redan` badge block was removed.
+- The top add-on count/scroll-hint copy was removed.
+
+These closeout UI quickfixes were direct-deployed to the park-test phone Pages project before being committed for repository closeout. They did not change AWS, Roller, Aurora, payments, redeem behavior, webhooks, SMS, or email.
 
 Deployment/readback after PR #176:
 
@@ -215,7 +227,14 @@ Deployment/readback after PR #176:
 - Public park-test phone/admin URLs returned HTTP `200`.
 - CORS preflight from `https://jumpyard-check-in-park-test.pages.dev` to `POST /v1/check-in/lookup` returned HTTP `204`.
 - Read-only `POST /v1/bookings/availability` for `2026-06-29 13:30` returned HTTP `200`, status `available`, one slot, and ten products; no draft booking was created.
+- `npm --prefix jumpyard-checkin-phone run lint` passed for the closeout UI quickfixes with existing `<img>` warnings only.
+- `npm --prefix jumpyard-checkin-phone run build` passed for the closeout UI quickfixes with existing `baseline-browser-mapping` notices only.
+- Park-test phone output check confirmed `HasParkApi=true`, `HasDevApi=false`, no visible handoff-code test id, no old QR help text, no old socks auto-fill snippet, no add-on scroll hint, no top existing-add-on badge pattern, and preserved socks confirmation/per-card `alreadyInBooking`.
+- `npx --yes wrangler pages deploy jumpyard-checkin-phone/out --project-name jumpyard-check-in-park-test --branch main --commit-dirty=true` direct-deployed the closeout UI quickfixes.
+- Remote stable Pages bundle check for `https://jumpyard-check-in-park-test.pages.dev` confirmed the same markers after deploy.
 
 ## Result
 
-T0176 is ready for Love's manual full-flow rehearsal. The deployed park-test API currently opens new booking/payment, post-payment sync, assisted Nacka/date-scoped lookup, existing-booking add-ons, staff auth, and Nacka/date-scoped redeem. Webhook processing, guest SMS/email sends, and broad imports remain closed. The manual feedback fix pass is merged, deployed to Cloudflare production for phone/admin, and deployed to the park-test `LookupHandler`.
+T0176 is completed and closed in the repository. The deployed park-test API currently opens new booking/payment, post-payment sync, assisted Nacka/date-scoped lookup, existing-booking add-ons, staff auth, and Nacka/date-scoped redeem. Webhook processing, guest SMS/email sends, and broad imports remain closed. The manual feedback and closeout UI fix passes are merged/deployed to the park-test phone/admin targets as applicable, and the park-test `LookupHandler` code deploy remains in place.
+
+Important runtime note: closing T0176 in GitHub does not by itself close the temporary full-flow AWS gate posture. If the test window should be shut, run a separate normal `park-test.json` close-window deploy and document that readback.

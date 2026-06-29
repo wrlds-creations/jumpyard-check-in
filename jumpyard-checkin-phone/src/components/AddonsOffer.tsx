@@ -261,12 +261,13 @@ export const AddonsOffer = ({
     }, [existingAddons]);
 
     const [step, setStep] = useState<AddonsOfferStep>('SELECT');
-    const [qty, setQty] = useState<Record<AddonId, number>>(() => getRecommendedAddonQty(minQty, guestCount));
+    const [qty, setQty] = useState<Record<AddonId, number>>(() => getRecommendedAddonQty(minQty));
     const [quote, setQuote] = useState<NewBookingQuote | null>(null);
     const [draft, setDraft] = useState<AddProductDraftResult | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
+    const [alreadyHasApprovedSocks, setAlreadyHasApprovedSocks] = useState(false);
     const handledBackRequest = useRef(backRequest);
 
     const returnToSelect = useCallback(() => {
@@ -303,21 +304,27 @@ export const AddonsOffer = ({
                 }
             }
 
-            if (minQty.socks === 0 && next.socks === 0 && guestCount > 0) {
-                next.socks = guestCount;
-                changed = true;
-            }
-
             return changed ? next : current;
         });
-    }, [guestCount, minQty]);
+    }, [minQty]);
 
     const setOne = (id: AddonId, nextQty: number) => {
         setSubmitError(null);
         setQuote(null);
         setDraft(null);
         if (id === 'skyrider') setSkyriderConsentConfirmed(false);
+        if (id === 'socks' && nextQty > minQty.socks) setAlreadyHasApprovedSocks(false);
         setQty((current) => ({ ...current, [id]: Math.max(minQty[id], nextQty) }));
+    };
+
+    const setSocksConfirmation = (checked: boolean) => {
+        setAlreadyHasApprovedSocks(checked);
+        setSubmitError(null);
+        setQuote(null);
+        setDraft(null);
+        if (checked) {
+            setQty((current) => ({ ...current, socks: minQty.socks }));
+        }
     };
 
     const selectedAddons: Addon[] = useMemo(
@@ -358,6 +365,13 @@ export const AddonsOffer = ({
         () => addedAddons.reduce((sum, addon) => sum + addon.price * addon.qty, 0),
         [addedAddons]
     );
+    const socksEntry = catalogById.get('socks') ?? null;
+    const otherCatalogEntries = catalog.filter((entry) => entry.id !== 'socks');
+    const socksQty = qty.socks;
+    const socksAddedQty = Math.max(0, socksQty - minQty.socks);
+    const socksRecommendedVisibleCount = Math.min(Math.max(0, guestCount), 5);
+    const socksRecommendationProgress = Math.min(100, Math.round((socksQty / Math.max(1, guestCount)) * 100));
+    const showSocksConfirmation = minQty.socks === 0 && socksAddedQty === 0;
     const addedSkyrider = addedAddons.some((addon) => addon.id === 'skyrider');
     const needsSkyRiderConsent = (confirmed = skyriderConsentConfirmed) =>
         addedSkyrider && !confirmed;
@@ -502,26 +516,7 @@ export const AddonsOffer = ({
                     <div className="text-center">
                         <h1 className="text-xl font-black italic uppercase text-foreground">{t.addons.title}</h1>
                         <p className="text-muted text-xs mt-0.5">{t.addons.description}</p>
-                        <p className="text-muted text-[10px] mb-3">
-                            {catalogLoading ? t.addons.loading : `${catalog.length} ${t.addons.scrollHint}`}
-                        </p>
                     </div>
-
-                    {existingAddons.length > 0 && (
-                        <div className="w-full mb-2">
-                            <p className="text-[11px] text-muted uppercase font-bold italic tracking-widest mb-1">{t.addons.alreadyInBooking}</p>
-                            <div className="flex flex-wrap gap-1.5">
-                                {existingAddons.map((addon, index) => (
-                                    <span
-                                        key={index}
-                                        className="px-2.5 py-0.5 rounded-full bg-surface-strong border border-border text-foreground text-xs italic"
-                                    >
-                                        {addon.label} x {addon.qty}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-                    )}
 
                     {(submitError || catalogError) && (
                         <div className="mb-3 bg-white border border-danger/25 rounded-xl p-3 text-sm text-foreground flex gap-2">
@@ -535,7 +530,95 @@ export const AddonsOffer = ({
                             <AddonsLoadingCard label={t.addons.loading} />
                         ) : (
                         <div className="w-full flex flex-col gap-1.5">
-                            {catalog.map((entry) => {
+                            {socksEntry && (
+                                <section className={`bg-white border border-border rounded-xl p-3 ${!isPricedCatalogEntry(socksEntry) ? 'opacity-60' : ''}`}>
+                                    <div className="flex items-start gap-3">
+                                        <JumpyardIcon name={socksEntry.icon} className="w-9 h-9 flex-shrink-0" />
+                                        <div className="min-w-0">
+                                            <h3 className="text-sm font-black italic text-foreground uppercase">
+                                                {t.addons.socksSectionTitle}
+                                            </h3>
+                                            <p className="mt-1 text-[11px] text-muted">{t.addons.socksHelp}</p>
+                                            {!isPricedCatalogEntry(socksEntry) && (
+                                                <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full bg-surface-strong text-muted text-[9px] font-bold italic uppercase tracking-wide">{t.addons.unsupported}</span>
+                                            )}
+                                            {minQty.socks > 0 && (
+                                                <span className="mt-1 block text-[10px] text-success font-bold italic">
+                                                    {t.addons.alreadyInBooking} ({minQty.socks})
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {!alreadyHasApprovedSocks && (
+                                        <div className="mt-3 rounded-xl border border-border bg-surface-strong px-3 py-3">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <span className="text-[10px] font-black italic uppercase tracking-wider text-muted">
+                                                    {t.addons.socksRecommendedCount}
+                                                </span>
+                                                <span className="rounded-full bg-white px-3 py-1 text-sm font-black italic text-primary shadow-sm">
+                                                    {guestCount}
+                                                </span>
+                                            </div>
+                                            <div className="mt-2 flex items-center justify-between gap-3">
+                                                <div className="flex min-w-0 flex-wrap items-center gap-1">
+                                                    {Array.from({ length: socksRecommendedVisibleCount }).map((_, index) => (
+                                                        <JumpyardIcon key={index} name="grip-socks" className="h-5 w-5" />
+                                                    ))}
+                                                    {guestCount > socksRecommendedVisibleCount && (
+                                                        <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-black italic text-muted shadow-sm">
+                                                            +{guestCount - socksRecommendedVisibleCount}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="shrink-0 text-[11px] font-black italic text-foreground">
+                                                    {t.addons.socksSelectedCount} {socksQty}/{guestCount}
+                                                </span>
+                                            </div>
+                                            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+                                                <div
+                                                    className="h-full rounded-full bg-primary transition-all"
+                                                    style={{ width: `${socksRecommendationProgress}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {showSocksConfirmation && (
+                                        <label className="mt-3 flex items-start gap-2 rounded-lg bg-surface/70 px-3 py-2 text-left">
+                                            <input
+                                                type="checkbox"
+                                                checked={alreadyHasApprovedSocks}
+                                                onChange={(event) => setSocksConfirmation(event.target.checked)}
+                                                className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                                            />
+                                            <span className="text-xs font-bold italic text-foreground">
+                                                {t.addons.socksAlreadyHave}
+                                            </span>
+                                        </label>
+                                    )}
+
+                                    {!alreadyHasApprovedSocks && (
+                                        <div className="mt-3 flex items-center justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] font-bold italic text-muted">
+                                                    {formatMoney(socksEntry.price)} - {socksEntry.unit}
+                                                </p>
+                                            </div>
+                                            <Counter
+                                                value={socksQty}
+                                                onChange={(nextQty) => setOne('socks', nextQty)}
+                                                max={Math.max(1, guestCount * socksEntry.maxPerGuest)}
+                                                min={minQty.socks}
+                                                disabled={!isPricedCatalogEntry(socksEntry)}
+                                                testId="addon-option-socks"
+                                            />
+                                        </div>
+                                    )}
+                                </section>
+                            )}
+
+                            {otherCatalogEntries.map((entry) => {
                                 const value = qty[entry.id];
                                 const max = Math.max(1, guestCount * entry.maxPerGuest);
                                 const locked = minQty[entry.id];
@@ -710,10 +793,10 @@ export const AddonsOffer = ({
     );
 };
 
-function getRecommendedAddonQty(minQty: Record<AddonId, number>, guestCount: number): Record<AddonId, number> {
+function getRecommendedAddonQty(minQty: Record<AddonId, number>): Record<AddonId, number> {
     return {
         ...minQty,
-        socks: minQty.socks > 0 ? minQty.socks : Math.max(0, guestCount),
+        socks: minQty.socks,
     };
 }
 
