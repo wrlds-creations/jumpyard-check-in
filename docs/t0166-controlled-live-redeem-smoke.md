@@ -140,8 +140,8 @@ The normal park-test config is closed again. T0166 does not approve broad lookup
 
 Follow-up added after closeout discussion:
 
-- `T0168` Frontend redeem rehearsal should let Love run the deployed phone/admin redeem flow end to end before a real visitor uses it.
-- This is separate from T0166 because T0166 proved the backend/staff-redeem chain and exact Roller Live write; T0168 proves the human frontend experience, button states, post-redeem UI, and recovery cues.
+- `T0176` Frontend redeem rehearsal should let Love run the deployed phone/admin redeem flow end to end before a real visitor uses it.
+- This is separate from T0166 because T0166 proved the backend/staff-redeem chain and exact Roller Live write; T0176 proves the human frontend experience, button states, post-redeem UI, and recovery cues.
 
 ## Validation Log
 

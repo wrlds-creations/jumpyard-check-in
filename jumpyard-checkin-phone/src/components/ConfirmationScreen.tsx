@@ -2,6 +2,7 @@
 import { motion } from 'framer-motion';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
+import { QrCode } from '@/components/QrCode';
 import type { Addon, Booking, Channel, CheckInSession } from '@/flow/types';
 
 interface ConfirmationScreenProps {
@@ -48,10 +49,18 @@ export const ConfirmationScreen = ({
             ? t.confirm.kioskSubtitle
             : t.confirm.onsiteSubtitle;
     const handoffCode = checkinSession?.handoffCode ?? '';
+    const handoffDisplayCode = handoffCode || booking.id;
+    const handoffQrValue = buildHandoffPayload(checkinSession, handoffCode);
+    const entryTicketLabel = getEntryTicketLabel(booking, t.confirm.entryTicketFallback);
 
-    const entryHandoutLabel = t.confirm.wristbands;
-    const handoutItems: { label: string; qty: number; icon: JumpyardIconName }[] = [
-        { label: entryHandoutLabel, qty: jumperCount, icon: 'admission-ticket' },
+    const handoutItems: { detail?: string; icon: JumpyardIconName; label: string; qty: number; testId?: string }[] = [
+        {
+            detail: entryTicketLabel,
+            icon: 'admission-ticket',
+            label: t.confirm.wristbands,
+            qty: jumperCount,
+            testId: 'ready-entry-ticket-type',
+        },
     ];
     for (const addon of selectedAddons) {
         if (HANDOUT_IDS.has(addon.id)) {
@@ -98,6 +107,31 @@ export const ConfirmationScreen = ({
 
                 </div>
 
+                {!completed && (handoffQrValue || handoffDisplayCode) && (
+                    <div
+                        className="mb-3 rounded-xl border border-primary/20 bg-white p-3 text-center shadow-sm"
+                        data-testid="ready-entry-handoff-card"
+                    >
+                        {handoffQrValue && (
+                            <QrCode
+                                value={handoffQrValue}
+                                className="mx-auto h-36 w-36 rounded-lg border border-border p-2"
+                                testId="ready-entry-handoff-qr"
+                            />
+                        )}
+                        <p className="mt-2 text-[10px] font-bold italic uppercase tracking-widest text-muted">
+                            {t.confirm.handoffTitle}
+                        </p>
+                        <p
+                            className="mt-0.5 text-3xl font-black tracking-[0.22em] text-primary"
+                            data-testid="ready-entry-handoff-code"
+                        >
+                            {handoffDisplayCode}
+                        </p>
+                        <p className="mt-1 text-xs text-foreground/65">{t.confirm.qrHelp}</p>
+                    </div>
+                )}
+
                 {!completed && (
                     <div className="bg-surface-strong rounded-xl p-3 text-left border border-border mb-3">
                         <div className="flex items-center gap-2 mb-2">
@@ -110,7 +144,17 @@ export const ConfirmationScreen = ({
                                 <div key={i} className="flex justify-between items-center gap-3 bg-white px-3 py-2 rounded-lg border border-border shadow-sm">
                                     <div className="flex items-center gap-2 min-w-0">
                                         <JumpyardIcon name={item.icon} className="w-8 h-8 flex-shrink-0" />
-                                        <span className="text-foreground text-sm font-bold italic truncate">{item.label}</span>
+                                        <span className="min-w-0">
+                                            <span className="block truncate text-sm font-bold italic text-foreground">{item.label}</span>
+                                            {item.detail && (
+                                                <span
+                                                    className="block truncate text-[11px] font-black uppercase tracking-wide text-primary"
+                                                    data-testid={item.testId}
+                                                >
+                                                    {item.detail}
+                                                </span>
+                                            )}
+                                        </span>
                                     </div>
                                     <span className="text-xl font-black text-primary">{item.qty}</span>
                                 </div>
@@ -162,4 +206,28 @@ function isCompletedSession(session: CheckInSession | null) {
         status === 'completed' ||
         handoffStatus === 'completed'
     );
+}
+
+function buildHandoffPayload(session: CheckInSession | null, handoffCode: string) {
+    if (!session?.checkinSessionId) return '';
+    if (handoffCode) return `JY_HANDOFF:${handoffCode}:${session.checkinSessionId}`;
+    return `JY_SESSION:${session.checkinSessionId}`;
+}
+
+function getEntryTicketLabel(booking: Booking, fallback: string) {
+    const productLabel = booking.productLabel?.trim();
+    if (productLabel) return productLabel;
+
+    const durationLabel = getDurationLabel(booking);
+    if (durationLabel && booking.productType === 'family') return `${durationLabel} familj`;
+    if (durationLabel) return `${durationLabel} entré`;
+
+    return fallback;
+}
+
+function getDurationLabel(booking: Booking) {
+    if (booking.durationMinutes && booking.durationMinutes > 0) return `${booking.durationMinutes} min`;
+
+    const labelMatch = booking.productLabel?.match(/\b(60|90|120)\s*min\b/i);
+    return labelMatch ? `${labelMatch[1]} min` : '';
 }

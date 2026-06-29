@@ -61,8 +61,8 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 - Park-test new-booking checkout can use a scoped payment-sync smoke mode that opens new-booking draft/payment writes plus lookup of the same locally recorded draft after payment; it is not broad existing-booking lookup.
 - Park-test assisted existing-booking lookup is a single-code/date/venue-scoped read gate for `2026-06-29` through `2026-07-05`; it does not import same-day lists or open writes.
 - Park-test PWA drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; new-booking email delivery is proven, existing-booking add-on delivery remains unproven.
-- Ready-for-entry/staff handout UI must show entry duration (60/90/120 min) before visitor testing so staff choose the band/color.
-- Park-test payment-method readiness remains open: card works, Apple Pay collapsed on iPhone in T0169, and Swish was not visible.
+- Ready-for-entry/staff handout UI shows QR/handoff code plus entry duration/ticket type before visitor testing.
+- Park-test payment-method readiness remains open: card works, Apple Pay collapsed on iPhone, and Swish was not visible.
 - Gift card and Klippkort inputs are payment-prep inputs because Roller applies them during booking costs/draft creation.
 - Current V1 membership/`10-Kort` behavior is code validation/amount reduction through `discounts: [{ code }]`, not remaining-visit balance display.
 - SkyRider is the first capacity-gated add-on and requires height/consent before quote/draft/payment side effects.

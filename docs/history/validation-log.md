@@ -2,6 +2,17 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0174 Ready-For-Entry Handout UI Validation
+
+- 2026-06-29: T0174 was activated on branch `codex/t0174-ready-entry-handout-ui` after T0173 was squash-merged through PR #172.
+- 2026-06-29: Renumbered the active readiness tickets so `T0174` is Ready-for-entry handout UI, `T0175` is Payment method readiness, and `T0176` is Frontend redeem rehearsal.
+- 2026-06-29: Updated the phone confirmation screen to show a visible handoff QR/code and entry product/duration, and updated the admin handout grouping so wristband rows include duration when available.
+- 2026-06-29: `npm --prefix jumpyard-checkin-phone run lint` passed with existing `<img>` warnings only; `npm --prefix jumpyard-checkin-admin run lint` passed.
+- 2026-06-29: `npm --prefix jumpyard-checkin-phone run build` and `npm --prefix jumpyard-checkin-admin run build` passed.
+- 2026-06-29: Local phone/admin dev servers returned HTTP `200` at `http://127.0.0.1:3010/` and `http://127.0.0.1:3011/`.
+- 2026-06-29: `npm run validate` passed. `git diff --check` passed with existing CRLF normalization warnings only.
+- 2026-06-29: T0174 did not deploy AWS, deploy Cloudflare, call Roller Live APIs, query/write Aurora, create drafts/payments/add-ons/refunds/redemptions/webhooks, enable staff auth, process webhooks, send SMS/email, run visitor traffic, print secrets, or expose public PII.
+
 ## T0173 Webhook And Reconciliation Readiness Validation
 
 - 2026-06-29: T0173 was activated on branch `codex/t0173-webhook-reconciliation-readiness` after T0172 was squash-merged through PR #171.

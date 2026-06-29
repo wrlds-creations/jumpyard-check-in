@@ -52,7 +52,7 @@ That later ticket should define the open/close config, event allowlist, venue/da
 
 ## Decision
 
-T0173 keeps `ENABLE_ROLLER_WEBHOOK_PROCESSING=false` for park-test. The later frontend redeem rehearsal can proceed without depending on webhook processing: redeem confirmation comes from the synchronous Roller redemption response plus local Aurora audit, with staff/manual Roller fallback for uncertain cases.
+T0173 keeps `ENABLE_ROLLER_WEBHOOK_PROCESSING=false` for park-test. The T0176 frontend redeem rehearsal can proceed without depending on webhook processing: redeem confirmation comes from the synchronous Roller redemption response plus local Aurora audit, with staff/manual Roller fallback for uncertain cases.
 
 ## Validation
 
