@@ -14,7 +14,7 @@ Closed
 
 ## Goal
 
-No active ticket. T0171 is implemented, deployed, validated, documented, and ready to merge.
+No active ticket. T0172 is completed locally as a safe blocker and is ready for review/closeout.
 
 ## Scope
 
@@ -32,4 +32,4 @@ No active ticket. T0171 is implemented, deployed, validated, documented, and rea
 
 ## Result
 
-T0171 closeout state.
+T0172 found no documented safe Roller Rest API path for public `email -> booking` lookup. The approved park-test fallback is staff search in Roller Venue Manager by email, then entering the discovered booking code into the T0171 PWA lookup.

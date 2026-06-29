@@ -38,15 +38,15 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
 - AWS dev is the current implementation environment; non-dev/staging/live work requires separate reviewed config and preflight.
-- Park-test work is gated by scoped tickets; AWS changes, Roller Live reads/writes, payments, redemptions, webhooks, frontend rehearsal, UI/UX readiness, and visitor traffic require the approvals listed in the active ticket/backlog.
+- Park-test work is gated by scoped tickets; AWS changes, Live reads/writes, payments, redemptions, webhooks, frontend rehearsal, UI/UX, and visitor traffic require approval.
 - Park-test is a separate WRLDS environment in account `376129878018`, region `eu-north-1`, namespace `jumpyard-check-in-park-test`, with server-side Roller Live Nacka access.
 - CDK config validation keeps `dev` Playground-only and `park-test` on the reviewed account/region/prefix/Live/data-classification contract.
 - `infra/config/park-test.json` is synthable, contains no credentials, and uses the reviewed park-test Cloudflare Pages origins for API CORS.
 - T0150 deployed `jumpyard-check-in-park-test-stack`; T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database.
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
 - T0152 deployed park-test safety gates in CDK/config and Lambda runtime; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
-- Park-test human gate names are documented as aliases in [docs/t0170-park-test-gate-runbook.md](docs/t0170-park-test-gate-runbook.md); the current CDK/Lambda runtime variable names remain technical and ticket-numbered until a separate migration is scoped.
-- Park-test has confirmed Live access, webhook `1465`, frontend/CORS, smokes, contact resolution, email proof, add-on visibility, post-payment sync, and T0171 lookup. Public writes, broad lookup, redeem, webhooks, staff auth, visitor traffic, SMS, and JumpYard-owned email remain gated.
+- Park-test human gate names are aliases in [docs/t0170-park-test-gate-runbook.md](docs/t0170-park-test-gate-runbook.md); runtime variables stay ticket-numbered until a scoped migration.
+- Park-test has confirmed Live access, webhook `1465`, frontend/CORS, smokes, contact resolution, email proof, add-ons, post-payment sync, and T0171 lookup. Public writes, broad lookup, redeem, webhooks, staff auth, visitor traffic, SMS, and JumpYard-owned email remain gated.
 - Park-test post-payment new-booking sync is draft-backed and only refreshes a recent local `new_booking` prepayment draft created by JumpYard Cloud.
 
 ## Current Implemented Flow Facts
@@ -77,6 +77,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Guest messaging through SMS/email uses opaque `jy_token` links resolved server-side by JumpYard Cloud.
 - Park-test Aurora now contains the controlled Live booking snapshot for `166447399` from T0160 and the matching prepayment draft `jypd_56a8f1ca817c42a4b7` is marked `published`; this is not a broad booking import or all-day guest list.
 - T0161/T0171 selected REST-on-demand lookup by entered booking code; same-day indexing remains deferred and add-ons stay separately gated.
+- T0172 blocks public email lookup until Roller confirms a narrow API; staff can search Roller by email and enter the booking code in the PWA.
 - Existing-booking add-ons require server-resolved customer contact for the separate linked draft. T0163 confirmed Roller Live booking detail may expose `customerId` while `GET /guests/{customerId}` contains the complete first/last/email/phone contact needed server-side.
 - T0164-T0169 proved existing-booking add-on payment, linked settlement, one exact Live redemption, Roller email delivery, add-on visibility, and post-payment sync. Normal closed `park-test.json` is redeployed, so this is not a broad unlock.
 

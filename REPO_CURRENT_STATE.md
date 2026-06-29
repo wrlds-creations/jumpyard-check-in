@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-29
-- Current branch: `codex/t0171-park-test-lookup-mode`
-- Current status: T0171 is implemented, deployed, validated, documented, and ready to merge. The read-only assisted park-test lookup mode is open for single guest-entered Nacka booking codes for `2026-06-29` through `2026-07-05`, without broad same-day import.
+- Current branch: `codex/t0172-assisted-email-lookup`
+- Current status: T0172 is completed locally as a safe blocker. T0171 is merged and the read-only assisted booking-code lookup mode remains open for single guest-entered Nacka booking codes for `2026-06-29` through `2026-07-05`, without broad same-day import.
 - Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (170 completed tickets; latest closed `T0171`).
-- Recommended next step: open `T0172` assisted email lookup on a new branch, then continue the shifted park-test readiness sequence.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (171 completed tickets; latest closed `T0172`).
+- Recommended next step: continue with `T0173` webhook and reconciliation readiness.
 
 ## Current Structure
 
@@ -65,6 +65,7 @@ Current park-test status:
 - T0170 documents the human park-test gate names and maps them to current CDK config keys and Lambda environment variables. The current runtime variable names still include ticket numbers until a separate migration is scoped.
 - Park-test new-booking draft writes and the T0169 post-payment sync gate were closed again after the proof. Live lookup, existing-booking add-ons, redeem writes, staff auth, webhook processing, SMS, and JumpYard-owned email are closed; normal visitor traffic remains gated.
 - T0171's assisted lookup gate is currently deployed open on `LookupHandler` for `2026-06-29` through `2026-07-05`. User-tested booking codes `166797742` and `166741849` were saved as fresh normalized Aurora snapshots. Booking draft writes, add-on writes, redeem writes, staff auth, webhook processing, and guest messaging remain closed.
+- T0172 found no documented safe Roller Rest API path for public guest email lookup. If a visitor lacks their booking code, staff should search Roller Venue Manager by email and enter the discovered booking code into the T0171 PWA lookup.
 
 ## Known Validation Commands
 
@@ -86,21 +87,20 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 170
-- Latest closed ticket: `T0171`
+- Archived completed-ticket count: 171
+- Latest closed ticket: `T0172`
 - Current active ticket: None
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | None active. | Closed | T0171 is ready to merge; the next ticket is T0172 assisted email lookup. |
+| None active | None active. | Closed | T0172 is completed locally as a safe blocker. Recommended next ticket is T0173. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0172` | Assisted email lookup. | Planned | Investigate and implement, or document a safe blocker for, guest email lookup without exposing PII or broad guest lists. |
 | `T0173` | Webhook and reconciliation readiness. | Planned | Decide REST-refresh versus webhook processing for payment settlement, add-ons, booking updates, and redeem confirmation during park-test. |
 | `T0174` | Frontend redeem rehearsal. | Planned | Love tests the deployed phone/admin redeem flow end to end before a real visitor; exact booking/ticket scope only if another redeem is needed. |
 | `T0175` | Ready-for-entry handout UI. | Planned | Restore visible QR/handoff code and show purchased entry ticket type/duration such as 60/90/120 minutes so staff can choose the correct band/color. |
