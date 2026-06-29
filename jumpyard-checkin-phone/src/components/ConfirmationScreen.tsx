@@ -55,9 +55,8 @@ export const ConfirmationScreen = ({
 
     const handoutItems: { detail?: string; icon: JumpyardIconName; label: string; qty: number; testId?: string }[] = [
         {
-            detail: entryTicketLabel,
-            icon: 'admission-ticket',
-            label: t.confirm.wristbands,
+            icon: 'visitor-wristband',
+            label: entryTicketLabel,
             qty: jumperCount,
             testId: 'ready-entry-ticket-type',
         },
@@ -135,7 +134,7 @@ export const ConfirmationScreen = ({
                 {!completed && (
                     <div className="bg-surface-strong rounded-xl p-3 text-left border border-border mb-3">
                         <div className="flex items-center gap-2 mb-2">
-                            <JumpyardIcon name="visitor-wristband" className="w-7 h-7" />
+                            <JumpyardIcon name="addons-bag" className="w-7 h-7" />
                             <h2 className="text-sm font-bold italic uppercase text-foreground">{t.confirm.staffHandout}</h2>
                         </div>
 

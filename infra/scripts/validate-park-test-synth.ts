@@ -304,9 +304,11 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
+    ENABLE_T0176_FRONTEND_REDEEM_REHEARSAL: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
+    T0176_FRONTEND_REDEEM_REHEARSAL_ALLOWED_SESSION_IDS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
@@ -688,6 +690,128 @@ function validateParkTestRedeemSmokeTemplate(parkTest: SynthResult): void {
   console.log('[pass] park-test Live redeem smoke synth opens only controlled lookup, staff auth, and redeem');
 }
 
+function validateParkTestFrontendRedeemRehearsalTemplate(parkTest: SynthResult): void {
+  const strings = collectStrings(parkTest.template);
+
+  expect(
+    parkTest.stackName === `${PARK_TEST_PREFIX}-stack`,
+    `Expected park-test frontend redeem rehearsal stack name ${PARK_TEST_PREFIX}-stack.`,
+  );
+  expectContains(strings, PARK_TEST_PREFIX, 'park-test frontend redeem rehearsal');
+  expectContains(strings, 'https://api.roller.app', 'park-test frontend redeem rehearsal');
+  expectContains(strings, 'live', 'park-test frontend redeem rehearsal');
+  expectNoBookingTimeMessagingSchedule(parkTest.template);
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-lookup`, {
+    ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'false',
+    ENABLE_T0165_LINKED_ADDON_SETTLEMENT: 'false',
+    ENABLE_T0169_POST_PAYMENT_SYNC: 'false',
+    ENABLE_T0171_ASSISTED_LOOKUP: 'false',
+    T0171_ASSISTED_LOOKUP_ALLOWED_OPERATING_DATES: '',
+    T0171_ASSISTED_LOOKUP_VENUE_ID: '',
+    T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS: '',
+    T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
+    ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'false',
+    ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
+    ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
+    T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
+    ENABLE_ROLLER_REDEEM_WRITES: 'false',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
+    ENABLE_GUEST_MESSAGE_SENDS: 'false',
+    ENABLE_STAFF_AUTH: 'true',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
+    ENABLE_T0176_FRONTEND_REDEEM_REHEARSAL: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
+    T0176_FRONTEND_REDEEM_REHEARSAL_ALLOWED_SESSION_IDS: 'jycs_mqtimdxf_bb33c94c',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
+    ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+
+  console.log('[pass] park-test frontend redeem rehearsal synth opens staff auth only for an allowlisted session');
+}
+
+function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void {
+  const strings = collectStrings(parkTest.template);
+  const approvedDates = '2026-06-29,2026-06-30,2026-07-01,2026-07-02,2026-07-03,2026-07-04,2026-07-05';
+
+  expect(
+    parkTest.stackName === `${PARK_TEST_PREFIX}-stack`,
+    `Expected park-test full-flow rehearsal stack name ${PARK_TEST_PREFIX}-stack.`,
+  );
+  expectContains(strings, PARK_TEST_PREFIX, 'park-test full-flow rehearsal');
+  expectContains(strings, 'https://api.roller.app', 'park-test full-flow rehearsal');
+  expectContains(strings, 'live', 'park-test full-flow rehearsal');
+  expectNoBookingTimeMessagingSchedule(parkTest.template);
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-lookup`, {
+    ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'false',
+    ENABLE_T0165_LINKED_ADDON_SETTLEMENT: 'false',
+    ENABLE_T0169_POST_PAYMENT_SYNC: 'true',
+    ENABLE_T0171_ASSISTED_LOOKUP: 'true',
+    T0171_ASSISTED_LOOKUP_ALLOWED_OPERATING_DATES: approvedDates,
+    T0171_ASSISTED_LOOKUP_VENUE_ID: '50871',
+    T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS: '',
+    T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
+    ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'true',
+    ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'true',
+    ENABLE_T0162_LIVE_ADDON_SMOKE: 'true',
+    ENABLE_T0176_FULL_FLOW_REHEARSAL: 'true',
+    T0176_FULL_FLOW_ALLOWED_OPERATING_DATES: approvedDates,
+    T0176_FULL_FLOW_VENUE_ID: '50871',
+    T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
+    ENABLE_ROLLER_REDEEM_WRITES: 'true',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
+    ENABLE_T0176_FULL_FLOW_REHEARSAL: 'true',
+    T0176_FULL_FLOW_ALLOWED_OPERATING_DATES: approvedDates,
+    T0176_FULL_FLOW_VENUE_ID: '50871',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
+    ENABLE_GUEST_MESSAGE_SENDS: 'false',
+    ENABLE_STAFF_AUTH: 'true',
+    ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
+    ENABLE_T0176_FRONTEND_REDEEM_REHEARSAL: 'false',
+    ENABLE_T0176_FULL_FLOW_REHEARSAL: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+    T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
+    T0176_FRONTEND_REDEEM_REHEARSAL_ALLOWED_SESSION_IDS: '',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
+    ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
+    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+  });
+
+  console.log('[pass] park-test full-flow rehearsal synth opens Nacka/date-scoped payment, lookup, add-on, staff auth, and redeem');
+}
+
 const dev = synthConfig('config/dev.json');
 const parkTest = synthConfig('config/park-test.json');
 const parkTestAddOnSmoke = synthConfig('config/park-test-live-addon-smoke.json');
@@ -697,6 +821,8 @@ const parkTestLookupSmoke = synthConfig('config/park-test-live-lookup-smoke.json
 const parkTestPaymentSmoke = synthConfig('config/park-test-live-payment-smoke.json');
 const parkTestPaymentSyncSmoke = synthConfig('config/park-test-live-payment-sync-smoke.json');
 const parkTestRedeemSmoke = synthConfig('config/park-test-live-redeem-smoke.json');
+const parkTestFrontendRedeemRehearsal = synthConfig('config/park-test-frontend-redeem-rehearsal.json');
+const parkTestFullFlowRehearsal = synthConfig('config/park-test-full-flow-rehearsal.json');
 
 validateDevTemplate(dev);
 validateParkTestTemplate(parkTest);
@@ -707,5 +833,7 @@ validateParkTestAddOnSettlementSmokeTemplate(parkTestAddOnSettlementSmoke);
 validateParkTestPaymentSmokeTemplate(parkTestPaymentSmoke);
 validateParkTestPaymentSyncSmokeTemplate(parkTestPaymentSyncSmoke);
 validateParkTestRedeemSmokeTemplate(parkTestRedeemSmoke);
+validateParkTestFrontendRedeemRehearsalTemplate(parkTestFrontendRedeemRehearsal);
+validateParkTestFullFlowRehearsalTemplate(parkTestFullFlowRehearsal);
 
 console.log('Park-test synth validation passed.');

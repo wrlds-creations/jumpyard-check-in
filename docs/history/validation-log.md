@@ -2,6 +2,29 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0176 Frontend Redeem Rehearsal Validation
+
+- 2026-06-29: Implemented a manual feedback fix pass after full-flow testing: ready-for-entry handout row/icon copy, product quantity display, existing-booking add-on loading/review/socks defaults, SkyRider visual consistency, and POS booking display-name normalization.
+- 2026-06-29: The fix pass is code-only so far; it did not deploy AWS or Cloudflare, create bookings/payments/add-ons/refunds/redemptions/webhooks, process webhooks, send SMS/email, or print secrets.
+- 2026-06-29: `node --check infra/lambda/lookup/index.js`, `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, `npm run validate`, and `git diff --check` passed. Phone lint still reports only existing `<img>` warnings, phone build still reports existing `baseline-browser-mapping` notices, and `git diff --check` reports existing CRLF normalization warnings only.
+- 2026-06-29: After explicit user approval for a real full-flow rehearsal, added `infra/config/park-test-full-flow-rehearsal.json`, approval phrase `T0176_FULL_FLOW_REHEARSAL_APPROVED`, and Lambda env mapping for `ENABLE_T0176_FULL_FLOW_REHEARSAL`, `T0176_FULL_FLOW_ALLOWED_OPERATING_DATES`, and `T0176_FULL_FLOW_VENUE_ID`.
+- 2026-06-29: Updated BookingHandler to let T0176 full-flow pass emergency stop for new booking/payment and existing-booking add-on writes, while validating existing-booking add-on originals against the approved operating dates and venue.
+- 2026-06-29: Updated RedeemHandler to let T0176 full-flow pass emergency stop only when the local booking/ticket dates match `2026-06-29` through `2026-07-05` and the local booking venue is either Nacka `50871` or absent. T0166 exact allowlist behavior remains separate.
+- 2026-06-29: `npm --prefix infra run build`, `npm --prefix infra run validate:config-guards`, `npm --prefix infra run validate:park-test-synth`, and `node --check` for Booking/Redeem/Session handlers passed after the full-flow changes.
+- 2026-06-29: AWS preflight confirmed account `376129878018` and region `eu-north-1`. `npm --prefix infra run synth:park-test-full-flow-rehearsal` passed, and the opening CDK diff showed only existing Lookup/Booking/Redeem/Session Lambda code/environment changes.
+- 2026-06-29: `npm --prefix infra run deploy:park-test-full-flow-rehearsal` reached `UPDATE_COMPLETE`.
+- 2026-06-29: Lambda readback confirmed Booking writes, T0159 payment smoke bypass, T0162 add-on bypass, T0176 full-flow, T0169 post-payment sync, T0171 assisted lookup, staff auth, and Roller redeem writes are open for Nacka `50871` and dates `2026-06-29` through `2026-07-05`. Webhook processing, guest sends, T0160/T0165 exact lookup modes, T0166 exact redeem smoke, and frontend-only session allowlist are off. `JUMPYARD_EMERGENCY_STOP=true` remains set across handlers.
+- 2026-06-29: Safe public smokes confirmed staff login with the temporary passcode returned an auth token without printing it, and Nacka availability returned `available` without creating a draft.
+- 2026-06-29: T0176 was activated on branch `codex/t0176-frontend-redeem-rehearsal` after the park-test Live entry variation hotfix was squash-merged through PR #175.
+- 2026-06-29: Added separate CDK/config gate `infra/config/park-test-frontend-redeem-rehearsal.json`, approval phrase `T0176_FRONTEND_REDEEM_REHEARSAL_APPROVED`, and `ENABLE_T0176_FRONTEND_REDEEM_REHEARSAL` / `T0176_FRONTEND_REDEEM_REHEARSAL_ALLOWED_SESSION_IDS` environment mapping for `SessionHandler`.
+- 2026-06-29: Runtime enforcement lets staff auth pass emergency stop only for T0166 or T0176 and, in T0176 mode, filters staff sessions to allowlisted check-in session ids and blocks non-allowlisted staff detail requests.
+- 2026-06-29: Config guards require T0176 to name at least one allowed session id, require `staffAuthEnabled=true`, require `rollerRedeemWritesEnabled=false`, and reject combining T0176 with payment, lookup, add-on, settlement, redeem, draft-write, webhook, or guest-message gates.
+- 2026-06-29: `npm --prefix infra run build`, `npm --prefix infra run validate:config-guards`, `npm --prefix infra run validate:park-test-synth`, and `npm --prefix infra run synth:park-test-frontend-redeem-rehearsal` passed.
+- 2026-06-29: Opening CDK diff for `infra/config/park-test-frontend-redeem-rehearsal.json` changed only existing `SessionHandler` code/environment: `ENABLE_STAFF_AUTH=true`, `ENABLE_T0176_FRONTEND_REDEEM_REHEARSAL=true`, and allowed session `jycs_mqtimdxf_bb33c94c`. No new AWS resources were planned.
+- 2026-06-29: Deploy reached `UPDATE_COMPLETE`. Readback confirmed Session staff auth/T0176 on for `jycs_mqtimdxf_bb33c94c`, T0166 off, guest sends off, Redeem writes off, Booking draft/payment/add-on writes off, Lookup T0160/T0165/T0169/T0171 modes off, Webhook processing off, and `JUMPYARD_EMERGENCY_STOP=true`.
+- 2026-06-29: Safe public API probe without a passcode returned `400 staff_passcode_required`, confirming staff auth is reachable without reading or printing the staff secret.
+- 2026-06-29: T0176 did not create new AWS resources, call Roller Live, query/write Aurora, create bookings/payments/add-ons/refunds/redemptions/webhooks, process webhooks, send SMS/email, run visitor traffic, print secrets, print raw payment JWTs, or expose public PII.
+
 ## T0175 Payment Method Readiness Validation
 
 - 2026-06-29: T0175 was activated on branch `codex/t0175-payment-method-readiness` after T0174 was squash-merged through PR #173.

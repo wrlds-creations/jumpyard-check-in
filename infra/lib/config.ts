@@ -34,6 +34,10 @@ export const PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL = 'T0162_EXISTING_BOOKING_ADDO
 export const PARK_TEST_LINKED_ADD_ON_SETTLEMENT_APPROVAL =
   'T0165_LINKED_ADDON_SETTLEMENT_RECONCILIATION_APPROVED';
 export const PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL = 'T0166_CONTROLLED_LIVE_REDEEM_SMOKE_APPROVED';
+export const PARK_TEST_FRONTEND_REDEEM_REHEARSAL_APPROVAL =
+  'T0176_FRONTEND_REDEEM_REHEARSAL_APPROVED';
+export const PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL =
+  'T0176_FULL_FLOW_REHEARSAL_APPROVED';
 
 export interface JumpYardCloudConfig {
   readonly api: {
@@ -80,6 +84,11 @@ export interface JumpYardCloudConfig {
     readonly livePostPaymentSyncApproval?: string;
     readonly liveRedeemSmokeAllowedIdentifiers: readonly string[];
     readonly liveRedeemSmokeApproval?: string;
+    readonly frontendRedeemRehearsalAllowedSessionIds: readonly string[];
+    readonly frontendRedeemRehearsalApproval?: string;
+    readonly fullFlowRehearsalAllowedOperatingDates: readonly string[];
+    readonly fullFlowRehearsalApproval?: string;
+    readonly fullFlowRehearsalVenueId?: string;
     readonly rollerBookingDraftWritesEnabled: boolean;
     readonly rollerRedeemWritesEnabled: boolean;
     readonly rollerWebhookProcessingEnabled: boolean;
@@ -133,6 +142,11 @@ interface RawConfig {
     readonly livePostPaymentSyncApproval?: unknown;
     readonly liveRedeemSmokeAllowedIdentifiers?: unknown;
     readonly liveRedeemSmokeApproval?: unknown;
+    readonly frontendRedeemRehearsalAllowedSessionIds?: unknown;
+    readonly frontendRedeemRehearsalApproval?: unknown;
+    readonly fullFlowRehearsalAllowedOperatingDates?: unknown;
+    readonly fullFlowRehearsalApproval?: unknown;
+    readonly fullFlowRehearsalVenueId?: unknown;
     readonly rollerBookingDraftWritesEnabled?: unknown;
     readonly rollerRedeemWritesEnabled?: unknown;
     readonly rollerWebhookProcessingEnabled?: unknown;
@@ -291,6 +305,10 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     input.safetyGates.liveLinkedAddOnSettlementApproval === PARK_TEST_LINKED_ADD_ON_SETTLEMENT_APPROVAL;
   const liveRedeemSmokeApproved =
     input.safetyGates.liveRedeemSmokeApproval === PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL;
+  const frontendRedeemRehearsalApproved =
+    input.safetyGates.frontendRedeemRehearsalApproval === PARK_TEST_FRONTEND_REDEEM_REHEARSAL_APPROVAL;
+  const fullFlowRehearsalApproved =
+    input.safetyGates.fullFlowRehearsalApproval === PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL;
 
   if (!input.safetyGates.emergencyStop) {
     throw new Error(
@@ -298,13 +316,21 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     );
   }
 
-  if (input.safetyGates.rollerBookingDraftWritesEnabled && !livePaymentSmokeApproved && !liveAddOnSmokeApproved) {
+  if (
+    input.safetyGates.rollerBookingDraftWritesEnabled &&
+    !livePaymentSmokeApproved &&
+    !liveAddOnSmokeApproved &&
+    !fullFlowRehearsalApproved
+  ) {
     throw new Error(
       'park-test safetyGates.rollerBookingDraftWritesEnabled must stay false until a scoped ticket enables it.',
     );
   }
 
-  if ((livePaymentSmokeApproved || liveAddOnSmokeApproved) && !input.safetyGates.rollerBookingDraftWritesEnabled) {
+  if (
+    (livePaymentSmokeApproved || liveAddOnSmokeApproved || fullFlowRehearsalApproved) &&
+    !input.safetyGates.rollerBookingDraftWritesEnabled
+  ) {
     throw new Error(
       'park-test live write smoke approval requires safetyGates.rollerBookingDraftWritesEnabled=true.',
     );
@@ -392,7 +418,9 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
       livePostPaymentSyncApproved ||
       liveAddOnSmokeApproved ||
       liveLinkedAddOnSettlementApproved ||
-      liveRedeemSmokeApproved)
+      liveRedeemSmokeApproved ||
+      frontendRedeemRehearsalApproved ||
+      fullFlowRehearsalApproved)
   ) {
     throw new Error('park-test assisted lookup approval must not be combined with payment, add-on, settlement, or redeem approvals.');
   }
@@ -409,6 +437,104 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     );
   }
 
+  if (
+    frontendRedeemRehearsalApproved &&
+    input.safetyGates.frontendRedeemRehearsalAllowedSessionIds.length === 0
+  ) {
+    throw new Error(
+      'park-test frontend redeem rehearsal approval requires safetyGates.frontendRedeemRehearsalAllowedSessionIds.',
+    );
+  }
+
+  if (fullFlowRehearsalApproved && input.safetyGates.fullFlowRehearsalAllowedOperatingDates.length === 0) {
+    throw new Error(
+      'park-test full-flow rehearsal approval requires safetyGates.fullFlowRehearsalAllowedOperatingDates.',
+    );
+  }
+
+  for (const date of input.safetyGates.fullFlowRehearsalAllowedOperatingDates) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new Error('park-test safetyGates.fullFlowRehearsalAllowedOperatingDates must use YYYY-MM-DD dates.');
+    }
+  }
+
+  if (!fullFlowRehearsalApproved && input.safetyGates.fullFlowRehearsalAllowedOperatingDates.length > 0) {
+    throw new Error(
+      'park-test safetyGates.fullFlowRehearsalAllowedOperatingDates must stay empty until a scoped full-flow ticket enables it.',
+    );
+  }
+
+  if (fullFlowRehearsalApproved && !input.safetyGates.fullFlowRehearsalVenueId) {
+    throw new Error('park-test full-flow rehearsal approval requires safetyGates.fullFlowRehearsalVenueId.');
+  }
+
+  if (!fullFlowRehearsalApproved && input.safetyGates.fullFlowRehearsalVenueId) {
+    throw new Error(
+      'park-test safetyGates.fullFlowRehearsalVenueId must stay empty until a scoped full-flow ticket enables it.',
+    );
+  }
+
+  if (fullFlowRehearsalApproved && !input.safetyGates.staffAuthEnabled) {
+    throw new Error('park-test full-flow rehearsal approval requires safetyGates.staffAuthEnabled=true.');
+  }
+
+  if (fullFlowRehearsalApproved && !input.safetyGates.rollerRedeemWritesEnabled) {
+    throw new Error('park-test full-flow rehearsal approval requires safetyGates.rollerRedeemWritesEnabled=true.');
+  }
+
+  if (
+    fullFlowRehearsalApproved &&
+    (livePaymentSmokeApproved ||
+      livePostPaymentSyncApproved ||
+      liveLookupSmokeApproved ||
+      liveAssistedLookupApproved ||
+      liveAddOnSmokeApproved ||
+      liveLinkedAddOnSettlementApproved ||
+      liveRedeemSmokeApproved ||
+      frontendRedeemRehearsalApproved)
+  ) {
+    throw new Error(
+      'park-test full-flow rehearsal approval must not be combined with payment, lookup, add-on, settlement, redeem, or frontend-only approvals.',
+    );
+  }
+
+  if (
+    !frontendRedeemRehearsalApproved &&
+    input.safetyGates.frontendRedeemRehearsalAllowedSessionIds.length > 0
+  ) {
+    throw new Error(
+      'park-test safetyGates.frontendRedeemRehearsalAllowedSessionIds must stay empty until a scoped frontend rehearsal ticket enables it.',
+    );
+  }
+
+  if (frontendRedeemRehearsalApproved && !input.safetyGates.staffAuthEnabled) {
+    throw new Error(
+      'park-test frontend redeem rehearsal approval requires safetyGates.staffAuthEnabled=true.',
+    );
+  }
+
+  if (frontendRedeemRehearsalApproved && input.safetyGates.rollerRedeemWritesEnabled) {
+    throw new Error(
+      'park-test frontend redeem rehearsal must keep safetyGates.rollerRedeemWritesEnabled=false.',
+    );
+  }
+
+  if (
+    frontendRedeemRehearsalApproved &&
+    (livePaymentSmokeApproved ||
+      livePostPaymentSyncApproved ||
+      liveLookupSmokeApproved ||
+      liveAssistedLookupApproved ||
+      liveAddOnSmokeApproved ||
+      liveLinkedAddOnSettlementApproved ||
+      liveRedeemSmokeApproved ||
+      input.safetyGates.rollerBookingDraftWritesEnabled)
+  ) {
+    throw new Error(
+      'park-test frontend redeem rehearsal approval must not be combined with payment, lookup, add-on, settlement, redeem, or draft-write approvals.',
+    );
+  }
+
   if (liveRedeemSmokeApproved && !input.safetyGates.rollerRedeemWritesEnabled) {
     throw new Error(
       'park-test live redeem smoke approval requires safetyGates.rollerRedeemWritesEnabled=true.',
@@ -421,11 +547,16 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     );
   }
 
-  if (!liveRedeemSmokeApproved && input.safetyGates.rollerRedeemWritesEnabled) {
+  if (!liveRedeemSmokeApproved && !fullFlowRehearsalApproved && input.safetyGates.rollerRedeemWritesEnabled) {
     throw new Error('park-test safetyGates.rollerRedeemWritesEnabled must stay false until a scoped ticket enables it.');
   }
 
-  if (!liveRedeemSmokeApproved && input.safetyGates.staffAuthEnabled) {
+  if (
+    !liveRedeemSmokeApproved &&
+    !frontendRedeemRehearsalApproved &&
+    !fullFlowRehearsalApproved &&
+    input.safetyGates.staffAuthEnabled
+  ) {
     throw new Error('park-test safetyGates.staffAuthEnabled must stay false until a scoped ticket enables it.');
   }
 
@@ -647,6 +778,29 @@ function readSafetyGatesConfig(raw: RawConfig['safetyGates']): JumpYardCloudConf
       raw?.liveRedeemSmokeApproval,
       '',
       'safetyGates.liveRedeemSmokeApproval',
+    ),
+    frontendRedeemRehearsalAllowedSessionIds: readOptionalStringArray(
+      raw?.frontendRedeemRehearsalAllowedSessionIds,
+      'safetyGates.frontendRedeemRehearsalAllowedSessionIds',
+    ),
+    frontendRedeemRehearsalApproval: readOptionalString(
+      raw?.frontendRedeemRehearsalApproval,
+      '',
+      'safetyGates.frontendRedeemRehearsalApproval',
+    ),
+    fullFlowRehearsalAllowedOperatingDates: readOptionalStringArray(
+      raw?.fullFlowRehearsalAllowedOperatingDates,
+      'safetyGates.fullFlowRehearsalAllowedOperatingDates',
+    ),
+    fullFlowRehearsalApproval: readOptionalString(
+      raw?.fullFlowRehearsalApproval,
+      '',
+      'safetyGates.fullFlowRehearsalApproval',
+    ),
+    fullFlowRehearsalVenueId: readOptionalString(
+      raw?.fullFlowRehearsalVenueId,
+      '',
+      'safetyGates.fullFlowRehearsalVenueId',
     ),
     rollerBookingDraftWritesEnabled: readOptionalBoolean(
       raw?.rollerBookingDraftWritesEnabled,

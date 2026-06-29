@@ -222,6 +222,13 @@ async function findLocalBookingRow(identifier) {
        b.booking_date::text AS booking_date,
        b.start_time::text AS start_time,
        b.end_time::text AS end_time,
+       b.normalized_summary ->> 'bookingCustomerId' AS booking_customer_id,
+       COALESCE(
+         NULLIF(b.normalized_summary ->> 'bookingName', ''),
+         NULLIF(b.normalized_summary ->> 'name', '')
+       ) AS booking_name,
+       b.normalized_summary ->> 'customerFirstName' AS customer_first_name,
+       b.normalized_summary ->> 'customerLastName' AS customer_last_name,
        b.freshness_status,
        b.is_tombstoned,
        b.last_seen_from_roller_at::text AS last_seen_from_roller_at,
@@ -249,9 +256,13 @@ async function findLocalBookingRow(identifier) {
 
   return {
     amountOwingCents: numberOrNull(row.amount_owing_cents),
+    bookingCustomerId: stringOrNull(row.booking_customer_id),
     bookingDate: stringOrNull(row.booking_date),
+    bookingName: stringOrNull(row.booking_name),
     bookingReference: stringOrNull(row.booking_reference),
     bookingStatus: stringOrNull(row.booking_status),
+    customerFirstName: stringOrNull(row.customer_first_name),
+    customerLastName: stringOrNull(row.customer_last_name),
     endTime: stringOrNull(row.end_time),
     freshnessStatus: stringOrNull(row.freshness_status) || 'stale',
     isTombstoned: Boolean(row.is_tombstoned),
@@ -340,6 +351,7 @@ async function findLocalBookingItems(rollerUniqueId) {
 
 function normalizeLocalBooking(bookingRow, items) {
   return {
+    bookingName: bookingRow.bookingName,
     bookingReference: bookingRow.bookingReference,
     rollerUniqueId: bookingRow.rollerUniqueId,
     externalId: null,
@@ -350,7 +362,13 @@ function normalizeLocalBooking(bookingRow, items) {
     total: centsToCurrency(bookingRow.totalCents),
     amountOwing: centsToCurrency(bookingRow.amountOwingCents),
     createdDate: null,
-    customerId: null,
+    customer: {
+      firstName: bookingRow.customerFirstName,
+      fullName: bookingRow.bookingName,
+      id: bookingRow.bookingCustomerId,
+      lastName: bookingRow.customerLastName,
+    },
+    customerId: bookingRow.bookingCustomerId,
     items: items.length > 0 ? items : [fallbackLocalItem(bookingRow)].filter(Boolean),
   };
 }
@@ -379,7 +397,18 @@ function shouldUseLocalBooking(booking) {
   const paymentStatus = String(booking.paymentStatus ?? booking.status ?? '').trim();
   if (!paymentStatus && booking.amountOwing === null) return false;
 
+  if (isT0171AssistedLookupEnabled() && !hasBookingDisplayName(booking)) return false;
+
   return true;
+}
+
+function hasBookingDisplayName(booking) {
+  return Boolean(
+    stringOrNull(booking.bookingName) ||
+    stringOrNull(booking.customer?.fullName) ||
+    stringOrNull(booking.customer?.firstName) ||
+    stringOrNull(booking.customer?.lastName),
+  );
 }
 
 async function getRollerConfig() {
@@ -623,8 +652,11 @@ function flattenProducts(products, parent = null) {
 
 function normalizeBooking(booking, products) {
   const items = Array.isArray(booking.items) ? booking.items : [];
+  const customer = normalizeBookingCustomer(booking);
+  const bookingName = firstObjectString(booking, ['bookingName', 'name', 'title']) || customer.fullName;
 
   return {
+    bookingName,
     bookingReference: stringOrNull(booking.bookingReference ?? booking.reference),
     rollerUniqueId: stringOrNull(booking.uniqueId ?? booking.id),
     externalId: stringOrNull(booking.externalId),
@@ -634,9 +666,61 @@ function normalizeBooking(booking, products) {
     total: numberOrNull(booking.total ?? booking.costs?.total),
     amountOwing: numberOrNull(booking.amountOwing ?? booking.remainder ?? booking.costs?.amountOwing),
     createdDate: stringOrNull(booking.createdDate),
-    customerId: null,
+    customer,
+    customerId: customer.id,
     items: items.map((item) => normalizeBookingItem(item, products.byId)),
   };
+}
+
+function normalizeBookingCustomer(booking) {
+  const candidates = [
+    booking?.customer,
+    booking?.bookingCustomer,
+    booking?.bookingHolder,
+    booking?.guest,
+    booking?.contact,
+    booking?.primaryContact,
+    booking?.holder,
+    booking?.customerDetails,
+    Array.isArray(booking?.contacts) ? booking.contacts[0] : null,
+    booking,
+  ].filter(isPlainObject);
+
+  const customer = {
+    email: null,
+    firstName: null,
+    fullName: null,
+    id: stringOrNull(booking?.customerId ?? booking?.customer?.id),
+    lastName: null,
+    phone: null,
+  };
+
+  for (const candidate of candidates) {
+    customer.id =
+      customer.id ||
+      firstObjectString(candidate, ['customerId', 'customerID']) ||
+      (candidate === booking ? null : firstObjectString(candidate, ['id']));
+    customer.firstName =
+      customer.firstName || firstObjectString(candidate, ['firstName', 'first_name', 'givenName', 'given_name']);
+    customer.lastName =
+      customer.lastName || firstObjectString(candidate, ['lastName', 'last_name', 'familyName', 'family_name', 'surname']);
+    customer.email = customer.email || firstObjectString(candidate, ['email', 'emailAddress', 'email_address']);
+    customer.phone =
+      customer.phone ||
+      firstObjectString(candidate, ['phone', 'phoneNumber', 'phone_number', 'mobile', 'mobilePhone', 'contactNumber']);
+    customer.fullName =
+      customer.fullName ||
+      firstObjectString(candidate, ['fullName', 'full_name', 'customerName', 'bookingHolderName', 'name', 'bookingName']);
+  }
+
+  const nameParts = splitCustomerName(customer.fullName);
+  customer.firstName = customer.firstName || nameParts.firstName;
+  customer.lastName = customer.lastName || nameParts.lastName;
+  if (!customer.fullName && (customer.firstName || customer.lastName)) {
+    customer.fullName = [customer.firstName, customer.lastName].filter(Boolean).join(' ');
+  }
+
+  return customer;
 }
 
 function normalizeBookingItem(item, productById) {
@@ -997,8 +1081,13 @@ async function upsertLiveBooking(booking, rollerEnv, venueId) {
       stringParameter(
         'normalizedSummary',
         JSON.stringify({
+          bookingCustomerId: booking.customerId,
+          bookingName: booking.bookingName,
+          customerFirstName: booking.customer?.firstName ?? null,
+          customerLastName: booking.customer?.lastName ?? null,
           externalId: booking.externalId,
           itemCount: booking.items.length,
+          name: booking.bookingName ?? booking.customer?.fullName ?? null,
           source: 'roller_live_lookup',
         }),
       ),
@@ -1450,6 +1539,34 @@ function fieldToJsValue(field) {
 function stringOrNull(value) {
   if (value === undefined || value === null || value === '') return null;
   return String(value);
+}
+
+function firstObjectString(object, keys) {
+  if (!isPlainObject(object)) return null;
+
+  for (const key of keys) {
+    const value = stringOrNull(object[key]);
+    if (value) return value;
+  }
+
+  return null;
+}
+
+function splitCustomerName(value) {
+  const name = stringOrNull(value);
+  if (!name) return { firstName: null, lastName: null };
+
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return { firstName: null, lastName: null };
+
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  };
+}
+
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 function numberOrNull(value) {

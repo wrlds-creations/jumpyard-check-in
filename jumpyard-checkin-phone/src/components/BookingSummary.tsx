@@ -17,6 +17,8 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
 
     const existingAddons: { label: string; qty: number }[] = booking?.existingAddons ?? [];
     const canStartCheckIn = Boolean(booking?.paid);
+    const productQuantity = Math.max(1, Number(booking?.jumpers || booking?.products || 1));
+    const productDisplay = booking?.productLabel ? `${booking.productLabel} x ${productQuantity}` : null;
 
     const timeDisplay = booking?.endTime
         ? `${booking.time}–${booking.endTime}`
@@ -77,10 +79,10 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
                     </div>
                 </div>
 
-                {booking?.productLabel && (
+                {productDisplay && (
                     <div className="bg-white p-2.5 rounded-xl border border-border shadow-sm mb-3">
                         <JumpyardIcon name="admission-ticket" className="w-6 h-6 mb-0.5" />
-                        <p className="text-foreground font-bold italic text-sm">{booking.productLabel}</p>
+                        <p className="text-foreground font-bold italic text-sm">{productDisplay}</p>
                         <p className="text-muted text-[10px] uppercase">{t.booking.product}</p>
                     </div>
                 )}
