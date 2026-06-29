@@ -2,6 +2,13 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0172 Assisted Email Lookup Validation
+
+- 2026-06-29: T0172 was activated on branch `codex/t0172-assisted-email-lookup` after T0171 was squash-merged through PR #170.
+- 2026-06-29: Reviewed official Roller docs and support/academy material for booking detail, guest detail, API overview, Data API behavior, and Venue Manager booking search.
+- 2026-06-29: Documented `docs/t0172-assisted-email-lookup.md` as a safe blocker: no public guest email lookup should be implemented until Roller confirms a narrow supported `email -> booking` API contract. Staff can search Roller Venue Manager by email and enter the discovered booking code into the T0171 PWA lookup.
+- 2026-06-29: T0172 did not call Roller Live APIs, call AWS/Aurora, change Lambda runtime behavior, create drafts/payments/refunds/redemptions/webhooks, enable add-on writes, enable staff auth, process webhooks, send SMS/email, run visitor traffic, print secrets, or expose public PII.
+
 ## T0171 Park-Test Lookup Mode Validation
 
 - 2026-06-29: T0171 was activated on branch `codex/t0171-park-test-lookup-mode`.
