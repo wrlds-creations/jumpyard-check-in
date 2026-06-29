@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-29
-- Current branch: `codex/t0170-park-test-gate-runbook`
-- Current status: No active ticket; T0170 is completed locally and ready for commit/merge when requested.
+- Current branch: `codex/t0169-post-payment-booking-sync`
+- Current status: No active ticket. T0169 is documented as completed; all sensitive park-test gates were redeployed closed after the T0169 smoke.
 - Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (168 completed tickets; latest `T0170`).
-- Recommended next step: start `T0169` post-payment booking sync, then continue to `T0171` park-test lookup mode unless the user chooses another order.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (169 completed tickets; latest closed `T0169`; highest ticket already completed `T0170`).
+- Recommended next step: start `T0171` park-test lookup mode unless the user chooses another order.
 
 ## Current Structure
 
@@ -52,16 +52,17 @@ History and planning archives:
 - Park-test controlled Live redeem smoke: [docs/t0166-controlled-live-redeem-smoke.md](docs/t0166-controlled-live-redeem-smoke.md)
 - Park-test receipt and confirmation handling: [docs/t0167-receipt-confirmation-handling.md](docs/t0167-receipt-confirmation-handling.md)
 - Park-test new-booking add-on visibility: [docs/t0168-new-booking-addon-visibility.md](docs/t0168-new-booking-addon-visibility.md)
+- Park-test post-payment booking sync: [docs/t0169-post-payment-booking-sync.md](docs/t0169-post-payment-booking-sync.md)
 - Park-test gate naming and runbook: [docs/t0170-park-test-gate-runbook.md](docs/t0170-park-test-gate-runbook.md)
 
 Current park-test status:
 
 - Park-test phone/admin Cloudflare Pages targets exist and point at the park-test API `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`.
-- Roller Live access, webhook registration, quote/cost, controlled draft/payment, exact lookup, Live catalog readiness, existing-booking add-on payment, linked add-on settlement, one exact redeem, and new-booking Roller email proof have passed for Nacka.
+- Roller Live access, webhook registration, quote/cost, controlled draft/payment, exact lookup, Live catalog readiness, existing-booking add-on payment, linked add-on settlement, one exact redeem, new-booking Roller email proof, add-on visibility, and post-payment booking sync have passed for Nacka.
 - Aurora contains only scoped smoke/test state, including controlled booking `166447399`, add-on booking `166497194`, and redeem session `jycs_mqtimdxf_bb33c94c`; this is not a broad same-day booking import.
 - T0168 found the missing new-booking add-ons were caused by backend Live phone add-on mapping being tied to the T0162 existing-booking add-on gate. BookingHandler now has a read-only `LIVE_PHONE_ADDON_PRODUCTS` mapping for Nacka Live add-ons while keeping write gates unchanged.
 - T0170 documents the human park-test gate names and maps them to current CDK config keys and Lambda environment variables. The current runtime variable names still include ticket numbers until a separate migration is scoped.
-- Park-test new-booking draft writes were closed again after the T0167 receipt proof. Live lookup, existing-booking add-ons, redeem writes, staff auth, webhook processing, SMS, and JumpYard-owned email are closed; normal visitor traffic remains gated.
+- Park-test new-booking draft writes and the T0169 post-payment sync gate were closed again after the proof. Live lookup, existing-booking add-ons, redeem writes, staff auth, webhook processing, SMS, and JumpYard-owned email are closed; normal visitor traffic remains gated.
 
 ## Known Validation Commands
 
@@ -83,27 +84,28 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 168
-- Latest completed ticket: `T0170`
+- Archived completed-ticket count: 169
+- Latest closed ticket: `T0169`
 - Current active ticket: None active
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | - | No active ticket. | T0170 completed the park-test gate naming/runbook documentation without AWS deploy, Roller calls, payment, redeem, webhook processing, SMS/email, or visitor traffic. |
+| None active | No active ticket. | Idle | T0169 is completed in docs. Recommended next ticket is T0171. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0169` | Post-payment booking sync. | Planned | Make the PWA find/reconcile a newly paid booking or show an intentional staff fallback instead of the current "not synced" dead-end. |
 | `T0171` | Park-test lookup mode. | Planned | Define safe Nacka/date-scoped existing-booking lookup for an unknown real visitor instead of exact booking-code allowlists. |
 | `T0172` | Webhook and reconciliation readiness. | Planned | Decide REST-refresh versus webhook processing for payment settlement, add-ons, booking updates, and redeem confirmation during park-test. |
 | `T0173` | Frontend redeem rehearsal. | Planned | Love tests the deployed phone/admin redeem flow end to end before a real visitor; exact booking/ticket scope only if another redeem is needed. |
-| `T0174` | Park-test UI/UX readiness. | Planned | Final guest/staff UI pass before assisted visitor testing; no new Live unlock by itself. |
-| `T0175` | Staff-assisted visitor test. | Planned | Limited assisted test after readiness gates, park approval, and runbook. |
-| `T0176` | Outcome and go/no-go. | Planned | Documentation/report only. |
+| `T0174` | Ready-for-entry handout UI. | Planned | Restore visible QR/handoff code and show purchased entry ticket type/duration such as 60/90/120 minutes so staff can choose the correct band/color. |
+| `T0175` | Payment method readiness. | Planned | Investigate card/Apple Pay/Swish behavior in the Roller payment drop-in and decide the approved payment method set before visitor testing. |
+| `T0176` | Park-test UI/UX readiness. | Planned | Final guest/staff UI pass before assisted visitor testing; no new Live unlock by itself. |
+| `T0177` | Staff-assisted visitor test. | Planned | Limited assisted test after readiness gates, park approval, and runbook. |
+| `T0178` | Outcome and go/no-go. | Planned | Documentation/report only. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -111,13 +113,13 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- Latest validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md) under T0170.
+- Latest validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md) under T0169.
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions
 
 - Park-test AWS exists with dedicated API, Aurora, raw bucket, secrets, and gates; current resource details are in [AWS_RESOURCES.md](AWS_RESOURCES.md).
-- Roller Live access, webhook registration, frontend target setup, first quote/cost smoke, first controlled draft smoke, first internal paid booking smoke, controlled lookup, Live catalog/index readiness, guest-detail contact resolution, controlled existing-booking add-on payment, scoped linked add-on settlement reconciliation, controlled Live redeem, and T0167 receipt email proof have passed for Nacka. Public draft writes, staff auth, broad lookup, existing-booking add-ons, redeem, webhook processing, SMS, and email remain scoped-ticket gated.
+- Roller Live access, webhook registration, frontend target setup, first quote/cost smoke, first controlled draft smoke, first internal paid booking smoke, controlled lookup, Live catalog/index readiness, guest-detail contact resolution, controlled existing-booking add-on payment, scoped linked add-on settlement reconciliation, controlled Live redeem, T0167 receipt email proof, new-booking add-on visibility, and T0169 post-payment sync have passed for Nacka. Public draft writes, staff auth, broad lookup, existing-booking add-ons, redeem, webhook processing, SMS, and email remain scoped-ticket gated.
 - The park-test plan is not an approval to create additional AWS resources, call new Roller Live endpoints, create drafts/payments, redeem additional tickets, or run visitor traffic.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before the T0128 branch was created.

@@ -44,6 +44,7 @@ interface TestConfig {
     liveLookupSmokeAllowedIdentifiers?: string[];
     liveLookupSmokeApproval?: string;
     livePaymentSmokeApproval?: string;
+    livePostPaymentSyncApproval?: string;
     liveRedeemSmokeAllowedIdentifiers?: string[];
     liveRedeemSmokeApproval?: string;
     rollerBookingDraftWritesEnabled: boolean;
@@ -142,6 +143,13 @@ parkTestApprovalWithoutDraftWrites.safetyGates.rollerBookingDraftWritesEnabled =
 
 const parkTestPaymentSmokeWithWebhook = cloneConfig(parkTestApprovedPaymentSmoke);
 parkTestPaymentSmokeWithWebhook.safetyGates.rollerWebhookProcessingEnabled = true;
+
+const parkTestApprovedPostPaymentSync = cloneConfig(parkTestApprovedPaymentSmoke);
+parkTestApprovedPostPaymentSync.safetyGates.livePostPaymentSyncApproval = 'T0169_POST_PAYMENT_SYNC_APPROVED';
+
+const parkTestPostPaymentSyncWithoutPaymentSmoke = cloneConfig(parkTestConfig);
+parkTestPostPaymentSyncWithoutPaymentSmoke.safetyGates.emergencyStop = true;
+parkTestPostPaymentSyncWithoutPaymentSmoke.safetyGates.livePostPaymentSyncApproval = 'T0169_POST_PAYMENT_SYNC_APPROVED';
 
 const parkTestApprovedLookupSmoke = cloneConfig(parkTestConfig);
 parkTestApprovedLookupSmoke.safetyGates.emergencyStop = true;
@@ -255,6 +263,12 @@ expectFail(
   'park-test payment smoke still blocks webhook processing',
   parkTestPaymentSmokeWithWebhook,
   /rollerWebhookProcessingEnabled/,
+);
+expectPass('approved park-test post-payment sync config passes', parkTestApprovedPostPaymentSync, 'park-test');
+expectFail(
+  'park-test post-payment sync approval without payment smoke fails closed',
+  parkTestPostPaymentSyncWithoutPaymentSmoke,
+  /post-payment sync approval requires/,
 );
 expectPass('approved park-test Live lookup smoke config passes', parkTestApprovedLookupSmoke, 'park-test');
 expectFail(

@@ -1253,7 +1253,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
 
   const resolvePaidDraftBooking = async (draftOverride?: NewBookingDraftResult) => {
     const activeDraft = draftOverride ?? draft;
-    const identifier = activeDraft?.draft.bookingReference ?? activeDraft?.draft.uniqueId;
+    const identifier = activeDraft?.draft.uniqueId ?? activeDraft?.draft.bookingReference;
     if (!identifier || paymentSyncing) return;
 
     setPaymentSyncing(true);
