@@ -10,26 +10,24 @@ No active ticket
 
 ## Status
 
-Closed
+None
 
 ## Goal
 
-No active ticket. T0172 is completed locally as a safe blocker and is ready for review/closeout.
+No active ticket. Next recommended ticket is `T0175` ready-for-entry handout UI.
 
 ## Scope
 
-- Keep this file aligned with `REPO_CURRENT_STATE.md`.
-- Open the next ticket by updating this file on a new ticket branch.
+No active ticket.
 
 ## Allowed Areas
 
-- Source-of-truth docs only when closing or opening a ticket.
+No active ticket.
 
 ## Validation Plan
 
-- `npm run validate`
-- `git diff --check`
+Define validation when the next ticket is activated.
 
 ## Result
 
-T0172 found no documented safe Roller Rest API path for public `email -> booking` lookup. The approved park-test fallback is staff search in Roller Venue Manager by email, then entering the discovered booking code into the T0171 PWA lookup.
+T0173 completed locally. It documented that the first assisted park-test should keep Roller Live webhook processing off and confirm outcomes through scoped REST reads or direct Roller write responses.

@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-29
-- Current branch: `codex/t0172-assisted-email-lookup`
-- Current status: T0172 is completed locally as a safe blocker. T0171 is merged and the read-only assisted booking-code lookup mode remains open for single guest-entered Nacka booking codes for `2026-06-29` through `2026-07-05`, without broad same-day import.
-- Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (171 completed tickets; latest closed `T0172`).
-- Recommended next step: continue with `T0173` webhook and reconciliation readiness.
+- Current branch: `codex/t0173-webhook-reconciliation-readiness`
+- Current status: No active ticket. T0171 assisted booking-code lookup remains open for single guest-entered Nacka booking codes for `2026-06-29` through `2026-07-05`; T0173 keeps Live webhook processing closed for first assisted park-test.
+- Current ticket: `NO_ACTIVE_TICKET`
+- Completed tickets: archived in `docs/history/completed-tickets.md` (172 completed tickets; latest closed `T0173`).
+- Recommended next step: start T0175 ready-for-entry handout UI.
 
 ## Current Structure
 
@@ -55,6 +55,7 @@ History and planning archives:
 - Park-test post-payment booking sync: [docs/t0169-post-payment-booking-sync.md](docs/t0169-post-payment-booking-sync.md)
 - Park-test gate naming and runbook: [docs/t0170-park-test-gate-runbook.md](docs/t0170-park-test-gate-runbook.md)
 - Park-test lookup mode: [docs/t0171-park-test-lookup-mode.md](docs/t0171-park-test-lookup-mode.md)
+- Park-test webhook and reconciliation readiness: [docs/t0173-webhook-reconciliation-readiness.md](docs/t0173-webhook-reconciliation-readiness.md)
 
 Current park-test status:
 
@@ -66,6 +67,7 @@ Current park-test status:
 - Park-test new-booking draft writes and the T0169 post-payment sync gate were closed again after the proof. Live lookup, existing-booking add-ons, redeem writes, staff auth, webhook processing, SMS, and JumpYard-owned email are closed; normal visitor traffic remains gated.
 - T0171's assisted lookup gate is currently deployed open on `LookupHandler` for `2026-06-29` through `2026-07-05`. User-tested booking codes `166797742` and `166741849` were saved as fresh normalized Aurora snapshots. Booking draft writes, add-on writes, redeem writes, staff auth, webhook processing, and guest messaging remain closed.
 - T0172 found no documented safe Roller Rest API path for public guest email lookup. If a visitor lacks their booking code, staff should search Roller Venue Manager by email and enter the discovered booking code into the T0171 PWA lookup.
+- T0173 recommends keeping Live webhook processing closed for the first assisted park-test. Payment/add-on confirmation should use scoped REST refresh; redeem confirmation should use the synchronous Roller `POST /redemptions` success plus Aurora audit and manual Roller fallback if the result is uncertain.
 
 ## Known Validation Commands
 
@@ -87,24 +89,23 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 171
-- Latest closed ticket: `T0172`
+- Archived completed-ticket count: 172
+- Latest closed ticket: `T0173`
 - Current active ticket: None
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | None active. | Closed | T0172 is completed locally as a safe blocker. Recommended next ticket is T0173. |
+| `NO_ACTIVE_TICKET` | None active. | Closed | T0173 completed locally. Recommended next ticket is T0175. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0173` | Webhook and reconciliation readiness. | Planned | Decide REST-refresh versus webhook processing for payment settlement, add-ons, booking updates, and redeem confirmation during park-test. |
-| `T0174` | Frontend redeem rehearsal. | Planned | Love tests the deployed phone/admin redeem flow end to end before a real visitor; exact booking/ticket scope only if another redeem is needed. |
 | `T0175` | Ready-for-entry handout UI. | Planned | Restore visible QR/handoff code and show purchased entry ticket type/duration such as 60/90/120 minutes so staff can choose the correct band/color. |
 | `T0176` | Payment method readiness. | Planned | Investigate card/Apple Pay/Swish behavior in the Roller payment drop-in and decide the approved payment method set before visitor testing. |
+| `T0174` | Frontend redeem rehearsal. | Planned | After T0175/T0176, Love tests the deployed phone/admin redeem flow end to end before a real visitor; exact booking/ticket scope only if another redeem is needed. |
 | `T0177` | Park-test UI/UX readiness. | Planned | Final guest/staff UI pass before assisted visitor testing; no new Live unlock by itself. |
 | `T0178` | Staff-assisted visitor test. | Planned | Limited assisted test after readiness gates, park approval, and runbook. |
 | `T0179` | Outcome and go/no-go. | Planned | Documentation/report only. |
@@ -115,13 +116,13 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- Latest validation is recorded in [docs/t0171-park-test-lookup-mode.md](docs/t0171-park-test-lookup-mode.md) and [docs/history/validation-log.md](docs/history/validation-log.md).
+- Latest validation is recorded in [docs/t0173-webhook-reconciliation-readiness.md](docs/t0173-webhook-reconciliation-readiness.md) and [docs/history/validation-log.md](docs/history/validation-log.md).
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions
 
 - Park-test AWS exists with dedicated API, Aurora, raw bucket, secrets, and gates; current resource details are in [AWS_RESOURCES.md](AWS_RESOURCES.md).
-- Roller Live access, webhook registration, frontend target setup, first quote/cost smoke, first controlled draft smoke, first internal paid booking smoke, controlled lookup, Live catalog/index readiness, guest-detail contact resolution, controlled existing-booking add-on payment, scoped linked add-on settlement reconciliation, controlled Live redeem, T0167 receipt email proof, new-booking add-on visibility, and T0169 post-payment sync have passed for Nacka. Public draft writes, staff auth, broad lookup, existing-booking add-ons, redeem, webhook processing, SMS, and email remain scoped-ticket gated.
+- Roller Live access, webhook registration, frontend target setup, first quote/cost smoke, first controlled draft smoke, first internal paid booking smoke, controlled lookup, Live catalog/index readiness, guest-detail contact resolution, controlled existing-booking add-on payment, scoped linked add-on settlement reconciliation, controlled Live redeem, T0167 receipt email proof, new-booking add-on visibility, T0169 post-payment sync, T0171 assisted lookup, and T0173 webhook-off readiness have passed for Nacka. Public draft writes, staff auth, broad lookup, existing-booking add-ons, redeem, webhook processing, SMS, and email remain scoped-ticket gated.
 - The park-test plan is not an approval to create additional AWS resources, call new Roller Live endpoints, create drafts/payments, redeem additional tickets, or run visitor traffic.
 - Production readiness remains partial; active future work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before the T0128 branch was created.

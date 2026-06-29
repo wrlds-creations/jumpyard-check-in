@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground and park-
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS/Live/Cloudflare setup, controlled smokes, Roller email/post-payment proofs, and T0171 assisted booking-code lookup; write gates remain closed.
+The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has setup, controlled smokes, T0171 lookup, and T0173 webhook-off readiness; write gates remain closed.
 
 ## Context Archives
 
@@ -42,11 +42,11 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Park-test is a separate WRLDS environment in account `376129878018`, region `eu-north-1`, namespace `jumpyard-check-in-park-test`, with server-side Roller Live Nacka access.
 - CDK config validation keeps `dev` Playground-only and `park-test` on the reviewed account/region/prefix/Live/data-classification contract.
 - `infra/config/park-test.json` is synthable, contains no credentials, and uses the reviewed park-test Cloudflare Pages origins for API CORS.
-- T0150 deployed `jumpyard-check-in-park-test-stack`; T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database.
+- T0150 deployed `jumpyard-check-in-park-test-stack`; T0151 applied SQL migrations `0001` through `0008` to park-test Aurora.
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
 - T0152 deployed park-test safety gates in CDK/config and Lambda runtime; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
 - Park-test human gate names are aliases in [docs/t0170-park-test-gate-runbook.md](docs/t0170-park-test-gate-runbook.md); runtime variables stay ticket-numbered until a scoped migration.
-- Park-test has confirmed Live access, webhook `1465`, frontend/CORS, smokes, contact resolution, email proof, add-ons, post-payment sync, and T0171 lookup. Public writes, broad lookup, redeem, webhooks, staff auth, visitor traffic, SMS, and JumpYard-owned email remain gated.
+- Park-test has Live access, webhook `1465`, frontend/CORS, smokes through redeem, email/post-payment proofs, T0171 lookup, and T0173 webhook-off readiness. Public writes, broad lookup, redeem, webhooks, staff auth, visitor traffic, SMS, and JumpYard-owned email remain gated.
 - Park-test post-payment new-booking sync is draft-backed and only refreshes a recent local `new_booking` prepayment draft created by JumpYard Cloud.
 
 ## Current Implemented Flow Facts
@@ -61,8 +61,8 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Park-test new-booking checkout can use a scoped payment-sync smoke mode that opens new-booking draft/payment writes plus lookup of the same locally recorded draft after payment; it is not broad existing-booking lookup.
 - Park-test assisted existing-booking lookup is a single-code/date/venue-scoped read gate for `2026-06-29` through `2026-07-05`; it does not import same-day lists or open writes.
 - Park-test PWA drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; new-booking email delivery is proven, existing-booking add-on delivery remains unproven.
-- Ready-for-entry/staff handout UI must show purchased entry duration, such as 60/90/120 minutes, before assisted visitor testing so staff can choose the correct band/color.
-- Park-test payment-method readiness remains open: card has worked, Apple Pay collapsed on iPhone during the T0169 phone proof, and Swish was not visible in the Roller payment drop-in.
+- Ready-for-entry/staff handout UI must show entry duration (60/90/120 min) before visitor testing so staff choose the band/color.
+- Park-test payment-method readiness remains open: card works, Apple Pay collapsed on iPhone in T0169, and Swish was not visible.
 - Gift card and Klippkort inputs are payment-prep inputs because Roller applies them during booking costs/draft creation.
 - Current V1 membership/`10-Kort` behavior is code validation/amount reduction through `discounts: [{ code }]`, not remaining-visit balance display.
 - SkyRider is the first capacity-gated add-on and requires height/consent before quote/draft/payment side effects.
@@ -78,8 +78,9 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Park-test Aurora now contains the controlled Live booking snapshot for `166447399` from T0160 and the matching prepayment draft `jypd_56a8f1ca817c42a4b7` is marked `published`; this is not a broad booking import or all-day guest list.
 - T0161/T0171 selected REST-on-demand lookup by entered booking code; same-day indexing remains deferred and add-ons stay separately gated.
 - T0172 blocks public email lookup until Roller confirms a narrow API; staff can search Roller by email and enter the booking code in the PWA.
+- T0173 keeps Live webhook processing off for first assisted park-test; payment/add-on state uses scoped REST refresh, and redeem uses direct `POST /redemptions` success plus Aurora audit/manual fallback.
 - Existing-booking add-ons require server-resolved customer contact for the separate linked draft. T0163 confirmed Roller Live booking detail may expose `customerId` while `GET /guests/{customerId}` contains the complete first/last/email/phone contact needed server-side.
-- T0164-T0169 proved existing-booking add-on payment, linked settlement, one exact Live redemption, Roller email delivery, add-on visibility, and post-payment sync. Normal closed `park-test.json` is redeployed, so this is not a broad unlock.
+- T0164-T0169 proved add-on payment, linked settlement, one exact Live redemption, Roller email delivery, add-on visibility, and post-payment sync. Normal closed `park-test.json` is redeployed, so this is not a broad unlock.
 
 ## Security And Operational Constraints
 

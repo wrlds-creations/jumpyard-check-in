@@ -2,6 +2,14 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0173 Webhook And Reconciliation Readiness Validation
+
+- 2026-06-29: T0173 was activated on branch `codex/t0173-webhook-reconciliation-readiness` after T0172 was squash-merged through PR #171.
+- 2026-06-29: Reviewed current webhook registration docs, park-test closed config, webhook handler gating/enrichment behavior, lookup reconciliation, linked add-on settlement, and redeem confirmation paths.
+- 2026-06-29: Documented `docs/t0173-webhook-reconciliation-readiness.md` and D0129: first assisted park-test should keep `ENABLE_ROLLER_WEBHOOK_PROCESSING=false`, use scoped REST reads for payment/add-on state, and use synchronous Roller `POST /redemptions` success plus Aurora audit/manual fallback for redeem confirmation.
+- 2026-06-29: `npm run validate` passed. `git diff --check` passed with existing CRLF normalization warnings only.
+- 2026-06-29: T0173 did not deploy AWS, call Roller Live APIs, query/write Aurora, change Lambda runtime behavior, create drafts/payments/add-ons/refunds/redemptions/webhooks, enable staff auth, process webhooks, send SMS/email, run visitor traffic, print secrets, or expose public PII.
+
 ## T0172 Assisted Email Lookup Validation
 
 - 2026-06-29: T0172 was activated on branch `codex/t0172-assisted-email-lookup` after T0171 was squash-merged through PR #170.
