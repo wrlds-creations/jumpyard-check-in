@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground through a
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, migrations, Live setup, Cloudflare targets, quote/draft/payment/lookup/add-on/settlement/redeem smokes, and all sensitive gates closed again. Receipt/confirmation delivery proof, frontend redeem rehearsal, UI/UX readiness, webhook processing, visitor traffic, payment-start writes, SMS, and email remain gated.
+The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is tracked in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has AWS foundation, Live setup, Cloudflare targets, controlled Live smokes, and one new-booking Roller email proof. Sensitive gates are closed again; remaining readiness work is tracked in the roadmap.
 
 ## Context Archives
 
@@ -38,15 +38,15 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
 - AWS dev is the current implementation environment; non-dev/staging/live work requires separate reviewed config and preflight.
-- Park-test work is gated by scoped tickets; AWS creation, Roller Live reads/writes, existing-booking lookup, product/add-on catalog readiness, booking-index strategy, existing-booking add-ons, webhook registration, payments, receipt/confirmation handling, frontend redeem rehearsal, UI/UX readiness, and redemptions require the approvals listed in the active ticket/backlog.
+- Park-test work is gated by scoped tickets; AWS changes, Roller Live reads/writes, payments, redemptions, webhooks, frontend rehearsal, UI/UX readiness, and visitor traffic require the approvals listed in the active ticket/backlog.
 - Park-test is a separate WRLDS environment in dev's AWS account/region: `376129878018`, `eu-north-1`, namespace `jumpyard-check-in-park-test`, own database/secrets/API/resources, and Roller Live Nacka access only through JumpYard Cloud.
-- CDK config validation now separates `dev` and `park-test`: dev remains Roller Playground-only, while park-test must match the T0146 account/region/resource-prefix/Live-base/data-classification contract and keep `bookingTimeSms.confirmSend=false`.
-- `infra/config/park-test.json` is synthable and uses separate park-test naming/tags/resource prefix. It does not contain credentials and now uses the reviewed park-test Cloudflare Pages origins for API CORS.
+- CDK config validation separates `dev` and `park-test`; dev remains Roller Playground-only, while park-test must match the T0146 account/region/resource-prefix/Live-base/data-classification contract.
+- `infra/config/park-test.json` is synthable, contains no credentials, and uses the reviewed park-test Cloudflare Pages origins for API CORS.
 - T0150 deployed `jumpyard-check-in-park-test-stack`; details are in the T0150 report.
 - T0151 applied SQL migrations `0001` through `0008` to the dedicated park-test Aurora database.
 - Park-test CDK no longer creates the account-wide SNS SMS delivery-status custom resource; that account-level setting remains owned by dev until park-test guest messaging is explicitly scoped.
-- T0152 deployed park-test safety gates in CDK/config and Lambda runtime for staff auth, guest message sends, webhook processing, Roller booking draft writes, Roller redemption writes, and an emergency stop. Dev remains configured for existing Playground behavior; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
-- Park-test has confirmed Roller Live access, webhook `1465`, frontend targets/CORS, quote/draft/payment/lookup/add-on/settlement/redeem smokes, and guest-detail contact resolution. Public draft writes, Live lookup, staff auth, redeem, webhook processing, visitor traffic, SMS, and email are closed again.
+- T0152 deployed park-test safety gates in CDK/config and Lambda runtime; park-test has `JUMPYARD_EMERGENCY_STOP=true` and sensitive gates closed.
+- Park-test has confirmed Roller Live access, webhook `1465`, frontend targets/CORS, controlled Live smokes, guest-detail contact resolution, one new-booking Roller email proof, and the T0168 add-on visibility fix. Public writes/lookup/redeem/webhooks/staff auth/visitor traffic/SMS/email remain gated.
 
 ## Current Implemented Flow Facts
 
@@ -56,7 +56,8 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Staff/admin handoff uses server-owned staff auth in dev and can list, search, inspect, and staff-confirm redeem ready sessions.
 - Buy-entry can create a Roller draft/payment path through JumpYard Cloud using the approved Roller payment package.
 - Existing-booking add-products create a separate linked add-on draft booking; the original Roller booking is not mutated in that path.
-- Park-test PWA new-booking and existing-booking add-on drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; actual Live delivery still needs proof on the next controlled paid PWA transaction after deployment.
+- Park-test Live phone add-on catalog mapping is read-only display/quote-prep data and is separate from existing-booking add-on write gates.
+- Park-test PWA drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; new-booking email delivery is proven, existing-booking add-on delivery remains unproven.
 - Gift card and Klippkort inputs are payment-prep inputs because Roller applies them during booking costs/draft creation.
 - Current V1 membership/`10-Kort` behavior is code validation/amount reduction through `discounts: [{ code }]`, not remaining-visit balance display.
 - SkyRider is the first capacity-gated add-on and requires height/consent before quote/draft/payment side effects.
@@ -72,7 +73,7 @@ The current Sprint 1 API/data contract is documented in [JUMPYARD_CLOUD_CONTRACT
 - Park-test Aurora now contains the controlled Live booking snapshot for `166447399` from T0160 and the matching prepayment draft `jypd_56a8f1ca817c42a4b7` is marked `published`; this is not a broad booking import or all-day guest list.
 - T0161 selected REST-on-demand lookup by entered booking code for the first assisted park test; broad same-day booking indexing remains deferred.
 - Existing-booking add-ons require server-resolved customer contact for the separate linked draft. T0163 confirmed Roller Live booking detail may expose `customerId` while `GET /guests/{customerId}` contains the complete first/last/email/phone contact needed server-side.
-- T0164-T0166 proved the controlled existing-booking add-on payment, linked add-on settlement, and one exact Live ticket redemption for booking `166490323`; details live in the T0164-T0166 reports. The normal closed `park-test.json` config is redeployed, so this is not a broad lookup/add-on/redeem unlock.
+- T0164-T0168 proved the controlled existing-booking add-on payment, linked settlement, one exact Live redemption, Roller new-booking email delivery, and the add-on visibility fix. Post-payment booking sync remains open; normal closed `park-test.json` is redeployed, so this is not a broad lookup/add-on/payment/redeem unlock.
 
 ## Security And Operational Constraints
 

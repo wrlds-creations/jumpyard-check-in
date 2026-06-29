@@ -2,6 +2,15 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0168 New-Booking Add-On Visibility Validation
+
+- 2026-06-29: T0168 was completed on branch `codex/t0168-new-booking-addon-visibility`.
+- 2026-06-29: Code trace found the phone UI hides new-booking add-ons unless availability returns a priced/mappable `type="addon"` product with max quantity above zero.
+- 2026-06-29: Code trace found the BookingHandler only exposed known Nacka Live add-on ids/prices through the old T0162 existing-booking add-on smoke fallback, so T0167's T0159 new-booking payment proof could create the entry booking but did not return priced add-ons to the frontend.
+- 2026-06-29: Updated `infra/lambda/booking/index.js` to separate read-only `LIVE_PHONE_ADDON_PRODUCTS` from the T0162 write/allowlist gate. Known Live add-ons are SkyRider parent `970335` with child `970336`, socks `970338`, lock `970334`, and coffee `970352`.
+- 2026-06-29: T0168 did not call Roller Live, deploy AWS, open Lambda gates, write Aurora rows, create drafts/bookings/payments/refunds/redemptions/webhooks, process webhooks, send SMS/email, run visitor traffic, print secrets, print raw payment JWTs, or expose public PII.
+- 2026-06-29: `node --check infra/lambda/booking/index.js`, `npm --prefix infra run build`, `npm --prefix jumpyard-checkin-phone run lint`, `npm run validate`, `git diff --check`, and `npm run infra:check` passed. Frontend lint reported four existing `@next/next/no-img-element` warnings only. `git diff --check` reported line-ending normalization warnings only.
+
 ## T0167 Receipt And Confirmation Handling Validation
 
 - 2026-06-25: T0167 was activated on branch `codex/t0167-receipt-confirmation-handling` after T0166 was squash-merged through PR #165.
