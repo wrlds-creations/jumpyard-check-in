@@ -173,7 +173,13 @@ After Love tested a real card purchase, a POS-created booking, add-ons, safety, 
 - Add-on review rows now show product, quantity, unit price, and row total before payment.
 - Lookup normalization now keeps Roller booking/customer display name and customer id when returned by Roller, and assisted lookup refreshes from Roller when the local cache lacks a display name. This is intended to prevent POS-created bookings from appearing as only `Gäst` in the phone/admin handoff surfaces.
 
-This fix pass is code-only so far. It has not been deployed to AWS or Cloudflare yet; deploy/merge is required before the park-test URLs show these changes.
+Deployment/readback after PR #176:
+
+- PR #176 was squash-merged to `main` as commit `e3c5d58`.
+- Cloudflare Pages production deployments for both `jumpyard-check-in-park-test` and `jumpyard-checkin-admin-park-test` report source commit `e3c5d58`.
+- The deployed phone bundle contains the park-test API id `ij4rnaui2b` and does not contain the dev API id `m0uo5g4mde`.
+- CDK diff for `infra/config/park-test-full-flow-rehearsal.json` showed only the existing `LookupHandler` Lambda code hash changing.
+- `npm --prefix infra run deploy:park-test-full-flow-rehearsal` completed with CloudFormation `UPDATE_COMPLETE`; readback confirmed `LookupHandler` was modified at `2026-06-29T14:18:15.000+0000` and kept post-payment sync plus assisted lookup open for Nacka `50871` and dates `2026-06-29` through `2026-07-05`.
 
 ## Validation
 
@@ -197,7 +203,19 @@ This fix pass is code-only so far. It has not been deployed to AWS or Cloudflare
 - `npm --prefix jumpyard-checkin-phone run build` passed with existing `baseline-browser-mapping` notices only.
 - `npm run validate`
 - `git diff --check` passed with existing CRLF normalization warnings only.
+- `gh pr merge 176 --squash --delete-branch` merged PR #176 to `main`.
+- `npx --yes wrangler pages deployment list --project-name jumpyard-check-in-park-test` confirmed production source `e3c5d58`.
+- `npx --yes wrangler pages deployment list --project-name jumpyard-checkin-admin-park-test` confirmed production source `e3c5d58`.
+- Remote phone bundle check confirmed `ContainsParkTestApi=true` and `ContainsDevApi=false`.
+- `npm --prefix infra run synth:park-test-full-flow-rehearsal`
+- `npm --prefix infra run diff:park-test-full-flow-rehearsal` showed only `LookupHandler` code changing.
+- `npm --prefix infra run deploy:park-test-full-flow-rehearsal`
+- AWS CloudFormation readback confirmed stack `UPDATE_COMPLETE`.
+- AWS Lambda readback confirmed `LookupHandler` keeps `ENABLE_T0169_POST_PAYMENT_SYNC=true`, `ENABLE_T0171_ASSISTED_LOOKUP=true`, approved dates `2026-06-29` through `2026-07-05`, venue `50871`, and `JUMPYARD_EMERGENCY_STOP=true`.
+- Public park-test phone/admin URLs returned HTTP `200`.
+- CORS preflight from `https://jumpyard-check-in-park-test.pages.dev` to `POST /v1/check-in/lookup` returned HTTP `204`.
+- Read-only `POST /v1/bookings/availability` for `2026-06-29 13:30` returned HTTP `200`, status `available`, one slot, and ten products; no draft booking was created.
 
 ## Result
 
-T0176 is ready for Love's manual full-flow rehearsal. The deployed park-test API currently opens new booking/payment, post-payment sync, assisted Nacka/date-scoped lookup, existing-booking add-ons, staff auth, and Nacka/date-scoped redeem. Webhook processing, guest SMS/email sends, and broad imports remain closed. The manual feedback fix pass is implemented and validated in code, but still needs deploy/merge before it is visible on the park-test URLs.
+T0176 is ready for Love's manual full-flow rehearsal. The deployed park-test API currently opens new booking/payment, post-payment sync, assisted Nacka/date-scoped lookup, existing-booking add-ons, staff auth, and Nacka/date-scoped redeem. Webhook processing, guest SMS/email sends, and broad imports remain closed. The manual feedback fix pass is merged, deployed to Cloudflare production for phone/admin, and deployed to the park-test `LookupHandler`.

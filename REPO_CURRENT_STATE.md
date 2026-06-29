@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-29
-- Current branch: `codex/t0176-frontend-redeem-rehearsal`
-- Current status: T0176 full-flow rehearsal is deployed for Love's manual test. Nacka/date-scoped payment, lookup, add-ons, staff auth, and redeem are open; webhook processing, SMS, and JumpYard email remain closed.
+- Current branch: `main`
+- Current status: T0176 full-flow rehearsal and manual feedback fix pass are deployed for Love's manual test. Nacka/date-scoped payment, lookup, add-ons, staff auth, and redeem are open; webhook processing, SMS, and JumpYard email remain closed.
 - Current ticket: `T0176`
 - Completed tickets: archived in `docs/history/completed-tickets.md` (174 completed tickets; latest closed `T0175`).
-- Recommended next step: Commit/merge/deploy the T0176 manual feedback fix pass, then Love retests the park-test phone/admin flow before closing the window with normal `park-test.json`.
+- Recommended next step: Love retests the park-test phone/admin flow, then close the window with normal `park-test.json`.
 
 ## Current Structure
 
@@ -74,7 +74,7 @@ Current park-test status:
 - T0173 recommends keeping Live webhook processing closed for the first assisted park-test. Payment/add-on confirmation should use scoped REST refresh; redeem confirmation should use the synchronous Roller `POST /redemptions` success plus Aurora audit and manual Roller fallback if the result is uncertain.
 - T0174 restores the ready-for-entry handout UI: the phone final screen shows a visible QR/handoff code and entry product/duration, and the admin handout detail groups wristbands by duration when available.
 - T0175 adds the Apple Pay domain-association file and Cloudflare `_headers` rule to the phone app. The association file is live on `https://jumpyard-check-in-park-test.pages.dev/.well-known/apple-developer-merchantid-domain-association`; Apple Pay opens on iPhone but collapses at processing, so the code track is paused pending Pabel/Roller/Adyen logs and card remains fallback.
-- T0176 currently deploys an assisted full-flow rehearsal window; webhook/message gates remain closed. A code-only manual feedback fix pass now updates ready-for-entry handout copy/icons, product quantities, existing-booking add-on loading/review/socks defaults, and POS booking display-name normalization; it still needs deploy/merge before the park-test URLs show it.
+- T0176 currently deploys an assisted full-flow rehearsal window; webhook/message gates remain closed. PR #176 merged and deployed the manual feedback fix pass: Cloudflare phone/admin production deployments read back source `e3c5d58`, the phone bundle points at the park-test API rather than dev, and the park-test `LookupHandler` was redeployed with only code changes.
 
 ## Known Validation Commands
 
