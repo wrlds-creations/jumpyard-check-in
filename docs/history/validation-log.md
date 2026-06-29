@@ -2,6 +2,20 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0175 Payment Method Readiness Validation
+
+- 2026-06-29: T0175 was activated on branch `codex/t0175-payment-method-readiness` after T0174 was squash-merged through PR #173.
+- 2026-06-29: Inspected `RollerPaymentDropIn`, the vendored Roller `@roller/ecom-payments` wrapper, and BookingHandler payment settings normalization.
+- 2026-06-29: Reviewed prior T0159/T0167/T0169 payment evidence and official Adyen Apple Pay/Swish/payment-method management docs.
+- 2026-06-29: Public domain checks found both `https://jumpyard-check-in-park-test.pages.dev/.well-known/apple-developer-merchantid-domain-association` and `https://jumpyard-check-in.pages.dev/.well-known/apple-developer-merchantid-domain-association` returned HTTP `404` before the fix.
+- 2026-06-29: Added the Adyen Apple Pay domain-association file to `jumpyard-checkin-phone/public/.well-known/apple-developer-merchantid-domain-association`; SHA-256 `8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6`, length `9094`.
+- 2026-06-29: Added `jumpyard-checkin-phone/public/_headers` so Cloudflare Pages serves the association path as `text/plain`.
+- 2026-06-29: `npm --prefix jumpyard-checkin-phone run build` passed and confirmed the association file exports to `jumpyard-checkin-phone/out/.well-known/apple-developer-merchantid-domain-association` with matching SHA-256.
+- 2026-06-29: Documented `docs/t0175-payment-method-readiness.md` and D0131: Apple Pay should be actively unblocked before the park test, but still requires deploy, Roller/Adyen domain registration/approval, and iPhone smoke proof; card remains fallback if Apple Pay is not proven before Wednesday.
+- 2026-06-29: Added FU-094 for Roller/Adyen/Pabel/Josh confirmation of Apple Pay enablement, park-test domain approval, merchant-validation errors, and separate Swish coexistence.
+- 2026-06-29: `npm run validate` passed. `git diff --check` passed with existing CRLF normalization warnings only.
+- 2026-06-29: T0175 did not deploy AWS, call/write Roller Live, query/write Aurora, create drafts/payments/refunds/redemptions/webhooks, process webhooks, send SMS/email, run visitor traffic, print secrets, print raw payment JWTs, or expose public PII.
+
 ## T0174 Ready-For-Entry Handout UI Validation
 
 - 2026-06-29: T0174 was activated on branch `codex/t0174-ready-entry-handout-ui` after T0173 was squash-merged through PR #172.

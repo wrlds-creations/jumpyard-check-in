@@ -62,7 +62,7 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 - Park-test assisted existing-booking lookup is a single-code/date/venue-scoped read gate for `2026-06-29` through `2026-07-05`; it does not import same-day lists or open writes.
 - Park-test PWA drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; new-booking email delivery is proven, existing-booking add-on delivery remains unproven.
 - Ready-for-entry/staff handout UI shows QR/handoff code plus entry duration/ticket type before visitor testing.
-- Park-test payment-method readiness remains open: card works, Apple Pay collapsed on iPhone, and Swish was not visible.
+- Park-test Apple Pay has the Adyen domain-association file locally; deploy, Roller/Adyen approval, and iPhone smoke remain.
 - Gift card and Klippkort inputs are payment-prep inputs because Roller applies them during booking costs/draft creation.
 - Current V1 membership/`10-Kort` behavior is code validation/amount reduction through `discounts: [{ code }]`, not remaining-visit balance display.
 - SkyRider is the first capacity-gated add-on and requires height/consent before quote/draft/payment side effects.
@@ -97,7 +97,7 @@ Repository source-of-truth workflow docs, ticket summaries, decisions, validator
 
 - Production readiness remains partial and should be handled through scoped future tickets, not opportunistic context hygiene.
 - Main staging/live blockers include production environment config, route auth/WAF or equivalent edge protection, alarm notification routing, SMS/SES production access, sender/domain setup, dev-token replacement, retention policy, deployment rollback, live backfill/cutover, and webhook production verification.
-- Payment must stay on Roller's approved package. Card works in Roller Live for Nacka, but Swish/Apple Pay visibility is venue/payment/domain configuration and must be resolved or accepted as out of scope before visitor testing.
+- Payment must stay on Roller's approved package; method visibility is Roller/Adyen controlled.
 
 ## Current Open Questions
 
