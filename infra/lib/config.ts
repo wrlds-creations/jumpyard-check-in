@@ -29,6 +29,7 @@ const PARK_TEST_RESOURCE_PREFIX = 'jumpyard-check-in-park-test';
 export const PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL = 'T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED';
 export const PARK_TEST_POST_PAYMENT_SYNC_APPROVAL = 'T0169_POST_PAYMENT_SYNC_APPROVED';
 export const PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL = 'T0160_LIVE_LOOKUP_SMOKE_APPROVED';
+export const PARK_TEST_ASSISTED_LOOKUP_APPROVAL = 'T0171_ASSISTED_LOOKUP_APPROVED';
 export const PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL = 'T0162_EXISTING_BOOKING_ADDON_SMOKE_APPROVED';
 export const PARK_TEST_LINKED_ADD_ON_SETTLEMENT_APPROVAL =
   'T0165_LINKED_ADDON_SETTLEMENT_RECONCILIATION_APPROVED';
@@ -70,6 +71,9 @@ export interface JumpYardCloudConfig {
     readonly liveAddOnSmokeApproval?: string;
     readonly liveLinkedAddOnSettlementAllowedIdentifiers: readonly string[];
     readonly liveLinkedAddOnSettlementApproval?: string;
+    readonly liveAssistedLookupAllowedOperatingDates: readonly string[];
+    readonly liveAssistedLookupApproval?: string;
+    readonly liveAssistedLookupVenueId?: string;
     readonly liveLookupSmokeAllowedIdentifiers: readonly string[];
     readonly liveLookupSmokeApproval?: string;
     readonly livePaymentSmokeApproval?: string;
@@ -120,6 +124,9 @@ interface RawConfig {
     readonly liveAddOnSmokeApproval?: unknown;
     readonly liveLinkedAddOnSettlementAllowedIdentifiers?: unknown;
     readonly liveLinkedAddOnSettlementApproval?: unknown;
+    readonly liveAssistedLookupAllowedOperatingDates?: unknown;
+    readonly liveAssistedLookupApproval?: unknown;
+    readonly liveAssistedLookupVenueId?: unknown;
     readonly liveLookupSmokeAllowedIdentifiers?: unknown;
     readonly liveLookupSmokeApproval?: unknown;
     readonly livePaymentSmokeApproval?: unknown;
@@ -276,6 +283,8 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     input.safetyGates.livePostPaymentSyncApproval === PARK_TEST_POST_PAYMENT_SYNC_APPROVAL;
   const liveLookupSmokeApproved =
     input.safetyGates.liveLookupSmokeApproval === PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL;
+  const liveAssistedLookupApproved =
+    input.safetyGates.liveAssistedLookupApproval === PARK_TEST_ASSISTED_LOOKUP_APPROVAL;
   const liveAddOnSmokeApproved =
     input.safetyGates.liveAddOnSmokeApproval === PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL;
   const liveLinkedAddOnSettlementApproved =
@@ -347,6 +356,45 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     throw new Error(
       'park-test safetyGates.liveLookupSmokeAllowedIdentifiers must stay empty until a scoped lookup ticket enables it.',
     );
+  }
+
+  if (liveAssistedLookupApproved && input.safetyGates.liveAssistedLookupAllowedOperatingDates.length === 0) {
+    throw new Error(
+      'park-test assisted lookup approval requires safetyGates.liveAssistedLookupAllowedOperatingDates.',
+    );
+  }
+
+  for (const date of input.safetyGates.liveAssistedLookupAllowedOperatingDates) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new Error('park-test safetyGates.liveAssistedLookupAllowedOperatingDates must use YYYY-MM-DD dates.');
+    }
+  }
+
+  if (!liveAssistedLookupApproved && input.safetyGates.liveAssistedLookupAllowedOperatingDates.length > 0) {
+    throw new Error(
+      'park-test safetyGates.liveAssistedLookupAllowedOperatingDates must stay empty until assisted lookup is approved.',
+    );
+  }
+
+  if (liveAssistedLookupApproved && !input.safetyGates.liveAssistedLookupVenueId) {
+    throw new Error('park-test assisted lookup approval requires safetyGates.liveAssistedLookupVenueId.');
+  }
+
+  if (!liveAssistedLookupApproved && input.safetyGates.liveAssistedLookupVenueId) {
+    throw new Error(
+      'park-test safetyGates.liveAssistedLookupVenueId must stay empty until assisted lookup is approved.',
+    );
+  }
+
+  if (
+    liveAssistedLookupApproved &&
+    (livePaymentSmokeApproved ||
+      livePostPaymentSyncApproved ||
+      liveAddOnSmokeApproved ||
+      liveLinkedAddOnSettlementApproved ||
+      liveRedeemSmokeApproved)
+  ) {
+    throw new Error('park-test assisted lookup approval must not be combined with payment, add-on, settlement, or redeem approvals.');
   }
 
   if (liveRedeemSmokeApproved && input.safetyGates.liveRedeemSmokeAllowedIdentifiers.length === 0) {
@@ -557,6 +605,20 @@ function readSafetyGatesConfig(raw: RawConfig['safetyGates']): JumpYardCloudConf
       raw?.liveLinkedAddOnSettlementApproval,
       '',
       'safetyGates.liveLinkedAddOnSettlementApproval',
+    ),
+    liveAssistedLookupAllowedOperatingDates: readOptionalStringArray(
+      raw?.liveAssistedLookupAllowedOperatingDates,
+      'safetyGates.liveAssistedLookupAllowedOperatingDates',
+    ),
+    liveAssistedLookupApproval: readOptionalString(
+      raw?.liveAssistedLookupApproval,
+      '',
+      'safetyGates.liveAssistedLookupApproval',
+    ),
+    liveAssistedLookupVenueId: readOptionalString(
+      raw?.liveAssistedLookupVenueId,
+      '',
+      'safetyGates.liveAssistedLookupVenueId',
     ),
     liveLookupSmokeAllowedIdentifiers: readOptionalStringArray(
       raw?.liveLookupSmokeAllowedIdentifiers,

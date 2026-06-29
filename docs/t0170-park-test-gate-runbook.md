@@ -20,6 +20,7 @@ Think of `infra/config/*.json` as the recipe, CDK deploy as the person putting t
 | New booking/payment smoke config | `infra/config/park-test-live-payment-smoke.json` |
 | New booking/payment sync smoke config | `infra/config/park-test-live-payment-sync-smoke.json` |
 | Existing booking lookup smoke config | `infra/config/park-test-live-lookup-smoke.json` |
+| Assisted existing-booking lookup config | `infra/config/park-test-assisted-lookup.json` |
 | Existing booking add-on smoke config | `infra/config/park-test-live-addon-smoke.json` |
 | Linked add-on settlement smoke config | `infra/config/park-test-live-addon-settlement-smoke.json` |
 | Controlled redeem smoke config | `infra/config/park-test-live-redeem-smoke.json` |
@@ -34,7 +35,8 @@ Think of `infra/config/*.json` as the recipe, CDK deploy as the person putting t
 | Emergency stop | Default stop layer for park-test handlers. Some smoke paths can pass through only when their own narrow gate is approved. | `safetyGates.emergencyStop` | `JUMPYARD_EMERGENCY_STOP` | `true` | Keep on under the current model. Open only scoped service doors, not the whole building. |
 | New booking + payment writes | Creating a new Roller Live draft/payment through the public park-test API. | `safetyGates.rollerBookingDraftWritesEnabled`, `safetyGates.livePaymentSmokeApproval` | `ENABLE_ROLLER_BOOKING_DRAFT_WRITES`, `ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES` | `false`, empty approval | Closed except controlled checkout tests. T0169 must fix post-payment sync before this is comfortable for visitor use. |
 | Post-payment new-booking sync | After a new booking is paid, reading that same Roller Live booking by the locally stored draft id and saving the finished snapshot to park-test Aurora. | `safetyGates.livePostPaymentSyncApproval` plus the new booking/payment write approval | `ENABLE_T0169_POST_PAYMENT_SYNC` in the Lookup Lambda | empty approval | Closed except T0169 checkout tests. It only accepts draft ids already created by our own backend in `jumpyard.prepayment_booking_drafts`. |
-| Existing booking lookup | Reading a real Roller Live booking by code/id and writing a normalized snapshot to park-test Aurora. | `safetyGates.liveLookupSmokeApproval`, `safetyGates.liveLookupSmokeAllowedIdentifiers` | `ENABLE_T0160_LIVE_LOOKUP_SMOKE`, `T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS` | empty approval, empty allowlist | T0171 should replace exact-booking smoke behavior with an approved Nacka/date-scoped assisted lookup mode. |
+| Existing booking lookup smoke | Reading one exact Roller Live booking by allowlisted code/id and writing a normalized snapshot to park-test Aurora. | `safetyGates.liveLookupSmokeApproval`, `safetyGates.liveLookupSmokeAllowedIdentifiers` | `ENABLE_T0160_LIVE_LOOKUP_SMOKE`, `T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS` | empty approval, empty allowlist | Keep as a narrow smoke/debug mode, not the first visitor posture. |
+| Assisted existing booking lookup | Reading a single guest-entered Roller Live booking code/id for the approved Nacka/date park-test window, then writing only that normalized snapshot to Aurora. | `safetyGates.liveAssistedLookupApproval`, `safetyGates.liveAssistedLookupAllowedOperatingDates`, `safetyGates.liveAssistedLookupVenueId` | `ENABLE_T0171_ASSISTED_LOOKUP`, `T0171_ASSISTED_LOOKUP_ALLOWED_OPERATING_DATES`, `T0171_ASSISTED_LOOKUP_VENUE_ID` | empty approval, empty date list, empty venue id | Planned park-test lookup posture after T0171 validation. Reads existing booking items/add-ons/tickets only; no broad import, payment, add-on write, redeem, webhook, staff auth, SMS, or email. |
 | Existing booking add-ons | Creating a separate linked add-on draft/payment for a real existing Roller Live booking. | `safetyGates.rollerBookingDraftWritesEnabled`, `safetyGates.liveAddOnSmokeApproval`, `safetyGates.liveAddOnSmokeAllowedIdentifiers` | `ENABLE_ROLLER_BOOKING_DRAFT_WRITES`, `ENABLE_T0162_LIVE_ADDON_SMOKE`, `T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS` | `false`, empty approval, empty allowlist | Closed until lookup/contact/payment recovery is ready for the park-test scenario. |
 | Linked add-on settlement | Refreshing/reconciling a paid linked add-on booking back into Aurora state. | `safetyGates.liveLinkedAddOnSettlementApproval`, `safetyGates.liveLinkedAddOnSettlementAllowedIdentifiers` | `ENABLE_T0165_LINKED_ADDON_SETTLEMENT`, `T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS` | empty approval, empty allowlist | Closed except a named settlement/reconciliation proof. T0172 decides whether webhook processing helps here. |
 | Redeem/check-in writes | Staff/admin redemption against Roller Live tickets. This consumes real tickets. | `safetyGates.rollerRedeemWritesEnabled`, `safetyGates.staffAuthEnabled`, `safetyGates.liveRedeemSmokeApproval`, `safetyGates.liveRedeemSmokeAllowedIdentifiers` | `ENABLE_ROLLER_REDEEM_WRITES`, `ENABLE_STAFF_AUTH`, `ENABLE_T0166_LIVE_REDEEM_SMOKE`, `T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS` | `false`, `false`, empty approval, empty allowlist | Closed until frontend redeem rehearsal and UI/UX readiness. Any earlier proof must name exact booking/ticket identifiers. |
@@ -66,6 +68,7 @@ Think of `infra/config/*.json` as the recipe, CDK deploy as the person putting t
 | New booking/payment smoke | `infra/config/park-test-live-payment-smoke.json` | New booking draft/payment write gate only. |
 | New booking/payment sync smoke | `infra/config/park-test-live-payment-sync-smoke.json` | New booking draft/payment write gate plus lookup of the same locally recorded draft after payment. |
 | Existing booking lookup smoke | `infra/config/park-test-live-lookup-smoke.json` | Exact allowlisted booking lookup only. |
+| Assisted existing-booking lookup | `infra/config/park-test-assisted-lookup.json` | Guest-entered booking-code/UUID lookup only for the approved Nacka/date window. |
 | Existing booking add-on smoke | `infra/config/park-test-live-addon-smoke.json` | Exact allowlisted lookup plus exact allowlisted linked add-on write. |
 | Linked add-on settlement smoke | `infra/config/park-test-live-addon-settlement-smoke.json` | Exact allowlisted settlement/reconciliation lookup only. |
 | Controlled redeem smoke | `infra/config/park-test-live-redeem-smoke.json` | Exact allowlisted lookup, staff auth, and exact ticket redemption. |
@@ -78,7 +81,7 @@ The expected assisted park-test posture is not "open everything." It is a short 
 |---|---|---|
 | Visitor creates a new booking and pays | New booking + payment writes, post-payment sync/recovery | T0169 before visitor use |
 | Visitor pays with the intended park-test method | New booking + payment writes; payment method availability stays controlled by Roller/Adyen payment configuration | T0175 before visitor use if Apple Pay/Swish are required, or document card-only as the approved test posture |
-| Visitor enters an existing booking code | Existing booking lookup | T0171 before visitor use |
+| Visitor enters an existing booking code | Assisted existing booking lookup | T0171 before visitor use |
 | Visitor buys socks or another add-on for an existing booking | Existing booking lookup, existing booking add-ons, linked settlement/reconciliation | T0171, T0172, and a scoped reopen of the add-on path |
 | Staff can hand out correct entry band/color | No AWS gate by itself; phone/admin UI must show a visible QR/handoff code plus purchased ticket type/duration such as 60/90/120 minutes | T0174 before final UI/UX readiness |
 | Staff completes check-in | Staff auth, redeem/check-in writes | T0173 frontend rehearsal and T0176 UI/UX readiness before visitor use |
@@ -106,7 +109,7 @@ Useful readback after deployment is to inspect the relevant Lambda environment v
 | Handler | Closed values to verify |
 |---|---|
 | Booking Lambda | `ENABLE_ROLLER_BOOKING_DRAFT_WRITES=false`, `ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES=false`, `ENABLE_T0162_LIVE_ADDON_SMOKE=false` |
-| Lookup Lambda | `ENABLE_T0160_LIVE_LOOKUP_SMOKE=false`, `T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS=` empty, `ENABLE_T0165_LINKED_ADDON_SETTLEMENT=false`, `ENABLE_T0169_POST_PAYMENT_SYNC=false` |
+| Lookup Lambda | `ENABLE_T0160_LIVE_LOOKUP_SMOKE=false`, `T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS=` empty, `ENABLE_T0165_LINKED_ADDON_SETTLEMENT=false`, `ENABLE_T0169_POST_PAYMENT_SYNC=false`, `ENABLE_T0171_ASSISTED_LOOKUP=false`, `T0171_ASSISTED_LOOKUP_ALLOWED_OPERATING_DATES=` empty, `T0171_ASSISTED_LOOKUP_VENUE_ID=` empty |
 | Redeem Lambda | `ENABLE_ROLLER_REDEEM_WRITES=false`, `ENABLE_T0166_LIVE_REDEEM_SMOKE=false`, `T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS=` empty |
 | Session Lambda | `ENABLE_STAFF_AUTH=false`, `ENABLE_GUEST_MESSAGE_SENDS=false` |
 | Webhook Lambda | `ENABLE_ROLLER_WEBHOOK_PROCESSING=false` |

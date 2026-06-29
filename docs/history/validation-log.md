@@ -2,6 +2,21 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0171 Park-Test Lookup Mode Validation
+
+- 2026-06-29: T0171 was activated on branch `codex/t0171-park-test-lookup-mode`.
+- 2026-06-29: Added separate assisted lookup config `infra/config/park-test-assisted-lookup.json`, approval phrase `T0171_ASSISTED_LOOKUP_APPROVED`, config guard fields `liveAssistedLookupApproval`, `liveAssistedLookupAllowedOperatingDates`, and `liveAssistedLookupVenueId`, plus Lookup Lambda env vars `ENABLE_T0171_ASSISTED_LOOKUP`, `T0171_ASSISTED_LOOKUP_ALLOWED_OPERATING_DATES`, and `T0171_ASSISTED_LOOKUP_VENUE_ID`.
+- 2026-06-29: Lookup runtime now accepts the assisted gate only for 6-9 digit booking-reference-like numeric ids or Roller UUIDs, rejects name/email/phone-style free-form lookup input, validates returned booking dates against the approved operating date list before Aurora writes, and rejects mismatched venue id if Roller returns one. Existing normalized booking items, add-ons, and tickets remain preserved in the lookup response/snapshot.
+- 2026-06-29: `npm --prefix infra run build`, `npm --prefix infra run validate:config-guards`, `npm --prefix infra run validate:park-test-synth`, `npm --prefix infra run synth:park-test-assisted-lookup`, `node --check infra/lambda/lookup/index.js`, `npm run validate`, and `git diff --check` passed. The synth printed existing CDK notice `37949`; `git diff --check` reported existing CRLF normalization warnings only.
+- 2026-06-29: The approved date window was expanded from only `2026-06-29` to `2026-06-29` through `2026-07-05` so office testing and the Wednesday park-test day are covered by the same assisted lookup gate.
+- 2026-06-29: AWS identity was verified as account `376129878018`, region `eu-north-1`, assumed role `AWSReservedSSO_AdministratorAccess_8a2502e60c822ae0/Love`.
+- 2026-06-29: `npx cdk diff -c config=./config/park-test-assisted-lookup.json --profile wrlds-dev --method=template` showed only existing `LookupHandler` code plus three new T0171 environment variables. `npm --prefix infra run deploy:park-test-assisted-lookup` reached `UPDATE_COMPLETE`.
+- 2026-06-29: Lambda readback confirmed lookup `ENABLE_T0171_ASSISTED_LOOKUP=true`, allowed dates `2026-06-29,2026-06-30,2026-07-01,2026-07-02,2026-07-03,2026-07-04,2026-07-05`, venue `50871`, T0160/T0165/T0169 off, and `JUMPYARD_EMERGENCY_STOP=true`. Booking draft writes, add-on writes, redeem writes, staff auth, guest messaging, and webhook processing read back closed.
+- 2026-06-29: Negative API checks passed: email-like input returned `403 live_lookup_not_allowed`; old booking `166490323` returned `403 live_lookup_not_allowed` because it is outside the approved operating date window.
+- 2026-06-29: User-tested booking-code lookups for the office/park-test window succeeded; safe Aurora readback confirmed `166797742` and `166741849` were stored as fresh normalized Nacka snapshots with booking items/tickets present and no public PII output.
+- 2026-06-29: T0171 was closed in source-of-truth docs: `CODEX_TASK.md` moved to `NO_ACTIVE_TICKET`, `REPO_CURRENT_STATE.md` moved to none active, `docs/roadmap/backlog.md` removed T0171 from Now, `docs/history/completed-tickets.md` lists T0171 as completed, and the next-ticket sequence was shifted to insert new T0172 assisted email lookup before webhook/reconciliation readiness.
+- 2026-06-29: T0171 did not create drafts/payments/refunds/redemptions/webhooks, enable add-on writes, enable staff auth, process webhooks, send SMS/email, run visitor traffic, print secrets, or expose public PII.
+
 ## T0170 Park-Test Gate Naming And Runbook Validation
 
 - 2026-06-29: T0170 was completed locally on branch `codex/t0170-park-test-gate-runbook`.

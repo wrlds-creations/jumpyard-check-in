@@ -39,6 +39,9 @@ interface TestConfig {
     guestMessagingSendsEnabled: boolean;
     liveAddOnSmokeAllowedIdentifiers?: string[];
     liveAddOnSmokeApproval?: string;
+    liveAssistedLookupAllowedOperatingDates?: string[];
+    liveAssistedLookupApproval?: string;
+    liveAssistedLookupVenueId?: string;
     liveLinkedAddOnSettlementAllowedIdentifiers?: string[];
     liveLinkedAddOnSettlementApproval?: string;
     liveLookupSmokeAllowedIdentifiers?: string[];
@@ -168,6 +171,30 @@ delete parkTestAllowedIdentifiersWithoutLookupApproval.safetyGates.liveLookupSmo
 const parkTestLookupSmokeWithRedeem = cloneConfig(parkTestApprovedLookupSmoke);
 parkTestLookupSmokeWithRedeem.safetyGates.rollerRedeemWritesEnabled = true;
 
+const parkTestApprovedAssistedLookup = cloneConfig(parkTestConfig);
+parkTestApprovedAssistedLookup.safetyGates.emergencyStop = true;
+parkTestApprovedAssistedLookup.safetyGates.liveAssistedLookupApproval = 'T0171_ASSISTED_LOOKUP_APPROVED';
+parkTestApprovedAssistedLookup.safetyGates.liveAssistedLookupAllowedOperatingDates = ['2026-06-29'];
+parkTestApprovedAssistedLookup.safetyGates.liveAssistedLookupVenueId = '50871';
+
+const parkTestAssistedLookupWithoutDates = cloneConfig(parkTestApprovedAssistedLookup);
+parkTestAssistedLookupWithoutDates.safetyGates.liveAssistedLookupAllowedOperatingDates = [];
+
+const parkTestAssistedLookupWithoutVenue = cloneConfig(parkTestApprovedAssistedLookup);
+delete parkTestAssistedLookupWithoutVenue.safetyGates.liveAssistedLookupVenueId;
+
+const parkTestAssistedLookupDatesWithoutApproval = cloneConfig(parkTestApprovedAssistedLookup);
+delete parkTestAssistedLookupDatesWithoutApproval.safetyGates.liveAssistedLookupApproval;
+delete parkTestAssistedLookupDatesWithoutApproval.safetyGates.liveAssistedLookupVenueId;
+
+const parkTestAssistedLookupVenueWithoutApproval = cloneConfig(parkTestApprovedAssistedLookup);
+delete parkTestAssistedLookupVenueWithoutApproval.safetyGates.liveAssistedLookupApproval;
+parkTestAssistedLookupVenueWithoutApproval.safetyGates.liveAssistedLookupAllowedOperatingDates = [];
+
+const parkTestAssistedLookupWithPaymentSmoke = cloneConfig(parkTestApprovedAssistedLookup);
+parkTestAssistedLookupWithPaymentSmoke.safetyGates.rollerBookingDraftWritesEnabled = true;
+parkTestAssistedLookupWithPaymentSmoke.safetyGates.livePaymentSmokeApproval = 'T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED';
+
 const parkTestApprovedAddOnSmoke = cloneConfig(parkTestConfig);
 parkTestApprovedAddOnSmoke.safetyGates.emergencyStop = true;
 parkTestApprovedAddOnSmoke.safetyGates.rollerBookingDraftWritesEnabled = true;
@@ -285,6 +312,32 @@ expectFail(
   'park-test lookup smoke still blocks redeem writes',
   parkTestLookupSmokeWithRedeem,
   /rollerRedeemWritesEnabled/,
+);
+expectPass('approved park-test assisted lookup config passes', parkTestApprovedAssistedLookup, 'park-test');
+expectFail(
+  'park-test assisted lookup approval without operating dates fails closed',
+  parkTestAssistedLookupWithoutDates,
+  /liveAssistedLookupAllowedOperatingDates/,
+);
+expectFail(
+  'park-test assisted lookup approval without venue id fails closed',
+  parkTestAssistedLookupWithoutVenue,
+  /liveAssistedLookupVenueId/,
+);
+expectFail(
+  'park-test assisted lookup operating dates without approval fail closed',
+  parkTestAssistedLookupDatesWithoutApproval,
+  /liveAssistedLookupAllowedOperatingDates must stay empty/,
+);
+expectFail(
+  'park-test assisted lookup venue id without approval fails closed',
+  parkTestAssistedLookupVenueWithoutApproval,
+  /liveAssistedLookupVenueId must stay empty/,
+);
+expectFail(
+  'park-test assisted lookup cannot combine with payment smoke',
+  parkTestAssistedLookupWithPaymentSmoke,
+  /must not be combined/,
 );
 expectPass('approved park-test Live add-on smoke config passes', parkTestApprovedAddOnSmoke, 'park-test');
 expectFail(

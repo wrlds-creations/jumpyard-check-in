@@ -20,6 +20,7 @@ let cachedProducts = null;
 
 exports.handler = async (event) => {
   let correlationId = createCorrelationId();
+  let parkTestAccess = { ok: true, mode: 'not_park_test' };
 
   try {
     const request = parseRequest(event);
@@ -36,7 +37,7 @@ exports.handler = async (event) => {
     }
 
     if (isParkTestEnvironment()) {
-      const parkTestAccess = await validateParkTestLookupAccess(request.identifier);
+      parkTestAccess = await validateParkTestLookupAccess(request.identifier);
       if (!parkTestAccess.ok) {
         return jsonResponse(parkTestAccess.statusCode, correlationId, {
           status: 'blocked',
@@ -50,6 +51,17 @@ exports.handler = async (event) => {
 
     const localResult = await getLocalBooking(request);
     if (localResult.status === 'found' && shouldUseLocalBooking(localResult.booking)) {
+      const parkTestScope = validateParkTestBookingScope(parkTestAccess, request, null, localResult.booking);
+      if (!parkTestScope.ok) {
+        return jsonResponse(parkTestScope.statusCode, correlationId, {
+          status: 'blocked',
+          error: {
+            code: parkTestScope.code,
+            message: parkTestScope.message,
+          },
+        });
+      }
+
       await reconcilePrepaymentDraftFromPaidBooking(localResult.booking, 'aurora_local_lookup');
       const eligibility = evaluateEligibility(localResult.booking, request);
 
@@ -93,7 +105,18 @@ exports.handler = async (event) => {
 
     const products = await getProductCatalogBestEffort(config, token);
     const booking = normalizeBooking(bookingResult.body, products);
-    await upsertLiveBooking(booking, config.env, request.venueId);
+    const parkTestScope = validateParkTestBookingScope(parkTestAccess, request, bookingResult.body, booking);
+    if (!parkTestScope.ok) {
+      return jsonResponse(parkTestScope.statusCode, correlationId, {
+        status: 'blocked',
+        error: {
+          code: parkTestScope.code,
+          message: parkTestScope.message,
+        },
+      });
+    }
+
+    await upsertLiveBooking(booking, config.env, parkTestScope.venueId ?? request.venueId);
     await reconcilePrepaymentDraftFromPaidBooking(booking, 'roller_live_lookup');
     const eligibility = evaluateEligibility(booking, request);
 
@@ -322,6 +345,7 @@ function normalizeLocalBooking(bookingRow, items) {
     externalId: null,
     status: bookingRow.bookingStatus,
     paymentStatus: bookingRow.paymentStatus ?? bookingRow.bookingStatus,
+    venueId: bookingRow.venueId,
     isTombstoned: bookingRow.isTombstoned,
     total: centsToCurrency(bookingRow.totalCents),
     amountOwing: centsToCurrency(bookingRow.amountOwingCents),
@@ -606,6 +630,7 @@ function normalizeBooking(booking, products) {
     externalId: stringOrNull(booking.externalId),
     status: stringOrNull(booking.status ?? booking.bookingStatus),
     paymentStatus: stringOrNull(booking.paymentStatus ?? booking.status ?? booking.bookingStatus),
+    venueId: stringOrNull(booking.venueId ?? booking.venue?.id),
     total: numberOrNull(booking.total ?? booking.costs?.total),
     amountOwing: numberOrNull(booking.amountOwing ?? booking.remainder ?? booking.costs?.amountOwing),
     createdDate: stringOrNull(booking.createdDate),
@@ -655,6 +680,19 @@ async function validateParkTestLookupAccess(identifier) {
     }
   }
 
+  if (isT0171AssistedLookupEnabled()) {
+    if (!isAssistedLookupIdentifierShapeAllowed(identifier)) {
+      return {
+        ok: false,
+        statusCode: 403,
+        code: 'live_lookup_not_allowed',
+        message: 'Only booking references or Roller booking ids are approved for assisted park-test lookup.',
+      };
+    }
+
+    return { ok: true, mode: 'assisted_lookup' };
+  }
+
   if (!isParkTestLiveLookupGateEnabled() && !isT0169PostPaymentSyncEnabled()) {
     return {
       ok: false,
@@ -672,6 +710,47 @@ async function validateParkTestLookupAccess(identifier) {
   };
 }
 
+function validateParkTestBookingScope(access, request, rollerBooking, booking) {
+  if (!isParkTestEnvironment() || access?.mode !== 'assisted_lookup') {
+    return { ok: true, venueId: request.venueId };
+  }
+
+  const allowedDates = getT0171AssistedLookupAllowedOperatingDates();
+  const bookingDates = getBookingOperatingDates(booking);
+
+  if (allowedDates.length === 0) {
+    return {
+      ok: false,
+      statusCode: 500,
+      code: 'lookup_config_error',
+      message: 'Assisted park-test lookup has no approved operating dates.',
+    };
+  }
+
+  if (bookingDates.length === 0 || bookingDates.some((date) => !allowedDates.includes(date))) {
+    return {
+      ok: false,
+      statusCode: 403,
+      code: 'live_lookup_not_allowed',
+      message: 'This booking is outside the approved park-test operating date.',
+    };
+  }
+
+  const approvedVenueId = getT0171AssistedLookupVenueId();
+  const rollerVenueId = extractVenueId(rollerBooking) || stringOrNull(booking?.venueId);
+
+  if (approvedVenueId && rollerVenueId && rollerVenueId !== approvedVenueId) {
+    return {
+      ok: false,
+      statusCode: 403,
+      code: 'live_lookup_not_allowed',
+      message: 'This booking is outside the approved park-test venue.',
+    };
+  }
+
+  return { ok: true, venueId: rollerVenueId || approvedVenueId || request.venueId };
+}
+
 function isT0160LiveLookupSmokeEnabled() {
   return isParkTestEnvironment() && process.env.ENABLE_T0160_LIVE_LOOKUP_SMOKE === 'true';
 }
@@ -684,8 +763,12 @@ function isT0169PostPaymentSyncEnabled() {
   return isParkTestEnvironment() && process.env.ENABLE_T0169_POST_PAYMENT_SYNC === 'true';
 }
 
+function isT0171AssistedLookupEnabled() {
+  return isParkTestEnvironment() && process.env.ENABLE_T0171_ASSISTED_LOOKUP === 'true';
+}
+
 function isParkTestLiveLookupGateEnabled() {
-  return isT0160LiveLookupSmokeEnabled() || isT0165LinkedAddOnSettlementEnabled();
+  return isT0160LiveLookupSmokeEnabled() || isT0165LinkedAddOnSettlementEnabled() || isT0171AssistedLookupEnabled();
 }
 
 function isParkTestRollerLiveLookupRuntimeEnabled() {
@@ -697,6 +780,70 @@ function isParkTestLiveLookupIdentifierAllowed(identifier) {
     isT0160LiveLookupSmokeIdentifierAllowed(identifier) ||
     isT0165LinkedAddOnSettlementIdentifierAllowed(identifier)
   );
+}
+
+function isAssistedLookupIdentifierShapeAllowed(identifier) {
+  const normalized = String(identifier ?? '').trim();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized)) {
+    return true;
+  }
+
+  return /^[1-9]\d{5,8}$/.test(normalized);
+}
+
+function getT0171AssistedLookupAllowedOperatingDates() {
+  return String(process.env.T0171_ASSISTED_LOOKUP_ALLOWED_OPERATING_DATES || '')
+    .split(',')
+    .map((value) => normalizeDate(value))
+    .filter(Boolean);
+}
+
+function getT0171AssistedLookupVenueId() {
+  return stringOrNull(process.env.T0171_ASSISTED_LOOKUP_VENUE_ID);
+}
+
+function getBookingOperatingDates(booking) {
+  const items = Array.isArray(booking?.items) ? booking.items : [];
+  const dates = items.map((item) => normalizeDate(item.bookingDate)).filter(Boolean);
+  return Array.from(new Set(dates)).sort();
+}
+
+function normalizeDate(value) {
+  const text = String(value ?? '').trim();
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+}
+
+function extractVenueId(booking) {
+  if (!booking || typeof booking !== 'object') return null;
+
+  const candidates = [
+    booking.venueId,
+    booking.venueID,
+    booking.locationId,
+    booking.locationID,
+    booking.siteId,
+    booking.siteID,
+    booking.venue?.id,
+    booking.venue?.venueId,
+    booking.location?.id,
+  ];
+
+  const items = Array.isArray(booking.items) ? booking.items : [];
+  for (const item of items) {
+    candidates.push(
+      item.venueId,
+      item.venueID,
+      item.locationId,
+      item.locationID,
+      item.venue?.id,
+      item.venue?.venueId,
+      item.location?.id,
+    );
+  }
+
+  const value = candidates.map((candidate) => stringOrNull(candidate)).find(Boolean);
+  return value ?? null;
 }
 
 function isT0160LiveLookupSmokeIdentifierAllowed(identifier) {

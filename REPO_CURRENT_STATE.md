@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-29
-- Current branch: `codex/t0169-post-payment-booking-sync`
-- Current status: No active ticket. T0169 is documented as completed; all sensitive park-test gates were redeployed closed after the T0169 smoke.
+- Current branch: `codex/t0171-park-test-lookup-mode`
+- Current status: T0171 is implemented, deployed, validated, documented, and ready to merge. The read-only assisted park-test lookup mode is open for single guest-entered Nacka booking codes for `2026-06-29` through `2026-07-05`, without broad same-day import.
 - Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (169 completed tickets; latest closed `T0169`; highest ticket already completed `T0170`).
-- Recommended next step: start `T0171` park-test lookup mode unless the user chooses another order.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (170 completed tickets; latest closed `T0171`).
+- Recommended next step: open `T0172` assisted email lookup on a new branch, then continue the shifted park-test readiness sequence.
 
 ## Current Structure
 
@@ -54,6 +54,7 @@ History and planning archives:
 - Park-test new-booking add-on visibility: [docs/t0168-new-booking-addon-visibility.md](docs/t0168-new-booking-addon-visibility.md)
 - Park-test post-payment booking sync: [docs/t0169-post-payment-booking-sync.md](docs/t0169-post-payment-booking-sync.md)
 - Park-test gate naming and runbook: [docs/t0170-park-test-gate-runbook.md](docs/t0170-park-test-gate-runbook.md)
+- Park-test lookup mode: [docs/t0171-park-test-lookup-mode.md](docs/t0171-park-test-lookup-mode.md)
 
 Current park-test status:
 
@@ -63,6 +64,7 @@ Current park-test status:
 - T0168 found the missing new-booking add-ons were caused by backend Live phone add-on mapping being tied to the T0162 existing-booking add-on gate. BookingHandler now has a read-only `LIVE_PHONE_ADDON_PRODUCTS` mapping for Nacka Live add-ons while keeping write gates unchanged.
 - T0170 documents the human park-test gate names and maps them to current CDK config keys and Lambda environment variables. The current runtime variable names still include ticket numbers until a separate migration is scoped.
 - Park-test new-booking draft writes and the T0169 post-payment sync gate were closed again after the proof. Live lookup, existing-booking add-ons, redeem writes, staff auth, webhook processing, SMS, and JumpYard-owned email are closed; normal visitor traffic remains gated.
+- T0171's assisted lookup gate is currently deployed open on `LookupHandler` for `2026-06-29` through `2026-07-05`. User-tested booking codes `166797742` and `166741849` were saved as fresh normalized Aurora snapshots. Booking draft writes, add-on writes, redeem writes, staff auth, webhook processing, and guest messaging remain closed.
 
 ## Known Validation Commands
 
@@ -84,28 +86,28 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 169
-- Latest closed ticket: `T0169`
-- Current active ticket: None active
+- Archived completed-ticket count: 170
+- Latest closed ticket: `T0171`
+- Current active ticket: None
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | No active ticket. | Idle | T0169 is completed in docs. Recommended next ticket is T0171. |
+| None active | None active. | Closed | T0171 is ready to merge; the next ticket is T0172 assisted email lookup. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0171` | Park-test lookup mode. | Planned | Define safe Nacka/date-scoped existing-booking lookup for an unknown real visitor instead of exact booking-code allowlists. |
-| `T0172` | Webhook and reconciliation readiness. | Planned | Decide REST-refresh versus webhook processing for payment settlement, add-ons, booking updates, and redeem confirmation during park-test. |
-| `T0173` | Frontend redeem rehearsal. | Planned | Love tests the deployed phone/admin redeem flow end to end before a real visitor; exact booking/ticket scope only if another redeem is needed. |
-| `T0174` | Ready-for-entry handout UI. | Planned | Restore visible QR/handoff code and show purchased entry ticket type/duration such as 60/90/120 minutes so staff can choose the correct band/color. |
-| `T0175` | Payment method readiness. | Planned | Investigate card/Apple Pay/Swish behavior in the Roller payment drop-in and decide the approved payment method set before visitor testing. |
-| `T0176` | Park-test UI/UX readiness. | Planned | Final guest/staff UI pass before assisted visitor testing; no new Live unlock by itself. |
-| `T0177` | Staff-assisted visitor test. | Planned | Limited assisted test after readiness gates, park approval, and runbook. |
-| `T0178` | Outcome and go/no-go. | Planned | Documentation/report only. |
+| `T0172` | Assisted email lookup. | Planned | Investigate and implement, or document a safe blocker for, guest email lookup without exposing PII or broad guest lists. |
+| `T0173` | Webhook and reconciliation readiness. | Planned | Decide REST-refresh versus webhook processing for payment settlement, add-ons, booking updates, and redeem confirmation during park-test. |
+| `T0174` | Frontend redeem rehearsal. | Planned | Love tests the deployed phone/admin redeem flow end to end before a real visitor; exact booking/ticket scope only if another redeem is needed. |
+| `T0175` | Ready-for-entry handout UI. | Planned | Restore visible QR/handoff code and show purchased entry ticket type/duration such as 60/90/120 minutes so staff can choose the correct band/color. |
+| `T0176` | Payment method readiness. | Planned | Investigate card/Apple Pay/Swish behavior in the Roller payment drop-in and decide the approved payment method set before visitor testing. |
+| `T0177` | Park-test UI/UX readiness. | Planned | Final guest/staff UI pass before assisted visitor testing; no new Live unlock by itself. |
+| `T0178` | Staff-assisted visitor test. | Planned | Limited assisted test after readiness gates, park approval, and runbook. |
+| `T0179` | Outcome and go/no-go. | Planned | Documentation/report only. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -113,7 +115,7 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- Latest validation is recorded in [docs/history/validation-log.md](docs/history/validation-log.md) under T0169.
+- Latest validation is recorded in [docs/t0171-park-test-lookup-mode.md](docs/t0171-park-test-lookup-mode.md) and [docs/history/validation-log.md](docs/history/validation-log.md).
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions
