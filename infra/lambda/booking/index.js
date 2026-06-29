@@ -76,13 +76,14 @@ const T0162_LIVE_ADDON_SMOKE_PRODUCTS = [
   { key: 'F120', parentProductId: '1189794' },
 ];
 
-const T0162_LIVE_ADDON_SMOKE_ADDONS = [
+const LIVE_PHONE_ADDON_PRODUCTS = [
   {
     key: 'skyrider',
     parentProductId: '970335',
     parentProductName: 'SkyRider',
     productId: '970335',
     productName: 'SkyRider',
+    availabilityProductIds: ['970336'],
     priceCents: null,
   },
   {
@@ -2101,6 +2102,11 @@ function getLiveSmokeBookingProductFallbacks(rollerEnv) {
   return [];
 }
 
+function getLivePhoneAddonFallbacks(rollerEnv) {
+  if (rollerEnv !== 'live') return [];
+  return LIVE_PHONE_ADDON_PRODUCTS;
+}
+
 async function loadPhoneAddonProducts(rollerEnv) {
   const clauses = [];
   const parameters = [stringParameter('rollerEnv', rollerEnv)];
@@ -2133,8 +2139,9 @@ async function loadPhoneAddonProducts(rollerEnv) {
     parameters,
   );
   const rows = mappedRows(result);
-  const fallbackRows = isT0162LiveAddOnSmokeEnabled() && rollerEnv === 'live'
-    ? T0162_LIVE_ADDON_SMOKE_ADDONS
+  const liveAddonFallbacks = getLivePhoneAddonFallbacks(rollerEnv);
+  const fallbackRows = liveAddonFallbacks.length > 0
+    ? liveAddonFallbacks
         .filter((product) => !rows.some((row) => row.id === product.productId || row.parent_product_id === product.parentProductId))
         .map((product) => ({
           parent_product_id: product.parentProductId,
@@ -2245,17 +2252,29 @@ async function loadParentProductsForChildIds(rollerEnv, productIds) {
     parentProductId: stringOrNull(row.parent_product_id),
     productId: stringOrNull(row.product_id),
   }));
-  if (!isT0159LivePaymentSmokeEnabled() || rollerEnv !== 'live') return rows;
+  if (rollerEnv !== 'live') return rows;
 
   const existingIds = new Set(rows.map((row) => row.productId));
-  const fallbackRows = T0159_LIVE_PAYMENT_SMOKE_PRODUCTS
-    .filter((product) => productIds.map(String).includes(product.productId) && !existingIds.has(product.productId))
-    .map((product) => ({
+  const requestedProductIds = productIds.map(String);
+  const liveBookingFallbackRows = isT0159LivePaymentSmokeEnabled()
+    ? T0159_LIVE_PAYMENT_SMOKE_PRODUCTS
+        .filter((product) => requestedProductIds.includes(product.productId) && !existingIds.has(product.productId))
+        .map((product) => ({
+          parentProductId: product.parentProductId,
+          productId: product.productId,
+        }))
+    : [];
+  const liveAddonFallbackRows = getLivePhoneAddonFallbacks(rollerEnv)
+    .flatMap((product) => [
+      stringOrNull(product.productId),
+      ...(Array.isArray(product.availabilityProductIds) ? product.availabilityProductIds.map(stringOrNull) : []),
+    ].filter(Boolean).map((productId) => ({
       parentProductId: product.parentProductId,
-      productId: product.productId,
-    }));
+      productId,
+    })))
+    .filter((product) => requestedProductIds.includes(product.productId) && !existingIds.has(product.productId));
 
-  return [...rows, ...fallbackRows];
+  return [...rows, ...liveBookingFallbackRows, ...liveAddonFallbackRows];
 }
 
 function buildPhoneAvailability(request, parentProducts, rollerBody) {
