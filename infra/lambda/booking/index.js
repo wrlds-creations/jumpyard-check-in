@@ -60,11 +60,12 @@ const PHONE_ADDON_PRODUCTS = [
 ];
 
 const T0159_LIVE_PAYMENT_SMOKE_PRODUCTS = [
-  {
-    key: 'E60',
-    parentProductId: '1189805',
-    productId: '1189808',
-  },
+  { key: 'E60', parentProductId: '1189805' },
+  { key: 'E90', parentProductId: '1189823' },
+  { key: 'E120', parentProductId: '1189771' },
+  { key: 'F60', parentProductId: '1189814' },
+  { key: 'F90', parentProductId: '1189832' },
+  { key: 'F120', parentProductId: '1189794' },
 ];
 
 const T0162_LIVE_ADDON_SMOKE_PRODUCTS = [
@@ -2088,10 +2089,6 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
 }
 
 function getRequiredPhoneBookingProducts(rollerEnv) {
-  if (isT0159LivePaymentSmokeEnabled() && rollerEnv === 'live') {
-    return PHONE_BOOKING_PRODUCTS.filter((product) => product.key === 'E60');
-  }
-
   return PHONE_BOOKING_PRODUCTS;
 }
 
@@ -2187,9 +2184,16 @@ async function validateItemsAvailable(config, token, items) {
   const productIds = [...new Set(itemsToValidate.map((item) => item.productId).filter(Boolean))];
   const productParents = await loadParentProductsForChildIds(config.env, productIds);
   const parentsByProductId = new Map(productParents.map((product) => [String(product.productId), product]));
+  const liveAvailabilityParentsByItemKey = await loadLivePaymentSmokeParentsFromAvailability(
+    config,
+    token,
+    itemsToValidate,
+    parentsByProductId,
+  );
 
   for (const item of itemsToValidate) {
-    const productParent = parentsByProductId.get(String(item.productId));
+    const liveAvailabilityParent = liveAvailabilityParentsByItemKey.get(liveAvailabilityItemKey(item));
+    const productParent = parentsByProductId.get(String(item.productId)) || liveAvailabilityParent;
     if (!productParent?.parentProductId) {
       return {
         code: 'availability_product_missing',
@@ -2197,25 +2201,9 @@ async function validateItemsAvailable(config, token, items) {
       };
     }
 
-    const rollerResult = await getRollerJson(
-      config,
-      token,
-      `/product-availability?${new URLSearchParams({
-        Date: item.bookingDate,
-        ProductIds: productParent.parentProductId,
-      }).toString()}`,
-    );
+    const parent = productParent.availabilityParent || await loadAvailabilityParentForProduct(config, token, item, productParent.parentProductId);
+    if (parent?.error) return parent.error;
 
-    if (!rollerResult.ok) {
-      return {
-        code: 'roller_availability_failed',
-        message: `Roller availability failed with HTTP ${rollerResult.status}.`,
-      };
-    }
-
-    const parent = Array.isArray(rollerResult.body)
-      ? rollerResult.body.find((candidate) => String(candidate.parentProductId ?? candidate.id) === productParent.parentProductId)
-      : null;
     const session = findSessionForProduct(parent, String(item.productId), item.startTime);
     const capacity = getSessionCapacityRemaining(session);
     const onlineSalesOpen = session?.onlineSalesOpen !== false;
@@ -2229,6 +2217,94 @@ async function validateItemsAvailable(config, token, items) {
   }
 
   return null;
+}
+
+async function loadAvailabilityParentForProduct(config, token, item, parentProductId) {
+  const rollerResult = await getRollerJson(
+    config,
+    token,
+    `/product-availability?${new URLSearchParams({
+      Date: item.bookingDate,
+      ProductIds: parentProductId,
+    }).toString()}`,
+  );
+
+  if (!rollerResult.ok) {
+    return {
+      error: {
+        code: 'roller_availability_failed',
+        message: `Roller availability failed with HTTP ${rollerResult.status}.`,
+      },
+    };
+  }
+
+  return Array.isArray(rollerResult.body)
+    ? rollerResult.body.find((candidate) => String(candidate.parentProductId ?? candidate.id) === parentProductId)
+    : null;
+}
+
+async function loadLivePaymentSmokeParentsFromAvailability(config, token, items, parentsByProductId) {
+  const result = new Map();
+  if (config.env !== 'live' || !isT0159LivePaymentSmokeEnabled()) return result;
+
+  const missingItems = items.filter((item) => !parentsByProductId.has(String(item.productId)));
+  if (missingItems.length === 0) return result;
+
+  const parentProducts = await loadPhoneBookingParentProducts(config.env);
+  const allowedParents = parentProducts.filter(
+    (product) =>
+      (product.type === 'entry' || product.type === 'family') &&
+      product.parentProductId,
+  );
+  const allowedParentIds = new Set(allowedParents.map((product) => String(product.parentProductId)));
+  if (allowedParentIds.size === 0) return result;
+
+  const itemsByDate = new Map();
+  for (const item of missingItems) {
+    const date = stringOrNull(item.bookingDate);
+    if (!date) continue;
+    const existing = itemsByDate.get(date) || [];
+    existing.push(item);
+    itemsByDate.set(date, existing);
+  }
+
+  for (const [date, dateItems] of itemsByDate.entries()) {
+    const rollerResult = await getRollerJson(
+      config,
+      token,
+      `/product-availability?${new URLSearchParams({
+        Date: date,
+        ProductIds: [...allowedParentIds].join(','),
+      }).toString()}`,
+    );
+    if (!rollerResult.ok || !Array.isArray(rollerResult.body)) continue;
+
+    for (const item of dateItems) {
+      const productId = String(item.productId);
+      const parent = rollerResult.body.find((candidate) => {
+        const parentProductId = String(candidate?.parentProductId ?? candidate?.id ?? '');
+        return (
+          allowedParentIds.has(parentProductId) &&
+          findAvailabilityProduct(candidate, productId) &&
+          findSessionForProduct(candidate, productId, item.startTime)
+        );
+      });
+      const parentProductId = stringOrNull(parent?.parentProductId ?? parent?.id);
+      if (!parent || !parentProductId) continue;
+
+      result.set(liveAvailabilityItemKey(item), {
+        availabilityParent: parent,
+        parentProductId,
+        productId,
+      });
+    }
+  }
+
+  return result;
+}
+
+function liveAvailabilityItemKey(item) {
+  return `${item.productId}|${item.bookingDate}|${item.startTime}`;
 }
 
 async function loadParentProductsForChildIds(rollerEnv, productIds) {
@@ -2386,6 +2462,11 @@ function findSessionForProduct(parent, productId, startTime) {
   if (allocations.length === 0) return session;
 
   return allocations.some((allocation) => String(allocation?.productId ?? '') === productId) ? session : null;
+}
+
+function findAvailabilityProduct(parent, productId) {
+  const products = Array.isArray(parent?.products) ? parent.products : [];
+  return products.find((product) => String(product?.id ?? '') === productId) || null;
 }
 
 function selectAvailabilityProduct(parent, session) {
