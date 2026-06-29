@@ -142,6 +142,40 @@ function getItemDisplayName(item: StaffBookingItem) {
   return item.parentProductName ?? item.productName ?? "Produkt";
 }
 
+function getDurationLabelFromText(value: string) {
+  const match = value.match(/\b(60|90|120)\s*min\b/i);
+  return match ? `${match[1]} min` : null;
+}
+
+function getDurationLabelFromTimes(startTime?: string | null, endTime?: string | null) {
+  if (!startTime || !endTime) return null;
+
+  const start = clockToMinutes(startTime);
+  const end = clockToMinutes(endTime);
+  if (start === null || end === null) return null;
+
+  const duration = end >= start ? end - start : end + 24 * 60 - start;
+  return duration > 0 ? `${duration} min` : null;
+}
+
+function getItemDurationLabel(item: StaffBookingItem) {
+  return (
+    getDurationLabelFromText(`${item.parentProductName ?? ""} ${item.productName ?? ""}`) ??
+    getDurationLabelFromTimes(item.startTime, item.endTime)
+  );
+}
+
+function clockToMinutes(value: string) {
+  const match = value.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+
+  return hours * 60 + minutes;
+}
+
 function getItemIconName(item: StaffBookingItem): StaffIconName {
   const text = getItemProductText(item);
 
@@ -230,7 +264,15 @@ function getHandoutCategory(item: StaffBookingItem): HandoutCategoryDefinition {
     text.includes("barn") ||
     text.includes("jump")
   ) {
-    return { icon: "visitor-wristband", key: "wristband", label: "Besöksband", order: 10, section: "checkin" };
+    const durationLabel = getItemDurationLabel(item);
+    return {
+      icon: "visitor-wristband",
+      key: durationLabel ? `wristband-${durationLabel.replace(/\s+/g, "-").toLowerCase()}` : "wristband",
+      label: durationLabel ? `Besöksband ${durationLabel}` : "Besöksband",
+      note: getItemDisplayName(item),
+      order: 10,
+      section: "checkin",
+    };
   }
 
   return { icon: getItemIconName(item), key: "other", label: "Övrigt", order: 90, section: "other" };

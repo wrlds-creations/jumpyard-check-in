@@ -84,7 +84,7 @@ The expected assisted park-test posture is not "open everything." It is a short 
 | Visitor enters an existing booking code | Assisted existing booking lookup | T0171 before visitor use |
 | Visitor buys socks or another add-on for an existing booking | Existing booking lookup, existing booking add-ons, linked settlement/reconciliation | T0171, T0173, and a scoped reopen of the add-on path |
 | Staff can hand out correct entry band/color | No AWS gate by itself; phone/admin UI must show a visible QR/handoff code plus purchased ticket type/duration such as 60/90/120 minutes | T0174 before final UI/UX readiness |
-| Staff completes check-in | Staff auth, redeem/check-in writes | T0175 handout UI, T0176 payment readiness, T0174 frontend rehearsal, and T0177 UI/UX readiness before visitor use |
+| Staff completes check-in | Staff auth, redeem/check-in writes | T0174 handout UI, T0175 payment readiness, T0176 frontend rehearsal, and T0177 UI/UX readiness before visitor use |
 | Background webhook reconciliation | Webhook processing if explicitly chosen | T0173 recommends leaving this closed for the first assisted park-test |
 | JumpYard sends guest SMS/email | Guest SMS/email sends | Separate future messaging ticket, not part of the current park-test baseline |
 
