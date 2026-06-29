@@ -73,5 +73,10 @@ Implemented and deployed the T0176 staff-auth-only frontend redeem rehearsal gat
   - existing-booking add-ons use a clean loading state, no SkyRider-only red highlight, socks prefill to jumper count when missing, and review rows show quantity/unit/line total;
   - assisted lookup stores Roller booking/customer display names and refreshes name-missing local cache entries from Roller so POS-created bookings do not fall back to `Gäst` when Roller provides a name.
 - Validation for the fix pass passed: `node --check infra/lambda/lookup/index.js`, phone lint/build, `npm run validate`, and `git diff --check` with existing warnings only.
+- PR #176 was squash-merged to `main` as `e3c5d58`.
+- Cloudflare Pages production deployments for phone and admin read back source `e3c5d58`; the deployed phone bundle contains the park-test API id and not the dev API id.
+- Deployed the updated `LookupHandler` code through `npm --prefix infra run deploy:park-test-full-flow-rehearsal`. CDK diff showed only `LookupHandler` code changing, and CloudFormation reached `UPDATE_COMPLETE`.
+- Post-deploy readback confirmed `LookupHandler` keeps post-payment sync and assisted lookup open for Nacka `50871` and dates `2026-06-29` through `2026-07-05`.
+- Public phone/admin URLs returned HTTP `200`, lookup CORS preflight returned HTTP `204`, and a read-only availability smoke returned `available` without creating a draft.
 
-Manual verification pending: Love should test the park-test phone PWA and admin with real card-payment flows, a POS-created booking lookup/add-on flow, and staff redeem.
+Manual verification pending: Love should retest the park-test phone PWA and admin with real card-payment flows, a POS-created booking lookup/add-on flow, and staff redeem.
