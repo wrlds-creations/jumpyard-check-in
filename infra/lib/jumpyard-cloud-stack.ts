@@ -22,6 +22,7 @@ import {
   PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL,
   PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL,
   PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL,
+  PARK_TEST_POST_PAYMENT_SYNC_APPROVAL,
 } from './config';
 
 interface JumpYardCloudStackProps extends StackProps {
@@ -814,6 +815,9 @@ export class JumpYardCloudStack extends Stack {
       );
       environment.T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS =
         resources.safetyGates.liveLookupSmokeAllowedIdentifiers.join(',');
+      environment.ENABLE_T0169_POST_PAYMENT_SYNC = String(
+        resources.safetyGates.livePostPaymentSyncApproval === PARK_TEST_POST_PAYMENT_SYNC_APPROVAL,
+      );
     }
 
     if (handlerName === 'redeem') {

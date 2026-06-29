@@ -10,6 +10,17 @@ This archive was created in T0128 to keep active source-of-truth files short whi
 - 2026-06-29: T0170 did not rename AWS/CDK/Lambda variables, deploy AWS, call Roller, create drafts/payments, redeem tickets, process webhooks, send SMS/email, run visitor traffic, print secrets, print raw payment JWTs, or expose public PII.
 - 2026-06-29: `npm --prefix infra run validate:config-guards`, `npm --prefix infra run synth:park-test`, `npm run validate`, and `git diff --check` passed. The first `npm run validate` attempt correctly failed because the completed-ticket archive count still said `167`; the count was updated to `168` and the rerun passed. `git diff --check` reported line-ending normalization warnings only. `npm --prefix infra run synth:park-test` printed existing CDK notice `37949`.
 
+## T0169 Post-Payment Booking Sync Validation
+
+- 2026-06-29: T0169 was validated on branch `codex/t0169-post-payment-booking-sync`.
+- 2026-06-29: `node --check infra/lambda/lookup/index.js`, `npm --prefix infra run build`, `npm --prefix infra run validate:config-guards`, `npm --prefix jumpyard-checkin-phone run lint`, `npm run validate`, `npm --prefix infra run validate:park-test-synth`, `npm --prefix infra run synth:park-test-payment-sync-smoke`, `npm run infra:check`, `npm --prefix jumpyard-checkin-phone run build`, and `git diff --check` passed before the controlled proof. Phone lint reported the existing `<img>` warnings only.
+- 2026-06-29: AWS identity was verified for account `376129878018`, region `eu-north-1`. Deploying `infra/config/park-test-live-payment-sync-smoke.json` changed existing Lambda code/environment only and opened new-booking draft/payment writes plus draft-backed post-payment lookup.
+- 2026-06-29: The park-test phone PWA was direct-deployed to Cloudflare Pages with API target `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`, and the stable URL `https://jumpyard-check-in-park-test.pages.dev/` served the park-test API bundle.
+- 2026-06-29: The user completed one Live park-test PWA new-booking payment and reached safety/done; the previous payment-complete sync-failed state did not occur.
+- 2026-06-29: A closed-gate check for unrelated booking `166490323` returned `live_lookup_not_allowed`, confirming T0169 did not open broad existing-booking lookup.
+- 2026-06-29: Normal `infra/config/park-test.json` was redeployed after proof. Readback confirmed booking draft/payment gates, T0169 post-payment sync, lookup, existing-booking add-ons, redeem, staff auth, webhook processing, and guest message sends closed again, with `JUMPYARD_EMERGENCY_STOP=true`.
+- 2026-06-29: T0169 was closed in source-of-truth docs: `CODEX_TASK.md` moved to `NO_ACTIVE_TICKET`, `REPO_CURRENT_STATE.md` moved to none active, `docs/roadmap/backlog.md` removed T0169 from Now, and `docs/history/completed-tickets.md` lists T0169 as completed.
+
 ## T0168 New-Booking Add-On Visibility Validation
 
 - 2026-06-29: T0168 was completed on branch `codex/t0168-new-booking-addon-visibility`.

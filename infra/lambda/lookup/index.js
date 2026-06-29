@@ -36,22 +36,13 @@ exports.handler = async (event) => {
     }
 
     if (isParkTestEnvironment()) {
-      if (!isParkTestLiveLookupGateEnabled()) {
-        return jsonResponse(409, correlationId, {
+      const parkTestAccess = await validateParkTestLookupAccess(request.identifier);
+      if (!parkTestAccess.ok) {
+        return jsonResponse(parkTestAccess.statusCode, correlationId, {
           status: 'blocked',
           error: {
-            code: 'live_lookup_disabled',
-            message: 'Live lookup is disabled for park-test.',
-          },
-        });
-      }
-
-      if (!isParkTestLiveLookupIdentifierAllowed(request.identifier)) {
-        return jsonResponse(403, correlationId, {
-          status: 'blocked',
-          error: {
-            code: 'live_lookup_not_allowed',
-            message: 'This booking identifier is not approved for the active park-test Live lookup gate.',
+            code: parkTestAccess.code,
+            message: parkTestAccess.message,
           },
         });
       }
@@ -420,7 +411,7 @@ async function readSecret(secretId) {
 function validateRollerConfig(config) {
   const errors = [];
   let parsedBaseUrl = null;
-  const liveLookupGateEnabled = isParkTestLiveLookupGateEnabled();
+  const liveLookupGateEnabled = isParkTestRollerLiveLookupRuntimeEnabled();
 
   if (!liveLookupGateEnabled && config.env !== 'playground') {
     errors.push('Roller environment must be playground.');
@@ -652,6 +643,35 @@ function isParkTestEnvironment() {
   return process.env.JUMPYARD_ENVIRONMENT === 'park-test';
 }
 
+async function validateParkTestLookupAccess(identifier) {
+  if (isParkTestLiveLookupGateEnabled() && isParkTestLiveLookupIdentifierAllowed(identifier)) {
+    return { ok: true, mode: 'explicit_live_lookup_gate' };
+  }
+
+  if (isT0169PostPaymentSyncEnabled()) {
+    const draft = await findPostPaymentSyncDraft(identifier);
+    if (draft) {
+      return { ok: true, mode: 'post_payment_sync', draft };
+    }
+  }
+
+  if (!isParkTestLiveLookupGateEnabled() && !isT0169PostPaymentSyncEnabled()) {
+    return {
+      ok: false,
+      statusCode: 409,
+      code: 'live_lookup_disabled',
+      message: 'Live lookup is disabled for park-test.',
+    };
+  }
+
+  return {
+    ok: false,
+    statusCode: 403,
+    code: 'live_lookup_not_allowed',
+    message: 'This booking identifier is not approved for the active park-test Live lookup gate.',
+  };
+}
+
 function isT0160LiveLookupSmokeEnabled() {
   return isParkTestEnvironment() && process.env.ENABLE_T0160_LIVE_LOOKUP_SMOKE === 'true';
 }
@@ -660,8 +680,16 @@ function isT0165LinkedAddOnSettlementEnabled() {
   return isParkTestEnvironment() && process.env.ENABLE_T0165_LINKED_ADDON_SETTLEMENT === 'true';
 }
 
+function isT0169PostPaymentSyncEnabled() {
+  return isParkTestEnvironment() && process.env.ENABLE_T0169_POST_PAYMENT_SYNC === 'true';
+}
+
 function isParkTestLiveLookupGateEnabled() {
   return isT0160LiveLookupSmokeEnabled() || isT0165LinkedAddOnSettlementEnabled();
+}
+
+function isParkTestRollerLiveLookupRuntimeEnabled() {
+  return isParkTestLiveLookupGateEnabled() || isT0169PostPaymentSyncEnabled();
 }
 
 function isParkTestLiveLookupIdentifierAllowed(identifier) {
@@ -689,6 +717,44 @@ function isT0165LinkedAddOnSettlementIdentifierAllowed(identifier) {
 
   if (allowed.length === 0) return false;
   return allowed.includes(String(identifier ?? '').trim());
+}
+
+async function findPostPaymentSyncDraft(identifier) {
+  const normalized = String(identifier ?? '').trim();
+  if (!normalized) return null;
+
+  const result = await executeStatement(
+    `SELECT
+       prepayment_draft_id,
+       roller_draft_unique_id,
+       status,
+       flow_type,
+       roller_env,
+       created_at::text AS created_at,
+       expires_at::text AS expires_at
+     FROM jumpyard.prepayment_booking_drafts
+     WHERE roller_draft_unique_id = :identifier
+       AND flow_type = 'new_booking'
+       AND roller_env = 'live'
+       AND status IN ('payment_pending', 'payment_blocked', 'published')
+       AND created_at >= now() - interval '24 hours'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [stringParameter('identifier', normalized)],
+  );
+
+  const row = firstMappedRow(result);
+  if (!row) return null;
+
+  return {
+    createdAt: stringOrNull(row.created_at),
+    expiresAt: stringOrNull(row.expires_at),
+    flowType: stringOrNull(row.flow_type),
+    prepaymentDraftId: stringOrNull(row.prepayment_draft_id),
+    rollerDraftUniqueId: stringOrNull(row.roller_draft_unique_id),
+    rollerEnv: stringOrNull(row.roller_env),
+    status: stringOrNull(row.status),
+  };
 }
 
 async function upsertLiveBooking(booking, rollerEnv, venueId) {
