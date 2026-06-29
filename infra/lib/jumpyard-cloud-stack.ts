@@ -18,6 +18,7 @@ import * as path from 'path';
 import {
   JumpYardCloudConfig,
   PARK_TEST_LINKED_ADD_ON_SETTLEMENT_APPROVAL,
+  PARK_TEST_ASSISTED_LOOKUP_APPROVAL,
   PARK_TEST_LIVE_ADD_ON_SMOKE_APPROVAL,
   PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL,
   PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL,
@@ -818,6 +819,13 @@ export class JumpYardCloudStack extends Stack {
       environment.ENABLE_T0169_POST_PAYMENT_SYNC = String(
         resources.safetyGates.livePostPaymentSyncApproval === PARK_TEST_POST_PAYMENT_SYNC_APPROVAL,
       );
+      environment.ENABLE_T0171_ASSISTED_LOOKUP = String(
+        resources.safetyGates.liveAssistedLookupApproval === PARK_TEST_ASSISTED_LOOKUP_APPROVAL,
+      );
+      environment.T0171_ASSISTED_LOOKUP_ALLOWED_OPERATING_DATES =
+        resources.safetyGates.liveAssistedLookupAllowedOperatingDates.join(',');
+      environment.T0171_ASSISTED_LOOKUP_VENUE_ID =
+        resources.safetyGates.liveAssistedLookupVenueId ?? '';
     }
 
     if (handlerName === 'redeem') {

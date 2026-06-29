@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 169
-Latest archived completed ticket: `T0169`
+Archived count: 170
+Latest archived completed ticket: `T0171`
 
 ## Completed Tickets
 
@@ -181,3 +181,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0168` | New-booking add-on visibility. | 2026-06-29 | Fixed the park-test new-booking add-on visibility gap found during the T0167 receipt proof. The phone UI was correctly hiding add-ons without safe product id/price data; BookingHandler only exposed known Nacka Live add-on ids/prices while the T0162 existing-booking add-on smoke gate was open. T0168 separates read-only Live phone add-on mapping from write gates, so availability can return SkyRider, socks, lock, and coffee without opening draft writes, lookup, redeem, webhooks, SMS/email, visitor traffic, AWS deploy, or Roller writes. |
 | `T0169` | Post-payment booking sync. | 2026-06-29 | Added a scoped post-payment sync gate so a newly paid park-test PWA booking can be refreshed from Roller Live only when the lookup identifier matches a recent local `new_booking` prepayment draft created by JumpYard Cloud. The user completed one Live park-test PWA new-booking payment and reached safety/done instead of the previous sync-failed state. Normal closed `park-test.json` was redeployed after proof; payment writes, T0169 sync, lookup, existing-booking add-ons, redeem, staff auth, webhook processing, SMS, and JumpYard-owned email are closed again. Follow-ups: T0174 must restore visible QR/handoff code plus ticket duration on the final screen, and T0175 must clarify Apple Pay/Swish readiness. |
 | `T0170` | Park-test gate naming and runbook. | 2026-06-29 | Added `docs/t0170-park-test-gate-runbook.md` as the human-readable map from park-test gate names to current CDK config keys, Lambda environment variables, default closed state, risk/owner posture, park-test-day plan, and close/readback guidance. T0170 also recorded D0124 and FU-093 so the friendly names are understood as aliases, not deployed runtime variable renames. No AWS deploy, Roller call, runtime rename, draft/payment, redeem, webhook processing, SMS/email, visitor traffic, secret print, raw payment JWT print, or public PII exposure occurred. |
+| `T0171` | Park-test lookup mode. | 2026-06-29 | Added and deployed a T0171 assisted lookup gate/config for single guest-entered Nacka booking codes or Roller UUIDs scoped to `2026-06-29` through `2026-07-05` and venue `50871`. LookupHandler preserves existing booking items, add-ons, and tickets in Aurora snapshots while rejecting email/name/phone-style input and wrong-date bookings. Deployment changed existing `LookupHandler` code/environment only; booking draft writes, add-on writes, redeem writes, staff auth, webhook processing, guest messaging, SMS/email, and broad same-day import remained closed. Safe readback confirmed test bookings `166797742` and `166741849` were saved as fresh normalized Aurora snapshots. |

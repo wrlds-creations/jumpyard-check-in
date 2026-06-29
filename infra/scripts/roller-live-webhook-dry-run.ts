@@ -533,6 +533,7 @@ function buildValidSelfTestConfig(): ConfigValidationTarget {
       emergencyStop: true,
       guestMessagingSendsEnabled: false,
       liveAddOnSmokeAllowedIdentifiers: [],
+      liveAssistedLookupAllowedOperatingDates: [],
       liveLinkedAddOnSettlementAllowedIdentifiers: [],
       liveLookupSmokeAllowedIdentifiers: [],
       liveRedeemSmokeAllowedIdentifiers: [],
