@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 167
-Latest archived completed ticket: `T0168`
+Archived count: 168
+Latest archived completed ticket: `T0170`
 
 ## Completed Tickets
 
@@ -179,3 +179,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0166` | Controlled Live redeem smoke. | 2026-06-25 | Added a separate T0166 Live redeem smoke gate/config and proved one exact staff-confirmed Roller Live redemption through the park-test phone/admin flow for booking `166490323`, unique id `9ae484b0-d9a9-4dad-b3d5-4ad3b0e25088`, and ticket `166490323-560714728`. Roller Live `POST /redemptions` returned HTTP `200`; Aurora marks session `jycs_mqtimdxf_bb33c94c` as `redeemed`, handoff `completed`, ticket `166490323-560714728` as `redeemed`, and redeem attempt `redeem_attempt:701798...` as `redeemed`. Normal `park-test.json` was redeployed, lookup/staff/redeem/add-on/draft/webhook/SMS/email gates are closed, and no new AWS resources, additional bookings, payments, refunds, webhook processing, SMS, email, broad import, visitor traffic, secret print, raw payment JWT print, or public PII output occurred. |
 | `T0167` | Receipt and confirmation handling. | 2026-06-25 | Fixed the park-test PWA receipt/confirmation code path after T0159 and T0164 produced no guest receipt email. Phone new-booking and existing-booking add-on draft requests now send `sendConfirmations=true`, the booking Lambda logs that safe boolean in draft success events, and payment-complete copy tells guests Roller sends confirmation/receipt to the booking email. Post-merge proof on 2026-06-26 confirmed one new-booking Roller confirmation email was received. Existing-booking add-on receipt delivery remains unproven. |
 | `T0168` | New-booking add-on visibility. | 2026-06-29 | Fixed the park-test new-booking add-on visibility gap found during the T0167 receipt proof. The phone UI was correctly hiding add-ons without safe product id/price data; BookingHandler only exposed known Nacka Live add-on ids/prices while the T0162 existing-booking add-on smoke gate was open. T0168 separates read-only Live phone add-on mapping from write gates, so availability can return SkyRider, socks, lock, and coffee without opening draft writes, lookup, redeem, webhooks, SMS/email, visitor traffic, AWS deploy, or Roller writes. |
+| `T0170` | Park-test gate naming and runbook. | 2026-06-29 | Added `docs/t0170-park-test-gate-runbook.md` as the human-readable map from park-test gate names to current CDK config keys, Lambda environment variables, default closed state, risk/owner posture, park-test-day plan, and close/readback guidance. T0170 also recorded D0124 and FU-093 so the friendly names are understood as aliases, not deployed runtime variable renames. No AWS deploy, Roller call, runtime rename, draft/payment, redeem, webhook processing, SMS/email, visitor traffic, secret print, raw payment JWT print, or public PII exposure occurred. |
