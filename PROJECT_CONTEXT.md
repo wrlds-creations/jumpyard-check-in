@@ -17,7 +17,7 @@ Sprint 1 connects the existing check-in app suite to Roller Playground and park-
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Park-test has setup, controlled smokes, lookup, webhook-off readiness, and temporary T0176 full-flow rehearsal.
+The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The park-test sequence is in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). T0178 UI/UX readiness is the next planned park-test gate.
 
 ## Context Archives
 
@@ -53,6 +53,7 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 ## Current Implemented Flow Facts
 
 - Phone booking lookup calls JumpYard Cloud, which uses Aurora-first lookup with Roller-authoritative refresh when local data is missing or unsafe.
+- Park-test lookup accepts booking reference/email/phone; contact input searches Roller for today's Stockholm date, enforces Nacka/date scope, and picks the nearest upcoming start.
 - Phone check-in starts or resumes a server-owned check-in session before progressing from a ready booking.
 - Guest safety completion marks a JumpYard Cloud session ready for staff and shows a server-owned handoff code/QR.
 - Staff/admin handoff uses server-owned staff auth in dev and can list, search, inspect, and staff-confirm redeem ready sessions.
@@ -79,9 +80,9 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 - Guest messaging through SMS/email uses opaque `jy_token` links resolved server-side by JumpYard Cloud.
 - Park-test Aurora contains only scoped Live smoke snapshots, not a broad booking import or all-day guest list.
 - T0161/T0171 selected REST-on-demand lookup by entered booking code; same-day indexing remains deferred and add-ons stay separately gated.
-- T0172 blocks public email lookup until Roller confirms a narrow API; staff can search Roller by email and enter the booking code in the PWA.
+- T0177 deployed date-scoped server-side Roller `GET /bookings?date&keywords` for park-test email/phone lookup; same-day indexing remains deferred.
 - T0173 keeps Live webhook processing off for first assisted park-test; payment/add-on state uses scoped REST refresh, and redeem uses direct `POST /redemptions` success plus Aurora audit/manual fallback.
-- Existing-booking add-ons require server-resolved customer contact for the separate linked draft. T0163 confirmed Roller Live booking detail may expose `customerId` while `GET /guests/{customerId}` contains the complete first/last/email/phone contact needed server-side.
+- Existing-booking add-ons require server-resolved customer contact for the separate linked draft; T0163 proved the Roller booking-detail customer id plus guest-detail fallback.
 - T0164-T0169 proved add-on payment, linked settlement, one exact Live redemption, Roller email delivery, add-on visibility, and post-payment sync.
 
 ## Security And Operational Constraints

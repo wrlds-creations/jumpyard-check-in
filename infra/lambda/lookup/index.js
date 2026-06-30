@@ -37,7 +37,7 @@ exports.handler = async (event) => {
     }
 
     if (isParkTestEnvironment()) {
-      parkTestAccess = await validateParkTestLookupAccess(request.identifier);
+      parkTestAccess = await validateParkTestLookupAccess(request);
       if (!parkTestAccess.ok) {
         return jsonResponse(parkTestAccess.statusCode, correlationId, {
           status: 'blocked',
@@ -49,12 +49,14 @@ exports.handler = async (event) => {
       }
     }
 
-    const localResult = await getLocalBooking(request);
+    const localResult = shouldTryLocalLookup(request)
+      ? await getLocalBooking(request)
+      : { status: 'skipped', booking: null, metadata: { lookupPath: 'aurora:skipped_contact_lookup' } };
     if (localResult.status === 'found' && shouldUseLocalBooking(localResult.booking)) {
       const parkTestScope = validateParkTestBookingScope(parkTestAccess, request, null, localResult.booking);
       if (!parkTestScope.ok) {
         return jsonResponse(parkTestScope.statusCode, correlationId, {
-          status: 'blocked',
+          status: parkTestScope.code === 'booking_not_found' ? 'not_found' : 'blocked',
           error: {
             code: parkTestScope.code,
             message: parkTestScope.message,
@@ -62,12 +64,14 @@ exports.handler = async (event) => {
         });
       }
 
-      await reconcilePrepaymentDraftFromPaidBooking(localResult.booking, 'aurora_local_lookup');
-      const eligibility = evaluateEligibility(localResult.booking, request);
+      const scopedBooking = scopeBookingForLookupDate(localResult.booking, parkTestScope.lookupDate);
+
+      await reconcilePrepaymentDraftFromPaidBooking(scopedBooking, 'aurora_local_lookup');
+      const eligibility = evaluateEligibility(scopedBooking, request);
 
       return jsonResponse(200, correlationId, {
         status: 'found',
-        booking: localResult.booking,
+        booking: scopedBooking,
         eligibility,
         source: {
           system: 'jumpyard_cloud',
@@ -81,34 +85,90 @@ exports.handler = async (event) => {
 
     const config = await getRollerConfig();
     const token = await getRollerAccessToken(config);
-    const bookingResult = await getBookingDetail(config, token, request.identifier);
+    const products = await getProductCatalogBestEffort(config, token);
 
-    if (bookingResult.status === 404) {
+    let bookingResult = null;
+    let booking = null;
+    let lookupPath = 'GET /bookings/{identifier}';
+    let searchMatchCount = null;
+
+    if (shouldUseRollerBookingSearch(request, parkTestAccess)) {
+      const searchResult = await getBookingFromRollerSearch(config, token, products, request, parkTestAccess);
+      if (searchResult.status === 'not_found') {
+        return jsonResponse(404, correlationId, {
+          status: 'not_found',
+          error: {
+            code: 'booking_not_found',
+            message: 'No Roller booking was found for the supplied identifier today.',
+          },
+        });
+      }
+
+      if (searchResult.status === 'scope_error') {
+        return jsonResponse(searchResult.scope.statusCode, correlationId, {
+          status: 'blocked',
+          error: {
+            code: searchResult.scope.code,
+            message: searchResult.scope.message,
+          },
+        });
+      }
+
+      if (searchResult.status !== 'found') {
+        return jsonResponse(502, correlationId, {
+          status: 'roller_error',
+          error: {
+            code: 'roller_lookup_failed',
+            message: 'Roller booking search failed.',
+          },
+        });
+      }
+
+      bookingResult = { body: searchResult.rollerBooking };
+      booking = searchResult.booking;
+      lookupPath = searchResult.lookupPath;
+      searchMatchCount = searchResult.matchCount;
+    } else {
+      const detailResult = await getBookingDetail(config, token, request.identifier);
+
+      if (detailResult.status === 404) {
+        return jsonResponse(404, correlationId, {
+          status: 'not_found',
+          error: {
+            code: 'booking_not_found',
+            message: 'No Roller booking was found for the supplied identifier.',
+          },
+        });
+      }
+
+      if (!detailResult.ok) {
+        return jsonResponse(502, correlationId, {
+          status: 'roller_error',
+          error: {
+            code: 'roller_lookup_failed',
+            message: `Roller lookup failed with HTTP ${detailResult.status}.`,
+          },
+        });
+      }
+
+      bookingResult = detailResult;
+      booking = normalizeBooking(detailResult.body, products);
+    }
+
+    if (!bookingResult || !booking) {
       return jsonResponse(404, correlationId, {
         status: 'not_found',
         error: {
           code: 'booking_not_found',
-          message: 'No Roller booking was found for the supplied identifier.',
+          message: 'No Roller booking was found for the supplied identifier today.',
         },
       });
     }
 
-    if (!bookingResult.ok) {
-      return jsonResponse(502, correlationId, {
-        status: 'roller_error',
-        error: {
-          code: 'roller_lookup_failed',
-          message: `Roller lookup failed with HTTP ${bookingResult.status}.`,
-        },
-      });
-    }
-
-    const products = await getProductCatalogBestEffort(config, token);
-    const booking = normalizeBooking(bookingResult.body, products);
     const parkTestScope = validateParkTestBookingScope(parkTestAccess, request, bookingResult.body, booking);
     if (!parkTestScope.ok) {
       return jsonResponse(parkTestScope.statusCode, correlationId, {
-        status: 'blocked',
+        status: parkTestScope.code === 'booking_not_found' ? 'not_found' : 'blocked',
         error: {
           code: parkTestScope.code,
           message: parkTestScope.message,
@@ -116,21 +176,24 @@ exports.handler = async (event) => {
       });
     }
 
-    await upsertLiveBooking(booking, config.env, parkTestScope.venueId ?? request.venueId);
-    await reconcilePrepaymentDraftFromPaidBooking(booking, 'roller_live_lookup');
-    const eligibility = evaluateEligibility(booking, request);
+    const scopedBooking = scopeBookingForLookupDate(booking, parkTestScope.lookupDate);
+
+    await upsertLiveBooking(scopedBooking, config.env, parkTestScope.venueId ?? request.venueId);
+    await reconcilePrepaymentDraftFromPaidBooking(scopedBooking, 'roller_live_lookup');
+    const eligibility = evaluateEligibility(scopedBooking, request);
 
     return jsonResponse(200, correlationId, {
       status: 'found',
-      booking,
+      booking: scopedBooking,
       eligibility,
       source: {
         system: 'roller',
         environment: config.env,
-        lookupPath: 'GET /bookings/{identifier}',
+        lookupPath,
         localLookupStatus: localResult.status,
         productCatalog: products.status,
         refreshedFromRoller: true,
+        searchMatchCount,
       },
     });
   } catch (error) {
@@ -156,12 +219,15 @@ function parseRequest(event) {
   try {
     const parsed = JSON.parse(body);
     const identifier = String(parsed.identifier ?? '').trim();
+    const identifierType = inferIdentifierType(identifier);
+
+    const expectedDate = normalizeDate(parsed.expectedDate) || getVenueToday();
 
     return {
       venueId: parsed.venueId ? String(parsed.venueId).trim() : null,
       identifier,
-      identifierType: parsed.identifierType ? String(parsed.identifierType).trim() : inferIdentifierType(identifier),
-      expectedDate: parsed.expectedDate ? String(parsed.expectedDate).trim() : null,
+      identifierType,
+      expectedDate,
       expectedStartTime: parsed.expectedStartTime ? String(parsed.expectedStartTime).trim() : null,
       correlationId: parsed.correlationId ? String(parsed.correlationId).trim() : null,
     };
@@ -173,15 +239,63 @@ function parseRequest(event) {
 }
 
 function inferIdentifierType(identifier) {
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier)) {
+  const normalized = String(identifier ?? '').trim();
+
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    return 'email';
+  }
+
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized)) {
     return 'rollerUniqueId';
   }
 
-  if (/^\d{5,12}$/.test(identifier)) {
+  if (isLikelyPhoneIdentifier(normalized)) {
+    return 'phone';
+  }
+
+  if (/^\d{5,12}$/.test(normalized)) {
     return 'bookingReference';
   }
 
   return 'unknown';
+}
+
+function shouldTryLocalLookup(request) {
+  return request.identifierType !== 'email' && request.identifierType !== 'phone';
+}
+
+function isLikelyPhoneIdentifier(value) {
+  const text = String(value ?? '').trim();
+  const digits = text.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return false;
+  if (/^\+|^00/.test(text)) return true;
+  if (/^0\d{6,14}$/.test(digits)) return true;
+  return /[\s()/-]/.test(text) && digits.length >= 7;
+}
+
+function getVenueToday(now = new Date()) {
+  return getStockholmNowParts(now).date;
+}
+
+function getStockholmNowParts(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+    minute: '2-digit',
+    month: '2-digit',
+    timeZone: 'Europe/Stockholm',
+    year: 'numeric',
+  }).formatToParts(now);
+
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const hour = Number(byType.hour);
+  const minute = Number(byType.minute);
+
+  return {
+    date: `${byType.year}-${byType.month}-${byType.day}`,
+    minuteOfDay: Number.isFinite(hour) && Number.isFinite(minute) ? hour * 60 + minute : null,
+  };
 }
 
 function createCorrelationId() {
@@ -579,6 +693,189 @@ async function getBookingDetail(config, token, identifier) {
   };
 }
 
+async function searchBookings(config, token, date, keyword) {
+  const url = buildRollerUrl(config.baseUrl, '/bookings');
+  url.searchParams.set('date', date);
+  url.searchParams.set('keywords', keyword);
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+    },
+  });
+  emitRollerApiMetric({ method: 'GET', operation: 'search_bookings', status: response.status, ok: response.ok });
+
+  const text = await response.text();
+  const body = text ? JSON.parse(text) : null;
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    body,
+  };
+}
+
+async function getBookingFromRollerSearch(config, token, products, request, access) {
+  const lookupDate = access.lookupDate || normalizeDate(request.expectedDate) || getVenueToday();
+  const keywords = getSearchKeywordCandidates(request.identifier, request.identifierType);
+  const matches = [];
+  const seenIdentifiers = new Set();
+
+  for (const keyword of keywords) {
+    const searchResult = await searchBookings(config, token, lookupDate, keyword);
+    if (!searchResult.ok) {
+      return { status: 'roller_error', httpStatus: searchResult.status };
+    }
+
+    const searchItems = extractBookingSearchItems(searchResult.body);
+    for (const item of searchItems) {
+      const detailIdentifier = extractSearchBookingIdentifier(item);
+      if (!detailIdentifier || seenIdentifiers.has(detailIdentifier)) continue;
+      seenIdentifiers.add(detailIdentifier);
+
+      const detailResult = await getBookingDetail(config, token, detailIdentifier);
+      if (detailResult.status === 404) continue;
+      if (!detailResult.ok) {
+        return { status: 'roller_error', httpStatus: detailResult.status };
+      }
+
+      const booking = normalizeBooking(detailResult.body, products);
+      const scope = validateParkTestBookingScope(access, request, detailResult.body, booking);
+      if (!scope.ok) {
+        if (scope.statusCode >= 500) return { status: 'scope_error', scope };
+        continue;
+      }
+
+      matches.push({
+        booking: scopeBookingForLookupDate(booking, scope.lookupDate),
+        lookupPath: 'GET /bookings?date&keywords -> GET /bookings/{identifier}',
+        rollerBooking: detailResult.body,
+      });
+    }
+  }
+
+  const selected = selectBestBookingSearchMatch(matches, lookupDate);
+  if (!selected) return { status: 'not_found', matchCount: 0 };
+
+  return {
+    status: 'found',
+    booking: selected.booking,
+    lookupPath: selected.lookupPath,
+    matchCount: matches.length,
+    rollerBooking: selected.rollerBooking,
+  };
+}
+
+function shouldUseRollerBookingSearch(request, access) {
+  return access?.mode === 'assisted_lookup' && (request.identifierType === 'email' || request.identifierType === 'phone');
+}
+
+function getSearchKeywordCandidates(identifier, identifierType) {
+  const raw = String(identifier ?? '').trim();
+  if (!raw) return [];
+
+  if (identifierType === 'email') {
+    return [raw.toLowerCase()];
+  }
+
+  if (identifierType === 'phone') {
+    return uniqueStrings([normalizePhoneForSearch(raw), raw.replace(/\s+/g, ''), raw]);
+  }
+
+  return [raw];
+}
+
+function normalizePhoneForSearch(value) {
+  const text = String(value ?? '').trim();
+  const digits = text.replace(/\D/g, '');
+  if (!digits) return null;
+
+  if (text.startsWith('+')) return `+${digits}`;
+  if (digits.startsWith('00')) return `+${digits.slice(2)}`;
+  if (digits.startsWith('0')) return `+46${digits.slice(1)}`;
+  if (digits.startsWith('46')) return `+${digits}`;
+  return digits;
+}
+
+function uniqueStrings(values) {
+  return Array.from(new Set(values.map((value) => stringOrNull(value)).filter(Boolean)));
+}
+
+function extractBookingSearchItems(body) {
+  if (Array.isArray(body)) return body;
+  if (!isPlainObject(body)) return [];
+
+  for (const key of ['items', 'bookings', 'data', 'results']) {
+    if (Array.isArray(body[key])) return body[key];
+  }
+
+  return [];
+}
+
+function extractSearchBookingIdentifier(item) {
+  if (!isPlainObject(item)) return null;
+
+  return firstObjectString(item, [
+    'uniqueId',
+    'bookingUniqueId',
+    'bookingReference',
+    'reference',
+    'id',
+    'bookingId',
+  ]);
+}
+
+function selectBestBookingSearchMatch(matches, lookupDate, now = new Date()) {
+  const candidates = matches
+    .map((match, index) => ({
+      ...match,
+      index,
+      startMinute: getBookingStartMinute(match.booking, lookupDate),
+    }))
+    .filter((match) => match.booking);
+
+  if (candidates.length === 0) return null;
+
+  const nowParts = getStockholmNowParts(now);
+  const currentMinute = nowParts.date === lookupDate ? nowParts.minuteOfDay : null;
+  const upcoming =
+    currentMinute === null ? [] : candidates.filter((match) => match.startMinute !== null && match.startMinute >= currentMinute);
+  const sortable = upcoming.length > 0 ? upcoming : candidates;
+
+  sortable.sort((left, right) => {
+    const leftMinute = left.startMinute ?? Number.MAX_SAFE_INTEGER;
+    const rightMinute = right.startMinute ?? Number.MAX_SAFE_INTEGER;
+    if (leftMinute !== rightMinute) return leftMinute - rightMinute;
+    return left.index - right.index;
+  });
+
+  return sortable[0] ?? null;
+}
+
+function getBookingStartMinute(booking, lookupDate) {
+  const items = Array.isArray(booking?.items) ? booking.items : [];
+  const minutes = items
+    .filter((item) => !lookupDate || normalizeDate(item.bookingDate) === lookupDate)
+    .map((item) => timeToMinutes(item.startTime))
+    .filter((value) => value !== null)
+    .sort((left, right) => left - right);
+
+  return minutes[0] ?? null;
+}
+
+function timeToMinutes(value) {
+  const match = String(value ?? '').match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+
+  return hours * 60 + minutes;
+}
+
 async function getProductCatalogBestEffort(config, token) {
   if (cachedProducts && cachedProducts.expiresAt > Date.now()) {
     return cachedProducts;
@@ -704,10 +1001,6 @@ function normalizeBookingCustomer(booking) {
       customer.firstName || firstObjectString(candidate, ['firstName', 'first_name', 'givenName', 'given_name']);
     customer.lastName =
       customer.lastName || firstObjectString(candidate, ['lastName', 'last_name', 'familyName', 'family_name', 'surname']);
-    customer.email = customer.email || firstObjectString(candidate, ['email', 'emailAddress', 'email_address']);
-    customer.phone =
-      customer.phone ||
-      firstObjectString(candidate, ['phone', 'phoneNumber', 'phone_number', 'mobile', 'mobilePhone', 'contactNumber']);
     customer.fullName =
       customer.fullName ||
       firstObjectString(candidate, ['fullName', 'full_name', 'customerName', 'bookingHolderName', 'name', 'bookingName']);
@@ -752,7 +1045,9 @@ function isParkTestEnvironment() {
   return process.env.JUMPYARD_ENVIRONMENT === 'park-test';
 }
 
-async function validateParkTestLookupAccess(identifier) {
+async function validateParkTestLookupAccess(request) {
+  const identifier = request.identifier;
+
   if (isParkTestLiveLookupGateEnabled() && isParkTestLiveLookupIdentifierAllowed(identifier)) {
     return { ok: true, mode: 'explicit_live_lookup_gate' };
   }
@@ -765,16 +1060,37 @@ async function validateParkTestLookupAccess(identifier) {
   }
 
   if (isT0171AssistedLookupEnabled()) {
-    if (!isAssistedLookupIdentifierShapeAllowed(identifier)) {
+    const lookupDate = normalizeDate(request.expectedDate) || getVenueToday();
+    const allowedDates = getT0171AssistedLookupAllowedOperatingDates();
+
+    if (allowedDates.length === 0) {
+      return {
+        ok: false,
+        statusCode: 500,
+        code: 'lookup_config_error',
+        message: 'Assisted park-test lookup has no approved operating dates.',
+      };
+    }
+
+    if (!lookupDate || !allowedDates.includes(lookupDate)) {
       return {
         ok: false,
         statusCode: 403,
         code: 'live_lookup_not_allowed',
-        message: 'Only booking references or Roller booking ids are approved for assisted park-test lookup.',
+        message: 'Assisted park-test lookup is only approved for the current operating date.',
       };
     }
 
-    return { ok: true, mode: 'assisted_lookup' };
+    if (!isAssistedLookupIdentifierShapeAllowed(identifier, request.identifierType)) {
+      return {
+        ok: false,
+        statusCode: 403,
+        code: 'live_lookup_not_allowed',
+        message: 'Only booking references, email, or phone are approved for assisted park-test lookup.',
+      };
+    }
+
+    return { ok: true, lookupDate, mode: 'assisted_lookup' };
   }
 
   if (!isParkTestLiveLookupGateEnabled() && !isT0169PostPaymentSyncEnabled()) {
@@ -801,6 +1117,7 @@ function validateParkTestBookingScope(access, request, rollerBooking, booking) {
 
   const allowedDates = getT0171AssistedLookupAllowedOperatingDates();
   const bookingDates = getBookingOperatingDates(booking);
+  const lookupDate = access.lookupDate || normalizeDate(request.expectedDate) || getVenueToday();
 
   if (allowedDates.length === 0) {
     return {
@@ -811,12 +1128,21 @@ function validateParkTestBookingScope(access, request, rollerBooking, booking) {
     };
   }
 
-  if (bookingDates.length === 0 || bookingDates.some((date) => !allowedDates.includes(date))) {
+  if (!lookupDate || !allowedDates.includes(lookupDate)) {
     return {
       ok: false,
       statusCode: 403,
       code: 'live_lookup_not_allowed',
       message: 'This booking is outside the approved park-test operating date.',
+    };
+  }
+
+  if (bookingDates.length === 0 || !bookingDates.includes(lookupDate)) {
+    return {
+      ok: false,
+      statusCode: 404,
+      code: 'booking_not_found',
+      message: 'No approved booking was found for the current operating date.',
     };
   }
 
@@ -832,7 +1158,7 @@ function validateParkTestBookingScope(access, request, rollerBooking, booking) {
     };
   }
 
-  return { ok: true, venueId: rollerVenueId || approvedVenueId || request.venueId };
+  return { ok: true, lookupDate, venueId: rollerVenueId || approvedVenueId || request.venueId };
 }
 
 function isT0160LiveLookupSmokeEnabled() {
@@ -866,8 +1192,10 @@ function isParkTestLiveLookupIdentifierAllowed(identifier) {
   );
 }
 
-function isAssistedLookupIdentifierShapeAllowed(identifier) {
+function isAssistedLookupIdentifierShapeAllowed(identifier, identifierType = inferIdentifierType(identifier)) {
   const normalized = String(identifier ?? '').trim();
+  if (identifierType === 'email' || identifierType === 'phone') return true;
+
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized)) {
     return true;
   }
@@ -890,6 +1218,19 @@ function getBookingOperatingDates(booking) {
   const items = Array.isArray(booking?.items) ? booking.items : [];
   const dates = items.map((item) => normalizeDate(item.bookingDate)).filter(Boolean);
   return Array.from(new Set(dates)).sort();
+}
+
+function scopeBookingForLookupDate(booking, lookupDate) {
+  const date = normalizeDate(lookupDate);
+  if (!booking || !date || !Array.isArray(booking.items)) return booking;
+
+  const scopedItems = booking.items.filter((item) => normalizeDate(item.bookingDate) === date);
+  if (scopedItems.length === 0) return booking;
+
+  return {
+    ...booking,
+    items: scopedItems,
+  };
 }
 
 function normalizeDate(value) {
@@ -1701,3 +2042,12 @@ function jsonResponse(statusCode, correlationId, payload) {
     }),
   };
 }
+
+exports._internal = {
+  getSearchKeywordCandidates,
+  getStockholmNowParts,
+  inferIdentifierType,
+  normalizePhoneForSearch,
+  scopeBookingForLookupDate,
+  selectBestBookingSearchMatch,
+};

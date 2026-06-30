@@ -53,11 +53,11 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
                     data-testid="booking-lookup-input"
                     type="text"
                     value={code}
-                    onChange={e => setCode(e.target.value.toUpperCase())}
+                    onChange={e => setCode(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSearch()}
                     placeholder={t.lookup.placeholder}
                     autoFocus
-                    className="w-full bg-white border border-border rounded-xl px-4 py-3.5 text-base text-foreground placeholder:text-muted/50 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all tracking-wider uppercase font-bold"
+                    className="w-full bg-white border border-border rounded-xl px-4 py-3.5 text-base text-foreground placeholder:text-muted/50 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-bold"
                 />
             </div>
 

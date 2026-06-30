@@ -9,6 +9,7 @@ Use this file to define active validation for the current project or milestone. 
 | `node scripts/validate-current-ticket.js` | Confirm `CODEX_TASK.md` and `REPO_CURRENT_STATE.md` agree on active ticket state. | Passes locally without network access. |
 | `node scripts/validate-followups.js` | Confirm active followups have no duplicate FU ids and no closed rows under `## Open Followups`. | Passes locally without network access. |
 | `node scripts/validate-history-archives.js` | Confirm required history/backlog archives exist, are linked from active docs, and preserve completed-ticket history safely. | Passes locally without network access. |
+| `node scripts/validate-t0177-contact-lookup.js` | Confirm T0177 identifier inference, phone normalization, same-day scoping, and nearest-upcoming match selection. | Passes locally without network access. |
 | `npm run validate` | Run root workflow, current-ticket, followup, history-archive, skill, and AWS tag validators. | Passes locally without changing AWS, Roller, app behavior, credentials, SMS, or email. |
 | `git diff --check` | Check the current working diff for whitespace errors. | Passes; CRLF conversion warnings are acceptable if the command exits 0. |
 
