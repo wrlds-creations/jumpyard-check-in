@@ -52,14 +52,14 @@ const sv = {
   choice: {
     title: 'Vad vill du göra?',
     haveBooking: 'Jag har en bokning',
-    haveBookingDesc: 'Hitta din bokning med bokningsnummer, mejl eller telefonnummer',
+    haveBookingDesc: 'Hitta din bokning och checka in',
     buyTickets: 'Köp entré',
     buyTicketsDesc: 'Köp entré och fortsätt till check-in',
   },
   lookup: {
     title: 'Hitta din bokning',
     description: 'Skriv in bokningsnummer, mejl eller telefonnummer för att hitta din bokning.',
-    placeholder: 'Bokningsnummer, mejl eller telefonnummer',
+    placeholder: 'Fyll i här',
     cta: 'Sök',
     notFound: 'Vi hittade ingen bokning idag.',
     tryAgain: 'Kontrollera uppgiften eller hämta personal.',
@@ -440,14 +440,14 @@ const en: typeof sv = {
   choice: {
     title: 'What would you like to do?',
     haveBooking: 'I have a booking',
-    haveBookingDesc: 'Find your booking with booking number, email, or phone number',
+    haveBookingDesc: 'Find your booking and check in',
     buyTickets: 'Buy entry',
     buyTicketsDesc: 'Buy entry and continue to check-in',
   },
   lookup: {
     title: 'Find your booking',
     description: 'Enter booking number, email, or phone number to find your booking.',
-    placeholder: 'Booking number, email, or phone number',
+    placeholder: 'Type here',
     cta: 'Search',
     notFound: "We couldn't find a booking today.",
     tryAgain: 'Check the details or call staff.',
