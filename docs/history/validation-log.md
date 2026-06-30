@@ -2,6 +2,18 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0177 Guest Contact Lookup Validation
+
+- 2026-06-30: Implemented server-side booking reference/email/phone lookup for park-test. Email/phone uses Roller `GET /bookings?date&keywords` for the current Europe/Stockholm operating date, verifies candidates with booking detail, filters to Nacka/date scope, scopes response/snapshot items to that date, and selects the nearest upcoming same-day start time when multiple valid matches exist.
+- 2026-06-30: Updated the phone lookup input and copy to accept booking reference, email, or phone without uppercasing the entered value.
+- 2026-06-30: `node --check infra/lambda/lookup/index.js`, `node scripts/validate-t0177-contact-lookup.js`, and `npm --prefix jumpyard-checkin-phone run lint` passed. Phone lint reported only existing `<img>` warnings.
+- 2026-06-30: AWS preflight confirmed account `376129878018`, region `eu-north-1`, and park-test WRLDS metadata. `npm --prefix infra run synth:park-test-full-flow-rehearsal` passed with existing CDK notice `37949`.
+- 2026-06-30: `npm --prefix infra run diff:park-test-full-flow-rehearsal` showed only existing `LookupHandler` Lambda code/S3Key changing.
+- 2026-06-30: `npm --prefix infra run deploy:park-test-full-flow-rehearsal` reached `UPDATE_COMPLETE`. Readback confirmed `LookupHandler` last modified `2026-06-30T08:57:15.000+0000`, `ENABLE_T0171_ASSISTED_LOOKUP=true`, `ENABLE_T0169_POST_PAYMENT_SYNC=true`, Nacka venue `50871`, dates `2026-06-29` through `2026-07-05`, and `JUMPYARD_EMERGENCY_STOP=true`.
+- 2026-06-30: Public negative email and phone lookup smokes for `2026-06-30` returned HTTP `404` with `booking_not_found`, proving contact input reaches the new date-scoped search path instead of the old `live_lookup_not_allowed` guard. No real visitor/contact positive smoke was run because no user-approved real email or phone value was provided.
+- 2026-06-30: `npm run validate`, `npm run infra:check`, `npm --prefix jumpyard-checkin-phone run build`, and `git diff --check` passed. Infra check reported existing CDK notice `37949`, phone build reported existing `baseline-browser-mapping` notices, and diff-check reported existing CRLF normalization warnings only.
+- 2026-06-30: T0177 did not create AWS resources, add migrations, broaden venue/date scope, import same-day bookings, write Roller drafts/payments/redemptions, process webhooks, send SMS/email, print secrets, print raw payment JWTs, or expose raw contact PII in the public response.
+
 ## T0176 Frontend Redeem Rehearsal Validation
 
 - 2026-06-29: Closeout UI quickfixes were implemented for the park-test phone PWA: QR-only ready-for-entry handoff copy, existing-booking add-on parity with the new-booking add-on socks card, no automatic socks add-on when none already exist, no top add-on count/scroll hint, and no duplicate top-level `Ingår redan` badge.

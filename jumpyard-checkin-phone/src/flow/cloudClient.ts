@@ -61,7 +61,7 @@ export class CloudBookingError extends Error {
 }
 
 interface CloudLookupResponse {
-  status: 'found' | 'not_found' | 'invalid_request' | 'roller_error' | 'config_error' | 'internal_error';
+  status: 'found' | 'not_found' | 'blocked' | 'invalid_request' | 'roller_error' | 'config_error' | 'internal_error';
   booking?: CloudBooking;
   eligibility?: {
     canCheckIn: boolean;
@@ -109,6 +109,7 @@ interface CloudLookupSource {
   lookupPath?: string | null;
   freshnessStatus?: string | null;
   refreshedFromRoller?: boolean;
+  searchMatchCount?: number | null;
 }
 
 interface CloudBooking {
@@ -773,15 +774,33 @@ function getVenueToday() {
 }
 
 function inferIdentifierType(identifier: string) {
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier)) {
+  const normalized = identifier.trim();
+
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    return 'email';
+  }
+
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized)) {
     return 'rollerUniqueId';
   }
 
-  if (/^\d{5,12}$/.test(identifier)) {
+  if (isLikelyPhoneIdentifier(normalized)) {
+    return 'phone';
+  }
+
+  if (/^\d{5,12}$/.test(normalized)) {
     return 'bookingReference';
   }
 
   return 'unknown';
+}
+
+function isLikelyPhoneIdentifier(value: string) {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return false;
+  if (/^\+|^00/.test(value)) return true;
+  if (/^0\d{6,14}$/.test(digits)) return true;
+  return /[\s()/-]/.test(value) && digits.length >= 7;
 }
 
 async function parseResponse(response: Response): Promise<CloudLookupResponse | null> {
