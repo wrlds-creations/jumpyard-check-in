@@ -5,7 +5,7 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-06-30
-- Current branch: `codex/t0177-contact-lookup-docs`
+- Current branch: `main`
 - Current status: No active ticket. Temporary full-flow AWS gate posture remains open until a normal `park-test.json` close-window deploy is run.
 - Current ticket: `NO_ACTIVE_TICKET`
 - Completed tickets: archived in `docs/history/completed-tickets.md` (176 completed tickets; latest closed `T0177`).
@@ -70,7 +70,7 @@ Current park-test status:
 - T0170 documents the human park-test gate names and maps them to current CDK config keys and Lambda environment variables. The current runtime variable names still include ticket numbers until a separate migration is scoped.
 - Park-test payment-sync smoke mode was closed after Apple Pay was paused pending external diagnostics.
 - BookingHandler accepts Live child variations only when Roller availability returns them under approved Nacka entry/family parents; quote smokes passed for E60 `1189809` and F60 `1189818`.
-- T0177 extends the current Nacka/date-scoped assisted lookup to booking reference/email/phone, using server-side Roller search for today's Europe/Stockholm date and choosing the nearest upcoming same-day match.
+- T0177 extends the current Nacka/date-scoped assisted lookup to booking reference/email/phone, using server-side Roller search for today's Europe/Stockholm date and choosing the nearest upcoming same-day match. A post-merge copy polish keeps the "I have a booking" card short and uses a short lookup placeholder.
 - T0173 recommends keeping Live webhook processing closed for the first assisted park-test; payment/add-on/redeem confirmation uses scoped REST/direct responses plus Aurora audit/manual fallback.
 - T0174 restores the ready-for-entry handout UI: the phone final screen shows a visible QR/handoff code and entry product/duration, and the admin handout detail groups wristbands by duration when available.
 - T0175 Apple Pay domain association is live, but Apple Pay still collapses at processing pending Roller/Adyen diagnostics; card remains fallback.
