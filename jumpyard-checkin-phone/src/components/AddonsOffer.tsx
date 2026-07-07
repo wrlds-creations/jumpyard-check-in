@@ -30,6 +30,7 @@ interface AddonsOfferProps {
     booking: Booking;
     guestCount: number;
     existingAddons: Addon[];
+    prefetchedAvailability?: AddonsAvailabilityPrefetch | null;
     onStepChange?: (step: AddonsOfferStep) => void;
     onContinue: (result: {
         selectedAddons: Addon[];
@@ -40,6 +41,13 @@ interface AddonsOfferProps {
         paymentHandled?: boolean;
     }) => void;
     onPendingDone: () => void;
+}
+
+export interface AddonsAvailabilityPrefetch {
+    key: string;
+    availability: NewBookingAvailability | null;
+    error: string | null;
+    promise: Promise<NewBookingAvailability> | null;
 }
 
 interface CatalogEntry {
@@ -99,6 +107,16 @@ function Counter({
 function formatMoney(value: number | null | undefined) {
     if (value === null || value === undefined) return '-';
     return `${Math.round(value)} kr`;
+}
+
+function formatAddonPriceLabel(
+    value: number | null | undefined,
+    unit: string,
+    eachUnit: string,
+    eachLongUnit: string
+) {
+    const unitLabel = unit === eachUnit ? eachLongUnit : unit;
+    return `${formatMoney(value)} ${unitLabel}`;
 }
 
 function getVenueToday() {
@@ -182,6 +200,10 @@ function getSlotAddonProducts(availability: NewBookingAvailability, startTime: s
     return slot?.products.filter((product) => product.type === 'addon') ?? [];
 }
 
+function getAvailabilityPrefetchKey(bookingDate: string, bookingStartTime: string) {
+    return `${bookingDate}|${bookingStartTime}`;
+}
+
 function isPricedCatalogEntry(entry: CatalogEntry): entry is CatalogEntry & { price: number; rollerProductId: number } {
     return entry.price !== null && entry.rollerProductId !== null;
 }
@@ -191,6 +213,7 @@ export const AddonsOffer = ({
     booking,
     guestCount,
     existingAddons,
+    prefetchedAvailability = null,
     onContinue,
     onPendingDone,
     onStepChange,
@@ -198,15 +221,29 @@ export const AddonsOffer = ({
     const { t } = useTranslation();
     const bookingDate = booking.date ?? getVenueToday();
     const bookingStartTime = normalizeStartTime(booking.time) ?? '09:00';
+    const prefetchKey = getAvailabilityPrefetchKey(bookingDate, bookingStartTime);
+    const matchingPrefetch = prefetchedAvailability?.key === prefetchKey ? prefetchedAvailability : null;
     const [catalogProducts, setCatalogProducts] = useState<NewBookingProduct[]>([]);
     const [catalogLoading, setCatalogLoading] = useState(true);
     const [catalogError, setCatalogError] = useState<string | null>(null);
 
     useEffect(() => {
         let cancelled = false;
+        const prefetched = matchingPrefetch && !matchingPrefetch.error ? matchingPrefetch : null;
+
+        if (prefetched?.availability) {
+            setCatalogProducts(getSlotAddonProducts(prefetched.availability, bookingStartTime));
+            setCatalogError(null);
+            setCatalogLoading(false);
+            return () => {
+                cancelled = true;
+            };
+        }
+
         setCatalogLoading(true);
         setCatalogError(null);
-        getNewBookingAvailability([bookingStartTime], bookingDate)
+        const availabilityRequest = prefetched?.promise ?? getNewBookingAvailability([bookingStartTime], bookingDate);
+        availabilityRequest
             .then((availability) => {
                 if (cancelled) return;
                 setCatalogProducts(getSlotAddonProducts(availability, bookingStartTime));
@@ -223,7 +260,12 @@ export const AddonsOffer = ({
         return () => {
             cancelled = true;
         };
-    }, [bookingDate, bookingStartTime, t.buy.availabilityFailed]);
+    }, [
+        bookingDate,
+        bookingStartTime,
+        matchingPrefetch,
+        t.buy.availabilityFailed,
+    ]);
 
     const catalog = useMemo<CatalogEntry[]>(
         () => {
@@ -368,10 +410,9 @@ export const AddonsOffer = ({
     const socksEntry = catalogById.get('socks') ?? null;
     const otherCatalogEntries = catalog.filter((entry) => entry.id !== 'socks');
     const socksQty = qty.socks;
-    const socksAddedQty = Math.max(0, socksQty - minQty.socks);
     const socksRecommendedVisibleCount = Math.min(Math.max(0, guestCount), 5);
     const socksRecommendationProgress = Math.min(100, Math.round((socksQty / Math.max(1, guestCount)) * 100));
-    const showSocksConfirmation = minQty.socks === 0 && socksAddedQty === 0;
+    const showSocksConfirmation = minQty.socks === 0;
     const addedSkyrider = addedAddons.some((addon) => addon.id === 'skyrider');
     const needsSkyRiderConsent = (confirmed = skyriderConsentConfirmed) =>
         addedSkyrider && !confirmed;
@@ -476,7 +517,7 @@ export const AddonsOffer = ({
 
     return (
         <motion.div
-            className="w-full max-w-md mx-auto flex flex-col px-4 py-3"
+            className="w-full max-w-md min-w-0 mx-auto flex flex-col px-4 py-3"
             data-add-product-status={draft?.prepayment?.status ?? ''}
             data-add-product-draft-id={draft?.prepayment?.prepaymentDraftId ?? ''}
             data-add-product-flow-type={draft?.prepayment?.flowType ?? ''}
@@ -489,12 +530,12 @@ export const AddonsOffer = ({
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="w-full flex items-center justify-center"
+                    className="w-full max-w-full min-w-0 flex items-center justify-center"
                     style={{ minHeight: 'calc(100dvh - 160px)' }}
                 >
-                    <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
+                    <div className="w-full bg-white border border-border p-5 rounded-2xl text-center">
                         <h2 className="text-xl font-black italic text-foreground uppercase mb-2">{t.addons.paymentTitle}</h2>
-                        <p className="text-muted text-sm mb-5">
+                        <p className="text-foreground text-sm mb-5">
                             {formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
                         </p>
 
@@ -515,7 +556,7 @@ export const AddonsOffer = ({
                 <>
                     <div className="text-center">
                         <h1 className="text-xl font-black italic uppercase text-foreground">{t.addons.title}</h1>
-                        <p className="text-muted text-xs mt-0.5">{t.addons.description}</p>
+                        <p className="text-foreground text-xs mt-0.5">{t.addons.description}</p>
                     </div>
 
                     {(submitError || catalogError) && (
@@ -529,7 +570,7 @@ export const AddonsOffer = ({
                         {catalogLoading ? (
                             <AddonsLoadingCard label={t.addons.loading} />
                         ) : (
-                        <div className="w-full flex flex-col gap-1.5">
+                        <div className="w-full max-w-full min-w-0 flex flex-col gap-1.5">
                             {socksEntry && (
                                 <section className={`bg-white border border-border rounded-xl p-3 ${!isPricedCatalogEntry(socksEntry) ? 'opacity-60' : ''}`}>
                                     <div className="flex items-start gap-3">
@@ -538,9 +579,9 @@ export const AddonsOffer = ({
                                             <h3 className="text-sm font-black italic text-foreground uppercase">
                                                 {t.addons.socksSectionTitle}
                                             </h3>
-                                            <p className="mt-1 text-[11px] text-muted">{t.addons.socksHelp}</p>
+                                            <p className="mt-1 text-[11px] text-foreground">{t.addons.socksHelp}</p>
                                             {!isPricedCatalogEntry(socksEntry) && (
-                                                <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full bg-surface-strong text-muted text-[9px] font-bold italic uppercase tracking-wide">{t.addons.unsupported}</span>
+                                                <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full bg-white border border-border text-foreground text-[9px] font-bold italic uppercase tracking-wide">{t.addons.unsupported}</span>
                                             )}
                                             {minQty.socks > 0 && (
                                                 <span className="mt-1 block text-[10px] text-success font-bold italic">
@@ -551,9 +592,9 @@ export const AddonsOffer = ({
                                     </div>
 
                                     {!alreadyHasApprovedSocks && (
-                                        <div className="mt-3 rounded-xl border border-border bg-surface-strong px-3 py-3">
+                                        <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-3">
                                             <div className="flex items-center justify-between gap-3">
-                                                <span className="text-[10px] font-black italic uppercase tracking-wider text-muted">
+                                                <span className="text-[10px] font-black italic uppercase tracking-wider text-foreground">
                                                     {t.addons.socksRecommendedCount}
                                                 </span>
                                                 <span className="rounded-full bg-white px-3 py-1 text-sm font-black italic text-primary shadow-sm">
@@ -566,16 +607,16 @@ export const AddonsOffer = ({
                                                         <JumpyardIcon key={index} name="grip-socks" className="h-5 w-5" />
                                                     ))}
                                                     {guestCount > socksRecommendedVisibleCount && (
-                                                        <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-black italic text-muted shadow-sm">
-                                                            +{guestCount - socksRecommendedVisibleCount}
-                                                        </span>
-                                                    )}
+                                                            <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-black italic text-foreground shadow-sm">
+                                                                +{guestCount - socksRecommendedVisibleCount}
+                                                            </span>
+                                                        )}
                                                 </div>
                                                 <span className="shrink-0 text-[11px] font-black italic text-foreground">
                                                     {t.addons.socksSelectedCount} {socksQty}/{guestCount}
                                                 </span>
                                             </div>
-                                            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+                                            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-primary/10">
                                                 <div
                                                     className="h-full rounded-full bg-primary transition-all"
                                                     style={{ width: `${socksRecommendationProgress}%` }}
@@ -584,25 +625,11 @@ export const AddonsOffer = ({
                                         </div>
                                     )}
 
-                                    {showSocksConfirmation && (
-                                        <label className="mt-3 flex items-start gap-2 rounded-lg bg-surface/70 px-3 py-2 text-left">
-                                            <input
-                                                type="checkbox"
-                                                checked={alreadyHasApprovedSocks}
-                                                onChange={(event) => setSocksConfirmation(event.target.checked)}
-                                                className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                                            />
-                                            <span className="text-xs font-bold italic text-foreground">
-                                                {t.addons.socksAlreadyHave}
-                                            </span>
-                                        </label>
-                                    )}
-
                                     {!alreadyHasApprovedSocks && (
                                         <div className="mt-3 flex items-center justify-between gap-3">
                                             <div className="min-w-0">
-                                                <p className="text-[11px] font-bold italic text-muted">
-                                                    {formatMoney(socksEntry.price)} - {socksEntry.unit}
+                                                <p className="text-[11px] font-bold italic text-foreground">
+                                                    {formatAddonPriceLabel(socksEntry.price, socksEntry.unit, t.addons.each, t.addons.eachLong)}
                                                 </p>
                                             </div>
                                             <Counter
@@ -614,6 +641,20 @@ export const AddonsOffer = ({
                                                 testId="addon-option-socks"
                                             />
                                         </div>
+                                    )}
+
+                                    {showSocksConfirmation && (
+                                        <label className="mt-3 flex min-w-0 items-start gap-2 rounded-lg border border-border bg-white px-3 py-2 text-left">
+                                            <input
+                                                type="checkbox"
+                                                checked={alreadyHasApprovedSocks}
+                                                onChange={(event) => setSocksConfirmation(event.target.checked)}
+                                                className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                                            />
+                                            <span className="min-w-0 break-words text-xs font-bold italic text-foreground">
+                                                {t.addons.socksAlreadyHave}
+                                            </span>
+                                        </label>
                                     )}
                                 </section>
                             )}
@@ -632,19 +673,19 @@ export const AddonsOffer = ({
                                         className={`w-full border rounded-xl p-2.5 shadow-sm ${
                                             isHighlighted
                                                 ? 'bg-primary/5 border-primary/30'
-                                                : 'bg-surface border-border'
+                                                : 'bg-white border-border'
                                         } ${!isEnabled ? 'opacity-60' : ''}`}
                                     >
-                                        <div className="flex items-center justify-between gap-3">
+                                        <div className="flex min-w-0 items-center justify-between gap-3">
                                             <div className="flex items-center gap-2.5 flex-1 min-w-0">
                                                 <JumpyardIcon name={entry.icon} className="w-8 h-8 flex-shrink-0" />
                                                 <div className="min-w-0">
-                                                    <p className="text-foreground font-bold italic text-sm">{entry.label}</p>
-                                                    <p className="text-muted text-[11px]">
-                                                        {formatMoney(entry.price)} - {entry.unit}
+                                                    <p className="truncate text-foreground font-bold italic text-sm">{entry.label}</p>
+                                                    <p className="text-foreground text-[11px]">
+                                                        {formatAddonPriceLabel(entry.price, entry.unit, t.addons.each, t.addons.eachLong)}
                                                     </p>
                                                     {!isEnabled && (
-                                                        <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded-full bg-surface-strong text-muted text-[9px] font-bold italic uppercase tracking-wide">{t.addons.unsupported}</span>
+                                                        <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded-full bg-white border border-border text-foreground text-[9px] font-bold italic uppercase tracking-wide">{t.addons.unsupported}</span>
                                                     )}
                                                     {entry.id === 'connected' && isEnabled && (
                                                         <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] font-bold italic uppercase tracking-wide">{t.addons.connectedValueProp}</span>
@@ -671,8 +712,8 @@ export const AddonsOffer = ({
                     </div>
 
                     <div className="pt-3 border-t border-border mt-3">
-                        <div className="w-full flex items-center justify-between bg-surface-strong border border-border rounded-xl px-4 py-2.5 mb-3">
-                            <p className="text-muted uppercase text-xs font-bold italic tracking-wider">{t.addons.total}</p>
+                        <div className="w-full flex items-center justify-between bg-white border border-border rounded-xl px-4 py-2.5 mb-3">
+                            <p className="text-foreground uppercase text-xs font-bold italic tracking-wider">{t.addons.total}</p>
                             <p className="text-2xl font-black italic text-primary">{addonsTotal} {t.common.currency}</p>
                         </div>
 
@@ -699,30 +740,32 @@ export const AddonsOffer = ({
             )}
 
             {step === 'REVIEW' && quote && (
-                <motion.div data-testid="addons-review" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full bg-surface border border-border p-5 rounded-2xl">
+                <motion.div data-testid="addons-review" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-full min-w-0 px-2 py-5">
                     <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">{t.addons.reviewTitle}</h2>
-                    <p className="text-muted text-xs mb-5 text-center">{t.addons.reviewDesc}</p>
+                    <p className="text-foreground text-xs mb-5 text-center">{t.addons.reviewDesc}</p>
 
-                    <div className="bg-white border border-border rounded-xl p-4 mb-4">
+                    <div className="overflow-hidden rounded-2xl border border-border bg-white mb-4">
                         {addedAddons.map((addon) => {
                             const entry = catalogById.get(addon.id);
                             return (
-                                <div key={addon.id} className="flex justify-between items-center gap-3 text-sm font-bold text-foreground py-1">
-                                    <div className="flex items-center gap-2 min-w-0">
+                                <div key={addon.id} className="flex min-w-0 justify-between items-center gap-3 border-b border-border px-3 py-3 text-sm font-bold text-foreground last:border-b-0">
+                                    <div className="flex min-w-0 flex-1 items-center gap-2">
                                         <JumpyardIcon name={entry?.icon ?? 'addons-bag'} className="w-7 h-7 flex-shrink-0" />
                                         <span className="min-w-0">
-                                            <span className="block truncate">{addon.label} x {addon.qty}</span>
-                                            <span className="block text-[11px] font-normal text-muted">{formatMoney(addon.price)} / st</span>
+                                            <span className="block truncate">{addon.label} x{addon.qty}</span>
+                                            <span className="block text-[11px] font-normal text-foreground">
+                                                {formatAddonPriceLabel(addon.price, entry?.unit ?? t.addons.each, t.addons.each, t.addons.eachLong)}
+                                            </span>
                                         </span>
                                     </div>
-                                    <span className="flex-shrink-0">{formatMoney(addon.price * addon.qty)}</span>
+                                    <span className="flex-shrink-0 text-primary font-black italic">{formatMoney(addon.price * addon.qty)}</span>
                                 </div>
                             );
                         })}
                     </div>
 
                     <div className="bg-white border border-border p-3 rounded-xl mb-5 flex justify-between items-center px-4">
-                        <span className="text-muted text-sm font-bold italic uppercase">{t.buy.total}</span>
+                        <span className="text-foreground text-sm font-bold italic uppercase">{t.buy.total}</span>
                         <span className="text-xl font-black italic text-primary">{formatMoney(quote.costs.amountOwing)}</span>
                     </div>
 
@@ -745,12 +788,12 @@ export const AddonsOffer = ({
                     className="w-full flex items-center justify-center"
                     style={{ minHeight: 'calc(100dvh - 160px)' }}
                 >
-                    <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
+                    <div className="w-full bg-white border border-border p-5 rounded-2xl text-center">
                         <div className="w-14 h-14 rounded-full bg-success/10 border border-success/25 mx-auto mb-4 flex items-center justify-center">
                             <Check size={30} className="text-success" />
                         </div>
                         <h2 className="text-xl font-black italic text-foreground uppercase mb-2">{t.addons.paymentApprovedTitle}</h2>
-                        <p className="text-muted text-sm">{t.addons.paymentApprovedDesc}</p>
+                        <p className="text-foreground text-sm">{t.addons.paymentApprovedDesc}</p>
                     </div>
                 </motion.div>
             )}
@@ -762,20 +805,20 @@ export const AddonsOffer = ({
                     className="w-full flex items-center justify-center"
                     style={{ minHeight: 'calc(100dvh - 160px)' }}
                 >
-                    <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
+                    <div className="w-full bg-white border border-border p-5 rounded-2xl text-center">
                         <div className="w-14 h-14 rounded-full bg-white border border-border mx-auto mb-4 flex items-center justify-center">
                             <CreditCard size={28} className="text-primary" />
                         </div>
                         <h2 className="text-xl font-black italic text-foreground uppercase mb-2">{t.addons.pendingTitle}</h2>
-                        <p className="text-muted text-sm mb-5">{t.addons.pendingDesc}</p>
+                        <p className="text-foreground text-sm mb-5">{t.addons.pendingDesc}</p>
 
                         <div className="bg-white border border-border rounded-xl p-4 mb-5 text-left">
                             <div className="flex justify-between gap-3 text-sm mb-2">
-                                <span className="text-muted font-bold italic uppercase">{t.buy.total}</span>
+                                <span className="text-foreground font-bold italic uppercase">{t.buy.total}</span>
                                 <span className="font-black text-primary">{formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}</span>
                             </div>
                             <div className="flex justify-between gap-3 text-xs">
-                                <span className="text-muted">{t.buy.draftStatus}</span>
+                                <span className="text-foreground">{t.buy.draftStatus}</span>
                                 <span className="font-bold text-foreground">{t.buy.paymentPending}</span>
                             </div>
                         </div>
@@ -802,7 +845,7 @@ function getRecommendedAddonQty(minQty: Record<AddonId, number>): Record<AddonId
 
 function AddonsLoadingCard({ label }: { label: string }) {
     return (
-        <div className="w-full min-h-[260px] rounded-2xl border border-border bg-surface p-6 shadow-sm flex flex-col items-center justify-center text-center">
+        <div className="w-full min-h-[260px] rounded-2xl border border-border bg-white p-6 shadow-sm flex flex-col items-center justify-center text-center">
             <div className="relative mb-4 flex h-20 w-20 items-center justify-center">
                 <div className="absolute inset-0 rounded-full border-4 border-primary/15 border-t-primary animate-spin" />
                 <JumpyardIcon name="addons-bag" className="h-11 w-11" />

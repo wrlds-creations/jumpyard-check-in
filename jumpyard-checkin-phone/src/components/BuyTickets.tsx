@@ -106,6 +106,20 @@ function formatMoney(value: number | null | undefined) {
   return `${Math.round(value)} kr`;
 }
 
+function formatBasketLineLabel(label: string) {
+  return label.replace(/\s*\u00C2?\u00B7\s*/g, ' ');
+}
+
+function formatAddonPriceLabel(
+  value: number | null | undefined,
+  unit: string,
+  eachUnit: string,
+  eachLongUnit: string
+) {
+  const unitLabel = unit === eachUnit ? eachLongUnit : unit;
+  return `${formatMoney(value)} ${unitLabel}`;
+}
+
 function buildGiftCardInputs(value: string): NewBookingGiftCardInput[] {
   const giftCardNumber = value.trim();
   return giftCardNumber ? [{ giftCardNumber }] : [];
@@ -154,6 +168,10 @@ function getDiscountCodeAppliedAmount(quote: NewBookingQuote | null) {
   if (!quote?.discountCodes || quote.discountCodes.requestedCount === 0 || quote.discountCodes.errors.length > 0) return null;
   if (quote.discountCodes.totalApplied !== null) return quote.discountCodes.totalApplied;
   return quote.costs.discount ?? null;
+}
+
+function hasPaymentOptionQuoteErrors(quote: NewBookingQuote) {
+  return (quote.giftCards?.errors.length ?? 0) > 0 || (quote.discountCodes?.errors.length ?? 0) > 0;
 }
 
 function buildProductLabelMap(
@@ -662,6 +680,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   const [giftCardNumber, setGiftCardNumber] = useState('');
   const [clipCardCode, setClipCardCode] = useState('');
   const [paymentOptionsOpen, setPaymentOptionsOpen] = useState(false);
+  const [checkoutBreakdownOpen, setCheckoutBreakdownOpen] = useState(false);
   const [giftCardInputDirty, setGiftCardInputDirty] = useState(false);
   const [clipCardInputDirty, setClipCardInputDirty] = useState(false);
   const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
@@ -692,7 +711,8 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   const socksQty = addonQty.socks;
   const socksRecommendedVisibleCount = Math.min(Math.max(0, jumperCount), 5);
   const socksRecommendationProgress = Math.min(100, Math.round((socksQty / Math.max(1, jumperCount)) * 100));
-  const showSocksConfirmation = socksQty === 0;
+  const showSocksConfirmation = Boolean(socksAddon);
+  const socksRequirementMet = !socksAddon || socksQty > 0 || alreadyHasApprovedSocks;
   const selectedAddons: Addon[] = buyAddons.flatMap((addon) => {
     if (addonQty[addon.id] <= 0 || getBuyAddonMax(addon) <= 0 || !isPricedAddon(addon)) return [];
 
@@ -743,23 +763,6 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
             ? t.buy.clipCardRejected
             : t.buy.paymentCodeDone;
   const paymentInputsHaveValues = Boolean(giftCardNumber.trim() || clipCardCode.trim());
-  const giftCardWasApplied =
-    (quote?.giftCards?.appliedCount ?? 0) > 0 || (quote?.giftCards?.totalApplied ?? 0) > 0;
-  const discountCodeWasApplied =
-    (quote?.discountCodes?.appliedCount ?? 0) > 0 || (quote?.discountCodes?.totalApplied ?? 0) > 0;
-  const giftCardNeedsQuoteRefresh =
-    giftCardInputDirty && (Boolean(giftCardNumber.trim()) || giftCardWasApplied);
-  const clipCardNeedsQuoteRefresh =
-    clipCardInputDirty && (Boolean(clipCardCode.trim()) || discountCodeWasApplied);
-  const paymentInputsNeedQuoteRefresh = giftCardNeedsQuoteRefresh || clipCardNeedsQuoteRefresh;
-  const paymentOptionsApplyLabel =
-    giftCardNumber.trim() && clipCardCode.trim()
-      ? t.buy.paymentOptionsApplyBoth
-      : giftCardNumber.trim()
-        ? t.buy.paymentOptionsApplyGiftCard
-        : clipCardCode.trim()
-          ? t.buy.paymentOptionsApplyClipCard
-          : t.buy.paymentOptionsApplyChanges;
   const paymentInputsBlockingErrors =
     (!giftCardInputDirty && Boolean(giftCardNumber.trim()) && giftCardErrors.length > 0) ||
     (!clipCardInputDirty && Boolean(clipCardCode.trim()) && discountCodeErrors.length > 0);
@@ -768,6 +771,9 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   const draftAmountOwing = getDraftAmountOwing(draft);
   const noPaymentRequired = draftAmountOwing !== null && draftAmountOwing <= 0;
   const showPaymentSyncCard = paymentApprovedForSync || paymentSyncing || Boolean(paymentSyncError);
+  const checkoutAmount = draftAmountOwing ?? quote?.costs.amountOwing ?? basketEstimateTotal;
+  const checkoutTotal = quote?.costs.total ?? basketEstimateTotal;
+  const checkoutLocked = Boolean(draft) || showPaymentSyncCard;
 
   const clearPaymentSyncState = () => {
     setPaymentSyncError(null);
@@ -894,11 +900,15 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
           return;
         }
         if (recoverySnapshot.currentFlowStep === 'SKYRIDER_ATTEST') {
-          setStep(needsRecoveredSkyRiderConsent ? 'SKYRIDER_ATTEST' : 'CONTACT');
+          setStep(needsRecoveredSkyRiderConsent ? 'SKYRIDER_ATTEST' : 'REVIEW');
           return;
         }
         if (recoverySnapshot.currentFlowStep === 'CONTACT') {
           setStep(needsRecoveredSkyRiderConsent ? 'SKYRIDER_ATTEST' : 'CONTACT');
+          return;
+        }
+        if (recoverySnapshot.currentFlowStep === 'REVIEW') {
+          setStep(needsRecoveredSkyRiderConsent ? 'SKYRIDER_ATTEST' : 'REVIEW');
           return;
         }
 
@@ -1023,7 +1033,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
             label: `${selectedProductDurationLabel} · ${selectedProductTypeLabel}`,
             qty: quantity,
             total: entryTotal,
-            icon: 'admission-ticket' as JumpyardIconName,
+            icon: (selectedProduct.type === 'family' ? 'group' : 'admission-ticket') as JumpyardIconName,
           },
         ]
       : []),
@@ -1149,12 +1159,13 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   const needsSkyRiderConsent = () => skyriderSelected && !skyriderConsentConfirmed;
 
   const continueFromAddons = () => {
+    if (!socksRequirementMet) return;
     if (needsSkyRiderConsent()) {
       setStep('SKYRIDER_ATTEST');
       return;
     }
 
-    setStep('CONTACT');
+    setStep('REVIEW');
   };
 
   const buildCustomer = (): NewBookingCustomer => ({
@@ -1184,48 +1195,39 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
     ];
   };
 
-  const goToReview = async () => {
+  const createDraft = async () => {
+    if (draft) {
+      setStep('PAYMENT');
+      return;
+    }
     if (!selectedProduct || !customerValid || submitting) return;
     if (needsSkyRiderConsent()) {
       setStep('SKYRIDER_ATTEST');
       return;
     }
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      const result = await quoteNewBooking(
-        buildCustomer(),
-        buildItems(),
-        shouldPrecheckBasketAvailability,
-        giftCardInputs,
-        discountCodeInputs
-      );
-      setQuote(result);
-      setGiftCardInputDirty(false);
-      setClipCardInputDirty(false);
-      setStep('REVIEW');
-    } catch (error) {
-      setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.quoteFailed));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const createDraft = async () => {
-    if (!selectedProduct || !quote || submitting) return;
-    if (needsSkyRiderConsent()) {
-      setStep('SKYRIDER_ATTEST');
-      return;
-    }
-    if (paymentInputsNeedQuoteRefresh) {
+    if (paymentInputsBlockingErrors) {
       setSubmitError(t.buy.paymentOptionsUpdateRequired);
       return;
     }
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const quoted = await quoteNewBooking(
+        buildCustomer(),
+        buildItems(),
+        shouldPrecheckBasketAvailability,
+        giftCardInputs,
+        discountCodeInputs
+      );
+      setQuote(quoted);
+      setGiftCardInputDirty(false);
+      setClipCardInputDirty(false);
+      if (hasPaymentOptionQuoteErrors(quoted)) {
+        setSubmitError(t.buy.paymentOptionsUpdateRequired);
+        return;
+      }
+
       const itemKey = basketLines.map((line) => `${line.key}-${line.qty}`).join(':');
-      if (paymentInputsBlockingErrors) return;
 
       const result = await createDraftBooking(
         buildCustomer(),
@@ -1278,7 +1280,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
 
   const backFromStep = () => {
     if (step === 'PAYMENT') {
-      setStep('REVIEW');
+      setStep('CONTACT');
       return;
     }
     if (step === 'PENDING') {
@@ -1286,8 +1288,8 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
       onBack();
       return;
     }
-    if (step === 'REVIEW') setStep('CONTACT');
-    else if (step === 'CONTACT') setStep('ADDONS');
+    if (step === 'REVIEW') setStep('ADDONS');
+    else if (step === 'CONTACT') setStep('REVIEW');
     else if (step === 'SKYRIDER_ATTEST') setStep('ADDONS');
     else if (step === 'ADDONS') setStep('QUANTITY');
     else if (step === 'QUANTITY') setStep('PRODUCT');
@@ -1304,14 +1306,13 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
     const durationLabel = getProductDurationLabel(product);
     const capacityLabel = getCapacityLabel(product, t.buy.spotsAvailable, t.buy.spotsLeft);
     const iconName: JumpyardIconName = product.type === 'family' ? 'group' : 'admission-ticket';
-    const productMeta =
-      product.type === 'family' ? `${t.buy.familyNote} · ${capacityLabel}` : capacityLabel;
+    const ticketUnitLabel = product.type === 'family' ? t.buy.familyNote : t.buy.perPersonNote;
     return (
       <button
         key={product.key}
         onClick={() => available && handleProductSelect(product)}
         disabled={!available}
-        className={`p-3.5 rounded-xl text-left flex items-center gap-3 transition-all border ${
+        className={`min-w-0 p-3.5 rounded-xl text-left flex items-center gap-3 transition-all border ${
           available
             ? 'bg-white border-border active:scale-[0.98]'
             : 'bg-surface-strong border-border opacity-50 cursor-not-allowed'
@@ -1322,15 +1323,24 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
           <p className={`text-lg font-black italic uppercase ${available ? 'text-foreground' : 'text-muted'}`}>
             {durationLabel}
           </p>
-          <p className={`text-[10px] font-bold italic uppercase tracking-wider mt-0.5 ${
-            available ? 'text-muted' : 'text-muted/70'
-          }`}>
-            {available
-              ? productMeta
-              : t.buy.spotsFull}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-black italic uppercase ${
+                available ? 'bg-primary text-white' : 'bg-surface text-muted'
+              }`}
+            >
+              {ticketUnitLabel}
+            </span>
+            <span
+              className={`text-[10px] font-normal italic uppercase tracking-wider ${
+                available ? 'text-foreground' : 'text-muted/70'
+              }`}
+            >
+              {available ? capacityLabel : t.buy.spotsFull}
+            </span>
+          </div>
         </div>
-        <p className={`text-base font-black italic ${available ? 'text-primary' : 'text-muted/60'}`}>
+        <p className={`shrink-0 text-base font-black italic ${available ? 'text-primary' : 'text-muted/60'}`}>
           {formatMoney(product.unitPrice)}
         </p>
       </button>
@@ -1364,7 +1374,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
 
   return (
     <motion.div
-      className="w-full max-w-md mx-auto px-4"
+      className="w-full max-w-md min-w-0 mx-auto px-4"
       data-prepayment-status={draft?.prepayment?.status ?? ''}
       data-prepayment-draft-id={draft?.prepayment?.prepaymentDraftId ?? ''}
       data-payment-syncing={String(paymentSyncing)}
@@ -1386,8 +1396,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
           <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">
             {t.buy.selectTime}
           </h2>
-          <p className="text-foreground text-xs font-black italic uppercase text-center mb-1">{todayLabel}</p>
-          <p className="text-muted text-xs mb-4 text-center">{t.buy.selectTimeDesc}</p>
+          <p className="text-foreground text-xs font-black italic uppercase text-center mb-5">{todayLabel}</p>
 
           {availabilityError && (
             <div className="mb-4 bg-white border border-danger/25 rounded-xl p-3 text-sm text-foreground flex gap-2">
@@ -1400,24 +1409,24 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
             <AvailabilityLoadingCard selectedTime={selectedTime} />
           ) : (
             <>
-              <div className="flex flex-col gap-2 mb-5">
+              <div className="flex flex-col gap-3 mb-6">
                 {slots.map((time) => {
                   const isSelected = selectedTime === time;
                   return (
                     <button
                       key={time}
                       onClick={() => handleTimeSelect(time)}
-                      className={`w-full p-3.5 rounded-xl text-left flex items-center justify-between transition-all ${
+                      className={`w-full min-h-[76px] px-5 py-4 rounded-2xl text-left flex items-center justify-between transition-all ${
                         isSelected
                           ? 'bg-primary text-white border-2 border-primary'
                           : 'bg-white border border-border active:scale-[0.98]'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-4">
                         <span className={isSelected ? 'rounded-md bg-white' : ''}>
-                          <JumpyardIcon name="time" className="w-7 h-7" />
+                          <JumpyardIcon name="time" className="w-9 h-9" />
                         </span>
-                        <span className={`text-lg font-black italic ${isSelected ? 'text-white' : 'text-foreground'}`}>
+                        <span className={`text-2xl font-black italic ${isSelected ? 'text-white' : 'text-foreground'}`}>
                           {time}
                         </span>
                       </div>
@@ -1431,7 +1440,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                 disabled={!selectedTime}
                 className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
               >
-                {t.common.continue} <Check size={18} />
+                {t.common.continue}
               </button>
             </>
           )}
@@ -1454,19 +1463,19 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
             {t.buy.selectJumpTime}
           </h2>
           {selectedTime && (
-            <p className="text-muted text-xs mb-4 text-center flex items-center justify-center gap-1.5 uppercase font-bold italic">
+            <p className="text-foreground text-xs mb-4 text-center flex items-center justify-center gap-1.5 uppercase font-black italic">
               <JumpyardIcon name="time" className="w-5 h-5" />
               <span>{t.buy.startTimeLabel} {selectedTime} {t.buy.todaySuffix}</span>
             </p>
           )}
 
           <div className="mb-3">
-            <p className="text-[10px] text-muted uppercase font-bold italic tracking-widest mb-2 px-1">{t.buy.sectionEntry}</p>
+            <p className="text-xs text-foreground uppercase font-black italic tracking-wider mb-2 px-1">{t.buy.sectionEntry}</p>
             <div className="flex flex-col gap-2">{entryProducts.map(renderProductCard)}</div>
           </div>
 
           <div>
-            <p className="text-[10px] text-muted uppercase font-bold italic tracking-widest mb-2 px-1">{t.buy.sectionFamily}</p>
+            <p className="text-xs text-foreground uppercase font-black italic tracking-wider mb-2 px-1">{t.buy.sectionFamily}</p>
             <div className="flex flex-col gap-2">{familyProducts.map(renderProductCard)}</div>
           </div>
         </>
@@ -1476,43 +1485,47 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="w-full flex items-center justify-center"
+          className="w-full max-w-full min-w-0 flex items-center justify-center"
           style={{ minHeight: 'calc(100dvh - 160px)' }}
         >
-          <div className="w-full bg-surface border border-border p-5 rounded-2xl text-center">
-            <div className="bg-white border border-border rounded-xl px-3 py-2 mb-4 inline-flex items-center gap-2">
-              <JumpyardIcon name="admission-ticket" className="w-6 h-6" />
-              <span className="text-sm font-bold italic text-foreground">{selectedProductDurationLabel}</span>
-              {selectedProduct.type === 'family' && (
-                <span className="text-[10px] text-muted">· {t.buy.familyNote}</span>
-              )}
+          <div className="w-full px-2 py-5 text-center">
+            <div className="max-w-full bg-white border border-border rounded-2xl px-4 py-3 mb-6 inline-flex flex-wrap items-center justify-center gap-3 shadow-sm">
+              <JumpyardIcon
+                name={selectedProduct.type === 'family' ? 'group' : 'admission-ticket'}
+                className="w-8 h-8"
+              />
+              <span className="text-lg font-black italic uppercase text-foreground">
+                {selectedProduct.type === 'family'
+                  ? `${selectedProductDurationLabel} ${t.buy.sectionFamily}`
+                  : selectedProductDurationLabel}
+              </span>
             </div>
 
-            <h2 className="text-xl font-black italic text-foreground uppercase mb-1">
+            <h2 className="text-2xl font-black italic text-foreground uppercase mb-2">
               {selectedProduct.type === 'family' ? t.buy.quantityPackages : t.buy.quantityJumpers}
             </h2>
-            <p className="text-muted text-xs mb-4 flex items-center justify-center gap-1">
-              <JumpyardIcon name="time" className="w-5 h-5" /> {t.buy.startTimeLabel} {selectedProduct.startTime} {t.buy.todaySuffix}
+            <p className="text-foreground text-sm font-normal italic uppercase mb-6 flex items-center justify-center gap-2">
+              <JumpyardIcon name="time" className="w-6 h-6" /> {t.buy.startTimeLabel} {selectedProduct.startTime} {t.buy.todaySuffix}
             </p>
 
-            <div className="flex items-center justify-center gap-6 mb-2">
+            <div className="flex items-center justify-center gap-7 mb-3">
               <button
                 onClick={() => updateQuantity(quantity - 1)}
                 disabled={quantity <= 1}
-                className="w-12 h-12 rounded-full bg-surface-strong border border-border flex items-center justify-center text-foreground text-xl font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-14 h-14 rounded-full bg-surface-strong border border-border flex items-center justify-center text-foreground text-xl font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Minus size={20} />
               </button>
-              <span className="text-4xl font-black italic text-foreground w-16 text-center">{quantity}</span>
+              <span className="text-5xl font-black italic text-foreground w-16 text-center">{quantity}</span>
               <button
                 onClick={() => updateQuantity(quantity + 1)}
                 disabled={quantity >= maxQuantity}
-                className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center text-xl font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center text-xl font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Plus size={20} />
               </button>
             </div>
-            <p className="text-[10px] text-muted uppercase font-bold italic tracking-wider mb-5">
+            <p className="text-xs text-foreground uppercase font-normal italic tracking-wider mb-6">
               {maxQuantity > 0
                 ? `${getCapacityLabel(selectedProduct, t.buy.spotsAvailable, t.buy.spotsLeft)} · ${
                     t.buy.maxReached
@@ -1520,8 +1533,8 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                 : t.buy.spotsFull}
             </p>
 
-            <div className="bg-white border border-border p-3 rounded-xl mb-5 flex justify-between items-center px-4">
-              <span className="text-muted text-sm font-bold italic uppercase">{t.buy.total}</span>
+            <div className="bg-white border border-border p-4 rounded-2xl mb-5 flex justify-between items-center px-5">
+              <span className="text-foreground text-sm font-black italic uppercase">{t.buy.total}</span>
               <span className="text-xl font-black italic text-primary">
                 {formatMoney((selectedProduct.unitPrice ?? 0) * quantity)}
               </span>
@@ -1529,9 +1542,9 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
 
             <button
               onClick={() => setStep('ADDONS')}
-              className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+              className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center active:scale-[0.98]"
             >
-              {t.common.continue} <Check size={18} />
+              {t.common.continue}
             </button>
           </div>
         </motion.div>
@@ -1546,7 +1559,6 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
         >
           <div className="text-center mb-3">
             <h2 className="text-xl font-black italic text-foreground uppercase mb-1">{t.addons.title}</h2>
-            <p className="text-muted text-xs">{t.addons.description}</p>
           </div>
 
           <div className="flex-1 flex flex-col gap-2 mb-4">
@@ -1563,12 +1575,12 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                 </div>
 
                 {!alreadyHasApprovedSocks && (
-                  <div className="mt-3 rounded-xl border border-border bg-surface-strong px-3 py-3">
+                  <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-black italic uppercase tracking-wider text-muted">
+                      <span className="text-[10px] font-black italic uppercase tracking-wider text-foreground">
                         {t.addons.socksRecommendedCount}
                       </span>
-                      <span className="rounded-full bg-white px-3 py-1 text-sm font-black italic text-primary shadow-sm">
+                      <span className="rounded-full bg-primary px-3 py-1 text-sm font-black italic text-white shadow-sm">
                         {jumperCount}
                       </span>
                     </div>
@@ -1578,7 +1590,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                           <JumpyardIcon key={index} name="grip-socks" className="h-5 w-5" />
                         ))}
                         {jumperCount > socksRecommendedVisibleCount && (
-                          <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-black italic text-muted shadow-sm">
+                          <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-black italic text-foreground shadow-sm">
                             +{jumperCount - socksRecommendedVisibleCount}
                           </span>
                         )}
@@ -1587,7 +1599,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                         {t.addons.socksSelectedCount} {socksQty}/{jumperCount}
                       </span>
                     </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-primary/10">
                       <div
                         className="h-full rounded-full bg-primary transition-all"
                         style={{ width: `${socksRecommendationProgress}%` }}
@@ -1596,8 +1608,19 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                   </div>
                 )}
 
+                {!alreadyHasApprovedSocks && (
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold italic text-muted">
+                        {formatAddonPriceLabel(socksAddon.price, socksAddon.unit, t.addons.each, t.addons.eachLong)}
+                      </p>
+                    </div>
+                    {renderAddonStepper(socksAddon)}
+                  </div>
+                )}
+
                 {showSocksConfirmation && (
-                  <label className="mt-3 flex items-start gap-2 rounded-lg bg-surface/70 px-3 py-2 text-left">
+                  <label className="mt-3 flex items-start gap-2 rounded-xl border border-primary/20 bg-white px-3 py-3 text-left shadow-sm">
                     <input
                       type="checkbox"
                       checked={alreadyHasApprovedSocks}
@@ -1609,17 +1632,6 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                     </span>
                   </label>
                 )}
-
-                {!alreadyHasApprovedSocks && (
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-bold italic text-muted">
-                        {formatMoney(socksAddon.price)} - {socksAddon.unit}
-                      </p>
-                    </div>
-                    {renderAddonStepper(socksAddon)}
-                  </div>
-                )}
               </section>
             )}
 
@@ -1627,14 +1639,14 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
               return (
                 <div
                   key={addon.id}
-                  className="bg-white border border-border rounded-xl p-3 flex items-center justify-between gap-3"
+                  className="min-w-0 bg-white border border-border rounded-xl p-3 flex items-center justify-between gap-3"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                     <JumpyardIcon name={addon.icon} className="w-9 h-9 flex-shrink-0" />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-black italic text-foreground uppercase truncate">{addon.label}</p>
                       <p className="text-[11px] text-muted">
-                        {formatMoney(addon.price)} - {addon.unit}
+                        {formatAddonPriceLabel(addon.price, addon.unit, t.addons.each, t.addons.eachLong)}
                       </p>
                     </div>
                   </div>
@@ -1644,16 +1656,17 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
             })}
           </div>
 
-          <div className="bg-white border border-border p-3 rounded-xl mb-4 flex justify-between items-center px-4">
-            <span className="text-muted text-sm font-bold italic uppercase">{t.buy.total}</span>
+          <div className="bg-white border border-border p-4 rounded-2xl mb-4 flex justify-between items-center px-5">
+            <span className="text-foreground text-sm font-black italic uppercase">{t.buy.total}</span>
             <span className="text-xl font-black italic text-primary">{formatMoney(basketEstimateTotal)}</span>
           </div>
 
           <button
             onClick={continueFromAddons}
-            className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+            disabled={!socksRequirementMet}
+            className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center active:scale-[0.98]"
           >
-            {t.common.continue} <Check size={18} />
+            {t.common.continue}
           </button>
         </motion.div>
       )}
@@ -1662,7 +1675,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
         <SkyRiderAttest
           onComplete={() => {
             setSkyriderConsentConfirmed(true);
-            setStep('CONTACT');
+            setStep('REVIEW');
           }}
         />
       )}
@@ -1674,148 +1687,96 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
           className="w-full flex flex-col items-center justify-center"
           style={{ minHeight: 'calc(100dvh - 160px)' }}
         >
-          <div className="w-full bg-surface border border-border p-5 rounded-2xl">
-            <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">{t.buy.contactTitle}</h2>
-            <p className="text-muted text-xs mb-5 text-center">{t.buy.contactDesc}</p>
+          <div className="w-full px-2 py-5">
+            <h2 className="mb-5 text-center text-xl font-black italic uppercase text-foreground">
+              {t.buy.contactTitle}
+            </h2>
 
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <label>
-                <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest block mb-1">
-                  {t.buy.firstNameLabel}
+            <section className="mb-4 rounded-2xl border border-border bg-white p-4">
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <label>
+                  <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider block mb-1">
+                    {t.buy.firstNameLabel}
+                  </span>
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    autoComplete="given-name"
+                    disabled={checkoutLocked}
+                    className="w-full bg-white border border-border rounded-xl px-3 py-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
+                  />
+                </label>
+                <label>
+                  <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider block mb-1">
+                    {t.buy.lastNameLabel}
+                  </span>
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    autoComplete="family-name"
+                    disabled={checkoutLocked}
+                    className="w-full bg-white border border-border rounded-xl px-3 py-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
+                  />
+                </label>
+              </div>
+
+              <label className="block mb-3">
+                <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider flex items-center gap-1.5 mb-1">
+                  <JumpyardIcon name="email-confirmed" className="w-5 h-5" /> {t.buy.emailLabel}
                 </span>
                 <input
-                  type="text"
-                  value={firstName}
-                  onChange={(event) => setFirstName(event.target.value)}
-                  autoComplete="given-name"
-                  className="w-full bg-white border border-border rounded-xl px-3 py-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder={t.buy.emailPlaceholder}
+                  autoComplete="email"
+                  disabled={checkoutLocked}
+                  className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
                 />
               </label>
-              <label>
-                <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest block mb-1">
-                  {t.buy.lastNameLabel}
+
+              <label className="block">
+                <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider flex items-center gap-1.5 mb-1">
+                  <JumpyardIcon name="phone" className="h-5 w-5" /> {t.buy.phoneLabel}
                 </span>
                 <input
-                  type="text"
-                  value={lastName}
-                  onChange={(event) => setLastName(event.target.value)}
-                  autoComplete="family-name"
-                  className="w-full bg-white border border-border rounded-xl px-3 py-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
+                  type="tel"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder={t.buy.phonePlaceholder}
+                  autoComplete="tel"
+                  disabled={checkoutLocked}
+                  className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
                 />
               </label>
-            </div>
+            </section>
 
-            <label className="block mb-3">
-              <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
-                <JumpyardIcon name="email-confirmed" className="w-5 h-5" /> {t.buy.emailLabel}
-              </span>
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder={t.buy.emailPlaceholder}
-                autoComplete="email"
-                className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
-              />
-            </label>
-
-            <label className="block mb-5">
-              <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
-                <JumpyardIcon name="phone" className="h-5 w-5" /> {t.buy.phoneLabel}
-              </span>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder={t.buy.phonePlaceholder}
-                autoComplete="tel"
-                className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"
-              />
-            </label>
-
-            {submitError && (
-              <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>
-            )}
-
-            <button
-              onClick={goToReview}
-              disabled={!customerValid || submitting}
-              className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
-            >
-              {submitting ? t.buy.quoting : t.common.continue} {!submitting && <Check size={18} />}
-            </button>
-          </div>
-        </motion.div>
-      )}
-
-      {step === 'REVIEW' && selectedProduct && quote && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="w-full flex items-center justify-center"
-          style={{ minHeight: 'calc(100dvh - 160px)' }}
-        >
-          <div className="w-full bg-surface border border-border p-5 rounded-2xl">
-            <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">{t.buy.reviewTitle}</h2>
-            <p className="text-muted text-xs mb-5 text-center">{t.buy.reviewDesc}</p>
-
-            <div className="bg-white border border-border rounded-xl p-3 mb-4">
-              <div className="mb-3 grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-lg bg-surface/70 px-2 py-2">
-                  <JumpyardIcon name="time" className="mx-auto mb-1 h-7 w-7" />
-                  <p className="text-[9px] font-bold italic uppercase tracking-wider text-muted">{t.buy.startTimeLabel}</p>
-                  <p className="text-sm font-black italic text-foreground">{selectedProduct.startTime}</p>
-                  <p className="text-[9px] uppercase text-muted">{t.buy.todaySuffix}</p>
-                </div>
-                <div className="rounded-lg bg-surface/70 px-2 py-2">
-                  <JumpyardIcon name="trampoline-jump" className="mx-auto mb-1 h-7 w-7" />
-                  <p className="text-[9px] font-bold italic uppercase tracking-wider text-muted">{t.buy.jumpTimeLabel}</p>
-                  <p className="text-sm font-black italic text-foreground">{selectedProductDurationLabel}</p>
-                </div>
-                <div className="rounded-lg bg-surface/70 px-2 py-2">
-                  <JumpyardIcon name="group" className="mx-auto mb-1 h-7 w-7" />
-                  <p className="text-[9px] font-bold italic uppercase tracking-wider text-muted">{t.buy.jumpersLabel}</p>
-                  <p className="text-sm font-black italic text-foreground">{jumperCount}</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {basketLines.map((line) => (
-                  <div key={line.key} className="flex items-center gap-2 rounded-lg bg-surface/60 px-2.5 py-2">
-                    <JumpyardIcon name={line.icon} className="h-7 w-7 flex-shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-black italic uppercase text-foreground">{line.label}</p>
-                      <p className="text-[11px] text-muted">{line.qty} st</p>
-                    </div>
-                    <span className="text-sm font-black italic text-foreground">{formatMoney(line.total)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-white border border-border rounded-xl mb-4 overflow-hidden">
+            <section className="mb-4 rounded-2xl border-2 border-primary/25 bg-white px-4 shadow-sm">
               <button
                 type="button"
                 onClick={() => setPaymentOptionsOpen((open) => !open)}
-                className="flex w-full items-center justify-between gap-3 p-3 text-left"
+                className="flex w-full items-center justify-between gap-3 py-4 text-left"
               >
-                <div className="flex min-w-0 items-center gap-2">
-                  <JumpyardIcon name="payment-card" className="h-8 w-8 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-black italic uppercase text-foreground">{t.buy.paymentOptionsTitle}</p>
-                  </div>
+                <div className="flex min-w-0 items-center gap-3">
+                  <JumpyardIcon name="presentkort" className="h-8 w-8 flex-shrink-0" />
+                  <p className="min-w-0 text-sm font-black italic uppercase leading-tight text-foreground">
+                    {t.buy.paymentOptionsTitle}
+                  </p>
                 </div>
                 <ChevronDown
-                  size={18}
-                  className={`flex-shrink-0 text-muted transition-transform ${
-                    paymentOptionsOpen || paymentInputsHaveValues ? 'rotate-180' : ''
+                  size={22}
+                  className={`flex-shrink-0 text-foreground transition-transform ${
+                    paymentOptionsOpen || paymentInputsHaveValues ? 'rotate-0' : '-rotate-90'
                   }`}
                 />
               </button>
 
               {(paymentOptionsOpen || paymentInputsHaveValues) && (
-                <div className="border-t border-border p-3">
+                <div className="border-t border-primary/15 pb-4 pt-3">
                   <label className="block mb-3">
-                    <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
+                    <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider flex items-center gap-1.5 mb-1">
                       <JumpyardIcon name="presentkort" className="h-5 w-5" /> {t.buy.giftCardLabel}
                     </span>
                     <input
@@ -1825,6 +1786,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                       placeholder={t.buy.giftCardPlaceholder}
                       maxLength={PAYMENT_OPTION_CODE_MAX_LENGTH}
                       autoComplete="off"
+                      disabled={checkoutLocked}
                       aria-describedby={giftCardInputFeedback ? 'gift-card-feedback' : undefined}
                       aria-invalid={giftCardInputState === 'rejected'}
                       className={getPaymentOptionInputClass(giftCardInputState)}
@@ -1840,7 +1802,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                   </label>
 
                   <label className="block">
-                    <span className="text-[10px] text-muted uppercase font-bold italic tracking-widest flex items-center gap-1.5 mb-1">
+                    <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider flex items-center gap-1.5 mb-1">
                       <JumpyardIcon name="points-star" className="h-5 w-5" /> {t.buy.clipCardLabel}
                     </span>
                     <input
@@ -1850,6 +1812,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                       placeholder={t.buy.clipCardPlaceholder}
                       maxLength={PAYMENT_OPTION_CODE_MAX_LENGTH}
                       autoComplete="off"
+                      disabled={checkoutLocked}
                       aria-describedby={clipCardInputFeedback ? 'clip-card-feedback' : undefined}
                       aria-invalid={clipCardInputState === 'rejected'}
                       className={getPaymentOptionInputClass(clipCardInputState)}
@@ -1863,20 +1826,9 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                       </p>
                     )}
                   </label>
-
-                  {paymentInputsNeedQuoteRefresh && (
-                    <button
-                      type="button"
-                      onClick={() => void goToReview()}
-                      disabled={submitting}
-                      className="mt-3 w-full bg-foreground text-white font-black italic uppercase text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98]"
-                    >
-                      {submitting ? t.buy.quoting : paymentOptionsApplyLabel}
-                    </button>
-                  )}
                 </div>
               )}
-            </div>
+            </section>
 
             {!giftCardInputDirty && giftCardNumber.trim() && (
               <div
@@ -1885,7 +1837,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                 }`}
               >
                 <div className="flex justify-between gap-3 text-sm">
-                  <span className="text-muted font-bold italic uppercase">{t.buy.giftCardLabel}</span>
+                  <span className="text-foreground font-black italic uppercase">{t.buy.giftCardLabel}</span>
                   <span className={`font-black ${giftCardErrors.length > 0 ? 'text-danger' : 'text-primary'}`}>
                     {giftCardErrors.length > 0
                       ? t.buy.giftCardRejected
@@ -1901,7 +1853,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                         {error.message || t.buy.giftCardErrorFallback}
                       </p>
                     ))}
-                    <p className="text-xs text-muted">{t.buy.giftCardFixHint}</p>
+                    <p className="text-xs text-foreground">{t.buy.giftCardFixHint}</p>
                   </div>
                 )}
               </div>
@@ -1914,7 +1866,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                 }`}
               >
                 <div className="flex justify-between gap-3 text-sm">
-                  <span className="text-muted font-bold italic uppercase">{t.buy.clipCardLabel}</span>
+                  <span className="text-foreground font-black italic uppercase">{t.buy.clipCardLabel}</span>
                   <span className={`font-black ${discountCodeErrors.length > 0 ? 'text-danger' : 'text-primary'}`}>
                     {discountCodeErrors.length > 0
                       ? t.buy.clipCardRejected
@@ -1930,33 +1882,132 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                         {error.message || t.buy.clipCardErrorFallback}
                       </p>
                     ))}
-                    <p className="text-xs text-muted">{t.buy.clipCardFixHint}</p>
+                    <p className="text-xs text-foreground">{t.buy.clipCardFixHint}</p>
                   </div>
                 )}
               </div>
             )}
 
-            <div className="bg-white border border-border p-3 rounded-xl mb-5 px-4">
-              <div className="flex justify-between items-center">
-                <span className="text-muted text-sm font-bold italic uppercase">{t.buy.toPay}</span>
-                <span className="text-xl font-black italic text-primary">{formatMoney(quote.costs.amountOwing)}</span>
-              </div>
-              {quote.costs.total !== null && quote.costs.amountOwing !== null && quote.costs.total !== quote.costs.amountOwing && (
-                <div className="mt-1 flex justify-between gap-3 text-[11px] text-muted">
-                  <span>{t.buy.originalTotal}</span>
-                  <span>{formatMoney(quote.costs.total)}</span>
+            <div className="mb-4 overflow-hidden rounded-2xl border border-border bg-white">
+              <button
+                type="button"
+                onClick={() => setCheckoutBreakdownOpen((open) => !open)}
+                className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left"
+              >
+                <span className="text-lg font-black italic uppercase text-foreground">{t.buy.toPay}</span>
+                <span className="flex items-center gap-2 text-2xl font-black italic leading-none text-primary">
+                  {formatMoney(checkoutAmount)}
+                  <ChevronDown
+                    size={22}
+                    className={`text-foreground transition-transform ${checkoutBreakdownOpen ? 'rotate-0' : '-rotate-90'}`}
+                  />
+                </span>
+              </button>
+              {checkoutBreakdownOpen && (
+                <div className="border-t border-border px-4 py-3">
+                  {basketLines.map((line) => (
+                    <div key={line.key} className="grid grid-cols-[minmax(0,1fr)_2.5rem_4.5rem] gap-2 py-1.5 text-sm">
+                      <span className="min-w-0 truncate font-bold italic uppercase text-foreground">
+                        {formatBasketLineLabel(line.label)}
+                      </span>
+                      <span className="text-center text-xs text-foreground">{line.qty} st</span>
+                      <span className="text-right font-black italic text-primary">{formatMoney(line.total)}</span>
+                    </div>
+                  ))}
+                  {checkoutTotal !== null && checkoutAmount !== null && checkoutTotal !== checkoutAmount && (
+                    <div className="mt-2 flex justify-between gap-3 border-t border-border pt-2 text-[11px] text-foreground">
+                      <span>{t.buy.originalTotal}</span>
+                      <span>{formatMoney(checkoutTotal)}</span>
+                    </div>
+                  )}
                 </div>
               )}
+            </div>
+
+            {submitError && (
+              <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>
+            )}
+
+            <button
+              onClick={() => {
+                if (draft) {
+                  setStep('PAYMENT');
+                  return;
+                }
+                void createDraft();
+              }}
+              disabled={!customerValid || submitting || paymentInputsBlockingErrors}
+              className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center active:scale-[0.98]"
+            >
+              {submitting ? t.buy.creating : t.buy.createDraft}
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {step === 'REVIEW' && selectedProduct && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="w-full flex items-center justify-center"
+          style={{ minHeight: 'calc(100dvh - 160px)' }}
+        >
+          <div className="w-full px-2 py-5">
+            <h2 className="mb-6 text-center text-xl font-black italic uppercase text-foreground">
+              {t.buy.reviewTitle}
+            </h2>
+
+            <div className="mb-5 grid grid-cols-2 items-stretch gap-2.5">
+              <div className="flex min-w-0 items-center justify-center gap-2 rounded-2xl border border-border bg-white px-3 py-3 shadow-sm">
+                <JumpyardIcon name="time" className="h-8 w-8 flex-shrink-0" />
+                <p className="min-w-0 text-sm font-black italic uppercase leading-tight text-foreground">
+                  {selectedProduct.startTime} {t.buy.todaySuffix}
+                </p>
+              </div>
+              <div className="flex min-w-0 items-center justify-center gap-2 rounded-2xl border border-border bg-white px-3 py-3 shadow-sm">
+                <JumpyardIcon name="trampoline-jump" className="h-8 w-8 flex-shrink-0" />
+                <p className="min-w-0 text-sm font-black italic uppercase leading-tight text-foreground">
+                  {selectedProductDurationLabel}
+                </p>
+              </div>
+            </div>
+
+            <div className="mb-6 overflow-hidden rounded-2xl border border-border bg-white">
+              <div className="flex items-center justify-between gap-4 px-4 py-4">
+                <span className="flex min-w-0 items-center gap-2">
+                  <JumpyardIcon name="payment-card" className="h-7 w-7 flex-shrink-0" />
+                  <span className="text-lg font-black italic uppercase text-foreground">{t.buy.toPay}</span>
+                </span>
+                <span className="shrink-0 text-2xl font-black italic leading-none text-primary">
+                  {formatMoney(basketEstimateTotal)}
+                </span>
+              </div>
+              <div className="border-t border-border px-4 py-3">
+                {basketLines.map((line) => (
+                  <div
+                    key={line.key}
+                    className="grid grid-cols-[minmax(0,1fr)_2.5rem_4.5rem] gap-2 py-1.5 text-sm"
+                  >
+                    <span className="min-w-0 truncate font-bold italic uppercase text-foreground">
+                      {formatBasketLineLabel(line.label)}
+                    </span>
+                    <span className="text-center text-xs text-foreground">{line.qty} st</span>
+                    <span className="text-right font-black italic text-primary">{formatMoney(line.total)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {submitError && <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>}
 
             <button
-              onClick={() => void createDraft()}
-              disabled={submitting || paymentInputsNeedQuoteRefresh || paymentInputsBlockingErrors}
-              className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+              onClick={() => {
+                setSubmitError(null);
+                setStep('CONTACT');
+              }}
+              className="w-full rounded-2xl bg-primary py-4 text-lg font-black italic uppercase text-white transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {submitting ? t.buy.creating : t.buy.createDraft} {!submitting && <Check size={18} />}
+              {t.common.continue}
             </button>
           </div>
         </motion.div>
@@ -1969,12 +2020,15 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
           className="w-full flex items-center justify-center"
           style={{ minHeight: 'calc(100dvh - 160px)' }}
         >
-          <div className="w-full bg-surface border border-border p-5 rounded-2xl">
+          <div className="w-full px-2 py-5">
+            <JumpyardIcon name="payment-card" className="mx-auto mb-2 h-11 w-11" />
+            <h2 className="mb-5 text-center text-xl font-black italic uppercase text-foreground">
+              {t.buy.paymentMethodTitle}
+            </h2>
+
             {showPaymentSyncCard ? (
               <div
-                className={`rounded-xl border bg-white p-5 text-center ${
-                  paymentSyncError ? 'border-danger/30' : 'border-primary/30'
-                }`}
+                className={`rounded-xl bg-white p-5 text-center ${paymentSyncError ? 'border border-danger/30' : ''}`}
                 data-payment-sync-card="true"
                 data-payment-sync-error={paymentSyncError ? 'true' : 'false'}
               >

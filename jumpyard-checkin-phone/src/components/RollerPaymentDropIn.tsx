@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
-import { JumpyardIcon } from '@/components/JumpyardIcon';
 import type { NewBookingDraftResult } from '@/flow/cloudClient';
 
 type PaymentStatus = 'bootstrapping' | 'ready' | 'received' | 'approved' | 'failed' | 'blocked';
@@ -161,21 +160,13 @@ export const RollerPaymentDropIn = ({
 
   return (
     <div className="bg-white border border-border rounded-xl p-4 text-left" data-roller-payment-status={status}>
-      <div className="flex items-start gap-3 mb-4">
-        <div className="w-10 h-10 rounded-full bg-surface border border-border flex items-center justify-center flex-shrink-0">
-          {status === 'approved' ? (
-            <CheckCircle2 size={22} className="text-success" />
-          ) : status === 'failed' || status === 'blocked' ? (
-            <AlertCircle size={22} className="text-danger" />
-          ) : (
-            <JumpyardIcon name="payment-card" className="h-7 w-7" />
-          )}
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-black italic uppercase text-foreground">{getStatusTitle(status, t.buy)}</p>
-          <p className="text-xs text-muted mt-0.5">{getStatusDescription(status, amountLabel, message, t.buy)}</p>
-        </div>
-      </div>
+      <p
+        className={`mb-4 text-sm font-bold italic ${
+          status === 'failed' || status === 'blocked' ? 'text-danger' : 'text-foreground'
+        }`}
+      >
+        {getStatusDescription(status, amountLabel, message, t.buy)}
+      </p>
 
       {(status === 'bootstrapping' || status === 'received') && (
         <div className="flex items-center gap-2 text-xs font-bold italic uppercase text-muted">
@@ -264,14 +255,6 @@ function normalizePaymentResult(
 
 function isPaymentResult(value: unknown): value is { message?: unknown; provider?: unknown; result?: unknown } {
   return typeof value === 'object' && value !== null;
-}
-
-function getStatusTitle(status: PaymentStatus, labels: ReturnType<typeof useTranslation>['t']['buy']) {
-  if (status === 'approved') return labels.paymentApprovedTitle;
-  if (status === 'failed') return labels.paymentFailedTitle;
-  if (status === 'blocked') return labels.paymentBlockedTitle;
-  if (status === 'bootstrapping') return labels.paymentSetupTitle;
-  return labels.paymentMethodTitle;
 }
 
 function getStatusDescription(

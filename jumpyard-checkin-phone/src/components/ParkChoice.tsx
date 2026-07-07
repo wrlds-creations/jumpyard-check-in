@@ -12,7 +12,7 @@ export const ParkChoice = ({ onSelect }: ParkChoiceProps) => {
 
     return (
         <motion.div
-            className="w-full max-w-md mx-auto flex flex-col items-center justify-center px-4"
+            className="w-full max-w-md min-w-0 mx-auto flex flex-col items-center justify-center px-4"
             style={{ minHeight: 'calc(100dvh - 60px)' }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -24,38 +24,32 @@ export const ParkChoice = ({ onSelect }: ParkChoiceProps) => {
                 {t.choice.title}
             </h1>
 
-            <div className="w-full flex flex-col gap-3">
+            <div className="w-full max-w-full min-w-0 flex flex-col gap-3">
                 <button
                     onClick={() => onSelect('BOOKING')}
-                    className="w-full bg-primary text-white p-5 rounded-2xl text-left flex items-start gap-4 transition-all active:scale-[0.98]"
+                    className="w-full min-w-0 bg-primary text-white p-5 rounded-2xl text-left flex items-center gap-4 transition-all active:scale-[0.98]"
                 >
-                    <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
-                        <JumpyardIcon name="booking-confirmed" className="w-10 h-10" />
+                    <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
+                        <JumpyardIcon name="booking-confirmed-on-red-white-calendar" className="w-10 h-10" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                         <h2 className="text-lg font-black italic uppercase leading-tight">
                             {t.choice.haveBooking}
                         </h2>
-                        <p className="text-white/70 text-xs mt-1">
-                            {t.choice.haveBookingDesc}
-                        </p>
                     </div>
                 </button>
 
                 <button
                     onClick={() => onSelect('BUY')}
-                    className="w-full bg-surface border border-border text-foreground p-5 rounded-2xl text-left flex items-start gap-4 transition-all active:scale-[0.98]"
+                    className="w-full min-w-0 bg-foreground border border-foreground text-white p-5 rounded-2xl text-left flex items-center gap-4 transition-all active:scale-[0.98]"
                 >
-                    <div className="w-12 h-12 rounded-xl bg-white border border-border flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
-                        <JumpyardIcon name="admission-ticket" className="w-10 h-10" />
+                    <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
+                        <JumpyardIcon name="admission-ticket-red-white-flame" className="w-10 h-10" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                         <h2 className="text-lg font-black italic uppercase leading-tight">
                             {t.choice.buyTickets}
                         </h2>
-                        <p className="text-muted text-xs mt-1">
-                            {t.choice.buyTicketsDesc}
-                        </p>
                     </div>
                 </button>
             </div>
