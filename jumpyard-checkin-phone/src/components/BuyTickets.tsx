@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, ArrowLeft, Check, ChevronDown, Minus, Plus, RefreshCw } from 'lucide-react';
 import {
@@ -251,7 +251,7 @@ function writeDraftRecovery(
       label: selectedProduct.label,
       productId: selectedProduct.productId,
       startTime: selectedProduct.startTime,
-      type: selectedProduct.type === 'family' ? 'family' : 'entry',
+      type: selectedProduct.type === 'family' || selectedProduct.type === 'combo' ? selectedProduct.type : 'entry',
       unitPrice: selectedProduct.unitPrice,
     },
     selectedStartTime: selectedTime,
@@ -262,10 +262,7 @@ function getMaxQuantity(product: NewBookingProduct | null) {
   if (!product?.available) return 0;
   if (product.capacityRemaining === null) return 10;
 
-  const unitCapacity =
-    product.type === 'family'
-      ? Math.floor(product.capacityRemaining / Math.max(1, product.jumpersPerUnit))
-      : product.capacityRemaining;
+  const unitCapacity = Math.floor(product.capacityRemaining / Math.max(1, product.jumpersPerUnit));
 
   return Math.max(0, Math.min(10, unitCapacity));
 }
@@ -282,13 +279,66 @@ function getCapacityLabel(product: NewBookingProduct | null, spotsAvailable: str
 
 function getProductDurationLabel(product: NewBookingProduct | null) {
   const duration = product?.label.match(/\b\d+\s*min\b/i)?.[0];
-  return duration ? duration.replace(/\s+/, ' ') : product?.label ?? '';
+  if (duration) return duration.replace(/\s+/, ' ');
+  if (product?.durationMinutes && product.durationMinutes > 0) return `${product.durationMinutes} min`;
+  return product?.label ?? '';
+}
+
+function getProductIconName(product: NewBookingProduct | null): JumpyardIconName {
+  if (product?.type === 'combo') return 'combo-pizza';
+  if (product?.type === 'family') return 'group';
+  return 'admission-ticket';
+}
+
+function getProductCardTitle(product: NewBookingProduct) {
+  return product.type === 'combo' ? product.label : getProductDurationLabel(product);
+}
+
+function getProductSectionLabel(
+  product: NewBookingProduct | null,
+  labels: ReturnType<typeof useTranslation>['t']['buy']
+) {
+  if (product?.type === 'combo') return labels.sectionCombo;
+  if (product?.type === 'family') return labels.sectionFamily;
+  return labels.sectionEntry;
+}
+
+function getProductUnitBadgeLabel(
+  product: NewBookingProduct,
+  labels: ReturnType<typeof useTranslation>['t']['buy']
+) {
+  if (product.type === 'combo') return labels.comboPackageNote;
+  if (product.type === 'family') return labels.familyNote;
+  return labels.perPersonNote;
+}
+
+function getQuantityTitle(
+  product: NewBookingProduct,
+  labels: ReturnType<typeof useTranslation>['t']['buy']
+) {
+  if (product.type === 'combo') return labels.quantityComboPackages;
+  if (product.type === 'family') return labels.quantityPackages;
+  return labels.quantityJumpers;
+}
+
+function getBasketProductLabel(
+  product: NewBookingProduct,
+  labels: ReturnType<typeof useTranslation>['t']['buy']
+) {
+  if (product.type === 'combo') return product.label;
+  return `${getProductDurationLabel(product)} · ${getProductSectionLabel(product, labels)}`;
+}
+
+function getComboInclusions(labels: ReturnType<typeof useTranslation>['t']['buy']) {
+  return [
+    { icon: 'combo-two-people' as JumpyardIconName, label: labels.comboPeople },
+    { icon: 'combo-60-min' as JumpyardIconName, label: labels.comboDuration },
+    { icon: 'combo-pizza' as JumpyardIconName, label: labels.comboPizza },
+  ];
 }
 
 function getJumperCount(product: NewBookingProduct | null, nextQuantity: number) {
-  return product?.type === 'family'
-    ? nextQuantity * Math.max(1, product.jumpersPerUnit)
-    : nextQuantity;
+  return product ? nextQuantity * Math.max(1, product.jumpersPerUnit) : nextQuantity;
 }
 
 function getAddonMaxQuantity(
@@ -403,9 +453,13 @@ function toRecoveryProduct(product: NewBookingProduct): BuyFlowRecoveryProduct {
     label: product.label,
     productId: product.productId,
     startTime: product.startTime,
-    type: product.type === 'family' ? 'family' : 'entry',
+    type: product.type === 'family' || product.type === 'combo' ? product.type : 'entry',
     unitPrice: product.unitPrice,
   };
+}
+
+function isBaseBookingProduct(product: NewBookingProduct) {
+  return product.type === 'entry' || product.type === 'family' || product.type === 'combo';
 }
 
 function findRecoveredProduct(
@@ -415,7 +469,7 @@ function findRecoveredProduct(
   if (!slot || !recovered) return null;
   const candidates = slot.products.filter(
     (product) =>
-      (product.type === 'entry' || product.type === 'family') &&
+      isBaseBookingProduct(product) &&
       product.available &&
       product.productId !== null &&
       getMaxQuantity(product) > 0
@@ -444,7 +498,7 @@ function findRecoveredProduct(
 function getRecoveredQuantity(snapshot: BuyFlowRecoverySnapshot, product: NewBookingProduct) {
   if (snapshot.quantity && snapshot.quantity > 0) return snapshot.quantity;
   if (!snapshot.jumperCount || snapshot.jumperCount <= 0) return 1;
-  if (product.type === 'family') {
+  if (product.jumpersPerUnit > 1) {
     return Math.ceil(snapshot.jumperCount / Math.max(1, product.jumpersPerUnit));
   }
   return snapshot.jumperCount;
@@ -698,6 +752,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   const [paymentApprovedForSync, setPaymentApprovedForSync] = useState(false);
 
   const selectedSlot = availability?.slots.find((slot) => slot.startTime === selectedTime) ?? null;
+  const comboProducts = selectedSlot?.products.filter((product) => product.type === 'combo') ?? [];
   const entryProducts = selectedSlot?.products.filter((product) => product.type === 'entry') ?? [];
   const familyProducts = selectedSlot?.products.filter((product) => product.type === 'family') ?? [];
   const maxQuantity = getMaxQuantity(selectedProduct);
@@ -743,8 +798,6 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   const discountCodeInputs = buildDiscountCodeInputs(clipCardCode);
   const productLabels = buildProductLabelMap(selectedProduct, buyAddons);
   const selectedProductDurationLabel = getProductDurationLabel(selectedProduct);
-  const selectedProductTypeLabel =
-    selectedProduct?.type === 'family' ? t.buy.sectionFamily : t.buy.sectionEntry;
   const giftCardErrors = quote?.giftCards?.errors ?? [];
   const discountCodeErrors = quote?.discountCodes?.errors ?? [];
   const giftCardInputState = getPaymentOptionInputState(giftCardNumber, giftCardInputDirty, giftCardErrors);
@@ -1047,10 +1100,10 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
       ? [
           {
             key: 'entry',
-            label: `${selectedProductDurationLabel} · ${selectedProductTypeLabel}`,
+            label: getBasketProductLabel(selectedProduct, t.buy),
             qty: quantity,
             total: entryTotal,
-            icon: (selectedProduct.type === 'family' ? 'group' : 'admission-ticket') as JumpyardIconName,
+            icon: getProductIconName(selectedProduct),
           },
         ]
       : []),
@@ -1332,44 +1385,83 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   };
 
   const renderProductCard = (product: NewBookingProduct) => {
+    const isCombo = product.type === 'combo';
     const max = getMaxQuantity(product);
     const available = product.available && max > 0 && product.productId !== null;
-    const durationLabel = getProductDurationLabel(product);
+    const cardTitle = getProductCardTitle(product);
     const capacityLabel = getCapacityLabel(product, t.buy.spotsAvailable, t.buy.spotsLeft);
-    const iconName: JumpyardIconName = product.type === 'family' ? 'group' : 'admission-ticket';
-    const ticketUnitLabel = product.type === 'family' ? t.buy.familyNote : t.buy.perPersonNote;
+    const iconName = getProductIconName(product);
+    const ticketUnitLabel = getProductUnitBadgeLabel(product, t.buy);
+    const comboInclusions = isCombo ? getComboInclusions(t.buy) : [];
+    const showLeadingIcon = product.type !== 'combo';
+
     return (
       <button
         key={product.key}
         onClick={() => available && handleProductSelect(product)}
         disabled={!available}
-        className={`min-w-0 p-3.5 rounded-xl text-left flex items-center gap-3 transition-all border ${
+        className={`min-w-0 ${isCombo ? 'p-4 rounded-2xl' : 'p-3.5 rounded-xl'} text-left flex items-center gap-3 transition-all border ${
           available
-            ? 'bg-white border-border active:scale-[0.98]'
+            ? isCombo
+              ? 'bg-white border-primary/60 shadow-[0_0_22px_rgba(239,23,66,0.26)] ring-1 ring-primary/25 active:scale-[0.98]'
+              : 'bg-white border-border active:scale-[0.98]'
             : 'bg-surface-strong border-border opacity-50 cursor-not-allowed'
         }`}
       >
-        <JumpyardIcon name={iconName} className="w-9 h-9 flex-shrink-0" />
+        {showLeadingIcon && <JumpyardIcon name={iconName} className="w-9 h-9 flex-shrink-0" />}
         <div className="flex-1 min-w-0">
-          <p className={`text-lg font-black italic uppercase ${available ? 'text-foreground' : 'text-muted'}`}>
-            {durationLabel}
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-black italic uppercase ${
-                available ? 'bg-primary text-white' : 'bg-surface text-muted'
-              }`}
-            >
-              {ticketUnitLabel}
-            </span>
-            <span
-              className={`text-[10px] font-normal italic uppercase tracking-wider ${
-                available ? 'text-foreground' : 'text-muted/70'
-              }`}
-            >
-              {available ? capacityLabel : t.buy.spotsFull}
-            </span>
-          </div>
+          {!isCombo && (
+            <p className={`text-lg font-black italic uppercase ${available ? 'text-foreground' : 'text-muted'}`}>
+              {cardTitle}
+            </p>
+          )}
+          {isCombo ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2">
+                {comboInclusions.map((item, index) => (
+                  <Fragment key={item.label}>
+                    {index > 0 && (
+                      <span className="text-base font-black italic leading-none text-primary" aria-hidden="true">
+                        +
+                      </span>
+                    )}
+                    <span
+                      className={`flex min-w-0 items-center gap-1.5 text-xs font-black italic uppercase leading-tight ${
+                        available ? 'text-foreground' : 'text-muted/70'
+                      }`}
+                    >
+                      <JumpyardIcon name={item.icon} className="h-7 w-7 flex-shrink-0" />
+                      <span className="min-w-0 truncate">{item.label}</span>
+                    </span>
+                  </Fragment>
+                ))}
+              </div>
+              <span
+                className={`text-[10px] font-normal italic uppercase tracking-wider ${
+                  available ? 'text-foreground' : 'text-muted/70'
+                }`}
+              >
+                {available ? capacityLabel : t.buy.spotsFull}
+              </span>
+            </div>
+          ) : (
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-black italic uppercase ${
+                  available ? 'bg-primary text-white' : 'bg-surface text-muted'
+                }`}
+              >
+                {ticketUnitLabel}
+              </span>
+              <span
+                className={`text-[10px] font-normal italic uppercase tracking-wider ${
+                  available ? 'text-foreground' : 'text-muted/70'
+                }`}
+              >
+                {available ? capacityLabel : t.buy.spotsFull}
+              </span>
+            </div>
+          )}
         </div>
         <p className={`shrink-0 text-base font-black italic ${available ? 'text-primary' : 'text-muted/60'}`}>
           {formatMoney(product.unitPrice)}
@@ -1500,6 +1592,18 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
             </p>
           )}
 
+          {comboProducts.length > 0 && (
+            <div className="mb-3">
+              <p
+                className="text-base text-foreground uppercase font-black italic tracking-wide mb-2 px-1"
+                style={{ textShadow: '1.4px 1.4px 0 #ef1742' }}
+              >
+                {t.buy.sectionCombo}
+              </p>
+              <div className="flex flex-col gap-2">{comboProducts.map(renderProductCard)}</div>
+            </div>
+          )}
+
           <div className="mb-3">
             <p className="text-xs text-foreground uppercase font-black italic tracking-wider mb-2 px-1">{t.buy.sectionEntry}</p>
             <div className="flex flex-col gap-2">{entryProducts.map(renderProductCard)}</div>
@@ -1522,18 +1626,20 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
           <div className="w-full px-2 py-5 text-center">
             <div className="max-w-full bg-white border border-border rounded-2xl px-4 py-3 mb-6 inline-flex flex-wrap items-center justify-center gap-3 shadow-sm">
               <JumpyardIcon
-                name={selectedProduct.type === 'family' ? 'group' : 'admission-ticket'}
+                name={getProductIconName(selectedProduct)}
                 className="w-8 h-8"
               />
               <span className="text-lg font-black italic uppercase text-foreground">
-                {selectedProduct.type === 'family'
-                  ? `${selectedProductDurationLabel} ${t.buy.sectionFamily}`
-                  : selectedProductDurationLabel}
+                {selectedProduct.type === 'combo'
+                  ? selectedProduct.label
+                  : selectedProduct.type === 'family'
+                    ? `${selectedProductDurationLabel} ${t.buy.sectionFamily}`
+                    : selectedProductDurationLabel}
               </span>
             </div>
 
             <h2 className="text-2xl font-black italic text-foreground uppercase mb-2">
-              {selectedProduct.type === 'family' ? t.buy.quantityPackages : t.buy.quantityJumpers}
+              {getQuantityTitle(selectedProduct, t.buy)}
             </h2>
             <p className="text-foreground text-sm font-normal italic uppercase mb-6 flex items-center justify-center gap-2">
               <JumpyardIcon name="time" className="w-6 h-6" /> {t.buy.startTimeLabel} {selectedProduct.startTime} {t.buy.todaySuffix}
@@ -2029,7 +2135,10 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                 </p>
               </div>
               <div className="flex min-w-0 items-center justify-center gap-2 rounded-2xl border border-border bg-white px-3 py-3 shadow-sm">
-                <JumpyardIcon name="trampoline-jump" className="h-8 w-8 flex-shrink-0" />
+                <JumpyardIcon
+                  name={selectedProduct.type === 'combo' ? 'combo-60-min' : 'trampoline-jump'}
+                  className="h-8 w-8 flex-shrink-0"
+                />
                 <p className="min-w-0 text-sm font-black italic uppercase leading-tight text-foreground">
                   {selectedProductDurationLabel}
                 </p>

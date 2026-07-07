@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 184
-Latest archived completed ticket: `T0186`
+Archived count: 185
+Latest archived completed ticket: `T0187`
 
 ## Completed Tickets
 
@@ -196,3 +196,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0184` | Older guest support closeout. | 2026-07-07 | Closed as documentation-only after Love confirmed the older/technically inexperienced guest support path should be handled by the later kiosk/staff-help setup rather than another immediate phone-flow change. No app code, kiosk code, backend, public API contract, AWS resource, Roller integration, gate, payment, redeem, webhook, SMS, email, Cloudflare deploy, or runtime behavior changed for T0184. |
 | `T0185` | Socks confirmation guard closeout. | 2026-07-07 | Closed as documentation-only because the guest-facing socks confirmation guard was already delivered during T0182. The add-ons step requires either socks quantity or active approved JumpYard socks confirmation before continuing. No app code, backend, public API contract, AWS resource, Roller integration, gate, payment, redeem, webhook, SMS, email, Cloudflare deploy, or runtime behavior changed for T0185. |
 | `T0186` | Water bottle add-on. | 2026-07-07 | Added the park-test water bottle add-on as `water_bottle`, mapped server-side in JumpYard Cloud to Roller Live product `1324123` (`Jumpy Vattenflaska`) at `49 kr`. Phone buy-entry and existing-booking add-on flows now show socks first, water bottle second, then other add-ons; guests must choose a bottle quantity or confirm they brought their own. Phone/admin water-bottle icon assets and handout recognition were added, and the final user-selected flatter icon was converted to transparent PNG. Existing `BookingHandler` Lambda code and phone/admin Cloudflare Pages were deployed; no new AWS resources, gate broadening, webhook processing, JumpYard-owned sends, venue/date-scope changes, or frontend Roller calls were introduced. |
+| `T0187` | ComboDeal booking product. | 2026-07-07 | Added the park-test ComboDeal buy-entry product above standard entry products, mapped server-side in JumpYard Cloud to Roller Live parent `1318777` with child price products `1318778`, `1318779`, and `1318780`, and counted one package as two jumpers. The phone product card uses generated JumpYard-style combo icons, red plus separators, and a red offer glow while showing `2 personer + 60 min + 1 pizza`. Existing `BookingHandler` Lambda code and the phone Cloudflare Pages target were deployed; no new AWS resources, gate broadening, webhook processing, JumpYard-owned sends, venue/date-scope changes, or frontend Roller calls were introduced. |

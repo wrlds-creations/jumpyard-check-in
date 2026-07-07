@@ -71,7 +71,7 @@ export interface Booking {
   lastName?: string;
   existingAddons?: Addon[];
   productLabel?: string;
-  productType?: 'entry' | 'family';
+  productType?: 'entry' | 'family' | 'combo';
   lookupSource?: LookupSource;
 }
 
@@ -109,7 +109,7 @@ export interface FlowContext {
 
   baseProductId: string | null;
   baseProductLabel: string | null;
-  baseProductType: 'entry' | 'family' | null;
+  baseProductType: 'entry' | 'family' | 'combo' | null;
   baseDurationMinutes: number;
   baseUnitPrice: number;
   baseQuantity: number;

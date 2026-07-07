@@ -11,7 +11,7 @@ This file is the living project memory for JumpYard Next. Confirmed durable fact
 
 ## Current Phase And Scope
 
-Sprint 2 is closed. T0182-T0185 are closed; T0184 moves to kiosk/staff help. Sprint 3/4 is pending. Nacka park-test stays open through 2026-09-30.
+Sprint 2 is closed. Sprint 3/4 is pending. Nacka park-test stays open through 2026-09-30.
 
 The latest roadmap artifact is [docs/assets/jumpyard-next-sprint-roadmap.pdf](docs/assets/jumpyard-next-sprint-roadmap.pdf), updated 2026-06-11. It frames Sprint 3 as production cloud plus Sprint 2 response work, and Sprint 4 as kiosk, QR print, terminal preparation, and AirHive/JumpyBoard testing.
 
@@ -47,7 +47,7 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 - Park-test is a separate WRLDS environment in account `376129878018`, region `eu-north-1`, namespace `jumpyard-check-in-park-test`, with server-side Roller Live Nacka access.
 - CDK config validation keeps `dev` Playground-only and `park-test` on the reviewed account/region/prefix/Live/data-classification contract.
 - `infra/config/park-test.json` is the normal closed config; ticket-specific configs open reviewed gates.
-- Park-test AWS stack, Aurora migrations, Live access, webhook `1465`, frontend/CORS, and smokes through lookup/payment/add-ons/redeem are documented in [AWS_RESOURCES.md](AWS_RESOURCES.md) and the ticket docs.
+- Park-test AWS resources, Live access, webhook `1465`, frontend/CORS, and smokes are documented in [AWS_RESOURCES.md](AWS_RESOURCES.md) and ticket docs.
 - Park-test human gate names are aliases in [docs/t0170-park-test-gate-runbook.md](docs/t0170-park-test-gate-runbook.md); runtime variables stay ticket-numbered until a scoped migration.
 - The T0176/T0177 full-flow park-test runtime posture remains intentionally open after T0178-T0180 until Love asks to close it; ticket closeout must not be interpreted as a close-window deploy. The approved Nacka operating-date window now runs from 2026-06-29 through 2026-09-30.
 - Park-test phone PWA builds must set `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL` to the park-test API, or the app falls back to dev.
@@ -56,7 +56,7 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 ## Current Implemented Flow Facts
 
 - Phone booking lookup calls JumpYard Cloud, which uses Aurora-first lookup with Roller-authoritative refresh when local data is missing or unsafe. Park-test lookup accepts booking reference/email/phone, enforces Nacka/date scope, and picks the nearest upcoming same-day start.
-- Park testing through T0178-T0180 was positive: the core flow worked well with and without bookings, guests could check in smoothly, and the park feedback is primarily clarity, accessibility, copy, and robustness work rather than a new base design.
+- Park testing was positive; feedback is primarily clarity, accessibility, copy, and robustness work rather than a new base design.
 - Phone check-in starts or resumes a server-owned check-in session before progressing from a ready booking.
 - Guest safety completion marks a JumpYard Cloud session ready for staff and shows a server-owned handoff code/QR.
 - Staff/admin handoff uses server-owned staff auth in dev and can list, search, inspect, and staff-confirm redeem ready sessions.
@@ -66,12 +66,12 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 - Park-test product validation uses approved Nacka entry/family parents plus Roller Live slot availability, not static child ids. Live phone add-on catalog mapping is read-only display/quote-prep data and separate from write gates.
 - Park-test PWA drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; new-booking delivery is proven.
 - Ready-for-entry/staff handout UI shows a QR plus entry duration/ticket type; the visible guest fallback is now name-to-staff rather than a displayed handoff code.
-- Park-test Apple Pay has the Adyen domain-association file live on the park-test Cloudflare Pages domain. The iPhone sheet opens but collapses at processing; the code track is paused pending Pabel/Roller/Adyen merchant-validation/session/payment logs, with card as fallback.
+- Park-test Apple Pay domain association is live, but processing is paused pending Pabel/Roller/Adyen diagnostics; card remains fallback.
 - Park-test T0176 full-flow rehearsal opens Nacka/date-scoped payment, lookup, add-ons, staff auth, and redeem for `2026-06-29` through `2026-09-30` while keeping webhook processing and JumpYard-owned guest sends closed.
 - Gift card, Klippkort, and current V1 membership/`10-Kort` handling are payment-prep code inputs applied by Roller during costs/draft creation; `10-Kort` is code validation/amount reduction, not remaining-visit balance display.
 - SkyRider is the first capacity-gated add-on and requires height/consent before quote/draft/payment side effects.
 - Water bottle add-on maps to Roller Live product `1324123`; users choose quantity or confirm own bottle.
-- T0182 keeps the working phone flow while reducing copy density and grey visual weight.
+- ComboDeal maps to Roller Live parent product `1318777` with child price products `1318778`, `1318779`, and `1318780`; one package counts as two jumpers and includes 60 minutes of jumping plus one pizza to share according to Roller product copy.
 - Older/technically inexperienced guest fallback is deferred to the later kiosk/staff-help track.
 - Staff/admin handout grouping uses exact operational labels such as `Lämna ut vid incheckning`, `Hämtas efter hoppet`, and `Övrigt i bokningen`.
 
