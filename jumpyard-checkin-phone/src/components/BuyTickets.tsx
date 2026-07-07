@@ -78,6 +78,7 @@ const createEmptyAddonQty = (): AddonQuantityMap => ({
   extra_person: 0,
   lock: 0,
   socks: 0,
+  water_bottle: 0,
 });
 
 function generateSlots(): string[] {
@@ -337,6 +338,8 @@ function getAddonLabel(id: AddonId, products: ReturnType<typeof useTranslation>[
       return products.lockLabel;
     case 'socks':
       return products.socksLabel;
+    case 'water_bottle':
+      return products.waterBottleLabel;
   }
 }
 
@@ -584,7 +587,7 @@ function AvailabilityLoadingCard({ selectedTime }: { selectedTime: string | null
 
   return (
     <div
-      className="bg-surface border border-border rounded-2xl p-6 text-center"
+      className="bg-white border border-border rounded-2xl p-6 text-center"
       role="status"
       aria-live="polite"
       data-availability-loading="true"
@@ -685,6 +688,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   const [clipCardInputDirty, setClipCardInputDirty] = useState(false);
   const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
   const [alreadyHasApprovedSocks, setAlreadyHasApprovedSocks] = useState(false);
+  const [alreadyHasWaterBottle, setAlreadyHasWaterBottle] = useState(false);
   const [quote, setQuote] = useState<NewBookingQuote | null>(null);
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -707,12 +711,15 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
     getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null, nextJumperCount);
   const visibleBuyAddons = buyAddons.filter((addon) => getBuyAddonMax(addon) > 0 && isPricedAddon(addon));
   const socksAddon = visibleBuyAddons.find((addon) => addon.id === 'socks') ?? null;
-  const otherBuyAddons = visibleBuyAddons.filter((addon) => addon.id !== 'socks');
+  const waterBottleAddon = visibleBuyAddons.find((addon) => addon.id === 'water_bottle') ?? null;
+  const otherBuyAddons = visibleBuyAddons.filter((addon) => addon.id !== 'socks' && addon.id !== 'water_bottle');
   const socksQty = addonQty.socks;
+  const waterBottleQty = addonQty.water_bottle;
   const socksRecommendedVisibleCount = Math.min(Math.max(0, jumperCount), 5);
-  const socksRecommendationProgress = Math.min(100, Math.round((socksQty / Math.max(1, jumperCount)) * 100));
   const showSocksConfirmation = Boolean(socksAddon);
   const socksRequirementMet = !socksAddon || socksQty > 0 || alreadyHasApprovedSocks;
+  const showWaterBottleConfirmation = Boolean(waterBottleAddon);
+  const waterBottleRequirementMet = !waterBottleAddon || waterBottleQty > 0 || alreadyHasWaterBottle;
   const selectedAddons: Addon[] = buyAddons.flatMap((addon) => {
     if (addonQty[addon.id] <= 0 || getBuyAddonMax(addon) <= 0 || !isPricedAddon(addon)) return [];
 
@@ -815,6 +822,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
         setQuantity(1);
         setAddonQty(createEmptyAddonQty());
         setAlreadyHasApprovedSocks(false);
+        setAlreadyHasWaterBottle(false);
         setSkyriderConsentConfirmed(false);
         setLoadingAvailability(false);
         restoringPrePaymentRef.current = false;
@@ -836,6 +844,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
           setQuantity(1);
           setAddonQty(createEmptyAddonQty());
           setAlreadyHasApprovedSocks(false);
+          setAlreadyHasWaterBottle(false);
           setSkyriderConsentConfirmed(false);
           setStep('TIMESLOT');
           return;
@@ -847,6 +856,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
           setQuantity(1);
           setAddonQty(createEmptyAddonQty());
           setAlreadyHasApprovedSocks(false);
+          setAlreadyHasWaterBottle(false);
           setSkyriderConsentConfirmed(false);
           setStep(recoverySnapshot.currentFlowStep === 'TIMESLOT' ? 'TIMESLOT' : 'PRODUCT');
           return;
@@ -874,6 +884,8 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
         const recoveredSkyRiderConsent = recoveredSkyRiderSelected && recoverySnapshot.skyriderConsentConfirmed === true;
         const recoveredAlreadyHasSocks =
           recoveredAddonQty.socks === 0 && recoverySnapshot.alreadyHasApprovedSocks === true;
+        const recoveredAlreadyHasWaterBottle =
+          recoveredAddonQty.water_bottle === 0 && recoverySnapshot.alreadyHasWaterBottle === true;
         const recoveredCustomerValid = isValidRecoveredCustomer(savedContact);
         const needsRecoveredSkyRiderConsent = recoveredSkyRiderSelected && !recoveredSkyRiderConsent;
 
@@ -881,6 +893,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
         setQuantity(recoveredQuantity);
         setAddonQty(recoveredAddonQty);
         setAlreadyHasApprovedSocks(recoveredAlreadyHasSocks);
+        setAlreadyHasWaterBottle(recoveredAlreadyHasWaterBottle);
         setSkyriderConsentConfirmed(recoveredSkyRiderConsent);
 
         if (recoverySnapshot.currentFlowStep === 'TIMESLOT') {
@@ -952,6 +965,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
         setQuantity(1);
         setAddonQty(createEmptyAddonQty());
         setAlreadyHasApprovedSocks(false);
+        setAlreadyHasWaterBottle(false);
         setSkyriderConsentConfirmed(false);
         setStep('TIMESLOT');
       } finally {
@@ -978,6 +992,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
     writeBuyFlowRecovery({
       addonQty: toRecoveryAddonQty(addonQty),
       alreadyHasApprovedSocks: showSocksConfirmation && alreadyHasApprovedSocks,
+      alreadyHasWaterBottle: showWaterBottleConfirmation && alreadyHasWaterBottle,
       bookingReference: null,
       contact: {
         email,
@@ -998,6 +1013,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   }, [
     addonQty,
     alreadyHasApprovedSocks,
+    alreadyHasWaterBottle,
     draft,
     email,
     firstName,
@@ -1009,6 +1025,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
     selectedProduct,
     selectedTime,
     showSocksConfirmation,
+    showWaterBottleConfirmation,
     skyriderConsentConfirmed,
     step,
   ]);
@@ -1085,6 +1102,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
     setClipCardInputDirty(false);
     setSkyriderConsentConfirmed(false);
     setAlreadyHasApprovedSocks(false);
+    setAlreadyHasWaterBottle(false);
   };
 
   const handleProductSelect = (product: NewBookingProduct) => {
@@ -1098,6 +1116,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
     clearPaymentSyncState();
     setSkyriderConsentConfirmed(false);
     setAlreadyHasApprovedSocks(false);
+    setAlreadyHasWaterBottle(false);
     setStep('QUANTITY');
   };
 
@@ -1142,6 +1161,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
     const addon = buyAddons.find((entry) => entry.id === id);
     const max = addon ? getBuyAddonMax(addon) : 0;
     if (id === 'skyrider') setSkyriderConsentConfirmed(false);
+    if (id === 'water_bottle' && nextQty > 0) setAlreadyHasWaterBottle(false);
     setAddonQty((current) => ({ ...current, [id]: Math.max(0, Math.min(max, nextQty)) }));
   };
 
@@ -1156,10 +1176,21 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
     }
   };
 
+  const setWaterBottleConfirmation = (checked: boolean) => {
+    setAlreadyHasWaterBottle(checked);
+    setSubmitError(null);
+    setQuote(null);
+    setDraft(null);
+    clearPaymentSyncState();
+    if (checked) {
+      setAddonQty((current) => ({ ...current, water_bottle: 0 }));
+    }
+  };
+
   const needsSkyRiderConsent = () => skyriderSelected && !skyriderConsentConfirmed;
 
   const continueFromAddons = () => {
-    if (!socksRequirementMet) return;
+    if (!socksRequirementMet || !waterBottleRequirementMet) return;
     if (needsSkyRiderConsent()) {
       setStep('SKYRIDER_ATTEST');
       return;
@@ -1570,24 +1601,24 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                     <h3 className="text-sm font-black italic text-foreground uppercase">
                       {t.addons.socksSectionTitle}
                     </h3>
-                    <p className="mt-1 text-[11px] text-muted">{t.addons.socksHelp}</p>
+                    <p className="mt-1 text-[11px] text-foreground">{t.addons.socksHelp}</p>
                   </div>
                 </div>
 
                 {!alreadyHasApprovedSocks && (
-                  <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-3">
-                    <div className="flex items-center justify-between gap-3">
+                  <div className="mt-2 rounded-lg border border-primary/20 bg-white px-2.5 py-2">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-[10px] font-black italic uppercase tracking-wider text-foreground">
                         {t.addons.socksRecommendedCount}
                       </span>
-                      <span className="rounded-full bg-primary px-3 py-1 text-sm font-black italic text-white shadow-sm">
+                      <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-black italic text-white shadow-sm">
                         {jumperCount}
                       </span>
                     </div>
-                    <div className="mt-2 flex items-center justify-between gap-3">
-                      <div className="flex min-w-0 flex-wrap items-center gap-1">
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-0.5">
                         {Array.from({ length: socksRecommendedVisibleCount }).map((_, index) => (
-                          <JumpyardIcon key={index} name="grip-socks" className="h-5 w-5" />
+                          <JumpyardIcon key={index} name="grip-socks" className="h-4 w-4" />
                         ))}
                         {jumperCount > socksRecommendedVisibleCount && (
                           <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-black italic text-foreground shadow-sm">
@@ -1595,15 +1626,9 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                           </span>
                         )}
                       </div>
-                      <span className="shrink-0 text-[11px] font-black italic text-foreground">
+                      <span className="shrink-0 text-[10px] font-black italic text-foreground">
                         {t.addons.socksSelectedCount} {socksQty}/{jumperCount}
                       </span>
-                    </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-primary/10">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${socksRecommendationProgress}%` }}
-                      />
                     </div>
                   </div>
                 )}
@@ -1611,7 +1636,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                 {!alreadyHasApprovedSocks && (
                   <div className="mt-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-[11px] font-bold italic text-muted">
+                      <p className="text-[11px] text-foreground">
                         {formatAddonPriceLabel(socksAddon.price, socksAddon.unit, t.addons.each, t.addons.eachLong)}
                       </p>
                     </div>
@@ -1635,6 +1660,45 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
               </section>
             )}
 
+            {waterBottleAddon && (
+              <section className="bg-white border border-border rounded-xl p-3">
+                <div className="flex items-start gap-3">
+                  <JumpyardIcon name={waterBottleAddon.icon} className="w-9 h-9 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-black italic text-foreground uppercase">
+                      {t.addons.waterBottleSectionTitle}
+                    </h3>
+                    <p className="mt-1 text-[11px] text-foreground">{t.addons.waterBottleHelp}</p>
+                  </div>
+                </div>
+
+                {!alreadyHasWaterBottle && (
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-foreground">
+                        {formatAddonPriceLabel(waterBottleAddon.price, waterBottleAddon.unit, t.addons.each, t.addons.eachLong)}
+                      </p>
+                    </div>
+                    {renderAddonStepper(waterBottleAddon)}
+                  </div>
+                )}
+
+                {showWaterBottleConfirmation && (
+                  <label className="mt-3 flex items-start gap-2 rounded-xl border border-border bg-white px-3 py-3 text-left shadow-sm">
+                    <input
+                      type="checkbox"
+                      checked={alreadyHasWaterBottle}
+                      onChange={(event) => setWaterBottleConfirmation(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                    />
+                    <span className="text-xs font-bold italic text-foreground">
+                      {t.addons.waterBottleAlreadyHave}
+                    </span>
+                  </label>
+                )}
+              </section>
+            )}
+
             {otherBuyAddons.map((addon) => {
               return (
                 <div
@@ -1645,7 +1709,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
                     <JumpyardIcon name={addon.icon} className="w-9 h-9 flex-shrink-0" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-black italic text-foreground uppercase truncate">{addon.label}</p>
-                      <p className="text-[11px] text-muted">
+                      <p className="text-[11px] text-foreground">
                         {formatAddonPriceLabel(addon.price, addon.unit, t.addons.each, t.addons.eachLong)}
                       </p>
                     </div>
@@ -1663,7 +1727,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
 
           <button
             onClick={continueFromAddons}
-            disabled={!socksRequirementMet}
+            disabled={!socksRequirementMet || !waterBottleRequirementMet}
             className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center active:scale-[0.98]"
           >
             {t.common.continue}

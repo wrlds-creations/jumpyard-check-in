@@ -345,6 +345,7 @@ const CUSTOMER_ADDON_LABELS: Record<AddonId, string> = {
   lock: 'Hänglås',
   skyrider: 'SkyRider',
   socks: 'Strumpor',
+  water_bottle: 'Vattenflaska',
 };
 
 export async function lookupBooking(code: string): Promise<Booking> {
@@ -1031,7 +1032,11 @@ function isAddonItem(item: CloudBookingItem) {
     text.includes('hanglas') ||
     text.includes('coffee') ||
     text.includes('kaffe') ||
-    text.includes('connected')
+    text.includes('connected') ||
+    text.includes('vatten') ||
+    text.includes('water') ||
+    text.includes('flaska') ||
+    text.includes('bottle')
   );
 }
 
@@ -1040,6 +1045,7 @@ function inferAddonId(item: CloudBookingItem): AddonId {
   if (text.includes('skyrider')) return 'skyrider';
   if (text.includes('connected')) return 'connected';
   if (text.includes('coffee') || text.includes('kaffe')) return 'coffee';
+  if (text.includes('vatten') || text.includes('water') || text.includes('flaska') || text.includes('bottle')) return 'water_bottle';
   if (text.includes('hänglås') || text.includes('hanglas') || text.includes('lock')) return 'lock';
   if (text.includes('sock') || text.includes('strump')) return 'socks';
   return 'extra_person';

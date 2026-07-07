@@ -44,14 +44,21 @@ export const ADDON_CATALOG_CONFIG: Record<AddonId, AddonCatalogConfig> = {
     requiresAvailability: false,
     rollerProductId: 1765445,
   },
+  water_bottle: {
+    icon: 'water-bottle',
+    maxPerGuest: 4,
+    requiresAvailability: false,
+    rollerProductId: null,
+  },
 };
 
-export const BUY_ENTRY_ADDON_IDS: AddonId[] = ['skyrider', 'socks', 'lock', 'coffee'];
+export const BUY_ENTRY_ADDON_IDS: AddonId[] = ['socks', 'water_bottle', 'skyrider', 'lock', 'coffee'];
 
 export const EXISTING_BOOKING_ADDON_IDS: AddonId[] = [
+  'socks',
+  'water_bottle',
   'skyrider',
   'connected',
-  'socks',
   'coffee',
   'extra_person',
   'lock',

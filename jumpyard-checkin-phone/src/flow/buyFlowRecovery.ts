@@ -59,6 +59,7 @@ export interface BuyFlowRecoverySnapshot {
   quantity?: number | null;
   addonQty?: BuyFlowRecoveryAddonQty;
   alreadyHasApprovedSocks?: boolean;
+  alreadyHasWaterBottle?: boolean;
   skyriderConsentConfirmed?: boolean;
   contact?: BuyFlowRecoveryContact | null;
   paymentOptionsHadValues?: boolean;
@@ -148,7 +149,7 @@ function readDraftState(value: unknown): BuyFlowRecoveryDraftState | null {
 function readAddonQty(value: unknown): BuyFlowRecoveryAddonQty | undefined {
   if (!isObject(value)) return undefined;
   const next: BuyFlowRecoveryAddonQty = {};
-  const ids: AddonId[] = ['skyrider', 'connected', 'coffee', 'extra_person', 'lock', 'socks'];
+  const ids: AddonId[] = ['skyrider', 'connected', 'coffee', 'extra_person', 'lock', 'socks', 'water_bottle'];
   for (const id of ids) {
     const qty = value[id];
     if (typeof qty === 'number' && Number.isInteger(qty) && qty > 0) {
@@ -181,6 +182,7 @@ function normalizeSnapshot(value: unknown): BuyFlowRecoverySnapshot | null {
   return {
     addonQty: readAddonQty(value.addonQty),
     alreadyHasApprovedSocks: value.alreadyHasApprovedSocks === true,
+    alreadyHasWaterBottle: value.alreadyHasWaterBottle === true,
     bookingReference: stringOrNull(value.bookingReference),
     contact: readContact(value.contact),
     currentFlowStep: value.currentFlowStep,

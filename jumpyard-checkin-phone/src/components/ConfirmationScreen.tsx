@@ -16,13 +16,14 @@ interface ConfirmationScreenProps {
 }
 
 // Items that staff hand out at check-in.
-const HANDOUT_IDS = new Set(['socks', 'connected', 'lock', 'skyrider']);
+const HANDOUT_IDS = new Set(['socks', 'water_bottle', 'connected', 'lock', 'skyrider']);
 // Non-physical / experience addons
 const EXPERIENCE_IDS = new Set(['coffee', 'extra_person']);
 
 const HANDOUT_ICONS: Partial<Record<Addon['id'], JumpyardIconName>> = {
     connected: 'connected-band',
     socks: 'grip-socks',
+    water_bottle: 'water-bottle',
     lock: 'padlock',
     skyrider: 'zipline',
 };

@@ -40,6 +40,15 @@ const PHONE_ADDON_PRODUCTS = [
     requiresAvailability: false,
   },
   {
+    key: 'water_bottle',
+    parentName: 'Jumpy Vattenflaska',
+    label: 'Vattenflaska',
+    type: 'addon',
+    durationMinutes: 0,
+    jumpersPerUnit: 1,
+    requiresAvailability: false,
+  },
+  {
     key: 'lock',
     productId: '1765441',
     label: 'Hänglås',
@@ -94,6 +103,14 @@ const LIVE_PHONE_ADDON_PRODUCTS = [
     productId: '970338',
     productName: 'Antal',
     priceCents: 4500,
+  },
+  {
+    key: 'water_bottle',
+    parentProductId: '970508',
+    parentProductName: 'Merchandise',
+    productId: '1324123',
+    productName: 'Jumpy Vattenflaska',
+    priceCents: 4900,
   },
   {
     key: 'lock',
