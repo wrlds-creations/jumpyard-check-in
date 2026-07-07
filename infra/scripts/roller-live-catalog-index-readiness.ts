@@ -229,6 +229,13 @@ const REQUIRED_ADDONS: readonly RequiredAddon[] = [
     searchTerms: ["jumpsocks", "jump socks", "sock", "strump"],
   },
   {
+    currentPlaygroundProductId: null,
+    key: "water_bottle",
+    label: "Jumpy Vattenflaska",
+    requiresAvailability: false,
+    searchTerms: ["jumpy vattenflaska", "vattenflaska", "water bottle", "bottle"],
+  },
+  {
     currentPlaygroundProductId: "1765441",
     key: "lock",
     label: "Padlock",

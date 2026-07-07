@@ -160,6 +160,8 @@ function getAddonLabel(id: AddonId, products: ReturnType<typeof useTranslation>[
             return products.lockLabel;
         case 'socks':
             return products.socksLabel;
+        case 'water_bottle':
+            return products.waterBottleLabel;
     }
 }
 
@@ -177,6 +179,8 @@ function getAddonDescription(id: AddonId, products: ReturnType<typeof useTransla
             return products.lockDesc;
         case 'socks':
             return products.socksDesc;
+        case 'water_bottle':
+            return products.waterBottleDesc;
     }
 }
 
@@ -295,7 +299,7 @@ export const AddonsOffer = ({
     );
 
     const minQty = useMemo(() => {
-        const base: Record<AddonId, number> = { skyrider: 0, connected: 0, coffee: 0, extra_person: 0, lock: 0, socks: 0 };
+        const base: Record<AddonId, number> = { skyrider: 0, connected: 0, coffee: 0, extra_person: 0, lock: 0, socks: 0, water_bottle: 0 };
         for (const addon of existingAddons) {
             if (addon.id in base) base[addon.id] = addon.qty;
         }
@@ -310,6 +314,7 @@ export const AddonsOffer = ({
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
     const [alreadyHasApprovedSocks, setAlreadyHasApprovedSocks] = useState(false);
+    const [alreadyHasWaterBottle, setAlreadyHasWaterBottle] = useState(false);
     const handledBackRequest = useRef(backRequest);
 
     const returnToSelect = useCallback(() => {
@@ -356,6 +361,7 @@ export const AddonsOffer = ({
         setDraft(null);
         if (id === 'skyrider') setSkyriderConsentConfirmed(false);
         if (id === 'socks' && nextQty > minQty.socks) setAlreadyHasApprovedSocks(false);
+        if (id === 'water_bottle' && nextQty > minQty.water_bottle) setAlreadyHasWaterBottle(false);
         setQty((current) => ({ ...current, [id]: Math.max(minQty[id], nextQty) }));
     };
 
@@ -366,6 +372,16 @@ export const AddonsOffer = ({
         setDraft(null);
         if (checked) {
             setQty((current) => ({ ...current, socks: minQty.socks }));
+        }
+    };
+
+    const setWaterBottleConfirmation = (checked: boolean) => {
+        setAlreadyHasWaterBottle(checked);
+        setSubmitError(null);
+        setQuote(null);
+        setDraft(null);
+        if (checked) {
+            setQty((current) => ({ ...current, water_bottle: minQty.water_bottle }));
         }
     };
 
@@ -408,11 +424,16 @@ export const AddonsOffer = ({
         [addedAddons]
     );
     const socksEntry = catalogById.get('socks') ?? null;
-    const otherCatalogEntries = catalog.filter((entry) => entry.id !== 'socks');
+    const waterBottleEntry = catalogById.get('water_bottle') ?? null;
+    const otherCatalogEntries = catalog.filter((entry) => entry.id !== 'socks' && entry.id !== 'water_bottle');
     const socksQty = qty.socks;
+    const waterBottleQty = qty.water_bottle;
     const socksRecommendedVisibleCount = Math.min(Math.max(0, guestCount), 5);
-    const socksRecommendationProgress = Math.min(100, Math.round((socksQty / Math.max(1, guestCount)) * 100));
     const showSocksConfirmation = minQty.socks === 0;
+    const showWaterBottleConfirmation = minQty.water_bottle === 0;
+    const socksRequirementMet = !socksEntry || socksQty > minQty.socks || minQty.socks > 0 || alreadyHasApprovedSocks;
+    const waterBottleRequirementMet =
+        !waterBottleEntry || waterBottleQty > minQty.water_bottle || minQty.water_bottle > 0 || alreadyHasWaterBottle;
     const addedSkyrider = addedAddons.some((addon) => addon.id === 'skyrider');
     const needsSkyRiderConsent = (confirmed = skyriderConsentConfirmed) =>
         addedSkyrider && !confirmed;
@@ -451,6 +472,8 @@ export const AddonsOffer = ({
             setSubmitError(catalogError);
             return;
         }
+
+        if (!socksRequirementMet || !waterBottleRequirementMet) return;
 
         if (addedAddons.length === 0) {
             completeAddons(false);
@@ -592,19 +615,19 @@ export const AddonsOffer = ({
                                     </div>
 
                                     {!alreadyHasApprovedSocks && (
-                                        <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-3">
-                                            <div className="flex items-center justify-between gap-3">
+                                        <div className="mt-2 rounded-lg border border-primary/20 bg-white px-2.5 py-2">
+                                            <div className="flex items-center justify-between gap-2">
                                                 <span className="text-[10px] font-black italic uppercase tracking-wider text-foreground">
                                                     {t.addons.socksRecommendedCount}
                                                 </span>
-                                                <span className="rounded-full bg-white px-3 py-1 text-sm font-black italic text-primary shadow-sm">
+                                                <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-black italic text-white shadow-sm">
                                                     {guestCount}
                                                 </span>
                                             </div>
-                                            <div className="mt-2 flex items-center justify-between gap-3">
-                                                <div className="flex min-w-0 flex-wrap items-center gap-1">
+                                            <div className="mt-1.5 flex items-center justify-between gap-2">
+                                                <div className="flex min-w-0 flex-wrap items-center gap-0.5">
                                                     {Array.from({ length: socksRecommendedVisibleCount }).map((_, index) => (
-                                                        <JumpyardIcon key={index} name="grip-socks" className="h-5 w-5" />
+                                                        <JumpyardIcon key={index} name="grip-socks" className="h-4 w-4" />
                                                     ))}
                                                     {guestCount > socksRecommendedVisibleCount && (
                                                             <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-black italic text-foreground shadow-sm">
@@ -612,15 +635,9 @@ export const AddonsOffer = ({
                                                             </span>
                                                         )}
                                                 </div>
-                                                <span className="shrink-0 text-[11px] font-black italic text-foreground">
+                                                <span className="shrink-0 text-[10px] font-black italic text-foreground">
                                                     {t.addons.socksSelectedCount} {socksQty}/{guestCount}
                                                 </span>
-                                            </div>
-                                            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-primary/10">
-                                                <div
-                                                    className="h-full rounded-full bg-primary transition-all"
-                                                    style={{ width: `${socksRecommendationProgress}%` }}
-                                                />
                                             </div>
                                         </div>
                                     )}
@@ -628,7 +645,7 @@ export const AddonsOffer = ({
                                     {!alreadyHasApprovedSocks && (
                                         <div className="mt-3 flex items-center justify-between gap-3">
                                             <div className="min-w-0">
-                                                <p className="text-[11px] font-bold italic text-foreground">
+                                                <p className="text-[11px] text-foreground">
                                                     {formatAddonPriceLabel(socksEntry.price, socksEntry.unit, t.addons.each, t.addons.eachLong)}
                                                 </p>
                                             </div>
@@ -653,6 +670,60 @@ export const AddonsOffer = ({
                                             />
                                             <span className="min-w-0 break-words text-xs font-bold italic text-foreground">
                                                 {t.addons.socksAlreadyHave}
+                                            </span>
+                                        </label>
+                                    )}
+                                </section>
+                            )}
+
+                            {waterBottleEntry && (
+                                <section className={`bg-white border border-border rounded-xl p-3 ${!isPricedCatalogEntry(waterBottleEntry) ? 'opacity-60' : ''}`}>
+                                    <div className="flex items-start gap-3">
+                                        <JumpyardIcon name={waterBottleEntry.icon} className="w-9 h-9 flex-shrink-0" />
+                                        <div className="min-w-0">
+                                            <h3 className="text-sm font-black italic text-foreground uppercase">
+                                                {t.addons.waterBottleSectionTitle}
+                                            </h3>
+                                            <p className="mt-1 text-[11px] text-foreground">{t.addons.waterBottleHelp}</p>
+                                            {!isPricedCatalogEntry(waterBottleEntry) && (
+                                                <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full bg-white border border-border text-foreground text-[9px] font-bold italic uppercase tracking-wide">{t.addons.unsupported}</span>
+                                            )}
+                                            {minQty.water_bottle > 0 && (
+                                                <span className="mt-1 block text-[10px] text-success font-bold italic">
+                                                    {t.addons.alreadyInBooking} ({minQty.water_bottle})
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {!alreadyHasWaterBottle && (
+                                        <div className="mt-3 flex items-center justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] text-foreground">
+                                                    {formatAddonPriceLabel(waterBottleEntry.price, waterBottleEntry.unit, t.addons.each, t.addons.eachLong)}
+                                                </p>
+                                            </div>
+                                            <Counter
+                                                value={waterBottleQty}
+                                                onChange={(nextQty) => setOne('water_bottle', nextQty)}
+                                                max={Math.max(1, guestCount * waterBottleEntry.maxPerGuest)}
+                                                min={minQty.water_bottle}
+                                                disabled={!isPricedCatalogEntry(waterBottleEntry)}
+                                                testId="addon-option-water-bottle"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {showWaterBottleConfirmation && (
+                                        <label className="mt-3 flex min-w-0 items-start gap-2 rounded-lg border border-border bg-white px-3 py-2 text-left">
+                                            <input
+                                                type="checkbox"
+                                                checked={alreadyHasWaterBottle}
+                                                onChange={(event) => setWaterBottleConfirmation(event.target.checked)}
+                                                className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                                            />
+                                            <span className="min-w-0 break-words text-xs font-bold italic text-foreground">
+                                                {t.addons.waterBottleAlreadyHave}
                                             </span>
                                         </label>
                                     )}
@@ -720,7 +791,7 @@ export const AddonsOffer = ({
                         <button
                             data-testid="addons-select-continue"
                             onClick={handleSelectContinue}
-                            disabled={submitting || catalogLoading}
+                            disabled={submitting || catalogLoading || !socksRequirementMet || !waterBottleRequirementMet}
                             className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm disabled:opacity-40 disabled:hover:bg-primary disabled:hover:text-white disabled:hover:border-transparent"
                         >
                             {catalogLoading ? t.buy.loadingAvailabilityTitle : submitting ? t.buy.quoting : t.common.continue}

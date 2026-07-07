@@ -36,6 +36,7 @@ export type JumpyardIconName =
     | 'visit-calendar'
     | 'visitor-wristband'
     | 'warning'
+    | 'water-bottle'
     | 'zipline';
 
 interface JumpyardIconProps {
@@ -46,7 +47,7 @@ interface JumpyardIconProps {
 
 export const JumpyardIcon = ({ name, alt = '', className = 'w-8 h-8' }: JumpyardIconProps) => (
     <img
-        src={`/jumpyard-next-icons/${name}.png`}
+        src={`/jumpyard-next-icons/${name}.png${name === 'water-bottle' ? '?v=imagegen-flat-t0186' : ''}`}
         alt={alt}
         aria-hidden={alt ? undefined : true}
         draggable={false}

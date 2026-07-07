@@ -60,6 +60,7 @@ type StaffIconName =
   | "success-check"
   | "time"
   | "visitor-wristband"
+  | "water-bottle"
   | "zipline";
 
 function StaffIcon({
@@ -71,7 +72,7 @@ function StaffIcon({
 }) {
   return (
     <Image
-      src={`/jumpyard-next-icons/${name}.png`}
+      src={`/jumpyard-next-icons/${name}.png${name === "water-bottle" ? "?v=imagegen-flat-t0186" : ""}`}
       alt=""
       width={48}
       height={48}
@@ -181,6 +182,7 @@ function getItemIconName(item: StaffBookingItem): StaffIconName {
 
   if (text.includes("skyrider") || text.includes("sky rider")) return "zipline";
   if (text.includes("strump") || text.includes("sock")) return "grip-socks";
+  if (text.includes("vatten") || text.includes("water") || text.includes("flaska") || text.includes("bottle")) return "water-bottle";
   if (text.includes("hanglas") || text.includes("lock")) return "padlock";
   if (text.includes("kaffe") || text.includes("coffee") || text.includes("brygg")) return "drink-cup";
   if (text.includes("familj") || text.includes("family") || text.includes("grupp")) return "group";
@@ -235,6 +237,10 @@ function getHandoutCategory(item: StaffBookingItem): HandoutCategoryDefinition {
 
   if (text.includes("strump") || text.includes("sock")) {
     return { icon: "grip-socks", key: "socks", label: "Strumpor", order: 20, section: "checkin" };
+  }
+
+  if (text.includes("vatten") || text.includes("water") || text.includes("flaska") || text.includes("bottle")) {
+    return { icon: "water-bottle", key: "water-bottle", label: "Vattenflaska", order: 25, section: "checkin" };
   }
 
   if (text.includes("hanglas") || text.includes("lock")) {

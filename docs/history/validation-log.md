@@ -2,6 +2,19 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0186 Water Bottle Add-On
+
+- 2026-07-07: Implemented `water_bottle` as a phone add-on sorted after socks, with buy-or-own-bottle confirmation and environmental copy.
+- 2026-07-07: Read-only Roller Live catalog search selected `1324123` / `Jumpy Vattenflaska` / `4900` cents under parent `970508` / `Merchandise`.
+- 2026-07-07: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, `npm --prefix jumpyard-checkin-admin run lint`, `npm --prefix jumpyard-checkin-admin run build`, `npm --prefix infra run build`, `npm --prefix infra run validate:roller-live-catalog-index-readiness`, and `npm --prefix infra run synth:park-test-full-flow-rehearsal` passed. Phone lint reported existing `<img>` warnings only.
+- 2026-07-07: `npm --prefix infra run diff:park-test-full-flow-rehearsal` showed only existing `BookingHandler` Lambda code changing. `npm --prefix infra run deploy:park-test-full-flow-rehearsal` reached `UPDATE_COMPLETE`; no new AWS resources, gate changes, webhook changes, venue/date scope changes, or guest messaging sends were introduced.
+- 2026-07-07: Park-test availability API smoke returned `water_bottle` with product `1324123`, price `49`, `requiresAvailability=false`, and `onlineSalesOpen=true`.
+- 2026-07-07: Direct-deployed phone and admin park-test Cloudflare Pages builds with the park-test API target. Stable phone/admin URLs and phone/admin `water-bottle.png` assets returned HTTP `200`; the deployed phone bundle contains `water_bottle` and the park-test API id.
+- 2026-07-07: Replaced the first 3D water bottle icon with the user-selected flatter green-background variant, converted it to transparent PNG, added `imagegen-flat-t0186` cache-busting in phone/admin icon rendering, rebuilt, and direct-deployed phone/admin again. Stable phone/admin URLs, `water-bottle.png?v=imagegen-flat-t0186`, and the deployed phone/admin bundles verified successfully.
+- 2026-07-07: Final phone UI polish compacted the recommended socks count card, removed the grey capacity-loading surface, made small add-on copy black, and made add-on price text black/normal weight. Phone lint/build passed again, and stable phone URL checks passed with cachebusters `t0186_compact_socks` and `t0186_black_prices`.
+- 2026-07-07: `git diff --check` passed with CRLF normalization warnings only.
+- 2026-07-07: Closed T0186 after user approval to commit, push, and merge the water bottle add-on ticket.
+
 ## T0185 Socks Confirmation Guard Closeout
 
 - 2026-07-07: Closed T0185 as documentation-only because the guest-facing socks confirmation guard was already delivered and reviewed during T0182.

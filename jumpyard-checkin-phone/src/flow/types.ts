@@ -26,7 +26,7 @@ export type FlowState =
   | 'EXT_PAY'
   | 'EXT_QR';
 
-export type AddonId = 'skyrider' | 'connected' | 'coffee' | 'extra_person' | 'lock' | 'socks';
+export type AddonId = 'skyrider' | 'connected' | 'coffee' | 'extra_person' | 'lock' | 'socks' | 'water_bottle';
 
 export interface Addon {
   id: AddonId;

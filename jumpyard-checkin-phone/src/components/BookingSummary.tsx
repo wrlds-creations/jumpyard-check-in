@@ -19,6 +19,7 @@ const ADDON_ICONS: Record<Addon['id'], JumpyardIconName> = {
     extra_person: 'add-guest',
     lock: 'padlock',
     socks: 'grip-socks',
+    water_bottle: 'water-bottle',
 };
 
 export const BookingSummary = ({ booking, onContinue, isStartingSession = false, sessionStartError = null }: BookingSummaryProps) => {
