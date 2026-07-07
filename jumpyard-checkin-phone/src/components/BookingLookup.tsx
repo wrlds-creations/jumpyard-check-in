@@ -34,7 +34,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
 
     return (
         <motion.div
-            className="w-full max-w-md mx-auto flex flex-col justify-center px-4"
+            className="w-full max-w-md min-w-0 mx-auto flex flex-col justify-center px-4"
             style={{ minHeight: 'calc(100dvh - 120px)' }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -44,11 +44,11 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
             <h1 className="text-xl font-black italic uppercase text-foreground mb-1 text-center">
                 {t.lookup.title}
             </h1>
-            <p className="text-muted text-xs text-center mb-6">
+            <p className="text-foreground text-xs text-center mb-6">
                 {t.lookup.description}
             </p>
 
-            <div className="mb-4">
+            <div className="mb-4 w-full min-w-0">
                 <input
                     data-testid="booking-lookup-input"
                     type="text"
@@ -57,7 +57,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
                     onKeyDown={e => e.key === 'Enter' && handleSearch()}
                     placeholder={t.lookup.placeholder}
                     autoFocus
-                    className="w-full bg-white border border-border rounded-xl px-4 py-3.5 text-base text-foreground placeholder:text-muted/50 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-bold"
+                    className="w-full bg-white border border-border rounded-xl px-4 py-3.5 text-base text-foreground placeholder:text-foreground/45 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-bold"
                 />
             </div>
 
@@ -65,7 +65,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
                 <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
-                    className="mb-4 bg-red-50 border border-red-200 p-3 rounded-xl"
+                    className="mb-4 min-w-0 bg-red-50 border border-red-200 p-3 rounded-xl"
                 >
                     <p className="text-sm text-red-700 font-medium">{getLookupErrorTitle(error, t)}</p>
                     <p className="text-xs text-red-500 mt-0.5">{getLookupErrorDescription(error, t)}</p>

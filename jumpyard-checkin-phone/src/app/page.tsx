@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, ArrowLeft, RefreshCw, RotateCcw } from 'lucide-react';
 import { BookingSummary } from '@/components/BookingSummary';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { SafetyAttest } from '@/components/SafetyAttest';
-import { AddonsOffer, type AddonsOfferStep } from '@/components/AddonsOffer';
+import { AddonsOffer, type AddonsAvailabilityPrefetch, type AddonsOfferStep } from '@/components/AddonsOffer';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { ConnectedProfiles } from '@/components/ConnectedProfiles';
 import { PaymentView } from '@/components/PaymentView';
@@ -15,7 +15,16 @@ import { ConfirmationScreen } from '@/components/ConfirmationScreen';
 import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import { detectChannel, initialContext, initialState, nextState } from '@/flow/machine';
 import type { Branch } from '@/flow/machine';
-import { CloudSessionError, lookupBooking, markSessionReadyForStaff, resolveCheckInSessionLink, startCheckInSession, type SessionIssue } from '@/flow/cloudClient';
+import {
+    CloudBookingError,
+    CloudSessionError,
+    getNewBookingAvailability,
+    lookupBooking,
+    markSessionReadyForStaff,
+    resolveCheckInSessionLink,
+    startCheckInSession,
+    type SessionIssue,
+} from '@/flow/cloudClient';
 import type { Booking, CheckInSession, ConnectedProfile, FlowContext, FlowState } from '@/flow/types';
 import {
     clearBuyFlowRecovery,
@@ -97,6 +106,32 @@ function getBackState(state: FlowState, ctx: FlowContext): FlowState | null {
 }
 
 type BuyRecoveryStatus = 'checking' | 'failed' | 'unsafe';
+const VENUE_TIME_ZONE = 'Europe/Stockholm';
+
+function getVenueToday() {
+    return new Intl.DateTimeFormat('sv-SE', {
+        day: '2-digit',
+        month: '2-digit',
+        timeZone: VENUE_TIME_ZONE,
+        year: 'numeric',
+    }).format(new Date());
+}
+
+function normalizeStartTime(value?: string | null) {
+    const match = value?.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return null;
+    return `${match[1].padStart(2, '0')}:${match[2]}`;
+}
+
+function getAddonsAvailabilityTarget(booking: Booking) {
+    const bookingDate = booking.date ?? getVenueToday();
+    const bookingStartTime = normalizeStartTime(booking.time) ?? '09:00';
+    return {
+        bookingDate,
+        bookingStartTime,
+        key: `${bookingDate}|${bookingStartTime}`,
+    };
+}
 
 function isBuyEntryRecoveryState(state: FlowState): state is 'APP_SAFETY_VIDEO' | 'APP_SAFETY_ATTEST' | 'APP_CONFIRM' | 'APP_PRESENT' {
     return state === 'APP_SAFETY_VIDEO' || state === 'APP_SAFETY_ATTEST' || state === 'APP_CONFIRM' || state === 'APP_PRESENT';
@@ -149,7 +184,7 @@ function BuyRecoveryCard({
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
-            className="w-full max-w-md px-4"
+            className="w-full max-w-md min-w-0 px-4"
             data-buy-recovery-card="true"
             data-buy-recovery-status={status}
         >
@@ -222,7 +257,7 @@ function ProgressBar({ state, buyEntryFlow }: { state: FlowState; buyEntryFlow: 
     const gridTemplateColumns = `repeat(${labels.length}, minmax(0, 1fr))`;
 
     return (
-        <div className="w-full max-w-md mx-auto mb-3 px-4">
+        <div className="w-full max-w-md min-w-0 mx-auto mb-3 px-4">
             <div className="relative">
                 <div className="absolute top-4 left-[10%] right-[10%] h-0.5 bg-surface-strong" />
                 <div
@@ -247,7 +282,7 @@ function ProgressBar({ state, buyEntryFlow }: { state: FlowState; buyEntryFlow: 
                                 <JumpyardIcon name={icons[i]} className="w-6 h-6" />
                             </div>
                             <span
-                                className={`w-full whitespace-nowrap text-center text-[9px] font-bold italic uppercase tracking-wider transition-colors ${
+                                className={`block w-full min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-center text-[9px] font-bold italic uppercase tracking-wider transition-colors ${
                                     i <= current ? 'text-foreground' : 'text-muted'
                                 }`}
                             >
@@ -283,6 +318,8 @@ function CheckInFlow() {
     const [addonsBackRequest, setAddonsBackRequest] = useState(0);
     const [buyRecoverySnapshot, setBuyRecoverySnapshot] = useState<BuyFlowRecoverySnapshot | null>(null);
     const [buyRecoveryStatus, setBuyRecoveryStatus] = useState<BuyRecoveryStatus | null>(null);
+    const addonsAvailabilityPrefetchRef = useRef<AddonsAvailabilityPrefetch | null>(null);
+    const [addonsAvailabilityPrefetch, setAddonsAvailabilityPrefetch] = useState<AddonsAvailabilityPrefetch | null>(null);
 
     const scrollToTop = () => {
         window.scrollTo(0, 0);
@@ -331,6 +368,54 @@ function CheckInFlow() {
         scrollToTop();
     };
 
+    const getMatchingAddonsPrefetch = (booking: Booking | null) => {
+        if (!booking || !addonsAvailabilityPrefetch) return null;
+        return addonsAvailabilityPrefetch.key === getAddonsAvailabilityTarget(booking).key ? addonsAvailabilityPrefetch : null;
+    };
+
+    const prefetchAddonsAvailability = (booking: Booking) => {
+        const target = getAddonsAvailabilityTarget(booking);
+        const current = addonsAvailabilityPrefetchRef.current;
+        if (current?.key === target.key) return current;
+
+        const request = getNewBookingAvailability([target.bookingStartTime], target.bookingDate);
+        const prefetch: AddonsAvailabilityPrefetch = {
+            availability: null,
+            error: null,
+            key: target.key,
+            promise: request,
+        };
+
+        addonsAvailabilityPrefetchRef.current = prefetch;
+        setAddonsAvailabilityPrefetch(prefetch);
+
+        request
+            .then((availability) => {
+                if (addonsAvailabilityPrefetchRef.current?.key !== target.key) return;
+                const ready: AddonsAvailabilityPrefetch = {
+                    availability,
+                    error: null,
+                    key: target.key,
+                    promise: request,
+                };
+                addonsAvailabilityPrefetchRef.current = ready;
+                setAddonsAvailabilityPrefetch(ready);
+            })
+            .catch((error) => {
+                if (addonsAvailabilityPrefetchRef.current?.key !== target.key) return;
+                const failed: AddonsAvailabilityPrefetch = {
+                    availability: null,
+                    error: error instanceof CloudBookingError ? error.message : t.buy.availabilityFailed,
+                    key: target.key,
+                    promise: null,
+                };
+                addonsAvailabilityPrefetchRef.current = failed;
+                setAddonsAvailabilityPrefetch(failed);
+            });
+
+        return prefetch;
+    };
+
     const handleExistingBookingFound = async (booking: Booking) => {
         const bookingAddons = booking.existingAddons ?? [];
         const bookingPatch = {
@@ -347,6 +432,8 @@ function CheckInFlow() {
             advance(bookingPatch);
             return;
         }
+
+        prefetchAddonsAvailability(booking);
 
         try {
             const checkinSession = await startCheckInSession(booking);
@@ -448,6 +535,8 @@ function CheckInFlow() {
     const startExistingBookingCheckIn = async () => {
         if (!ctx.booking || isStartingSession) return;
 
+        prefetchAddonsAvailability(ctx.booking);
+
         if (ctx.checkinSession) {
             routeFromSessionResume(ctx.checkinSession);
             return;
@@ -536,6 +625,7 @@ function CheckInFlow() {
                 if (!alive) return;
                 setAlreadyCheckedIn(false);
                 const bookingAddons = booking.existingAddons ?? [];
+                if (booking.paid) prefetchAddonsAvailability(booking);
                 routeFromSessionResume(
                     checkinSession,
                     { booking, checkinSession, existingAddons: bookingAddons, selectedAddons: bookingAddons },
@@ -556,10 +646,11 @@ function CheckInFlow() {
 
     const backState = getBackState(state, ctx);
     const addonsHandlesBack = state === 'APP_ADDONS' && addonsStep !== 'SELECT' && addonsStep !== 'APPROVED';
+    const matchingAddonsPrefetch = getMatchingAddonsPrefetch(ctx.booking);
 
     return (
         <div
-            className="z-10 w-full max-w-lg flex flex-col items-center"
+            className="z-10 w-full max-w-lg min-w-0 flex flex-col items-center"
             data-flow-state={state}
             data-checkin-session-id={ctx.checkinSession?.checkinSessionId ?? ''}
             data-checkin-session-status={ctx.checkinSession?.status ?? ''}
@@ -569,7 +660,7 @@ function CheckInFlow() {
         >
             <ProgressBar state={state} buyEntryFlow={ctx.buyEntryFlow} />
 
-            <div className="w-full max-w-md px-4 h-8 flex items-center">
+            <div className="w-full max-w-md min-w-0 px-4 h-8 flex items-center">
                 {(backState || addonsHandlesBack) && (
                     <button
                         onClick={() => {
@@ -588,7 +679,7 @@ function CheckInFlow() {
                 )}
             </div>
 
-            <div className="w-full flex items-center justify-center relative">
+            <div className="w-full max-w-full min-w-0 flex items-center justify-center relative">
                 <AnimatePresence mode="wait">
                     {state === 'APP_MOBILE' && (
                         <motion.div
@@ -596,7 +687,7 @@ function CheckInFlow() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             key="mobile"
-                            className="flex flex-col items-center justify-center text-foreground w-full"
+                            className="flex w-full max-w-full min-w-0 flex-col items-center justify-center text-foreground"
                             style={{ minHeight: 'calc(100dvh - 60px)' }}
                         >
                             <img src="/jumpyard_logo.png" alt="JumpYard" className="w-40 mb-6" />
@@ -686,6 +777,7 @@ function CheckInFlow() {
                             booking={ctx.booking}
                             guestCount={ctx.booking.jumpers}
                             existingAddons={ctx.existingAddons}
+                            prefetchedAvailability={matchingAddonsPrefetch}
                             onStepChange={setAddonsStep}
                             onContinue={({ selectedAddons, addonsTotal, skyriderSelected, skyriderHeightConfirmed, connectedSelected, paymentHandled }) =>
                                 advance({
@@ -778,7 +870,7 @@ function isCompletedSession(session: CheckInSession) {
 export default function Home() {
     return (
         <LanguageProvider>
-            <main className="flex min-h-dvh w-full flex-col items-center justify-start p-3 pt-3 overflow-x-hidden relative text-foreground bg-background selection:bg-primary selection:text-white">
+            <main className="flex min-h-dvh w-full max-w-full min-w-0 flex-col items-center justify-start overflow-x-hidden p-3 pt-3 relative text-foreground bg-background selection:bg-primary selection:text-white">
                 <Suspense
                     fallback={
                         <div className="text-foreground z-10 flex flex-col justify-center items-center h-full w-full">

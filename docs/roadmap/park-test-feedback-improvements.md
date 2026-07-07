@@ -1,0 +1,30 @@
+# Park-Test Feedback Improvement Placeholders
+
+This page captures the post-park-test feedback queue after T0178-T0180. In the latest Sprint roadmap PDF, this corresponds to the Sprint 3 workstream "Agera på Sprint 2-respons". It is a planning surface only: no ticket below is active until Sprint 3/4 is approved and a ticket is opened in `CODEX_TASK.md`.
+
+## Outcome Guardrail
+
+The tested base flow should be preserved. Park feedback was positive: guests could check in smoothly, the flow worked both with and without an existing booking, the park manager liked the app, and Oskar liked the flow. The improvement queue is about clarity, accessibility, copy, and robustness, not a new base design.
+
+The deployed park-test full-flow window remains open until Love asks to close it. These placeholders do not close gates, broaden venue/date scope, enable webhooks, enable JumpYard-owned SMS/email sends, import same-day guest lists, or change AWS resources.
+
+This page is not the full Sprint 3/4 roadmap. It covers the park-feedback response slice only. Production cloud, domain, SMS/email, security frames, kiosk, QR print, terminal preparation, and AirHive/JumpyBoard work are tracked from the roadmap PDF in the main backlog.
+
+## Ticket Placeholders
+
+| Ticket | Theme | Goal | Scope Boundary | Acceptance Notes |
+|---|---|---|---|---|
+| `T0182` | Global UX, layout, and copy density | Completed the immediate mobile viewport consistency pass and approved phone UX/copy polish after live park-test review. | Frontend UX/copy only. No public API contract, new AWS resource, Roller ownership, webhook, guest-send, or broader venue/date scope change. | Closed on 2026-07-07 with explicit viewport metadata, global overflow/text-size guards, dynamic-label width hardening, screen-by-screen phone UI polish, socks confirmation guard, buy-entry contact/payment consolidation, and read-only existing-booking add-on availability prefetch. |
+| `T0183` | Safety video, rules, and child comprehension | Make the safety step short, clear, and harder to click through without understanding. | Safety-step UI/copy/media presentation only; no new legal or waiver model unless explicitly approved. | Video duration is visible before play, volume issue is handled or escalated, copy says the video is short and must be watched before jumping, and instructions clearly tell the responsible person to watch with the children. Rules are shorter, more visual, easier to scan, and focused into fewer main points where possible. |
+| `T0184` | Older and technically inexperienced guest support | Make QR start and early-step guidance clearer for guests who are not comfortable with mobile check-in. | Frontend guidance/fallback UX only; no new staff auth, identity, or operations backend scope. | Start from QR is clearer, early flow has visible step-by-step support, help copy such as `Behöver du hjälp? Fråga personalen.` is easy to find, and the flow explicitly preserves a staff fallback for guests who cannot read or use the phone flow. |
+| `T0185` | Socks confirmation guard | Require either a socks purchase or an active confirmation that every jumper already has approved JumpYard jumping socks. | Socks/add-on UI and existing validation path only unless backend enforcement is explicitly scoped during the ticket. | The guest cannot continue without buying socks or checking an approved-socks confirmation. Copy should use `Jag bekräftar att alla hoppare har godkända JumpYard-hoppstrumpor.` and clarify that ordinary socks, such as Polarn och Pyret-style socks, are not enough. |
+| `T0186` | Water bottle add-on | Add water bottle handling as a clear add-on or bring-your-own confirmation. | Guest-facing add-on UX and product mapping review; no product write or payment behavior changes without explicit ticket scope. | Guest can add a water bottle or confirm they brought one. Copy explains the simple reason: `Ta gärna med egen vattenflaska. Vi delar inte ut engångsmuggar av miljöskäl.` |
+| `T0187` | Booking flow and Roller product semantics | Fix product/counting robustness and evaluate the checkout simplification suggested by Oskar. | Discovery plus scoped implementation only; split this ticket if Roller mapping or checkout changes become too large. | Combo deals show the correct number of jumpers. Roller session products such as Family and Combo x2 are documented as source-of-truth mappings. The app counts actual jumpers rather than relying only on product names or row counts. The ticket also evaluates whether contact details and payment can live on the same page for new bookings. |
+
+## Deferred From This Queue
+
+No separate `T0181` close-window ticket is planned right now because Love explicitly wants the park-test app to keep working until further notice.
+
+No separate triage ticket is planned. `T0182` was the first concrete improvement ticket, not a feedback-sorting ticket.
+
+No separate `T0188` device QA pass or `T0189` go/no-go package is planned right now. T0178-T0180 are closed, and the next useful placeholders are the concrete feedback improvements above.

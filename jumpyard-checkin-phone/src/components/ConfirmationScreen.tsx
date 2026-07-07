@@ -71,7 +71,7 @@ export const ConfirmationScreen = ({
 
     return (
         <motion.div
-            className="w-full max-w-lg mx-auto flex flex-col items-center justify-center px-4 py-3 text-center"
+            className="w-full max-w-lg min-w-0 mx-auto flex flex-col items-center justify-center px-4 py-3 text-center"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             data-testid="confirmation-screen"
@@ -81,24 +81,24 @@ export const ConfirmationScreen = ({
             data-already-checked-in={String(completed)}
             data-confirmation-channel={channel}
         >
-            <div className="bg-surface p-5 rounded-2xl border border-border w-full shadow-sm text-foreground">
+            <div className="w-full max-w-full min-w-0 text-foreground">
 
                 <div className="flex flex-col items-center mb-4 border-b border-border pb-4">
                     <JumpyardIcon name="success-check" className="w-20 h-20 mb-2" />
-                    <h1 className="text-2xl font-black italic uppercase text-foreground mb-0.5">
+                    <h1 className="break-words text-2xl font-black italic uppercase text-foreground mb-0.5">
                         {completed ? t.confirm.alreadyCheckedInTitle : t.confirm.title}
                     </h1>
-                    <p className="text-muted text-sm" data-testid="confirmation-subtitle">
+                    <p className="text-foreground text-sm" data-testid="confirmation-subtitle">
                         {completed ? t.confirm.alreadyCheckedInSubtitle : subtitle}
                     </p>
 
                     {completed && (
                         <div
-                            className="mt-4 bg-success/10 p-4 rounded-xl border border-success/30 shadow-sm flex flex-col items-center"
+                            className="mt-4 max-w-full min-w-0 bg-success/10 p-4 rounded-xl border border-success/30 shadow-sm flex flex-col items-center"
                             data-testid="already-checked-in-card"
                         >
                             <p className="text-[11px] text-muted uppercase tracking-widest mb-0.5">{t.booking.ref}</p>
-                            <p className="text-2xl font-black tracking-widest text-success">{booking.id}</p>
+                            <p className="max-w-full break-all text-2xl font-black tracking-widest text-success">{booking.id}</p>
                             <p className="text-xs text-foreground mt-2">{t.confirm.alreadyCheckedInHelp}</p>
                         </div>
                     )}
@@ -107,34 +107,36 @@ export const ConfirmationScreen = ({
 
                 {!completed && handoffQrValue && (
                     <div
-                        className="mb-3 rounded-xl border border-primary/20 bg-white p-3 text-center shadow-sm"
+                        className="mb-4 border-b border-border pb-4 text-center"
                         data-testid="ready-entry-handoff-card"
                     >
+                        <p className="text-[10px] font-black italic uppercase tracking-wider text-primary">
+                            {t.confirm.showStaffNote}
+                        </p>
                         <QrCode
                             value={handoffQrValue}
-                            className="mx-auto h-36 w-36 rounded-lg border border-border p-2"
+                            className="mx-auto mt-3 h-40 w-40 rounded-xl border border-border bg-white p-2"
                             testId="ready-entry-handoff-qr"
                         />
-                        <p className="mt-2 text-[10px] font-bold italic uppercase tracking-widest text-muted">
-                            {t.confirm.handoffTitle}
+                        <p className="mx-auto mt-3 max-w-[18rem] text-sm font-bold italic text-foreground">
+                            {t.confirm.qrHelp}
                         </p>
-                        <p className="mt-1 text-xs text-foreground/65">{t.confirm.qrHelp}</p>
                     </div>
                 )}
 
                 {!completed && (
-                    <div className="bg-surface-strong rounded-xl p-3 text-left border border-border mb-3">
+                    <div className="min-w-0 text-left mb-4">
                         <div className="flex items-center gap-2 mb-2">
                             <JumpyardIcon name="addons-bag" className="w-7 h-7" />
                             <h2 className="text-sm font-bold italic uppercase text-foreground">{t.confirm.staffHandout}</h2>
                         </div>
 
-                        <div className="flex flex-col gap-1.5">
+                        <div className="overflow-hidden rounded-2xl border border-border bg-white">
                             {handoutItems.map((item, i) => (
-                                <div key={i} className="flex justify-between items-center gap-3 bg-white px-3 py-2 rounded-lg border border-border shadow-sm">
-                                    <div className="flex items-center gap-2 min-w-0">
+                                <div key={i} className="flex min-w-0 justify-between items-center gap-3 border-b border-border px-3 py-3 last:border-b-0">
+                                    <div className="flex min-w-0 flex-1 items-center gap-2">
                                         <JumpyardIcon name={item.icon} className="w-8 h-8 flex-shrink-0" />
-                                        <span className="min-w-0">
+                                        <span className="min-w-0 flex-1">
                                             <span className="block truncate text-sm font-bold italic text-foreground">{item.label}</span>
                                             {item.detail && (
                                                 <span
@@ -146,7 +148,7 @@ export const ConfirmationScreen = ({
                                             )}
                                         </span>
                                     </div>
-                                    <span className="text-xl font-black text-primary">{item.qty}</span>
+                                    <span className="shrink-0 text-xl font-black text-primary">{item.qty}</span>
                                 </div>
                             ))}
                         </div>
@@ -154,16 +156,16 @@ export const ConfirmationScreen = ({
                 )}
 
                 {!completed && experienceItems.length > 0 && (
-                    <div className="bg-surface-strong rounded-xl p-3 text-left border border-border mb-3">
+                    <div className="min-w-0 text-left mb-3">
                         <div className="flex items-center gap-2 mb-2">
                             <JumpyardIcon name="addons-bag" className="w-6 h-6" />
-                            <h2 className="text-xs font-bold italic uppercase text-muted">{t.confirm.otherAddons}</h2>
+                            <h2 className="text-xs font-bold italic uppercase text-foreground">{t.confirm.otherAddons}</h2>
                         </div>
-                        <div className="flex flex-col gap-1">
+                        <div className="overflow-hidden rounded-2xl border border-border bg-white">
                             {experienceItems.map(item => (
-                                <div key={item.id} className="flex justify-between items-center gap-2 px-3 py-1.5">
+                                <div key={item.id} className="flex min-w-0 justify-between items-center gap-2 border-b border-border px-3 py-2.5 last:border-b-0">
                                     <JumpyardIcon name={EXPERIENCE_ICONS[item.id] ?? 'gift-card'} className="w-6 h-6 flex-shrink-0" />
-                                    <span className="text-foreground text-sm flex-1">{item.label} x{item.qty}</span>
+                                    <span className="min-w-0 flex-1 truncate text-foreground text-sm">{item.label} x{item.qty}</span>
                                 </div>
                             ))}
                         </div>
@@ -176,10 +178,9 @@ export const ConfirmationScreen = ({
                 <button
                     type="button"
                     onClick={onStartOver}
-                    className="mt-3 inline-flex w-auto min-w-[190px] items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-black italic uppercase text-white shadow-sm transition-all active:scale-[0.98]"
+                    className="mt-4 text-xs font-black italic uppercase text-foreground/70 underline decoration-primary/50 underline-offset-4 transition-colors hover:text-primary"
                     data-testid="confirmation-start-over"
                 >
-                    <JumpyardIcon name="add-jump-session" className="h-6 w-6 brightness-0 invert" />
                     {t.confirm.done}
                 </button>
             )}

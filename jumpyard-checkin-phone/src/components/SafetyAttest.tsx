@@ -57,16 +57,19 @@ export const SafetyAttest = ({ buyEntryFlow = false, isSubmitting = false, submi
                 {!buyEntryFlow && <JumpyardIcon name="safety-check" className="w-8 h-8" />}
                 <h1 className="text-xl font-black italic uppercase text-foreground">{title}</h1>
             </div>
-            <p className="text-muted text-xs mb-3 text-center">{description}</p>
+            <p className="text-foreground text-xs mb-3 text-center">{description}</p>
 
             <div className="w-full flex flex-col gap-2 mb-4">
+                <h2 className="mb-0.5 text-foreground text-xs font-black italic uppercase tracking-wider">
+                    {t.safetyAttest.safetyRulesTitle}
+                </h2>
                 {/* Age rules — single checkbox covering all three brackets */}
                 <button
                     onClick={() => toggle(AGE_KEY)}
                     className={`w-full text-left p-3 rounded-xl border transition-all flex items-start gap-3 ${
                         ageChecked
-                            ? 'bg-primary/5 border-primary'
-                            : 'bg-surface border-border hover:border-primary/50'
+                            ? 'bg-white border-primary shadow-sm'
+                            : 'bg-white border-border hover:border-primary/50'
                     }`}
                 >
                     <div
@@ -76,12 +79,12 @@ export const SafetyAttest = ({ buyEntryFlow = false, isSubmitting = false, submi
                     >
                         {ageChecked && <span className="text-white text-xs font-black">✓</span>}
                     </div>
-                    <JumpyardIcon name="age-limit" className={`mt-0.5 w-7 h-7 flex-shrink-0 ${ageChecked ? '' : 'opacity-55'}`} />
+                    <JumpyardIcon name="age-limit" className="mt-0.5 w-7 h-7 flex-shrink-0" />
                     <div className="flex flex-col gap-1.5 min-w-0">
                         <p className="text-foreground text-sm font-bold italic">
                             {t.safetyAttest.ageRulesTitle}
                         </p>
-                        <ul className="flex flex-col gap-1 text-muted text-xs leading-snug">
+                        <ul className="flex flex-col gap-1 text-foreground text-xs leading-snug">
                             {AGE_BULLETS.map(bulletKey => (
                                 <li key={bulletKey} className="flex gap-1.5">
                                     <span className="text-primary">•</span>
@@ -93,10 +96,6 @@ export const SafetyAttest = ({ buyEntryFlow = false, isSubmitting = false, submi
                 </button>
 
                 {/* Safety rules section header */}
-                <h2 className="mt-2 mb-0.5 text-foreground text-xs font-black italic uppercase tracking-wider">
-                    {t.safetyAttest.safetyRulesTitle}
-                </h2>
-
                 {/* Safety rules — one checkbox per rule */}
                 {SAFETY_RULE_KEYS.map(key => {
                     const icon = SAFETY_RULE_ICONS[key];
@@ -107,8 +106,8 @@ export const SafetyAttest = ({ buyEntryFlow = false, isSubmitting = false, submi
                             onClick={() => toggle(key)}
                             className={`w-full text-left p-3 rounded-xl border transition-all flex items-center gap-3 ${
                                 isChecked
-                                    ? 'bg-primary/5 border-primary'
-                                    : 'bg-surface border-border hover:border-primary/50'
+                                    ? 'bg-white border-primary shadow-sm'
+                                    : 'bg-white border-border hover:border-primary/50'
                             }`}
                         >
                             <div
@@ -118,7 +117,7 @@ export const SafetyAttest = ({ buyEntryFlow = false, isSubmitting = false, submi
                             >
                                 {isChecked && <span className="text-white text-xs font-black">✓</span>}
                             </div>
-                            <JumpyardIcon name={icon} className={`w-7 h-7 flex-shrink-0 ${isChecked ? '' : 'opacity-55'}`} />
+                            <JumpyardIcon name={icon} className="w-7 h-7 flex-shrink-0" />
                             <p className="text-foreground text-sm font-bold italic">{t.safetyAttest.rules[key]}</p>
                         </button>
                     );
@@ -126,7 +125,7 @@ export const SafetyAttest = ({ buyEntryFlow = false, isSubmitting = false, submi
             </div>
 
             {allChecked && (
-                <p className="text-muted text-xs text-center mb-2">{t.safetyAttest.finalAttest}</p>
+                <p className="text-foreground text-xs text-center mb-2">{t.safetyAttest.finalAttest}</p>
             )}
 
             {submitError && (

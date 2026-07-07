@@ -2,6 +2,28 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0182 Mobile Viewport, UX Polish, And Add-On Prefetch
+
+- 2026-07-06: Implemented a defensive phone-app viewport/layout robustness pass. The phone app now exports a Next viewport with `width: "device-width"`, `initialScale: 1`, and `viewportFit: "cover"` while preserving user pinch zoom.
+- 2026-07-06: Added global mobile stability CSS for `html`/`body`, text-size adjustment, horizontal overflow containment, and media max-width.
+- 2026-07-06: Hardened top-level phone flow containers, progress labels, booking references, product/add-on labels, payment rows, and handout rows against horizontal overflow using scoped `min-w-0`, max-width, wrap, and truncate rules.
+- 2026-07-06: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings only.
+- 2026-07-06: `npm --prefix jumpyard-checkin-phone run build` passed. Next reported the existing `baseline-browser-mapping` age notices only.
+- 2026-07-06: Local static `out` build was served on loopback for browser checks. Emulated mobile viewport checks passed for `/` and `/?park=1` at `375x667`, `390x844`, `360x740`, and `412x915`; for each entry URL, `document.documentElement.scrollWidth <= window.innerWidth` and `document.body.scrollWidth <= window.innerWidth`.
+- 2026-07-06: Reachable key screens were checked in the same viewport matrix: start choice, booking lookup, and buy-entry first screen. All passed the same no-horizontal-overflow assertions.
+- 2026-07-06: Visual inspection at `390x844` confirmed the first screens kept the same basic feel without the extreme zoomed state. Booking summary and ready-for-entry confirmation were not live-reached because no scoped test booking/API smoke was part of Del A.
+- 2026-07-06: T0182 Del A changed phone frontend layout/metadata only. It did not change public APIs, backend, AWS, Roller, gates, data contracts, safety content, socks logic, water-bottle logic, or copy pass behavior.
+- 2026-07-07: Continued T0182 with the user-approved phone UX/copy polish pass across the park-test PWA: start choice, start time, product selection, jumper quantity, add-ons, contact/payment, summary, payment loading/completion, safety video/rules, ready-for-entry QR, booking lookup, existing-booking summary, existing-booking add-ons, and SkyRider consent.
+- 2026-07-07: Added the socks-step guard requiring either add-on quantity or active approved-socks confirmation, merged buy-entry contact details with payment prep, kept the QR on the ready-for-entry screen with shorter staff handoff copy, and preserved the tested base flow.
+- 2026-07-07: Added read-only existing-booking add-on availability prefetch after booking lookup/session resolution and when starting check-in. The prefetch can reuse a matching availability result in `AddonsOffer`, but it does not create drafts, payments, add-ons, redemptions, or other write side effects.
+- 2026-07-07: `npm --prefix jumpyard-checkin-phone run lint` passed with the existing four `<img>` warnings only.
+- 2026-07-07: `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL=https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com npm --prefix jumpyard-checkin-phone run build` passed; the bundle contained the park-test API target and excluded the dev/fake/local API targets.
+- 2026-07-07: `npm run validate` passed after closeout docs were updated.
+- 2026-07-07: `npm run validate:park-test-frontend-target` passed for the static phone output.
+- 2026-07-07: `git diff --check` passed with CRLF normalization warnings only.
+- 2026-07-07: Direct-deployed the static phone build to Cloudflare Pages project `jumpyard-check-in-park-test`. The stable URL returned HTTP `200`, and the in-app browser reloaded in a `390x844` mobile viewport with zero console errors.
+- 2026-07-07: T0182 did not change public API contracts, create new AWS resources, broaden venue/date scope, enable webhooks, enable JumpYard-owned guest sends, or close the intentionally open park-test full-flow runtime window.
+
 ## T0177 Guest Contact Lookup Validation
 
 - 2026-06-30: Implemented server-side booking reference/email/phone lookup for park-test. Email/phone uses Roller `GET /bookings?date&keywords` for the current Europe/Stockholm operating date, verifies candidates with booking detail, filters to Nacka/date scope, scopes response/snapshot items to that date, and selects the nearest upcoming same-day start time when multiple valid matches exist.

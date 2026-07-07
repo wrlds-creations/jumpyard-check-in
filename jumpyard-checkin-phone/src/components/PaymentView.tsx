@@ -30,7 +30,7 @@ export const PaymentView = ({ bookingId, total, items, baseProduct, onPaid }: Pa
 
     return (
         <motion.div
-            className="w-full max-w-md mx-auto flex flex-col items-center px-4 py-3"
+            className="w-full max-w-md min-w-0 mx-auto flex flex-col items-center px-4 py-3"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
@@ -41,20 +41,20 @@ export const PaymentView = ({ bookingId, total, items, baseProduct, onPaid }: Pa
             </div>
             <p className="text-muted text-xs mb-4 text-center">{t.payment.description}</p>
 
-            <div className="w-full bg-surface border border-border shadow-sm text-foreground rounded-xl p-4 mb-4">
-                <div className="flex justify-between items-center border-b border-border pb-3 mb-3">
-                    <p className="text-muted uppercase text-xs font-bold italic">{t.payment.booking}</p>
-                    <p className="text-foreground font-mono tracking-wider">{bookingId}</p>
+            <div className="w-full max-w-full min-w-0 bg-surface border border-border shadow-sm text-foreground rounded-xl p-4 mb-4">
+                <div className="flex min-w-0 justify-between gap-3 items-center border-b border-border pb-3 mb-3">
+                    <p className="shrink-0 text-muted uppercase text-xs font-bold italic">{t.payment.booking}</p>
+                    <p className="min-w-0 break-all text-right text-foreground font-mono tracking-wider">{bookingId}</p>
                 </div>
 
                 {baseProduct && (
                     <div className="border-b border-border pb-3 mb-3">
                         <p className="text-muted uppercase text-xs font-bold italic mb-2">{t.payment.baseProduct}</p>
-                        <div className="flex justify-between items-center py-1">
-                            <span className="text-foreground text-sm">
+                        <div className="flex min-w-0 justify-between gap-3 items-center py-1">
+                            <span className="min-w-0 truncate text-foreground text-sm">
                                 {baseProduct.label} {baseProduct.quantity > 1 && `x${baseProduct.quantity}`}
                             </span>
-                            <span className="text-foreground text-sm font-bold">{baseProduct.total} {t.common.currency}</span>
+                            <span className="shrink-0 text-foreground text-sm font-bold">{baseProduct.total} {t.common.currency}</span>
                         </div>
                     </div>
                 )}
@@ -63,9 +63,9 @@ export const PaymentView = ({ bookingId, total, items, baseProduct, onPaid }: Pa
                     <div className="border-b border-border pb-3 mb-3">
                         <p className="text-muted uppercase text-xs font-bold italic mb-2">{t.payment.addonsLabel}</p>
                         {items.map(item => (
-                            <div key={item.id} className="flex justify-between items-center py-1">
-                                <span className="text-foreground text-sm">{item.label} x{item.qty}</span>
-                                <span className="text-foreground text-sm font-bold">{item.price * item.qty} {t.common.currency}</span>
+                            <div key={item.id} className="flex min-w-0 justify-between gap-3 items-center py-1">
+                                <span className="min-w-0 truncate text-foreground text-sm">{item.label} x{item.qty}</span>
+                                <span className="shrink-0 text-foreground text-sm font-bold">{item.price * item.qty} {t.common.currency}</span>
                             </div>
                         ))}
                     </div>
