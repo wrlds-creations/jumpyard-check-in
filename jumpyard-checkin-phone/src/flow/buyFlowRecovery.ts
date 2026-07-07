@@ -24,7 +24,7 @@ export interface BuyFlowRecoveryProduct {
   label: string | null;
   startTime: string | null;
   durationMinutes: number | null;
-  type: 'entry' | 'family' | null;
+  type: 'entry' | 'family' | 'combo' | null;
   unitPrice: number | null;
 }
 
@@ -121,7 +121,7 @@ function positiveIntegerOrNull(value: unknown) {
 
 function readProduct(value: unknown): BuyFlowRecoveryProduct | null {
   if (!isObject(value)) return null;
-  const type = value.type === 'entry' || value.type === 'family' ? value.type : null;
+  const type = value.type === 'entry' || value.type === 'family' || value.type === 'combo' ? value.type : null;
   return {
     durationMinutes: numberOrNull(value.durationMinutes),
     key: stringOrNull(value.key),

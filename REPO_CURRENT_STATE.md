@@ -6,10 +6,10 @@ Use this file as the short operational snapshot of what actually exists in the r
 
 - Date: 2026-07-07
 - Current branch: `main`
-- Current status: T0186 is closed after the park-test water bottle add-on implementation and deploy. The temporary full-flow AWS gate posture intentionally remains open for Nacka dates through 2026-09-30 until Love asks to close it.
-- Current ticket: `None active`
-- Completed tickets: archived in `docs/history/completed-tickets.md` (184 completed tickets; latest closed `T0186`).
-- Recommended next step: open T0187, booking flow and Roller product semantics, when Love approves starting the next ticket. Do not close the park-test full-flow window unless Love explicitly asks.
+- Current status: No active ticket. T0187 ComboDeal buy-entry product is implemented, deployed to park-test, reviewed by Love, and closed. The temporary full-flow AWS gate posture intentionally remains open for Nacka dates through 2026-09-30 until Love asks to close it.
+- Current ticket: `NO_ACTIVE_TICKET`
+- Completed tickets: archived in `docs/history/completed-tickets.md` (185 completed tickets; latest closed `T0187`).
+- Recommended next step: choose the next approved ticket or product/kiosk slice. Do not close the park-test full-flow window unless Love explicitly asks.
 
 ## Current Structure
 
@@ -48,6 +48,7 @@ Current park-test status:
 - T0184 closed as deferred to the later kiosk/staff-help track; no additional phone-flow code or deploy was needed.
 - T0185 closed as satisfied by the T0182 socks confirmation guard; no additional code or deploy was needed.
 - T0186 closed after adding the park-test water bottle add-on as `water_bottle`, mapped server-side to Roller Live product `1324123` (`Jumpy Vattenflaska`), with buy-or-own-bottle confirmation in the phone add-on step and water-bottle icon handling in phone/admin handout surfaces.
+- T0187 closed after adding the park-test ComboDeal buy-entry product above standard entry products, mapped server-side to Roller Live parent `1318777` with child price products `1318778`, `1318779`, and `1318780`; one package counts as two jumpers and the phone card shows `2 personer + 60 min + 1 pizza` with approved offer styling.
 - T0178-T0180 are closed from the park-test readiness/test/outcome pass. Park feedback was positive and future improvements remain in the roadmap.
 - The latest Sprint roadmap PDF is archived in `docs/assets/`. It frames Sprint 3 as production cloud plus response to Sprint 2 park feedback, and Sprint 4 as kiosk/QR print/terminal preparation plus first AirHive/JumpyBoard test scope.
 - The current T0176/T0177 full-flow runtime posture remains intentionally open so the app keeps working for park testing until Love says otherwise. The date scope is now explicitly extended through 2026-09-30 for Nacka only; this does not broaden venue scope, webhooks, broad imports, or JumpYard-owned guest messaging.
@@ -75,21 +76,21 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 184
-- Latest closed ticket: `T0186`
+- Archived completed-ticket count: 185
+- Latest closed ticket: `T0187`
 - Current active ticket: None
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | No active ticket. | Idle | T0186 is closed; next planned ticket is T0187. |
+| `NO_ACTIVE_TICKET` | None active. | Closed | T0187 is merged and closed. Full-flow gates remain in their current Nacka/date-scoped park-test posture until Love explicitly asks to close them. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0187` | Booking flow and Roller product semantics. | Planned | Evaluate contact/payment simplification and fix actual jumper counting for Family/Combo/session products. |
+| `TBD` | Next approved slice. | Not selected | Choose separately from remaining product semantics, kiosk/staff-help, or Sprint 3/4 roadmap work. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -97,7 +98,7 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- Latest closeout evidence is recorded in [docs/t0186-water-bottle-addon.md](docs/t0186-water-bottle-addon.md), [docs/t0185-socks-confirmation-closeout.md](docs/t0185-socks-confirmation-closeout.md), [docs/t0184-older-guest-support-closeout.md](docs/t0184-older-guest-support-closeout.md), [docs/t0183-safety-video-rules-closeout.md](docs/t0183-safety-video-rules-closeout.md), and [docs/history/validation-log.md](docs/history/validation-log.md).
+- Latest closeout evidence is recorded in [docs/history/validation-log.md](docs/history/validation-log.md), [AWS_RESOURCES.md](AWS_RESOURCES.md), [DECISIONS.md](DECISIONS.md), and the T0186/T0185/T0184/T0183 closeout docs where applicable.
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions

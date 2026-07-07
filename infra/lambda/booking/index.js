@@ -12,6 +12,7 @@ const ROLLER_LIVE_BASE_URL = 'https://api.roller.app';
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
 
 const PHONE_BOOKING_PRODUCTS = [
+  { key: 'COMBO60', parentName: 'ComboDeal', label: 'ComboDeal', type: 'combo', durationMinutes: 60, jumpersPerUnit: 2 },
   { key: 'E60', parentName: 'Entré 60 min', label: '60 min entré', type: 'entry', durationMinutes: 60, jumpersPerUnit: 1 },
   { key: 'E90', parentName: 'Entré 90 min', label: '90 min entré', type: 'entry', durationMinutes: 90, jumpersPerUnit: 1 },
   { key: 'E120', parentName: 'Entré 120 min', label: '120 min entré', type: 'entry', durationMinutes: 120, jumpersPerUnit: 1 },
@@ -84,6 +85,10 @@ const T0162_LIVE_ADDON_SMOKE_PRODUCTS = [
   { key: 'F60', parentProductId: '1189814' },
   { key: 'F90', parentProductId: '1189832' },
   { key: 'F120', parentProductId: '1189794' },
+];
+
+const LIVE_PHONE_BOOKING_PRODUCTS = [
+  { key: 'COMBO60', parentProductId: '1318777', productIds: ['1318778', '1318779', '1318780'] },
 ];
 
 const LIVE_PHONE_ADDON_PRODUCTS = [
@@ -2144,6 +2149,7 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
            'Entré 60 min',
            'Entré 90 min',
            'Entré 120 min',
+           'ComboDeal',
            'Entré 60 min - Familj',
            'Entré 90 min - Familj',
            'Entré 120 min - Familj'
@@ -2152,6 +2158,7 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
            'Entré 60 min',
            'Entré 90 min',
            'Entré 120 min',
+           'ComboDeal',
            'Entré 60 min - Familj',
            'Entré 90 min - Familj',
            'Entré 120 min - Familj'
@@ -2192,14 +2199,20 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
 }
 
 function getRequiredPhoneBookingProducts(rollerEnv) {
+  if (rollerEnv !== 'live') {
+    return PHONE_BOOKING_PRODUCTS.filter((product) => product.type !== 'combo');
+  }
   return PHONE_BOOKING_PRODUCTS;
 }
 
 function getLiveSmokeBookingProductFallbacks(rollerEnv) {
   if (rollerEnv !== 'live') return [];
-  if (isT0159LivePaymentSmokeEnabled()) return T0159_LIVE_PAYMENT_SMOKE_PRODUCTS;
-  if (isT0162LiveAddOnSmokeEnabled()) return T0162_LIVE_ADDON_SMOKE_PRODUCTS;
-  return [];
+  const products = [];
+  if (isT0159LivePaymentSmokeEnabled()) products.push(...T0159_LIVE_PAYMENT_SMOKE_PRODUCTS);
+  if (isT0162LiveAddOnSmokeEnabled()) products.push(...T0162_LIVE_ADDON_SMOKE_PRODUCTS);
+  if (isT0176FullFlowRehearsalEnabled()) products.push(...T0159_LIVE_PAYMENT_SMOKE_PRODUCTS);
+  products.push(...LIVE_PHONE_BOOKING_PRODUCTS);
+  return products;
 }
 
 function getLivePhoneAddonFallbacks(rollerEnv) {
@@ -2348,7 +2361,9 @@ async function loadAvailabilityParentForProduct(config, token, item, parentProdu
 
 async function loadLivePaymentSmokeParentsFromAvailability(config, token, items, parentsByProductId) {
   const result = new Map();
-  if (config.env !== 'live' || !isT0159LivePaymentSmokeEnabled()) return result;
+  if (config.env !== 'live' || (!isT0159LivePaymentSmokeEnabled() && !isT0176FullFlowRehearsalEnabled())) {
+    return result;
+  }
 
   const missingItems = items.filter((item) => !parentsByProductId.has(String(item.productId)));
   if (missingItems.length === 0) return result;
@@ -2356,7 +2371,7 @@ async function loadLivePaymentSmokeParentsFromAvailability(config, token, items,
   const parentProducts = await loadPhoneBookingParentProducts(config.env);
   const allowedParents = parentProducts.filter(
     (product) =>
-      (product.type === 'entry' || product.type === 'family') &&
+      (product.type === 'entry' || product.type === 'family' || product.type === 'combo') &&
       product.parentProductId,
   );
   const allowedParentIds = new Set(allowedParents.map((product) => String(product.parentProductId)));
@@ -2435,14 +2450,15 @@ async function loadParentProductsForChildIds(rollerEnv, productIds) {
 
   const existingIds = new Set(rows.map((row) => row.productId));
   const requestedProductIds = productIds.map(String);
-  const liveBookingFallbackRows = isT0159LivePaymentSmokeEnabled()
-    ? T0159_LIVE_PAYMENT_SMOKE_PRODUCTS
-        .filter((product) => requestedProductIds.includes(product.productId) && !existingIds.has(product.productId))
-        .map((product) => ({
-          parentProductId: product.parentProductId,
-          productId: product.productId,
-        }))
-    : [];
+  const liveBookingFallbackRows = getLiveSmokeBookingProductFallbacks(rollerEnv)
+    .flatMap((product) => [
+      stringOrNull(product.productId),
+      ...(Array.isArray(product.productIds) ? product.productIds.map(stringOrNull) : []),
+    ].filter(Boolean).map((productId) => ({
+      parentProductId: product.parentProductId,
+      productId,
+    })))
+    .filter((product) => requestedProductIds.includes(product.productId) && !existingIds.has(product.productId));
   const liveAddonFallbackRows = getLivePhoneAddonFallbacks(rollerEnv)
     .flatMap((product) => [
       stringOrNull(product.productId),

@@ -152,7 +152,7 @@ export interface NewBookingProduct {
   productName: string | null;
   requiresAvailability?: boolean;
   startTime: string;
-  type: 'entry' | 'family' | 'addon';
+  type: 'entry' | 'family' | 'combo' | 'addon';
   unitPrice: number | null;
   unitPriceCents: number | null;
 }

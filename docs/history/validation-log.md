@@ -2,6 +2,16 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0187 ComboDeal Booking Product
+
+- 2026-07-07: Implemented `COMBO60` as a phone buy-entry product sorted above standard entry products, mapped server-side to Roller Live parent `1318777` (`ComboDeal`) with child price products `1318778`, `1318779`, and `1318780`.
+- 2026-07-07: Public park-test availability smoke for `2026-07-07 17:00` returned `COMBO60` with `productId=1318778`, `unitPriceCents=43000`, `jumpersPerUnit=2`, and `requiresAvailability=true`.
+- 2026-07-07: Added transparent JumpYard-style combo icons for two people, 60 minutes, pizza, and summer/calendar; the final phone card uses two people, 60 minutes, and pizza with red plus separators and red offer glow.
+- 2026-07-07: Deployed existing `BookingHandler` Lambda code to the current park-test full-flow rehearsal posture. CloudFormation reached `UPDATE_COMPLETE`; pre-deploy diff showed only `BookingHandler` Lambda code changing and no new AWS resources.
+- 2026-07-07: Direct-deployed the phone park-test Cloudflare Pages build repeatedly during visual review with the park-test API target. Final browser check at cachebuster `t0187_combo_glow` verified `2 PERSONER + 60 MIN + 1 PIZZA`, red border/glow, plus separators, and no horizontal overflow at `390x844`.
+- 2026-07-07: `npm --prefix jumpyard-checkin-phone run lint`, `npm --prefix jumpyard-checkin-phone run build`, and `git diff --check` passed. Phone lint reported existing `<img>` warnings only; `git diff --check` reported CRLF normalization warnings only.
+- 2026-07-07: Closed T0187 after user approval to commit, push, and merge the ComboDeal ticket.
+
 ## T0186 Water Bottle Add-On
 
 - 2026-07-07: Implemented `water_bottle` as a phone add-on sorted after socks, with buy-or-own-bottle confirmation and environmental copy.
