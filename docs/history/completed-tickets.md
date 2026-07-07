@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 180
-Latest archived completed ticket: `T0182`
+Archived count: 183
+Latest archived completed ticket: `T0185`
 
 ## Completed Tickets
 
@@ -192,3 +192,6 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0179` | Staff-assisted visitor test. | 2026-07-02 | Closed from user-reported park-test outcome. The flow worked well with and without bookings, guests could check in smoothly, buy-without-booking worked well, and park feedback was overall positive. The park manager and Oskar both liked the app/flow. No AWS resources, Roller config, app code, deploys, refund automation, webhooks, SMS/email, or gate changes occurred in this closeout record. |
 | `T0180` | Outcome and go/no-go. | 2026-07-02 | Closed as Sprint 2 outcome capture. The base flow should be preserved, Sprint 3/4 implementation remains pending approval, and new improvement placeholders T0182-T0187 are recorded in the roadmap. Love explicitly asked to keep the deployed park-test full-flow window open until further notice, so this closeout did not run a normal `park-test.json` close-window deploy or broaden any current gate scope. |
 | `T0182` | Mobile viewport and phone UX polish. | 2026-07-07 | Closed after the approved phone-app viewport/layout robustness pass, screen-by-screen park-test UX/copy polish, socks confirmation guard, buy-entry contact/payment consolidation, safety/final-screen polish, existing-booking summary/add-on/SkyRider polish, and read-only existing-booking add-on availability prefetch. The phone build was direct-deployed to Cloudflare Pages with the park-test API target. T0182 did not change public API contracts, create new AWS resources, enable webhooks, enable JumpYard-owned guest sends, broaden venue/date scope, or close the intentionally open Nacka full-flow window. |
+| `T0183` | Safety video and rules closeout. | 2026-07-07 | Closed as documentation-only because the safety video, safety rules, and responsible-adult/child-comprehension scope was already delivered during the T0182 phone UX polish. No app code, backend, public API contract, AWS resource, Roller integration, gate, payment, redeem, webhook, SMS, email, Cloudflare deploy, or full-flow runtime posture changed for T0183. |
+| `T0184` | Older guest support closeout. | 2026-07-07 | Closed as documentation-only after Love confirmed the older/technically inexperienced guest support path should be handled by the later kiosk/staff-help setup rather than another immediate phone-flow change. No app code, kiosk code, backend, public API contract, AWS resource, Roller integration, gate, payment, redeem, webhook, SMS, email, Cloudflare deploy, or runtime behavior changed for T0184. |
+| `T0185` | Socks confirmation guard closeout. | 2026-07-07 | Closed as documentation-only because the guest-facing socks confirmation guard was already delivered during T0182. The add-ons step requires either socks quantity or active approved JumpYard socks confirmation before continuing. No app code, backend, public API contract, AWS resource, Roller integration, gate, payment, redeem, webhook, SMS, email, Cloudflare deploy, or runtime behavior changed for T0185. |

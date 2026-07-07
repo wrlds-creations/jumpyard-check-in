@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-07-07
-- Current branch: `codex/t0182-mobile-viewport-layout`
-- Current status: No active ticket. T0182 is closed as the mobile viewport, phone UX/copy polish, and existing-booking add-on availability prefetch pass. The temporary full-flow AWS gate posture intentionally remains open for Nacka dates through 2026-09-30 until Love asks to close it.
+- Current branch: `codex/t0183-t0185-closeouts`
+- Current status: No active ticket. T0185 is closed as documentation-only because its socks confirmation guard was already satisfied by T0182. The temporary full-flow AWS gate posture intentionally remains open for Nacka dates through 2026-09-30 until Love asks to close it.
 - Current ticket: `NO_ACTIVE_TICKET`
-- Completed tickets: archived in `docs/history/completed-tickets.md` (180 completed tickets; latest closed `T0182`).
-- Recommended next step: keep the park-test flow available for continued review, then pick the next approved post-test improvement ticket. Do not close the park-test full-flow window unless Love explicitly asks.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (183 completed tickets; latest closed `T0185`).
+- Recommended next step: keep the park-test flow available for continued review, then pick T0186 if water-bottle handling is still needed. Do not close the park-test full-flow window unless Love explicitly asks.
 
 ## Current Structure
 
@@ -33,6 +33,9 @@ History and planning archives:
 - Park-test feedback improvement placeholders: [docs/roadmap/park-test-feedback-improvements.md](docs/roadmap/park-test-feedback-improvements.md)
 - Park-test ticket docs: `docs/t0145-*.md` through `docs/t0180-*.md`
 - Park-test mobile viewport and phone UX polish: [docs/t0182-mobile-viewport-layout.md](docs/t0182-mobile-viewport-layout.md)
+- Park-test safety closeout: [docs/t0183-safety-video-rules-closeout.md](docs/t0183-safety-video-rules-closeout.md)
+- Park-test older guest support closeout: [docs/t0184-older-guest-support-closeout.md](docs/t0184-older-guest-support-closeout.md)
+- Park-test socks confirmation closeout: [docs/t0185-socks-confirmation-closeout.md](docs/t0185-socks-confirmation-closeout.md)
 
 Current park-test status:
 
@@ -41,6 +44,9 @@ Current park-test status:
 - Aurora contains only scoped smoke/test state; it is not a broad same-day booking import.
 - Current full-flow runtime posture allows scoped Nacka lookup, booking/payment, add-ons, staff auth, and redeem for `2026-06-29` through `2026-09-30`; webhook processing and JumpYard-owned guest sends remain closed.
 - T0182 closed the phone mobile robustness, UX/copy polish, socks confirmation, contact/payment consolidation, and read-only existing-booking add-on availability prefetch pass without changing public API contracts, new AWS resources, or Roller ownership.
+- T0183 closed as satisfied by T0182 safety-flow polish; no additional code or deploy was needed.
+- T0184 closed as deferred to the later kiosk/staff-help track; no additional phone-flow code or deploy was needed.
+- T0185 closed as satisfied by the T0182 socks confirmation guard; no additional code or deploy was needed.
 - T0178-T0180 are closed from the park-test readiness/test/outcome pass. Park feedback was positive and future improvements remain in the roadmap.
 - The latest Sprint roadmap PDF is archived in `docs/assets/`. It frames Sprint 3 as production cloud plus response to Sprint 2 park feedback, and Sprint 4 as kiosk/QR print/terminal preparation plus first AirHive/JumpyBoard test scope.
 - The current T0176/T0177 full-flow runtime posture remains intentionally open so the app keeps working for park testing until Love says otherwise. The date scope is now explicitly extended through 2026-09-30 for Nacka only; this does not broaden venue scope, webhooks, broad imports, or JumpYard-owned guest messaging.
@@ -68,23 +74,20 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 180
-- Latest closed ticket: `T0182`
+- Archived completed-ticket count: 183
+- Latest closed ticket: `T0185`
 - Current active ticket: None
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `NO_ACTIVE_TICKET` | None active. | Closed | T0182 is closed. Full-flow gates remain in the existing T0176/T0177/T0180 posture until Love asks to close them. |
+| `NO_ACTIVE_TICKET` | None active. | Closed | T0185 is closed as docs-only/no-op. Full-flow gates remain in the existing T0176/T0177/T0180 posture until Love asks to close them. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0183` | Safety video, rules, and child comprehension. | Planned | Clarify video length, volume/readiness, responsible-adult instructions, and shorter visual safety rules. |
-| `T0184` | Older and technically inexperienced guest support. | Planned | Improve QR start, early step-by-step guidance, help copy, and staff fallback. |
-| `T0185` | Socks confirmation guard. | Planned | Require socks purchase or active confirmation that every jumper has approved JumpYard jumping socks. |
 | `T0186` | Water bottle add-on. | Planned | Add water bottle add-on/bring-own confirmation with environmental copy. |
 | `T0187` | Booking flow and Roller product semantics. | Planned | Evaluate contact/payment simplification and fix actual jumper counting for Family/Combo/session products. |
 
@@ -94,7 +97,7 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- Latest phone-app validation and park-test frontend deploy evidence is recorded in [docs/t0182-mobile-viewport-layout.md](docs/t0182-mobile-viewport-layout.md) and [docs/history/validation-log.md](docs/history/validation-log.md). T0178-T0180 closeout is documentation/outcome capture only.
+- Latest docs-only closeout evidence is recorded in [docs/t0185-socks-confirmation-closeout.md](docs/t0185-socks-confirmation-closeout.md), [docs/t0184-older-guest-support-closeout.md](docs/t0184-older-guest-support-closeout.md), [docs/t0183-safety-video-rules-closeout.md](docs/t0183-safety-video-rules-closeout.md), and [docs/history/validation-log.md](docs/history/validation-log.md). Latest phone-app validation and park-test frontend deploy evidence remains in [docs/t0182-mobile-viewport-layout.md](docs/t0182-mobile-viewport-layout.md).
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions

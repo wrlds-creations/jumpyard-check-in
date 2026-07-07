@@ -6,14 +6,14 @@ This file is the living project memory for JumpYard Next. Confirmed durable fact
 
 - Project: `JumpYard Next`
 - Repository: `wrlds-creations/jumpyard-check-in`
-- App: existing JumpYard check-in app suite
-- Current phase: `Sprint 2 closed`; Sprint 3/4 approval pending.
+- App: JumpYard check-in app suite
+- Current phase: `Sprint 2 closed`; Sprint 3/4 pending.
 
 ## Current Phase And Scope
 
-Sprint 2 is closed. T0182 closed the approved immediate phone-app mobile robustness and UX/copy polish pass. Sprint 3/4 work is not approved yet. The deployed Nacka park-test full-flow window stays open until Love asks to close it, currently through 2026-09-30.
+Sprint 2 is closed. T0182-T0185 are closed; T0184 moves to future kiosk/staff help. Sprint 3/4 is not approved yet. Nacka park-test stays open until Love asks to close it, through 2026-09-30.
 
-The latest Sprint roadmap artifact is [docs/assets/jumpyard-next-sprint-roadmap.pdf](docs/assets/jumpyard-next-sprint-roadmap.pdf), updated 2026-06-11 and added on 2026-07-06. It frames Sprint 3 as production cloud plus Sprint 2 response work, and Sprint 4 as kiosk, QR print, terminal preparation, and AirHive/JumpyBoard testing.
+The latest roadmap artifact is [docs/assets/jumpyard-next-sprint-roadmap.pdf](docs/assets/jumpyard-next-sprint-roadmap.pdf), updated 2026-06-11. It frames Sprint 3 as production cloud plus Sprint 2 response work, and Sprint 4 as kiosk, QR print, terminal preparation, and AirHive/JumpyBoard testing.
 
 The check-in app suite connects to Roller Playground and park-test Live through a server-side layer. The target production architecture remains:
 
@@ -70,7 +70,8 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 - Park-test T0176 full-flow rehearsal opens Nacka/date-scoped payment, lookup, add-ons, staff auth, and redeem for `2026-06-29` through `2026-09-30` while keeping webhook processing and JumpYard-owned guest sends closed.
 - Gift card, Klippkort, and current V1 membership/`10-Kort` handling are payment-prep code inputs applied by Roller during costs/draft creation; `10-Kort` is code validation/amount reduction, not remaining-visit balance display.
 - SkyRider is the first capacity-gated add-on and requires height/consent before quote/draft/payment side effects.
-- The T0182 phone UI polish keeps the working base flow while reducing copy density and grey visual weight across start, lookup, summary, add-ons, contact/payment, safety, and ready-for-entry screens.
+- T0182 keeps the working phone flow while reducing copy density and grey visual weight across start, lookup, summary, add-ons, contact/payment, safety, and ready-for-entry.
+- Older/technically inexperienced guest fallback is deferred to the later kiosk/staff-help track.
 - Staff/admin handout grouping uses exact operational labels such as `Lämna ut vid incheckning`, `Hämtas efter hoppet`, and `Övrigt i bokningen`.
 
 ## Data And Integration Facts
