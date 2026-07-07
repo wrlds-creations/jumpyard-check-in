@@ -2,6 +2,27 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0185 Socks Confirmation Guard Closeout
+
+- 2026-07-07: Closed T0185 as documentation-only because the guest-facing socks confirmation guard was already delivered and reviewed during T0182.
+- 2026-07-07: Added `docs/t0185-socks-confirmation-closeout.md` and updated active status, roadmap, feedback placeholders, and completed-ticket history. No app code, backend code, public API contract, AWS resource, Roller integration, gate, payment, redeem, webhook, SMS, email, Cloudflare deploy, or runtime behavior changed.
+- 2026-07-07: `npm run validate` passed after T0185 closeout docs were updated.
+- 2026-07-07: `git diff --check` passed with CRLF normalization warnings only.
+
+## T0184 Older And Technically Inexperienced Guest Support Closeout
+
+- 2026-07-07: Closed T0184 as documentation-only because Love confirmed the older/technically inexperienced guest support path should move to the later kiosk/staff-help setup instead of another immediate phone-flow change.
+- 2026-07-07: Added `docs/t0184-older-guest-support-closeout.md`, recorded D0140, and updated active status, roadmap, feedback placeholders, and completed-ticket history. No app code, kiosk code, backend code, public API contract, AWS resource, Roller integration, gate, payment, redeem, webhook, SMS, email, Cloudflare deploy, or runtime behavior changed.
+- 2026-07-07: `npm run validate` passed after T0184 closeout docs were updated.
+- 2026-07-07: `git diff --check` passed with CRLF normalization warnings only.
+
+## T0183 Safety Video, Rules, And Child Comprehension Closeout
+
+- 2026-07-07: Closed T0183 as documentation-only because the safety video, safety rules, and responsible-adult/child-comprehension scope was already delivered and reviewed during T0182.
+- 2026-07-07: Added `docs/t0183-safety-video-rules-closeout.md` and updated active status, roadmap, feedback placeholders, and completed-ticket history. No app code, backend code, public API contract, AWS resource, Roller integration, gate, payment, redeem, webhook, SMS, email, or Cloudflare deploy changed.
+- 2026-07-07: `npm run validate` passed after T0183 closeout docs were updated.
+- 2026-07-07: `git diff --check` passed with CRLF normalization warnings only.
+
 ## T0182 Mobile Viewport, UX Polish, And Add-On Prefetch
 
 - 2026-07-06: Implemented a defensive phone-app viewport/layout robustness pass. The phone app now exports a Next viewport with `width: "device-width"`, `initialScale: 1`, and `viewportFit: "cover"` while preserving user pinch zoom.
