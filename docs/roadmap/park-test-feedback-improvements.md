@@ -1,6 +1,6 @@
 # Park-Test Feedback Improvement Placeholders
 
-This page captures the post-park-test feedback queue after T0178-T0180. In the latest Sprint roadmap PDF, this corresponds to the Sprint 3 workstream "Agera på Sprint 2-respons". It is a planning surface only: no ticket below is active until Sprint 3/4 is approved and a ticket is opened in `CODEX_TASK.md`.
+This page preserves the completed post-park-test feedback queue after T0178-T0180. In the latest Sprint roadmap PDF, it corresponds to the Sprint 3 workstream "Agera på Sprint 2-respons". T0182-T0187 are closed; remaining phone/admin feedback decisions now belong to T0199 in the Sprint 3 plan.
 
 ## Outcome Guardrail
 
@@ -8,7 +8,7 @@ The tested base flow should be preserved. Park feedback was positive: guests cou
 
 The deployed park-test full-flow window remains open until Love asks to close it. These placeholders do not close gates, broaden venue/date scope, enable webhooks, enable JumpYard-owned SMS/email sends, import same-day guest lists, or change AWS resources.
 
-This page is not the full Sprint 3/4 roadmap. It covers the park-feedback response slice only. Production cloud, domain, SMS/email, security frames, kiosk, QR print, terminal preparation, and AirHive/JumpyBoard work are tracked from the roadmap PDF in the main backlog.
+This page is not the full Sprint 3/4 roadmap. It covers the completed park-feedback response slice only. The main backlog tracks the Sprint 3 phone/admin/cloud plan. Kiosk/print/terminal and JumpyBoard/AirHive work remain separate project workstreams.
 
 ## Ticket Placeholders
 
@@ -27,4 +27,4 @@ No separate `T0181` close-window ticket is planned right now because Love explic
 
 No separate triage ticket is planned. `T0182` was the first concrete improvement ticket, not a feedback-sorting ticket.
 
-No separate `T0188` device QA pass or `T0189` go/no-go package is planned right now. T0178-T0180 are closed, and the next useful placeholders are the concrete feedback improvements above.
+T0188 is the separate Sprint 3 phone/admin planning ticket. It does not reopen or renumber this completed feedback queue.

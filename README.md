@@ -6,6 +6,8 @@ JumpYard Check-in contains three Next.js apps for the JumpYard Next check-in flo
 - `jumpyard-checkin-kiosk/`: in-park kiosk flow for check-in and handout support.
 - `jumpyard-checkin-admin/`: staff PWA for redeeming completed check-ins and handing out wristbands, Connected bands, socks, and other physical items.
 
+The current Sprint 3 ticket queue covers the phone app, the admin app, and their required JumpYard Cloud backend. The kiosk folder is maintained as a separate implementation workstream. JumpyBoard/AirHive and activity-data implementation belongs to a separate Connected Experience project/folder.
+
 ## WRLDS Workflow
 
 This repository follows the WRLDS Codex workflow from `wrlds-template`.
@@ -44,13 +46,14 @@ npm run lint
 npm run build
 ```
 
-Root workflow validation:
+Full root workflow validation requires the infrastructure dependencies because the contact-lookup validator imports the deployed lookup handler:
 
 ```bash
+npm --prefix infra install
 npm run validate
 ```
 
-The root validation scripts use Node.js built-ins and do not install dependencies.
+The individual template, current-ticket, followup, history, skill, AWS-tag, and frontend-target validators use Node.js built-ins and can be run separately for documentation-only work.
 
 JumpYard Cloud infrastructure validation:
 
@@ -61,14 +64,15 @@ npm run infra:check
 npm run infra:synth
 ```
 
-The `infra/` CDK app is synth-only until AWS account metadata and WRLDS tags are confirmed. Do not run `cdk deploy` from the example config.
+The `infra/` CDK app has deployed `dev` and `park-test` environments. `infra/config/dev.example.json` remains synth-only. Never deploy from the example config, and do not run any deploy without an active ticket, confirmed AWS identity/metadata, reviewed diff, and explicit approval.
 
 ## Deployment Notes
 
 - `jumpyard-checkin-phone` is configured for static export with unoptimized images.
 - `jumpyard-checkin-admin` is configured for static export and Cloudflare Pages.
 - `jumpyard-checkin-kiosk` currently uses the default Next.js config.
-- Deployment targets for phone and kiosk are still `TBD` in project context.
+- Dev and park-test Cloudflare Pages targets exist for phone/admin. Production phone/admin domains are planned in Sprint 3 and are not yet approved or deployed.
+- Kiosk deployment is owned by the separate kiosk workstream.
 
 ## Project Documentation
 

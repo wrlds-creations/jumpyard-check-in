@@ -7,13 +7,13 @@ This file is the living project memory for JumpYard Next. Confirmed durable fact
 - Project: `JumpYard Next`
 - Repository: `wrlds-creations/jumpyard-check-in`
 - App: JumpYard check-in app suite
-- Current phase: `Sprint 2 closed`; Sprint 3/4 pending.
+- Current phase: `Sprint 2 closed`; Sprint 3 phone/admin plan approved; implementation pending.
 
 ## Current Phase And Scope
 
-Sprint 2 is closed. Sprint 3/4 is pending. Nacka park-test stays open through 2026-09-30.
+Sprint 2 is closed. T0188 defined the approved Sprint 3 phone/admin ticket map and is now closed; implementation begins only after Love understands and approves the next ticket. Nacka park-test stays open through 2026-09-30.
 
-The latest roadmap artifact is [docs/assets/jumpyard-next-sprint-roadmap.pdf](docs/assets/jumpyard-next-sprint-roadmap.pdf), updated 2026-06-11. It frames Sprint 3 as production cloud plus Sprint 2 response work, and Sprint 4 as kiosk, QR print, terminal preparation, and AirHive/JumpyBoard testing.
+The latest roadmap is [docs/assets/jumpyard-next-sprint-roadmap.pdf](docs/assets/jumpyard-next-sprint-roadmap.pdf), updated 2026-06-11. Here, Sprint 3 covers phone, admin, and their required JumpYard Cloud work. Kiosk/print/terminal and JumpyBoard/AirHive activity data belong to separate project workstreams.
 
 The check-in app suite connects to Roller Playground and park-test Live through a server-side layer. The target production architecture remains:
 
@@ -22,6 +22,12 @@ check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
 The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The latest roadmap PDF and forward planning are reflected in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). The park feedback improvement queue is captured in [docs/roadmap/park-test-feedback-improvements.md](docs/roadmap/park-test-feedback-improvements.md).
+
+## Current Workstream Ownership
+
+- The active Sprint 3 queue covers `jumpyard-checkin-phone`, `jumpyard-checkin-admin`, and their required JumpYard Cloud/API/AWS work. Each ticket requires a plain-language explanation and Love's approval before activation.
+- `jumpyard-checkin-kiosk`, including kiosk-owned staff help, print, and terminal work, is a separate project-folder workstream.
+- JumpyBoard/AirHive, Bluetooth bands, and activity data belong to the separate Connected Experience workstream. Only explicit interface contracts may cross workstream boundaries.
 
 ## Context Archives
 
@@ -32,6 +38,7 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 - Forward roadmap/backlog: [docs/roadmap/backlog.md](docs/roadmap/backlog.md)
 - Latest Sprint roadmap PDF: [docs/assets/jumpyard-next-sprint-roadmap.pdf](docs/assets/jumpyard-next-sprint-roadmap.pdf)
 - Park-test gate naming/runbook: [docs/t0170-park-test-gate-runbook.md](docs/t0170-park-test-gate-runbook.md)
+- Sprint 3 phone/admin scope and ticket plan: [docs/t0188-sprint-3-phone-admin-plan.md](docs/t0188-sprint-3-phone-admin-plan.md)
 
 ## Durable Architecture Facts
 
@@ -60,20 +67,14 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 - Phone check-in starts or resumes a server-owned check-in session before progressing from a ready booking.
 - Guest safety completion marks a JumpYard Cloud session ready for staff and shows a server-owned handoff code/QR.
 - Staff/admin handoff uses server-owned staff auth in dev and can list, search, inspect, and staff-confirm redeem ready sessions.
-- Buy-entry can create a Roller draft/payment path through JumpYard Cloud using the approved Roller payment package.
-- Existing-booking add-products create a separate linked add-on draft booking; the original Roller booking is not mutated in that path.
+- Buy-entry and existing-booking add-ons use server-owned Roller draft/payment paths; add-ons create a separate linked booking instead of mutating the original.
 - Existing-booking add-on availability may be prefetched after a successful booking lookup/session resolution so the add-on step feels faster; that prefetch is read-only availability and must not create drafts, payments, add-ons, redemptions, or other write side effects before the guest continues.
 - Park-test product validation uses approved Nacka entry/family parents plus Roller Live slot availability, not static child ids. Live phone add-on catalog mapping is read-only display/quote-prep data and separate from write gates.
 - Park-test PWA drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; new-booking delivery is proven.
 - Ready-for-entry/staff handout UI shows a QR plus entry duration/ticket type; the visible guest fallback is now name-to-staff rather than a displayed handoff code.
 - Park-test Apple Pay domain association is live, but processing is paused pending Pabel/Roller/Adyen diagnostics; card remains fallback.
 - Park-test T0176 full-flow rehearsal opens Nacka/date-scoped payment, lookup, add-ons, staff auth, and redeem for `2026-06-29` through `2026-09-30` while keeping webhook processing and JumpYard-owned guest sends closed.
-- Gift card, Klippkort, and current V1 membership/`10-Kort` handling are payment-prep code inputs applied by Roller during costs/draft creation; `10-Kort` is code validation/amount reduction, not remaining-visit balance display.
-- SkyRider is the first capacity-gated add-on and requires height/consent before quote/draft/payment side effects.
-- Water bottle add-on maps to Roller Live product `1324123`; users choose quantity or confirm own bottle.
-- ComboDeal maps to Roller Live parent product `1318777` with child price products `1318778`, `1318779`, and `1318780`; one package counts as two jumpers and includes 60 minutes of jumping plus one pizza to share according to Roller product copy.
-- Older/technically inexperienced guest fallback is deferred to the later kiosk/staff-help track.
-- Staff/admin handout grouping uses exact operational labels such as `Lämna ut vid incheckning`, `Hämtas efter hoppet`, and `Övrigt i bokningen`.
+- Server-owned product/payment rules cover gift cards, `Klippkort`, SkyRider, water bottle, and ComboDeal; exact mappings and guest rules are preserved in `DECISIONS.md` and completed-ticket history.
 
 ## Data And Integration Facts
 
@@ -99,6 +100,7 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 ## Current Readiness Gates
 
 - Production readiness remains partial and should be handled through scoped future tickets, not opportunistic context hygiene.
+- The approved Sprint 3 phone/admin sequence is T0189-T0200 in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Planned rows are not implementation approval; only one explained and approved ticket becomes active at a time.
 - Main staging/live blockers include production environment config, route auth/WAF or equivalent edge protection, alarm notification routing, SMS/SES production access, sender/domain setup, dev-token replacement, retention policy, deployment rollback, live backfill/cutover, and webhook production verification.
 - Payment must stay on Roller's approved package; method visibility is Roller/Adyen controlled.
 
