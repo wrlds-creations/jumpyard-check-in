@@ -4,12 +4,12 @@ Use this file as the short operational snapshot of what actually exists in the r
 
 ## Snapshot
 
-- Date: 2026-07-07
-- Current branch: `main`
-- Current status: No active ticket. T0187 ComboDeal buy-entry product is implemented, deployed to park-test, reviewed by Love, and closed. The temporary full-flow AWS gate posture intentionally remains open for Nacka dates through 2026-09-30 until Love asks to close it.
+- Date: 2026-07-09
+- Current branch: `codex/t0188-sprint-3-phone-admin-plan`
+- Current status: T0188 is complete. No implementation ticket is active; Sprint 3 phone/admin work begins only after the next ticket is explained and approved.
 - Current ticket: `NO_ACTIVE_TICKET`
-- Completed tickets: archived in `docs/history/completed-tickets.md` (185 completed tickets; latest closed `T0187`).
-- Recommended next step: choose the next approved ticket or product/kiosk slice. Do not close the park-test full-flow window unless Love explicitly asks.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (186 completed tickets; latest closed `T0188`).
+- Recommended next step: explain and review T0189 in plain language before activation. Do not close the park-test full-flow window unless Love explicitly asks.
 
 ## Current Structure
 
@@ -36,6 +36,7 @@ History and planning archives:
 - Park-test safety closeout: [docs/t0183-safety-video-rules-closeout.md](docs/t0183-safety-video-rules-closeout.md)
 - Park-test older guest support closeout: [docs/t0184-older-guest-support-closeout.md](docs/t0184-older-guest-support-closeout.md)
 - Park-test socks confirmation closeout: [docs/t0185-socks-confirmation-closeout.md](docs/t0185-socks-confirmation-closeout.md)
+- Sprint 3 phone/admin scope and ticket plan: [docs/t0188-sprint-3-phone-admin-plan.md](docs/t0188-sprint-3-phone-admin-plan.md)
 
 Current park-test status:
 
@@ -76,21 +77,21 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 185
-- Latest closed ticket: `T0187`
+- Archived completed-ticket count: 186
+- Latest closed ticket: `T0188`
 - Current active ticket: None
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `NO_ACTIVE_TICKET` | None active. | Closed | T0187 is merged and closed. Full-flow gates remain in their current Nacka/date-scoped park-test posture until Love explicitly asks to close them. |
+| `NO_ACTIVE_TICKET` | No implementation or documentation ticket is active. | None | T0189 must be explained and approved before activation. Full-flow gates remain in their current Nacka/date-scoped park-test posture. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `TBD` | Next approved slice. | Not selected | Choose separately from remaining product semantics, kiosk/staff-help, or Sprint 3/4 roadmap work. |
+| `T0189` | Correct the critical park-test safety-gate behavior before broader production work. | Planned | Must be explained and approved before activation; no implementation is active yet. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -98,7 +99,7 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- Latest closeout evidence is recorded in [docs/history/validation-log.md](docs/history/validation-log.md), [AWS_RESOURCES.md](AWS_RESOURCES.md), [DECISIONS.md](DECISIONS.md), and the T0186/T0185/T0184/T0183 closeout docs where applicable.
+- T0188 documentation-closeout evidence is recorded in [docs/history/validation-log.md](docs/history/validation-log.md) and [docs/t0188-sprint-3-phone-admin-plan.md](docs/t0188-sprint-3-phone-admin-plan.md).
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions

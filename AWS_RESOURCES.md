@@ -783,15 +783,15 @@ Confirmed T0006 dev target:
 
 | Resource Name | AWS Service | Environment | Region | Managed By | Notes |
 |---|---|---|---|---|---|
-| `jumpyard-check-in-dev-stack` | CloudFormation | `dev` | `eu-north-1` | `cdk` | `CREATE_COMPLETE`. |
-| `jumpyard-check-in-park-test-stack` | CloudFormation | `park-test` | `eu-north-1` | `cdk` | T0150 foundation stack; `CREATE_COMPLETE`; stack ARN `arn:aws:cloudformation:eu-north-1:376129878018:stack/jumpyard-check-in-park-test-stack/159bdd20-6ae4-11f1-8f4c-069284999d99`. |
+| `jumpyard-check-in-dev-stack` | CloudFormation | `dev` | `eu-north-1` | `cdk` | Deployed dev stack; documented later updates reached `UPDATE_COMPLETE`. |
+| `jumpyard-check-in-park-test-stack` | CloudFormation | `park-test` | `eu-north-1` | `cdk` | T0150 created the foundation; documented later updates reached `UPDATE_COMPLETE`; stack ARN `arn:aws:cloudformation:eu-north-1:376129878018:stack/jumpyard-check-in-park-test-stack/159bdd20-6ae4-11f1-8f4c-069284999d99`. |
 | `ij4rnaui2b` | API Gateway HTTP API | `park-test` | `eu-north-1` | `cdk` | Endpoint `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`; routes are deployed. T0156 CORS allows `https://jumpyard-check-in-park-test.pages.dev` and `https://jumpyard-checkin-admin-park-test.pages.dev`; both Cloudflare Pages projects now exist and point at this API through build-time frontend config. On 2026-06-26 the phone/admin park-test Pages projects were direct-deployed from latest `main`; the phone bundle was verified to contain `sendConfirmations=true`. |
 | `jumpyard-check-in-park-test-ops` | CloudWatch Dashboard | `park-test` | `eu-north-1` | `cdk` | T0150 operations dashboard for the park-test foundation. |
 | `jumpyard-check-in-park-test-*` CloudWatch alarms | CloudWatch Alarms | `park-test` | `eu-north-1` | `cdk` | 17 T0150 alarms for API, Lambda, Roller API, and DLQ signals; all were `OK` after deploy. |
-| `jumpyard-check-in-park-test-stack-lookup` | Lambda | `park-test` | `eu-north-1` | `cdk` | Lookup handler deployed for park-test. Do not use for visitor traffic before migrations, secrets, and frontend gates. |
-| `jumpyard-check-in-park-test-stack-booking` | Lambda | `park-test` | `eu-north-1` | `cdk` | Booking handler deployed for park-test. Roller Live credentials are not populated and no Live calls are approved in T0150. |
-| `jumpyard-check-in-park-test-stack-redeem` | Lambda | `park-test` | `eu-north-1` | `cdk` | Redeem handler deployed for park-test. Redeem remains gated by later tickets. |
-| `jumpyard-check-in-park-test-stack-session` | Lambda | `park-test` | `eu-north-1` | `cdk` | Session/staff/message handler deployed for park-test. Booking-time guest messaging schedule is absent; T0156 points disabled guest-message base URL env values at the park-test phone Pages URL. |
+| `jumpyard-check-in-park-test-stack-lookup` | Lambda | `park-test` | `eu-north-1` | `cdk` | Lookup handler deployed under the current Nacka/date-scoped full-flow posture. Booking reference/email/phone lookup is allowed for approved dates through 2026-09-30; broad imports remain closed. |
+| `jumpyard-check-in-park-test-stack-booking` | Lambda | `park-test` | `eu-north-1` | `cdk` | Booking handler deployed with server-side Roller Live credentials and the current Nacka/date-scoped full-flow gates for approved booking/payment/add-on paths. |
+| `jumpyard-check-in-park-test-stack-redeem` | Lambda | `park-test` | `eu-north-1` | `cdk` | Redeem handler deployed under the current Nacka/date-scoped full-flow posture. Real redeem remains staff-authenticated and bounded by the approved venue/date gates. |
+| `jumpyard-check-in-park-test-stack-session` | Lambda | `park-test` | `eu-north-1` | `cdk` | Session/staff handler deployed with staff auth enabled for the current full-flow posture. JumpYard-owned guest message sends and booking-time messaging remain disabled. |
 | `jumpyard-check-in-park-test-stack-webhook` | Lambda | `park-test` | `eu-north-1` | `cdk` | Webhook handler deployed for park-test. Roller Live webhook `1465` targets this API route, but webhook processing remains disabled and safe intake returns `ignored_disabled`. |
 | `jumpyard-check-in-park-test-stack-data-sync` | Lambda | `park-test` | `eu-north-1` | `cdk` | Data-sync handler deployed for park-test. Daily rule exists but must stay gated and perform no Live import until a later ticket approves it. |
 | `/aws/lambda/jumpyard-check-in-park-test-stack-*` | CloudWatch Logs | `park-test` | `eu-north-1` | `cdk` | Six Lambda log groups with 30-day retention. |
@@ -905,9 +905,9 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`.
 | JumpYard logs | CloudWatch Logs | Per environment | Operational logs and error traces with Lambda log retention. | Deployed to `dev` |
 | Infrastructure deployment | CDK TypeScript | Per environment | Repeatable infrastructure with WRLDS tags. | `dev` deployed |
 
-## Planned Park-Test Target
+## Park-Test Target
 
-T0146 defines `park-test` as a planned separate environment only. This section is a contract, not proof of deployed resources.
+T0146 defined the separate `park-test` environment contract, and T0150 deployed it. The inventory above and the status row below record the current deployed posture; future changes still require scoped tickets and explicit approval.
 
 | Field | Planned Value |
 |---|---|

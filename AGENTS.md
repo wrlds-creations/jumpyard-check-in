@@ -37,11 +37,25 @@ This repository uses the WRLDS Codex workflow. Treat the source-of-truth files i
 
 ## Project Direction
 
-- Sprint 1 focuses on connecting the existing check-in app to Roller Playground through a server-side layer.
+- Sprint 2 is closed. The active Sprint 3 workstream covers the phone check-in app, the staff/admin app, and the JumpYard Cloud capabilities required by those two surfaces.
+- Kiosk/print/terminal implementation and JumpyBoard/AirHive activity-data implementation belong to separate project folders/workstreams. Keep only explicit interface-contract dependencies in this ticket queue.
 - The production architecture must be `check-in app -> JumpYard Cloud/server API -> Roller API`.
 - Roller is the source of truth for bookings.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, and session status.
 - The frontend must not call Roller directly in the real architecture.
+
+## Ticket Explanation
+
+Before activating an implementation ticket, explain it to Love in plain language:
+
+- what changes and why;
+- a useful analogy when the technical reason is not obvious;
+- what is included and explicitly excluded;
+- the main risk, cost, and dependency;
+- how completion will be verified; and
+- which approval or decision is still required.
+
+Planned backlog rows are not implementation approval. Work only on the single ticket recorded as active in `CODEX_TASK.md`.
 
 ## AWS Work
 
