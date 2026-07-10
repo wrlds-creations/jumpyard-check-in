@@ -36,6 +36,8 @@ T0187 deployed ComboDeal buy-entry support to the current park-test full-flow re
 
 T0190 changes repository-only park-test gate semantics and creates no AWS change. The normal closed source config keeps `emergencyStop=true`; reviewed active source profiles now use `false`, while Lambda runtime checks treat `true`, missing, or invalid values as an unconditional stop that no smoke/full-flow flag can bypass. Venue scope now requires both configured and observed booking venue `50871`, including the final Roller refresh before redeem. The currently deployed park-test Lambdas and environment remain unchanged on the earlier `JUMPYARD_EMERGENCY_STOP=true` bypass model, so the open Nacka/date-scoped phone/admin test window still works. A future code-and-config deploy requires separate approval and must review the transition as one unit. Confirmed metadata remains account `376129878018`, region `eu-north-1`, environment `park-test`, client `JumpYard`, project `jumpyard-check-in`, owner/creator `love`, repository `wrlds-creations/jumpyard-check-in`, managed by `cdk`, data classification `confidential`, exportable `true`, and cost center `unassigned`.
 
+T0191 records the existing park-test foundation as Sprint 3's sole Live-backed pre-production environment. It keeps the current account, region, resource names, prefix, stack, data, frontend targets, and `WRLDS:Environment=park-test`; it does not rename, clone, deploy, or mutate anything. No parallel staging foundation is planned. T0192 will qualify and harden these existing resources, T0204 will run the full rehearsal here, and a separate production environment may be created only in T0205 after T0204 GO and new explicit AWS approvals. No AWS API call, resource change, deploy, Roller action, message send, or runtime change occurred in T0191.
+
 T0152 deployed park-test safety gates for staff auth, guest message sends, webhook processing, booking draft/payment-start writes, redeem writes, and emergency stop. Park-test Lambda environment readback confirmed `JUMPYARD_EMERGENCY_STOP=true` and the sensitive operation gates set to `false`. No Roller Live calls, secret value reads/prints, webhooks, drafts/payments, redemptions, SMS/email sends, frontend traffic, or visitor flows were performed.
 
 T0153 added local Roller Live read-only preflight tooling and passed the first Roller Live read-only preflight for JumpYard Nacka Forum. AWS resources changed: none. The existing park-test Roller credentials secret `/jumpyard-check-in-park-test/roller/credentials` was populated by the user through AWS Console; no secret values or tokens were printed or committed. Read-only Roller Live calls confirmed auth, venue `JumpYard Nacka Forum` id `50871`, product catalog, `Entré 60 min` id `1189805`, `Entré 60 min - Familj` id `1189814`, availability reads, and payment settings visibility. No drafts/payments, redemptions, webhooks, frontend traffic, SMS, or email occurred.
@@ -72,7 +74,7 @@ T0058 production-readiness audit notes:
 - Read-only AWS validation confirmed stack `jumpyard-check-in-dev-stack` status `UPDATE_COMPLETE`, API `m0uo5g4mde`, Aurora cluster `jumpyard-check-in-dev-aurora` status `available`, and SNS SMS sandbox status `IsInSandbox=true`.
 - At T0058 audit time, `aws cloudwatch describe-alarms --alarm-name-prefix jumpyard-check-in-dev` returned no CloudWatch alarms; T0060 later added the first dev alarms.
 - At T0058 audit time, API Gateway routes had `AuthorizationType=NONE` and wildcard CORS; T0060 later replaced dev wildcard CORS with explicit allowed origins, while route authorizers remain future production work.
-- Dev is appropriate for Playground development and smoke testing, but staging/live must wait for the readiness gate documented in `PROJECT_CONTEXT.md`, `DECISIONS.md`, and `FOLLOWUPS.md`.
+- Dev is appropriate for Playground development and smoke testing; expanded park-test pre-production and future production use must wait for the readiness gates in `PROJECT_CONTEXT.md`, `DECISIONS.md`, and `FOLLOWUPS.md`.
 
 T0087 staff/admin Cloudflare readiness notes:
 
@@ -289,7 +291,7 @@ T0062 route auth and WAF/edge boundary notes:
 - T0062 is documentation/design only; no CDK implementation, deploy, authorizer, WAF, CloudFront, custom domain, Lambda code, Aurora schema, or package dependency was changed.
 - New source-of-truth file: `API_PROTECTION_BOUNDARY.md`.
 - Route inventory is classified by trust boundary: guest public, guest token, guest write, staff auth entry, staff protected, internal operations, Roller webhook, and legacy/dev-only.
-- Later implementation should apply route-specific limits, API-boundary staff identity, internal-only protection for operations routes, and WAF or equivalent edge controls before staging/live exposure.
+- Later implementation should apply route-specific limits, API-boundary staff identity, internal-only protection for operations routes, and WAF or equivalent edge controls before expanded park-test pre-production or production exposure.
 
 T0063 guest messaging and email foundation notes:
 
@@ -786,7 +788,7 @@ Confirmed T0006 dev target:
 | Resource Name | AWS Service | Environment | Region | Managed By | Notes |
 |---|---|---|---|---|---|
 | `jumpyard-check-in-dev-stack` | CloudFormation | `dev` | `eu-north-1` | `cdk` | Deployed dev stack; documented later updates reached `UPDATE_COMPLETE`. |
-| `jumpyard-check-in-park-test-stack` | CloudFormation | `park-test` | `eu-north-1` | `cdk` | T0150 created the foundation; documented later updates reached `UPDATE_COMPLETE`; stack ARN `arn:aws:cloudformation:eu-north-1:376129878018:stack/jumpyard-check-in-park-test-stack/159bdd20-6ae4-11f1-8f4c-069284999d99`. |
+| `jumpyard-check-in-park-test-stack` | CloudFormation | `park-test` | `eu-north-1` | `cdk` | T0150 created the foundation; documented later updates reached `UPDATE_COMPLETE`; T0191 designates it as Sprint 3's sole pre-production foundation without changing it; stack ARN `arn:aws:cloudformation:eu-north-1:376129878018:stack/jumpyard-check-in-park-test-stack/159bdd20-6ae4-11f1-8f4c-069284999d99`. |
 | `ij4rnaui2b` | API Gateway HTTP API | `park-test` | `eu-north-1` | `cdk` | Endpoint `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`; routes are deployed. T0156 CORS allows `https://jumpyard-check-in-park-test.pages.dev` and `https://jumpyard-checkin-admin-park-test.pages.dev`; both Cloudflare Pages projects now exist and point at this API through build-time frontend config. On 2026-06-26 the phone/admin park-test Pages projects were direct-deployed from latest `main`; the phone bundle was verified to contain `sendConfirmations=true`. |
 | `jumpyard-check-in-park-test-ops` | CloudWatch Dashboard | `park-test` | `eu-north-1` | `cdk` | T0150 operations dashboard for the park-test foundation. |
 | `jumpyard-check-in-park-test-*` CloudWatch alarms | CloudWatch Alarms | `park-test` | `eu-north-1` | `cdk` | 17 T0150 alarms for API, Lambda, Roller API, and DLQ signals; all were `OK` after deploy. |
@@ -896,20 +898,20 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`.
 
 | Proposed Resource | AWS Service | Environment | Purpose | Status |
 |---|---|---|---|---|
-| JumpYard Cloud API | API Gateway HTTP API | `dev` first, then `staging`/`prod` TBD | Phone app entrypoint for server-owned contracts. | Deployed to `dev` |
-| JumpYard Cloud handlers | Lambda | `dev` first, then `staging`/`prod` TBD | Lookup, session, availability, quote, draft booking, add-product, redeem, webhook handlers. | Lookup, booking availability/quote/draft, existing-booking add-product quote/draft, session, webhook intake/enrichment, and redeem implemented in `dev` |
-| Roller credentials | Secrets Manager | Per environment | Store Roller client id and client secret server-side. | Deployed and populated in `dev` |
-| Roller non-secret config | SSM Parameter Store | Per environment | Store Roller environment and Playground base URL. | Deployed to `dev` |
-| JumpYard operational database | Aurora PostgreSQL Serverless v2 | Per environment | Roller snapshot, operational state, check-in attempts, idempotency, handoff state, webhook events, event log. | Deployed to `dev` |
-| Raw payload/archive storage | S3 | Per environment | Optional raw Roller payloads, Data API export files, and analysis dumps. | Deployed to `dev` with 30-day lifecycle |
-| Roller rate-limit control | SQS plus DLQ | Per environment | Serialize Roller operations and provide dead-letter handling. | Deployed to `dev` |
-| Async processing | EventBridge | Per environment | Webhook and reconciliation event bus. | Deployed to `dev` |
-| JumpYard logs | CloudWatch Logs | Per environment | Operational logs and error traces with Lambda log retention. | Deployed to `dev` |
-| Infrastructure deployment | CDK TypeScript | Per environment | Repeatable infrastructure with WRLDS tags. | `dev` deployed |
+| JumpYard Cloud API | API Gateway HTTP API | `dev`, existing `park-test`, then separate production after GO | Phone app entrypoint for server-owned contracts. | Deployed to `dev` and `park-test`; production deferred to T0205 |
+| JumpYard Cloud handlers | Lambda | `dev`, existing `park-test`, then separate production after GO | Lookup, session, availability, quote, draft booking, add-product, redeem, webhook handlers. | Implemented in `dev` and deployed in the existing park-test foundation; production deferred to T0205 |
+| Roller credentials | Secrets Manager | Per environment | Store Roller client id and client secret server-side. | Deployed to `dev` and existing `park-test`; production deferred to T0205 |
+| Roller non-secret config | SSM Parameter Store | Per environment | Store Roller environment and base URL. | Deployed to `dev` and existing `park-test`; production deferred to T0205 |
+| JumpYard operational database | Aurora PostgreSQL Serverless v2 | Per environment | Roller snapshot, operational state, check-in attempts, idempotency, handoff state, webhook events, event log. | Deployed to `dev` and existing `park-test`; production deferred to T0205 |
+| Raw payload/archive storage | S3 | Per environment | Optional raw Roller payloads, Data API export files, and analysis dumps. | Deployed to `dev` and existing `park-test` with 30-day lifecycle; production deferred to T0205 |
+| Roller rate-limit control | SQS plus DLQ | Per environment | Serialize Roller operations and provide dead-letter handling. | Deployed to `dev` and existing `park-test`; production deferred to T0205 |
+| Async processing | EventBridge | Per environment | Webhook and reconciliation event bus. | Deployed to `dev` and existing `park-test`; production deferred to T0205 |
+| JumpYard logs | CloudWatch Logs | Per environment | Operational logs and error traces with Lambda log retention. | Deployed to `dev` and existing `park-test`; production deferred to T0205 |
+| Infrastructure deployment | CDK TypeScript | Per environment | Repeatable infrastructure with WRLDS tags. | `dev` and existing `park-test` deployed; production deferred to T0205 |
 
 ## Park-Test Target
 
-T0146 defined the separate `park-test` environment contract, and T0150 deployed it. The inventory above and the status row below record the current deployed posture; future changes still require scoped tickets and explicit approval.
+T0146 defined the separate `park-test` environment contract, and T0150 deployed it. T0191 now designates that unchanged foundation as Sprint 3's sole Live-backed pre-production environment; no parallel staging copy will be created. The inventory above and the status row below record the current deployed posture. T0192 must qualify it before broader work, and production remains a separate post-GO T0205 environment. Every future AWS change still requires a scoped ticket and explicit approval.
 
 | Field | Planned Value |
 |---|---|

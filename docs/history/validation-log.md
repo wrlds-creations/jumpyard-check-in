@@ -2,6 +2,14 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0191 Park-Test Pre-Production Contract
+
+- 2026-07-10: Audited the active roadmap, environment/AWS records, production-readiness contracts, followups, and historical Sprint 3 plans for the superseded parallel-staging assumption.
+- 2026-07-10: Published the approved `dev/Playground -> existing park-test/Live pre-production -> separate production after GO` model. Park-test keeps its technical identity and becomes the T0192-T0204 qualification/rehearsal environment; T0205 owns separately approved production creation and cutover.
+- 2026-07-10: Historical T0146/T0188/T0189 plans were preserved and marked with supersession notes rather than silently rewritten.
+- 2026-07-10: No app, Lambda, CDK, migration, dependency, configuration, AWS resource, Roller state, deployment, webhook, SMS/email, Cloudflare, DNS, secret, or runtime change occurred.
+- 2026-07-10: Full root `npm run validate` passed, including template/current-ticket/followup/history/skills/AWS-tag/frontend-target checks plus the T0177 and T0190 behavioral validators. `git diff --check`, active-source stale-term checks, allowed-file review, and the 12,000-character limits for `PROJECT_CONTEXT.md` and `REPO_CURRENT_STATE.md` also passed.
+
 ## T0190 Critical Safety Gates
 
 - 2026-07-10: Audited lookup, booking/add-on, session/staff, redeem, webhook, CDK config, and synth behavior. Confirmed three venue fail-opens, multiple emergency-stop bypasses, missing-config fail-open behavior, and a redeem final-refresh venue evidence gap.

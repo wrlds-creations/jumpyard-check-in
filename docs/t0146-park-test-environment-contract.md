@@ -6,6 +6,8 @@ Ticket: `T0146`
 
 Status: Contract locked for future implementation tickets. T0146 does not create resources, credentials, config files, deploys, Live API calls, webhooks, payments, redemptions, SMS, or email.
 
+> 2026-07-10 addendum: T0191 extends the deployed environment's role. Existing `park-test` is now Sprint 3's sole Live-backed pre-production environment; its technical identity stays unchanged, no parallel staging copy is planned, and production remains a separate post-GO environment. The original planned-only status and implementation sequence below are retained as historical T0146 evidence.
+
 ## Purpose
 
 `park-test` is a limited pre-production environment for the JumpYard Nacka park test. It exists to test the same JumpYard Cloud architecture against Roller Live under explicit ticket gates, without disturbing the current dev/Playground implementation.

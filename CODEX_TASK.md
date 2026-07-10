@@ -6,7 +6,7 @@
 
 ## Title
 
-No active ticket
+No Active Ticket
 
 ## Status
 
@@ -14,22 +14,23 @@ None
 
 ## Goal
 
-T0190 is complete in the repository. The venue boundary now fails closed and the emergency stop is an unconditional master breaker, with focused behavioral validation.
+T0191 is complete. Explain T0192 in plain language and obtain Love's approval before activating it.
 
 ## Scope
 
-- No implementation or documentation ticket is active.
-- Explain T0191 to Love in plain language and obtain approval before activating it.
-- Do not deploy T0190 or change the current park-test runtime posture without separate explicit approval and a reviewed coherent code-and-config diff.
+- No ticket is active.
+- T0192 is planned but not approved for implementation.
+- Before activation, explain that T0192 qualifies and hardens the existing park-test foundation, resolves or blocks on `FU-096`, and plans a coherent T0190 code/config deployment.
+- Do not change AWS or the running park-test environment until T0192 receives explicit approval.
 
 ## Allowed Areas
 
-- None until the next ticket is explained, approved, and activated.
+- None until the next ticket is approved and activated.
 
 ## Validation Plan
 
-- Define ticket-specific validation when T0191 is activated.
+- Define the next ticket's validation plan before activation.
 
 ## Result
 
-T0190 made missing, wrong, and unconfigured venue fail closed across park-test lookup, existing-booking add-on, and redeem; persisted authoritative venue during final Roller redeem refresh; made active or missing emergency-stop config block booking operations, park-test lookup, staff access, confirmed redeem, webhook processing, and real guest sends; and preserved the separate narrow approval/allowlist/date/venue gates after the stop is released. Normal closed source config remains stopped while reviewed active profiles release the stop explicitly. No AWS deploy/resource, Roller call/write, payment, redemption, webhook processing, guest message, Cloudflare change, or running app behavior occurred. FU-096 records the separate request-item date-gate finding.
+T0191 closed as documentation-only. Existing park-test is the sole Sprint 3 pre-production environment; production remains separate and requires T0204 GO plus a separately approved T0205. No AWS or runtime change occurred.

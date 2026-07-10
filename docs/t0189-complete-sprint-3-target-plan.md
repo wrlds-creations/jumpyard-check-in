@@ -1,5 +1,7 @@
 # T0189 Complete Sprint 3 Target And Ticket Correction
 
+> Environment-sequence update: T0191 supersedes only this plan's parallel-staging assumption. T0192 now qualifies and hardens existing `park-test`, T0204 runs the full rehearsal there, and T0205 creates separate production only after GO and new approvals. The complete background-to-guest target below remains unchanged.
+
 ## Purpose
 
 T0189 corrects the Sprint 3 plan before implementation starts. Love confirmed that the production target is not only the visible phone-to-admin journey. It must also include the background chain that makes the check-in link reliable:

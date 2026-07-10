@@ -48,7 +48,7 @@ Do not enable unattended `confirmSend=true` scheduled booking-time messages unti
 | Guest consent/copy | Final transactional SMS and email copy, opt-in/consent basis, and support/opt-out wording are approved. |
 | Volume plan | Expected monthly volume, peak rate, countries, and spend limits are approved. |
 | Monitoring | Production delivery failure monitoring exists for SMS, email, and due-message processing; the T0101 dev runbook is not enough by itself. |
-| Environment boundary | Dev/staging/live config, base URLs, secrets, and sender identities are separated. |
+| Environment boundary | Dev, park-test pre-production, and future production config, base URLs, secrets, and sender identities are separated; park-test is never treated as production. |
 
 Until those gates are satisfied:
 
