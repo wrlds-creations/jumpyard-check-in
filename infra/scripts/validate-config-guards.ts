@@ -307,7 +307,7 @@ parkTestFrontendRedeemRehearsalWithLiveRedeem.safetyGates.liveRedeemSmokeAllowed
 ];
 
 const parkTestApprovedFullFlowRehearsal = cloneConfig(parkTestConfig);
-parkTestApprovedFullFlowRehearsal.safetyGates.emergencyStop = true;
+parkTestApprovedFullFlowRehearsal.safetyGates.emergencyStop = false;
 parkTestApprovedFullFlowRehearsal.safetyGates.rollerBookingDraftWritesEnabled = true;
 parkTestApprovedFullFlowRehearsal.safetyGates.rollerRedeemWritesEnabled = true;
 parkTestApprovedFullFlowRehearsal.safetyGates.staffAuthEnabled = true;
@@ -327,6 +327,7 @@ delete parkTestFullFlowWithoutVenue.safetyGates.fullFlowRehearsalVenueId;
 
 const parkTestFullFlowDatesWithoutApproval = cloneConfig(parkTestApprovedFullFlowRehearsal);
 delete parkTestFullFlowDatesWithoutApproval.safetyGates.fullFlowRehearsalApproval;
+parkTestFullFlowDatesWithoutApproval.safetyGates.emergencyStop = true;
 parkTestFullFlowDatesWithoutApproval.safetyGates.rollerBookingDraftWritesEnabled = false;
 parkTestFullFlowDatesWithoutApproval.safetyGates.rollerRedeemWritesEnabled = false;
 parkTestFullFlowDatesWithoutApproval.safetyGates.staffAuthEnabled = false;
@@ -334,6 +335,7 @@ delete parkTestFullFlowDatesWithoutApproval.safetyGates.fullFlowRehearsalVenueId
 
 const parkTestFullFlowVenueWithoutApproval = cloneConfig(parkTestApprovedFullFlowRehearsal);
 delete parkTestFullFlowVenueWithoutApproval.safetyGates.fullFlowRehearsalApproval;
+parkTestFullFlowVenueWithoutApproval.safetyGates.emergencyStop = true;
 parkTestFullFlowVenueWithoutApproval.safetyGates.fullFlowRehearsalAllowedOperatingDates = [];
 parkTestFullFlowVenueWithoutApproval.safetyGates.rollerBookingDraftWritesEnabled = false;
 parkTestFullFlowVenueWithoutApproval.safetyGates.rollerRedeemWritesEnabled = false;
@@ -369,13 +371,17 @@ expectFail('park-test missing resourcePrefix fails closed', parkTestMissingPrefi
 expectFail('park-test Playground config fails closed', parkTestPlaygroundConfig, /park-test config must explicitly use Roller Live/);
 expectFail('park-test wrong data classification fails closed', parkTestWrongClassification, /DataClassification/);
 expectFail('park-test confirmed scheduled send fails closed', parkTestConfirmedSend, /confirmSend must stay false/);
-expectFail('park-test emergency stop off fails closed', parkTestEmergencyStopOff, /emergencyStop must stay true/);
+expectFail(
+  'park-test emergency stop off without scoped approval fails closed',
+  parkTestEmergencyStopOff,
+  /emergencyStop may be false only with a recognized scoped traffic approval/,
+);
 expectFail('park-test draft writes enabled fails closed', parkTestDraftWritesOn, /rollerBookingDraftWritesEnabled/);
 expectPass('approved park-test Live payment smoke config passes', parkTestApprovedPaymentSmoke, 'park-test');
-expectFail(
-  'park-test payment smoke keeps global emergency stop on',
+expectPass(
+  'approved park-test payment smoke may explicitly release the emergency stop',
   parkTestApprovedPaymentSmokeEmergencyOff,
-  /emergencyStop must stay true/,
+  'park-test',
 );
 expectFail(
   'park-test payment smoke approval without draft writes fails closed',

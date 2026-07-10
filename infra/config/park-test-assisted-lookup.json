@@ -31,7 +31,7 @@
     "replyToAddresses": []
   },
   "safetyGates": {
-    "emergencyStop": true,
+    "emergencyStop": false,
     "guestMessagingSendsEnabled": false,
     "liveAssistedLookupApproval": "T0171_ASSISTED_LOOKUP_APPROVED",
     "liveAssistedLookupAllowedOperatingDates": [

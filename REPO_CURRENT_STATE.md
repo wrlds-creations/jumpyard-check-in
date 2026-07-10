@@ -5,11 +5,11 @@ Use this file as the short operational snapshot of what actually exists in the r
 ## Snapshot
 
 - Date: 2026-07-10
-- Current branch: `codex/t0189-complete-sprint-3-plan`
-- Current status: T0189 is complete. No implementation ticket is active; the corrected Sprint 3 sequence begins only after T0190 is explained and approved.
+- Current branch: `codex/t0190-fail-closed-safety-gates`
+- Current status: T0190 is complete in the repository. No ticket is active; no AWS deploy or runtime gate change occurred.
 - Current ticket: `NO_ACTIVE_TICKET`
-- Completed tickets: archived in `docs/history/completed-tickets.md` (187 completed tickets; latest closed `T0189`).
-- Recommended next step: explain and review T0190, the safety-gate ticket, before activation. Do not close the park-test full-flow window unless Love explicitly asks.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (188 completed tickets; latest closed `T0190`).
+- Recommended next step: explain T0191, the staging/production environment-contract ticket, before activation. Keep the deployed park-test posture unchanged unless Love explicitly approves a reviewed change.
 
 ## Current Structure
 
@@ -54,6 +54,7 @@ Current park-test status:
 - T0178-T0180 are closed from the park-test readiness/test/outcome pass. Park feedback was positive and future improvements remain in the roadmap.
 - The latest Sprint roadmap PDF is archived in `docs/assets/`. It frames Sprint 3 as production cloud plus response to Sprint 2 park feedback, and Sprint 4 as kiosk/QR print/terminal preparation plus first AirHive/JumpyBoard test scope.
 - The current T0176/T0177 full-flow runtime posture remains intentionally open so the app keeps working for park testing until Love says otherwise. The date scope is now explicitly extended through 2026-09-30 for Nacka only; this does not broaden venue scope, webhooks, broad imports, or JumpYard-owned guest messaging.
+- T0190 corrected repository gate semantics only. Normal source config is stopped, reviewed active source profiles release the stop explicitly, and runtime code makes the stop unconditional plus venue evidence fail closed. The deployed park-test Lambdas/config remain unchanged on the earlier model, so the running test apps are unchanged until a separately approved coherent deploy.
 
 ## Known Validation Commands
 
@@ -62,6 +63,7 @@ Current closeout entrypoints:
 - `npm run validate`
 - `npm run infra:check`
 - `git diff --check`
+- `node scripts/validate-t0190-safety-gates.js`
 - `node scripts/validate-t0177-contact-lookup.js`
 - `npm --prefix infra run validate:roller-live-quote-smoke`
 - `npm --prefix infra run validate:roller-live-draft-smoke`
@@ -78,21 +80,21 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 187
-- Latest closed ticket: `T0189`
+- Archived completed-ticket count: 188
+- Latest closed ticket: `T0190`
 - Current active ticket: None
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `NO_ACTIVE_TICKET` | No implementation or documentation ticket is active. | None | T0190 must be explained and approved before activation. Full-flow gates remain in their current Nacka/date-scoped park-test posture. |
+| `NO_ACTIVE_TICKET` | No implementation or documentation ticket is active. | None | T0190 is complete in the repository without deployment. T0191 requires its own explanation and approval. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0190` | Correct the critical park-test safety-gate behavior before broader production work. | Planned | Renumbered from the old T0189 plan; must be explained and approved before activation. |
+| `T0191` | Agree the staging/production environment contract before any new AWS environment work. | Planned | Starts only after T0190 closes and receives its own plain-language explanation and approval. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -100,7 +102,7 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
-- T0189 documentation-closeout evidence is recorded in [docs/history/validation-log.md](docs/history/validation-log.md) and [docs/t0189-complete-sprint-3-target-plan.md](docs/t0189-complete-sprint-3-target-plan.md).
+- T0190 safety-gate evidence is recorded in [docs/history/validation-log.md](docs/history/validation-log.md) and [docs/t0190-critical-safety-gates.md](docs/t0190-critical-safety-gates.md).
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
 
 ## Current Risks And Open Questions

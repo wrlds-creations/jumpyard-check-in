@@ -336,7 +336,7 @@ function validateParkTestPaymentSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_T0169_POST_PAYMENT_SYNC: 'false',
     T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '',
     T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
@@ -344,13 +344,13 @@ function validateParkTestPaymentSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'true',
     ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
     T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
@@ -358,13 +358,13 @@ function validateParkTestPaymentSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
 
@@ -388,7 +388,7 @@ function validateParkTestPaymentSyncSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_T0169_POST_PAYMENT_SYNC: 'true',
     T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '',
     T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
@@ -396,13 +396,13 @@ function validateParkTestPaymentSyncSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'true',
     ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
     T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
@@ -410,13 +410,13 @@ function validateParkTestPaymentSyncSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
 
@@ -440,7 +440,7 @@ function validateParkTestLookupSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_T0169_POST_PAYMENT_SYNC: 'false',
     T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS: '',
     T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '166447399,68b3bbb4-9a46-4379-96ac-bc7157f2fb3e',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
@@ -448,13 +448,13 @@ function validateParkTestLookupSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
     ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
     T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
@@ -462,13 +462,13 @@ function validateParkTestLookupSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
 
@@ -496,7 +496,7 @@ function validateParkTestAssistedLookupTemplate(parkTest: SynthResult): void {
     T0171_ASSISTED_LOOKUP_ALLOWED_OPERATING_DATES:
       '2026-06-29,2026-06-30,2026-07-01,2026-07-02,2026-07-03,2026-07-04,2026-07-05',
     T0171_ASSISTED_LOOKUP_VENUE_ID: '50871',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
@@ -504,13 +504,13 @@ function validateParkTestAssistedLookupTemplate(parkTest: SynthResult): void {
     ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
     ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
     T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
@@ -518,13 +518,13 @@ function validateParkTestAssistedLookupTemplate(parkTest: SynthResult): void {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
 
@@ -548,7 +548,7 @@ function validateParkTestAddOnSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_T0169_POST_PAYMENT_SYNC: 'false',
     T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS: '',
     T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '166490323',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
@@ -556,13 +556,13 @@ function validateParkTestAddOnSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
     ENABLE_T0162_LIVE_ADDON_SMOKE: 'true',
     T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '166490323',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
@@ -570,13 +570,13 @@ function validateParkTestAddOnSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
 
@@ -601,7 +601,7 @@ function validateParkTestAddOnSettlementSmokeTemplate(parkTest: SynthResult): vo
     T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '',
     T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS:
       '166497194,4a092241-6947-436a-97ea-04813a8404aa',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
@@ -609,13 +609,13 @@ function validateParkTestAddOnSettlementSmokeTemplate(parkTest: SynthResult): vo
     ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
     ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
     T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
@@ -623,13 +623,13 @@ function validateParkTestAddOnSettlementSmokeTemplate(parkTest: SynthResult): vo
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
 
@@ -653,7 +653,7 @@ function validateParkTestRedeemSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_T0169_POST_PAYMENT_SYNC: 'false',
     T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '166490323,9ae484b0-d9a9-4dad-b3d5-4ad3b0e25088',
     T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
@@ -661,13 +661,13 @@ function validateParkTestRedeemSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
     ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
     T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'true',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'true',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS:
       '166490323,9ae484b0-d9a9-4dad-b3d5-4ad3b0e25088,166490323-560714728',
@@ -676,14 +676,14 @@ function validateParkTestRedeemSmokeTemplate(parkTest: SynthResult): void {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'true',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'true',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS:
       '166490323,9ae484b0-d9a9-4dad-b3d5-4ad3b0e25088,166490323-560714728',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
 
@@ -710,7 +710,7 @@ function validateParkTestFrontendRedeemRehearsalTemplate(parkTest: SynthResult):
     T0171_ASSISTED_LOOKUP_VENUE_ID: '',
     T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS: '',
     T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
@@ -718,13 +718,13 @@ function validateParkTestFrontendRedeemRehearsalTemplate(parkTest: SynthResult):
     ENABLE_T0159_LIVE_PAYMENT_SMOKE_DRAFT_WRITES: 'false',
     ENABLE_T0162_LIVE_ADDON_SMOKE: 'false',
     T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
@@ -733,14 +733,14 @@ function validateParkTestFrontendRedeemRehearsalTemplate(parkTest: SynthResult):
     ENABLE_STAFF_AUTH: 'true',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     ENABLE_T0176_FRONTEND_REDEEM_REHEARSAL: 'true',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
     T0176_FRONTEND_REDEEM_REHEARSAL_ALLOWED_SESSION_IDS: 'jycs_mqtimdxf_bb33c94c',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
 
@@ -769,7 +769,7 @@ function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void 
     T0171_ASSISTED_LOOKUP_VENUE_ID: '50871',
     T0165_LINKED_ADDON_SETTLEMENT_ALLOWED_IDENTIFIERS: '',
     T0160_LIVE_LOOKUP_SMOKE_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-booking`, {
@@ -780,7 +780,7 @@ function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void 
     T0176_FULL_FLOW_ALLOWED_OPERATING_DATES: approvedDates,
     T0176_FULL_FLOW_VENUE_ID: '50871',
     T0162_LIVE_ADDON_SMOKE_ALLOWED_IDENTIFIERS: '',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
@@ -789,7 +789,7 @@ function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void 
     ENABLE_T0176_FULL_FLOW_REHEARSAL: 'true',
     T0176_FULL_FLOW_ALLOWED_OPERATING_DATES: approvedDates,
     T0176_FULL_FLOW_VENUE_ID: '50871',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
@@ -799,14 +799,14 @@ function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void 
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     ENABLE_T0176_FRONTEND_REDEEM_REHEARSAL: 'false',
     ENABLE_T0176_FULL_FLOW_REHEARSAL: 'true',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
     T0176_FRONTEND_REDEEM_REHEARSAL_ALLOWED_SESSION_IDS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
-    JUMPYARD_EMERGENCY_STOP: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
 

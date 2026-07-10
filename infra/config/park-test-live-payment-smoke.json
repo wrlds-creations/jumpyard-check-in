@@ -31,7 +31,7 @@
     "replyToAddresses": []
   },
   "safetyGates": {
-    "emergencyStop": true,
+    "emergencyStop": false,
     "guestMessagingSendsEnabled": false,
     "livePaymentSmokeApproval": "T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED",
     "rollerBookingDraftWritesEnabled": true,

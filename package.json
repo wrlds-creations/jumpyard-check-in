@@ -4,7 +4,7 @@
   "private": true,
   "description": "JumpYard Check-in repository workflow and validation scripts.",
   "scripts": {
-    "validate": "npm run validate:template && npm run validate:current-ticket && npm run validate:followups && npm run validate:history-archives && npm run validate:skills && npm run validate:aws && npm run validate:park-test-frontend-target && npm run validate:t0177-contact-lookup",
+    "validate": "npm run validate:template && npm run validate:current-ticket && npm run validate:followups && npm run validate:history-archives && npm run validate:skills && npm run validate:aws && npm run validate:park-test-frontend-target && npm run validate:t0177-contact-lookup && npm run validate:t0190-safety-gates",
     "validate:template": "node scripts/validate-template.js",
     "validate:current-ticket": "node scripts/validate-current-ticket.js",
     "validate:followups": "node scripts/validate-followups.js",
@@ -13,6 +13,7 @@
     "validate:aws": "node scripts/validate-aws-tags.js",
     "validate:park-test-frontend-target": "node scripts/validate-park-test-frontend-target.js",
     "validate:t0177-contact-lookup": "node scripts/validate-t0177-contact-lookup.js",
+    "validate:t0190-safety-gates": "node scripts/validate-t0190-safety-gates.js",
     "infra:check": "npm --prefix infra run check",
     "infra:synth": "npm --prefix infra run synth:example",
     "roller:env:check": "node scripts/check-roller-env.js",

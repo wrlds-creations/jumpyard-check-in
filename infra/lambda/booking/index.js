@@ -152,6 +152,14 @@ exports.handler = async (event) => {
     const body = parseBody(event);
     correlationId = stringOrNull(body.correlationId) || correlationId;
 
+    if (isEmergencyStopEnabled()) {
+      return safetyGateBlockedResponse(
+        correlationId,
+        'emergency_stop_active',
+        'Park-test booking operations are disabled while the JumpYard emergency stop is active.',
+      );
+    }
+
     if (isAddProductQuoteRoute(routeKey, event)) {
       return handleAddProductQuote(event, body, correlationId);
     }
@@ -1240,21 +1248,23 @@ function validateQuoteRequest(request) {
 }
 
 function isEmergencyStopEnabled() {
-  return process.env.JUMPYARD_EMERGENCY_STOP === 'true';
+  return process.env.JUMPYARD_EMERGENCY_STOP !== 'false';
+}
+
+function isParkTestEnvironment() {
+  return process.env.JUMPYARD_ENVIRONMENT === 'park-test';
 }
 
 function isNewBookingDraftWriteEnabled() {
-  return (
-    process.env.ENABLE_ROLLER_BOOKING_DRAFT_WRITES === 'true' &&
-    (!isEmergencyStopEnabled() || isT0159LivePaymentSmokeEnabled() || isT0176FullFlowRehearsalEnabled())
-  );
+  if (process.env.ENABLE_ROLLER_BOOKING_DRAFT_WRITES !== 'true' || isEmergencyStopEnabled()) return false;
+  if (!isParkTestEnvironment()) return true;
+  return isT0159LivePaymentSmokeEnabled() || isT0176FullFlowRehearsalEnabled();
 }
 
 function isAddProductDraftWriteEnabled() {
-  return (
-    process.env.ENABLE_ROLLER_BOOKING_DRAFT_WRITES === 'true' &&
-    (!isEmergencyStopEnabled() || isT0162LiveAddOnSmokeEnabled() || isT0176FullFlowRehearsalEnabled())
-  );
+  if (process.env.ENABLE_ROLLER_BOOKING_DRAFT_WRITES !== 'true' || isEmergencyStopEnabled()) return false;
+  if (!isParkTestEnvironment()) return true;
+  return isT0162LiveAddOnSmokeEnabled() || isT0176FullFlowRehearsalEnabled();
 }
 
 function isT0159LivePaymentSmokeEnabled() {
@@ -1324,7 +1334,16 @@ function validateT0176FullFlowOriginalBookingAccess(original) {
 
   const approvedVenueId = stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID);
   const bookingVenueId = stringOrNull(original?.venueId);
-  if (approvedVenueId && bookingVenueId && approvedVenueId !== bookingVenueId) {
+  if (!approvedVenueId) {
+    return {
+      ok: false,
+      code: 't0176_full_flow_config_error',
+      message: 'The T0176 full-flow rehearsal has no approved venue.',
+      statusCode: 500,
+    };
+  }
+
+  if (!bookingVenueId || approvedVenueId !== bookingVenueId) {
     return {
       ok: false,
       code: 't0176_full_flow_booking_not_allowed',
@@ -1372,12 +1391,16 @@ function addOnSmokeGateBlockedResponse(correlationId, gate) {
   });
 }
 
-function safetyGateBlockedResponse(correlationId, code) {
+function safetyGateBlockedResponse(
+  correlationId,
+  code,
+  message = 'This JumpYard Cloud environment is not enabled for Roller booking draft writes.',
+) {
   return jsonResponse(409, correlationId, {
     status: 'blocked',
     error: {
       code,
-      message: 'This JumpYard Cloud environment is not enabled for Roller booking draft writes.',
+      message,
     },
   });
 }

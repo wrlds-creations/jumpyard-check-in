@@ -1045,8 +1045,21 @@ function isParkTestEnvironment() {
   return process.env.JUMPYARD_ENVIRONMENT === 'park-test';
 }
 
+function isEmergencyStopEnabled() {
+  return process.env.JUMPYARD_EMERGENCY_STOP !== 'false';
+}
+
 async function validateParkTestLookupAccess(request) {
   const identifier = request.identifier;
+
+  if (isEmergencyStopEnabled()) {
+    return {
+      ok: false,
+      statusCode: 409,
+      code: 'emergency_stop_active',
+      message: 'Park-test booking lookup is disabled while the JumpYard emergency stop is active.',
+    };
+  }
 
   if (isParkTestLiveLookupGateEnabled() && isParkTestLiveLookupIdentifierAllowed(identifier)) {
     return { ok: true, mode: 'explicit_live_lookup_gate' };
@@ -1149,7 +1162,16 @@ function validateParkTestBookingScope(access, request, rollerBooking, booking) {
   const approvedVenueId = getT0171AssistedLookupVenueId();
   const rollerVenueId = extractVenueId(rollerBooking) || stringOrNull(booking?.venueId);
 
-  if (approvedVenueId && rollerVenueId && rollerVenueId !== approvedVenueId) {
+  if (!approvedVenueId) {
+    return {
+      ok: false,
+      statusCode: 500,
+      code: 'lookup_config_error',
+      message: 'Assisted park-test lookup has no approved venue.',
+    };
+  }
+
+  if (!rollerVenueId || rollerVenueId !== approvedVenueId) {
     return {
       ok: false,
       statusCode: 403,
@@ -1158,7 +1180,7 @@ function validateParkTestBookingScope(access, request, rollerBooking, booking) {
     };
   }
 
-  return { ok: true, lookupDate, venueId: rollerVenueId || approvedVenueId || request.venueId };
+  return { ok: true, lookupDate, venueId: rollerVenueId };
 }
 
 function isT0160LiveLookupSmokeEnabled() {
