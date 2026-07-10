@@ -1,6 +1,6 @@
 # T0188 Sprint 3 Phone/Admin Scope And Ticket Plan
 
-> Historical plan notice: T0189 supersedes this document's T0189-T0200 numbering after Love confirmed that production seed/backfill, webhook/reconciliation, and automatic T-30 SMS/email must be explicit Sprint 3 outcomes. The phone/admin workstream boundary remains valid.
+> Historical plan notice: T0189 supersedes this document's T0189-T0200 numbering after Love confirmed that production seed/backfill, webhook/reconciliation, and automatic T-30 SMS/email must be explicit Sprint 3 outcomes. T0191 later supersedes the parallel-staging assumption: existing `park-test` is the sole pre-production environment and T0205 owns separate post-GO production creation. The phone/admin workstream boundary remains valid.
 
 ## Purpose
 

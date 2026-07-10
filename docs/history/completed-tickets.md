@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 188
-Latest archived completed ticket: `T0190`
+Archived count: 189
+Latest archived completed ticket: `T0191`
 
 ## Completed Tickets
 
@@ -200,3 +200,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0188` | Sprint 3 phone/admin scope and ticket plan. | 2026-07-09 | Defined the T0189-T0200 phone/admin/JumpYard Cloud ticket sequence, separated kiosk and JumpyBoard/AirHive implementation into their own workstreams, added the plain-language ticket-explanation standard, and corrected stale active documentation. Documentation only: no app code, AWS resource, Roller state, deployment, messaging, or runtime-gate change occurred. |
 | `T0189` | Complete Sprint 3 target and ticket correction. | 2026-07-10 | Corrected the production target to include approved initial backfill, scheduled morning seed, webhook processing/reconciliation, normalized Aurora state, sender readiness, and automatic SMS plus email with a secure check-in link 30 minutes before the selected booking time. Published the revised T0190-T0204 sequence and removed duplicate candidate/parking rows while preserving evidence in followups, decisions, the T0189 report, and Git history. Documentation only: no app code, AWS resource, Roller state, deployment, messaging, or runtime-gate change occurred. |
 | `T0190` | Critical fail-closed safety gates. | 2026-07-10 | Made missing/wrong/unconfigured venue fail closed across assisted lookup, existing-booking add-on, and redeem; carried authoritative venue through final Roller redeem refresh; made the emergency stop unconditional and fail closed when missing; and required narrow park-test gates even after the stop is released. Updated reviewed active source profiles to release the stop explicitly while normal closed config remains stopped, added focused dependency-free runtime validation, and recorded FU-096 for the separate request-item date gap. Repository/local work only: no AWS deploy/resource, Roller call/write, payment, redemption, webhook processing, guest message, Cloudflare change, or running app behavior changed. |
+| `T0191` | Park-test pre-production contract. | 2026-07-10 | Recorded existing `park-test` as Sprint 3's sole Live-backed pre-production environment, kept its technical name/resources/tags unchanged, replaced parallel staging creation with T0192 qualification/hardening, moved the complete rehearsal to T0204 in park-test, and added T0205 for separate post-GO production creation and controlled cutover. Documentation only: no application, infrastructure, AWS, Roller, deployment, messaging, Cloudflare, or runtime change occurred. |
