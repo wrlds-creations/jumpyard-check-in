@@ -1,6 +1,6 @@
 # Park-Test Feedback Improvement Placeholders
 
-This page preserves the completed post-park-test feedback queue after T0178-T0180. In the latest Sprint roadmap PDF, it corresponds to the Sprint 3 workstream "Agera på Sprint 2-respons". T0182-T0187 are closed; remaining phone/admin feedback decisions now belong to T0199 in the Sprint 3 plan.
+This page preserves the completed post-park-test feedback queue after T0178-T0180. In the latest Sprint roadmap PDF, it corresponds to the Sprint 3 workstream "Agera på Sprint 2-respons". T0182-T0187 are closed; remaining phone/admin feedback decisions now belong to T0203 in the revised Sprint 3 plan.
 
 ## Outcome Guardrail
 
@@ -27,4 +27,4 @@ No separate `T0181` close-window ticket is planned right now because Love explic
 
 No separate triage ticket is planned. `T0182` was the first concrete improvement ticket, not a feedback-sorting ticket.
 
-T0188 is the separate Sprint 3 phone/admin planning ticket. It does not reopen or renumber this completed feedback queue.
+T0188 is the first Sprint 3 phone/admin planning ticket. T0189 corrects the complete production target and renumbers the remaining-feedback owner to T0203 without reopening this completed feedback queue.

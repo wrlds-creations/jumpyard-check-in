@@ -2,6 +2,15 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0189 Complete Sprint 3 Target And Ticket Correction
+
+- 2026-07-10: Audited the T0188 plan against the confirmed production target and found that seed/backfill, production webhook/reconciliation, and automatic T-30 SMS/email were present in older architecture/followups but not explicit in the planned implementation queue.
+- 2026-07-10: Published the exact T0190-T0204 sequence. T0196 owns initial backfill/morning seed, T0197 owns webhook/reconciliation, T0200 owns sender readiness, T0201 owns automatic T-30 SMS/email, T0202 owns monitoring/operations, and T0204 proves the complete chain.
+- 2026-07-10: Removed duplicate candidate and parking-lot rows only after preserving their evidence and ownership in `FOLLOWUPS.md`, `DECISIONS.md`, `docs/t0189-complete-sprint-3-target-plan.md`, and Git history.
+- 2026-07-10: `node scripts/validate-template.js`, `node scripts/validate-current-ticket.js`, `node scripts/validate-followups.js`, `node scripts/validate-history-archives.js`, `node scripts/validate-skills.js`, `node scripts/validate-aws-tags.js`, `node scripts/validate-park-test-frontend-target.js`, and `git diff --check` passed.
+- 2026-07-10: Custom sequence/ownership validation confirmed exactly T0190-T0204 with no promoted duplicate rows. No application, Lambda, migration, infrastructure, AWS, Roller, deployment, Cloudflare, credential, SMS/email, or runtime-gate change occurred.
+- 2026-07-10: The aggregate `npm run validate` was not used because its known T0177 validator dependency gap remains on a dependency-free clean checkout; all applicable dependency-free constituents passed.
+
 ## T0188 Sprint 3 Phone/Admin Scope And Ticket Plan
 
 - 2026-07-09: Completed a documentation-only source-of-truth audit and published the T0189-T0200 phone/admin/JumpYard Cloud ticket map with plain-language purpose, scope boundary, dependencies, and completion evidence.

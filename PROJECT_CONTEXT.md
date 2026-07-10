@@ -7,11 +7,11 @@ This file is the living project memory for JumpYard Next. Confirmed durable fact
 - Project: `JumpYard Next`
 - Repository: `wrlds-creations/jumpyard-check-in`
 - App: JumpYard check-in app suite
-- Current phase: `Sprint 2 closed`; Sprint 3 phone/admin plan approved; implementation pending.
+- Current phase: `Sprint 2 closed`; complete Sprint 3 phone/admin/cloud target approved; implementation pending.
 
 ## Current Phase And Scope
 
-Sprint 2 is closed. T0188 defined the approved Sprint 3 phone/admin ticket map and is now closed; implementation begins only after Love understands and approves the next ticket. Nacka park-test stays open through 2026-09-30.
+Sprint 2 is closed. T0189 adds the complete booking-ingestion and T-30 messaging chain to the Sprint 3 plan. Nacka park-test stays open through 2026-09-30.
 
 The latest roadmap is [docs/assets/jumpyard-next-sprint-roadmap.pdf](docs/assets/jumpyard-next-sprint-roadmap.pdf), updated 2026-06-11. Here, Sprint 3 covers phone, admin, and their required JumpYard Cloud work. Kiosk/print/terminal and JumpyBoard/AirHive activity data belong to separate project workstreams.
 
@@ -21,7 +21,7 @@ The check-in app suite connects to Roller Playground and park-test Live through 
 check-in app -> JumpYard Cloud/server API -> Roller API
 ```
 
-The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md). The latest roadmap PDF and forward planning are reflected in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). The park feedback improvement queue is captured in [docs/roadmap/park-test-feedback-improvements.md](docs/roadmap/park-test-feedback-improvements.md).
+The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT.md); forward planning is in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
 ## Current Workstream Ownership
 
@@ -39,13 +39,15 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 - Latest Sprint roadmap PDF: [docs/assets/jumpyard-next-sprint-roadmap.pdf](docs/assets/jumpyard-next-sprint-roadmap.pdf)
 - Park-test gate naming/runbook: [docs/t0170-park-test-gate-runbook.md](docs/t0170-park-test-gate-runbook.md)
 - Sprint 3 phone/admin scope and ticket plan: [docs/t0188-sprint-3-phone-admin-plan.md](docs/t0188-sprint-3-phone-admin-plan.md)
+- Complete Sprint 3 target and revised ticket plan: [docs/t0189-complete-sprint-3-target-plan.md](docs/t0189-complete-sprint-3-target-plan.md)
 
 ## Durable Architecture Facts
 
 - Frontend apps must not call Roller directly in the real production architecture.
-- Park-test planning preserves the same boundary: phone/admin deployments may point at a park-test JumpYard Cloud API by environment config, but Roller Live access remains server-side only.
 - Roller remains the source of truth for bookings, products, payments, and ticket redemption.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, session status, idempotency, audit events, and guest messaging state.
+- The production booking index uses an approved initial backfill, scheduled morning seed, idempotent webhook updates/reconciliation, and live REST confirmation. Roller remains authoritative; Aurora is the operational cache.
+- The production guest-message target sends one SMS and one email with a secure JumpYard Cloud check-in link 30 minutes before the selected booking time only after sender, consent, domain, provider, duplicate-suppression, and kill-switch gates pass.
 - Check-in is modeled as ticket-level redemption through Roller `POST /redemptions`, not a booking-level flag.
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
@@ -63,13 +65,12 @@ The Sprint 1 API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD
 ## Current Implemented Flow Facts
 
 - Phone booking lookup calls JumpYard Cloud, which uses Aurora-first lookup with Roller-authoritative refresh when local data is missing or unsafe. Park-test lookup accepts booking reference/email/phone, enforces Nacka/date scope, and picks the nearest upcoming same-day start.
-- Park testing was positive; feedback is primarily clarity, accessibility, copy, and robustness work rather than a new base design.
 - Phone check-in starts or resumes a server-owned check-in session before progressing from a ready booking.
 - Guest safety completion marks a JumpYard Cloud session ready for staff and shows a server-owned handoff code/QR.
 - Staff/admin handoff uses server-owned staff auth in dev and can list, search, inspect, and staff-confirm redeem ready sessions.
 - Buy-entry and existing-booking add-ons use server-owned Roller draft/payment paths; add-ons create a separate linked booking instead of mutating the original.
-- Existing-booking add-on availability may be prefetched after a successful booking lookup/session resolution so the add-on step feels faster; that prefetch is read-only availability and must not create drafts, payments, add-ons, redemptions, or other write side effects before the guest continues.
-- Park-test product validation uses approved Nacka entry/family parents plus Roller Live slot availability, not static child ids. Live phone add-on catalog mapping is read-only display/quote-prep data and separate from write gates.
+- Existing-booking add-on availability may be prefetched read-only; it must not create drafts, payments, add-ons, redemptions, or other writes.
+- Park-test product validation uses approved Nacka parents plus Roller Live slot availability, not static child ids; display mapping is separate from write gates.
 - Park-test PWA drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; new-booking delivery is proven.
 - Ready-for-entry/staff handout UI shows a QR plus entry duration/ticket type; the visible guest fallback is now name-to-staff rather than a displayed handoff code.
 - Park-test Apple Pay domain association is live, but processing is paused pending Pabel/Roller/Adyen diagnostics; card remains fallback.
@@ -100,7 +101,7 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 ## Current Readiness Gates
 
 - Production readiness remains partial and should be handled through scoped future tickets, not opportunistic context hygiene.
-- The approved Sprint 3 phone/admin sequence is T0189-T0200 in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Planned rows are not implementation approval; only one explained and approved ticket becomes active at a time.
+- T0189 corrects the plan; the approved Sprint 3 implementation sequence is T0190-T0204 in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Planned rows are not implementation approval; only one explained and approved ticket becomes active at a time.
 - Main staging/live blockers include production environment config, route auth/WAF or equivalent edge protection, alarm notification routing, SMS/SES production access, sender/domain setup, dev-token replacement, retention policy, deployment rollback, live backfill/cutover, and webhook production verification.
 - Payment must stay on Roller's approved package; method visibility is Roller/Adyen controlled.
 
@@ -109,8 +110,8 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 | Question | Why It Matters | Owner | Status |
 |---|---|---|---|
 | Which products must be ticket/session products for API redemption and webhook counters? | Stock/add-on products are excluded from Roller ticket redemption webhook/API flow. | `TBD` | Open |
-| What production retention/encryption applies to guest email/phone? | Needed before production data commitments. | `TBD` | Open |
+| What production retention/encryption applies to guest email/phone? | Needed before production data commitments. | `T0195` | Open |
 | Should `/data/giftcards` be imported, and in which ticket? | Optional audit/display/reconciliation work should stay separate from payment UI. | `TBD` | Open |
-| What production webhook auth/signature/IP policy replaces dev `x-roller-apikey`? | Required before production webhook registration. | `TBD` | Open |
+| What production webhook auth/signature/IP policy replaces dev `x-roller-apikey`? | Required before production webhook registration. | `T0197` | Open |
 | Should JumpYard Cloud send a real Roller redemption device name? | Roller rejects non-existent device names; dev omits the field. | `TBD` | Open |
-| Which staff/admin auth model authorizes final redeem? | T0047 dev staff auth is not final production identity. | `TBD` | Open |
+| Which staff/admin auth model authorizes final redeem? | T0047 dev staff auth is not final production identity. | `T0194` | Open |

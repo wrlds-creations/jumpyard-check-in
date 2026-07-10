@@ -8,6 +8,8 @@ JumpYard Check-in contains three Next.js apps for the JumpYard Next check-in flo
 
 The current Sprint 3 ticket queue covers the phone app, the admin app, and their required JumpYard Cloud backend. The kiosk folder is maintained as a separate implementation workstream. JumpyBoard/AirHive and activity-data implementation belongs to a separate Connected Experience project/folder.
 
+The complete Sprint 3 target also covers the background production chain: approved initial booking backfill, scheduled morning seed, Roller webhook updates and reconciliation, minimal normalized booking state in Aurora, and automatic SMS plus email with a secure check-in link 30 minutes before the selected booking time. These production capabilities are planned, not currently enabled by the park-test posture.
+
 ## WRLDS Workflow
 
 This repository follows the WRLDS Codex workflow from `wrlds-template`.

@@ -38,6 +38,8 @@ This repository uses the WRLDS Codex workflow. Treat the source-of-truth files i
 ## Project Direction
 
 - Sprint 2 is closed. The active Sprint 3 workstream covers the phone check-in app, the staff/admin app, and the JumpYard Cloud capabilities required by those two surfaces.
+- The complete Sprint 3 production target includes approved initial booking backfill, scheduled morning seed, Roller webhook processing/reconciliation, normalized Aurora state, and automatic SMS plus email check-in links 30 minutes before the selected booking time.
+- Roller remains the booking source of truth; the Aurora booking index is an operational cache used for lookup, scheduling, handoff, audit, and recovery.
 - Kiosk/print/terminal implementation and JumpyBoard/AirHive activity-data implementation belong to separate project folders/workstreams. Keep only explicit interface-contract dependencies in this ticket queue.
 - The production architecture must be `check-in app -> JumpYard Cloud/server API -> Roller API`.
 - Roller is the source of truth for bookings.
