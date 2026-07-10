@@ -1,5 +1,7 @@
 # T0188 Sprint 3 Phone/Admin Scope And Ticket Plan
 
+> Historical plan notice: T0189 supersedes this document's T0189-T0200 numbering after Love confirmed that production seed/backfill, webhook/reconciliation, and automatic T-30 SMS/email must be explicit Sprint 3 outcomes. The phone/admin workstream boundary remains valid.
+
 ## Purpose
 
 T0188 cleans the project map before Sprint 3 implementation begins. The active Sprint 3 workstream in this repository covers the guest phone check-in app, the staff/admin app, and the JumpYard Cloud capabilities required by those two surfaces.
