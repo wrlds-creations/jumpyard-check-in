@@ -309,10 +309,20 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     input.safetyGates.frontendRedeemRehearsalApproval === PARK_TEST_FRONTEND_REDEEM_REHEARSAL_APPROVAL;
   const fullFlowRehearsalApproved =
     input.safetyGates.fullFlowRehearsalApproval === PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL;
+  const scopedTrafficApproved =
+    livePaymentSmokeApproved ||
+    livePostPaymentSyncApproved ||
+    liveLookupSmokeApproved ||
+    liveAssistedLookupApproved ||
+    liveAddOnSmokeApproved ||
+    liveLinkedAddOnSettlementApproved ||
+    liveRedeemSmokeApproved ||
+    frontendRedeemRehearsalApproved ||
+    fullFlowRehearsalApproved;
 
-  if (!input.safetyGates.emergencyStop) {
+  if (!input.safetyGates.emergencyStop && !scopedTrafficApproved) {
     throw new Error(
-      'park-test safetyGates.emergencyStop must stay true until a scoped ticket enables park-test traffic.',
+      'park-test safetyGates.emergencyStop may be false only with a recognized scoped traffic approval.',
     );
   }
 

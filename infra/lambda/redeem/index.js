@@ -57,6 +57,9 @@ exports.handler = async (event) => {
 
   try {
     if (isStaffSessionRedeemRoute(event)) {
+      if (isEmergencyStopEnabled()) {
+        return emergencyStopBlockedResponse(correlationId);
+      }
       return handleStaffSessionRedeem(event, correlationId);
     }
 
@@ -69,6 +72,10 @@ exports.handler = async (event) => {
         status: 'invalid_request',
         error: requestError,
       });
+    }
+
+    if (request.confirmRedeem && isEmergencyStopEnabled()) {
+      return emergencyStopBlockedResponse(correlationId);
     }
 
     if (request.confirmRedeem && !event.__jumpyardTrustedStaffRedeem) {
@@ -1062,52 +1069,59 @@ function evaluateRedeemWriteGate(context, request, decision) {
     );
   }
 
-  if (!isEmergencyStopEnabled()) {
-    return {
-      enabled: true,
-      message: null,
-      reason: 'enabled',
-    };
+  if (isEmergencyStopEnabled()) {
+    return disabled(
+      'emergency_stop_active',
+      'Roller redemption writes are disabled while the JumpYard emergency stop is active.',
+    );
   }
 
-  if (isT0166LiveRedeemSmokeRuntimeEnabled()) {
-    if (!isT0166LiveRedeemAllowed(context, request, decision)) {
-      return disabled(
-        't0166_live_redeem_not_allowed',
-        'This controlled Live redeem smoke only allows the approved booking and ticket identifiers.',
-      );
+  if (process.env.JUMPYARD_ENVIRONMENT === 'park-test') {
+    if (isT0166LiveRedeemSmokeRuntimeEnabled()) {
+      if (!isT0166LiveRedeemAllowed(context, request, decision)) {
+        return disabled(
+          't0166_live_redeem_not_allowed',
+          'This controlled Live redeem smoke only allows the approved booking and ticket identifiers.',
+        );
+      }
+
+      return {
+        enabled: true,
+        message: null,
+        reason: 't0166_live_redeem_smoke_enabled',
+      };
     }
 
-    return {
-      enabled: true,
-      message: null,
-      reason: 't0166_live_redeem_smoke_enabled',
-    };
-  }
+    if (isT0176FullFlowRehearsalEnabled()) {
+      if (!isT0176FullFlowRedeemAllowed(context, request)) {
+        return disabled(
+          't0176_full_flow_redeem_not_allowed',
+          'This T0176 full-flow rehearsal only allows the approved park-test date and venue.',
+        );
+      }
 
-  if (isT0176FullFlowRehearsalEnabled()) {
-    if (!isT0176FullFlowRedeemAllowed(context, request)) {
-      return disabled(
-        't0176_full_flow_redeem_not_allowed',
-        'This T0176 full-flow rehearsal only allows the approved park-test date and venue.',
-      );
+      return {
+        enabled: true,
+        message: null,
+        reason: 't0176_full_flow_rehearsal_enabled',
+      };
     }
 
-    return {
-      enabled: true,
-      message: null,
-      reason: 't0176_full_flow_rehearsal_enabled',
-    };
+    return disabled(
+      'park_test_redeem_not_approved',
+      'Park-test redemption requires an approved scoped redeem or full-flow gate.',
+    );
   }
 
-  return disabled(
-    'redeem_write_disabled',
-    'Roller redemption writes are disabled while the JumpYard emergency stop is active.',
-  );
+  return {
+    enabled: true,
+    message: null,
+    reason: 'enabled',
+  };
 }
 
 function isEmergencyStopEnabled() {
-  return process.env.JUMPYARD_EMERGENCY_STOP === 'true';
+  return process.env.JUMPYARD_EMERGENCY_STOP !== 'false';
 }
 
 function isT0176FullFlowRehearsalEnabled() {
@@ -1130,9 +1144,19 @@ function isT0176FullFlowRedeemAllowed(context, request) {
 
   const approvedVenueId = stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID);
   const bookingVenueId = stringOrNull(context?.booking?.venueId);
-  if (approvedVenueId && bookingVenueId && approvedVenueId !== bookingVenueId) return false;
+  if (!approvedVenueId || !bookingVenueId || approvedVenueId !== bookingVenueId) return false;
 
   return true;
+}
+
+function emergencyStopBlockedResponse(correlationId) {
+  return jsonResponse(409, correlationId, {
+    status: 'blocked',
+    error: {
+      code: 'emergency_stop_active',
+      message: 'Roller redemption is disabled while the JumpYard emergency stop is active.',
+    },
+  });
 }
 
 function getT0176FullFlowAllowedOperatingDates() {
@@ -1804,7 +1828,39 @@ function normalizeBooking(booking, products) {
     rollerUniqueId: stringOrNull(booking?.uniqueId ?? booking?.id),
     status: stringOrNull(booking?.status ?? booking?.bookingStatus),
     total: numberOrNull(booking?.total ?? booking?.costs?.total),
+    venueId: extractVenueId(booking),
   };
+}
+
+function extractVenueId(booking) {
+  if (!booking || typeof booking !== 'object') return null;
+
+  const candidates = [
+    booking.venueId,
+    booking.venueID,
+    booking.locationId,
+    booking.locationID,
+    booking.siteId,
+    booking.siteID,
+    booking.venue?.id,
+    booking.venue?.venueId,
+    booking.location?.id,
+  ];
+
+  const items = Array.isArray(booking.items) ? booking.items : [];
+  for (const item of items) {
+    candidates.push(
+      item?.venueId,
+      item?.venueID,
+      item?.locationId,
+      item?.locationID,
+      item?.venue?.id,
+      item?.venue?.venueId,
+      item?.location?.id,
+    );
+  }
+
+  return candidates.map((candidate) => stringOrNull(candidate)).find(Boolean) ?? null;
 }
 
 function normalizeBookingItem(item, productById) {
@@ -1842,6 +1898,7 @@ async function upsertLiveBooking(booking, rollerEnv) {
     paymentStatus: booking.paymentStatus,
     source: 'roller_redeem_final_refresh',
     status: booking.status,
+    venueId: booking.venueId,
   });
 
   await executeStatement(
@@ -1849,6 +1906,7 @@ async function upsertLiveBooking(booking, rollerEnv) {
       roller_unique_id,
       booking_reference,
       roller_env,
+      venue_id,
       booking_status,
       payment_status,
       amount_owing_cents,
@@ -1869,6 +1927,7 @@ async function upsertLiveBooking(booking, rollerEnv) {
       :rollerUniqueId,
       :bookingReference,
       :rollerEnv,
+      :venueId,
       :bookingStatus,
       :paymentStatus,
       :amountOwingCents,
@@ -1888,6 +1947,7 @@ async function upsertLiveBooking(booking, rollerEnv) {
     ON CONFLICT (roller_unique_id) DO UPDATE SET
       booking_reference = EXCLUDED.booking_reference,
       roller_env = EXCLUDED.roller_env,
+      venue_id = EXCLUDED.venue_id,
       booking_status = EXCLUDED.booking_status,
       payment_status = EXCLUDED.payment_status,
       amount_owing_cents = EXCLUDED.amount_owing_cents,
@@ -1907,6 +1967,7 @@ async function upsertLiveBooking(booking, rollerEnv) {
       stringParameter('rollerUniqueId', booking.rollerUniqueId),
       stringParameter('bookingReference', booking.bookingReference),
       stringParameter('rollerEnv', rollerEnv),
+      stringParameter('venueId', booking.venueId),
       stringParameter('bookingStatus', booking.status),
       stringParameter('paymentStatus', booking.paymentStatus),
       intParameter('amountOwingCents', currencyToCents(booking.amountOwing)),
@@ -1922,6 +1983,7 @@ async function upsertLiveBooking(booking, rollerEnv) {
           externalId: booking.externalId,
           itemCount: booking.items.length,
           source: 'roller_redeem_final_refresh',
+          venueId: booking.venueId,
         }),
       ),
     ],

@@ -7,11 +7,11 @@ This file is the living project memory for JumpYard Next. Confirmed durable fact
 - Project: `JumpYard Next`
 - Repository: `wrlds-creations/jumpyard-check-in`
 - App: JumpYard check-in app suite
-- Current phase: `Sprint 2 closed`; complete Sprint 3 phone/admin/cloud target approved; implementation pending.
+- Current phase: `Sprint 2 closed`; Sprint 3 target approved; repository safety-gate correction complete without deployment.
 
 ## Current Phase And Scope
 
-Sprint 2 is closed. T0189 adds the complete booking-ingestion and T-30 messaging chain to the Sprint 3 plan. Nacka park-test stays open through 2026-09-30.
+Sprint 2 is closed. The complete Sprint 3 plan includes booking ingestion and T-30 messaging. Repository safety gates now fail closed; deployed Nacka park-test remains unchanged through 2026-09-30.
 
 The latest roadmap is [docs/assets/jumpyard-next-sprint-roadmap.pdf](docs/assets/jumpyard-next-sprint-roadmap.pdf), updated 2026-06-11. Here, Sprint 3 covers phone, admin, and their required JumpYard Cloud work. Kiosk/print/terminal and JumpyBoard/AirHive activity data belong to separate project workstreams.
 
@@ -61,6 +61,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - The T0176/T0177 full-flow park-test runtime posture remains intentionally open after T0178-T0180 until Love asks to close it; ticket closeout must not be interpreted as a close-window deploy. The approved Nacka operating-date window now runs from 2026-06-29 through 2026-09-30.
 - Park-test phone PWA builds must set `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL` to the park-test API, or the app falls back to dev.
 - Park-test post-payment new-booking sync is draft-backed and only refreshes a recent local `new_booking` prepayment draft created by JumpYard Cloud.
+- Repository safety gates treat emergency stop `true`/missing/invalid as stopped and require both configured and observed venue `50871`; releasing the stop never replaces narrower gates.
 
 ## Current Implemented Flow Facts
 
@@ -101,7 +102,7 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 ## Current Readiness Gates
 
 - Production readiness remains partial and should be handled through scoped future tickets, not opportunistic context hygiene.
-- T0189 corrects the plan; the approved Sprint 3 implementation sequence is T0190-T0204 in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). Planned rows are not implementation approval; only one explained and approved ticket becomes active at a time.
+- The approved Sprint 3 sequence is T0190-T0204 in [docs/roadmap/backlog.md](docs/roadmap/backlog.md). T0190 is complete without deployment; T0191 still needs explanation and approval.
 - Main staging/live blockers include production environment config, route auth/WAF or equivalent edge protection, alarm notification routing, SMS/SES production access, sender/domain setup, dev-token replacement, retention policy, deployment rollback, live backfill/cutover, and webhook production verification.
 - Payment must stay on Roller's approved package; method visibility is Roller/Adyen controlled.
 

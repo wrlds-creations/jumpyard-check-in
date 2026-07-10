@@ -31,7 +31,7 @@
     "replyToAddresses": []
   },
   "safetyGates": {
-    "emergencyStop": true,
+    "emergencyStop": false,
     "guestMessagingSendsEnabled": false,
     "liveLinkedAddOnSettlementApproval": "T0165_LINKED_ADDON_SETTLEMENT_RECONCILIATION_APPROVED",
     "liveLinkedAddOnSettlementAllowedIdentifiers": [

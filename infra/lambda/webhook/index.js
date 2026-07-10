@@ -190,7 +190,7 @@ function isRollerWebhookProcessingEnabled() {
 }
 
 function isEmergencyStopEnabled() {
-  return process.env.JUMPYARD_EMERGENCY_STOP === 'true';
+  return process.env.JUMPYARD_EMERGENCY_STOP !== 'false';
 }
 
 async function getWebhookToken() {

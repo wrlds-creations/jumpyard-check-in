@@ -25,13 +25,12 @@ Every implementation ticket must be explained to Love before activation in plain
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| None active | Sprint 3 handoff | T0189 corrected the complete production target and published the T0190-T0204 implementation sequence. | T0189 | Low | No implementation ticket is active. | T0189 closeout evidence is archived; T0190 requires explanation and approval before activation. | Closed |
+| None active | Sprint 3 handoff | T0190 completed the repository safety-gate correction without deploying it. | T0190 | Low | No implementation ticket is active; deployed park-test remains unchanged. | Explain T0191 and obtain Love's approval before activation. | Closed |
 
 ## Next
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0190` | Critical safety gates | Make venue checks fail closed and make the emergency stop unconditional. | T0189; current park-test gate evidence | High | Cloud safety only; no broader venue/date scope or production environment. | Missing/wrong venue is rejected and emergency-stop negative tests prove the stop always wins. | Planned |
 | `T0191` | Stage/production contract | Agree account, region, naming, ownership, tags, data, cost, rollback, and environment boundaries before AWS creation. | T0190; Love/WRLDS environment decisions | High | Planning and preflight only; creates no AWS resources. | Love approves a plain-language environment contract and reviewed CDK plan. | Planned |
 | `T0192` | Staging foundation | Create the separately approved staging foundation for complete-flow rehearsal. | T0191; explicit AWS approval | High | Staging only; dev, park-test, and production remain unchanged. | CDK diff/deploy/readback, tags, closed gates, costs, and rollback evidence pass. | Planned |
 | `T0193` | API protection | Protect guest, staff, internal, scheduler, and webhook routes with the right boundary and abuse controls. | T0190-T0192; API protection design | High | Route security only; no product-flow redesign. | Route matrix plus positive/negative auth, rate-limit, and internal-route tests pass. | Planned |

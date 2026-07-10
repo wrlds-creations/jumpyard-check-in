@@ -79,6 +79,19 @@ exports.handler = async (event) => {
       return handleSendDueSessionLinkMessages(event, scheduledBody, scheduledCorrelationId, { trustedScheduler: true });
     }
 
+    if (
+      isEmergencyStopEnabled() &&
+      (isStaffAuthLoginRoute(routeKey, event) ||
+        isStaffSessionListRoute(routeKey, event) ||
+        isStaffSessionDetailRoute(routeKey, event))
+    ) {
+      return safetyGateBlockedResponse(
+        correlationId,
+        'emergency_stop_active',
+        'Staff access is disabled while the JumpYard emergency stop is active.',
+      );
+    }
+
     if (isStaffAuthLoginRoute(routeKey, event)) {
       return handleStaffAuthLogin(body, correlationId);
     }
@@ -3631,7 +3644,7 @@ function isResolveSessionLinkRoute(routeKey, event) {
 }
 
 function isEmergencyStopEnabled() {
-  return process.env.JUMPYARD_EMERGENCY_STOP === 'true';
+  return process.env.JUMPYARD_EMERGENCY_STOP !== 'false';
 }
 
 function isGuestMessagingSendEnabled() {
@@ -3639,12 +3652,13 @@ function isGuestMessagingSendEnabled() {
 }
 
 function isStaffAuthEnabled() {
+  if (process.env.ENABLE_STAFF_AUTH !== 'true' || isEmergencyStopEnabled()) return false;
+  if (process.env.JUMPYARD_ENVIRONMENT !== 'park-test') return true;
+
   return (
-    process.env.ENABLE_STAFF_AUTH === 'true' &&
-    (!isEmergencyStopEnabled() ||
-      process.env.ENABLE_T0166_LIVE_REDEEM_SMOKE === 'true' ||
-      process.env.ENABLE_T0176_FULL_FLOW_REHEARSAL === 'true' ||
-      isT0176FrontendRedeemRehearsalEnabled())
+    process.env.ENABLE_T0166_LIVE_REDEEM_SMOKE === 'true' ||
+    process.env.ENABLE_T0176_FULL_FLOW_REHEARSAL === 'true' ||
+    isT0176FrontendRedeemRehearsalEnabled()
   );
 }
 

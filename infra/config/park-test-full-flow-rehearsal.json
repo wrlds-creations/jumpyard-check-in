@@ -31,7 +31,7 @@
     "replyToAddresses": []
   },
   "safetyGates": {
-    "emergencyStop": true,
+    "emergencyStop": false,
     "guestMessagingSendsEnabled": false,
     "rollerBookingDraftWritesEnabled": true,
     "rollerRedeemWritesEnabled": true,

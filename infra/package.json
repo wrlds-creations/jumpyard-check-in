@@ -61,6 +61,7 @@
     "preflight:roller-live:park-test": "ts-node --prefer-ts-exts scripts/roller-live-readonly-preflight.ts --config ./config/park-test.json --profile wrlds-dev",
     "validate:config-guards": "ts-node --prefer-ts-exts scripts/validate-config-guards.ts",
     "validate:park-test-synth": "ts-node --prefer-ts-exts scripts/validate-park-test-synth.ts",
+    "validate:t0190-safety-gates": "node ../scripts/validate-t0190-safety-gates.js",
     "validate:roller-live-contact-resolver": "ts-node --prefer-ts-exts scripts/roller-live-contact-resolver.ts --self-test",
     "validate:roller-live-readonly-preflight": "ts-node --prefer-ts-exts scripts/roller-live-readonly-preflight.ts --self-test",
     "validate:roller-live-catalog-index-readiness": "ts-node --prefer-ts-exts scripts/roller-live-catalog-index-readiness.ts --self-test",
@@ -68,7 +69,7 @@
     "validate:roller-live-webhook-register": "ts-node --prefer-ts-exts scripts/roller-live-webhook-register.ts --self-test",
     "validate:roller-live-quote-smoke": "ts-node --prefer-ts-exts scripts/roller-live-quote-smoke.ts --self-test",
     "validate:roller-live-draft-smoke": "ts-node --prefer-ts-exts scripts/roller-live-draft-smoke.ts --self-test",
-    "check": "npm run build && npm run validate:config-guards && npm run validate:park-test-synth && npm run validate:roller-live-readonly-preflight && npm run validate:roller-live-catalog-index-readiness && npm run validate:roller-live-contact-resolver && npm run validate:roller-live-webhook-dry-run && npm run validate:roller-live-webhook-register && npm run validate:roller-live-quote-smoke && npm run validate:roller-live-draft-smoke && npm run synth:example"
+    "check": "npm run build && npm run validate:config-guards && npm run validate:park-test-synth && npm run validate:t0190-safety-gates && npm run validate:roller-live-readonly-preflight && npm run validate:roller-live-catalog-index-readiness && npm run validate:roller-live-contact-resolver && npm run validate:roller-live-webhook-dry-run && npm run validate:roller-live-webhook-register && npm run validate:roller-live-quote-smoke && npm run validate:roller-live-draft-smoke && npm run synth:example"
   },
   "dependencies": {
     "@aws-sdk/client-rds-data": "^3.1050.0",

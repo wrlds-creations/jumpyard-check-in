@@ -31,7 +31,7 @@
     "replyToAddresses": []
   },
   "safetyGates": {
-    "emergencyStop": true,
+    "emergencyStop": false,
     "guestMessagingSendsEnabled": false,
     "liveAddOnSmokeApproval": "T0162_EXISTING_BOOKING_ADDON_SMOKE_APPROVED",
     "liveAddOnSmokeAllowedIdentifiers": [

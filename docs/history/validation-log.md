@@ -2,6 +2,17 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0190 Critical Safety Gates
+
+- 2026-07-10: Audited lookup, booking/add-on, session/staff, redeem, webhook, CDK config, and synth behavior. Confirmed three venue fail-opens, multiple emergency-stop bypasses, missing-config fail-open behavior, and a redeem final-refresh venue evidence gap.
+- 2026-07-10: Implemented exact configured-plus-observed venue matching for Nacka `50871`; missing configured venue, missing booking venue, and wrong venue now block lookup, add-on, and redeem. Final Roller redeem normalization/upsert now carries venue into Aurora before the second write-gate check.
+- 2026-07-10: Changed runtime semantics so only exact `JUMPYARD_EMERGENCY_STOP=false` releases the stop. Booking operations, all park-test lookup modes, staff routes, confirmed redeem, webhook processing, and real guest sends cannot be opened by smoke/full-flow flags while stopped; released park-test mode still requires its narrow approval/allowlist/date/venue gates.
+- 2026-07-10: Kept normal `park-test.json` stopped and changed reviewed active source profiles to release the stop explicitly. Config validation rejects stop-off without a recognized scoped approval. No CDK deploy, AWS mutation, Roller call, payment, redeem, webhook processing, SMS/email send, Cloudflare change, or running app behavior occurred; deployed full-flow remains on the previous runtime model.
+- 2026-07-10: Added dependency-free `scripts/validate-t0190-safety-gates.js` and wired it into root validation and `infra:check`. Focused validation passed for correct/wrong/missing/unconfigured venue, emergency-stop override combinations, missing stop config, post-stop narrow gates, staff-route blocking, webhook/message behavior, and authoritative redeem venue normalization.
+- 2026-07-10: Full `npm --prefix infra run check` and full root `npm run validate` passed, including TypeScript build, config guards, every dev/park-test synth profile, Roller guard self-tests, T0190 behavioral validation, and all repository source-of-truth validators. Syntax checks passed for all five changed Lambda handlers, and `git diff --check` passed.
+- 2026-07-10: Project validation dependencies were installed locally without changing the lockfile; the existing lockfile is not clean-`npm ci` compatible because it omits transitive `jsonschema@1.4.1`.
+- 2026-07-10: Recorded high-priority `FU-096` instead of widening T0190: new-booking quote/draft and submitted add-on item dates still need an explicit full-flow operating-date gate before the corrected model is deployed or used more broadly.
+
 ## T0189 Complete Sprint 3 Target And Ticket Correction
 
 - 2026-07-10: Audited the T0188 plan against the confirmed production target and found that seed/backfill, production webhook/reconciliation, and automatic T-30 SMS/email were present in older architecture/followups but not explicit in the planned implementation queue.

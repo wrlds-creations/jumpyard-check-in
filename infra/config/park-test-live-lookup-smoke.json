@@ -31,7 +31,7 @@
     "replyToAddresses": []
   },
   "safetyGates": {
-    "emergencyStop": true,
+    "emergencyStop": false,
     "guestMessagingSendsEnabled": false,
     "liveLookupSmokeApproval": "T0160_LIVE_LOOKUP_SMOKE_APPROVED",
     "liveLookupSmokeAllowedIdentifiers": [
