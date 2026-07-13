@@ -31,7 +31,7 @@ let cachedToken = null;
 let cachedProducts = null;
 
 exports.handler = async (event) => {
-  const correlationId = getHeader(event, 'x-correlation-id') || createCorrelationId();
+  const correlationId = normalizeCorrelationId(getHeader(event, 'x-correlation-id')) || createCorrelationId();
 
   try {
     const request = parseWebhookRequest(event);
@@ -1722,6 +1722,11 @@ function isPaymentSettled(booking) {
 
 function createCorrelationId() {
   return `jy_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function normalizeCorrelationId(value) {
+  const normalized = String(value ?? '').trim();
+  return /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,95}$/.test(normalized) ? normalized : null;
 }
 
 function safeErrorSummary(error) {

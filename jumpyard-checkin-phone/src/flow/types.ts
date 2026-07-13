@@ -48,6 +48,8 @@ export interface LookupSource {
 export interface CheckInSession {
   checkinSessionId: string;
   status: string;
+  guestAccessToken?: string;
+  guestAccessExpiresAt?: string | null;
   handoffStatus?: string | null;
   handoffCode?: string | null;
   safetyStatus?: string | null;
@@ -58,6 +60,8 @@ export interface CheckInSession {
 export interface Booking {
   id: string;
   rollerUniqueId?: string | null;
+  guestAccessToken?: string;
+  guestAccessExpiresAt?: string | null;
   jumpers: number;
   time: string;
   endTime?: string;

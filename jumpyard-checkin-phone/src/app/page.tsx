@@ -298,8 +298,8 @@ function ProgressBar({ state, buyEntryFlow }: { state: FlowState; buyEntryFlow: 
 
 function CheckInFlow() {
     const searchParams = useSearchParams();
-    const linkToken = searchParams.get('jy_token') ?? searchParams.get('token');
-    const token = linkToken ?? searchParams.get('bookingRef');
+    const [linkToken] = useState(() => searchParams.get('jy_token') ?? searchParams.get('token'));
+    const [token] = useState(() => linkToken ?? searchParams.get('bookingRef'));
     const { t } = useTranslation();
 
     const params = new URLSearchParams(searchParams.toString());
@@ -320,6 +320,18 @@ function CheckInFlow() {
     const [buyRecoveryStatus, setBuyRecoveryStatus] = useState<BuyRecoveryStatus | null>(null);
     const addonsAvailabilityPrefetchRef = useRef<AddonsAvailabilityPrefetch | null>(null);
     const [addonsAvailabilityPrefetch, setAddonsAvailabilityPrefetch] = useState<AddonsAvailabilityPrefetch | null>(null);
+
+    useEffect(() => {
+        if (!linkToken || typeof window === 'undefined') return;
+
+        const url = new URL(window.location.href);
+        const hadSensitiveToken = url.searchParams.has('jy_token') || url.searchParams.has('token');
+        if (!hadSensitiveToken) return;
+
+        url.searchParams.delete('jy_token');
+        url.searchParams.delete('token');
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    }, [linkToken]);
 
     const scrollToTop = () => {
         window.scrollTo(0, 0);

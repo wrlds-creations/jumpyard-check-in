@@ -10,6 +10,9 @@ const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
 const ROLLER_LIVE_BASE_URL = 'https://api.roller.app';
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
+const GUEST_ACCESS_CHANNEL = 'guest_access';
+const GUEST_ACCESS_LINK_WINDOW_MINUTES = 60;
+const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 
 const PHONE_BOOKING_PRODUCTS = [
   { key: 'COMBO60', parentName: 'ComboDeal', label: 'ComboDeal', type: 'combo', durationMinutes: 60, jumpersPerUnit: 2 },
@@ -144,13 +147,13 @@ let cachedToken = null;
 let cachedVenuePaymentConfig = null;
 
 exports.handler = async (event) => {
-  let correlationId = getHeader(event, 'x-correlation-id') || createCorrelationId();
+  let correlationId = normalizeCorrelationId(getHeader(event, 'x-correlation-id')) || createCorrelationId();
 
   try {
     const routeKey = event?.routeKey || `${event?.requestContext?.http?.method ?? ''} ${event?.rawPath ?? ''}`.trim();
 
     const body = parseBody(event);
-    correlationId = stringOrNull(body.correlationId) || correlationId;
+    correlationId = normalizeCorrelationId(body.correlationId) || correlationId;
 
     if (isEmergencyStopEnabled()) {
       return safetyGateBlockedResponse(
@@ -161,23 +164,23 @@ exports.handler = async (event) => {
     }
 
     if (isAddProductQuoteRoute(routeKey, event)) {
-      return handleAddProductQuote(event, body, correlationId);
+      return await handleAddProductQuote(event, body, correlationId);
     }
 
     if (isAddProductDraftRoute(routeKey, event)) {
-      return handleAddProductDraft(event, body, correlationId);
+      return await handleAddProductDraft(event, body, correlationId);
     }
 
     if (isAvailabilityRoute(routeKey, event)) {
-      return handleAvailability(body, correlationId);
+      return await handleAvailability(body, correlationId);
     }
 
     if (isQuoteRoute(routeKey, event)) {
-      return handleQuote(event, body, correlationId);
+      return await handleQuote(event, body, correlationId);
     }
 
     if (isDraftRoute(routeKey, event)) {
-      return handleDraft(event, body, correlationId);
+      return await handleDraft(event, body, correlationId);
     }
 
     return jsonResponse(404, correlationId, {
@@ -632,6 +635,11 @@ async function handleAddProductQuote(event, body, correlationId) {
     return parkTestGateBlockedResponse(correlationId, smokeGate);
   }
 
+  const guestAccess = await verifyGuestAccessForBooking(event, bookingReference);
+  if (!guestAccess.ok) {
+    return guestAccessErrorResponse(correlationId, guestAccess);
+  }
+
   const config = await getRollerConfig();
   const token = await getRollerAccessToken(config);
   const original = await resolveOriginalBookingContext(config, token, bookingReference);
@@ -768,6 +776,11 @@ async function handleAddProductDraft(event, body, correlationId) {
 
   if (!isAddProductDraftWriteEnabled()) {
     return safetyGateBlockedResponse(correlationId, 'roller_booking_draft_writes_disabled');
+  }
+
+  const guestAccess = await verifyGuestAccessForBooking(event, bookingReference);
+  if (!guestAccess.ok) {
+    return guestAccessErrorResponse(correlationId, guestAccess);
   }
 
   const config = await getRollerConfig();
@@ -3078,6 +3091,74 @@ async function writeBookingEventLog({ correlationId, eventType, payload, subject
   );
 }
 
+async function verifyGuestAccessForBooking(event, bookingReference) {
+  const credential = getGuestAccessCredential(event);
+  if (!credential.present) {
+    return { ok: false, statusCode: 401 };
+  }
+
+  if (!credential.token) {
+    return { ok: false, statusCode: 403 };
+  }
+
+  const result = await executeStatement(
+    `SELECT
+       ct.roller_unique_id,
+       b.booking_reference
+     FROM jumpyard.checkin_tokens AS ct
+     LEFT JOIN jumpyard.roller_bookings AS b
+       ON b.roller_unique_id = ct.roller_unique_id
+     WHERE ct.token_hash = :tokenHash
+       AND ct.consumed_at IS NULL
+       AND ct.expires_at > now()
+       AND (
+         ct.channel = :channel
+         OR (
+           ct.channel IN ('sms', 'email', 'manual', 'dev')
+           AND ct.opened_at > now() - INTERVAL '${GUEST_ACCESS_LINK_WINDOW_MINUTES} minutes'
+         )
+       )
+     LIMIT 1`,
+    [
+      stringParameter('tokenHash', hashString(credential.token)),
+      stringParameter('channel', GUEST_ACCESS_CHANNEL),
+    ],
+  );
+  const row = firstMappedRow(result);
+  const normalizedReference = stringOrNull(bookingReference);
+  const authorized = Boolean(
+    normalizedReference &&
+      (normalizedReference === stringOrNull(row?.booking_reference) ||
+        normalizedReference === stringOrNull(row?.roller_unique_id)),
+  );
+
+  return authorized ? { ok: true } : { ok: false, statusCode: 403 };
+}
+
+function getGuestAccessCredential(event) {
+  const authorization = getHeader(event, 'authorization');
+  if (!authorization) {
+    return { present: false, token: null };
+  }
+
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return {
+    present: true,
+    token: stringOrNull(match?.[1]),
+  };
+}
+
+function guestAccessErrorResponse(correlationId, auth) {
+  const statusCode = auth?.statusCode === 401 ? 401 : 403;
+  return jsonResponse(statusCode, correlationId, {
+    status: statusCode === 401 ? 'unauthorized' : 'forbidden',
+    error: {
+      code: statusCode === 401 ? 'guest_access_required' : 'guest_access_denied',
+      message: 'Valid guest access is required for this booking operation.',
+    },
+  });
+}
+
 async function executeStatement(sql, parameters = []) {
   const resourceArn = process.env.DATABASE_CLUSTER_ARN;
   const secretArn = process.env.DATABASE_SECRET_ARN;
@@ -3132,6 +3213,12 @@ function parseBody(event) {
   let body = event.body;
   if (event.isBase64Encoded) {
     body = Buffer.from(body, 'base64').toString('utf8');
+  }
+
+  if (Buffer.byteLength(body, 'utf8') > MAX_REQUEST_BODY_BYTES) {
+    const error = new Error('Request body exceeds the allowed size.');
+    error.code = 'payload_too_large';
+    throw error;
   }
 
   try {
@@ -3387,6 +3474,11 @@ function createCorrelationId() {
   return `jy_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
+function normalizeCorrelationId(value) {
+  const normalized = String(value ?? '').trim();
+  return /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,95}$/.test(normalized) ? normalized : null;
+}
+
 function createExternalId(prefix) {
   const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   return `${prefix}-${timestamp}-${crypto.randomUUID().slice(0, 8)}`;
@@ -3467,6 +3559,15 @@ function isTime(value) {
 }
 
 function classifyError(error) {
+  if (error.code === 'payload_too_large') {
+    return {
+      statusCode: 413,
+      status: 'invalid_request',
+      code: 'payload_too_large',
+      message: 'Request body exceeds the allowed size.',
+    };
+  }
+
   if (error.code === 'invalid_json') {
     return {
       statusCode: 400,

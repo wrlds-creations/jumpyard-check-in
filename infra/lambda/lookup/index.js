@@ -9,6 +9,11 @@ const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
 const ROLLER_PLAYGROUND_BASE_URL = 'https://api.play.roller.app';
 const ROLLER_LIVE_BASE_URL = 'https://api.roller.app';
 const PRODUCT_CACHE_TTL_MS = 15 * 60 * 1000;
+const GUEST_ACCESS_CHANNEL = 'guest_access';
+const GUEST_ACCESS_TTL_MINUTES = 60;
+const MAX_ACTIVE_GUEST_ACCESS_TOKENS_PER_BOOKING = 64;
+const MAX_REQUEST_BODY_BYTES = 8 * 1024;
+const TOKEN_BYTES = 32;
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
@@ -24,7 +29,7 @@ exports.handler = async (event) => {
 
   try {
     const request = parseRequest(event);
-    correlationId = request.correlationId || correlationId;
+    correlationId = normalizeCorrelationId(request.correlationId) || correlationId;
 
     if (!request.identifier) {
       return jsonResponse(400, correlationId, {
@@ -68,11 +73,13 @@ exports.handler = async (event) => {
 
       await reconcilePrepaymentDraftFromPaidBooking(scopedBooking, 'aurora_local_lookup');
       const eligibility = evaluateEligibility(scopedBooking, request);
+      const guestAccess = await createGuestAccessToken(scopedBooking.rollerUniqueId);
 
       return jsonResponse(200, correlationId, {
         status: 'found',
         booking: scopedBooking,
         eligibility,
+        guestAccess,
         source: {
           system: 'jumpyard_cloud',
           environment: localResult.metadata.rollerEnv,
@@ -181,11 +188,13 @@ exports.handler = async (event) => {
     await upsertLiveBooking(scopedBooking, config.env, parkTestScope.venueId ?? request.venueId);
     await reconcilePrepaymentDraftFromPaidBooking(scopedBooking, 'roller_live_lookup');
     const eligibility = evaluateEligibility(scopedBooking, request);
+    const guestAccess = await createGuestAccessToken(scopedBooking.rollerUniqueId);
 
     return jsonResponse(200, correlationId, {
       status: 'found',
       booking: scopedBooking,
       eligibility,
+      guestAccess,
       source: {
         system: 'roller',
         environment: config.env,
@@ -216,6 +225,12 @@ function parseRequest(event) {
     body = Buffer.from(body, 'base64').toString('utf8');
   }
 
+  if (Buffer.byteLength(body, 'utf8') > MAX_REQUEST_BODY_BYTES) {
+    const error = new Error('Request body exceeds the allowed size.');
+    error.code = 'payload_too_large';
+    throw error;
+  }
+
   try {
     const parsed = JSON.parse(body);
     const identifier = String(parsed.identifier ?? '').trim();
@@ -229,7 +244,7 @@ function parseRequest(event) {
       identifierType,
       expectedDate,
       expectedStartTime: parsed.expectedStartTime ? String(parsed.expectedStartTime).trim() : null,
-      correlationId: parsed.correlationId ? String(parsed.correlationId).trim() : null,
+      correlationId: normalizeCorrelationId(parsed.correlationId),
     };
   } catch {
     const error = new Error('Request body must be valid JSON.');
@@ -300,6 +315,11 @@ function getStockholmNowParts(now = new Date()) {
 
 function createCorrelationId() {
   return `jy_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function normalizeCorrelationId(value) {
+  const normalized = String(value ?? '').trim();
+  return /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,95}$/.test(normalized) ? normalized : null;
 }
 
 async function getLocalBooking(request) {
@@ -1851,6 +1871,87 @@ function sanitizeMetricValue(value) {
   return sanitized || 'unknown';
 }
 
+async function createGuestAccessToken(rollerUniqueId) {
+  if (!rollerUniqueId) {
+    const error = new Error('A Roller unique id is required before guest access can be issued.');
+    error.code = 'guest_access_token_error';
+    throw error;
+  }
+
+  const expiresAt = new Date(Date.now() + GUEST_ACCESS_TTL_MINUTES * 60 * 1000).toISOString();
+
+  // This is a steady-state safety cap, not a database uniqueness guarantee: concurrent first-time
+  // lookups may briefly overshoot it. Never evict a still-valid credential, because doing so would
+  // let another caller interrupt an in-progress guest. T0195 owns final retention/purge policy.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const token = crypto.randomBytes(TOKEN_BYTES).toString('base64url');
+    const tokenHash = hashString(token);
+    const result = await executeStatement(
+      `WITH pruned AS (
+         DELETE FROM jumpyard.checkin_tokens
+         WHERE roller_unique_id = :rollerUniqueId
+           AND channel = :channel
+           AND (consumed_at IS NOT NULL OR expires_at <= now())
+         RETURNING token_hash
+       ),
+       capacity AS (
+         SELECT
+           COUNT(*)::int AS active_count,
+           (SELECT COUNT(*)::int FROM pruned) AS pruned_count
+         FROM jumpyard.checkin_tokens
+         WHERE roller_unique_id = :rollerUniqueId
+           AND channel = :channel
+           AND consumed_at IS NULL
+           AND expires_at > now()
+       ),
+       inserted AS (
+         INSERT INTO jumpyard.checkin_tokens (
+           token_hash,
+           roller_unique_id,
+           channel,
+           expires_at
+         )
+         SELECT
+           :tokenHash,
+           :rollerUniqueId,
+           :channel,
+           CAST(:expiresAt AS timestamptz)
+         FROM capacity
+         WHERE active_count < :activeTokenLimit
+         ON CONFLICT (token_hash) DO NOTHING
+         RETURNING expires_at::text AS expires_at
+       )
+       SELECT inserted.expires_at, capacity.active_count
+       FROM capacity
+       LEFT JOIN inserted ON true`,
+      [
+        stringParameter('tokenHash', tokenHash),
+        stringParameter('rollerUniqueId', rollerUniqueId),
+        stringParameter('channel', GUEST_ACCESS_CHANNEL),
+        stringParameter('expiresAt', expiresAt),
+        intParameter('activeTokenLimit', MAX_ACTIVE_GUEST_ACCESS_TOKENS_PER_BOOKING),
+      ],
+    );
+    const row = firstMappedRow(result);
+    if (stringOrNull(row?.expires_at)) {
+      return {
+        expiresAt: stringOrNull(row.expires_at),
+        token,
+      };
+    }
+
+    if ((numberOrNull(row?.active_count) ?? 0) >= MAX_ACTIVE_GUEST_ACCESS_TOKENS_PER_BOOKING) {
+      const error = new Error('Too many active guest access credentials exist for this booking.');
+      error.code = 'guest_access_rate_limited';
+      throw error;
+    }
+  }
+
+  const error = new Error('Could not allocate a unique guest access token.');
+  error.code = 'guest_access_token_error';
+  throw error;
+}
+
 async function executeStatement(sql, parameters = []) {
   const resourceArn = process.env.DATABASE_CLUSTER_ARN;
   const secretArn = process.env.DATABASE_SECRET_ARN;
@@ -2007,6 +2108,24 @@ function isPaymentSettled(booking) {
 }
 
 function classifyError(error) {
+  if (error.code === 'guest_access_rate_limited') {
+    return {
+      statusCode: 429,
+      status: 'blocked',
+      code: 'guest_access_rate_limited',
+      message: 'Too many active guest sessions exist for this booking. Try again later or ask staff for help.',
+    };
+  }
+
+  if (error.code === 'payload_too_large') {
+    return {
+      statusCode: 413,
+      status: 'invalid_request',
+      code: 'payload_too_large',
+      message: 'Request body exceeds the allowed size.',
+    };
+  }
+
   if (error.code === 'invalid_json') {
     return {
       statusCode: 400,

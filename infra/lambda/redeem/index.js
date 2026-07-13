@@ -5,6 +5,7 @@ const crypto = require('crypto');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const MAX_REDEEM_TICKETS = 10;
+const MAX_REQUEST_BODY_BYTES = 32 * 1024;
 const REDEEMABLE_PRODUCT_KEYS = new Set([
   'membership',
   'partypackage',
@@ -53,18 +54,18 @@ let cachedStaffAuthConfigExpiresAt = 0;
 let cachedProducts = null;
 
 exports.handler = async (event) => {
-  let correlationId = getHeader(event, 'x-correlation-id') || createCorrelationId();
+  let correlationId = normalizeCorrelationId(getHeader(event, 'x-correlation-id')) || createCorrelationId();
 
   try {
     if (isStaffSessionRedeemRoute(event)) {
       if (isEmergencyStopEnabled()) {
         return emergencyStopBlockedResponse(correlationId);
       }
-      return handleStaffSessionRedeem(event, correlationId);
+      return await handleStaffSessionRedeem(event, correlationId);
     }
 
     const request = parseRequest(event);
-    correlationId = request.correlationId || correlationId;
+    correlationId = normalizeCorrelationId(request.correlationId) || correlationId;
 
     const requestError = validateRequest(request);
     if (requestError) {
@@ -78,14 +79,14 @@ exports.handler = async (event) => {
       return emergencyStopBlockedResponse(correlationId);
     }
 
-    if (request.confirmRedeem && !event.__jumpyardTrustedStaffRedeem) {
+    if (!event.__jumpyardTrustedStaffRedeem) {
       const auth = await verifyRedeemDevToken(event);
       if (!auth.ok) {
         return jsonResponse(403, correlationId, {
           status: 'forbidden',
           error: {
             code: auth.code,
-            message: 'Confirmed redeem requires the JumpYard dev redeem token.',
+            message: 'The internal redeem route requires the JumpYard service token.',
           },
         });
       }
@@ -352,7 +353,7 @@ exports.handler = async (event) => {
 
 async function handleStaffSessionRedeem(event, correlationId) {
   const body = parseOptionalJsonBody(event);
-  correlationId = stringOrNull(body.correlationId) || correlationId;
+  correlationId = normalizeCorrelationId(body.correlationId) || correlationId;
 
   const request = normalizeStaffSessionRedeemRequest(event, body);
   const requestError = validateStaffSessionRedeemRequest(request);
@@ -466,12 +467,8 @@ async function handleStaffSessionRedeem(event, correlationId) {
 }
 
 function parseRequest(event) {
-  if (!event || !event.body) return {};
-
-  let body = event.body;
-  if (event.isBase64Encoded) {
-    body = Buffer.from(body, 'base64').toString('utf8');
-  }
+  const body = getDecodedRequestBody(event);
+  if (body === null) return {};
 
   try {
     const parsed = JSON.parse(body);
@@ -484,7 +481,8 @@ function parseRequest(event) {
     return {
       bookingReference,
       confirmRedeem: parsed.confirmRedeem === true,
-      correlationId: stringOrNull(parsed.correlationId) || stringOrNull(getHeader(event, 'x-correlation-id')),
+      correlationId:
+        normalizeCorrelationId(parsed.correlationId) || normalizeCorrelationId(getHeader(event, 'x-correlation-id')),
       expectedDate: stringOrNull(parsed.expectedDate),
       identifier,
       idempotencyKey,
@@ -534,12 +532,8 @@ function validateRequest(request) {
 }
 
 function parseOptionalJsonBody(event) {
-  if (!event || !event.body) return {};
-
-  let body = event.body;
-  if (event.isBase64Encoded) {
-    body = Buffer.from(body, 'base64').toString('utf8');
-  }
+  const body = getDecodedRequestBody(event);
+  if (body === null) return {};
 
   try {
     return JSON.parse(body);
@@ -548,6 +542,19 @@ function parseOptionalJsonBody(event) {
     error.code = 'invalid_json';
     throw error;
   }
+}
+
+function getDecodedRequestBody(event) {
+  if (!event || !event.body) return null;
+
+  const body = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
+  if (Buffer.byteLength(body, 'utf8') > MAX_REQUEST_BODY_BYTES) {
+    const error = new Error('Request body exceeds the allowed size.');
+    error.code = 'payload_too_large';
+    throw error;
+  }
+
+  return body;
 }
 
 function normalizeStaffSessionRedeemRequest(event, body) {
@@ -2380,6 +2387,11 @@ function createCorrelationId() {
   return `jy_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
+function normalizeCorrelationId(value) {
+  const normalized = String(value ?? '').trim();
+  return /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,95}$/.test(normalized) ? normalized : null;
+}
+
 function hashJson(value) {
   return hashString(JSON.stringify(value));
 }
@@ -2389,6 +2401,15 @@ function hashString(value) {
 }
 
 function classifyError(error) {
+  if (error.code === 'payload_too_large') {
+    return {
+      statusCode: 413,
+      status: 'invalid_request',
+      code: 'payload_too_large',
+      message: 'Request body exceeds the allowed size.',
+    };
+  }
+
   if (error.code === 'invalid_json') {
     return {
       statusCode: 400,

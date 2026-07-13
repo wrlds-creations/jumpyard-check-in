@@ -10,10 +10,14 @@ const CHECKIN_LINK_CHANNELS = new Set(['sms', 'email', 'manual', 'dev']);
 const STAFF_AUTH_HEADERS = ['x-jumpyard-staff-token', 'authorization'];
 const DEFAULT_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_CHECKIN_LINK_TTL_MINUTES = 72 * 60;
+const DEFAULT_GUEST_ACCESS_TTL_MINUTES = 60;
+const LINK_OPEN_AUDIT_REFRESH_MINUTES = 5;
+const LINK_RESOLVE_COOLDOWN_SECONDS = 5;
 const DEFAULT_STAFF_AUTH_TTL_MINUTES = 12 * 60;
 const STAFF_AUTH_CONFIG_CACHE_MS = 30 * 1000;
 const MAX_CHECKIN_LINK_TTL_MINUTES = 7 * 24 * 60;
 const MAX_SELECTED_TICKETS = 10;
+const MAX_REQUEST_BODY_BYTES = 32 * 1024;
 const REDEEMABLE_PRODUCT_KEYS = new Set([
   'membership',
   'partypackage',
@@ -53,6 +57,7 @@ const MAX_SMS_TRIGGER_WINDOW_MINUTES = 180;
 const MAX_SMS_TRIGGER_LIMIT = 10;
 const SCHEDULED_SMS_CONFIRMED_SEND_APPROVAL = 'I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS';
 const BOOKING_TIME_MESSAGE_CHANNELS = new Set(['sms', 'email']);
+const GUEST_ACCESS_CHANNEL = 'guest_access';
 const TOKEN_BYTES = 32;
 
 const rdsClient = new RDSDataClient({});
@@ -66,16 +71,16 @@ let cachedSesClient = null;
 let cachedSendEmailCommand = null;
 
 exports.handler = async (event) => {
-  let correlationId = getHeader(event, 'x-correlation-id') || createCorrelationId();
+  let correlationId = normalizeCorrelationId(getHeader(event, 'x-correlation-id')) || createCorrelationId();
 
   try {
     const routeKey = event?.routeKey || `${event?.requestContext?.http?.method ?? ''} ${event?.rawPath ?? ''}`.trim();
     const body = parseBody(event);
-    correlationId = stringOrNull(body.correlationId) || correlationId;
+    correlationId = normalizeCorrelationId(body.correlationId) || correlationId;
 
     if (isScheduledDueSessionLinkMessagingEvent(event)) {
       const scheduledBody = normalizeScheduledDueSessionLinkMessagingBody(event);
-      const scheduledCorrelationId = stringOrNull(scheduledBody.correlationId) || correlationId;
+      const scheduledCorrelationId = normalizeCorrelationId(scheduledBody.correlationId) || correlationId;
       return handleSendDueSessionLinkMessages(event, scheduledBody, scheduledCorrelationId, { trustedScheduler: true });
     }
 
@@ -93,47 +98,47 @@ exports.handler = async (event) => {
     }
 
     if (isStaffAuthLoginRoute(routeKey, event)) {
-      return handleStaffAuthLogin(body, correlationId);
+      return await handleStaffAuthLogin(body, correlationId);
     }
 
     if (isStaffSessionListRoute(routeKey, event)) {
-      return handleStaffSessionList(event, correlationId);
+      return await handleStaffSessionList(event, correlationId);
     }
 
     if (isStaffSessionDetailRoute(routeKey, event)) {
-      return handleStaffSessionDetail(event, correlationId);
+      return await handleStaffSessionDetail(event, correlationId);
     }
 
     if (isCreateSessionLinkRoute(routeKey, event)) {
-      return handleCreateSessionLink(event, body, correlationId);
+      return await handleCreateSessionLink(event, body, correlationId);
     }
 
     if (isSendSessionLinkSmsRoute(routeKey, event)) {
-      return handleSendSessionLinkSms(event, body, correlationId);
+      return await handleSendSessionLinkSms(event, body, correlationId);
     }
 
     if (isSendSessionLinkEmailRoute(routeKey, event)) {
-      return handleSendSessionLinkEmail(event, body, correlationId);
+      return await handleSendSessionLinkEmail(event, body, correlationId);
     }
 
     if (isSendDueSessionLinkSmsRoute(routeKey, event)) {
-      return handleSendDueSessionLinkSms(event, body, correlationId);
+      return await handleSendDueSessionLinkSms(event, body, correlationId);
     }
 
     if (isSendDueSessionLinkMessagesRoute(routeKey, event)) {
-      return handleSendDueSessionLinkMessages(event, body, correlationId);
+      return await handleSendDueSessionLinkMessages(event, body, correlationId);
     }
 
     if (isResolveSessionLinkRoute(routeKey, event)) {
-      return handleResolveSessionLink(event, body, correlationId);
+      return await handleResolveSessionLink(event, body, correlationId);
     }
 
     if (isStartSessionRoute(routeKey, event)) {
-      return handleStartSession(event, body, correlationId);
+      return await handleStartSession(event, body, correlationId);
     }
 
     if (isReadyForStaffRoute(routeKey, event)) {
-      return handleReadyForStaff(event, body, correlationId);
+      return await handleReadyForStaff(event, body, correlationId);
     }
 
     return jsonResponse(404, correlationId, {
@@ -155,7 +160,7 @@ exports.handler = async (event) => {
   }
 };
 
-async function handleStartSession(event, body, correlationId) {
+async function handleStartSession(event, body, correlationId, options = {}) {
   const request = normalizeStartRequest(event, body);
   const validationError = validateStartRequest(request);
   if (validationError) {
@@ -165,7 +170,19 @@ async function handleStartSession(event, body, correlationId) {
     });
   }
 
-  const context = await getBookingContext(request.identifier);
+  let guestAccess = null;
+  if (!options.trustedGuestAccess) {
+    guestAccess = await verifyGuestAccessToken(event);
+    if (!guestAccess.ok) {
+      return guestAccessErrorResponse(correlationId, guestAccess);
+    }
+
+    if (!guestAccessMatchesIdentifier(guestAccess, request.identifier)) {
+      return guestAccessErrorResponse(correlationId, { ok: false, statusCode: 403 });
+    }
+  }
+
+  const context = await getBookingContext(guestAccess?.rollerUniqueId || request.identifier);
   if (!context) {
     return jsonResponse(404, correlationId, {
       status: 'not_found',
@@ -174,6 +191,10 @@ async function handleStartSession(event, body, correlationId) {
         message: 'No local JumpYard Cloud booking snapshot was found for the supplied identifier.',
       },
     });
+  }
+
+  if (guestAccess && context.booking.rollerUniqueId !== guestAccess.rollerUniqueId) {
+    return guestAccessErrorResponse(correlationId, { ok: false, statusCode: 403 });
   }
 
   const decision = evaluateStartContext(context, request);
@@ -222,20 +243,24 @@ async function handleStartSession(event, body, correlationId) {
   const existingSession = await findActiveSession(context.booking.rollerUniqueId, decision.visitDate);
   if (existingSession) {
     const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
-    await writeEventLog({
-      booking: context.booking,
-      correlationId,
-      eventType: 'checkin.session_resumed',
-      payload: {
-        checkinSessionId: existingSession.checkinSessionId,
-        ticketCount: existingSession.selectedTicketIds.length,
-      },
-      summary: 'Check-in session resumed.',
-    });
+    if (options.auditResume !== false) {
+      await writeEventLog({
+        booking: context.booking,
+        correlationId,
+        eventType: 'checkin.session_resumed',
+        payload: {
+          checkinSessionId: existingSession.checkinSessionId,
+          ticketCount: existingSession.selectedTicketIds.length,
+        },
+        summary: 'Check-in session resumed.',
+      });
+    }
+    const issuedGuestAccess = options.guestAccess || null;
 
     return jsonResponse(200, correlationId, {
       status: 'session_resumed',
       session: existingSession,
+      ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
       ...(bookingResponse ? bookingResponse : {}),
     });
   }
@@ -260,10 +285,12 @@ async function handleStartSession(event, body, correlationId) {
   });
 
   const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
+  const issuedGuestAccess = options.guestAccess || null;
 
   return jsonResponse(201, correlationId, {
     status: 'session_started',
     session,
+    ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
     ...(bookingResponse ? bookingResponse : {}),
   });
 }
@@ -278,6 +305,11 @@ async function handleReadyForStaff(event, body, correlationId) {
     });
   }
 
+  const guestAccess = await verifyGuestAccessToken(event);
+  if (!guestAccess.ok) {
+    return guestAccessErrorResponse(correlationId, guestAccess);
+  }
+
   const session = await findSessionById(request.checkinSessionId);
   if (!session) {
     return jsonResponse(404, correlationId, {
@@ -287,6 +319,10 @@ async function handleReadyForStaff(event, body, correlationId) {
         message: 'No JumpYard Cloud check-in session was found for the supplied id.',
       },
     });
+  }
+
+  if (session.rollerUniqueId !== guestAccess.rollerUniqueId) {
+    return guestAccessErrorResponse(correlationId, { ok: false, statusCode: 403 });
   }
 
   if (isExpired(session.expiresAt)) {
@@ -440,6 +476,13 @@ async function handleStaffAuthLogin(body, correlationId) {
 
   const config = await getStaffAuthConfig();
   if (!safeEquals(request.passcode, config.passcode)) {
+    console.warn(
+      JSON.stringify({
+        correlationId,
+        event: 'staff_auth_failed',
+        reason: 'invalid_passcode',
+      }),
+    );
     return jsonResponse(403, correlationId, {
       status: 'forbidden',
       error: {
@@ -450,6 +493,12 @@ async function handleStaffAuthLogin(body, correlationId) {
   }
 
   const issued = createStaffAuthToken(config);
+  console.info(
+    JSON.stringify({
+      correlationId,
+      event: 'staff_auth_succeeded',
+    }),
+  );
 
   return jsonResponse(200, correlationId, {
     status: 'authenticated',
@@ -1103,7 +1152,7 @@ async function handleResolveSessionLink(event, body, correlationId) {
 
   const tokenHash = hashString(request.token);
   const tokenRecord = await findSessionLinkToken(tokenHash);
-  if (!tokenRecord) {
+  if (!tokenRecord || !CHECKIN_LINK_CHANNELS.has(tokenRecord.channel)) {
     return jsonResponse(404, correlationId, {
       status: 'not_found',
       error: {
@@ -1133,20 +1182,34 @@ async function handleResolveSessionLink(event, body, correlationId) {
     });
   }
 
-  await markSessionLinkOpened(tokenHash);
-  await writeEventLog({
-    booking: {
-      bookingReference: tokenRecord.bookingReference,
-      rollerUniqueId: tokenRecord.rollerUniqueId,
-    },
-    correlationId,
-    eventType: 'checkin.link_opened',
-    payload: {
-      channel: tokenRecord.channel,
-      tokenHashPrefix: tokenHash.slice(0, 12),
-    },
-    summary: 'Check-in session link opened.',
-  });
+  const linkOpen = await markSessionLinkOpened(tokenHash);
+  if (!linkOpen.accepted) {
+    return jsonResponse(429, correlationId, {
+      status: 'blocked',
+      retryAfterSeconds: LINK_RESOLVE_COOLDOWN_SECONDS,
+      error: {
+        code: 'checkin_link_rate_limited',
+        message: 'This check-in link was just opened. Wait a few seconds before trying again.',
+      },
+    });
+  }
+
+  const auditLinkOpen = shouldAuditSessionLinkOpen(tokenRecord.openedAt);
+  if (auditLinkOpen) {
+    await writeEventLog({
+      booking: {
+        bookingReference: tokenRecord.bookingReference,
+        rollerUniqueId: tokenRecord.rollerUniqueId,
+      },
+      correlationId,
+      eventType: 'checkin.link_opened',
+      payload: {
+        channel: tokenRecord.channel,
+        tokenHashPrefix: tokenHash.slice(0, 12),
+      },
+      summary: 'Check-in session link opened.',
+    });
+  }
 
   return handleStartSession(
     event,
@@ -1158,6 +1221,14 @@ async function handleResolveSessionLink(event, body, correlationId) {
       sourceLookupRef: `checkin_token:${tokenHash.slice(0, 12)}`,
     },
     correlationId,
+    {
+      auditResume: auditLinkOpen,
+      guestAccess: {
+        expiresAt: getLinkGuestAccessExpiresAt(tokenRecord.expiresAt, linkOpen.openedAt || tokenRecord.openedAt),
+        token: request.token,
+      },
+      trustedGuestAccess: true,
+    },
   );
 }
 
@@ -2469,6 +2540,84 @@ async function createSessionLinkToken({ channel, context, ttlMinutes }) {
   throw error;
 }
 
+async function verifyGuestAccessToken(event) {
+  const credential = getGuestAccessCredential(event);
+  if (!credential.present) {
+    return { ok: false, statusCode: 401 };
+  }
+
+  if (!credential.token) {
+    return { ok: false, statusCode: 403 };
+  }
+
+  const result = await executeStatement(
+    `SELECT
+       ct.roller_unique_id,
+       b.booking_reference
+     FROM jumpyard.checkin_tokens AS ct
+     LEFT JOIN jumpyard.roller_bookings AS b
+       ON b.roller_unique_id = ct.roller_unique_id
+     WHERE ct.token_hash = :tokenHash
+       AND ct.consumed_at IS NULL
+       AND ct.expires_at > now()
+       AND (
+         ct.channel = :channel
+         OR (
+           ct.channel IN ('sms', 'email', 'manual', 'dev')
+           AND ct.opened_at > now() - INTERVAL '${DEFAULT_GUEST_ACCESS_TTL_MINUTES} minutes'
+         )
+       )
+     LIMIT 1`,
+    [
+      stringParameter('tokenHash', hashString(credential.token)),
+      stringParameter('channel', GUEST_ACCESS_CHANNEL),
+    ],
+  );
+  const row = firstMappedRow(result);
+  const rollerUniqueId = stringOrNull(row?.roller_unique_id);
+  if (!rollerUniqueId) {
+    return { ok: false, statusCode: 403 };
+  }
+
+  return {
+    bookingReference: stringOrNull(row.booking_reference),
+    ok: true,
+    rollerUniqueId,
+  };
+}
+
+function getGuestAccessCredential(event) {
+  const authorization = getHeader(event, 'authorization');
+  if (!authorization) {
+    return { present: false, token: null };
+  }
+
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return {
+    present: true,
+    token: stringOrNull(match?.[1]),
+  };
+}
+
+function guestAccessMatchesIdentifier(guestAccess, identifier) {
+  const normalized = stringOrNull(identifier);
+  return Boolean(
+    normalized &&
+      (normalized === stringOrNull(guestAccess.rollerUniqueId) || normalized === stringOrNull(guestAccess.bookingReference)),
+  );
+}
+
+function guestAccessErrorResponse(correlationId, auth) {
+  const statusCode = auth?.statusCode === 401 ? 401 : 403;
+  return jsonResponse(statusCode, correlationId, {
+    status: statusCode === 401 ? 'unauthorized' : 'forbidden',
+    error: {
+      code: statusCode === 401 ? 'guest_access_required' : 'guest_access_denied',
+      message: 'Valid guest access is required for this check-in operation.',
+    },
+  });
+}
+
 async function findSessionLinkToken(tokenHash) {
   const result = await executeStatement(
     `SELECT
@@ -2501,12 +2650,24 @@ async function findSessionLinkToken(tokenHash) {
 }
 
 async function markSessionLinkOpened(tokenHash) {
-  await executeStatement(
+  // One leaked link must not generate an unbounded write/log loop. The cooldown is per token,
+  // so simultaneous arrivals through different links do not compete with each other.
+  const result = await executeStatement(
     `UPDATE jumpyard.checkin_tokens
-     SET opened_at = COALESCE(opened_at, now())
-     WHERE token_hash = :tokenHash`,
+     SET opened_at = now()
+     WHERE token_hash = :tokenHash
+       AND channel IN ('sms', 'email', 'manual', 'dev')
+       AND consumed_at IS NULL
+       AND expires_at > now()
+       AND (opened_at IS NULL OR opened_at <= now() - INTERVAL '${LINK_RESOLVE_COOLDOWN_SECONDS} seconds')
+     RETURNING opened_at::text AS opened_at`,
     [stringParameter('tokenHash', tokenHash)],
   );
+  const row = firstMappedRow(result);
+  return {
+    accepted: Boolean(row),
+    openedAt: stringOrNull(row?.opened_at),
+  };
 }
 
 async function markSessionLinkSent(tokenHash) {
@@ -3564,6 +3725,12 @@ function parseBody(event) {
     body = Buffer.from(body, 'base64').toString('utf8');
   }
 
+  if (Buffer.byteLength(body, 'utf8') > MAX_REQUEST_BODY_BYTES) {
+    const error = new Error('Request body exceeds the allowed size.');
+    error.code = 'payload_too_large';
+    throw error;
+  }
+
   try {
     return JSON.parse(body);
   } catch {
@@ -4372,6 +4539,24 @@ function createCorrelationId() {
   return `jy_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
+function getLinkGuestAccessExpiresAt(linkExpiresAt, openedAt = null) {
+  const openedAtMs = Date.parse(openedAt || '');
+  const guestWindowStartedAt = Number.isFinite(openedAtMs) ? openedAtMs : Date.now();
+  const guestWindowExpiresAt = guestWindowStartedAt + DEFAULT_GUEST_ACCESS_TTL_MINUTES * 60 * 1000;
+  const linkExpiresAtMs = Date.parse(linkExpiresAt || '');
+  return new Date(Math.min(guestWindowExpiresAt, Number.isFinite(linkExpiresAtMs) ? linkExpiresAtMs : guestWindowExpiresAt)).toISOString();
+}
+
+function shouldAuditSessionLinkOpen(previousOpenedAt) {
+  const previousOpenedAtMs = Date.parse(previousOpenedAt || '');
+  return !Number.isFinite(previousOpenedAtMs) || previousOpenedAtMs <= Date.now() - LINK_OPEN_AUDIT_REFRESH_MINUTES * 60 * 1000;
+}
+
+function normalizeCorrelationId(value) {
+  const normalized = String(value ?? '').trim();
+  return /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,95}$/.test(normalized) ? normalized : null;
+}
+
 function createSessionId() {
   return `jycs_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
 }
@@ -4385,6 +4570,15 @@ function hashString(value) {
 }
 
 function classifyError(error) {
+  if (error.code === 'payload_too_large') {
+    return {
+      statusCode: 413,
+      status: 'invalid_request',
+      code: 'payload_too_large',
+      message: 'Request body exceeds the allowed size.',
+    };
+  }
+
   if (error.code === 'invalid_json') {
     return {
       statusCode: 400,
