@@ -39,6 +39,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Latest Sprint roadmap PDF: [docs/assets/jumpyard-next-sprint-roadmap.pdf](docs/assets/jumpyard-next-sprint-roadmap.pdf)
 - Sprint 3 environment contract: [docs/t0191-park-test-preproduction-contract.md](docs/t0191-park-test-preproduction-contract.md)
 - Park-test foundation qualification: [docs/t0192-park-test-foundation-qualification.md](docs/t0192-park-test-foundation-qualification.md)
+- Park-test API protection: [docs/t0193-api-protection.md](docs/t0193-api-protection.md)
 
 ## Durable Architecture Facts
 
@@ -50,7 +51,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Check-in is modeled as ticket-level redemption through Roller `POST /redemptions`, not a booking-level flag.
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
-- Dev is the Playground environment. Existing park-test is the sole Live-backed pre-production environment for the remaining T0193-T0204 work; production is separate and requires T0204 GO plus new approval.
+- Dev is Playground. Existing park-test is the sole Live-backed pre-production environment for T0194-T0204; production is separate and requires T0204 GO plus new approval.
 - Park-test work is gated by scoped tickets; AWS changes, Live reads/writes, payments, redemptions, webhooks, frontend rehearsal, UI/UX, and visitor traffic require approval.
 - Park-test is a separate WRLDS environment in account `376129878018`, region `eu-north-1`, namespace `jumpyard-check-in-park-test`, with server-side Roller Live Nacka access.
 - Park-test keeps its name, prefix, tags, data, and frontend targets; it is neither cloned nor reused as production.
@@ -62,21 +63,20 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Park-test phone PWA builds must set `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL` to the park-test API, or the app falls back to dev.
 - Park-test post-payment sync only refreshes a recent local `new_booking` prepayment draft.
 - Deployed gates stop on emergency value `true`/missing/invalid, require configured plus observed venue `50871`, and reject any request item outside the date allowlist before side effects.
+- T0193 gives all 21 API routes explicit trust/auth/rate controls: six internal/legacy routes use AWS IAM plus app tokens; guest, staff, and Roller routes enforce caller-specific proof in Lambda.
+- Protection is aggregate per route rather than per IP and passed 120 guests/20 minutes plus a 40-device two-second burst behind shared park Wi-Fi with no modeled false `429`.
 
 ## Current Implemented Flow Facts
 
 - Phone lookup uses Aurora first and Roller-authoritative refresh when needed. Park-test accepts reference/email/phone, enforces Nacka/date scope, and picks the nearest same-day start.
 - Phone check-in starts or resumes a server-owned check-in session before progressing from a ready booking.
+- Scoped lookup/link resolution provides a booking-bound opaque guest credential held only in phone memory; Aurora stores only its hash, and protected session/add-on actions require it.
 - Guest safety completion marks a JumpYard Cloud session ready for staff and shows a server-owned handoff code/QR.
 - Staff/admin handoff uses server-owned staff auth in dev and can list, search, inspect, and staff-confirm redeem ready sessions.
 - Buy-entry and existing-booking add-ons use server-owned Roller draft/payment paths; add-ons create a separate linked booking instead of mutating the original.
-- Existing-booking add-on availability prefetch is read-only and creates no drafts, payments, add-ons, redemptions, or other writes.
 - Park-test product validation uses approved Nacka parents plus Roller Live slot availability, not static child ids; display mapping is separate from write gates.
 - Park-test PWA drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; new-booking delivery is proven.
-- Ready-for-entry/staff handout UI shows a QR plus entry duration/ticket type; the visible guest fallback is now name-to-staff rather than a displayed handoff code.
-- Park-test Apple Pay domain association is live, but processing is paused pending Pabel/Roller/Adyen diagnostics; card remains fallback.
 - Park-test T0176 full-flow rehearsal opens Nacka/date-scoped payment, lookup, add-ons, staff auth, and redeem for `2026-06-29` through `2026-09-30` while keeping webhook processing and JumpYard-owned guest sends closed.
-- Server-owned product/payment rules cover gift cards, `Klippkort`, SkyRider, water bottle, and ComboDeal; exact mappings and guest rules are preserved in `DECISIONS.md` and completed-ticket history.
 
 ## Data And Integration Facts
 
@@ -104,7 +104,7 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 
 - Production readiness remains partial and should be handled through scoped future tickets, not opportunistic context hygiene.
 - The approved T0190-T0205 sequence is in [the backlog](docs/roadmap/backlog.md): T0192 has qualified park-test, T0204 decides GO/NO-GO there, and T0205 owns separately approved production creation/cutover.
-- Main pre-production/production blockers include route protection, alarm routing, SMS/SES access, sender/domain setup, staff identity, retention, rollback, Live backfill/cutover, and webhook verification.
+- Main pre-production/production blockers include alarm routing, SMS/SES access, sender/domain setup, staff identity, retention, rollback, Live backfill/cutover, and webhook verification.
 - Payment must stay on Roller's approved package; method visibility is Roller/Adyen controlled.
 
 ## Current Open Questions

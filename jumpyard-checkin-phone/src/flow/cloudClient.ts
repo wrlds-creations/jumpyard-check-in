@@ -68,6 +68,7 @@ interface CloudLookupResponse {
     reason: 'ready' | 'payment_required' | 'wrong_date' | 'no_redeemable_tickets';
     amountOwing?: number;
   };
+  guestAccess?: CloudGuestAccess;
   error?: {
     code?: string;
     message?: string;
@@ -83,14 +84,23 @@ interface CloudSessionResponse {
     | 'blocked'
     | 'not_found'
     | 'invalid_request'
+    | 'unauthorized'
+    | 'forbidden'
     | 'internal_error';
   session?: CloudSession;
+  guestAccess?: CloudGuestAccess;
+  retryAfterSeconds?: number;
   error?: {
     code?: string;
     message?: string;
   };
   booking?: CloudBooking;
   source?: CloudLookupSource;
+}
+
+interface CloudGuestAccess {
+  token: string;
+  expiresAt: string | null;
 }
 
 interface CloudSession {
@@ -317,7 +327,16 @@ interface DraftResponse {
 }
 
 interface AddProductQuoteResponse {
-  status: 'quoted' | 'invalid_request' | 'blocked' | 'rejected' | 'roller_error' | 'config_error' | 'internal_error';
+  status:
+    | 'quoted'
+    | 'invalid_request'
+    | 'unauthorized'
+    | 'forbidden'
+    | 'blocked'
+    | 'rejected'
+    | 'roller_error'
+    | 'config_error'
+    | 'internal_error';
   quote?: NewBookingQuote;
   error?: { code?: string; message?: string };
 }
@@ -326,6 +345,8 @@ interface AddProductDraftResponse {
   status:
     | 'add_product_draft_created'
     | 'invalid_request'
+    | 'unauthorized'
+    | 'forbidden'
     | 'blocked'
     | 'rejected'
     | 'roller_error'
@@ -380,12 +401,12 @@ export async function lookupBooking(code: string): Promise<Booking> {
     throw createLookupError(body, response.status);
   }
 
-  if (body.status !== 'found' || !body.booking || !body.eligibility) {
+  if (body.status !== 'found' || !body.booking || !body.eligibility || !body.guestAccess?.token) {
     throw createLookupError(body, response.status);
   }
 
   if (body.eligibility.reason === 'payment_required') {
-    return toBooking(body.booking, body.eligibility.reason, body.source);
+    return toBooking(body.booking, body.eligibility.reason, body.source, body.guestAccess);
   }
 
   if (!body.eligibility.canCheckIn || body.eligibility.reason !== 'ready') {
@@ -393,7 +414,7 @@ export async function lookupBooking(code: string): Promise<Booking> {
     throw new CloudLookupError(reason, 'Booking is not ready for check-in.', response.status);
   }
 
-  return toBooking(body.booking, body.eligibility.reason, body.source);
+  return toBooking(body.booking, body.eligibility.reason, body.source, body.guestAccess);
 }
 
 export async function resolveCheckInSessionLink(token: string): Promise<CheckInSessionLinkResult> {
@@ -402,25 +423,32 @@ export async function resolveCheckInSessionLink(token: string): Promise<CheckInS
     throw new CloudSessionError('session_failed', 'A check-in link token is required.');
   }
 
-  let response: Response;
-  let body: CloudSessionResponse | null = null;
+  let result: { response: Response; body: CloudSessionResponse | null };
 
   try {
-    response = await fetch(`${getApiBaseUrl()}/v1/check-in/session-links/resolve`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        correlationId: `phone_link_${Date.now().toString(36)}`,
-        token: rawToken,
-      }),
-    });
-    body = await parseSessionResponse(response);
+    try {
+      result = await requestSessionLinkResolve(rawToken);
+    } catch {
+      await delay(500);
+      result = await requestSessionLinkResolve(rawToken);
+    }
+
+    if (result.response.status >= 500) {
+      await delay(500);
+      result = await requestSessionLinkResolve(rawToken);
+    }
+
+    if (result.response.status === 429 && result.body?.error?.code === 'checkin_link_rate_limited') {
+      const retryAfterSeconds = Math.min(10, Math.max(1, result.body.retryAfterSeconds ?? 5));
+      await delay(retryAfterSeconds * 1000);
+      result = await requestSessionLinkResolve(rawToken);
+    }
   } catch (error) {
     if (error instanceof CloudSessionError) throw error;
     throw new CloudSessionError('network_error', 'Could not reach JumpYard Cloud.');
   }
+
+  const { response, body } = result;
 
   if (!response.ok && body?.error?.code === 'already_redeemed' && body.booking) {
     return {
@@ -437,7 +465,7 @@ export async function resolveCheckInSessionLink(token: string): Promise<CheckInS
     };
   }
 
-  if (!response.ok || !body?.session || !body.booking) {
+  if (!response.ok || !body?.session || !body.booking || !body.guestAccess?.token) {
     throw createSessionError(body, response.status);
   }
 
@@ -446,8 +474,8 @@ export async function resolveCheckInSessionLink(token: string): Promise<CheckInS
   }
 
   return {
-    booking: toBooking(body.booking, 'ready', body.source),
-    checkinSession: toCheckInSession(body.session),
+    booking: toBooking(body.booking, 'ready', body.source, body.guestAccess),
+    checkinSession: toCheckInSession(body.session, body.guestAccess),
   };
 }
 
@@ -457,6 +485,11 @@ export async function startCheckInSession(booking: Booking): Promise<CheckInSess
     throw new CloudSessionError('session_failed', 'Booking reference is required before starting a session.');
   }
 
+  const guestAccessToken = normalizeOptionalString(booking.guestAccessToken);
+  if (!guestAccessToken) {
+    throw new CloudSessionError('session_failed', 'Guest access is required before starting a session.');
+  }
+
   let response: Response;
   let body: CloudSessionResponse | null = null;
 
@@ -464,6 +497,7 @@ export async function startCheckInSession(booking: Booking): Promise<CheckInSess
     response = await fetch(`${getApiBaseUrl()}/v1/check-in/sessions`, {
       method: 'POST',
       headers: {
+        authorization: `Bearer ${guestAccessToken}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify({
@@ -489,7 +523,32 @@ export async function startCheckInSession(booking: Booking): Promise<CheckInSess
     throw createSessionError(body, response.status);
   }
 
-  return toCheckInSession(body.session);
+  return toCheckInSession(body.session, {
+    expiresAt: booking.guestAccessExpiresAt ?? null,
+    token: guestAccessToken,
+  });
+}
+
+async function requestSessionLinkResolve(rawToken: string) {
+  const response = await fetch(`${getApiBaseUrl()}/v1/check-in/session-links/resolve`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      correlationId: `phone_link_${Date.now().toString(36)}`,
+      token: rawToken,
+    }),
+  });
+
+  return {
+    body: await parseSessionResponse(response),
+    response,
+  };
+}
+
+function delay(milliseconds: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
 export async function markSessionReadyForStaff(
@@ -498,6 +557,10 @@ export async function markSessionReadyForStaff(
 ): Promise<CheckInSession> {
   if (!session.checkinSessionId) {
     throw new CloudSessionError('session_failed', 'A check-in session id is required before staff handoff.');
+  }
+  const guestAccessToken = normalizeOptionalString(session.guestAccessToken);
+  if (!guestAccessToken) {
+    throw new CloudSessionError('session_failed', 'Guest access is required before staff handoff.');
   }
 
   let response: Response;
@@ -509,6 +572,7 @@ export async function markSessionReadyForStaff(
       {
         method: 'POST',
         headers: {
+          authorization: `Bearer ${guestAccessToken}`,
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -528,7 +592,10 @@ export async function markSessionReadyForStaff(
     throw createSessionError(body, response.status);
   }
 
-  return toCheckInSession(body.session);
+  return toCheckInSession(body.session, {
+    expiresAt: session.guestAccessExpiresAt ?? null,
+    token: guestAccessToken,
+  });
 }
 
 export async function getNewBookingAvailability(startTimes: string[], date = getExpectedDate()): Promise<NewBookingAvailability> {
@@ -654,10 +721,15 @@ export async function createDraftBooking(
 
 export async function quoteAddProducts(
   bookingReference: string,
+  guestAccessToken: string,
   customer: NewBookingCustomer | null,
   items: NewBookingItemRequest[],
   requireAvailability: boolean
 ): Promise<NewBookingQuote> {
+  const accessToken = normalizeOptionalString(guestAccessToken);
+  if (!accessToken) {
+    throw new CloudBookingError('guest_access_required', 'Guest access is required before quoting add-ons.');
+  }
   let response: Response;
   let body: AddProductQuoteResponse | null = null;
   const payload: {
@@ -678,6 +750,7 @@ export async function quoteAddProducts(
     response = await fetch(`${getApiBaseUrl()}/v1/bookings/${encodeURIComponent(bookingReference)}/add-products/quote`, {
       method: 'POST',
       headers: {
+        authorization: `Bearer ${accessToken}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify(payload),
@@ -697,11 +770,16 @@ export async function quoteAddProducts(
 
 export async function createAddProductDraft(
   bookingReference: string,
+  guestAccessToken: string,
   customer: NewBookingCustomer | null,
   items: NewBookingItemRequest[],
   idempotencyKey: string,
   requireAvailability: boolean
 ): Promise<AddProductDraftResult> {
+  const accessToken = normalizeOptionalString(guestAccessToken);
+  if (!accessToken) {
+    throw new CloudBookingError('guest_access_required', 'Guest access is required before creating add-ons.');
+  }
   let response: Response;
   let body: AddProductDraftResponse | null = null;
   const payload: {
@@ -728,6 +806,7 @@ export async function createAddProductDraft(
     response = await fetch(`${getApiBaseUrl()}/v1/bookings/${encodeURIComponent(bookingReference)}/add-products`, {
       method: 'POST',
       headers: {
+        authorization: `Bearer ${accessToken}`,
         'content-type': 'application/json',
         'x-idempotency-key': idempotencyKey,
       },
@@ -883,7 +962,12 @@ function isSessionIssue(value?: string): value is SessionIssue {
   );
 }
 
-function toBooking(booking: CloudBooking, reason: string, source?: CloudLookupSource): Booking {
+function toBooking(
+  booking: CloudBooking,
+  reason: string,
+  source?: CloudLookupSource,
+  guestAccess?: CloudGuestAccess
+): Booking {
   const primaryItems = getPrimaryItems(booking.items);
   const sessionItem = primaryItems[0] ?? booking.items[0] ?? null;
   const existingAddons = getExistingAddons(booking.items);
@@ -892,6 +976,8 @@ function toBooking(booking: CloudBooking, reason: string, source?: CloudLookupSo
   return {
     id: booking.bookingReference ?? booking.rollerUniqueId ?? '',
     rollerUniqueId: booking.rollerUniqueId,
+    guestAccessToken: normalizeOptionalString(guestAccess?.token) ?? undefined,
+    guestAccessExpiresAt: guestAccess?.expiresAt ?? null,
     jumpers: getJumperCount(primaryItems, booking.items),
     time: formatClockTime(sessionItem?.startTime) ?? '',
     endTime: formatClockTime(sessionItem?.endTime) ?? undefined,
@@ -948,10 +1034,12 @@ function getReadyForStaffIdempotencyKey(session: CheckInSession, safetyStatus: s
   return `phone-ready-for-staff:${session.checkinSessionId}:${safetyStatus}`;
 }
 
-function toCheckInSession(session: CloudSession): CheckInSession {
+function toCheckInSession(session: CloudSession, guestAccess?: CloudGuestAccess): CheckInSession {
   return {
     checkinSessionId: session.checkinSessionId,
     status: session.status,
+    guestAccessToken: normalizeOptionalString(guestAccess?.token) ?? undefined,
+    guestAccessExpiresAt: guestAccess?.expiresAt ?? null,
     handoffCode: session.handoffCode ?? null,
     handoffStatus: session.handoffStatus ?? null,
     safetyStatus: session.safetyStatus ?? null,

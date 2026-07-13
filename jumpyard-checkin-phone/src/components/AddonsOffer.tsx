@@ -502,7 +502,13 @@ export const AddonsOffer = ({
         setSubmitting(true);
         setSubmitError(null);
         try {
-            const result = await quoteAddProducts(booking.id, null, buildItems(), requireAvailability);
+            const result = await quoteAddProducts(
+                booking.id,
+                booking.guestAccessToken ?? '',
+                null,
+                buildItems(),
+                requireAvailability
+            );
             setQuote(result);
             setStep('REVIEW');
         } catch (error) {
@@ -524,6 +530,7 @@ export const AddonsOffer = ({
             const itemKey = addedAddons.map((addon) => `${addon.id}-${addon.qty}`).join(':');
             const result = await createAddProductDraft(
                 booking.id,
+                booking.guestAccessToken ?? '',
                 null,
                 buildItems(),
                 `phone-add-product:${booking.id}:${itemKey}:${Date.now().toString(36)}`,

@@ -3,8 +3,8 @@
 This archive was created in T0128 to keep `REPO_CURRENT_STATE.md` short while preserving completed-ticket history.
 
 Source file: `REPO_CURRENT_STATE.md`
-Archived count: 190
-Latest archived completed ticket: `T0192`
+Archived count: 191
+Latest archived completed ticket: `T0193`
 
 ## Completed Tickets
 
@@ -202,3 +202,4 @@ The table below is moved from `REPO_CURRENT_STATE.md` without intentionally chan
 | `T0190` | Critical fail-closed safety gates. | 2026-07-10 | Made missing/wrong/unconfigured venue fail closed across assisted lookup, existing-booking add-on, and redeem; carried authoritative venue through final Roller redeem refresh; made the emergency stop unconditional and fail closed when missing; and required narrow park-test gates even after the stop is released. Updated reviewed active source profiles to release the stop explicitly while normal closed config remains stopped, added focused dependency-free runtime validation, and recorded FU-096 for the separate request-item date gap. Repository/local work only: no AWS deploy/resource, Roller call/write, payment, redemption, webhook processing, guest message, Cloudflare change, or running app behavior changed. |
 | `T0191` | Park-test pre-production contract. | 2026-07-10 | Recorded existing `park-test` as Sprint 3's sole Live-backed pre-production environment, kept its technical name/resources/tags unchanged, replaced parallel staging creation with T0192 qualification/hardening, moved the complete rehearsal to T0204 in park-test, and added T0205 for separate post-GO production creation and controlled cutover. Documentation only: no application, infrastructure, AWS, Roller, deployment, messaging, Cloudflare, or runtime change occurred. |
 | `T0192` | Park-test foundation qualification and hardening. | 2026-07-13 | Added a fail-closed request-item operating-date gate before side effects on all four full-flow quote/draft paths, deployed T0190/T0192's coherent emergency-stop/venue/date model to the existing park-test stack, and disabled its Playground-only daily Data API schedule. AWS readback confirmed 134 healthy resources, 61 tagged resources with no WRLDS-tag mismatch, unchanged Nacka/date scope, closed webhook/guest-send gates, three preserved CORS origins, 17 alarms `OK`, and zero drift. No AWS resource was created or replaced, and no Roller write, payment, redeem, webhook processing, or guest message smoke was run. |
+| `T0193` | Park-test API protection. | 2026-07-13 | Defined all 21 routes in one explicit trust/auth/rate catalog, IAM-locked six internal/legacy routes behind a second app token, added short-lived hash-only booking-bound guest proof, protected session/add-on/staff/webhook actions, bounded payloads/replay/logging, and passed the shared-IP 120-guests/20-minutes capacity model. Deployed the five changed Lambdas, route/stage settings, and matching phone build to park-test; readback and non-write smokes passed with 134 resources, unchanged Nacka/date gates, webhook/message sends off, and a clean post-deploy diff. No production or real Roller/message write occurred. |

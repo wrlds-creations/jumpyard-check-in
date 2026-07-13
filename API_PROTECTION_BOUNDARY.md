@@ -1,82 +1,102 @@
 # JumpYard API Protection Boundary
 
-This file is the T0062 source-of-truth design for how JumpYard Cloud routes should be protected before expanded park-test pre-production or production exposure.
+This file is the source of truth for the route trust boundary first designed in T0062 and implemented for dev/park-test infrastructure and the deployed park-test runtime in T0193.
 
-## Status
+## Current Status
 
-- Ticket: `T0062`
-- Scope: documentation and route-boundary design only
-- AWS resources changed: none
-- App behavior changed: none
-- Current dev baseline: explicit CORS origins, API Gateway stage throttling at rate `25` requests/second and burst `50`, API access logs without bodies, CloudWatch alarms/dashboard, and app-level staff/dev/webhook tokens on selected routes
-- Current API Gateway route auth: all routes still use `AuthorizationType=NONE`; protection is currently enforced by CORS, stage throttling, request validation, app-level tokens, staff tokens, webhook tokens, and Lambda business rules
+- Implementation ticket: `T0193`, completed 2026-07-13.
+- Deployed target: existing park-test API `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com`.
+- Inventory: 21 explicit routes, 6 `AWS_IAM` and 15 explicit `NONE` at API Gateway.
+- Stage fallback: rate 50 requests/second, burst 150, detailed metrics enabled.
+- Every route has an explicit trust class, handler, authorization type, route-specific rate/burst setting, and stage dependency in one CDK catalog.
+- Application-layer guest, staff, service, legacy, and webhook credentials remain required behind the route boundary.
+- No WAF, CloudFront, custom domain, authorizer resource, or other AWS resource was added in T0193.
+
+`NONE` means that API Gateway does not require AWS signing. It does not mean that the route is trusted without application validation. Guest browsers, staff browsers, and Roller cannot use AWS IAM signing, so those routes enforce the appropriate opaque guest proof, staff token, webhook token, payload rules, idempotency, and business gates in Lambda.
 
 ## Boundary Classes
 
-| Class | Meaning | Live posture |
-|---|---|---|
-| `guest_public` | Browser/mobile guest route that must be reachable without a staff login. | Keep public, but bound with strict CORS, route-specific throttling, WAF or equivalent edge controls, payload validation, idempotency for writes, and no sensitive data in errors. |
-| `guest_token` | Guest route that should be reached through an opaque JumpYard token or server-owned session id. | Keep public only for token/session resolution; never trust booking reference alone as authority. |
-| `guest_write` | Guest route that can create Roller/JumpYard state. | Keep public only with strict validation, idempotency, lower route-specific limits, payment/session context where applicable, and server-side Roller credentials only. |
-| `staff_auth_entry` | Staff login or identity bootstrap route. | Public entrypoint, but heavily rate-limited and WAF-protected; replace dev passcode model before live if final staff identity is ready. |
-| `staff_protected` | Staff/admin route that must require a short-lived staff token or production identity. | Require staff identity at the API boundary before expanded park-test or production use. |
-| `internal_ops` | Operational route for scheduled jobs, admin tooling, or controlled dev actions. | Do not leave generally public for expanded park-test or production use; protect with IAM, an internal authorizer, private automation, or remove the public route. |
-| `roller_webhook` | External route called by Roller. | Allow only Roller-authenticated delivery, optional Roller IP allowlisting, fast acknowledge, idempotency, and async enrichment if latency requires it. |
-| `legacy_dev_only` | Route useful for lower-level dev testing but not for normal product flow. | Remove, disable, or lock behind internal-only protection before expanded park-test or production use. |
-
-## Route Inventory
-
-| Route | Class | Current dev guard | Target pre-production/production boundary |
-|---|---|---|---|
-| `POST /v1/check-in/lookup` | `guest_public` | CORS allow-list, stage throttle, request validation, Aurora-first lookup, Roller refresh only when needed. | Public guest lookup can remain open, but add route-specific rate limits, WAF or equivalent edge rules, abuse detection for repeated misses, and no full PII in responses/logs. |
-| `POST /v1/bookings/availability` | `guest_public` | CORS allow-list, stage throttle, server-side Roller availability call, no writes. | Public, but route-specific limits and optional short cache should protect Roller capacity endpoints from bursts. |
-| `POST /v1/bookings/quote` | `guest_public` | CORS allow-list, stage throttle, server-side Roller cost quote, no booking creation. | Public, but lower route-specific limits than static reads; validate items and session times server-side. |
-| `POST /v1/bookings/draft` | `guest_write` | Requires `confirmDraft=true`, idempotency key, server-side Roller draft creation, response-only payment JWT. | Public checkout write, but require idempotency, strict payload validation, WAF/edge controls, lower write limits, and safe payment-package-only JWT handling. |
-| `POST /v1/bookings/{bookingReference}/add-products/quote` | `guest_public` | CORS allow-list, stage throttle, server-side add-product quote, no booking creation. | Public only after a valid original booking/session context; route-specific limits and validation must prevent enumeration by booking reference. |
-| `POST /v1/bookings/{bookingReference}/add-products` | `guest_write` | Creates separate linked add-product draft with idempotency and server-side Roller credentials. | Public write only after valid session/original-booking context, strict validation, idempotency, lower write limits, and payment-package-only JWT handling. |
-| `POST /v1/check-in/session-links/resolve` | `guest_token` | Public opaque `jy_token` resolution, token hash lookup, session start/resume. | Keep public, but only accept opaque token; rate-limit tightly and avoid exposing whether a booking exists beyond safe token states. |
-| `POST /v1/check-in/sessions` | `guest_token` | Starts/resumes server-owned session from booking context. | Require valid lookup/session context and keep guest route bounded; do not treat raw booking reference as proof of authority. |
-| `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff` | `guest_token` | Marks session ready after guest safety flow; no Roller write. | Require matching active guest session context and route-specific limits; no direct public state mutation without session proof. |
-| `POST /v1/staff/auth/login` | `staff_auth_entry` | AWS-stored passcode, short-lived staff token, secret refresh cache. | Keep only as a temporary staff identity entrypoint; add brute-force protections, low route limit, WAF/edge rules, and replace with production identity if approved. |
-| `GET /v1/staff/check-in/sessions` | `staff_protected` | Requires JumpYard staff token. | Require API-boundary staff identity or authorizer before expanded park-test or production use. |
-| `GET /v1/staff/check-in/sessions/{checkinSessionId}` | `staff_protected` | Requires JumpYard staff token. | Require API-boundary staff identity or authorizer before expanded park-test or production use. |
-| `POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem` | `staff_protected` | Requires JumpYard staff token, final Roller refresh, eligibility filter, Roller Playground write. | Require strong staff identity, role/audit ownership, lower write limits, final Roller refresh, and clear rollback/support process. |
-| `POST /v1/check-in/session-links` | `internal_ops` | Protected by check-in link dev token. | Move behind internal admin/automation protection; do not expose as a general public browser route. |
-| `POST /v1/check-in/session-links/send-sms` | `internal_ops` | Protected by check-in link dev token and explicit `confirmSend`. | Internal/staff/automation only; require provider readiness, consent policy, audit, and route-specific send limits before live. |
-| `POST /v1/check-in/session-links/send-email` | `internal_ops` | Protected by check-in link dev token, dry-run first, and SES sender config gate for confirmed sends. | Internal/staff/automation only; require verified sender/domain, consent policy, audit, and route-specific send limits before live. |
-| `POST /v1/check-in/session-links/send-due-sms` | `internal_ops` | Protected by check-in link dev token; EventBridge schedule uses planning mode. | Prefer internal EventBridge invocation instead of public route; if retained, require internal-only auth and no guest browser access. |
-| `POST /v1/check-in/redeem` | `legacy_dev_only` | Lower-level direct dev path requires dev redeem token for writes. | Remove, disable, or lock behind internal-only protection before expanded park-test or production use; normal flow should use staff session redeem. |
-| `POST /v1/roller/webhooks/bookings` | `roller_webhook` | Validates `x-roller-apikey`, stores idempotent event metadata, refreshes from Roller. | Confirm production webhook auth/signature, optionally allowlist Roller EMEA IP ranges, keep fast acknowledge, and move enrichment async if needed. |
-| `POST /v1/roller/webhooks/redemptions` | `roller_webhook` | Route exists for webhook handler; production payload semantics still need confirmation before relying on it. | Same webhook boundary as booking events; do not expose guest/staff semantics on this path. |
-
-## Target Protection Model
-
-1. Guest routes stay reachable from the phone PWA, but they are not unbounded.
-   They need strict CORS, route-specific throttling, WAF or equivalent edge controls, payload size checks, idempotency for writes, and no secret/PII leaks.
-
-2. Staff routes should not rely only on frontend routing.
-   The current T0047 staff token is useful for dev, but expanded park-test and production use should add an API-boundary identity decision: a Lambda/JWT authorizer, Cognito/SSO, or another approved staff identity layer.
-
-3. Internal operations routes should not be general public endpoints.
-   SMS creation, due-SMS processing, and direct lower-level redeem should move behind internal automation or stronger admin-only auth before expanded park-test or production use.
-
-4. Webhook routes are public internet routes for Roller only.
-   They need Roller-authenticated delivery, idempotency, fast acknowledgement, and optional IP allowlisting. If enrichment latency grows, the request handler should store/queue and return quickly.
-
-5. WAF needs an implementation check before coding.
-   The current API is an API Gateway HTTP API. If AWS WAF cannot be attached directly to the chosen endpoint shape, use CloudFront/custom domain in front of the API or equivalent edge controls plus authorizers and route limits.
-
-## Route-Specific Limit Direction
-
-| Group | Direction |
+| Class | Caller and rule |
 |---|---|
-| Low-risk read routes | Higher than write routes, but still bounded to protect Roller calls. |
-| Booking writes and add-product writes | Lower limits, idempotency required, and alarm on spikes. |
-| Staff auth login | Very low per-IP/per-route limit and brute-force monitoring. |
-| Staff redeem | Low write limit, staff identity required, and explicit audit. |
-| SMS/email send routes | Low send limits, consent/sandbox/sender production provider gates, and delivery alarms. |
-| Webhooks | Separate limits so Roller retries are not blocked by guest traffic. |
+| `guest_public` | Guest browser entry/read route. Strict payload/date/venue/business validation and a bounded route bucket apply; successful scoped lookup may issue guest proof. |
+| `guest_token` | Guest route that requires an opaque link/guest credential bound to the booking or session before scoped data or side effects. |
+| `guest_write` | Guest write route. Requires strict validation and idempotency; existing-booking writes also require bound guest proof. |
+| `staff_auth_entry` | Temporary staff login entry. Public at Gateway, isolated low route bucket, safe logs, and server-side passcode verification; T0194 replaces the shared identity model. |
+| `staff_protected` | Requires the short-lived server-verified staff token before protected reads or redeem work. |
+| `internal_ops` | Requires AWS IAM signing at Gateway and the existing service token in Lambda. Not callable as a normal browser endpoint. |
+| `roller_webhook` | Public only so Roller can deliver. Requires the registered shared token and preserves fast safe HTTP `200` acknowledgement semantics. Processing remains disabled until T0197. |
+| `legacy_dev_only` | Lower-level direct redeem route. Requires AWS IAM plus the existing service/dev token; normal product flow does not use it. |
 
-## T0062 Outcome
+## Implemented Route Inventory
 
-T0062 does not implement these controls. It labels every current API door and defines which lock belongs on each door before a later ticket changes infrastructure. The next implementation ticket can now modify CDK with less guesswork.
+Rates are requests per second followed by burst capacity. They are aggregate per-route API Gateway buckets, not per-IP limits.
+
+| Route | Trust class | Gateway auth | Required application proof/control | Rate / burst |
+|---|---|---|---|---:|
+| `POST /v1/check-in/lookup` | `guest_public` | `NONE` | Scoped identifier/date/venue validation; successful lookup issues hash-only stored guest proof | 25 / 80 |
+| `POST /v1/staff/auth/login` | `staff_auth_entry` | `NONE` | Existing AWS-stored passcode, safe correlation/logging | 2 / 10 |
+| `POST /v1/check-in/session-links` | `internal_ops` | `AWS_IAM` | Check-in-link service token | 1 / 5 |
+| `POST /v1/check-in/session-links/send-sms` | `internal_ops` | `AWS_IAM` | Service token plus existing send confirmation/provider gates | 1 / 5 |
+| `POST /v1/check-in/session-links/send-email` | `internal_ops` | `AWS_IAM` | Service token plus existing send confirmation/provider gates | 1 / 5 |
+| `POST /v1/check-in/session-links/send-due-sms` | `internal_ops` | `AWS_IAM` | Service token plus existing schedule/send gates | 1 / 5 |
+| `POST /v1/check-in/session-links/send-due-messages` | `internal_ops` | `AWS_IAM` | Service token plus existing schedule/send gates | 1 / 5 |
+| `POST /v1/check-in/session-links/resolve` | `guest_token` | `NONE` | Valid opaque link, allowed channel, expiry/consumed checks, atomic 5-second cooldown | 40 / 100 |
+| `POST /v1/check-in/sessions` | `guest_token` | `NONE` | Bearer guest proof bound to booking plus idempotency key | 40 / 100 |
+| `POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff` | `guest_token` | `NONE` | Bearer guest proof bound to active session/booking | 40 / 100 |
+| `GET /v1/staff/check-in/sessions` | `staff_protected` | `NONE` | Valid unexpired staff token | 20 / 50 |
+| `GET /v1/staff/check-in/sessions/{checkinSessionId}` | `staff_protected` | `NONE` | Valid unexpired staff token | 20 / 50 |
+| `POST /v1/check-in/redeem` | `legacy_dev_only` | `AWS_IAM` | Redeem service/dev token for plan and confirm paths | 1 / 5 |
+| `POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem` | `staff_protected` | `NONE` | Valid unexpired staff token, final Roller refresh, eligibility/idempotency/audit | 5 / 20 |
+| `POST /v1/bookings/quote` | `guest_public` | `NONE` | Strict item/date/venue validation; no write | 10 / 40 |
+| `POST /v1/bookings/draft` | `guest_write` | `NONE` | Strict validation, confirm flag, idempotency, payment-package-only handling | 5 / 20 |
+| `POST /v1/bookings/availability` | `guest_public` | `NONE` | Strict request/date/venue validation; no write | 20 / 60 |
+| `POST /v1/bookings/{bookingReference}/add-products/quote` | `guest_token` | `NONE` | Bearer guest proof bound to path booking plus strict validation | 10 / 40 |
+| `POST /v1/bookings/{bookingReference}/add-products` | `guest_write` | `NONE` | Bound guest proof, strict validation, confirm flag, idempotency | 5 / 20 |
+| `POST /v1/roller/webhooks/bookings` | `roller_webhook` | `NONE` | Registered Roller token; idempotent safe acknowledgement; processing disabled | 10 / 50 |
+| `POST /v1/roller/webhooks/redemptions` | `roller_webhook` | `NONE` | Registered Roller token; idempotent safe acknowledgement; processing disabled | 10 / 50 |
+
+## Guest Credential Rules
+
+- A successful scoped lookup issues a cryptographically random 32-byte opaque value and stores only SHA-256 in `jumpyard.checkin_tokens`.
+- Guest access expires after at most 60 minutes and is bound to one booking.
+- Existing active credentials are not evicted. Manual lookup prunes expired/consumed rows and applies a steady-state soft cap of 64 active `guest_access` credentials per booking.
+- SMS/email/manual/dev link resolution reuses the already opaque raw link value after a valid open rather than creating a new credential on every resolve.
+- Link guest access never outlives the original link expiry; consumed, expired, or wrong-channel/wrong-class rows fail closed.
+- Resolve cooldown is atomically enforced for five seconds. Link-open audit refresh is bounded to five minutes.
+- The phone holds proof in memory, sends it as Bearer authorization, immediately removes token query parameters from the URL, and performs only bounded transient retry.
+
+T0195 owns final retention/purge and any stronger concurrent-cap serialization.
+
+## Request And Error Boundary
+
+| Handler | Decoded body ceiling | Oversized behavior |
+|---|---:|---|
+| Lookup | 8 KiB | HTTP `413 payload_too_large` |
+| Booking | 64 KiB | HTTP `413 payload_too_large` |
+| Session/staff/link | 32 KiB | HTTP `413 payload_too_large` |
+| Legacy/staff redeem | 32 KiB | HTTP `413 payload_too_large` |
+| Webhook | 256 KiB | Safe HTTP `200` invalid/ignored acknowledgement |
+
+Plain and base64 API Gateway bodies use the same decoded limit. Correlation ids must match `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,95}$`; unsafe caller values are neither echoed nor logged. Authentication and payload failures use structured safe envelopes and run before downstream work covered by the relevant route guard.
+
+## Traffic Model
+
+The default 50/150 stage setting is a fallback. Explicit route buckets are intentionally higher in aggregate and isolated from each other. This lets legitimate lookup, session, add-on, staff, and preflight traffic coexist behind one park Wi-Fi public IP while sensitive internal/login/write paths remain narrow.
+
+The deterministic acceptance model covers 120 guests over 20 minutes, including 40 devices in the first two seconds and mixed guest/staff/payment activity, with zero modeled protection-caused `429` responses. A synthetic high-rate abuse case is throttled without consuming unrelated route buckets.
+
+This model protects JumpYard Cloud. It is not the upstream Roller one-request-per-second governor; `FU-013`, T0196, and T0204 retain that dependency.
+
+## Edge Boundary
+
+No per-IP limiter is used because many legitimate guests share the park's public IP. T0193 also does not attach WAF: the current API is API Gateway HTTP API, and a CloudFront layer would be bypassable while the default `execute-api` endpoint remains reachable. T0199/T0205 must decide custom-domain, origin, and default-endpoint policy before an edge layer is added. Route credentials, payload ceilings, idempotency, route buckets, and observability are the current enforceable boundary.
+
+## Remaining Ticket Ownership
+
+- T0194: personal staff identity, roles, MFA/session/revoke policy, named actor audit.
+- T0195: token/data lifecycle, least privilege, rotation, backup/restore.
+- T0197: final Roller webhook verification, processing, replay, reconciliation.
+- T0199/T0205: domain/origin/default-endpoint topology and any WAF/edge control.
+- T0202: security/traffic alarm routing and operational thresholds.
+
+Detailed implementation, validation, deployment, and rollback evidence is in [docs/t0193-api-protection.md](docs/t0193-api-protection.md).

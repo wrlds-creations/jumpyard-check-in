@@ -11,8 +11,8 @@
       "https://jumpyard-check-in.pages.dev",
       "https://jumpyard-checkin-admin.pages.dev"
     ],
-    "throttlingBurstLimit": 50,
-    "throttlingRateLimit": 25
+    "throttlingBurstLimit": 150,
+    "throttlingRateLimit": 50
   },
   "roller": {
     "environment": "playground",

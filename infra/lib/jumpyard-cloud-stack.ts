@@ -68,6 +68,217 @@ interface ObservabilityResources {
   readonly webhookHandler: lambda.Function;
 }
 
+type ApiRouteHandler = 'booking' | 'lookup' | 'redeem' | 'session' | 'webhook';
+type ApiRouteAuthorizationType = 'AWS_IAM' | 'NONE';
+type ApiRouteTrustClass =
+  | 'guest_public'
+  | 'guest_token'
+  | 'guest_write'
+  | 'internal_ops'
+  | 'legacy_dev_only'
+  | 'roller_webhook'
+  | 'staff_auth_entry'
+  | 'staff_protected';
+
+interface ApiRouteProtection {
+  readonly authorizationType: ApiRouteAuthorizationType;
+  readonly handler: ApiRouteHandler;
+  readonly routeKey: string;
+  readonly throttlingBurstLimit: number;
+  readonly throttlingRateLimit: number;
+  readonly trustClass: ApiRouteTrustClass;
+}
+
+// HTTP API throttles are aggregate route-level capacity controls, not per-IP identity limits.
+// These envelopes preserve a 30-40 guest/two-minute shared-Wi-Fi arrival wave while isolating
+// sensitive writes, staff login, internal operations, and Roller webhooks into separate buckets.
+const API_ROUTE_PROTECTION_CATALOG = [
+  {
+    authorizationType: 'NONE',
+    handler: 'lookup',
+    routeKey: 'POST /v1/check-in/lookup',
+    throttlingBurstLimit: 80,
+    throttlingRateLimit: 25,
+    trustClass: 'guest_public',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'session',
+    routeKey: 'POST /v1/staff/auth/login',
+    throttlingBurstLimit: 10,
+    throttlingRateLimit: 2,
+    trustClass: 'staff_auth_entry',
+  },
+  {
+    authorizationType: 'AWS_IAM',
+    handler: 'session',
+    routeKey: 'POST /v1/check-in/session-links',
+    throttlingBurstLimit: 5,
+    throttlingRateLimit: 1,
+    trustClass: 'internal_ops',
+  },
+  {
+    authorizationType: 'AWS_IAM',
+    handler: 'session',
+    routeKey: 'POST /v1/check-in/session-links/send-sms',
+    throttlingBurstLimit: 5,
+    throttlingRateLimit: 1,
+    trustClass: 'internal_ops',
+  },
+  {
+    authorizationType: 'AWS_IAM',
+    handler: 'session',
+    routeKey: 'POST /v1/check-in/session-links/send-email',
+    throttlingBurstLimit: 5,
+    throttlingRateLimit: 1,
+    trustClass: 'internal_ops',
+  },
+  {
+    authorizationType: 'AWS_IAM',
+    handler: 'session',
+    routeKey: 'POST /v1/check-in/session-links/send-due-sms',
+    throttlingBurstLimit: 5,
+    throttlingRateLimit: 1,
+    trustClass: 'internal_ops',
+  },
+  {
+    authorizationType: 'AWS_IAM',
+    handler: 'session',
+    routeKey: 'POST /v1/check-in/session-links/send-due-messages',
+    throttlingBurstLimit: 5,
+    throttlingRateLimit: 1,
+    trustClass: 'internal_ops',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'session',
+    routeKey: 'POST /v1/check-in/session-links/resolve',
+    throttlingBurstLimit: 100,
+    throttlingRateLimit: 40,
+    trustClass: 'guest_token',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'session',
+    routeKey: 'POST /v1/check-in/sessions',
+    throttlingBurstLimit: 100,
+    throttlingRateLimit: 40,
+    trustClass: 'guest_token',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'session',
+    routeKey: 'POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff',
+    throttlingBurstLimit: 100,
+    throttlingRateLimit: 40,
+    trustClass: 'guest_token',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'session',
+    routeKey: 'GET /v1/staff/check-in/sessions',
+    throttlingBurstLimit: 50,
+    throttlingRateLimit: 20,
+    trustClass: 'staff_protected',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'session',
+    routeKey: 'GET /v1/staff/check-in/sessions/{checkinSessionId}',
+    throttlingBurstLimit: 50,
+    throttlingRateLimit: 20,
+    trustClass: 'staff_protected',
+  },
+  {
+    authorizationType: 'AWS_IAM',
+    handler: 'redeem',
+    routeKey: 'POST /v1/check-in/redeem',
+    throttlingBurstLimit: 5,
+    throttlingRateLimit: 1,
+    trustClass: 'legacy_dev_only',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'redeem',
+    routeKey: 'POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem',
+    throttlingBurstLimit: 20,
+    throttlingRateLimit: 5,
+    trustClass: 'staff_protected',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'booking',
+    routeKey: 'POST /v1/bookings/quote',
+    throttlingBurstLimit: 40,
+    throttlingRateLimit: 10,
+    trustClass: 'guest_public',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'booking',
+    routeKey: 'POST /v1/bookings/draft',
+    throttlingBurstLimit: 20,
+    throttlingRateLimit: 5,
+    trustClass: 'guest_write',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'booking',
+    routeKey: 'POST /v1/bookings/availability',
+    throttlingBurstLimit: 60,
+    throttlingRateLimit: 20,
+    trustClass: 'guest_public',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'booking',
+    routeKey: 'POST /v1/bookings/{bookingReference}/add-products/quote',
+    throttlingBurstLimit: 40,
+    throttlingRateLimit: 10,
+    trustClass: 'guest_token',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'booking',
+    routeKey: 'POST /v1/bookings/{bookingReference}/add-products',
+    throttlingBurstLimit: 20,
+    throttlingRateLimit: 5,
+    trustClass: 'guest_write',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'webhook',
+    routeKey: 'POST /v1/roller/webhooks/bookings',
+    throttlingBurstLimit: 50,
+    throttlingRateLimit: 10,
+    trustClass: 'roller_webhook',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'webhook',
+    routeKey: 'POST /v1/roller/webhooks/redemptions',
+    throttlingBurstLimit: 50,
+    throttlingRateLimit: 10,
+    trustClass: 'roller_webhook',
+  },
+] as const satisfies readonly ApiRouteProtection[];
+
+function buildApiRouteSettings(): Record<
+  string,
+  { readonly DetailedMetricsEnabled: boolean; readonly ThrottlingBurstLimit: number; readonly ThrottlingRateLimit: number }
+> {
+  return Object.fromEntries(
+    API_ROUTE_PROTECTION_CATALOG.map((route) => [
+      route.routeKey,
+      {
+        DetailedMetricsEnabled: true,
+        ThrottlingBurstLimit: route.throttlingBurstLimit,
+        ThrottlingRateLimit: route.throttlingRateLimit,
+      },
+    ]),
+  );
+}
+
 export class JumpYardCloudStack extends Stack {
   public constructor(scope: Construct, id: string, props: JumpYardCloudStackProps) {
     super(scope, id, props);
@@ -294,7 +505,7 @@ export class JumpYardCloudStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    new apigatewayv2.CfnStage(this, 'DefaultStage', {
+    const defaultStage = new apigatewayv2.CfnStage(this, 'DefaultStage', {
       apiId: api.ref,
       accessLogSettings: {
         destinationArn: apiAccessLogGroup.logGroupArn,
@@ -314,6 +525,7 @@ export class JumpYardCloudStack extends Stack {
         throttlingBurstLimit: config.api.throttlingBurstLimit,
         throttlingRateLimit: config.api.throttlingRateLimit,
       },
+      routeSettings: buildApiRouteSettings(),
       stageName: '$default',
     });
 
@@ -407,27 +619,18 @@ export class JumpYardCloudStack extends Stack {
       });
     }
 
-    this.addRoute(api, lookupHandler, 'POST /v1/check-in/lookup');
-    this.addRoute(api, sessionHandler, 'POST /v1/staff/auth/login');
-    this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links');
-    this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-sms');
-    this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-email');
-    this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-due-sms');
-    this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/send-due-messages');
-    this.addRoute(api, sessionHandler, 'POST /v1/check-in/session-links/resolve');
-    this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions');
-    this.addRoute(api, sessionHandler, 'POST /v1/check-in/sessions/{checkinSessionId}/ready-for-staff');
-    this.addRoute(api, sessionHandler, 'GET /v1/staff/check-in/sessions');
-    this.addRoute(api, sessionHandler, 'GET /v1/staff/check-in/sessions/{checkinSessionId}');
-    this.addRoute(api, redeemHandler, 'POST /v1/check-in/redeem');
-    this.addRoute(api, redeemHandler, 'POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem');
-    this.addRoute(api, bookingHandler, 'POST /v1/bookings/quote');
-    this.addRoute(api, bookingHandler, 'POST /v1/bookings/draft');
-    this.addRoute(api, bookingHandler, 'POST /v1/bookings/availability');
-    this.addRoute(api, bookingHandler, 'POST /v1/bookings/{bookingReference}/add-products/quote');
-    this.addRoute(api, bookingHandler, 'POST /v1/bookings/{bookingReference}/add-products');
-    this.addRoute(api, webhookHandler, 'POST /v1/roller/webhooks/bookings');
-    this.addRoute(api, webhookHandler, 'POST /v1/roller/webhooks/redemptions');
+    const apiHandlers: Record<ApiRouteHandler, lambda.Function> = {
+      booking: bookingHandler,
+      lookup: lookupHandler,
+      redeem: redeemHandler,
+      session: sessionHandler,
+      webhook: webhookHandler,
+    };
+
+    for (const protection of API_ROUTE_PROTECTION_CATALOG) {
+      const route = this.addRoute(api, apiHandlers[protection.handler], protection);
+      defaultStage.addDependency(route);
+    }
 
     this.addOperationalObservability(config, {
       api,
@@ -964,8 +1167,12 @@ exports.handler = async () => ({
     return fn;
   }
 
-  private addRoute(api: apigatewayv2.CfnApi, handler: lambda.Function, routeKey: string): void {
-    const logicalId = routeKey
+  private addRoute(
+    api: apigatewayv2.CfnApi,
+    handler: lambda.Function,
+    protection: ApiRouteProtection,
+  ): apigatewayv2.CfnRoute {
+    const logicalId = protection.routeKey
       .replace(/[^A-Za-z0-9]/g, ' ')
       .split(' ')
       .filter(Boolean)
@@ -980,11 +1187,14 @@ exports.handler = async () => ({
       payloadFormatVersion: '2.0',
     });
 
-    new apigatewayv2.CfnRoute(this, `${logicalId}Route`, {
+    const route = new apigatewayv2.CfnRoute(this, `${logicalId}Route`, {
       apiId: api.ref,
-      routeKey,
+      authorizationType: protection.authorizationType,
+      routeKey: protection.routeKey,
       target: `integrations/${integration.ref}`,
     });
+    route.addMetadata('JumpYardHandler', protection.handler);
+    route.addMetadata('JumpYardTrustClass', protection.trustClass);
 
     new lambda.CfnPermission(this, `${logicalId}InvokePermission`, {
       action: 'lambda:InvokeFunction',
@@ -997,6 +1207,8 @@ exports.handler = async () => ({
         arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
       }),
     });
+
+    return route;
   }
 }
 

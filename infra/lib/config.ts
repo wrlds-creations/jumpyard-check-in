@@ -610,8 +610,8 @@ function normalizeBaseUrl(value: string, fieldName: string): string {
 
 function readApiConfig(raw: RawConfig['api']): JumpYardCloudConfig['api'] {
   const allowedCorsOrigins = readCorsOrigins(raw?.allowedCorsOrigins, 'api.allowedCorsOrigins');
-  const throttlingBurstLimit = readOptionalInteger(raw?.throttlingBurstLimit, 50, 1, 5000, 'api.throttlingBurstLimit');
-  const throttlingRateLimit = readOptionalInteger(raw?.throttlingRateLimit, 25, 1, 10000, 'api.throttlingRateLimit');
+  const throttlingBurstLimit = readOptionalInteger(raw?.throttlingBurstLimit, 150, 1, 5000, 'api.throttlingBurstLimit');
+  const throttlingRateLimit = readOptionalInteger(raw?.throttlingRateLimit, 50, 1, 10000, 'api.throttlingRateLimit');
 
   return {
     allowedCorsOrigins,
