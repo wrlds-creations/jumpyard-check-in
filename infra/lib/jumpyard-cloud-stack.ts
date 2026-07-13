@@ -365,7 +365,8 @@ export class JumpYardCloudStack extends Stack {
     new events.Rule(this, 'DailyDataApiSyncRule', {
       ruleName: `${config.resourcePrefix}-data-api-daily-sync`,
       description:
-        'Runs the dev Roller Data API modified-date sync for the previous UTC day. Roller writes are not performed.',
+        'Runs the Playground Roller Data API modified-date sync for the previous UTC day. Roller writes are not performed.',
+      enabled: config.roller.environment === 'playground',
       schedule: events.Schedule.cron({ minute: '0', hour: '2' }),
       targets: [
         new targets.LambdaFunction(dataSyncHandler, {

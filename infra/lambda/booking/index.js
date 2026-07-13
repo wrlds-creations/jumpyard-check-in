@@ -303,6 +303,11 @@ async function handleQuote(event, body, correlationId) {
     });
   }
 
+  const fullFlowItemGate = validateT0176FullFlowRequestItemDates(request.items);
+  if (!fullFlowItemGate.ok) {
+    return parkTestGateBlockedResponse(correlationId, fullFlowItemGate);
+  }
+
   const config = await getRollerConfig();
   const token = await getRollerAccessToken(config);
   const availabilityError = request.requireAvailability ? await validateItemsAvailable(config, token, request.items) : null;
@@ -395,6 +400,11 @@ async function handleDraft(event, body, correlationId) {
       status: 'invalid_request',
       error: validationError,
     });
+  }
+
+  const fullFlowItemGate = validateT0176FullFlowRequestItemDates(request.items);
+  if (!fullFlowItemGate.ok) {
+    return parkTestGateBlockedResponse(correlationId, fullFlowItemGate);
   }
 
   if (!isNewBookingDraftWriteEnabled()) {
@@ -612,9 +622,14 @@ async function handleAddProductQuote(event, body, correlationId) {
     });
   }
 
+  const fullFlowItemGate = validateT0176FullFlowRequestItemDates(request.items);
+  if (!fullFlowItemGate.ok) {
+    return parkTestGateBlockedResponse(correlationId, fullFlowItemGate);
+  }
+
   const smokeGate = validateT0162AddOnSmokeAccess(bookingReference);
   if (!smokeGate.ok) {
-    return addOnSmokeGateBlockedResponse(correlationId, smokeGate);
+    return parkTestGateBlockedResponse(correlationId, smokeGate);
   }
 
   const config = await getRollerConfig();
@@ -628,7 +643,7 @@ async function handleAddProductQuote(event, body, correlationId) {
   }
   const fullFlowGate = validateT0176FullFlowOriginalBookingAccess(original);
   if (!fullFlowGate.ok) {
-    return addOnSmokeGateBlockedResponse(correlationId, fullFlowGate);
+    return parkTestGateBlockedResponse(correlationId, fullFlowGate);
   }
 
   const customerResult = resolveAddProductCustomer(request, original);
@@ -741,9 +756,14 @@ async function handleAddProductDraft(event, body, correlationId) {
     });
   }
 
+  const fullFlowItemGate = validateT0176FullFlowRequestItemDates(request.items);
+  if (!fullFlowItemGate.ok) {
+    return parkTestGateBlockedResponse(correlationId, fullFlowItemGate);
+  }
+
   const smokeGate = validateT0162AddOnSmokeAccess(bookingReference);
   if (!smokeGate.ok) {
-    return addOnSmokeGateBlockedResponse(correlationId, smokeGate);
+    return parkTestGateBlockedResponse(correlationId, smokeGate);
   }
 
   if (!isAddProductDraftWriteEnabled()) {
@@ -761,7 +781,7 @@ async function handleAddProductDraft(event, body, correlationId) {
   }
   const fullFlowGate = validateT0176FullFlowOriginalBookingAccess(original);
   if (!fullFlowGate.ok) {
-    return addOnSmokeGateBlockedResponse(correlationId, fullFlowGate);
+    return parkTestGateBlockedResponse(correlationId, fullFlowGate);
   }
 
   const customerResult = resolveAddProductCustomer(request, original);
@@ -1355,6 +1375,35 @@ function validateT0176FullFlowOriginalBookingAccess(original) {
   return { ok: true };
 }
 
+function validateT0176FullFlowRequestItemDates(items) {
+  if (!isT0176FullFlowRehearsalEnabled()) return { ok: true };
+
+  const allowedDates = parseCsvValues(process.env.T0176_FULL_FLOW_ALLOWED_OPERATING_DATES);
+  if (allowedDates.length === 0 || allowedDates.some((date) => !isIsoDate(date))) {
+    return {
+      ok: false,
+      code: 't0176_full_flow_config_error',
+      message: 'The T0176 full-flow rehearsal has no valid approved operating dates.',
+      statusCode: 500,
+    };
+  }
+
+  if (
+    !Array.isArray(items) ||
+    items.length === 0 ||
+    items.some((item) => !isIsoDate(item?.bookingDate) || !allowedDates.includes(item.bookingDate))
+  ) {
+    return {
+      ok: false,
+      code: 't0176_full_flow_item_date_not_allowed',
+      message: 'One or more booking items are outside the approved T0176 full-flow test operating dates.',
+      statusCode: 403,
+    };
+  }
+
+  return { ok: true };
+}
+
 function parseCsvValues(value) {
   return String(value || '')
     .split(',')
@@ -1381,7 +1430,7 @@ function isT0162LiveAddOnSmokeIdentifierAllowed(identifier) {
   return allowed.includes(normalized);
 }
 
-function addOnSmokeGateBlockedResponse(correlationId, gate) {
+function parkTestGateBlockedResponse(correlationId, gate) {
   return jsonResponse(gate.statusCode, correlationId, {
     status: 'blocked',
     error: {
