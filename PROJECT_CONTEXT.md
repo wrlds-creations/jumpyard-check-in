@@ -38,6 +38,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Forward roadmap/backlog: [docs/roadmap/backlog.md](docs/roadmap/backlog.md)
 - Latest Sprint roadmap PDF: [docs/assets/jumpyard-next-sprint-roadmap.pdf](docs/assets/jumpyard-next-sprint-roadmap.pdf)
 - Sprint 3 environment contract: [docs/t0191-park-test-preproduction-contract.md](docs/t0191-park-test-preproduction-contract.md)
+- Park-test foundation qualification: [docs/t0192-park-test-foundation-qualification.md](docs/t0192-park-test-foundation-qualification.md)
 
 ## Durable Architecture Facts
 
@@ -49,7 +50,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Check-in is modeled as ticket-level redemption through Roller `POST /redemptions`, not a booking-level flag.
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
-- Dev is the Playground environment. Existing park-test is the sole Live-backed pre-production environment for T0192-T0204; production is separate and requires T0204 GO plus new approval.
+- Dev is the Playground environment. Existing park-test is the sole Live-backed pre-production environment for the remaining T0193-T0204 work; production is separate and requires T0204 GO plus new approval.
 - Park-test work is gated by scoped tickets; AWS changes, Live reads/writes, payments, redemptions, webhooks, frontend rehearsal, UI/UX, and visitor traffic require approval.
 - Park-test is a separate WRLDS environment in account `376129878018`, region `eu-north-1`, namespace `jumpyard-check-in-park-test`, with server-side Roller Live Nacka access.
 - Park-test keeps its name, prefix, tags, data, and frontend targets; it is neither cloned nor reused as production.
@@ -57,10 +58,10 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - `infra/config/park-test.json` is the normal closed config; ticket-specific configs open reviewed gates.
 - Park-test resources, Live access, webhook `1465`, frontend/CORS, and smokes are in [AWS_RESOURCES.md](AWS_RESOURCES.md).
 - Park-test human gate names are aliases in [docs/t0170-park-test-gate-runbook.md](docs/t0170-park-test-gate-runbook.md); runtime variables stay ticket-numbered until a scoped migration.
-- The T0176/T0177 full-flow park-test runtime posture remains intentionally open after T0178-T0180 until Love asks to close it; ticket closeout must not be interpreted as a close-window deploy. The approved Nacka operating-date window now runs from 2026-06-29 through 2026-09-30.
+- The Nacka `50871` full-flow window for `2026-06-29` through `2026-09-30` remains open until Love asks to close it; ticket closeout is not a close-window deploy.
 - Park-test phone PWA builds must set `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL` to the park-test API, or the app falls back to dev.
 - Park-test post-payment sync only refreshes a recent local `new_booking` prepayment draft.
-- Repository safety gates treat emergency stop `true`/missing/invalid as stopped and require both configured and observed venue `50871`; releasing the stop never replaces narrower gates.
+- Deployed gates stop on emergency value `true`/missing/invalid, require configured plus observed venue `50871`, and reject any request item outside the date allowlist before side effects.
 
 ## Current Implemented Flow Facts
 
@@ -83,6 +84,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Data API ingestion uses modified-date windows and must be treated as an operational cache/index, not source of truth.
 - Booking webhooks are registered in Roller Playground and use the confirmed `x-roller-apikey` header in dev; production webhook auth/signature/IP policy remains open.
 - Daily dev Data API sync runs internally from EventBridge to Lambda in planning/operational dev mode; guest messaging uses opaque `jy_token` links resolved server-side.
+- Park-test daily Data API sync is disabled; T0196 owns approved Live backfill and morning seed.
 - Park-test Aurora contains only scoped Live smoke snapshots, not a broad booking import or all-day guest list.
 - Same-day indexing remains deferred; park-test lookup uses scoped REST-on-demand paths and add-ons stay separately gated.
 - Live webhook processing remains off for the current assisted park-test posture; payment/add-on/redeem confirmation uses scoped REST/direct responses plus Aurora audit/manual fallback.
@@ -101,7 +103,7 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 ## Current Readiness Gates
 
 - Production readiness remains partial and should be handled through scoped future tickets, not opportunistic context hygiene.
-- The approved T0190-T0205 sequence is in [the backlog](docs/roadmap/backlog.md): T0192 qualifies park-test, T0204 decides GO/NO-GO there, and T0205 owns separately approved production creation/cutover.
+- The approved T0190-T0205 sequence is in [the backlog](docs/roadmap/backlog.md): T0192 has qualified park-test, T0204 decides GO/NO-GO there, and T0205 owns separately approved production creation/cutover.
 - Main pre-production/production blockers include route protection, alarm routing, SMS/SES access, sender/domain setup, staff identity, retention, rollback, Live backfill/cutover, and webhook verification.
 - Payment must stay on Roller's approved package; method visibility is Roller/Adyen controlled.
 

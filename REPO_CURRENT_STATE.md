@@ -4,12 +4,12 @@ Use this file as the short operational snapshot of what actually exists in the r
 
 ## Snapshot
 
-- Date: 2026-07-10
-- Current branch: `codex/t0191-park-test-preproduction-contract`
-- Current status: T0191 is complete. Existing park-test is Sprint 3's sole Live-backed pre-production environment; no AWS or runtime change occurred.
+- Date: 2026-07-13
+- Current branch: `codex/t0192-park-test-foundation-qualification`
+- Current status: T0192 is complete. The existing park-test foundation is qualified and coherently hardened; no implementation ticket is active.
 - Current ticket: None active
-- Completed tickets: archived in `docs/history/completed-tickets.md` (189 completed tickets; latest closed `T0191`).
-- Recommended next step: explain T0192's park-test qualification/hardening work in plain language and obtain Love's approval before activation or any AWS change.
+- Completed tickets: archived in `docs/history/completed-tickets.md` (190 completed tickets; latest closed `T0192`).
+- Recommended next step: explain T0193 API protection in plain language and obtain Love's explicit approval before activation.
 
 ## Current Structure
 
@@ -39,6 +39,7 @@ History and planning archives:
 - Sprint 3 phone/admin scope and ticket plan: [docs/t0188-sprint-3-phone-admin-plan.md](docs/t0188-sprint-3-phone-admin-plan.md)
 - Complete Sprint 3 target and revised ticket plan: [docs/t0189-complete-sprint-3-target-plan.md](docs/t0189-complete-sprint-3-target-plan.md)
 - Park-test pre-production contract: [docs/t0191-park-test-preproduction-contract.md](docs/t0191-park-test-preproduction-contract.md)
+- Park-test foundation qualification: [docs/t0192-park-test-foundation-qualification.md](docs/t0192-park-test-foundation-qualification.md)
 
 Current park-test status:
 
@@ -55,8 +56,10 @@ Current park-test status:
 - T0178-T0180 are closed from the park-test readiness/test/outcome pass. Park feedback was positive and future improvements remain in the roadmap.
 - The latest Sprint roadmap PDF is archived in `docs/assets/`. It frames Sprint 3 as production cloud plus response to Sprint 2 park feedback, and Sprint 4 as kiosk/QR print/terminal preparation plus first AirHive/JumpyBoard test scope.
 - The current T0176/T0177 full-flow runtime posture remains intentionally open so the app keeps working for park testing until Love says otherwise. The date scope is now explicitly extended through 2026-09-30 for Nacka only; this does not broaden venue scope, webhooks, broad imports, or JumpYard-owned guest messaging.
-- T0190 corrected repository gate semantics only. Normal source config is stopped, reviewed active source profiles release the stop explicitly, and runtime code makes the stop unconditional plus venue evidence fail closed. The deployed park-test Lambdas/config remain unchanged on the earlier model, so the running test apps are unchanged until a separately approved coherent deploy.
-- T0191 designated this unchanged park-test foundation as Sprint 3's sole pre-production environment. It keeps its current name, prefix, tags, data, and frontend targets; it is not staging to copy or production to rename.
+- T0191 designated this park-test foundation as Sprint 3's sole pre-production environment. It keeps its current name, prefix, tags, data, and frontend targets; it is not staging to copy or production to rename.
+- T0192 deployed the coherent fail-closed emergency-stop, venue, and request-item date model to the existing stack. All four full-flow quote/draft paths reject missing, malformed, mixed, or out-of-window item dates before side effects.
+- The existing daily Data API EventBridge rule is disabled because the current sync Lambda is Playground-only; T0196 owns approved Live backfill and morning seed. Park-test CORS preserves the existing phone, admin, and kiosk origins as interface contracts only.
+- Post-deploy readback found 134 healthy resources, 61 tagged resources with zero WRLDS-tag mismatch, 17 alarms `OK`, and zero CloudFormation drift. No AWS resource was added, removed, or replaced.
 
 ## Known Validation Commands
 
@@ -65,6 +68,7 @@ Current closeout entrypoints:
 - `npm run validate`
 - `npm run infra:check`
 - `git diff --check`
+- `node scripts/validate-t0192-request-item-dates.js`
 - `node scripts/validate-t0190-safety-gates.js`
 - `node scripts/validate-t0177-contact-lookup.js`
 - `npm --prefix infra run validate:roller-live-quote-smoke`
@@ -82,21 +86,21 @@ Historical command evidence lives in [docs/history/validation-log.md](docs/histo
 
 Completed-ticket history is archived in [docs/history/completed-tickets.md](docs/history/completed-tickets.md).
 
-- Archived completed-ticket count: 189
-- Latest closed ticket: `T0191`
+- Archived completed-ticket count: 190
+- Latest closed ticket: `T0192`
 - Current active ticket: None
 
 ## Current Ticket
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| None active | T0191 is closed; T0192 still requires explanation and approval. | None | Do not start AWS or runtime work from a planned backlog row. |
+| None active | Preserve the T0192 closeout state until the next ticket is approved. | None | T0193 must be explained and explicitly approved before activation. |
 
 ## Confirmed Next Tickets
 
 | Ticket | Goal | Status | Notes |
 |---|---|---|---|
-| `T0192` | Qualify and harden existing park-test as the sole pre-production environment. | Planned | Explain scope, risk, cost, `FU-096`, and the coherent T0190 deploy first; explicit approval is required before activation or AWS work. |
+| `T0193` | Protect guest, staff, internal, scheduler, and webhook API routes in park-test. | Planned | Starts only after T0192 closes and receives its own explanation and approval. |
 
 Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 
@@ -104,6 +108,7 @@ Broad future planning lives in [docs/roadmap/backlog.md](docs/roadmap/backlog.md
 
 Historical validation evidence is archived in [docs/history/validation-log.md](docs/history/validation-log.md).
 
+- T0192 implementation, AWS inventory/diff/deploy/readback, negative date proof, clean afterdiff, and drift evidence are recorded in [docs/history/validation-log.md](docs/history/validation-log.md) and [docs/t0192-park-test-foundation-qualification.md](docs/t0192-park-test-foundation-qualification.md).
 - T0191 environment-contract evidence is recorded in [docs/history/validation-log.md](docs/history/validation-log.md) and [docs/t0191-park-test-preproduction-contract.md](docs/t0191-park-test-preproduction-contract.md).
 - T0190 safety-gate evidence remains in [docs/history/validation-log.md](docs/history/validation-log.md) and [docs/t0190-critical-safety-gates.md](docs/t0190-critical-safety-gates.md).
 - Older validation is archived in [docs/history/validation-log.md](docs/history/validation-log.md) and the referenced ticket docs.
@@ -113,7 +118,7 @@ Historical validation evidence is archived in [docs/history/validation-log.md](d
 - Park-test AWS exists with dedicated API, Aurora, raw bucket, secrets, and gates. It is now the sole Sprint 3 pre-production environment; current resources are in [AWS_RESOURCES.md](AWS_RESOURCES.md).
 - Roller Live access and controlled smokes through receipt/sync/redeem have passed for Nacka. The full-flow rehearsal window remains open at runtime by Love's request until a normal `park-test.json` close-window deploy is explicitly approved.
 - The current window allows real Live bookings/payments/add-ons, scoped redeem, and date-scoped guest contact lookup through the deployed park-test flow. It does not allow webhooks, JumpYard-owned guest messages, broad same-day imports, new AWS resources, or broader venue/date scope.
-- T0190's corrected fail-closed model is not deployed, and `FU-096` must be resolved or explicitly block deployment before T0192 broadens park-test use.
+- The corrected fail-closed model is deployed and `FU-096` is resolved as archived `FU-097`. Remaining qualification findings are future-ticket work: alarm actions (`FU-056`), secret rotation (`FU-058`), termination/versioned rollback safety (`FU-059`), and cost attribution (`FU-098`).
 - Production remains a separate future environment. T0204 must decide GO/NO-GO before T0205 can receive new AWS/resource/cutover approvals.
 - Remaining readiness work is tracked in [FOLLOWUPS.md](FOLLOWUPS.md), [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), and [docs/roadmap/backlog.md](docs/roadmap/backlog.md).
 - Unrelated local work was stashed as `stash@{0}: pre-t0128-local-unrelated-work` before the T0128 branch was created.

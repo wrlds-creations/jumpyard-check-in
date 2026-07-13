@@ -6,6 +6,7 @@ import { JumpYardCloudStack } from '../lib/jumpyard-cloud-stack';
 
 const DEV_PREFIX = 'jumpyard-check-in-dev';
 const PARK_TEST_PREFIX = 'jumpyard-check-in-park-test';
+const PARK_TEST_KIOSK_ORIGIN = 'https://jumpyard-check-in-kiosk.pages.dev';
 
 interface SynthResult {
   readonly stackName: string;
@@ -121,6 +122,15 @@ function expectNamedResource(
   );
 }
 
+function expectEventRuleState(template: CloudFormationTemplate, ruleName: string, expectedState: string): void {
+  const rule = findResourceByTypeAndProperty(template, 'AWS::Events::Rule', 'Name', ruleName);
+  expect(Boolean(rule), `Expected EventBridge rule ${ruleName}.`);
+  expect(
+    rule?.Properties?.State === expectedState,
+    `Expected EventBridge rule ${ruleName} state ${expectedState}, got ${JSON.stringify(rule?.Properties?.State)}.`,
+  );
+}
+
 function expectNoBookingTimeMessagingSchedule(template: CloudFormationTemplate): void {
   const eventRules = Object.values(getResources(template)).filter(
     (resource) => resource.Type === 'AWS::Events::Rule',
@@ -178,6 +188,7 @@ function validateDevTemplate(dev: SynthResult): void {
   expectNotContains(strings, PARK_TEST_PREFIX, 'dev');
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/env`);
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/base-url`);
+  expectEventRuleState(dev.template, `${DEV_PREFIX}-data-api-daily-sync`, 'ENABLED');
   expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-lookup`, {
     ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'false',
     ENABLE_T0165_LINKED_ADDON_SETTLEMENT: 'false',
@@ -235,6 +246,7 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   expectContains(strings, 'park-test', 'park-test');
   expectContains(strings, 'WRLDS:DataClassification', 'park-test');
   expectContains(strings, 'confidential', 'park-test');
+  expectContains(strings, PARK_TEST_KIOSK_ORIGIN, 'park-test existing kiosk interface contract');
   expectNotContains(strings, DEV_PREFIX, 'park-test');
   expectNotContains(strings, `${PARK_TEST_PREFIX}-sns-sms-delivery-status`, 'park-test');
 
@@ -271,6 +283,7 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   expectNamedResource(parkTest.template, 'AWS::RDS::DBCluster', 'DBClusterIdentifier', `${PARK_TEST_PREFIX}-aurora`);
   expectNamedResource(parkTest.template, 'AWS::RDS::DBInstance', 'DBInstanceIdentifier', `${PARK_TEST_PREFIX}-aurora-writer`);
   expectNamedResource(parkTest.template, 'AWS::Events::Rule', 'Name', `${PARK_TEST_PREFIX}-data-api-daily-sync`);
+  expectEventRuleState(parkTest.template, `${PARK_TEST_PREFIX}-data-api-daily-sync`, 'DISABLED');
   expectNoBookingTimeMessagingSchedule(parkTest.template);
   expect(countResourcesByType(parkTest.template, 'AWS::ApiGatewayV2::Api') === 1, 'Expected one park-test HTTP API.');
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-lookup`, {

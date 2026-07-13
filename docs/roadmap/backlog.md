@@ -23,15 +23,12 @@ Every implementation ticket must be explained to Love before activation in plain
 
 ## Now
 
-| Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
-|---|---|---|---|---|---|---|---|
-| None active | Sprint 3 handoff | T0191 established existing park-test as the sole pre-production environment without changing AWS. | T0191 | Low | No implementation ticket is active; deployed park-test remains unchanged. | Explain T0192 and obtain Love's approval before activation. | Closed |
+No implementation ticket is active. T0192 is complete and archived; T0193 must be explained and separately approved before activation.
 
 ## Next
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0192` | Park-test foundation qualification | Qualify and harden existing park-test as the sole pre-production environment, including FU-096 and a coherent T0190 gate deployment. | T0191/T0190; explicit AWS approval | High | Existing park-test only; no clone, rename, production resources, or broader venue/traffic scope. Itemize and approve any individual new resource. | Synth/diff/deploy/readback, inventory/tags, date and stop gates, closed defaults, costs, and rollback pass. | Planned |
 | `T0193` | API protection | Protect guest, staff, internal, scheduler, and webhook routes in park-test with production-intent controls. | T0192; approved route-boundary design | High | Route security only; no product-flow redesign or production deploy. | Positive/negative auth, throttling, abuse, and internal-route tests pass. | Planned |
 | `T0194` | Admin identity | Replace the shared test passcode with approved personal staff identity, roles, session/MFA policy, and audit ownership in park-test. | T0193; Love/JumpYard identity decision | High | Staff/admin identity only; no visitor launch. | Identity, role, session, MFA, revoke, and audit tests pass. | Planned |
 | `T0195` | Data and secrets | Apply approved retention, purge, least privilege, secret rotation, backup, and restore to park-test and codify them for production. | T0191/T0192; data/ownership decisions | High | No new use of guest data; production is not created. | Retention/purge, IAM/database access, rotation, backup, and restore evidence pass. | Planned |

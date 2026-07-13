@@ -2,6 +2,16 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## T0192 Park-Test Foundation Qualification And Hardening
+
+- 2026-07-13: Added dependency-free request-item date validation for allowed, mixed, missing, malformed, and out-of-window dates on full-flow new-booking quote/draft and existing-booking add-on quote/draft paths. Validation runs before AWS, Roller, original-booking lookup, idempotency, or draft side effects.
+- 2026-07-13: `node scripts/validate-t0192-request-item-dates.js`, `node scripts/validate-t0190-safety-gates.js`, `node --check infra/lambda/booking/index.js`, full `npm run validate`, full `npm run infra:check`, every dev/park-test synth profile, and `git diff --check` passed before deployment; the full root and infra suites passed again during closeout.
+- 2026-07-13: AWS preflight confirmed account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-park-test-stack`, 134 complete resources, CloudFormation `IN_SYNC`, 61 tagged resources with zero mismatch across the ten WRLDS tags, healthy encrypted/deletion-protected Aurora with Data API, six dedicated secret containers inspected by metadata only, and 17 alarms `OK`.
+- 2026-07-13: The first CDK diff was stopped because it would remove the already deployed kiosk CORS origin. Repository park-test profiles were reconciled to preserve the existing phone, admin, and kiosk interface origins; no kiosk implementation entered scope.
+- 2026-07-13: The reviewed deploy changed only six existing Lambda code/environment definitions and disabled the existing Playground-only daily Data API EventBridge rule. CloudFormation reached `UPDATE_COMPLETE`; no resource was added, removed, replaced, renamed, or promoted, and webhook processing, guest sends, venue `50871`, and the 94 allowed dates from `2026-06-29` through `2026-09-30` stayed unchanged.
+- 2026-07-13: Deployed negative proof returned HTTP `403` with `t0176_full_flow_item_date_not_allowed` for `2026-10-01`. Post-deploy full-flow diff had no differences, the normal closed profile showed only expected gate closures, and final drift detection was `IN_SYNC` with zero drifted resources.
+- 2026-07-13: Rollback/containment remains `npm --prefix infra run deploy:park-test`. No Roller write, payment, redemption, webhook-processing, SMS, email, broad import, Cloudflare deploy, or new AWS-resource action was performed. Cost Explorer did not expose `WRLDS:Environment` as a cost-allocation tag, so no environment spend claim was made; `FU-098` owns cost attribution readiness.
+
 ## T0191 Park-Test Pre-Production Contract
 
 - 2026-07-10: Audited the active roadmap, environment/AWS records, production-readiness contracts, followups, and historical Sprint 3 plans for the superseded parallel-staging assumption.
