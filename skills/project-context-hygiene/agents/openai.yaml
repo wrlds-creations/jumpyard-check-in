@@ -1,4 +1,4 @@
 interface:
   display_name: "Project Context Hygiene"
-  short_description: "Audit stale ticket state and oversized project memory"
-  default_prompt: "Use $project-context-hygiene to audit CODEX_TASK.md, REPO_CURRENT_STATE.md, PROJECT_CONTEXT.md, FOLLOWUPS.md, and validation scripts before moving or archiving historical context."
+  short_description: "Keep GitHub-native project memory clean and durable"
+  default_prompt: "Use $project-context-hygiene to reconcile GitHub Issues/Project state with durable repository context, validate archives, and remove stale mutable Markdown queues without losing history."

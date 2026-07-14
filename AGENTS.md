@@ -1,63 +1,74 @@
-# WRLDS Codex Agreement
+# WRLDS Codex Workflow
 
-This repository uses the WRLDS Codex workflow. Treat the source-of-truth files in the repository as more reliable than chat history.
+This project uses the WRLDS GitHub-native Codex workflow. `AGENTS.md` is the first file Codex should read, but it is not the full project memory.
 
-## Start Every Ticket
+## Required Reading Order
+
+Start every implementation issue by reading:
 
 1. Read `PROJECT_CONTEXT.md`.
 2. Read `DECISIONS.md`.
 3. Read `REPO_CURRENT_STATE.md`.
-4. Read the current ticket in `CODEX_TASK.md`.
-5. Check local `skills/` for a matching workflow when relevant.
+4. Read the static task resolver in `CODEX_TASK.md`, resolve the issue number from the current branch, and load the issue with `gh issue view`.
+5. Check `skills/` for a matching domain or workflow skill, including `github-collaboration` for branch, PR, Project, or integration work.
+
+Before AWS work, also read `AWS_RESOURCES.md` and use the `aws-project-infrastructure` skill.
+
+## Source Of Truth
+
+- Do not treat chat history as the source of truth when confirmed project or GitHub records exist.
+- GitHub Issues own active implementation scope: goal, context, requirements, non-goals, acceptance criteria, dependencies, and validation.
+- GitHub Projects own operational planning: priority, status, work type, track, owner, and draft ideas.
+- Use `PROJECT_CONTEXT.md` for confirmed project facts, constraints, commands, environments, and open questions.
+- Use `DECISIONS.md` for meaningful decisions, rationale, impact, and revisit triggers.
+- Use `AWS_RESOURCES.md` for AWS resources affecting cost, security, data, deployment, or ownership.
+- Use `REPO_CURRENT_STATE.md` for the latest merged mainline snapshot and known validation state. Do not record feature-branch progress there.
+- `CODEX_TASK.md` is a static issue resolver. Do not rewrite it per branch.
+- Create out-of-scope findings and follow-up ideas as GitHub Project draft issues instead of editing a shared operational ledger.
+- Use `FOLLOWUPS.md` and `docs/roadmap/backlog.md` only for durable external gates, product guardrails, and migration pointers that belong in version control.
+- Use `docs/history/` for archived historical evidence that remains useful after Issues and PRs close.
+
+## Context Hygiene
+
+- Use `skills/project-context-hygiene/` before moving, archiving, compressing, or deleting project memory content.
+- Audit before moving content, run validators before large rewrites, and archive useful history before deleting it.
+- Keep active project context short and current while preserving historical material in searchable repository files.
+- Source-of-truth docs are English by default. Preserve exact non-English wording only for user-facing copy, business terminology, quoted evidence, or intentionally verbatim raw history.
+- Validators should check structure and consistency, not enforce a human language choice.
 
 ## Working Rules
 
-- Work on one ticket only.
-- Do not broaden scope beyond the current ticket.
-- Do not implement future-ticket features unless explicitly asked.
-- Do not refactor unrelated code.
-- Do not touch files outside the ticket's allowed areas unless the user explicitly approves it.
-- Put out-of-scope findings in `FOLLOWUPS.md` instead of fixing them automatically.
-- Update `REPO_CURRENT_STATE.md` after the ticket.
-- Update `PROJECT_CONTEXT.md` when confirmed project facts change.
-- Update `DECISIONS.md` when a meaningful architecture, scope, data, security, deployment, or maintainability decision is made.
-- Do not commit unless explicitly asked.
+- Ask focused questions only when missing information blocks the issue.
+- Work on one approved repository issue at a time. Draft issues are not implementation authorization.
+- Explain an implementation issue to Love in plain language before approval: what changes and why, a useful analogy when needed, what is included and excluded, risk/cost/dependencies, verification, and any remaining decision.
+- Stay inside the issue requirements and non-goals. Ask before materially broadening scope.
+- When confirmed project facts change, update `PROJECT_CONTEXT.md`.
+- When a meaningful decision is made, update `DECISIONS.md`.
+- When AWS infrastructure changes, update `AWS_RESOURCES.md`.
+- Update `REPO_CURRENT_STATE.md` only when merged repository facts, structure, commands, dependencies, or validation baseline change.
+- Create a Project draft for out-of-scope work instead of fixing it automatically.
+- Do not implement future-issue features unless explicitly asked.
+- Prefer small, reviewable diffs and explain new dependencies.
+- Do not touch files outside the issue's allowed scope unless Love explicitly approves it.
 - Do not push directly to `main`.
+- Do not commit unless explicitly asked.
 
-## Branch And Commit Workflow
+## Branch And PR Workflow
 
-- Use one dedicated branch per ticket unless the user explicitly says otherwise.
-- Name ticket branches with the `codex/` prefix, for example `codex/t0003-booking-lookup-contract`.
-- Create each ticket branch from the current approved base, preferably `main` or the latest merged ticket branch.
-- A commit saves changes only to the current branch; it does not update `main` by itself.
-- Stage and commit only files that belong to the current ticket.
-- Leave unrelated local assets, deliverables, and user changes unstaged unless the ticket explicitly includes them.
-- Push ticket branches to GitHub only when explicitly requested.
-- Bring work into `main` through a review/merge step, not by committing or pushing directly to `main`.
+- Use one dedicated branch per approved issue unless stacked work is explicitly documented.
+- Name branches `codex/gh-<issue-number>-<short-slug>`, for example `codex/gh-42-add-session-export`.
+- Create the branch from the current approved base, normally current `origin/main`.
+- Stage and commit only issue-owned files; preserve unrelated user changes.
+- A PR must include `Closes #<issue>`, its base and dependencies, validation results, manual verification, and unresolved risks.
+- Bring work into `main` through a reviewed PR.
+- Follow `references/github-collaboration-workflow.md` for drafts, stacked work, stale branch integration, duplicate legacy IDs, and semantic documentation merges.
 
-## Project Direction
+## Project Boundary
 
-- Sprint 2 is closed. The active Sprint 3 workstream covers the phone check-in app, the staff/admin app, and the JumpYard Cloud capabilities required by those two surfaces.
-- The complete Sprint 3 production target includes approved initial booking backfill, scheduled morning seed, Roller webhook processing/reconciliation, normalized Aurora state, and automatic SMS plus email check-in links 30 minutes before the selected booking time.
-- Roller remains the booking source of truth; the Aurora booking index is an operational cache used for lookup, scheduling, handoff, audit, and recovery.
-- Kiosk/print/terminal implementation and JumpyBoard/AirHive activity-data implementation belong to separate project folders/workstreams. Keep only explicit interface-contract dependencies in this ticket queue.
-- The production architecture must be `check-in app -> JumpYard Cloud/server API -> Roller API`.
-- Roller is the source of truth for bookings.
-- JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, and session status.
-- The frontend must not call Roller directly in the real architecture.
-
-## Ticket Explanation
-
-Before activating an implementation ticket, explain it to Love in plain language:
-
-- what changes and why;
-- a useful analogy when the technical reason is not obvious;
-- what is included and explicitly excluded;
-- the main risk, cost, and dependency;
-- how completion will be verified; and
-- which approval or decision is still required.
-
-Planned backlog rows are not implementation approval. Work only on the single ticket recorded as active in `CODEX_TASK.md`.
+- Sprint 3 implementation scope is the phone check-in app, the staff/admin app, and the JumpYard Cloud capabilities required by those surfaces.
+- Roller remains the booking source of truth; Aurora is an operational cache for lookup, scheduling, handoff, audit, and recovery.
+- The production architecture remains `check-in app -> JumpYard Cloud/server API -> Roller API`; frontends do not call Roller directly.
+- Kiosk/print/terminal and JumpyBoard/AirHive activity-data implementation remain separate workstreams. Only explicit interface contracts may cross those boundaries.
 
 ## AWS Work
 
@@ -68,8 +79,17 @@ Before creating, changing, deploying, or deleting AWS resources:
 3. Confirm client, project, environment, owner, repository, tags, data classification, exportability, and cost center.
 4. Update `AWS_RESOURCES.md` when AWS resources change.
 
-No AWS resources should be created for a ticket unless the ticket explicitly allows AWS work.
+No AWS resources should be created for an issue unless the issue explicitly allows AWS work.
 
-## Handoff
+## Completion Summary
 
-Summarize changed files, validation performed, manual verification performed or still needed, docs updated, risks or open questions, follow-up tickets, and the recommended next step.
+Always summarize:
+
+- Issue and PR
+- Changed files
+- Commands and validation run
+- Manual verification performed or still needed
+- Durable docs updated
+- Risks or unresolved questions
+- Project drafts created for follow-ups
+- Recommended next step

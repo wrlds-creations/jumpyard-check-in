@@ -1,39 +1,48 @@
-# CODEX_TASK.md
+# GitHub Issue Task Resolver
 
-## Ticket ID
+This file is static. Do not replace it with a branch-specific ticket brief and do not record active work here.
 
-`NO_ACTIVE_TICKET`
+## Resolve The Active Issue
 
-## Title
+Implementation branches use:
 
-No Active Ticket
+```text
+codex/gh-<issue-number>-<short-slug>
+```
 
-## Status
+Example:
 
-None
+```text
+codex/gh-42-add-session-export
+```
 
-## Goal
+Resolve and read the issue before editing:
 
-Keep the repository in a clean handoff state after T0194. Explain T0195 in plain language and obtain Love's approval before activating implementation.
+```bash
+branch="$(git branch --show-current)"
+issue="$(printf '%s' "$branch" | sed -nE 's#^codex/gh-([0-9]+)-.*#\1#p')"
+gh issue view "$issue" --json number,title,body,state,url,labels,assignees
+```
 
-## Scope
+PowerShell:
 
-- No implementation ticket is active.
-- T0194 is complete and archived.
-- T0195 remains planned and may start only after its required explanation and explicit approval.
+```powershell
+$branch = git branch --show-current
+if ($branch -notmatch '^codex/gh-(\d+)-[a-z0-9-]+$') {
+  throw "Expected codex/gh-<issue>-<slug>, got $branch"
+}
+$issue = $Matches[1]
+gh issue view $issue --json number,title,body,state,url,labels,assignees
+```
 
-## Allowed Areas
+The issue body owns the goal, context, requirements, non-goals, acceptance criteria, dependencies, and validation. Confirm that the issue is open and approved for implementation.
 
-- None until a new ticket is explained, approved, and activated.
+## Exceptions
 
-## Explicit Exclusions
+- Read-only questions and repository exploration do not require an implementation issue.
+- Draft Project items are ideas, not approved implementation scope. Convert an approved draft to a repository issue first.
+- For an integration branch, use the integration issue and preserve source branch and legacy ticket references in the issue and PR.
+- For stacked work, the issue and PR must name the dependency and non-`main` base explicitly.
+- If the branch does not identify an issue and implementation is requested, create or obtain an issue before editing.
 
-- Any implementation, AWS mutation, deploy, Roller action, messaging, or scope expansion before the next ticket is approved.
-
-## Validation Plan
-
-- Before activating T0195, verify that source-of-truth files still show no active ticket and present its purpose, boundary, risk/cost, dependencies, verification, and remaining data/security decisions in plain language.
-
-## Result
-
-T0194 completed on 2026-07-14. Park-test ordinary staff now use personal six-digit PIN-only login with server-owned hash-only sessions, while administrators use Cognito password plus TOTP to create, reset, disable, and enable staff. Migration `0009`, the rotated PIN pepper, five Cognito/JWT resources, 26-route API, mobile-safe request-stable admin Pages build, guessing protection, role/venue authorization, reset-race credential revalidation, venue-isolated redeem lookup, named credential-free audit, logout, reset, duplicate/trivial-PIN rejection, disable/re-enable, and non-write redeem authorization are deployed and verified. A live second-login collision was corrected with row-locked transactional session replacement; repeated login, old-session replacement, denied disabled login, restored enabled login, and final logout all passed live. A separate activity-driven queue-request amplification was corrected with stable session keys, a persistent activity throttle, coalesced refreshes, stale-response suppression, and fast session-transition recovery. Love accepted the final deployed result and chose closeout without an additional post-fix manual traffic smoke. Detailed evidence is in `docs/t0194-staff-identity.md` and `docs/history/validation-log.md`. No production resource, automatic guest message, broad import, webhook processing, or real Roller write was introduced by T0194. No ticket is currently active.
+See `references/github-collaboration-workflow.md` and `skills/github-collaboration/` for the complete workflow.

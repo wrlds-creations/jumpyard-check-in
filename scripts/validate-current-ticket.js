@@ -3,10 +3,6 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const codeTaskPath = path.join(root, 'CODEX_TASK.md');
-const repoStatePath = path.join(root, 'REPO_CURRENT_STATE.md');
-const completedTicketsArchivePath = path.join(root, 'docs', 'history', 'completed-tickets.md');
-
 let failures = 0;
 
 function fail(message) {
@@ -14,118 +10,54 @@ function fail(message) {
   console.error(`FAIL: ${message}`);
 }
 
-function readRequired(relativePath, filePath) {
-  if (!fs.existsSync(filePath)) {
+function readRequired(relativePath) {
+  const fullPath = path.join(root, relativePath);
+  if (!fs.existsSync(fullPath)) {
     fail(`missing ${relativePath}`);
     return '';
   }
-  return fs.readFileSync(filePath, 'utf8');
+  return fs.readFileSync(fullPath, 'utf8');
 }
 
-function normalizeCell(value) {
-  return value.replace(/`/g, '').trim().replace(/\s+/g, ' ');
+const task = readRequired('CODEX_TASK.md');
+const agents = readRequired('AGENTS.md');
+const reference = readRequired('references/github-collaboration-workflow.md');
+const repoState = readRequired('REPO_CURRENT_STATE.md');
+
+for (const phrase of [
+  'This file is static',
+  'codex/gh-<issue-number>-<short-slug>',
+  'gh issue view',
+  "^codex/gh-(\\d+)-[a-z0-9-]+$",
+  'Draft Project items are ideas, not approved implementation scope',
+]) {
+  if (!task.includes(phrase)) fail(`CODEX_TASK.md missing static resolver phrase: ${phrase}`);
 }
 
-function parseTickets(value) {
-  return Array.from(new Set((value.match(/T\d{4}/g) || [])));
+for (const forbidden of ['## Ticket ID', '## Ticket Template', 'codex/t0001-short-description', 'NO_ACTIVE_TICKET']) {
+  if (task.includes(forbidden)) fail(`CODEX_TASK.md still contains mutable-ticket marker: ${forbidden}`);
 }
 
-function parseActiveTicketIds(value) {
-  if (!value || /^None active\b/i.test(value)) return [];
-  return parseTickets(value);
+for (const text of [agents, reference]) {
+  if (!text.includes('codex/gh-<issue')) fail('GitHub workflow docs must contain a gh issue-backed branch example');
+  if (!text.includes('gh issue view')) fail('GitHub workflow docs must instruct AI to read the issue');
 }
 
-function extractSnapshotValue(text, label) {
-  const pattern = new RegExp(`^- ${label}:\\s*(.+)$`, 'm');
-  const match = text.match(pattern);
-  return match ? normalizeCell(match[1]) : null;
+if (!agents.includes('Do not rewrite it per branch')) {
+  fail('AGENTS.md must keep CODEX_TASK.md static');
 }
 
-function extractSection(text, heading) {
-  const lines = text.split(/\r?\n/);
-  const startIndex = lines.findIndex(line => line.trim() === `## ${heading}`);
-  if (startIndex === -1) return '';
-
-  const sectionLines = [];
-  for (let index = startIndex + 1; index < lines.length; index += 1) {
-    if (/^##\s/.test(lines[index])) break;
-    sectionLines.push(lines[index]);
-  }
-  return sectionLines.join('\n');
+for (const forbidden of [/^## Current Ticket\s*$/m, /^## Confirmed Next Tickets\s*$/m, /NO_ACTIVE_TICKET/]) {
+  if (forbidden.test(repoState)) fail(`REPO_CURRENT_STATE.md contains legacy mutable-ticket marker: ${forbidden}`);
 }
 
-function extractTableRows(sectionText) {
-  return sectionText
-    .split(/\r?\n/)
-    .filter(line => line.trim().startsWith('|'))
-    .filter(line => !/^\|\s*-+/.test(line.trim()))
-    .filter(line => !/^\|\s*Ticket\s*\|/i.test(line.trim()))
-    .map(line => line.split('|').slice(1, -1).map(normalizeCell))
-    .filter(cells => cells.length > 0 && cells[0]);
-}
-
-function extractCompletedTickets(repoStateText) {
-  const tickets = new Set(parseTickets(extractSnapshotValue(repoStateText, 'Completed tickets') || ''));
-
-  if (fs.existsSync(completedTicketsArchivePath)) {
-    const archiveText = fs.readFileSync(completedTicketsArchivePath, 'utf8');
-    for (const row of extractTableRows(extractSection(archiveText, 'Completed Tickets'))) {
-      for (const ticket of parseTickets(row[0])) tickets.add(ticket);
-    }
-  }
-
-  return Array.from(tickets);
-}
-
-function extractCodeTaskTicket(text) {
-  const ticketSection = text.match(/^## Ticket ID\s*\r?\n+([^\r\n]+)/mi);
-  if (ticketSection) {
-    return parseTickets(ticketSection[1])[0] || null;
-  }
-  return null;
-}
-
-const codeTaskText = readRequired('CODEX_TASK.md', codeTaskPath);
-const repoStateText = readRequired('REPO_CURRENT_STATE.md', repoStatePath);
-
-const codeTaskTicket = extractCodeTaskTicket(codeTaskText);
-const snapshotCurrentTicket = extractSnapshotValue(repoStateText, 'Current ticket');
-const snapshotCompletedTickets = extractCompletedTickets(repoStateText);
-const snapshotRecommendedNext = extractSnapshotValue(repoStateText, 'Recommended next step') || '';
-const completedSet = new Set(snapshotCompletedTickets);
-const activeTickets = parseActiveTicketIds(snapshotCurrentTicket || '');
-
-if (!snapshotCurrentTicket) {
-  fail('REPO_CURRENT_STATE.md snapshot is missing Current ticket');
-}
-
-if (activeTickets.length === 0 && codeTaskTicket) {
-  fail(`REPO_CURRENT_STATE.md says no active ticket, but CODEX_TASK.md points to ${codeTaskTicket}`);
-}
-
-if (activeTickets.length > 0) {
-  if (!codeTaskTicket) {
-    fail(`REPO_CURRENT_STATE.md active ticket is ${activeTickets.join(', ')}, but CODEX_TASK.md has no Ticket ID`);
-  } else if (!activeTickets.includes(codeTaskTicket) || activeTickets.length !== 1) {
-    fail(
-      `REPO_CURRENT_STATE.md active ticket (${activeTickets.join(', ')}) does not match CODEX_TASK.md (${codeTaskTicket})`
-    );
-  }
-}
-
-if (codeTaskTicket && completedSet.has(codeTaskTicket)) {
-  fail(`CODEX_TASK.md points to completed ticket ${codeTaskTicket}`);
-}
-
-for (const ticket of parseTickets(snapshotRecommendedNext)) {
-  if (completedSet.has(ticket)) {
-    fail(`REPO_CURRENT_STATE.md recommended next ticket ${ticket} is already listed as completed`);
-  }
+if (!repoState.includes('no product implementation Issue is approved')) {
+  fail('REPO_CURRENT_STATE.md must state approval without creating a Markdown next-work queue');
 }
 
 if (failures > 0) {
-  console.error(`Current ticket validation failed with ${failures} issue(s).`);
+  console.error(`Issue-resolver validation failed with ${failures} issue(s).`);
   process.exit(1);
 }
 
-console.log('Current ticket validation passed.');
+console.log('Static GitHub issue resolver validation passed.');

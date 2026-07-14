@@ -14,28 +14,43 @@ const coreFiles = [
   'CODEX_TASK.md',
   'REPO_CURRENT_STATE.md',
   'FOLLOWUPS.md',
+  '.github/pull_request_template.md',
+  '.github/ISSUE_TEMPLATE/implementation.yml',
   'references/aws-tagging-standard.md',
   'references/aws-resource-naming-standard.md',
   'references/aws-cicd-standard.md',
   'references/skill-naming-standard.md',
+  'references/project-intake-questions.md',
+  'references/codex-working-model.md',
+  'references/github-collaboration-workflow.md',
+  'docs/history/completed-tickets.md',
+  'docs/history/validation-log.md',
+  'docs/history/sprint-1-ticket-history.md',
+  'docs/history/followups-done.md',
+  'docs/history/github-project-migration-2026-07-14.md',
+  'docs/gh-192-github-collaboration-migration-audit.md',
+  'docs/roadmap/backlog.md',
   'scripts/validate-template.js',
+  'scripts/validate-current-ticket.js',
+  'scripts/validate-followups.js',
+  'scripts/validate-history-archives.js',
+  'scripts/validate-github-project-migration.js',
   'scripts/validate-skills.js',
   'scripts/validate-aws-tags.js',
 ];
 
 const optionalFiles = [
   'TEST_PLAN.md',
-  '.github/pull_request_template.md',
-  'references/project-intake-questions.md',
   'references/ui-library-selection.md',
   'references/reddit-stack-evaluation.md',
-  'references/codex-working-model.md',
 ];
 
 const coreSkills = [
   'project-intake',
   'skill-creator',
   'skill-candidate-capture',
+  'project-context-hygiene',
+  'github-collaboration',
   'aws-project-infrastructure',
 ];
 
@@ -70,145 +85,6 @@ function exists(relativePath) {
   return fs.existsSync(path.join(root, relativePath));
 }
 
-function normalizeCell(value) {
-  return value.replace(/`/g, '').trim().replace(/\s+/g, ' ');
-}
-
-function parseTickets(value) {
-  return Array.from(new Set((value.match(/T\d{4}/g) || [])));
-}
-
-function parseActiveTicketIds(value) {
-  if (!value || /^None active\b/i.test(value)) return [];
-  return parseTickets(value);
-}
-
-function extractSnapshotValue(text, label) {
-  const pattern = new RegExp(`^- ${label}:\\s*(.+)$`, 'm');
-  const match = text.match(pattern);
-  return match ? normalizeCell(match[1]) : null;
-}
-
-function extractSection(text, heading) {
-  const lines = text.split(/\r?\n/);
-  const startIndex = lines.findIndex(line => line.trim() === `## ${heading}`);
-  if (startIndex === -1) return '';
-
-  const sectionLines = [];
-  for (let index = startIndex + 1; index < lines.length; index += 1) {
-    if (/^##\s/.test(lines[index])) break;
-    sectionLines.push(lines[index]);
-  }
-  return sectionLines.join('\n');
-}
-
-function extractTableRows(sectionText) {
-  return sectionText
-    .split(/\r?\n/)
-    .filter(line => line.trim().startsWith('|'))
-    .filter(line => !/^\|\s*-+/.test(line.trim()))
-    .filter(line => !/^\|\s*Ticket\s*\|/i.test(line.trim()))
-    .map(line => line.split('|').slice(1, -1).map(normalizeCell))
-    .filter(cells => cells.length > 0 && cells[0]);
-}
-
-function extractCompletedTickets(repoStateText) {
-  const tickets = new Set(parseTickets(extractSnapshotValue(repoStateText, 'Completed tickets') || ''));
-  const archivePath = path.join(root, 'docs', 'history', 'completed-tickets.md');
-
-  if (fs.existsSync(archivePath)) {
-    const archiveText = fs.readFileSync(archivePath, 'utf8');
-    const archiveRows = extractTableRows(extractSection(archiveText, 'Completed Tickets'));
-    for (const row of archiveRows) {
-      for (const ticket of parseTickets(row[0])) tickets.add(ticket);
-    }
-  }
-
-  return Array.from(tickets);
-}
-
-function validateRepoCurrentState() {
-  const repoStatePath = path.join(root, 'REPO_CURRENT_STATE.md');
-  if (!fs.existsSync(repoStatePath)) return;
-
-  const text = fs.readFileSync(repoStatePath, 'utf8');
-  const snapshotCurrentTicket = extractSnapshotValue(text, 'Current ticket');
-  const snapshotCompletedTickets = extractCompletedTickets(text);
-  const snapshotRecommendedNext = extractSnapshotValue(text, 'Recommended next step') || '';
-  const completedSet = new Set(snapshotCompletedTickets);
-  const completedArchivePath = path.join(root, 'docs', 'history', 'completed-tickets.md');
-  const hasCompletedArchive = fs.existsSync(completedArchivePath);
-
-  if (!snapshotCurrentTicket) {
-    fail('REPO_CURRENT_STATE.md snapshot is missing Current ticket');
-  }
-
-  if (snapshotCompletedTickets.length === 0) {
-    fail('completed ticket history is missing from REPO_CURRENT_STATE.md and docs/history/completed-tickets.md');
-  }
-
-  const completedRows = hasCompletedArchive
-    ? extractTableRows(extractSection(fs.readFileSync(completedArchivePath, 'utf8'), 'Completed Tickets'))
-    : extractTableRows(extractSection(text, 'Completed Tickets'));
-  const completedTableTickets = completedRows.flatMap(row => parseTickets(row[0]));
-  const completedTableSet = new Set(completedTableTickets);
-
-  if (completedTableTickets.length !== completedTableSet.size) {
-    fail('REPO_CURRENT_STATE.md Completed Tickets table contains duplicate ticket ids');
-  }
-
-  if (hasCompletedArchive && !text.includes('docs/history/completed-tickets.md')) {
-    fail('REPO_CURRENT_STATE.md must link to docs/history/completed-tickets.md when completed tickets are archived');
-  }
-
-  for (const ticket of parseTickets(extractSnapshotValue(text, 'Completed tickets') || '')) {
-    if (!completedTableSet.has(ticket)) {
-      fail(`REPO_CURRENT_STATE.md snapshot mentions completed ticket ${ticket}, but the completed-ticket archive/table does not include it`);
-    }
-  }
-
-  const currentRows = extractTableRows(extractSection(text, 'Current Ticket'));
-  if (currentRows.length !== 1) {
-    fail(`REPO_CURRENT_STATE.md Current Ticket table must contain exactly one data row, found ${currentRows.length}`);
-  } else if (snapshotCurrentTicket && currentRows[0][0] !== snapshotCurrentTicket) {
-    fail(`REPO_CURRENT_STATE.md snapshot Current ticket (${snapshotCurrentTicket}) does not match Current Ticket table (${currentRows[0][0]})`);
-  }
-
-  const currentTicketIds = parseActiveTicketIds(snapshotCurrentTicket || '');
-  for (const ticket of currentTicketIds) {
-    if (completedSet.has(ticket)) {
-      fail(`REPO_CURRENT_STATE.md current ticket ${ticket} is already listed as completed`);
-    }
-  }
-
-  const nextRows = extractTableRows(extractSection(text, 'Confirmed Next Tickets'));
-  const nextTickets = nextRows.flatMap(row => parseTickets(row[0]));
-  const nextSet = new Set(nextTickets);
-
-  if (nextTickets.length !== nextSet.size) {
-    fail('REPO_CURRENT_STATE.md Confirmed Next Tickets contains duplicate ticket ids');
-  }
-
-  for (const ticket of nextTickets) {
-    if (completedSet.has(ticket)) {
-      fail(`REPO_CURRENT_STATE.md confirmed next ticket ${ticket} is already listed as completed`);
-    }
-    if (currentTicketIds.includes(ticket)) {
-      fail(`REPO_CURRENT_STATE.md current ticket ${ticket} must not also be in Confirmed Next Tickets`);
-    }
-  }
-
-  const recommendedTickets = parseTickets(snapshotRecommendedNext);
-  for (const ticket of recommendedTickets) {
-    if (completedSet.has(ticket)) {
-      fail(`REPO_CURRENT_STATE.md recommended next ticket ${ticket} is already listed as completed`);
-    }
-    if (!nextSet.has(ticket) && !currentTicketIds.includes(ticket)) {
-      fail(`REPO_CURRENT_STATE.md recommended next ticket ${ticket} is not in Current Ticket or Confirmed Next Tickets`);
-    }
-  }
-}
-
 for (const file of coreFiles) {
   if (!exists(file)) fail(`missing ${file}`);
 }
@@ -221,10 +97,23 @@ for (const file of optionalFiles) {
 }
 
 function validateSkillShape(skill, required) {
-  if (!exists(path.join('skills', skill, 'SKILL.md'))) {
+  const skillDir = path.join('skills', skill);
+  const hasSkillDir = exists(skillDir);
+  if (!hasSkillDir) {
     if (required) fail(`missing skills/${skill}/SKILL.md`);
     return;
   }
+
+  if (!fs.statSync(path.join(root, skillDir)).isDirectory()) {
+    fail(`skills/${skill} should be a directory`);
+    return;
+  }
+
+  if (!exists(path.join(skillDir, 'SKILL.md'))) {
+    fail(`missing skills/${skill}/SKILL.md`);
+    return;
+  }
+
   if (!exists(path.join('skills', skill, 'agents', 'openai.yaml'))) {
     fail(`missing skills/${skill}/agents/openai.yaml`);
   }
@@ -235,7 +124,7 @@ for (const skill of coreSkills) {
 }
 
 for (const skill of optionalSkills) {
-  if (exists(path.join('skills', skill))) validateSkillShape(skill, false);
+  validateSkillShape(skill, false);
 }
 
 const agentsPath = path.join(root, 'AGENTS.md');
@@ -252,6 +141,14 @@ if (fs.existsSync(agentsPath)) {
     'DECISIONS.md',
     'AWS_RESOURCES.md',
     'aws-project-infrastructure',
+    'CODEX_TASK.md',
+    'REPO_CURRENT_STATE.md',
+    'project-context-hygiene',
+    'github-collaboration',
+    'docs/history/',
+    'docs/roadmap/backlog.md',
+    'codex/gh-<issue-number>-<short-slug>',
+    'gh issue view',
     'Do not push directly to `main`',
     'Do not commit unless explicitly asked',
   ]) {
@@ -261,7 +158,39 @@ if (fs.existsSync(agentsPath)) {
   }
 }
 
-validateRepoCurrentState();
+const issueFormPath = path.join(root, '.github', 'ISSUE_TEMPLATE', 'implementation.yml');
+if (fs.existsSync(issueFormPath)) {
+  const issueForm = fs.readFileSync(issueFormPath, 'utf8');
+  for (const id of ['goal', 'context', 'requirements', 'non_goals', 'acceptance_criteria', 'dependencies', 'validation']) {
+    if (!issueForm.includes(`id: ${id}`)) fail(`implementation issue form missing field: ${id}`);
+  }
+}
+
+const collaborationPath = path.join(root, 'references', 'github-collaboration-workflow.md');
+if (fs.existsSync(collaborationPath)) {
+  const collaboration = fs.readFileSync(collaborationPath, 'utf8');
+  for (const phrase of [
+    'Project draft issue',
+    'gh project item-create',
+    'codex/gh-<issue-number>-<short-slug>',
+    'Closes #42',
+    'Stacked Work',
+    'Permanent Integration Rule',
+    'Semantic Conflict Resolution',
+    'Duplicate Legacy Ticket IDs',
+    'Backlog Migration',
+  ]) {
+    if (!collaboration.includes(phrase)) fail(`GitHub collaboration reference missing phrase: ${phrase}`);
+  }
+}
+
+const prTemplatePath = path.join(root, '.github', 'pull_request_template.md');
+if (fs.existsSync(prTemplatePath)) {
+  const prTemplate = fs.readFileSync(prTemplatePath, 'utf8');
+  for (const phrase of ['Closes #', 'Base And Dependencies', 'Validation', 'Risks And Unresolved Questions']) {
+    if (!prTemplate.includes(phrase)) fail(`PR template missing required phrase: ${phrase}`);
+  }
+}
 
 if (failures > 0) {
   console.error(`Template validation failed with ${failures} issue(s).`);
