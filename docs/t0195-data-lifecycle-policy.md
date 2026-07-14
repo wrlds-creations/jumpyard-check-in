@@ -171,11 +171,10 @@ Recovery duration and data age are measurements from the rehearsal, not a produc
 
 Local acceptance consists of deterministic synthetic 24-hour/30-day/90-day/12-hour tests; handler SQL/grant and denied-path checks; PIN version/re-enrollment/session invalidation tests; restore plan/approval/receipt tests; full T0190-T0194 regression; frontend checks; CDK synth/read-only diff; and `git diff --check`.
 
-The following remain prohibited until Love gives a second explicit approval after reviewing the final diff and evidence:
+Love separately approved and completed the 2026-07-14 park-test source migrations, CDK rollout, regression, and read-only lifecycle dry-run after the snapshot/restore evidence. Source reached migration `0012`; the stack reached 170 resources with restricted roles; the dry-run performed no mutation. The following still require new explicit approval:
 
-- applying any migration or lifecycle mutation to a live database;
-- creating/deleting a snapshot, restore cluster, instance, subnet/security resource, or other AWS resource;
-- deploying the CDK or frontend changes;
+- applying the lifecycle plan or any other deletion/anonymization to live data;
+- creating a new restore or deleting the retained snapshot;
 - changing/promoting any secret or provider credential;
 - making Roller writes, enabling webhook processing, sending guest messages, or creating production.
 

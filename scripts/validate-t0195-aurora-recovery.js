@@ -7,6 +7,7 @@ const { spawnSync } = require('node:child_process');
 const ROOT = path.resolve(__dirname, '..');
 const INFRA = path.join(ROOT, 'infra');
 const TOOL = path.join(INFRA, 'scripts', 'aurora-recovery-rehearsal.ts');
+const MIGRATION_TOOL = path.join(INFRA, 'scripts', 'run-migrations.ts');
 const RUNBOOK = path.join(ROOT, 'docs', 't0195-aurora-recovery-rehearsal.md');
 const TS_NODE = path.join(INFRA, 'node_modules', 'ts-node', 'dist', 'bin.js');
 const CONFIG = path.join(INFRA, 'config', 'park-test.json');
@@ -42,9 +43,11 @@ function expectFailure(result, pattern, label) {
 }
 
 assert.ok(fs.existsSync(TOOL), 'Missing guarded Aurora recovery rehearsal tool.');
+assert.ok(fs.existsSync(MIGRATION_TOOL), 'Missing guarded Aurora migration tool.');
 assert.ok(fs.existsSync(RUNBOOK), 'Missing Aurora recovery rehearsal runbook.');
 
 const source = fs.readFileSync(TOOL, 'utf8');
+const migrationSource = fs.readFileSync(MIGRATION_TOOL, 'utf8');
 const runbook = fs.readFileSync(RUNBOOK, 'utf8');
 
 for (const required of [
@@ -73,6 +76,10 @@ for (const required of [
   'policy_definition_digest AS "policyDefinitionDigest"',
   'policyDefinitionDigest',
   'receiptDatabaseMatch',
+  'HttpEndpointEnabled',
+  'enable-http-endpoint',
+  'resumeRestoreCluster',
+  'Existing restore state is not an exact resumable isolation-created rehearsal.',
 ]) {
   assert.ok(source.includes(required), `Recovery tool is missing required guard/evidence text: ${required}`);
 }
@@ -113,6 +120,23 @@ assert.match(
 assert.match(source, /validateCleanupTargets\(config, args\.profile, state\)[\s\S]*"delete-db-cluster"/);
 assert.doesNotMatch(source, /affected_counts::text/);
 assert.doesNotMatch(source, /\b(?:eligible_counts|planned_counts|affected_counts)\b/);
+
+for (const required of [
+  '--restore-run-id',
+  '--restore-state-file',
+  'I_APPROVE_T0195_MIGRATIONS_ON_ISOLATED_RESTORE',
+  'T0195 restore migrations require the exact park-test config.',
+  'T0195 restore state is outside the exact isolated migration boundary.',
+  'state.stage !== "writer-available"',
+  'state.trafficEligible !== false',
+  'state.restoreClusterIdentifier !== clusterIdentifier',
+  'state.restoreClusterArn !== clusterArn',
+  'state.writerIdentifier !== writerIdentifier',
+  'secretId: `/${T0195_SOURCE_PREFIX}/aurora/admin`',
+]) {
+  assert.ok(migrationSource.includes(required), `Migration tool is missing restore guard text: ${required}`);
+}
+assert.doesNotMatch(migrationSource, /--cluster-identifier/);
 
 const selfTest = runTool(['--self-test']);
 assert.equal(selfTest.status, 0, `Recovery self-test failed.\n${selfTest.stdout}${selfTest.stderr}`);
@@ -217,7 +241,10 @@ for (const required of [
   'explicit cleanup approval',
   'after migrations `0010`-`0012` and restricted-role password provisioning',
   'does not apply migrations or rebind database-role passwords',
-  'separately reviewed and approved migration/credential-recovery procedure',
+  'I_APPROVE_T0195_MIGRATIONS_ON_ISOLATED_RESTORE',
+  'exact same-run resume',
+  'AWS exposes Data API state as `HttpEndpointEnabled`',
+  'administrator credential only for schema migration',
 ]) {
   assert.ok(runbook.includes(required), `Recovery runbook is missing: ${required}`);
 }
@@ -227,4 +254,5 @@ console.log('[pass] snapshot, restore, cleanup, and snapshot deletion require tw
 console.log('[pass] restore names are unique, private, ingress-free, non-production, and never app-attached');
 console.log('[pass] restore verification is migration-aware and emits aggregate-only counts/fingerprints');
 console.log('[pass] lifecycle receipt must match the latest completed database run before rehearsal completion');
+console.log('[pass] isolated restore migrations require exact run/state targeting and separate approval');
 console.log('[pass] no production RPO/RTO is claimed');

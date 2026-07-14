@@ -16,6 +16,12 @@ import { fromIni } from "@aws-sdk/credential-providers";
 const DEFAULT_DATABASE = "jumpyard_cloud";
 const MIGRATION_SCHEMA = "jumpyard";
 const MIGRATION_TABLE = "schema_migrations";
+const T0195_ACCOUNT = "376129878018";
+const T0195_REGION = "eu-north-1";
+const T0195_SOURCE_PREFIX = "jumpyard-check-in-park-test";
+const T0195_GLOBAL_APPROVAL = "I_APPROVE_T0195_EXTERNAL_AWS_WRITE_CHECKPOINT";
+const T0195_RESTORE_MIGRATION_APPROVAL = "I_APPROVE_T0195_MIGRATIONS_ON_ISOLATED_RESTORE";
+const REPO_ROOT = path.resolve(__dirname, "..", "..");
 
 interface DeployConfig {
   awsAccount: string;
@@ -26,6 +32,8 @@ interface DeployConfig {
 interface MigrationArgs {
   configPath?: string;
   profile?: string;
+  restoreRunId?: string;
+  restoreStateFile?: string;
   selfTestOnly: boolean;
   statusOnly: boolean;
 }
@@ -52,6 +60,8 @@ interface AppliedMigration {
 function parseArgs(argv: string[]): MigrationArgs {
   let configPath: string | undefined;
   let profile: string | undefined;
+  let restoreRunId: string | undefined;
+  let restoreStateFile: string | undefined;
   let selfTestOnly = false;
   let statusOnly = false;
 
@@ -66,6 +76,18 @@ function parseArgs(argv: string[]): MigrationArgs {
 
     if (arg === "--profile") {
       profile = argv[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--restore-run-id") {
+      restoreRunId = argv[index + 1]?.toLowerCase();
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--restore-state-file") {
+      restoreStateFile = argv[index + 1];
       index += 1;
       continue;
     }
@@ -87,7 +109,11 @@ function parseArgs(argv: string[]): MigrationArgs {
     throw new Error("Missing required --config path.");
   }
 
-  return { configPath, profile, selfTestOnly, statusOnly };
+  if (Boolean(restoreRunId) !== Boolean(restoreStateFile)) {
+    throw new Error("--restore-run-id and --restore-state-file must be supplied together.");
+  }
+
+  return { configPath, profile, restoreRunId, restoreStateFile, selfTestOnly, statusOnly };
 }
 
 function readDeployConfig(configPath: string): DeployConfig {
@@ -108,6 +134,94 @@ function readDeployConfig(configPath: string): DeployConfig {
     awsRegion: parsed.awsRegion,
     resourcePrefix: parsed.resourcePrefix,
   };
+}
+
+interface T0195RestoreState {
+  readonly account?: unknown;
+  readonly environment?: unknown;
+  readonly issue?: unknown;
+  readonly region?: unknown;
+  readonly restoreClusterArn?: unknown;
+  readonly restoreClusterIdentifier?: unknown;
+  readonly runId?: unknown;
+  readonly schemaVersion?: unknown;
+  readonly sourceClusterIdentifier?: unknown;
+  readonly sourceEngineVersion?: unknown;
+  readonly stage?: unknown;
+  readonly temporaryIsolationSecurityGroupId?: unknown;
+  readonly trafficEligible?: unknown;
+  readonly writerIdentifier?: unknown;
+}
+
+function resolveT0195RestoreTarget(
+  args: MigrationArgs,
+  config: DeployConfig,
+): { clusterIdentifier: string; secretId: string } | undefined {
+  if (!args.restoreRunId || !args.restoreStateFile) return undefined;
+  if (
+    config.awsAccount !== T0195_ACCOUNT ||
+    config.awsRegion !== T0195_REGION ||
+    config.resourcePrefix !== T0195_SOURCE_PREFIX
+  ) {
+    throw new Error("T0195 restore migrations require the exact park-test config.");
+  }
+  if (!/^20\d{6}t\d{6}z-[a-z0-9]{6}$/.test(args.restoreRunId)) {
+    throw new Error("T0195 restore run id is invalid.");
+  }
+  const runTimestamp = new Date(
+    args.restoreRunId.replace(
+      /^(\d{4})(\d{2})(\d{2})t(\d{2})(\d{2})(\d{2})z-[a-z0-9]{6}$/,
+      "$1-$2-$3T$4:$5:$6.000Z",
+    ),
+  );
+  const ageMs = Date.now() - runTimestamp.getTime();
+  if (!Number.isFinite(ageMs) || ageMs < -5 * 60_000 || ageMs > 24 * 60 * 60_000) {
+    throw new Error("T0195 restore migration run id must be current within 24 hours.");
+  }
+
+  const statePath = path.resolve(args.restoreStateFile);
+  const relative = path.relative(REPO_ROOT, statePath);
+  if (!path.isAbsolute(args.restoreStateFile) || relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+    throw new Error("T0195 restore state file must be an absolute path outside the repository.");
+  }
+  if (!existsSync(statePath)) throw new Error("T0195 restore state file does not exist.");
+  const state = JSON.parse(readFileSync(statePath, "utf8")) as T0195RestoreState;
+  const clusterIdentifier = `jy-park-test-restore-${args.restoreRunId}-aurora`;
+  const clusterArn = `arn:aws:rds:${T0195_REGION}:${T0195_ACCOUNT}:cluster:${clusterIdentifier}`;
+  const writerIdentifier = `jy-park-test-restore-${args.restoreRunId}-writer`;
+  if (
+    state.schemaVersion !== 1 ||
+    state.issue !== 194 ||
+    state.account !== T0195_ACCOUNT ||
+    state.region !== T0195_REGION ||
+    state.environment !== "park-test" ||
+    state.runId !== args.restoreRunId ||
+    state.stage !== "writer-available" ||
+    state.trafficEligible !== false ||
+    state.sourceClusterIdentifier !== `${T0195_SOURCE_PREFIX}-aurora` ||
+    state.sourceEngineVersion !== "16.13" ||
+    state.restoreClusterIdentifier !== clusterIdentifier ||
+    state.restoreClusterArn !== clusterArn ||
+    state.writerIdentifier !== writerIdentifier ||
+    typeof state.temporaryIsolationSecurityGroupId !== "string" ||
+    !/^sg-[a-f0-9]+$/.test(state.temporaryIsolationSecurityGroupId)
+  ) {
+    throw new Error("T0195 restore state is outside the exact isolated migration boundary.");
+  }
+  return {
+    clusterIdentifier,
+    secretId: `/${T0195_SOURCE_PREFIX}/aurora/admin`,
+  };
+}
+
+function requireT0195RestoreMigrationApproval(statusOnly: boolean): void {
+  if (statusOnly) return;
+  if (process.env.T0195_EXTERNAL_WRITE_APPROVAL !== T0195_GLOBAL_APPROVAL) {
+    throw new Error("T0195 external-write approval is missing for isolated restore migrations.");
+  }
+  if (process.env.T0195_RESTORE_MIGRATION_APPROVAL !== T0195_RESTORE_MIGRATION_APPROVAL) {
+    throw new Error("T0195 isolated restore migration approval is missing.");
+  }
 }
 
 function splitSqlStatements(sql: string): string[] {
@@ -390,12 +504,12 @@ async function applyMigration(context: MigrationContext, migration: MigrationFil
   }
 }
 
-async function resolveSecretArn(config: DeployConfig, profile?: string): Promise<string> {
+async function resolveSecretArn(config: DeployConfig, profile?: string, secretId?: string): Promise<string> {
   const client = new SecretsManagerClient({
     credentials: profile ? fromIni({ profile }) : undefined,
     region: config.awsRegion,
   });
-  const secretName = `/${config.resourcePrefix}/aurora/admin`;
+  const secretName = secretId ?? `/${config.resourcePrefix}/aurora/admin`;
   const response = await client.send(new DescribeSecretCommand({ SecretId: secretName }));
 
   if (!response.ARN) {
@@ -416,9 +530,12 @@ async function main(): Promise<void> {
     throw new Error("Missing required --config path.");
   }
   const config = readDeployConfig(args.configPath);
-  const secretArn = await resolveSecretArn(config, args.profile);
+  const restoreTarget = resolveT0195RestoreTarget(args, config);
+  if (restoreTarget) requireT0195RestoreMigrationApproval(args.statusOnly);
+  const secretArn = await resolveSecretArn(config, args.profile, restoreTarget?.secretId);
+  const clusterIdentifier = restoreTarget?.clusterIdentifier ?? `${config.resourcePrefix}-aurora`;
   const context: MigrationContext = {
-    clusterArn: `arn:aws:rds:${config.awsRegion}:${config.awsAccount}:cluster:${config.resourcePrefix}-aurora`,
+    clusterArn: `arn:aws:rds:${config.awsRegion}:${config.awsAccount}:cluster:${clusterIdentifier}`,
     database: DEFAULT_DATABASE,
     rds: new RDSDataClient({
       credentials: args.profile ? fromIni({ profile: args.profile }) : undefined,
