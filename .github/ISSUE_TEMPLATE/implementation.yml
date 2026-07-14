@@ -1,0 +1,59 @@
+name: Implementation
+description: Approved, scoped implementation work for an issue-backed branch and PR.
+title: ""
+labels: []
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: State the concrete outcome this issue should achieve.
+      placeholder: What should be true when this issue is complete?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Explain the current behavior, evidence, and why this work matters.
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: List required behavior and allowed areas.
+      placeholder: "- Requirement one\n- Requirement two"
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: Name behavior and areas that must remain outside this issue.
+      placeholder: "- Not part of this issue"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Give observable, testable completion criteria.
+      placeholder: "- [ ] Observable result"
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and base
+      description: List blocking issues, stacked PRs, external gates, and the approved base branch. Use None when independent from main.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: List automated commands and required manual verification.
+      placeholder: "- npm test\n- Manual device scenario"
+    validations:
+      required: true

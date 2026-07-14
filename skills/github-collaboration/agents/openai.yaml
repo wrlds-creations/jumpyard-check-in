@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Collaboration"
+  short_description: "Coordinate issues, projects, branches, PRs, and integrations"
+  default_prompt: "Use $github-collaboration to manage this work through the linked GitHub Project and issue-backed branch, preserving parallel work and resolving shared documentation semantically."

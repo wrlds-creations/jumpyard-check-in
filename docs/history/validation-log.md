@@ -2,6 +2,17 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## Issue #192 GitHub Collaboration Migration Validation
+
+- 2026-07-14: Love approved adopting `wrlds-creations/wrlds-template@954c66cd311b` before T0195. The private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5) was created after existing organization Projects were inspected, linked only to `wrlds-creations/jumpyard-check-in`, and manually confirmed by Love with that repository as its default.
+- 2026-07-14: Live Project readback verified all eight Status options plus Priority, Work Type, Track, Owner, and Legacy ID. The Project contains 30 items: 29 unapproved drafts and open repository issue [#192](https://github.com/wrlds-creations/jumpyard-check-in/issues/192). Final status counts are 16 Backlog, 10 Blocked, 3 Parked, and issue #192 In review.
+- 2026-07-14: All 29 draft bodies match their Legacy ID fields. The 37 Project-owned follow-up references occur exactly once each; together with eight durable external-gate references and two archived references, all 47 formerly open follow-ups are reconciled. All 40 former backlog row IDs are preserved through draft ownership, documented aliases, or external gates.
+- 2026-07-14: T0195 remains an explicitly unapproved DraftIssue in Backlog. The migration did not approve or implement T0195 or any later product outcome, and the 192 completed legacy tickets remain searchable history rather than Project items.
+- 2026-07-14: The repository now uses GitHub Projects for mutable planning, repository Issues for approved implementation scope, `codex/gh-<issue>-<slug>` ticket branches, a static issue resolver, an implementation issue form, the WRLDS PR template, a GitHub collaboration reference and skill, and deterministic migration/workflow validators. Mutable Markdown backlog and follow-up ledgers were replaced with durable policy, gates, guardrails, and the one-time migration record.
+- 2026-07-14: Full `npm run validate` and `npm run infra:check` passed. Focused template, current-ticket, follow-up, history, migration, and skill validators passed; `git diff --check origin/main` passed with line-ending warnings only; and the branch remains based on `origin/main` commit `775804f`.
+- 2026-07-14: Diff review confirmed no application, UI, API, Lambda, migration, dependency, infrastructure, AWS inventory, Roller, Aurora, secret, messaging, Cloudflare, deployment, or runtime file change. No AWS, Roller, Cloudflare, deployment, production, guest-message, booking, payment, add-on, or redemption write was performed.
+- 2026-07-14: Two independent workflow/migration reviews reported ready with no remaining high- or medium-severity findings. Issue #192 remains open with all ten acceptance criteria checked and Project status In review so commit, push, PR, and merge remain separate explicitly approved steps.
+
 ## T0194 Personal Staff/Admin Identity
 
 - 2026-07-14: Love approved the final split model after plain-language review: ordinary staff use only a unique personal six-digit PIN on shared park devices, while a small administrator group uses separate Cognito password plus required TOTP to create, reset, enable, and disable staff. Device registration, ordinary-staff email/password/MFA, guest-flow changes, production, broad imports, webhooks, automatic messaging, and a real Roller redeem smoke were excluded.

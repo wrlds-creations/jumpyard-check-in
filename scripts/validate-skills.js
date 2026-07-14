@@ -135,6 +135,29 @@ if (!fs.existsSync(skillsDir)) {
   }
 }
 
+for (const [skillName, requiredPhrases, forbiddenPatterns] of [
+  [
+    'project-context-hygiene',
+    ['GitHub Issues own approved implementation scope', 'CODEX_TASK.md` must remain a static resolver', 'must not contain an operational ledger'],
+    [/Confirm the active ticket id matches/i, /current ticket, confirmed next tickets/i, /50-ticket forward backlog/i],
+  ],
+  [
+    'codex-repo-audit',
+    ['static resolver for issue-backed branches', 'linked GitHub Project owns unapproved drafts', 'FOLLOWUPS.md` is policy only'],
+    [/FOLLOWUPS\.md` exists for out-of-scope issues and deferred work/i, /scoped ticket handoffs/i],
+  ],
+]) {
+  const skillPath = path.join(skillsDir, skillName, 'SKILL.md');
+  if (!fs.existsSync(skillPath)) continue;
+  const text = readText(skillPath);
+  for (const phrase of requiredPhrases) {
+    if (!text.includes(phrase)) fail(`${skillName} missing GitHub-native policy phrase: ${phrase}`);
+  }
+  for (const pattern of forbiddenPatterns) {
+    if (pattern.test(text)) fail(`${skillName} contains legacy mutable-ticket guidance: ${pattern}`);
+  }
+}
+
 if (failures > 0) {
   console.error(`Skill validation failed with ${failures} issue(s).`);
   process.exit(1);

@@ -4,42 +4,29 @@ Codex should work with Love in a structured, direct, project-memory-first way.
 
 ## Principles
 
-- Be structured and direct.
-- Explain assumptions.
-- Ask focused questions when blocked.
-- Do not overwhelm with all questions at once.
-- Propose clear options with tradeoffs.
-- Prefer practical next steps.
-- Preserve decisions in files.
-- Suggest skills when patterns become reusable.
-- Implement one scoped ticket at a time.
-- Capture out-of-scope work as followups instead of widening the task.
+- Read durable project context before implementation.
+- Resolve active scope from the approved GitHub issue.
+- Explain each proposed implementation issue to Love before approval.
+- Ask focused questions only when blocked or when scope materially changes.
+- Implement one issue at a time and preserve unrelated user changes.
+- Record durable facts and decisions in repository files.
+- Create Project draft issues for out-of-scope work instead of widening the current issue.
+- Prefer practical next steps and validated, reviewable diffs.
 
-## Project Memory
+## Execution
 
-- Read `AGENTS.md` first.
-- Read `PROJECT_CONTEXT.md` before implementation.
-- Read `DECISIONS.md` before implementation.
-- Read `REPO_CURRENT_STATE.md` before implementation when it exists.
-- Read `AWS_RESOURCES.md` before AWS work.
-- Treat confirmed files as more reliable than chat history.
+1. Read `AGENTS.md`, project context, decisions, and merged current state.
+2. Resolve the issue from `codex/gh-<issue>-<slug>` using `CODEX_TASK.md`.
+3. Read the issue with `gh issue view` and confirm scope, non-goals, dependencies, and validation.
+4. Check for a matching skill.
+5. Implement and validate only the approved scope.
+6. Update durable docs when merged facts or meaningful decisions change.
+7. Open a PR using `.github/pull_request_template.md` and include `Closes #<issue>`.
 
-## Ticket Execution
+## Collaboration
 
-- Use `CODEX_TASK.md` for scoped implementation work.
-- Confirm allowed areas, do-not-touch areas, non-goals, acceptance criteria, and verification before editing.
-- Do not implement future-ticket features unless explicitly asked.
-- Update `REPO_CURRENT_STATE.md` after completed tickets when repository facts changed.
-- Add out-of-scope issues or deferred improvements to `FOLLOWUPS.md`.
+GitHub Issues and Projects own operational work. Repository Markdown does not mirror active issue queues. Use `references/github-collaboration-workflow.md` for draft triage, stacked work, stale branch integration, and semantic conflict resolution.
 
-## Questions
+## Decisions And Skills
 
-Ask only when missing information blocks the work or creates material risk. Prefer a small set of concrete questions over a large intake form.
-
-## Decisions
-
-When a decision affects architecture, cost, scope, data, security, deployment, or maintainability, record it in `DECISIONS.md`.
-
-## Skills
-
-When a workflow becomes reusable, use `skill-candidate-capture` to propose a new skill or update an existing one.
+Record architecture, scope, cost, data, security, deployment, UX, or maintainability decisions in `DECISIONS.md`. When a workflow becomes reusable, use `skill-candidate-capture` and `skill-creator` to propose or create a skill.

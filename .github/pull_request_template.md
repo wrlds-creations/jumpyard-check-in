@@ -1,18 +1,23 @@
 # Pull Request
 
-## Summary
+## Linked Issue
+
+Closes #
+
+## Base And Dependencies
+
+- Base branch: `main`
+- Depends on: None
+- Source/integration branches: None
+- Legacy IDs or commits preserved: None
+
+## Intended Behavior
 
 -
 
-## Checks
-
-- [ ] `PROJECT_CONTEXT.md` updated if confirmed project facts changed
-- [ ] `DECISIONS.md` updated if meaningful decisions changed
-- [ ] `AWS_RESOURCES.md` updated if AWS resources changed
-- [ ] Validation run and results documented
-- [ ] Risks and open questions documented
-
 ## Validation
+
+Automated:
 
 ```text
 npm run validate
@@ -22,18 +27,24 @@ Result:
 
 -
 
-Relevant app checks:
-
-```text
-cd jumpyard-checkin-phone && npm run lint && npm run build
-cd jumpyard-checkin-kiosk && npm run lint && npm run build
-cd jumpyard-checkin-admin && npm run lint && npm run build
-```
-
-Result:
+Manual verification:
 
 -
 
-## Risks And Open Questions
+## Durable Documentation
+
+- [ ] `PROJECT_CONTEXT.md` updated if confirmed facts changed
+- [ ] `DECISIONS.md` updated if meaningful decisions changed
+- [ ] `AWS_RESOURCES.md` updated if AWS resources changed
+- [ ] `REPO_CURRENT_STATE.md` updated only if merged mainline facts changed
+- [ ] Out-of-scope findings created as Project draft issues
+- [ ] Generated files regenerated with their canonical command
+- [ ] Not applicable items are explained below
+
+## Risks And Unresolved Questions
 
 -
+
+## Review Notes
+
+- Semantic conflict decisions, stacked-PR context, and follow-up Project items:
