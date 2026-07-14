@@ -51,8 +51,8 @@ for (const forbidden of [/^## Current Ticket\s*$/m, /^## Confirmed Next Tickets\
   if (forbidden.test(repoState)) fail(`REPO_CURRENT_STATE.md contains legacy mutable-ticket marker: ${forbidden}`);
 }
 
-if (!repoState.includes('no product implementation Issue is approved')) {
-  fail('REPO_CURRENT_STATE.md must state approval without creating a Markdown next-work queue');
+if (!repoState.includes('current mutable state is read from GitHub rather than copied here')) {
+  fail('REPO_CURRENT_STATE.md must defer mutable work state to GitHub without creating a Markdown queue');
 }
 
 if (failures > 0) {

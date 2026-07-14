@@ -5,13 +5,13 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-07-14
-- Latest product baseline: `775804f` after merged PR #191 and completed legacy ticket T0194.
-- Workflow baseline: GitHub-native collaboration adopted through issue [#192](https://github.com/wrlds-creations/jumpyard-check-in/issues/192); no product or runtime behavior changed.
+- Latest merged baseline: `acb94e8` after PR #193 adopted the GitHub-native workflow for issue [#192](https://github.com/wrlds-creations/jumpyard-check-in/issues/192); no product or runtime behavior changed.
+- Latest deployed product baseline: completed legacy ticket T0194 plus the T0193 API boundary.
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
-- Initial migration state: 29 unique unapproved draft issues plus issue #192, with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields.
-- Product/runtime state: unchanged by issue #192. T0194's deployed PIN/Cognito identity and T0193's protected API remain the latest application baseline.
+- Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
+- Product/runtime state: unchanged by issue #192/PR #193. T0194's deployed PIN/Cognito identity and T0193's protected API remain the latest application baseline.
 - Completed legacy tickets: 192, latest `T0194`. They remain history and were not backfilled into the Project.
-- Product approval state: no product implementation Issue is approved. The draft carrying legacy reference T0195 remains unapproved and has no authority until Love approves its explained scope and it is converted to a repository Issue.
+- Product approval and implementation status are read from GitHub Issues and the Project rather than copied into this merged-mainline snapshot.
 
 GitHub issue `#192` and legacy ticket `T0192` are unrelated; preserve both prefixes.
 
@@ -62,12 +62,11 @@ Current workflow and product checks are defined in [TEST_PLAN.md](TEST_PLAN.md).
 - `git diff --check`
 - live readback of Project link, fields, item count, field completeness, and legacy-ID coverage
 
-Issue #192 changes documentation, workflow templates, local skills, and validators only. It must not call or mutate AWS, Roller, Aurora, Cloudflare, payment, redeem, SMS, email, or deployed application behavior.
+The merged issue #192 baseline changed documentation, workflow templates, local skills, and validators only. It did not mutate AWS, Roller, Aurora, Cloudflare, payment, redeem, SMS, email, or deployed application behavior.
 
 ## Current Risks And Boundaries
 
-- The Project's 29 drafts are unapproved planning material, not implementation authorization.
+- Project drafts remain unapproved planning material, not implementation authorization.
 - External provider/approval dependencies remain under [External Gates](docs/roadmap/backlog.md#external-gates) and do not become Issues until actionable scope is approved.
-- T0195 must not begin inside issue #192. Its draft must first be explained, approved, converted to a repository Issue, and placed on a fresh issue branch.
 - Production stays separate. No production resource, DNS, sender, webhook, data copy, or cutover is authorized by this workflow migration.
-- No CI/CD, OIDC, branch protection, ruleset, remote legacy-branch cleanup, deployment, or application behavior change is included in issue #192.
+- No CI/CD, OIDC, branch protection, ruleset, remote legacy-branch cleanup, deployment, or application behavior change was included in issue #192.

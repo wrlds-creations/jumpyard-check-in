@@ -20,13 +20,17 @@ const PRODUCT_CACHE_TTL_MS = 15 * 60 * 1000;
 const RETRYABLE_DUPLICATE_STATUSES = new Set(['received', 'failed']);
 const SOURCE_WEBHOOK_GUEST_PROFILE = 'roller_webhook_booking_detail';
 const SOURCE_WEBHOOK_GUEST_DETAIL = 'roller_webhook_guest_detail';
+const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
+const SHARED_TOKEN_CACHE_MS = 60 * 1000;
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
 const ssmClient = new SSMClient({});
 
 let cachedWebhookToken = null;
+let cachedWebhookTokenExpiresAt = 0;
 let cachedRollerConfig = null;
+let cachedRollerConfigExpiresAt = 0;
 let cachedToken = null;
 let cachedProducts = null;
 
@@ -198,7 +202,8 @@ async function getWebhookToken() {
     return process.env.WEBHOOK_DEV_TOKEN;
   }
 
-  if (cachedWebhookToken) return cachedWebhookToken;
+  const now = Date.now();
+  if (cachedWebhookToken && cachedWebhookTokenExpiresAt > now) return cachedWebhookToken;
 
   const secretId = process.env.WEBHOOK_DEV_TOKEN_SECRET_ARN;
   if (!secretId) {
@@ -227,6 +232,8 @@ async function getWebhookToken() {
     error.code = 'webhook_config_error';
     throw error;
   }
+
+  cachedWebhookTokenExpiresAt = now + SHARED_TOKEN_CACHE_MS;
 
   return cachedWebhookToken;
 }
@@ -533,7 +540,8 @@ async function persistEnrichmentEventLog(intake, correlationId, booking, product
 }
 
 async function getRollerConfig() {
-  if (cachedRollerConfig) return cachedRollerConfig;
+  const now = Date.now();
+  if (cachedRollerConfig && cachedRollerConfigExpiresAt > now) return cachedRollerConfig;
 
   const [envParameter, baseUrlParameter, secret] = await Promise.all([
     readParameter(process.env.ROLLER_ENV_PARAMETER_NAME),
@@ -550,6 +558,7 @@ async function getRollerConfig() {
 
   validateRollerConfig(config);
   cachedRollerConfig = config;
+  cachedRollerConfigExpiresAt = now + PROVIDER_CONFIG_CACHE_MS;
   return config;
 }
 

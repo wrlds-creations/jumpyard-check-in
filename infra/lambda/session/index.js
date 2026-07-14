@@ -21,6 +21,7 @@ const LINK_OPEN_AUDIT_REFRESH_MINUTES = 5;
 const LINK_RESOLVE_COOLDOWN_SECONDS = 5;
 const DEFAULT_STAFF_AUTH_TTL_MINUTES = 12 * 60;
 const STAFF_AUTH_CONFIG_CACHE_MS = 30 * 1000;
+const CHECKIN_LINK_DEV_TOKEN_CACHE_MS = 60 * 1000;
 const STAFF_IDENTITY_MODE_COGNITO = 'cognito';
 const STAFF_IDENTITY_MODE_PIN = 'pin';
 const STAFF_IDENTITY_PROVIDER_COGNITO = 'cognito';
@@ -93,6 +94,7 @@ const secretsClient = new SecretsManagerClient({});
 const snsClient = new SNSClient({});
 
 let cachedCheckinLinkDevToken = null;
+let cachedCheckinLinkDevTokenExpiresAt = 0;
 let cachedStaffAuthConfig = null;
 let cachedStaffAuthConfigExpiresAt = 0;
 let cachedStaffPinPepper = null;
@@ -800,7 +802,9 @@ async function handleAdminStaffItem(event, body, correlationId) {
     const pin = normalizePinInput(body.pin);
     const pinError = validateNewStaffPin(pin);
     if (pinError) return jsonResponse(400, correlationId, { status: 'invalid_request', error: pinError });
-    pinCredential = await createStaffPinCredential(pin, auth.staff.environment, auth.staff.venueId);
+    pinCredential = await createStaffPinCredential(pin, auth.staff.environment, auth.staff.venueId, {
+      forceRefresh: true,
+    });
   } else if (Object.prototype.hasOwnProperty.call(body, 'pin')) {
     return jsonResponse(400, correlationId, {
       status: 'invalid_request',
@@ -1990,6 +1994,7 @@ async function getBookingContext(identifier) {
        FROM jumpyard.product_catalog_cache AS pc
        WHERE pc.roller_env = b.roller_env
          AND pc.summary ->> 'id' = COALESCE(NULLIF(t.product_id, ''), NULLIF(item.product_id, ''))
+         AND COALESCE(pc.expires_at, pc.fetched_at + interval '24 hours') > now()
        ORDER BY pc.fetched_at DESC
        LIMIT 1
      ) AS product ON true
@@ -3826,7 +3831,15 @@ async function reserveIdempotencyKey(operation, idempotencyKey, requestHash) {
        'started',
        now() + interval '2 hours'
      )
-     ON CONFLICT (idempotency_key) DO NOTHING`,
+     ON CONFLICT (idempotency_key) DO UPDATE SET
+       operation = EXCLUDED.operation,
+       request_hash = EXCLUDED.request_hash,
+       status = EXCLUDED.status,
+       result_ref = NULL,
+       expires_at = EXCLUDED.expires_at,
+       created_at = now(),
+       updated_at = now()
+     WHERE jumpyard.idempotency_records.expires_at <= now()`,
     [
       stringParameter('idempotencyKey', idempotencyKey),
       stringParameter('operation', operation),
@@ -4622,7 +4635,10 @@ async function getCheckinLinkDevToken() {
     return process.env.CHECKIN_LINK_DEV_TOKEN;
   }
 
-  if (cachedCheckinLinkDevToken) return cachedCheckinLinkDevToken;
+  const now = Date.now();
+  if (cachedCheckinLinkDevToken && cachedCheckinLinkDevTokenExpiresAt > now) {
+    return cachedCheckinLinkDevToken;
+  }
 
   const secretId = process.env.CHECKIN_LINK_DEV_TOKEN_SECRET_ARN;
   if (!secretId) {
@@ -4652,6 +4668,7 @@ async function getCheckinLinkDevToken() {
     throw error;
   }
 
+  cachedCheckinLinkDevTokenExpiresAt = now + CHECKIN_LINK_DEV_TOKEN_CACHE_MS;
   return cachedCheckinLinkDevToken;
 }
 
@@ -4706,7 +4723,7 @@ async function handlePinStaffAuthLogin(event, body, correlationId) {
   }
 
   const pepper = await getStaffPinPepper();
-  const sourceHash = staffPinSourceHash(pepper, readStaffSourceAddress(event));
+  const sourceHash = staffPinSourceHash(pepper.value, readStaffSourceAddress(event));
   const limit = await readStaffPinAuthLimit(gate, sourceHash);
   if (limit.blocked) return staffPinRateLimitedResponse(correlationId, limit.retryAfterSeconds);
 
@@ -4717,9 +4734,15 @@ async function handlePinStaffAuthLogin(event, body, correlationId) {
       : staffPinInvalidResponse(correlationId);
   }
 
-  const lookupHash = staffPinLookupHash(pepper, gate.environment, gate.venueId, pin);
-  const identity = await findLocalPinIdentity(lookupHash, gate);
-  const verified = await verifyStaffPin(pin, identity?.pinVerifier ?? null, pepper, gate.environment, gate.venueId);
+  const lookupHash = staffPinLookupHash(pepper.value, gate.environment, gate.venueId, pin);
+  const identity = await findLocalPinIdentity(lookupHash, pepper.version, gate);
+  const verified = await verifyStaffPin(
+    pin,
+    identity?.pinVerifier ?? null,
+    pepper.value,
+    gate.environment,
+    gate.venueId,
+  );
   if (
     !verified ||
     !identity ||
@@ -4736,7 +4759,7 @@ async function handlePinStaffAuthLogin(event, body, correlationId) {
 
   let issued;
   try {
-    issued = await createLocalPinStaffSession(identity, gate, lookupHash);
+    issued = await createLocalPinStaffSession(identity, gate, lookupHash, pepper.version);
   } catch (error) {
     if (error?.code === 'staff_pin_revalidation_failed') return staffPinInvalidResponse(correlationId);
     throw error;
@@ -4827,11 +4850,16 @@ function isTrivialStaffPin(pin) {
   ]).has(pin);
 }
 
-async function getStaffPinPepper() {
+async function getStaffPinPepper(options = {}) {
   const now = Date.now();
-  if (cachedStaffPinPepper && cachedStaffPinPepperExpiresAt > now) return cachedStaffPinPepper;
+  const forceRefresh = options.forceRefresh === true;
+  if (!forceRefresh && cachedStaffPinPepper && cachedStaffPinPepperExpiresAt > now) {
+    return cachedStaffPinPepper;
+  }
 
   let pepper = stringOrNull(process.env.STAFF_PIN_PEPPER);
+  let purpose = pepper ? 'staff-pin-pepper' : null;
+  let version = pepper ? numberOrNull(process.env.STAFF_PIN_PEPPER_VERSION ?? 1) : null;
   if (!pepper) {
     const secretId = stringOrNull(process.env.STAFF_PIN_PEPPER_SECRET_ARN);
     if (!secretId) {
@@ -4839,7 +4867,9 @@ async function getStaffPinPepper() {
       error.code = 'staff_pin_config_error';
       throw error;
     }
-    const response = await secretsClient.send(new GetSecretValueCommand({ SecretId: secretId }));
+    const response = await secretsClient.send(
+      new GetSecretValueCommand({ SecretId: secretId, VersionStage: 'AWSCURRENT' }),
+    );
     const secretString = stringOrNull(response.SecretString);
     if (!secretString) {
       const error = new Error('Staff PIN pepper secret has no string value.');
@@ -4848,19 +4878,29 @@ async function getStaffPinPepper() {
     }
     try {
       pepper = stringOrNull(JSON.parse(secretString).pinPepper);
+      purpose = stringOrNull(JSON.parse(secretString).purpose);
+      version = numberOrNull(JSON.parse(secretString).version);
     } catch {
       pepper = null;
+      purpose = null;
+      version = null;
     }
   }
 
-  if (!pepper || Buffer.byteLength(pepper, 'utf8') < 32) {
-    const error = new Error('Staff PIN pepper must be an independent secret with at least 32 bytes.');
+  if (
+    purpose !== 'staff-pin-pepper' ||
+    !pepper ||
+    Buffer.byteLength(pepper, 'utf8') < 32 ||
+    !Number.isSafeInteger(version) ||
+    version <= 0
+  ) {
+    const error = new Error('Staff PIN pepper must use the versioned server-only contract.');
     error.code = 'staff_pin_config_error';
     throw error;
   }
-  cachedStaffPinPepper = pepper;
+  cachedStaffPinPepper = { value: pepper, version };
   cachedStaffPinPepperExpiresAt = now + STAFF_AUTH_CONFIG_CACHE_MS;
-  return pepper;
+  return cachedStaffPinPepper;
 }
 
 function staffPinLookupHash(pepper, environment, venueId, pin) {
@@ -4885,12 +4925,13 @@ function staffPinVerifyMaterial(pepper, environment, venueId, pin) {
     .digest();
 }
 
-async function createStaffPinCredential(pin, environment, venueId) {
-  const pepper = await getStaffPinPepper();
+async function createStaffPinCredential(pin, environment, venueId, options = {}) {
+  const pepper = await getStaffPinPepper(options);
   const salt = crypto.randomBytes(16);
-  const derived = await scryptStaffPin(staffPinVerifyMaterial(pepper, environment, venueId, pin), salt);
+  const derived = await scryptStaffPin(staffPinVerifyMaterial(pepper.value, environment, venueId, pin), salt);
   return {
-    lookupHash: staffPinLookupHash(pepper, environment, venueId, pin),
+    lookupHash: staffPinLookupHash(pepper.value, environment, venueId, pin),
+    pepperVersion: pepper.version,
     verifier: [
       'scrypt-v1',
       STAFF_PIN_SCRYPT_COST,
@@ -4984,7 +5025,7 @@ async function readStaffPinAuthLimit(gate, sourceHash) {
       stringParameter('environment', gate.environment),
       stringParameter('venueId', gate.venueId),
       stringParameter('sourceHash', sourceHash),
-      stringParameter('venueHash', staffPinVenueHash(pepper, gate.environment, gate.venueId)),
+      stringParameter('venueHash', staffPinVenueHash(pepper.value, gate.environment, gate.venueId)),
     ],
   );
   return staffPinLimitResult(mappedRows(result));
@@ -5071,7 +5112,7 @@ async function recordStaffPinAuthFailure(gate, sourceHash) {
       stringParameter('environment', gate.environment),
       stringParameter('venueId', gate.venueId),
       stringParameter('sourceHash', sourceHash),
-      stringParameter('venueHash', staffPinVenueHash(pepper, gate.environment, gate.venueId)),
+      stringParameter('venueHash', staffPinVenueHash(pepper.value, gate.environment, gate.venueId)),
     ],
   );
   const row = firstMappedRow(result) ?? {};
@@ -5093,7 +5134,7 @@ function staffPinLimitResult(rows) {
   };
 }
 
-async function findLocalPinIdentity(pinLookupHash, gate) {
+async function findLocalPinIdentity(pinLookupHash, pinPepperVersion, gate) {
   const result = await executeStatement(
     `SELECT
        staff_identity_id,
@@ -5107,16 +5148,21 @@ async function findLocalPinIdentity(pinLookupHash, gate) {
        active,
        revoked_at::text AS identity_revoked_at,
        tokens_valid_after::text AS tokens_valid_after,
-       pin_verifier
+       pin_verifier,
+       pin_pepper_version,
+       pin_reenrollment_required_at::text AS pin_reenrollment_required_at
      FROM jumpyard.staff_identities
      WHERE identity_provider = :identityProvider
        AND pin_lookup_hash = :pinLookupHash
+       AND pin_pepper_version = CAST(:pinPepperVersion AS integer)
+       AND pin_reenrollment_required_at IS NULL
        AND environment = :environment
        AND venue_id = :venueId
      LIMIT 1`,
     [
       stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_PIN),
       stringParameter('pinLookupHash', pinLookupHash),
+      stringParameter('pinPepperVersion', String(pinPepperVersion)),
       stringParameter('environment', gate.environment),
       stringParameter('venueId', gate.venueId),
     ],
@@ -5131,6 +5177,8 @@ async function findLocalPinIdentity(pinLookupHash, gate) {
     familyName: stringOrNull(row.family_name),
     givenName: stringOrNull(row.given_name),
     pinVerifier: stringOrNull(row.pin_verifier),
+    pinPepperVersion: numberOrNull(row.pin_pepper_version),
+    pinReenrollmentRequiredAt: stringOrNull(row.pin_reenrollment_required_at),
     revokedAt: stringOrNull(row.identity_revoked_at),
     role: stringOrNull(row.role),
     staffIdentityId: stringOrNull(row.staff_identity_id),
@@ -5139,7 +5187,7 @@ async function findLocalPinIdentity(pinLookupHash, gate) {
   };
 }
 
-async function createLocalPinStaffSession(identity, gate, pinLookupHash) {
+async function createLocalPinStaffSession(identity, gate, pinLookupHash, pinPepperVersion) {
   const now = Date.now();
   const authTime = new Date(now).toISOString();
   const absoluteExpiresAt = new Date(now + STAFF_SESSION_ABSOLUTE_HOURS * 60 * 60 * 1000).toISOString();
@@ -5170,6 +5218,7 @@ async function createLocalPinStaffSession(identity, gate, pinLookupHash) {
       stringParameter('venueId', gate.venueId),
       stringParameter('pinLookupHash', pinLookupHash),
       stringParameter('pinVerifier', identity.pinVerifier),
+      stringParameter('pinPepperVersion', String(pinPepperVersion)),
       stringParameter('authTime', authTime),
     ];
     const lockedIdentityResult = await executeStatement(
@@ -5187,6 +5236,8 @@ async function createLocalPinStaffSession(identity, gate, pinLookupHash) {
          AND venue_id = :venueId
          AND pin_lookup_hash = :pinLookupHash
          AND pin_verifier = :pinVerifier
+         AND pin_pepper_version = CAST(:pinPepperVersion AS integer)
+         AND pin_reenrollment_required_at IS NULL
          AND active = true
          AND revoked_at IS NULL
          AND CAST(:authTime AS timestamptz) >= tokens_valid_after
@@ -5327,6 +5378,7 @@ async function authorizePinStaffRequest(event, requiredPermission) {
        AND identity.venue_id = :venueId
        AND identity.active = true
        AND identity.revoked_at IS NULL
+       AND identity.pin_reenrollment_required_at IS NULL
        AND staff_session.auth_time >= identity.tokens_valid_after
        AND ${allowedRoleClause}
      RETURNING
@@ -5343,7 +5395,8 @@ async function authorizePinStaffRequest(event, requiredPermission) {
        identity.venue_id,
        identity.active,
        identity.revoked_at::text AS identity_revoked_at,
-       identity.tokens_valid_after::text AS tokens_valid_after`,
+       identity.tokens_valid_after::text AS tokens_valid_after,
+       identity.pin_reenrollment_required_at::text AS pin_reenrollment_required_at`,
     pinSessionParameters(tokenResult.tokenHash, gate),
   );
   const row = firstMappedRow(result);
@@ -5367,7 +5420,8 @@ async function classifyPinStaffAuthorizationFailure(tokenHash, gate, requiredPer
        identity.venue_id,
        identity.active,
        identity.revoked_at::text AS identity_revoked_at,
-       identity.tokens_valid_after::text AS tokens_valid_after
+       identity.tokens_valid_after::text AS tokens_valid_after,
+       identity.pin_reenrollment_required_at::text AS pin_reenrollment_required_at
      FROM jumpyard.staff_auth_sessions AS staff_session
      INNER JOIN jumpyard.staff_identities AS identity
        ON identity.staff_identity_id = staff_session.staff_identity_id
@@ -5382,6 +5436,7 @@ async function classifyPinStaffAuthorizationFailure(tokenHash, gate, requiredPer
   const row = firstMappedRow(result);
   if (!row) return { ok: false, code: 'staff_auth_session_required', statusCode: 401, message: 'Staff authentication is required.' };
   if (row.active !== true || stringOrNull(row.identity_revoked_at)) return staffIdentityNotAuthorized();
+  if (stringOrNull(row.pin_reenrollment_required_at)) return staffPinReenrollmentRequired();
   if (stringOrNull(row.session_revoked_at)) {
     return { ok: false, code: 'staff_auth_session_revoked', statusCode: 401, message: 'The staff authentication session has been revoked.' };
   }
@@ -5488,7 +5543,8 @@ async function listLocalPinStaff(venueId) {
     `SELECT staff_identity_id, given_name, family_name, display_name, role, environment, venue_id,
             active, revoked_at::text AS identity_revoked_at,
             pin_changed_at::text AS pin_changed_at, created_at::text AS created_at,
-            updated_at::text AS updated_at
+            updated_at::text AS updated_at, pin_pepper_version,
+            pin_reenrollment_required_at::text AS pin_reenrollment_required_at
      FROM jumpyard.staff_identities
      WHERE identity_provider = :identityProvider
        AND environment = :environment
@@ -5504,7 +5560,9 @@ async function listLocalPinStaff(venueId) {
 }
 
 async function createLocalPinStaff(request, admin) {
-  const credential = await createStaffPinCredential(request.pin, admin.environment, admin.venueId);
+  const credential = await createStaffPinCredential(request.pin, admin.environment, admin.venueId, {
+    forceRefresh: true,
+  });
   const staffIdentityId = createStaffIdentityId();
   const displayName = `${request.givenName} ${request.familyName}`;
   let result;
@@ -5513,17 +5571,20 @@ async function createLocalPinStaff(request, admin) {
       `INSERT INTO jumpyard.staff_identities (
          staff_identity_id, identity_provider, provider_subject, given_name, family_name,
          display_name, role, environment, venue_id, active, revoked_at,
-         tokens_valid_after, pin_lookup_hash, pin_verifier, pin_changed_at
+         tokens_valid_after, pin_lookup_hash, pin_verifier, pin_changed_at,
+         pin_pepper_version, pin_reenrollment_required_at
        )
        VALUES (
          :staffIdentityId, :identityProvider, :providerSubject, :givenName, :familyName,
          :displayName, :role, :environment, :venueId, true, NULL,
-         now(), :pinLookupHash, :pinVerifier, now()
+         now(), :pinLookupHash, :pinVerifier, now(),
+         CAST(:pinPepperVersion AS integer), NULL
        )
        RETURNING staff_identity_id, given_name, family_name, display_name, role, environment, venue_id,
                  active, revoked_at::text AS identity_revoked_at,
                  pin_changed_at::text AS pin_changed_at, created_at::text AS created_at,
-                 updated_at::text AS updated_at`,
+                 updated_at::text AS updated_at, pin_pepper_version,
+                 pin_reenrollment_required_at::text AS pin_reenrollment_required_at`,
       [
         stringParameter('staffIdentityId', staffIdentityId),
         stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_PIN),
@@ -5536,6 +5597,7 @@ async function createLocalPinStaff(request, admin) {
         stringParameter('venueId', admin.venueId),
         stringParameter('pinLookupHash', credential.lookupHash),
         stringParameter('pinVerifier', credential.verifier),
+        stringParameter('pinPepperVersion', String(credential.pepperVersion)),
       ],
     );
   } catch (error) {
@@ -5555,7 +5617,9 @@ async function updateLocalPinStaff({ action, pinCredential, staffIdentityId }, a
     ? "active = true, revoked_at = NULL, tokens_valid_after = now(), updated_at = now()"
     : action === 'disable'
       ? "active = false, revoked_at = COALESCE(revoked_at, now()), tokens_valid_after = now(), updated_at = now()"
-      : "pin_lookup_hash = :pinLookupHash, pin_verifier = :pinVerifier, pin_changed_at = now(), tokens_valid_after = now(), updated_at = now()";
+      : "pin_lookup_hash = :pinLookupHash, pin_verifier = :pinVerifier, pin_changed_at = now(), " +
+        "pin_pepper_version = CAST(:pinPepperVersion AS integer), pin_reenrollment_required_at = NULL, " +
+        "tokens_valid_after = now(), updated_at = now()";
   const parameters = [
     stringParameter('staffIdentityId', staffIdentityId),
     stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_PIN),
@@ -5565,6 +5629,7 @@ async function updateLocalPinStaff({ action, pinCredential, staffIdentityId }, a
   if (action === 'reset_pin') {
     parameters.push(stringParameter('pinLookupHash', pinCredential.lookupHash));
     parameters.push(stringParameter('pinVerifier', pinCredential.verifier));
+    parameters.push(stringParameter('pinPepperVersion', String(pinCredential.pepperVersion)));
   }
 
   let result;
@@ -5579,7 +5644,8 @@ async function updateLocalPinStaff({ action, pinCredential, staffIdentityId }, a
        RETURNING staff_identity_id, given_name, family_name, display_name, role, environment, venue_id,
                  active, revoked_at::text AS identity_revoked_at,
                  pin_changed_at::text AS pin_changed_at, created_at::text AS created_at,
-                 updated_at::text AS updated_at`,
+                 updated_at::text AS updated_at, pin_pepper_version,
+                 pin_reenrollment_required_at::text AS pin_reenrollment_required_at`,
       parameters,
     );
   } catch (error) {
@@ -5590,6 +5656,11 @@ async function updateLocalPinStaff({ action, pinCredential, staffIdentityId }, a
 
 function mapStaffPinWriteError(error) {
   const message = String(error?.message ?? '');
+  if (/staff_pin_pepper_version_stale/i.test(message)) {
+    const stale = new Error('PIN security settings changed. Try again.');
+    stale.code = 'staff_pin_rotation_retry';
+    return stale;
+  }
   if (/duplicate key|unique constraint|pin_scope_unique/i.test(message)) {
     const conflict = new Error('That PIN is already in use.');
     conflict.code = 'staff_pin_unavailable';
@@ -5607,6 +5678,9 @@ function mapLocalPinStaffResponse(row) {
     firstName: stringOrNull(row.given_name),
     lastName: stringOrNull(row.family_name),
     pinChangedAt: stringOrNull(row.pin_changed_at),
+    pinPepperVersion: numberOrNull(row.pin_pepper_version),
+    pinReenrollmentRequired: Boolean(stringOrNull(row.pin_reenrollment_required_at)),
+    pinReenrollmentRequiredAt: stringOrNull(row.pin_reenrollment_required_at),
     revokedAt: stringOrNull(row.identity_revoked_at),
     role: stringOrNull(row.role),
     staffIdentityId: stringOrNull(row.staff_identity_id),
@@ -6233,6 +6307,15 @@ function staffIdentityNotAuthorized() {
   };
 }
 
+function staffPinReenrollmentRequired() {
+  return {
+    ok: false,
+    code: 'staff_pin_reenrollment_required',
+    statusCode: 403,
+    message: 'A JumpYard administrator must set a new PIN before this account can sign in.',
+  };
+}
+
 function isStaffRole(role) {
   return role === STAFF_ROLE_READER || role === STAFF_ROLE_OPERATOR || role === STAFF_ROLE_ADMIN;
 }
@@ -6679,6 +6762,15 @@ function classifyError(error) {
       status: 'blocked',
       code: 'staff_pin_unavailable',
       message: 'That PIN is already in use. Choose another PIN.',
+    };
+  }
+
+  if (error.code === 'staff_pin_rotation_retry') {
+    return {
+      statusCode: 409,
+      status: 'retry',
+      code: 'staff_pin_rotation_retry',
+      message: 'PIN security settings changed. Try again.',
     };
   }
 

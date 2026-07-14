@@ -14,12 +14,14 @@ const GUEST_ACCESS_TTL_MINUTES = 60;
 const MAX_ACTIVE_GUEST_ACCESS_TOKENS_PER_BOOKING = 64;
 const MAX_REQUEST_BODY_BYTES = 8 * 1024;
 const TOKEN_BYTES = 32;
+const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
 const ssmClient = new SSMClient({});
 
 let cachedRollerConfig = null;
+let cachedRollerConfigExpiresAt = 0;
 let cachedToken = null;
 let cachedProducts = null;
 
@@ -444,6 +446,7 @@ async function findLocalBookingItems(rollerUniqueId) {
        ON product.roller_env = b.roller_env
       AND product.venue_id = b.venue_id
       AND product.summary ->> 'id' = i.product_id
+      AND COALESCE(product.expires_at, product.fetched_at + interval '24 hours') > now()
      LEFT JOIN jumpyard.roller_booking_tickets AS t
        ON t.roller_unique_id = i.roller_unique_id
       AND (
@@ -546,7 +549,8 @@ function hasBookingDisplayName(booking) {
 }
 
 async function getRollerConfig() {
-  if (cachedRollerConfig) return cachedRollerConfig;
+  const now = Date.now();
+  if (cachedRollerConfig && cachedRollerConfigExpiresAt > now) return cachedRollerConfig;
 
   const [envParameter, baseUrlParameter, secret] = await Promise.all([
     readParameter(process.env.ROLLER_ENV_PARAMETER_NAME),
@@ -563,6 +567,7 @@ async function getRollerConfig() {
 
   validateRollerConfig(config);
   cachedRollerConfig = config;
+  cachedRollerConfigExpiresAt = now + PROVIDER_CONFIG_CACHE_MS;
   return config;
 }
 

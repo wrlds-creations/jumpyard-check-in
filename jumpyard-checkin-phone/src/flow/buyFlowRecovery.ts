@@ -50,6 +50,8 @@ export interface BuyFlowRecoveryContact {
 export interface BuyFlowRecoverySnapshot {
   version: 1;
   updatedAt: string;
+  expiresAt: string;
+  lastObservedAt: string;
   currentFlowStep: BuyFlowRecoveryStep;
   bookingReference: string | null;
   draftUniqueId: string | null;
@@ -67,10 +69,32 @@ export interface BuyFlowRecoverySnapshot {
 }
 
 const STORAGE_KEY = 'jumpyard.buyFlowRecovery.v1';
-const MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const STORAGE_UPDATED_EVENT = 'jumpyard:buy-flow-recovery-updated';
+export const BUY_FLOW_RECOVERY_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const LAST_OBSERVED_PERSIST_INTERVAL_MS = 60 * 1000;
 
-function hasStorage() {
-  return typeof window !== 'undefined' && Boolean(window.localStorage);
+interface ActiveCleanupDeadline {
+  deadline: number;
+  expiresAt: string;
+  updatedAt: string;
+}
+
+let activeCleanupDeadline: ActiveCleanupDeadline | null = null;
+let rollbackWriteFloor: number | null = null;
+
+function getStorage() {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function notifyRecoveryUpdated() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(STORAGE_UPDATED_EVENT));
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -169,6 +193,14 @@ function readContact(value: unknown): BuyFlowRecoveryContact | null {
   };
 }
 
+function storedObservationTime(value: unknown): number | null {
+  if (!isObject(value) || value.version !== 1) return null;
+  const updatedTime = Date.parse(stringOrNull(value.updatedAt) ?? '');
+  const lastObservedTime = Date.parse(stringOrNull(value.lastObservedAt) ?? '');
+  const validTimes = [updatedTime, lastObservedTime].filter(Number.isFinite);
+  return validTimes.length > 0 ? Math.max(...validTimes) : null;
+}
+
 function normalizeSnapshot(value: unknown): BuyFlowRecoverySnapshot | null {
   if (!isObject(value) || value.version !== 1 || !isRecoveryStep(value.currentFlowStep)) return null;
 
@@ -177,7 +209,28 @@ function normalizeSnapshot(value: unknown): BuyFlowRecoverySnapshot | null {
   if (!updatedAt || (!draftState && !isPrePaymentStep(value.currentFlowStep))) return null;
 
   const updatedTime = Date.parse(updatedAt);
-  if (!Number.isFinite(updatedTime) || Date.now() - updatedTime > MAX_AGE_MS) return null;
+  const now = Date.now();
+  const expectedExpiresTime = updatedTime + BUY_FLOW_RECOVERY_MAX_AGE_MS;
+  const suppliedExpiresAt = stringOrNull(value.expiresAt);
+  const suppliedExpiresTime = suppliedExpiresAt ? Date.parse(suppliedExpiresAt) : expectedExpiresTime;
+  const suppliedLastObservedAt = stringOrNull(value.lastObservedAt) ?? updatedAt;
+  const suppliedLastObservedTime = Date.parse(suppliedLastObservedAt);
+  if (
+    !Number.isFinite(updatedTime)
+    || !Number.isFinite(expectedExpiresTime)
+    || !Number.isFinite(suppliedExpiresTime)
+    || !Number.isFinite(suppliedLastObservedTime)
+    || suppliedExpiresTime !== expectedExpiresTime
+    || suppliedLastObservedTime < updatedTime
+    || suppliedLastObservedTime > expectedExpiresTime
+    || updatedTime > now
+    || suppliedLastObservedTime > now
+    || now >= expectedExpiresTime
+  ) return null;
+
+  const observedTime = now - suppliedLastObservedTime >= LAST_OBSERVED_PERSIST_INTERVAL_MS
+    ? now
+    : suppliedLastObservedTime;
 
   return {
     addonQty: readAddonQty(value.addonQty),
@@ -188,13 +241,15 @@ function normalizeSnapshot(value: unknown): BuyFlowRecoverySnapshot | null {
     currentFlowStep: value.currentFlowStep,
     draftState,
     draftUniqueId: stringOrNull(value.draftUniqueId),
+    expiresAt: new Date(expectedExpiresTime).toISOString(),
     jumperCount: numberOrNull(value.jumperCount),
+    lastObservedAt: new Date(observedTime).toISOString(),
     paymentOptionsHadValues: value.paymentOptionsHadValues === true,
     quantity: positiveIntegerOrNull(value.quantity),
     selectedProduct: readProduct(value.selectedProduct),
     selectedStartTime: stringOrNull(value.selectedStartTime),
     skyriderConsentConfirmed: value.skyriderConsentConfirmed === true,
-    updatedAt,
+    updatedAt: new Date(updatedTime).toISOString(),
     version: 1,
   };
 }
@@ -212,35 +267,178 @@ export function isPrePaymentBuyFlowRecovery(snapshot: BuyFlowRecoverySnapshot | 
 }
 
 export function readBuyFlowRecovery() {
-  if (!hasStorage()) return null;
+  const storage = getStorage();
+  if (!storage) return null;
 
   try {
-    const snapshot = normalizeSnapshot(window.localStorage.getItem(STORAGE_KEY) ? JSON.parse(window.localStorage.getItem(STORAGE_KEY)!) : null);
-    if (!snapshot) window.localStorage.removeItem(STORAGE_KEY);
+    const storedValue = storage.getItem(STORAGE_KEY);
+    const parsed = storedValue ? JSON.parse(storedValue) : null;
+    const observationTime = storedObservationTime(parsed);
+    if (observationTime !== null && Date.now() < observationTime) {
+      rollbackWriteFloor = Math.max(rollbackWriteFloor ?? 0, observationTime);
+    }
+    const snapshot = normalizeSnapshot(parsed);
+    if (!snapshot) {
+      activeCleanupDeadline = null;
+      storage.removeItem(STORAGE_KEY);
+      return null;
+    }
+
+    const normalizedValue = JSON.stringify(snapshot);
+    if (normalizedValue !== storedValue) storage.setItem(STORAGE_KEY, normalizedValue);
     return snapshot;
   } catch {
-    window.localStorage.removeItem(STORAGE_KEY);
+    activeCleanupDeadline = null;
+    try {
+      storage.removeItem(STORAGE_KEY);
+    } catch {
+      // Storage can disappear while a page is suspended; recovery remains optional.
+    }
     return null;
   }
 }
 
-export function writeBuyFlowRecovery(snapshot: Omit<BuyFlowRecoverySnapshot, 'version' | 'updatedAt'>) {
-  if (!hasStorage()) return;
+export function writeBuyFlowRecovery(
+  snapshot: Omit<BuyFlowRecoverySnapshot, 'version' | 'updatedAt' | 'expiresAt' | 'lastObservedAt'>,
+) {
+  const storage = getStorage();
+  if (!storage) return;
+
+  const now = Date.now();
+
+  try {
+    const storedValue = storage.getItem(STORAGE_KEY);
+    const observationTime = storedValue
+      ? storedObservationTime(JSON.parse(storedValue))
+      : null;
+    const requiredFloor = Math.max(rollbackWriteFloor ?? 0, observationTime ?? 0);
+    if (requiredFloor > now) {
+      rollbackWriteFloor = requiredFloor;
+      activeCleanupDeadline = null;
+      storage.removeItem(STORAGE_KEY);
+      notifyRecoveryUpdated();
+      return;
+    }
+    rollbackWriteFloor = null;
+  } catch {
+    activeCleanupDeadline = null;
+    try {
+      storage.removeItem(STORAGE_KEY);
+    } catch {
+      // Storage can disappear while a page is suspended; recovery remains optional.
+    }
+  }
+
+  const updatedAt = new Date(now).toISOString();
 
   const next: BuyFlowRecoverySnapshot = {
     ...snapshot,
-    updatedAt: new Date().toISOString(),
+    expiresAt: new Date(now + BUY_FLOW_RECOVERY_MAX_AGE_MS).toISOString(),
+    lastObservedAt: updatedAt,
+    updatedAt,
     version: 1,
   };
 
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    storage.setItem(STORAGE_KEY, JSON.stringify(next));
+    activeCleanupDeadline = null;
+    notifyRecoveryUpdated();
   } catch {
     // Storage can be unavailable in private modes; recovery should never block checkout.
   }
 }
 
 export function clearBuyFlowRecovery() {
-  if (!hasStorage()) return;
-  window.localStorage.removeItem(STORAGE_KEY);
+  const storage = getStorage();
+  if (!storage) return;
+
+  try {
+    storage.removeItem(STORAGE_KEY);
+    activeCleanupDeadline = null;
+    notifyRecoveryUpdated();
+  } catch {
+    // Recovery cleanup should never block the active checkout flow.
+  }
+}
+
+export function startBuyFlowRecoveryCleanup() {
+  const storage = getStorage();
+  if (!storage || typeof window === 'undefined') return () => undefined;
+
+  let timeoutId: number | null = null;
+  const ownerDocument = typeof document === 'undefined' ? null : document;
+
+  const monotonicNow = () => {
+    const value = window.performance?.now();
+    return Number.isFinite(value) ? value : Date.now();
+  };
+
+  const clearScheduledCleanup = () => {
+    if (timeoutId === null) return;
+    window.clearTimeout(timeoutId);
+    timeoutId = null;
+  };
+
+  const scheduleCleanup = () => {
+    clearScheduledCleanup();
+
+    const snapshot = readBuyFlowRecovery();
+    if (!snapshot) {
+      activeCleanupDeadline = null;
+      return;
+    }
+
+    const now = Date.now();
+    const monotonicTime = monotonicNow();
+    const expiresAt = Date.parse(snapshot.expiresAt);
+    const wallClockRemaining = Math.max(0, expiresAt - now);
+    if (
+      !activeCleanupDeadline
+      || activeCleanupDeadline.updatedAt !== snapshot.updatedAt
+      || activeCleanupDeadline.expiresAt !== snapshot.expiresAt
+    ) {
+      activeCleanupDeadline = {
+        deadline: monotonicTime + Math.min(
+          BUY_FLOW_RECOVERY_MAX_AGE_MS,
+          wallClockRemaining,
+        ),
+        expiresAt: snapshot.expiresAt,
+        updatedAt: snapshot.updatedAt,
+      };
+    }
+
+    const monotonicRemaining = activeCleanupDeadline.deadline - monotonicTime;
+    if (wallClockRemaining <= 0 || monotonicRemaining <= 0) {
+      activeCleanupDeadline = null;
+      clearBuyFlowRecovery();
+      return;
+    }
+
+    const delay = Math.max(1, Math.min(
+      LAST_OBSERVED_PERSIST_INTERVAL_MS,
+      BUY_FLOW_RECOVERY_MAX_AGE_MS,
+      wallClockRemaining,
+      monotonicRemaining,
+    ));
+    timeoutId = window.setTimeout(scheduleCleanup, delay);
+  };
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.storageArea && event.storageArea !== storage) return;
+    if (event.key === STORAGE_KEY || event.key === null) scheduleCleanup();
+  };
+
+  window.addEventListener(STORAGE_UPDATED_EVENT, scheduleCleanup);
+  window.addEventListener('storage', handleStorage);
+  window.addEventListener('pageshow', scheduleCleanup);
+  ownerDocument?.addEventListener('visibilitychange', scheduleCleanup);
+  scheduleCleanup();
+
+  return () => {
+    clearScheduledCleanup();
+    window.removeEventListener(STORAGE_UPDATED_EVENT, scheduleCleanup);
+    window.removeEventListener('storage', handleStorage);
+    window.removeEventListener('pageshow', scheduleCleanup);
+    ownerDocument?.removeEventListener('visibilitychange', scheduleCleanup);
+  };
 }

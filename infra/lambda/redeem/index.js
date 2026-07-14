@@ -50,14 +50,18 @@ const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
 const ROLLER_LIVE_BASE_URL = 'https://api.roller.app';
 const PRODUCT_CACHE_TTL_MS = 15 * 60 * 1000;
+const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
+const SHARED_TOKEN_CACHE_MS = 60 * 1000;
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
 const ssmClient = new SSMClient({});
 
 let cachedRollerConfig = null;
+let cachedRollerConfigExpiresAt = 0;
 let cachedToken = null;
 let cachedRedeemDevToken = null;
+let cachedRedeemDevTokenExpiresAt = 0;
 let cachedStaffAuthConfig = null;
 let cachedStaffAuthConfigExpiresAt = 0;
 let cachedProducts = null;
@@ -912,6 +916,7 @@ async function getRedeemContext(identifier, staffVenueId = null) {
        FROM jumpyard.product_catalog_cache AS pc
        WHERE pc.roller_env = b.roller_env
          AND pc.summary ->> 'id' = COALESCE(NULLIF(t.product_id, ''), NULLIF(item.product_id, ''))
+         AND COALESCE(pc.expires_at, pc.fetched_at + interval '24 hours') > now()
        ORDER BY pc.fetched_at DESC
        LIMIT 1
      ) AS product ON true
@@ -1338,7 +1343,8 @@ async function getRedeemDevToken() {
     return process.env.REDEEM_DEV_TOKEN;
   }
 
-  if (cachedRedeemDevToken) return cachedRedeemDevToken;
+  const now = Date.now();
+  if (cachedRedeemDevToken && cachedRedeemDevTokenExpiresAt > now) return cachedRedeemDevToken;
 
   const secretId = process.env.REDEEM_DEV_TOKEN_SECRET_ARN;
   if (!secretId) {
@@ -1367,6 +1373,8 @@ async function getRedeemDevToken() {
     error.code = 'redeem_config_error';
     throw error;
   }
+
+  cachedRedeemDevTokenExpiresAt = now + SHARED_TOKEN_CACHE_MS;
 
   return cachedRedeemDevToken;
 }
@@ -2038,7 +2046,15 @@ async function reserveIdempotencyKey(idempotencyKey, requestHash) {
       'in_progress',
       CAST(:expiresAt AS timestamptz)
     )
-    ON CONFLICT (idempotency_key) DO NOTHING`,
+    ON CONFLICT (idempotency_key) DO UPDATE SET
+      operation = EXCLUDED.operation,
+      request_hash = EXCLUDED.request_hash,
+      status = EXCLUDED.status,
+      result_ref = NULL,
+      expires_at = EXCLUDED.expires_at,
+      created_at = now(),
+      updated_at = now()
+    WHERE jumpyard.idempotency_records.expires_at <= now()`,
     [
       stringParameter('idempotencyKey', idempotencyKey),
       stringParameter('requestHash', requestHash),
@@ -2160,7 +2176,8 @@ async function markTicketsRedeemed(ticketIds) {
 }
 
 async function getRollerConfig() {
-  if (cachedRollerConfig) return cachedRollerConfig;
+  const now = Date.now();
+  if (cachedRollerConfig && cachedRollerConfigExpiresAt > now) return cachedRollerConfig;
 
   const [envParameter, baseUrlParameter, secret] = await Promise.all([
     readParameter(process.env.ROLLER_ENV_PARAMETER_NAME),
@@ -2177,6 +2194,7 @@ async function getRollerConfig() {
 
   validateRollerConfig(config);
   cachedRollerConfig = config;
+  cachedRollerConfigExpiresAt = now + PROVIDER_CONFIG_CACHE_MS;
   return config;
 }
 
