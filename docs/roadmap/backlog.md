@@ -23,13 +23,12 @@ Every implementation ticket must be explained to Love before activation in plain
 
 ## Now
 
-No implementation ticket is active. T0193 is complete and archived; T0194 must be explained and separately approved before activation.
+No implementation ticket is active. T0194 is complete and archived; T0195 requires its own plain-language explanation and explicit approval before activation.
 
 ## Next
 
 | Ticket | Theme | Goal | Dependencies | Risk | Scope Boundary | Validation Expectation | Status |
 |---|---|---|---|---|---|---|---|
-| `T0194` | Admin identity | Replace the shared test passcode with approved personal staff identity, roles, session/MFA policy, and audit ownership in park-test. | T0193; Love/JumpYard identity decision | High | Staff/admin identity only; no visitor launch. | Identity, role, session, MFA, revoke, and audit tests pass. | Planned |
 | `T0195` | Data and secrets | Apply approved retention, purge, least privilege, secret rotation, backup, and restore to park-test and codify them for production. | T0191/T0192; data/ownership decisions | High | No new use of guest data; production is not created. | Retention/purge, IAM/database access, rotation, backup, and restore evidence pass. | Planned |
 | `T0196` | Booking index and morning seed | Build and prove the approved initial backfill and scheduled morning seed in park-test Aurora. | T0192/T0195; approved venue/date/data window; Data API contract | High | Roller remains authoritative; approved normalized Live Nacka data only. Production backfill belongs to T0205. | Backfill, scheduled upsert, retry/run audit, freshness, and live-refresh evidence pass. | Planned |
 | `T0197` | Webhook and reconciliation | Enable and prove secure Roller Live webhook processing, idempotency, replay, and reconciliation in park-test. | T0193/T0195/T0196; webhook-security decision | High | Existing park-test webhook only; production registration/switch occurs in T0205. | Auth, scope filtering, duplicate/out-of-order handling, replay, and reconciliation pass. | Planned |

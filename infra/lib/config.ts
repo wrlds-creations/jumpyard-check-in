@@ -38,6 +38,26 @@ export const PARK_TEST_FRONTEND_REDEEM_REHEARSAL_APPROVAL =
   'T0176_FRONTEND_REDEEM_REHEARSAL_APPROVED';
 export const PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL =
   'T0176_FULL_FLOW_REHEARSAL_APPROVED';
+export const PARK_TEST_ADMIN_IDENTITY_CALLBACK_URL =
+  'https://jumpyard-checkin-admin-park-test.pages.dev/auth/callback';
+export const PARK_TEST_ADMIN_IDENTITY_LOGOUT_URL =
+  'https://jumpyard-checkin-admin-park-test.pages.dev/admin';
+export const PARK_TEST_ADMIN_IDENTITY_DOMAIN_PREFIX = 'jumpyard-check-in-park-test-admin-376129878018';
+export const PARK_TEST_STAFF_IDENTITY_VENUE_ID = '50871';
+
+export type StaffIdentityConfig =
+  | {
+      readonly mode: 'legacy';
+    }
+  | {
+      readonly accessTokenValidityMinutes: number;
+      readonly callbackUrls: readonly string[];
+      readonly domainPrefix: string;
+      readonly logoutUrls: readonly string[];
+      readonly mode: 'pin';
+      readonly refreshTokenValidityHours: number;
+      readonly venueId: string;
+    };
 
 export interface JumpYardCloudConfig {
   readonly api: {
@@ -94,6 +114,7 @@ export interface JumpYardCloudConfig {
     readonly rollerWebhookProcessingEnabled: boolean;
     readonly staffAuthEnabled: boolean;
   };
+  readonly staffIdentity: StaffIdentityConfig;
   readonly tags: Record<RequiredWrlDsTag, string>;
 }
 
@@ -152,6 +173,15 @@ interface RawConfig {
     readonly rollerWebhookProcessingEnabled?: unknown;
     readonly staffAuthEnabled?: unknown;
   };
+  readonly staffIdentity?: {
+    readonly accessTokenValidityMinutes?: unknown;
+    readonly callbackUrls?: unknown;
+    readonly domainPrefix?: unknown;
+    readonly logoutUrls?: unknown;
+    readonly mode?: unknown;
+    readonly refreshTokenValidityHours?: unknown;
+    readonly venueId?: unknown;
+  };
   readonly tags?: Record<string, unknown>;
 }
 
@@ -178,6 +208,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   const rollerBaseUrl = normalizeBaseUrl(readString(raw.roller?.baseUrl, 'roller.baseUrl'), 'roller.baseUrl');
   const safetyGates = readSafetyGatesConfig(raw.safetyGates);
   const deploymentEnvironment = readDeploymentEnvironment(tags['WRLDS:Environment']);
+  const staffIdentity = readStaffIdentityConfig(raw.staffIdentity, deploymentEnvironment);
 
   if (!/^\d{12}$/.test(awsAccount)) {
     throw new Error('awsAccount must be a 12 digit AWS account id.');
@@ -204,6 +235,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     rollerBaseUrl,
     rollerEnvironment,
     safetyGates,
+    staffIdentity,
     tags,
   });
 
@@ -219,6 +251,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
       baseUrl: rollerBaseUrl,
     },
     safetyGates,
+    staffIdentity,
     tags,
   };
 }
@@ -232,13 +265,51 @@ interface EnvironmentContractInput {
   readonly rollerBaseUrl: string;
   readonly rollerEnvironment: string;
   readonly safetyGates: JumpYardCloudConfig['safetyGates'];
+  readonly staffIdentity: JumpYardCloudConfig['staffIdentity'];
   readonly tags: Record<RequiredWrlDsTag, string>;
 }
 
 function validateEnvironmentContract(input: EnvironmentContractInput): void {
   if (input.deploymentEnvironment === 'dev') {
+    if (input.staffIdentity.mode !== 'legacy') {
+      throw new Error('dev staffIdentity.mode must remain legacy.');
+    }
     validateDevRollerContract(input.rollerEnvironment, input.rollerBaseUrl);
     return;
+  }
+
+  if (input.staffIdentity.mode !== 'pin') {
+    throw new Error('park-test staffIdentity.mode must be pin for PIN-only staff identity.');
+  }
+
+  if (
+    input.staffIdentity.callbackUrls.length !== 1 ||
+    input.staffIdentity.callbackUrls[0] !== PARK_TEST_ADMIN_IDENTITY_CALLBACK_URL
+  ) {
+    throw new Error(`park-test staffIdentity.callbackUrls must be exactly ${PARK_TEST_ADMIN_IDENTITY_CALLBACK_URL}.`);
+  }
+
+  if (
+    input.staffIdentity.logoutUrls.length !== 1 ||
+    input.staffIdentity.logoutUrls[0] !== PARK_TEST_ADMIN_IDENTITY_LOGOUT_URL
+  ) {
+    throw new Error(`park-test staffIdentity.logoutUrls must be exactly ${PARK_TEST_ADMIN_IDENTITY_LOGOUT_URL}.`);
+  }
+
+  if (input.staffIdentity.domainPrefix !== PARK_TEST_ADMIN_IDENTITY_DOMAIN_PREFIX) {
+    throw new Error(`park-test staffIdentity.domainPrefix must be ${PARK_TEST_ADMIN_IDENTITY_DOMAIN_PREFIX}.`);
+  }
+
+  if (input.staffIdentity.venueId !== PARK_TEST_STAFF_IDENTITY_VENUE_ID) {
+    throw new Error(`park-test staffIdentity.venueId must be ${PARK_TEST_STAFF_IDENTITY_VENUE_ID}.`);
+  }
+
+  if (input.staffIdentity.accessTokenValidityMinutes !== 60) {
+    throw new Error('park-test staffIdentity.accessTokenValidityMinutes must be 60.');
+  }
+
+  if (input.staffIdentity.refreshTokenValidityHours !== 8) {
+    throw new Error('park-test staffIdentity.refreshTokenValidityHours must be 8.');
   }
 
   validateParkTestContract(input);
@@ -831,6 +902,53 @@ function readSafetyGatesConfig(raw: RawConfig['safetyGates']): JumpYardCloudConf
   };
 }
 
+function readStaffIdentityConfig(
+  raw: RawConfig['staffIdentity'],
+  deploymentEnvironment: DeploymentEnvironment,
+): StaffIdentityConfig {
+  if (!raw) {
+    throw new Error('Config is missing staffIdentity.');
+  }
+
+  const mode = readString(raw.mode, 'staffIdentity.mode');
+  if (mode === 'legacy') {
+    return { mode };
+  }
+
+  if (mode !== 'pin') {
+    throw new Error('Config field staffIdentity.mode must be legacy or pin.');
+  }
+
+  if (deploymentEnvironment !== 'park-test') {
+    throw new Error('staffIdentity.mode=pin is allowed only for park-test.');
+  }
+
+  const domainPrefix = readString(raw.domainPrefix, 'staffIdentity.domainPrefix');
+  if (!/^[a-z0-9-]{1,63}$/.test(domainPrefix)) {
+    throw new Error('Config field staffIdentity.domainPrefix must use 1-63 lowercase letters, numbers, or hyphens.');
+  }
+
+  return {
+    accessTokenValidityMinutes: readInteger(
+      raw.accessTokenValidityMinutes,
+      5,
+      24 * 60,
+      'staffIdentity.accessTokenValidityMinutes',
+    ),
+    callbackUrls: readOptionalStringArray(raw.callbackUrls, 'staffIdentity.callbackUrls'),
+    domainPrefix,
+    logoutUrls: readOptionalStringArray(raw.logoutUrls, 'staffIdentity.logoutUrls'),
+    mode,
+    refreshTokenValidityHours: readInteger(
+      raw.refreshTokenValidityHours,
+      1,
+      24 * 365 * 10,
+      'staffIdentity.refreshTokenValidityHours',
+    ),
+    venueId: readString(raw.venueId, 'staffIdentity.venueId'),
+  };
+}
+
 function readRequiredTags(rawTags: Record<string, unknown> | undefined): Record<RequiredWrlDsTag, string> {
   if (!rawTags) {
     throw new Error('Config is missing required WRLDS tags.');
@@ -885,6 +1003,14 @@ function readOptionalStringArray(value: unknown, fieldName: string): readonly st
   }
 
   return value.map((item, index) => readString(item, `${fieldName}[${index}]`));
+}
+
+function readInteger(value: unknown, min: number, max: number, fieldName: string): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`Config field ${fieldName} must be an integer between ${min} and ${max}.`);
+  }
+
+  return value;
 }
 
 function readOptionalInteger(

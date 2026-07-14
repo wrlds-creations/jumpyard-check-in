@@ -11,6 +11,19 @@
     "throttlingBurstLimit": 150,
     "throttlingRateLimit": 50
   },
+  "staffIdentity": {
+    "mode": "pin",
+    "callbackUrls": [
+      "https://jumpyard-checkin-admin-park-test.pages.dev/auth/callback"
+    ],
+    "logoutUrls": [
+      "https://jumpyard-checkin-admin-park-test.pages.dev/admin"
+    ],
+    "domainPrefix": "jumpyard-check-in-park-test-admin-376129878018",
+    "accessTokenValidityMinutes": 60,
+    "refreshTokenValidityHours": 8,
+    "venueId": "50871"
+  },
   "roller": {
     "environment": "live",
     "baseUrl": "https://api.roller.app"

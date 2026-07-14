@@ -41,6 +41,7 @@
     "deploy:park-test-full-flow-rehearsal": "cdk deploy -c config=./config/park-test-full-flow-rehearsal.json --profile wrlds-dev --require-approval never",
     "migrate:dev": "ts-node --prefer-ts-exts scripts/run-migrations.ts --config ./config/dev.json --profile wrlds-dev",
     "migrate:dev:status": "ts-node --prefer-ts-exts scripts/run-migrations.ts --config ./config/dev.json --profile wrlds-dev --status",
+    "staff-admin-identity:park-test": "ts-node --prefer-ts-exts scripts/manage-staff-identity.ts --config ./config/park-test-full-flow-rehearsal.json --profile wrlds-dev",
     "import:bookingitems:dev": "ts-node --prefer-ts-exts scripts/import-bookingitems.ts --config ./config/dev.json --profile wrlds-dev",
     "import:bookingitems:dev:apply": "ts-node --prefer-ts-exts scripts/import-bookingitems.ts --config ./config/dev.json --profile wrlds-dev --apply",
     "import:products:dev": "ts-node --prefer-ts-exts scripts/import-products.ts --config ./config/dev.json --profile wrlds-dev",
@@ -65,6 +66,8 @@
     "validate:t0192-request-item-dates": "node ../scripts/validate-t0192-request-item-dates.js",
     "validate:t0193-api-protection": "node ../scripts/validate-t0193-api-protection.js",
     "validate:t0193-service-auth": "node ../scripts/validate-t0193-service-auth.js",
+    "validate:t0194-staff-identity-infra": "node ../scripts/validate-t0194-staff-identity-infra.js",
+    "validate:t0194-staff-identity-ops": "ts-node --prefer-ts-exts scripts/manage-staff-identity.ts --self-test",
     "validate:roller-live-contact-resolver": "ts-node --prefer-ts-exts scripts/roller-live-contact-resolver.ts --self-test",
     "validate:roller-live-readonly-preflight": "ts-node --prefer-ts-exts scripts/roller-live-readonly-preflight.ts --self-test",
     "validate:roller-live-catalog-index-readiness": "ts-node --prefer-ts-exts scripts/roller-live-catalog-index-readiness.ts --self-test",
@@ -72,14 +75,17 @@
     "validate:roller-live-webhook-register": "ts-node --prefer-ts-exts scripts/roller-live-webhook-register.ts --self-test",
     "validate:roller-live-quote-smoke": "ts-node --prefer-ts-exts scripts/roller-live-quote-smoke.ts --self-test",
     "validate:roller-live-draft-smoke": "ts-node --prefer-ts-exts scripts/roller-live-draft-smoke.ts --self-test",
-    "check": "npm run build && npm run validate:config-guards && npm run validate:park-test-synth && npm run validate:t0190-safety-gates && npm run validate:t0192-request-item-dates && npm run validate:t0193-api-protection && npm run validate:t0193-service-auth && npm run validate:roller-live-readonly-preflight && npm run validate:roller-live-catalog-index-readiness && npm run validate:roller-live-contact-resolver && npm run validate:roller-live-webhook-dry-run && npm run validate:roller-live-webhook-register && npm run validate:roller-live-quote-smoke && npm run validate:roller-live-draft-smoke && npm run synth:example"
+    "check": "npm run build && npm run validate:config-guards && npm run validate:park-test-synth && npm run validate:t0190-safety-gates && npm run validate:t0192-request-item-dates && npm run validate:t0193-api-protection && npm run validate:t0193-service-auth && npm run validate:t0194-staff-identity-infra && npm run validate:t0194-staff-identity-ops && npm run validate:roller-live-readonly-preflight && npm run validate:roller-live-catalog-index-readiness && npm run validate:roller-live-contact-resolver && npm run validate:roller-live-webhook-dry-run && npm run validate:roller-live-webhook-register && npm run validate:roller-live-quote-smoke && npm run validate:roller-live-draft-smoke && npm run synth:example"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudformation": "^3.1085.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.1085.0",
     "@aws-sdk/client-rds-data": "^3.1050.0",
     "@aws-sdk/client-secrets-manager": "^3.1050.0",
     "@aws-sdk/client-ssm": "^3.1050.0",
+    "@aws-sdk/client-sts": "^3.1085.0",
     "@aws-sdk/credential-providers": "^3.1050.0",
-    "aws-cdk-lib": "^2.175.1",
+    "aws-cdk-lib": "2.256.1",
     "constructs": "^10.4.2"
   },
   "devDependencies": {

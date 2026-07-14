@@ -24,8 +24,9 @@ interface DeployConfig {
 }
 
 interface MigrationArgs {
-  configPath: string;
+  configPath?: string;
   profile?: string;
+  selfTestOnly: boolean;
   statusOnly: boolean;
 }
 
@@ -51,6 +52,7 @@ interface AppliedMigration {
 function parseArgs(argv: string[]): MigrationArgs {
   let configPath: string | undefined;
   let profile: string | undefined;
+  let selfTestOnly = false;
   let statusOnly = false;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -73,14 +75,19 @@ function parseArgs(argv: string[]): MigrationArgs {
       continue;
     }
 
+    if (arg === "--self-test") {
+      selfTestOnly = true;
+      continue;
+    }
+
     throw new Error(`Unknown argument: ${arg}`);
   }
 
-  if (!configPath) {
+  if (!configPath && !selfTestOnly) {
     throw new Error("Missing required --config path.");
   }
 
-  return { configPath, profile, statusOnly };
+  return { configPath, profile, selfTestOnly, statusOnly };
 }
 
 function readDeployConfig(configPath: string): DeployConfig {
@@ -110,10 +117,22 @@ function splitSqlStatements(sql: string): string[] {
   let inDoubleQuote = false;
   let inLineComment = false;
   let inBlockComment = false;
+  let dollarQuoteTag: string | null = null;
 
   for (let index = 0; index < sql.length; index += 1) {
     const char = sql[index];
     const next = sql[index + 1] ?? "";
+
+    if (dollarQuoteTag) {
+      if (sql.startsWith(dollarQuoteTag, index)) {
+        current += dollarQuoteTag;
+        index += dollarQuoteTag.length - 1;
+        dollarQuoteTag = null;
+      } else {
+        current += char;
+      }
+      continue;
+    }
 
     if (inLineComment) {
       current += char;
@@ -164,6 +183,16 @@ function splitSqlStatements(sql: string): string[] {
       continue;
     }
 
+    if (!inSingleQuote && !inDoubleQuote && char === "$") {
+      const dollarQuoteMatch = sql.slice(index).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/);
+      if (dollarQuoteMatch) {
+        dollarQuoteTag = dollarQuoteMatch[0];
+        current += dollarQuoteTag;
+        index += dollarQuoteTag.length - 1;
+        continue;
+      }
+    }
+
     if (!inSingleQuote && !inDoubleQuote && char === ";") {
       const statement = current.trim();
       if (statement) {
@@ -176,7 +205,7 @@ function splitSqlStatements(sql: string): string[] {
     current += char;
   }
 
-  if (inSingleQuote || inDoubleQuote || inBlockComment) {
+  if (inSingleQuote || inDoubleQuote || inBlockComment || dollarQuoteTag) {
     throw new Error("SQL file contains an unterminated string or comment.");
   }
 
@@ -186,6 +215,36 @@ function splitSqlStatements(sql: string): string[] {
   }
 
   return statements;
+}
+
+function selfTestSqlSplitter(): void {
+  const sample = `
+CREATE TABLE test_one (value text);
+CREATE OR REPLACE FUNCTION test_fn()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $body$
+BEGIN
+  NEW.value := 'semi;colon';
+  RETURN NEW;
+END;
+$body$;
+CREATE TABLE test_two (value text);
+`;
+  const statements = splitSqlStatements(sample);
+  if (statements.length !== 3 || !statements[1]?.includes("NEW.value := 'semi;colon';")) {
+    throw new Error("SQL splitter self-test failed for PostgreSQL dollar-quoted function bodies.");
+  }
+
+  let unterminatedRejected = false;
+  try {
+    splitSqlStatements("CREATE FUNCTION broken() RETURNS void AS $$ BEGIN; END;");
+  } catch {
+    unterminatedRejected = true;
+  }
+  if (!unterminatedRejected) {
+    throw new Error("SQL splitter self-test failed to reject an unterminated dollar quote.");
+  }
 }
 
 function readMigrationFiles(): MigrationFile[] {
@@ -348,6 +407,14 @@ async function resolveSecretArn(config: DeployConfig, profile?: string): Promise
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  selfTestSqlSplitter();
+  if (args.selfTestOnly) {
+    console.log("SQL splitter self-test passed.");
+    return;
+  }
+  if (!args.configPath) {
+    throw new Error("Missing required --config path.");
+  }
   const config = readDeployConfig(args.configPath);
   const secretArn = await resolveSecretArn(config, args.profile);
   const context: MigrationContext = {

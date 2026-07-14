@@ -1,4 +1,10 @@
-const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
+const {
+  BeginTransactionCommand,
+  CommitTransactionCommand,
+  ExecuteStatementCommand,
+  RDSDataClient,
+  RollbackTransactionCommand,
+} = require('@aws-sdk/client-rds-data');
 const { PublishCommand, SNSClient } = require('@aws-sdk/client-sns');
 const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client-secrets-manager');
 const crypto = require('crypto');
@@ -15,6 +21,28 @@ const LINK_OPEN_AUDIT_REFRESH_MINUTES = 5;
 const LINK_RESOLVE_COOLDOWN_SECONDS = 5;
 const DEFAULT_STAFF_AUTH_TTL_MINUTES = 12 * 60;
 const STAFF_AUTH_CONFIG_CACHE_MS = 30 * 1000;
+const STAFF_IDENTITY_MODE_COGNITO = 'cognito';
+const STAFF_IDENTITY_MODE_PIN = 'pin';
+const STAFF_IDENTITY_PROVIDER_COGNITO = 'cognito';
+const STAFF_IDENTITY_PROVIDER_PIN = 'local_pin';
+const STAFF_PIN_CLIENT_ID = 'jumpyard-pin-v1';
+const STAFF_ROLE_READER = 'staff_reader';
+const STAFF_ROLE_OPERATOR = 'staff_operator';
+const STAFF_ROLE_ADMIN = 'staff_admin';
+const STAFF_READ_PERMISSION = 'staff:sessions:read';
+const STAFF_REDEEM_PERMISSION = 'staff:sessions:redeem';
+const STAFF_ADMIN_PERMISSION = 'staff:identities:manage';
+const STAFF_SESSION_IDLE_MINUTES = 15;
+const STAFF_SESSION_ABSOLUTE_HOURS = 8;
+const STAFF_PIN_SOURCE_FAILURE_LIMIT = 20;
+const STAFF_PIN_VENUE_FAILURE_LIMIT = 25;
+const STAFF_PIN_FAILURE_WINDOW_MINUTES = 10;
+const STAFF_PIN_BLOCK_MINUTES = 30;
+const STAFF_PIN_SCRYPT_COST = 32768;
+const STAFF_PIN_SCRYPT_BLOCK_SIZE = 8;
+const STAFF_PIN_SCRYPT_PARALLELIZATION = 1;
+const STAFF_PIN_SCRYPT_KEY_LENGTH = 32;
+const STAFF_PIN_SCRYPT_MAX_MEMORY = 64 * 1024 * 1024;
 const MAX_CHECKIN_LINK_TTL_MINUTES = 7 * 24 * 60;
 const MAX_SELECTED_TICKETS = 10;
 const MAX_REQUEST_BODY_BYTES = 32 * 1024;
@@ -67,6 +95,8 @@ const snsClient = new SNSClient({});
 let cachedCheckinLinkDevToken = null;
 let cachedStaffAuthConfig = null;
 let cachedStaffAuthConfigExpiresAt = 0;
+let cachedStaffPinPepper = null;
+let cachedStaffPinPepperExpiresAt = 0;
 let cachedSesClient = null;
 let cachedSendEmailCommand = null;
 
@@ -87,6 +117,10 @@ exports.handler = async (event) => {
     if (
       isEmergencyStopEnabled() &&
       (isStaffAuthLoginRoute(routeKey, event) ||
+        isStaffAuthSessionRoute(routeKey, event) ||
+        isAdminAuthSessionRoute(routeKey, event) ||
+        isAdminStaffCollectionRoute(routeKey, event) ||
+        isAdminStaffItemRoute(routeKey, event) ||
         isStaffSessionListRoute(routeKey, event) ||
         isStaffSessionDetailRoute(routeKey, event))
     ) {
@@ -98,7 +132,23 @@ exports.handler = async (event) => {
     }
 
     if (isStaffAuthLoginRoute(routeKey, event)) {
-      return await handleStaffAuthLogin(body, correlationId);
+      return await handleStaffAuthLogin(event, body, correlationId);
+    }
+
+    if (isStaffAuthSessionRoute(routeKey, event)) {
+      return await handleStaffAuthSession(event, body, correlationId);
+    }
+
+    if (isAdminAuthSessionRoute(routeKey, event)) {
+      return await handleAdminAuthSession(event, body, correlationId);
+    }
+
+    if (isAdminStaffCollectionRoute(routeKey, event)) {
+      return await handleAdminStaffCollection(event, body, correlationId);
+    }
+
+    if (isAdminStaffItemRoute(routeKey, event)) {
+      return await handleAdminStaffItem(event, body, correlationId);
     }
 
     if (isStaffSessionListRoute(routeKey, event)) {
@@ -393,13 +443,15 @@ async function handleReadyForStaff(event, body, correlationId) {
 }
 
 async function handleStaffSessionList(event, correlationId) {
-  const auth = await verifyStaffAuthToken(event);
+  const auth = await authorizeStaffRequest(event, STAFF_READ_PERMISSION);
   if (!auth.ok) {
     return staffAuthErrorResponse(correlationId, auth);
   }
 
   const request = normalizeStaffListRequest(event);
-  const sessions = filterT0176FrontendRedeemRehearsalSessions(await findReadyStaffSessions(request));
+  const sessions = filterT0176FrontendRedeemRehearsalSessions(
+    await findReadyStaffSessions(request, stringOrNull(auth.staff?.venueId)),
+  );
 
   return jsonResponse(200, correlationId, {
     status: 'found',
@@ -413,7 +465,7 @@ async function handleStaffSessionList(event, correlationId) {
 }
 
 async function handleStaffSessionDetail(event, correlationId) {
-  const auth = await verifyStaffAuthToken(event);
+  const auth = await authorizeStaffRequest(event, STAFF_READ_PERMISSION);
   if (!auth.ok) {
     return staffAuthErrorResponse(correlationId, auth);
   }
@@ -441,7 +493,7 @@ async function handleStaffSessionDetail(event, correlationId) {
     });
   }
 
-  const session = await findStaffSessionDetail(checkinSessionId);
+  const session = await findStaffSessionDetail(checkinSessionId, stringOrNull(auth.staff?.venueId));
   if (!session) {
     return jsonResponse(404, correlationId, {
       status: 'not_found',
@@ -458,7 +510,21 @@ async function handleStaffSessionDetail(event, correlationId) {
   });
 }
 
-async function handleStaffAuthLogin(body, correlationId) {
+async function handleStaffAuthLogin(event, body, correlationId) {
+  if (isPinStaffIdentityMode()) {
+    return handlePinStaffAuthLogin(event, body, correlationId);
+  }
+
+  if (isCognitoStaffIdentityMode()) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: 'staff_legacy_login_disabled',
+        message: 'Shared-passcode staff login is disabled for this environment.',
+      },
+    });
+  }
+
   const request = normalizeStaffAuthLoginRequest(body);
   if (!request.passcode) {
     return jsonResponse(400, correlationId, {
@@ -511,6 +577,253 @@ async function handleStaffAuthLogin(body, correlationId) {
       displayName: config.displayName,
     },
   });
+}
+
+async function handleStaffAuthSession(event, body, correlationId) {
+  if (isPinStaffIdentityMode()) {
+    return handlePinStaffAuthSession(event, body, correlationId);
+  }
+
+  const action = stringOrNull(body.action)?.toLowerCase() ?? null;
+  if (!['start', 'heartbeat', 'logout'].includes(action)) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: {
+        code: 'staff_session_action_invalid',
+        message: 'action must be start, heartbeat, or logout.',
+      },
+    });
+  }
+
+  if (!isCognitoStaffIdentityMode()) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: 'staff_identity_mode_disabled',
+        message: 'Personal staff identity is disabled for this environment.',
+      },
+    });
+  }
+
+  const gate = validateCognitoStaffGate();
+  if (!gate.ok) {
+    return staffAuthErrorResponse(correlationId, gate);
+  }
+
+  const claimsResult = getTrustedCognitoStaffClaims(event);
+  if (!claimsResult.ok) {
+    return staffAuthErrorResponse(correlationId, claimsResult);
+  }
+
+  if (action === 'start') {
+    const started = await startCognitoStaffSession(claimsResult.claims);
+    if (!started.ok) {
+      return staffAuthErrorResponse(correlationId, started);
+    }
+
+    if (started.created) {
+      await writeStaffIdentityAudit({
+        correlationId,
+        eventType: 'staff.auth_session_started',
+        principal: started.staff,
+        session: started.session,
+        summary: 'Personal staff authentication session started.',
+      });
+    }
+
+    return jsonResponse(200, correlationId, {
+      status: 'staff_session_started',
+      principal: buildStaffPrincipalResponse(started.staff),
+      session: buildStaffAuthSessionResponse(started.session),
+    });
+  }
+
+  if (action === 'heartbeat') {
+    const auth = await authorizeCognitoStaffRequest(claimsResult.claims, STAFF_READ_PERMISSION);
+    if (!auth.ok) {
+      return staffAuthErrorResponse(correlationId, auth);
+    }
+
+    return jsonResponse(200, correlationId, {
+      status: 'staff_session_active',
+      principal: buildStaffPrincipalResponse(auth.staff),
+      session: buildStaffAuthSessionResponse(auth.session),
+    });
+  }
+
+  const loggedOut = await revokeCognitoStaffSession(claimsResult.claims);
+  if (!loggedOut.ok) {
+    return staffAuthErrorResponse(correlationId, loggedOut);
+  }
+
+  if (loggedOut.revoked) {
+    await writeStaffIdentityAudit({
+      correlationId,
+      eventType: 'staff.auth_session_logged_out',
+      principal: loggedOut.staff,
+      session: loggedOut.session,
+      summary: 'Personal staff authentication session logged out.',
+    });
+  }
+
+  return jsonResponse(200, correlationId, {
+    status: 'staff_session_logged_out',
+    principal: buildStaffPrincipalResponse(loggedOut.staff),
+    session: buildStaffAuthSessionResponse(loggedOut.session),
+  });
+}
+
+async function handleAdminAuthSession(event, body, correlationId) {
+  const action = stringOrNull(body.action)?.toLowerCase() ?? null;
+  if (!['start', 'heartbeat', 'logout'].includes(action)) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: {
+        code: 'admin_session_action_invalid',
+        message: 'action must be start, heartbeat, or logout.',
+      },
+    });
+  }
+
+  if (!isPinStaffIdentityMode()) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: 'admin_identity_mode_disabled',
+        message: 'Personal staff administration is disabled for this environment.',
+      },
+    });
+  }
+
+  const gate = validateCognitoStaffGate();
+  if (!gate.ok) return staffAuthErrorResponse(correlationId, gate);
+
+  const claimsResult = getTrustedCognitoStaffClaims(event);
+  if (!claimsResult.ok) return staffAuthErrorResponse(correlationId, claimsResult);
+
+  if (action === 'start') {
+    const started = await startCognitoStaffSession(claimsResult.claims, STAFF_ADMIN_PERMISSION);
+    if (!started.ok) return staffAuthErrorResponse(correlationId, started);
+    if (started.created) {
+      await writeStaffIdentityAudit({
+        correlationId,
+        eventType: 'staff.admin_auth_session_started',
+        principal: started.staff,
+        session: started.session,
+        summary: 'Personal staff administrator session started.',
+      });
+    }
+    return jsonResponse(200, correlationId, {
+      status: 'admin_session_started',
+      principal: buildStaffPrincipalResponse(started.staff),
+      session: buildStaffAuthSessionResponse(started.session),
+    });
+  }
+
+  if (action === 'heartbeat') {
+    const auth = await authorizeCognitoStaffRequest(claimsResult.claims, STAFF_ADMIN_PERMISSION);
+    if (!auth.ok) return staffAuthErrorResponse(correlationId, auth);
+    return jsonResponse(200, correlationId, {
+      status: 'admin_session_active',
+      principal: buildStaffPrincipalResponse(auth.staff),
+      session: buildStaffAuthSessionResponse(auth.session),
+    });
+  }
+
+  const loggedOut = await revokeCognitoStaffSession(claimsResult.claims);
+  if (!loggedOut.ok) return staffAuthErrorResponse(correlationId, loggedOut);
+  if (loggedOut.revoked) {
+    await writeStaffIdentityAudit({
+      correlationId,
+      eventType: 'staff.admin_auth_session_logged_out',
+      principal: loggedOut.staff,
+      session: loggedOut.session,
+      summary: 'Personal staff administrator session logged out.',
+    });
+  }
+  return jsonResponse(200, correlationId, {
+    status: 'admin_session_logged_out',
+    principal: buildStaffPrincipalResponse(loggedOut.staff),
+    session: buildStaffAuthSessionResponse(loggedOut.session),
+  });
+}
+
+async function handleAdminStaffCollection(event, body, correlationId) {
+  const auth = await authorizeAdminRequest(event);
+  if (!auth.ok) return staffAuthErrorResponse(correlationId, auth);
+
+  const method = String(event?.requestContext?.http?.method ?? '').toUpperCase();
+  if (method === 'GET') {
+    const staff = await listLocalPinStaff(auth.staff.venueId);
+    return jsonResponse(200, correlationId, { status: 'found', staff });
+  }
+
+  const request = normalizeAdminCreateStaffRequest(body);
+  const validationError = validateAdminCreateStaffRequest(request);
+  if (validationError) {
+    return jsonResponse(400, correlationId, { status: 'invalid_request', error: validationError });
+  }
+
+  const created = await createLocalPinStaff(request, auth.staff);
+  await writeStaffAdminAudit({
+    actor: auth.staff,
+    correlationId,
+    eventType: 'staff.identity_created',
+    summary: 'Local PIN staff identity created.',
+    target: created,
+  });
+  return jsonResponse(201, correlationId, { status: 'created', staff: created });
+}
+
+async function handleAdminStaffItem(event, body, correlationId) {
+  const auth = await authorizeAdminRequest(event);
+  if (!auth.ok) return staffAuthErrorResponse(correlationId, auth);
+
+  const staffIdentityId = stringOrNull(event?.pathParameters?.staffIdentityId) || extractAdminStaffIdFromPath(event?.rawPath);
+  if (!staffIdentityId || !/^jystaff_[a-z0-9_-]{8,120}$/i.test(staffIdentityId)) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: { code: 'staff_identity_id_invalid', message: 'A valid staff identity id is required.' },
+    });
+  }
+
+  const action = stringOrNull(body.action)?.toLowerCase() ?? null;
+  if (!['enable', 'disable', 'reset_pin'].includes(action)) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: { code: 'staff_admin_action_invalid', message: 'action must be enable, disable, or reset_pin.' },
+    });
+  }
+
+  let pinCredential = null;
+  if (action === 'reset_pin') {
+    const pin = normalizePinInput(body.pin);
+    const pinError = validateNewStaffPin(pin);
+    if (pinError) return jsonResponse(400, correlationId, { status: 'invalid_request', error: pinError });
+    pinCredential = await createStaffPinCredential(pin, auth.staff.environment, auth.staff.venueId);
+  } else if (Object.prototype.hasOwnProperty.call(body, 'pin')) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: { code: 'staff_pin_not_allowed', message: 'PIN is only accepted for reset_pin.' },
+    });
+  }
+
+  const updated = await updateLocalPinStaff({ action, pinCredential, staffIdentityId }, auth.staff);
+  if (!updated) {
+    return jsonResponse(404, correlationId, {
+      status: 'not_found',
+      error: { code: 'staff_identity_not_found', message: 'No local staff identity was found.' },
+    });
+  }
+
+  await writeStaffAdminAudit({
+    actor: auth.staff,
+    correlationId,
+    eventType: `staff.identity_${action}`,
+    summary: `Local PIN staff identity ${action}.`,
+    target: updated,
+  });
+  return jsonResponse(200, correlationId, { status: 'updated', staff: updated });
 }
 
 async function handleCreateSessionLink(event, body, correlationId) {
@@ -2036,8 +2349,10 @@ async function sendDueMessageChannel(event, { candidate, channel, correlationId,
   );
 }
 
-async function findReadyStaffSessions(request) {
+async function findReadyStaffSessions(request, staffVenueId = null) {
   const expiryClause = request.includeExpired ? '' : 'AND cs.expires_at > now()';
+  const staffVenueClause = staffVenueId ? 'AND b.venue_id = :staffVenueId' : '';
+  const linkedVenueClause = staffVenueId ? 'AND linked_booking.venue_id = :staffVenueId' : '';
 
   const result = await executeStatement(
     `WITH session_base AS (
@@ -2175,6 +2490,7 @@ async function findReadyStaffSessions(request) {
        ) AS guest_identity ON true
        WHERE cs.handoff_status = 'ready_for_staff'
          AND cs.status = 'ready_for_staff'
+         ${staffVenueClause}
          ${expiryClause}
      ),
      session_rows AS (
@@ -2200,6 +2516,7 @@ async function findReadyStaffSessions(request) {
                 ON linked_draft.roller_draft_unique_id = link.linked_roller_unique_id
               WHERE link.original_roller_unique_id = session_rows.roller_unique_id
                 AND link.link_type = 'add_product_draft'
+                ${linkedVenueClause}
                 AND (
                   linked_draft.status = 'published'
                   OR linked_booking.amount_owing_cents = 0
@@ -2214,13 +2531,18 @@ async function findReadyStaffSessions(request) {
        )::int AS ticket_count
      FROM session_rows
      ORDER BY session_rows.ready_for_staff_at DESC NULLS LAST, session_rows.updated_at DESC`,
-    [stringParameter('searchQuery', request.searchQuery)],
+    [
+      stringParameter('searchQuery', request.searchQuery),
+      ...(staffVenueId ? [stringParameter('staffVenueId', staffVenueId)] : []),
+    ],
   );
 
   return mappedRows(result).map(mapStaffSessionSummaryRow);
 }
 
-async function findStaffSessionDetail(checkinSessionId) {
+async function findStaffSessionDetail(checkinSessionId, staffVenueId = null) {
+  const staffVenueClause = staffVenueId ? 'AND b.venue_id = :staffVenueId' : '';
+  const linkedVenueClause = staffVenueId ? 'AND linked_booking.venue_id = :staffVenueId' : '';
   const result = await executeStatement(
     `SELECT
        cs.checkin_session_id,
@@ -2265,6 +2587,7 @@ async function findStaffSessionDetail(checkinSessionId) {
                 ON linked_draft.roller_draft_unique_id = link.linked_roller_unique_id
               WHERE link.original_roller_unique_id = cs.roller_unique_id
                 AND link.link_type = 'add_product_draft'
+                ${linkedVenueClause}
                 AND (
                   linked_draft.status = 'published'
                   OR linked_booking.amount_owing_cents = 0
@@ -2352,15 +2675,19 @@ async function findStaffSessionDetail(checkinSessionId) {
        LIMIT 1
      ) AS guest_identity ON true
      WHERE cs.checkin_session_id = :checkinSessionId
+       ${staffVenueClause}
      LIMIT 1`,
-    [stringParameter('checkinSessionId', checkinSessionId)],
+    [
+      stringParameter('checkinSessionId', checkinSessionId),
+      ...(staffVenueId ? [stringParameter('staffVenueId', staffVenueId)] : []),
+    ],
   );
 
   const session = mapStaffSessionSummaryRow(firstMappedRow(result));
   if (!session) return null;
 
-  const items = await findStaffBookingItems(session.rollerUniqueId);
-  const tickets = await findStaffBookingTickets(session.rollerUniqueId, session.selectedTicketIds);
+  const items = await findStaffBookingItems(session.rollerUniqueId, staffVenueId);
+  const tickets = await findStaffBookingTickets(session.rollerUniqueId, session.selectedTicketIds, staffVenueId);
 
   return {
     ...session,
@@ -2369,8 +2696,17 @@ async function findStaffSessionDetail(checkinSessionId) {
   };
 }
 
-async function findStaffBookingItems(rollerUniqueId) {
+async function findStaffBookingItems(rollerUniqueId, staffVenueId = null) {
   if (!rollerUniqueId) return [];
+  const sourceVenueClause = staffVenueId
+    ? `AND EXISTS (
+         SELECT 1
+         FROM jumpyard.roller_bookings AS source_booking
+         WHERE source_booking.roller_unique_id = item.roller_unique_id
+           AND source_booking.venue_id = :staffVenueId
+       )`
+    : '';
+  const linkedVenueClause = staffVenueId ? 'AND linked_booking.venue_id = :staffVenueId' : '';
 
   const result = await executeStatement(
     `WITH staff_items AS (
@@ -2392,6 +2728,7 @@ async function findStaffBookingItems(rollerUniqueId) {
          0 AS source_order
        FROM jumpyard.roller_booking_items AS item
        WHERE item.roller_unique_id = :rollerUniqueId
+         ${sourceVenueClause}
        UNION ALL
        SELECT
          item.booking_item_key,
@@ -2418,6 +2755,7 @@ async function findStaffBookingItems(rollerUniqueId) {
          ON linked_draft.roller_draft_unique_id = link.linked_roller_unique_id
        WHERE link.original_roller_unique_id = :rollerUniqueId
          AND link.link_type = 'add_product_draft'
+         ${linkedVenueClause}
          AND (
            linked_draft.status = 'published'
            OR linked_booking.amount_owing_cents = 0
@@ -2441,7 +2779,10 @@ async function findStaffBookingItems(rollerUniqueId) {
        fulfillment_source
      FROM staff_items
      ORDER BY source_order ASC, booking_date NULLS LAST, start_time NULLS LAST, product_name NULLS LAST`,
-    [stringParameter('rollerUniqueId', rollerUniqueId)],
+    [
+      stringParameter('rollerUniqueId', rollerUniqueId),
+      ...(staffVenueId ? [stringParameter('staffVenueId', staffVenueId)] : []),
+    ],
   );
 
   return mappedRows(result).map((row) => ({
@@ -2462,10 +2803,18 @@ async function findStaffBookingItems(rollerUniqueId) {
   }));
 }
 
-async function findStaffBookingTickets(rollerUniqueId, selectedTicketIds) {
+async function findStaffBookingTickets(rollerUniqueId, selectedTicketIds, staffVenueId = null) {
   if (!rollerUniqueId) return [];
 
   const selected = new Set(selectedTicketIds);
+  const staffVenueClause = staffVenueId
+    ? `AND EXISTS (
+         SELECT 1
+         FROM jumpyard.roller_bookings AS source_booking
+         WHERE source_booking.roller_unique_id = roller_booking_tickets.roller_unique_id
+           AND source_booking.venue_id = :staffVenueId
+       )`
+    : '';
   const result = await executeStatement(
     `SELECT
        ticket_id,
@@ -2479,8 +2828,12 @@ async function findStaffBookingTickets(rollerUniqueId, selectedTicketIds) {
        ticket_summary::text AS ticket_summary
      FROM jumpyard.roller_booking_tickets
      WHERE roller_unique_id = :rollerUniqueId
+       ${staffVenueClause}
      ORDER BY booking_date NULLS LAST, ticket_id`,
-    [stringParameter('rollerUniqueId', rollerUniqueId)],
+    [
+      stringParameter('rollerUniqueId', rollerUniqueId),
+      ...(staffVenueId ? [stringParameter('staffVenueId', staffVenueId)] : []),
+    ],
   );
 
   return mappedRows(result).map((row) => ({
@@ -3748,6 +4101,31 @@ function isStaffAuthLoginRoute(routeKey, event) {
   return routeKey === 'POST /v1/staff/auth/login' || event?.rawPath === '/v1/staff/auth/login';
 }
 
+function isStaffAuthSessionRoute(routeKey, event) {
+  return routeKey === 'POST /v1/staff/auth/session' || event?.rawPath === '/v1/staff/auth/session';
+}
+
+function isAdminAuthSessionRoute(routeKey, event) {
+  return routeKey === 'POST /v1/admin/auth/session' || event?.rawPath === '/v1/admin/auth/session';
+}
+
+function isAdminStaffCollectionRoute(routeKey, event) {
+  const method = String(event?.requestContext?.http?.method ?? '').toUpperCase();
+  return (
+    routeKey === 'GET /v1/admin/staff' ||
+    routeKey === 'POST /v1/admin/staff' ||
+    ((method === 'GET' || method === 'POST') && event?.rawPath === '/v1/admin/staff')
+  );
+}
+
+function isAdminStaffItemRoute(routeKey, event) {
+  return (
+    routeKey === 'PATCH /v1/admin/staff/{staffIdentityId}' ||
+    (String(event?.requestContext?.http?.method ?? '').toUpperCase() === 'PATCH' &&
+      /^\/v1\/admin\/staff\/[^/]+$/.test(event?.rawPath ?? ''))
+  );
+}
+
 function isStaffSessionListRoute(routeKey, event) {
   return (
     routeKey === 'GET /v1/staff/check-in/sessions' ||
@@ -4277,6 +4655,1641 @@ async function getCheckinLinkDevToken() {
   return cachedCheckinLinkDevToken;
 }
 
+function extractAdminStaffIdFromPath(rawPath) {
+  const match = String(rawPath ?? '').match(/^\/v1\/admin\/staff\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function isCognitoStaffIdentityMode() {
+  return String(process.env.STAFF_IDENTITY_MODE ?? '').trim().toLowerCase() === STAFF_IDENTITY_MODE_COGNITO;
+}
+
+function isPinStaffIdentityMode() {
+  return String(process.env.STAFF_IDENTITY_MODE ?? '').trim().toLowerCase() === STAFF_IDENTITY_MODE_PIN;
+}
+
+function validatePinStaffGate() {
+  if (!isStaffAuthEnabled()) {
+    return {
+      ok: false,
+      code: 'staff_auth_disabled',
+      statusCode: 409,
+      message: 'Staff authentication is disabled for this JumpYard Cloud environment.',
+    };
+  }
+
+  const environment = stringOrNull(process.env.STAFF_IDENTITY_ENVIRONMENT);
+  const venueId = stringOrNull(process.env.STAFF_IDENTITY_VENUE_ID);
+  const runtimeEnvironment = stringOrNull(process.env.JUMPYARD_ENVIRONMENT);
+  if (!environment || !venueId || !runtimeEnvironment || environment !== runtimeEnvironment) {
+    return {
+      ok: false,
+      code: 'staff_identity_config_error',
+      statusCode: 500,
+      message: 'JumpYard Cloud staff identity configuration is incomplete or inconsistent.',
+    };
+  }
+
+  return { ok: true, environment, venueId };
+}
+
+async function handlePinStaffAuthLogin(event, body, correlationId) {
+  const gate = validatePinStaffGate();
+  if (!gate.ok) return staffAuthErrorResponse(correlationId, gate);
+
+  const pin = normalizePinInput(body.pin);
+  if (!pin || !/^\d{6}$/.test(pin)) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: { code: 'staff_pin_format_invalid', message: 'Enter a six-digit PIN.' },
+    });
+  }
+
+  const pepper = await getStaffPinPepper();
+  const sourceHash = staffPinSourceHash(pepper, readStaffSourceAddress(event));
+  const limit = await readStaffPinAuthLimit(gate, sourceHash);
+  if (limit.blocked) return staffPinRateLimitedResponse(correlationId, limit.retryAfterSeconds);
+
+  if (isTrivialStaffPin(pin)) {
+    const failed = await recordStaffPinAuthFailure(gate, sourceHash);
+    return failed.blocked
+      ? staffPinRateLimitedResponse(correlationId, failed.retryAfterSeconds)
+      : staffPinInvalidResponse(correlationId);
+  }
+
+  const lookupHash = staffPinLookupHash(pepper, gate.environment, gate.venueId, pin);
+  const identity = await findLocalPinIdentity(lookupHash, gate);
+  const verified = await verifyStaffPin(pin, identity?.pinVerifier ?? null, pepper, gate.environment, gate.venueId);
+  if (
+    !verified ||
+    !identity ||
+    identity.active !== true ||
+    identity.revokedAt ||
+    ![STAFF_ROLE_READER, STAFF_ROLE_OPERATOR].includes(identity.role)
+  ) {
+    const failed = await recordStaffPinAuthFailure(gate, sourceHash);
+    console.warn(JSON.stringify({ correlationId, event: 'staff_pin_auth_failed', reason: 'invalid_or_inactive' }));
+    return failed.blocked
+      ? staffPinRateLimitedResponse(correlationId, failed.retryAfterSeconds)
+      : staffPinInvalidResponse(correlationId);
+  }
+
+  let issued;
+  try {
+    issued = await createLocalPinStaffSession(identity, gate, lookupHash);
+  } catch (error) {
+    if (error?.code === 'staff_pin_revalidation_failed') return staffPinInvalidResponse(correlationId);
+    throw error;
+  }
+  await writeStaffIdentityAudit({
+    correlationId,
+    eventType: 'staff.auth_session_started',
+    principal: issued.staff,
+    session: issued.session,
+    summary: 'Personal staff PIN session started.',
+  });
+
+  return jsonResponse(200, correlationId, {
+    status: 'authenticated',
+    auth: {
+      expiresAt: issued.session.absoluteExpiresAt,
+      token: issued.token,
+      tokenType: 'Bearer',
+    },
+    principal: buildStaffPrincipalResponse(issued.staff),
+    session: buildStaffAuthSessionResponse(issued.session),
+    staff: buildStaffPrincipalResponse(issued.staff),
+  });
+}
+
+async function handlePinStaffAuthSession(event, body, correlationId) {
+  const action = stringOrNull(body.action)?.toLowerCase() ?? null;
+  if (!['heartbeat', 'logout'].includes(action)) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: { code: 'staff_session_action_invalid', message: 'action must be heartbeat or logout.' },
+    });
+  }
+
+  const result = action === 'heartbeat'
+    ? await authorizePinStaffRequest(event, STAFF_READ_PERMISSION)
+    : await revokePinStaffSession(event);
+  if (!result.ok) return staffAuthErrorResponse(correlationId, result);
+
+  if (action === 'logout' && result.revoked) {
+    await writeStaffIdentityAudit({
+      correlationId,
+      eventType: 'staff.auth_session_logged_out',
+      principal: result.staff,
+      session: result.session,
+      summary: 'Personal staff PIN session logged out.',
+    });
+  }
+
+  return jsonResponse(200, correlationId, {
+    status: action === 'heartbeat' ? 'staff_session_active' : 'staff_session_logged_out',
+    principal: buildStaffPrincipalResponse(result.staff),
+    session: buildStaffAuthSessionResponse(result.session),
+  });
+}
+
+function normalizePinInput(value) {
+  return typeof value === 'string' ? value : null;
+}
+
+function validateNewStaffPin(pin) {
+  if (!pin || !/^\d{6}$/.test(pin)) {
+    return { code: 'staff_pin_format_invalid', message: 'PIN must contain exactly six digits.' };
+  }
+  if (isTrivialStaffPin(pin)) {
+    return { code: 'staff_pin_too_simple', message: 'Choose a less predictable six-digit PIN.' };
+  }
+  return null;
+}
+
+function isTrivialStaffPin(pin) {
+  if (/^(\d)\1{5}$/.test(pin)) return true;
+  return new Set([
+    '012345',
+    '123456',
+    '234567',
+    '345678',
+    '456789',
+    '987654',
+    '876543',
+    '765432',
+    '654321',
+    '543210',
+    '121212',
+    '112233',
+    '123123',
+    '000123',
+  ]).has(pin);
+}
+
+async function getStaffPinPepper() {
+  const now = Date.now();
+  if (cachedStaffPinPepper && cachedStaffPinPepperExpiresAt > now) return cachedStaffPinPepper;
+
+  let pepper = stringOrNull(process.env.STAFF_PIN_PEPPER);
+  if (!pepper) {
+    const secretId = stringOrNull(process.env.STAFF_PIN_PEPPER_SECRET_ARN);
+    if (!secretId) {
+      const error = new Error('Staff PIN pepper is not configured.');
+      error.code = 'staff_pin_config_error';
+      throw error;
+    }
+    const response = await secretsClient.send(new GetSecretValueCommand({ SecretId: secretId }));
+    const secretString = stringOrNull(response.SecretString);
+    if (!secretString) {
+      const error = new Error('Staff PIN pepper secret has no string value.');
+      error.code = 'staff_pin_config_error';
+      throw error;
+    }
+    try {
+      pepper = stringOrNull(JSON.parse(secretString).pinPepper);
+    } catch {
+      pepper = null;
+    }
+  }
+
+  if (!pepper || Buffer.byteLength(pepper, 'utf8') < 32) {
+    const error = new Error('Staff PIN pepper must be an independent secret with at least 32 bytes.');
+    error.code = 'staff_pin_config_error';
+    throw error;
+  }
+  cachedStaffPinPepper = pepper;
+  cachedStaffPinPepperExpiresAt = now + STAFF_AUTH_CONFIG_CACHE_MS;
+  return pepper;
+}
+
+function staffPinLookupHash(pepper, environment, venueId, pin) {
+  return crypto
+    .createHmac('sha256', pepper)
+    .update(`staff-pin-lookup-v1\0${environment}\0${venueId}\0${pin}`)
+    .digest('hex');
+}
+
+function staffPinSourceHash(pepper, sourceAddress) {
+  return crypto.createHmac('sha256', pepper).update(`staff-pin-source-v1\0${sourceAddress}`).digest('hex');
+}
+
+function staffPinVenueHash(pepper, environment, venueId) {
+  return crypto.createHmac('sha256', pepper).update(`staff-pin-venue-v1\0${environment}\0${venueId}`).digest('hex');
+}
+
+function staffPinVerifyMaterial(pepper, environment, venueId, pin) {
+  return crypto
+    .createHmac('sha256', pepper)
+    .update(`staff-pin-verify-v1\0${environment}\0${venueId}\0${pin}`)
+    .digest();
+}
+
+async function createStaffPinCredential(pin, environment, venueId) {
+  const pepper = await getStaffPinPepper();
+  const salt = crypto.randomBytes(16);
+  const derived = await scryptStaffPin(staffPinVerifyMaterial(pepper, environment, venueId, pin), salt);
+  return {
+    lookupHash: staffPinLookupHash(pepper, environment, venueId, pin),
+    verifier: [
+      'scrypt-v1',
+      STAFF_PIN_SCRYPT_COST,
+      STAFF_PIN_SCRYPT_BLOCK_SIZE,
+      STAFF_PIN_SCRYPT_PARALLELIZATION,
+      salt.toString('base64url'),
+      derived.toString('base64url'),
+    ].join('$'),
+  };
+}
+
+async function verifyStaffPin(pin, encodedVerifier, pepper, environment, venueId) {
+  const parsed = parseStaffPinVerifier(encodedVerifier);
+  const salt = parsed?.salt ?? crypto.createHmac('sha256', pepper).update('staff-pin-dummy-salt-v1').digest().subarray(0, 16);
+  const actual = await scryptStaffPin(staffPinVerifyMaterial(pepper, environment, venueId, pin), salt);
+  const expected = parsed?.derived ?? Buffer.alloc(STAFF_PIN_SCRYPT_KEY_LENGTH, 0);
+  return parsed !== null && actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+function parseStaffPinVerifier(value) {
+  if (typeof value !== 'string') return null;
+  const [version, cost, blockSize, parallelization, salt, derived] = value.split('$');
+  if (
+    version !== 'scrypt-v1' ||
+    Number(cost) !== STAFF_PIN_SCRYPT_COST ||
+    Number(blockSize) !== STAFF_PIN_SCRYPT_BLOCK_SIZE ||
+    Number(parallelization) !== STAFF_PIN_SCRYPT_PARALLELIZATION ||
+    !/^[A-Za-z0-9_-]+$/.test(salt ?? '') ||
+    !/^[A-Za-z0-9_-]+$/.test(derived ?? '')
+  ) return null;
+  try {
+    const saltBuffer = Buffer.from(salt, 'base64url');
+    const derivedBuffer = Buffer.from(derived, 'base64url');
+    if (saltBuffer.length !== 16 || derivedBuffer.length !== STAFF_PIN_SCRYPT_KEY_LENGTH) return null;
+    return { derived: derivedBuffer, salt: saltBuffer };
+  } catch {
+    return null;
+  }
+}
+
+function scryptStaffPin(material, salt) {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(
+      material,
+      salt,
+      STAFF_PIN_SCRYPT_KEY_LENGTH,
+      {
+        N: STAFF_PIN_SCRYPT_COST,
+        maxmem: STAFF_PIN_SCRYPT_MAX_MEMORY,
+        p: STAFF_PIN_SCRYPT_PARALLELIZATION,
+        r: STAFF_PIN_SCRYPT_BLOCK_SIZE,
+      },
+      (error, derived) => (error ? reject(error) : resolve(derived)),
+    );
+  });
+}
+
+function readStaffSourceAddress(event) {
+  const source = stringOrNull(event?.requestContext?.http?.sourceIp);
+  return source && source.length <= 128 ? source : 'unknown';
+}
+
+function staffPinInvalidResponse(correlationId) {
+  return jsonResponse(403, correlationId, {
+    status: 'forbidden',
+    error: { code: 'staff_pin_invalid', message: 'PIN could not be verified.' },
+  });
+}
+
+function staffPinRateLimitedResponse(correlationId, retryAfterSeconds) {
+  return jsonResponse(429, correlationId, {
+    status: 'blocked',
+    retryAfterSeconds,
+    error: { code: 'staff_pin_rate_limited', message: 'Too many PIN attempts. Wait before trying again.' },
+  });
+}
+
+async function readStaffPinAuthLimit(gate, sourceHash) {
+  const pepper = await getStaffPinPepper();
+  const result = await executeStatement(
+    `SELECT scope_type, blocked_until::text AS blocked_until
+     FROM jumpyard.staff_pin_auth_limits
+     WHERE environment = :environment
+       AND venue_id = :venueId
+       AND blocked_until > now()
+       AND (
+         (scope_type = 'source' AND scope_hash = :sourceHash)
+         OR (scope_type = 'venue' AND scope_hash = :venueHash)
+       )`,
+    [
+      stringParameter('environment', gate.environment),
+      stringParameter('venueId', gate.venueId),
+      stringParameter('sourceHash', sourceHash),
+      stringParameter('venueHash', staffPinVenueHash(pepper, gate.environment, gate.venueId)),
+    ],
+  );
+  return staffPinLimitResult(mappedRows(result));
+}
+
+async function recordStaffPinAuthFailure(gate, sourceHash) {
+  const pepper = await getStaffPinPepper();
+  const result = await executeStatement(
+    `WITH source_limit AS (
+       INSERT INTO jumpyard.staff_pin_auth_limits AS limiter (
+         environment, venue_id, scope_type, scope_hash, window_started_at,
+         failure_count, blocked_until, last_failure_at, updated_at
+       )
+       VALUES (:environment, :venueId, 'source', :sourceHash, now(), 1, NULL, now(), now())
+       ON CONFLICT (environment, venue_id, scope_type, scope_hash) DO UPDATE
+       SET
+         window_started_at = CASE
+           WHEN limiter.window_started_at <= now() - interval '${STAFF_PIN_FAILURE_WINDOW_MINUTES} minutes'
+             THEN now()
+           ELSE limiter.window_started_at
+         END,
+         failure_count = CASE
+           WHEN limiter.window_started_at <= now() - interval '${STAFF_PIN_FAILURE_WINDOW_MINUTES} minutes'
+             THEN 1
+           ELSE limiter.failure_count + 1
+         END,
+         blocked_until = CASE
+           WHEN limiter.blocked_until > now()
+             THEN limiter.blocked_until
+           WHEN (
+             CASE
+               WHEN limiter.window_started_at <= now() - interval '${STAFF_PIN_FAILURE_WINDOW_MINUTES} minutes'
+                 THEN 1
+               ELSE limiter.failure_count + 1
+             END
+           ) >= ${STAFF_PIN_SOURCE_FAILURE_LIMIT}
+             THEN now() + interval '${STAFF_PIN_BLOCK_MINUTES} minutes'
+           ELSE NULL
+         END,
+         last_failure_at = now(),
+         updated_at = now()
+       RETURNING blocked_until
+     ),
+     venue_limit AS (
+       INSERT INTO jumpyard.staff_pin_auth_limits AS limiter (
+         environment, venue_id, scope_type, scope_hash, window_started_at,
+         failure_count, blocked_until, last_failure_at, updated_at
+       )
+       VALUES (:environment, :venueId, 'venue', :venueHash, now(), 1, NULL, now(), now())
+       ON CONFLICT (environment, venue_id, scope_type, scope_hash) DO UPDATE
+       SET
+         window_started_at = CASE
+           WHEN limiter.window_started_at <= now() - interval '${STAFF_PIN_FAILURE_WINDOW_MINUTES} minutes'
+             THEN now()
+           ELSE limiter.window_started_at
+         END,
+         failure_count = CASE
+           WHEN limiter.window_started_at <= now() - interval '${STAFF_PIN_FAILURE_WINDOW_MINUTES} minutes'
+             THEN 1
+           ELSE limiter.failure_count + 1
+         END,
+         blocked_until = CASE
+           WHEN limiter.blocked_until > now()
+             THEN limiter.blocked_until
+           WHEN (
+             CASE
+               WHEN limiter.window_started_at <= now() - interval '${STAFF_PIN_FAILURE_WINDOW_MINUTES} minutes'
+                 THEN 1
+               ELSE limiter.failure_count + 1
+             END
+           ) >= ${STAFF_PIN_VENUE_FAILURE_LIMIT}
+             THEN now() + interval '${STAFF_PIN_BLOCK_MINUTES} minutes'
+           ELSE NULL
+         END,
+         last_failure_at = now(),
+         updated_at = now()
+       RETURNING blocked_until
+     )
+     SELECT
+       source_limit.blocked_until::text AS source_blocked_until,
+       venue_limit.blocked_until::text AS venue_blocked_until
+     FROM source_limit CROSS JOIN venue_limit`,
+    [
+      stringParameter('environment', gate.environment),
+      stringParameter('venueId', gate.venueId),
+      stringParameter('sourceHash', sourceHash),
+      stringParameter('venueHash', staffPinVenueHash(pepper, gate.environment, gate.venueId)),
+    ],
+  );
+  const row = firstMappedRow(result) ?? {};
+  return staffPinLimitResult([
+    { blocked_until: row.source_blocked_until },
+    { blocked_until: row.venue_blocked_until },
+  ]);
+}
+
+function staffPinLimitResult(rows) {
+  const now = Date.now();
+  const blockedUntil = rows
+    .map((row) => Date.parse(String(row.blocked_until ?? '')))
+    .filter((value) => Number.isFinite(value) && value > now)
+    .sort((left, right) => right - left)[0];
+  return {
+    blocked: Number.isFinite(blockedUntil),
+    retryAfterSeconds: Number.isFinite(blockedUntil) ? Math.max(1, Math.ceil((blockedUntil - now) / 1000)) : 0,
+  };
+}
+
+async function findLocalPinIdentity(pinLookupHash, gate) {
+  const result = await executeStatement(
+    `SELECT
+       staff_identity_id,
+       provider_subject,
+       given_name,
+       family_name,
+       display_name,
+       role,
+       environment,
+       venue_id,
+       active,
+       revoked_at::text AS identity_revoked_at,
+       tokens_valid_after::text AS tokens_valid_after,
+       pin_verifier
+     FROM jumpyard.staff_identities
+     WHERE identity_provider = :identityProvider
+       AND pin_lookup_hash = :pinLookupHash
+       AND environment = :environment
+       AND venue_id = :venueId
+     LIMIT 1`,
+    [
+      stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_PIN),
+      stringParameter('pinLookupHash', pinLookupHash),
+      stringParameter('environment', gate.environment),
+      stringParameter('venueId', gate.venueId),
+    ],
+  );
+  const row = firstMappedRow(result);
+  if (!row) return null;
+  return {
+    actorId: stringOrNull(row.provider_subject),
+    active: row.active === true,
+    displayName: stringOrNull(row.display_name),
+    environment: stringOrNull(row.environment),
+    familyName: stringOrNull(row.family_name),
+    givenName: stringOrNull(row.given_name),
+    pinVerifier: stringOrNull(row.pin_verifier),
+    revokedAt: stringOrNull(row.identity_revoked_at),
+    role: stringOrNull(row.role),
+    staffIdentityId: stringOrNull(row.staff_identity_id),
+    tokensValidAfter: stringOrNull(row.tokens_valid_after),
+    venueId: stringOrNull(row.venue_id),
+  };
+}
+
+async function createLocalPinStaffSession(identity, gate, pinLookupHash) {
+  const now = Date.now();
+  const authTime = new Date(now).toISOString();
+  const absoluteExpiresAt = new Date(now + STAFF_SESSION_ABSOLUTE_HOURS * 60 * 60 * 1000).toISOString();
+  const idleExpiresAt = new Date(now + STAFF_SESSION_IDLE_MINUTES * 60 * 1000).toISOString();
+  const staffSessionId = createStaffAuthSessionId();
+  const token = `jypin_${crypto.randomBytes(32).toString('base64url')}`;
+  const tokenHash = hashString(token);
+  const database = databaseConnectionConfig();
+  const begin = await rdsClient.send(
+    new BeginTransactionCommand({
+      database: DATABASE_NAME,
+      resourceArn: database.resourceArn,
+      secretArn: database.secretArn,
+    }),
+  );
+  let transactionId = stringOrNull(begin.transactionId);
+  if (!transactionId) {
+    const error = new Error('Staff PIN session transaction could not be started.');
+    error.code = 'staff_auth_session_invalid';
+    throw error;
+  }
+
+  try {
+    const identityParameters = [
+      stringParameter('staffIdentityId', identity.staffIdentityId),
+      stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_PIN),
+      stringParameter('environment', gate.environment),
+      stringParameter('venueId', gate.venueId),
+      stringParameter('pinLookupHash', pinLookupHash),
+      stringParameter('pinVerifier', identity.pinVerifier),
+      stringParameter('authTime', authTime),
+    ];
+    const lockedIdentityResult = await executeStatement(
+      `SELECT
+         staff_identity_id,
+         provider_subject,
+         display_name,
+         role,
+         environment,
+         venue_id
+       FROM jumpyard.staff_identities
+       WHERE staff_identity_id = :staffIdentityId
+         AND identity_provider = :identityProvider
+         AND environment = :environment
+         AND venue_id = :venueId
+         AND pin_lookup_hash = :pinLookupHash
+         AND pin_verifier = :pinVerifier
+         AND active = true
+         AND revoked_at IS NULL
+         AND CAST(:authTime AS timestamptz) >= tokens_valid_after
+         AND role IN ('staff_reader', 'staff_operator')
+       FOR UPDATE`,
+      identityParameters,
+      transactionId,
+    );
+    const lockedIdentity = firstMappedRow(lockedIdentityResult);
+    if (!lockedIdentity) throwStaffPinRevalidationFailed();
+
+    await executeStatement(
+      `UPDATE jumpyard.staff_auth_sessions
+       SET revoked_at = COALESCE(revoked_at, now()),
+           revoke_reason = COALESCE(revoke_reason, 'new_pin_login'),
+           updated_at = now()
+       WHERE staff_identity_id = :staffIdentityId
+         AND identity_provider = :identityProvider
+         AND revoked_at IS NULL`,
+      [
+        stringParameter('staffIdentityId', identity.staffIdentityId),
+        stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_PIN),
+      ],
+      transactionId,
+    );
+
+    const result = await executeStatement(
+      `INSERT INTO jumpyard.staff_auth_sessions (
+         staff_session_id, staff_identity_id, identity_provider, provider_session_hash,
+         client_id, environment, venue_id, role_snapshot, display_name_snapshot,
+         auth_time, token_issued_at, token_expires_at, idle_expires_at,
+         absolute_expires_at, last_seen_at
+       ) VALUES (
+         :staffSessionId, :staffIdentityId, :identityProvider, :tokenHash,
+         :clientId, :environment, :venueId, :role, :displayName,
+         CAST(:authTime AS timestamptz), CAST(:authTime AS timestamptz),
+         CAST(:absoluteExpiresAt AS timestamptz), CAST(:idleExpiresAt AS timestamptz),
+         CAST(:absoluteExpiresAt AS timestamptz), now()
+       )
+       RETURNING
+         staff_session_id,
+         idle_expires_at::text AS idle_expires_at,
+         absolute_expires_at::text AS absolute_expires_at,
+         last_seen_at::text AS last_seen_at,
+         NULL::text AS session_revoked_at`,
+      [
+        stringParameter('staffSessionId', staffSessionId),
+        stringParameter('staffIdentityId', identity.staffIdentityId),
+        stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_PIN),
+        stringParameter('tokenHash', tokenHash),
+        stringParameter('clientId', STAFF_PIN_CLIENT_ID),
+        stringParameter('environment', gate.environment),
+        stringParameter('venueId', gate.venueId),
+        stringParameter('role', lockedIdentity.role),
+        stringParameter('displayName', lockedIdentity.display_name),
+        stringParameter('authTime', authTime),
+        stringParameter('idleExpiresAt', idleExpiresAt),
+        stringParameter('absoluteExpiresAt', absoluteExpiresAt),
+      ],
+      transactionId,
+    );
+    const sessionRow = firstMappedRow(result);
+    if (!sessionRow) throwStaffAuthSessionInvalid();
+
+    await rdsClient.send(
+      new CommitTransactionCommand({
+        resourceArn: database.resourceArn,
+        secretArn: database.secretArn,
+        transactionId,
+      }),
+    );
+    transactionId = null;
+
+    const row = { ...lockedIdentity, ...sessionRow };
+    return {
+      token,
+      session: mapStaffAuthSessionRow(row),
+      staff: mapStaffPrincipalRow(row),
+    };
+  } catch (error) {
+    if (transactionId) {
+      try {
+        await rdsClient.send(
+          new RollbackTransactionCommand({
+            resourceArn: database.resourceArn,
+            secretArn: database.secretArn,
+            transactionId,
+          }),
+        );
+      } catch {
+        // Preserve the original failure; Aurora expires or closes failed transactions itself.
+      }
+    }
+    throw error;
+  }
+}
+
+function throwStaffAuthSessionInvalid() {
+  const error = new Error('Staff PIN session could not be created.');
+  error.code = 'staff_auth_session_invalid';
+  throw error;
+}
+
+function throwStaffPinRevalidationFailed() {
+  const error = new Error('Staff PIN changed before the session could be created.');
+  error.code = 'staff_pin_revalidation_failed';
+  throw error;
+}
+
+async function authorizePinStaffRequest(event, requiredPermission) {
+  const gate = validatePinStaffGate();
+  if (!gate.ok) return gate;
+  const tokenResult = getLocalPinSessionToken(event);
+  if (!tokenResult.ok) return tokenResult;
+  const allowedRoleClause = requiredPermission === STAFF_REDEEM_PERMISSION
+    ? "identity.role = 'staff_operator'"
+    : "identity.role IN ('staff_reader', 'staff_operator')";
+  const result = await executeStatement(
+    `UPDATE jumpyard.staff_auth_sessions AS staff_session
+     SET
+       role_snapshot = identity.role,
+       display_name_snapshot = identity.display_name,
+       last_seen_at = now(),
+       idle_expires_at = LEAST(staff_session.absolute_expires_at, now() + interval '${STAFF_SESSION_IDLE_MINUTES} minutes'),
+       updated_at = now()
+     FROM jumpyard.staff_identities AS identity
+     WHERE staff_session.provider_session_hash = :tokenHash
+       AND staff_session.staff_identity_id = identity.staff_identity_id
+       AND staff_session.identity_provider = :identityProvider
+       AND staff_session.client_id = :clientId
+       AND staff_session.environment = :environment
+       AND staff_session.venue_id = :venueId
+       AND staff_session.revoked_at IS NULL
+       AND staff_session.idle_expires_at > now()
+       AND staff_session.absolute_expires_at > now()
+       AND identity.identity_provider = :identityProvider
+       AND identity.environment = :environment
+       AND identity.venue_id = :venueId
+       AND identity.active = true
+       AND identity.revoked_at IS NULL
+       AND staff_session.auth_time >= identity.tokens_valid_after
+       AND ${allowedRoleClause}
+     RETURNING
+       staff_session.staff_session_id,
+       staff_session.idle_expires_at::text AS idle_expires_at,
+       staff_session.absolute_expires_at::text AS absolute_expires_at,
+       staff_session.last_seen_at::text AS last_seen_at,
+       staff_session.revoked_at::text AS session_revoked_at,
+       identity.staff_identity_id,
+       identity.provider_subject,
+       identity.display_name,
+       identity.role,
+       identity.environment,
+       identity.venue_id,
+       identity.active,
+       identity.revoked_at::text AS identity_revoked_at,
+       identity.tokens_valid_after::text AS tokens_valid_after`,
+    pinSessionParameters(tokenResult.tokenHash, gate),
+  );
+  const row = firstMappedRow(result);
+  if (row) return mapAuthorizedStaffRow(row);
+  return classifyPinStaffAuthorizationFailure(tokenResult.tokenHash, gate, requiredPermission);
+}
+
+async function classifyPinStaffAuthorizationFailure(tokenHash, gate, requiredPermission) {
+  const result = await executeStatement(
+    `SELECT
+       staff_session.staff_session_id,
+       staff_session.idle_expires_at::text AS idle_expires_at,
+       staff_session.absolute_expires_at::text AS absolute_expires_at,
+       staff_session.last_seen_at::text AS last_seen_at,
+       staff_session.revoked_at::text AS session_revoked_at,
+       identity.staff_identity_id,
+       identity.provider_subject,
+       identity.display_name,
+       identity.role,
+       identity.environment,
+       identity.venue_id,
+       identity.active,
+       identity.revoked_at::text AS identity_revoked_at,
+       identity.tokens_valid_after::text AS tokens_valid_after
+     FROM jumpyard.staff_auth_sessions AS staff_session
+     INNER JOIN jumpyard.staff_identities AS identity
+       ON identity.staff_identity_id = staff_session.staff_identity_id
+     WHERE staff_session.provider_session_hash = :tokenHash
+       AND staff_session.identity_provider = :identityProvider
+       AND staff_session.client_id = :clientId
+       AND staff_session.environment = :environment
+       AND staff_session.venue_id = :venueId
+     LIMIT 1`,
+    pinSessionParameters(tokenHash, gate),
+  );
+  const row = firstMappedRow(result);
+  if (!row) return { ok: false, code: 'staff_auth_session_required', statusCode: 401, message: 'Staff authentication is required.' };
+  if (row.active !== true || stringOrNull(row.identity_revoked_at)) return staffIdentityNotAuthorized();
+  if (stringOrNull(row.session_revoked_at)) {
+    return { ok: false, code: 'staff_auth_session_revoked', statusCode: 401, message: 'The staff authentication session has been revoked.' };
+  }
+  if (isTimestampPast(row.absolute_expires_at)) {
+    return { ok: false, code: 'staff_auth_session_absolute_expired', statusCode: 401, message: 'The staff authentication session reached its maximum duration.' };
+  }
+  if (isTimestampPast(row.idle_expires_at)) {
+    return { ok: false, code: 'staff_auth_session_idle_expired', statusCode: 401, message: 'The staff authentication session expired after inactivity.' };
+  }
+  if (!staffRoleHasPermission(stringOrNull(row.role), requiredPermission)) {
+    return { ok: false, code: 'staff_role_forbidden', statusCode: 403, message: 'This staff account is not allowed to perform that action.', staff: mapStaffPrincipalRow(row) };
+  }
+  return { ok: false, code: 'staff_auth_session_invalid', statusCode: 401, message: 'The staff authentication session is no longer valid.' };
+}
+
+async function revokePinStaffSession(event) {
+  const gate = validatePinStaffGate();
+  if (!gate.ok) return gate;
+  const tokenResult = getLocalPinSessionToken(event);
+  if (!tokenResult.ok) return tokenResult;
+  const result = await executeStatement(
+    `UPDATE jumpyard.staff_auth_sessions AS staff_session
+     SET revoked_at = now(), revoke_reason = 'staff_logout', updated_at = now()
+     FROM jumpyard.staff_identities AS identity
+     WHERE staff_session.provider_session_hash = :tokenHash
+       AND staff_session.staff_identity_id = identity.staff_identity_id
+       AND staff_session.identity_provider = :identityProvider
+       AND staff_session.client_id = :clientId
+       AND staff_session.environment = :environment
+       AND staff_session.venue_id = :venueId
+       AND staff_session.revoked_at IS NULL
+     RETURNING
+       staff_session.staff_session_id,
+       staff_session.idle_expires_at::text AS idle_expires_at,
+       staff_session.absolute_expires_at::text AS absolute_expires_at,
+       staff_session.last_seen_at::text AS last_seen_at,
+       staff_session.revoked_at::text AS session_revoked_at,
+       identity.staff_identity_id,
+       identity.provider_subject,
+       identity.display_name,
+       identity.role,
+       identity.environment,
+       identity.venue_id`,
+    pinSessionParameters(tokenResult.tokenHash, gate),
+  );
+  const row = firstMappedRow(result);
+  if (!row) return classifyPinStaffAuthorizationFailure(tokenResult.tokenHash, gate, STAFF_READ_PERMISSION);
+  return { ...mapAuthorizedStaffRow(row), revoked: true };
+}
+
+function getLocalPinSessionToken(event) {
+  const token = getStaffAuthToken(event);
+  if (!token || !/^jypin_[A-Za-z0-9_-]{43}$/.test(token)) {
+    return { ok: false, code: 'staff_auth_session_required', statusCode: 401, message: 'Staff authentication is required.' };
+  }
+  return { ok: true, tokenHash: hashString(token) };
+}
+
+function pinSessionParameters(tokenHash, gate) {
+  return [
+    stringParameter('tokenHash', tokenHash),
+    stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_PIN),
+    stringParameter('clientId', STAFF_PIN_CLIENT_ID),
+    stringParameter('environment', gate.environment),
+    stringParameter('venueId', gate.venueId),
+  ];
+}
+
+async function authorizeAdminRequest(event) {
+  if (!isPinStaffIdentityMode()) {
+    return { ok: false, code: 'admin_identity_mode_disabled', statusCode: 409, message: 'Staff administration is disabled.' };
+  }
+  const claimsResult = getTrustedCognitoStaffClaims(event);
+  if (!claimsResult.ok) return claimsResult;
+  return authorizeCognitoStaffRequest(claimsResult.claims, STAFF_ADMIN_PERMISSION);
+}
+
+function normalizeAdminCreateStaffRequest(body) {
+  return {
+    familyName: normalizeStaffName(body.lastName),
+    givenName: normalizeStaffName(body.firstName),
+    pin: normalizePinInput(body.pin),
+  };
+}
+
+function normalizeStaffName(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.normalize('NFKC').trim().replace(/\s+/g, ' ');
+  if (!normalized || normalized.length > 80 || /[\u0000-\u001f\u007f]/.test(normalized)) return null;
+  return normalized;
+}
+
+function validateAdminCreateStaffRequest(request) {
+  if (!request.givenName || !request.familyName) {
+    return { code: 'staff_name_invalid', message: 'First name and last name are required.' };
+  }
+  return validateNewStaffPin(request.pin);
+}
+
+async function listLocalPinStaff(venueId) {
+  const gate = validatePinStaffGate();
+  if (!gate.ok || gate.venueId !== venueId) return [];
+  const result = await executeStatement(
+    `SELECT staff_identity_id, given_name, family_name, display_name, role, environment, venue_id,
+            active, revoked_at::text AS identity_revoked_at,
+            pin_changed_at::text AS pin_changed_at, created_at::text AS created_at,
+            updated_at::text AS updated_at
+     FROM jumpyard.staff_identities
+     WHERE identity_provider = :identityProvider
+       AND environment = :environment
+       AND venue_id = :venueId
+     ORDER BY lower(family_name), lower(given_name), staff_identity_id`,
+    [
+      stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_PIN),
+      stringParameter('environment', gate.environment),
+      stringParameter('venueId', gate.venueId),
+    ],
+  );
+  return mappedRows(result).map(mapLocalPinStaffResponse);
+}
+
+async function createLocalPinStaff(request, admin) {
+  const credential = await createStaffPinCredential(request.pin, admin.environment, admin.venueId);
+  const staffIdentityId = createStaffIdentityId();
+  const displayName = `${request.givenName} ${request.familyName}`;
+  let result;
+  try {
+    result = await executeStatement(
+      `INSERT INTO jumpyard.staff_identities (
+         staff_identity_id, identity_provider, provider_subject, given_name, family_name,
+         display_name, role, environment, venue_id, active, revoked_at,
+         tokens_valid_after, pin_lookup_hash, pin_verifier, pin_changed_at
+       )
+       VALUES (
+         :staffIdentityId, :identityProvider, :providerSubject, :givenName, :familyName,
+         :displayName, :role, :environment, :venueId, true, NULL,
+         now(), :pinLookupHash, :pinVerifier, now()
+       )
+       RETURNING staff_identity_id, given_name, family_name, display_name, role, environment, venue_id,
+                 active, revoked_at::text AS identity_revoked_at,
+                 pin_changed_at::text AS pin_changed_at, created_at::text AS created_at,
+                 updated_at::text AS updated_at`,
+      [
+        stringParameter('staffIdentityId', staffIdentityId),
+        stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_PIN),
+        stringParameter('providerSubject', staffIdentityId),
+        stringParameter('givenName', request.givenName),
+        stringParameter('familyName', request.familyName),
+        stringParameter('displayName', displayName),
+        stringParameter('role', STAFF_ROLE_OPERATOR),
+        stringParameter('environment', admin.environment),
+        stringParameter('venueId', admin.venueId),
+        stringParameter('pinLookupHash', credential.lookupHash),
+        stringParameter('pinVerifier', credential.verifier),
+      ],
+    );
+  } catch (error) {
+    throw mapStaffPinWriteError(error);
+  }
+  const row = firstMappedRow(result);
+  if (!row) {
+    const error = new Error('Staff identity could not be created.');
+    error.code = 'staff_identity_write_failed';
+    throw error;
+  }
+  return mapLocalPinStaffResponse(row);
+}
+
+async function updateLocalPinStaff({ action, pinCredential, staffIdentityId }, admin) {
+  const assignments = action === 'enable'
+    ? "active = true, revoked_at = NULL, tokens_valid_after = now(), updated_at = now()"
+    : action === 'disable'
+      ? "active = false, revoked_at = COALESCE(revoked_at, now()), tokens_valid_after = now(), updated_at = now()"
+      : "pin_lookup_hash = :pinLookupHash, pin_verifier = :pinVerifier, pin_changed_at = now(), tokens_valid_after = now(), updated_at = now()";
+  const parameters = [
+    stringParameter('staffIdentityId', staffIdentityId),
+    stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_PIN),
+    stringParameter('environment', admin.environment),
+    stringParameter('venueId', admin.venueId),
+  ];
+  if (action === 'reset_pin') {
+    parameters.push(stringParameter('pinLookupHash', pinCredential.lookupHash));
+    parameters.push(stringParameter('pinVerifier', pinCredential.verifier));
+  }
+
+  let result;
+  try {
+    result = await executeStatement(
+      `UPDATE jumpyard.staff_identities
+       SET ${assignments}
+       WHERE staff_identity_id = :staffIdentityId
+         AND identity_provider = :identityProvider
+         AND environment = :environment
+         AND venue_id = :venueId
+       RETURNING staff_identity_id, given_name, family_name, display_name, role, environment, venue_id,
+                 active, revoked_at::text AS identity_revoked_at,
+                 pin_changed_at::text AS pin_changed_at, created_at::text AS created_at,
+                 updated_at::text AS updated_at`,
+      parameters,
+    );
+  } catch (error) {
+    throw mapStaffPinWriteError(error);
+  }
+  return firstMappedRow(result) ? mapLocalPinStaffResponse(firstMappedRow(result)) : null;
+}
+
+function mapStaffPinWriteError(error) {
+  const message = String(error?.message ?? '');
+  if (/duplicate key|unique constraint|pin_scope_unique/i.test(message)) {
+    const conflict = new Error('That PIN is already in use.');
+    conflict.code = 'staff_pin_unavailable';
+    return conflict;
+  }
+  return error;
+}
+
+function mapLocalPinStaffResponse(row) {
+  return {
+    active: row.active === true,
+    createdAt: stringOrNull(row.created_at),
+    displayName: stringOrNull(row.display_name),
+    environment: stringOrNull(row.environment),
+    firstName: stringOrNull(row.given_name),
+    lastName: stringOrNull(row.family_name),
+    pinChangedAt: stringOrNull(row.pin_changed_at),
+    revokedAt: stringOrNull(row.identity_revoked_at),
+    role: stringOrNull(row.role),
+    staffIdentityId: stringOrNull(row.staff_identity_id),
+    updatedAt: stringOrNull(row.updated_at),
+    venueId: stringOrNull(row.venue_id),
+  };
+}
+
+function createStaffIdentityId() {
+  return `jystaff_${Date.now().toString(36)}_${crypto.randomBytes(10).toString('hex')}`;
+}
+
+async function writeStaffAdminAudit({ actor, correlationId, eventType, summary, target }) {
+  await writeEventLog({
+    booking: { checkinSessionId: target.staffIdentityId },
+    correlationId,
+    eventType,
+    payload: {
+      actorId: actor.staffIdentityId,
+      actorRole: actor.role,
+      environment: actor.environment,
+      targetDisplayName: target.displayName,
+      targetStaffIdentityId: target.staffIdentityId,
+      targetStatus: target.active ? 'active' : 'disabled',
+      venueId: actor.venueId,
+    },
+    summary,
+  });
+}
+
+function validateCognitoStaffGate() {
+  if (!isStaffAuthEnabled()) {
+    return {
+      ok: false,
+      code: 'staff_auth_disabled',
+      statusCode: 409,
+      message: 'Staff authentication is disabled for this JumpYard Cloud environment.',
+    };
+  }
+
+  const clientId = stringOrNull(process.env.STAFF_COGNITO_CLIENT_ID);
+  const environment = stringOrNull(process.env.STAFF_IDENTITY_ENVIRONMENT);
+  const venueId = stringOrNull(process.env.STAFF_IDENTITY_VENUE_ID);
+  const runtimeEnvironment = stringOrNull(process.env.JUMPYARD_ENVIRONMENT);
+  if (!clientId || !environment || !venueId || !runtimeEnvironment || runtimeEnvironment !== environment) {
+    return {
+      ok: false,
+      code: 'staff_identity_config_error',
+      statusCode: 500,
+      message: 'JumpYard Cloud staff identity configuration is incomplete or inconsistent.',
+    };
+  }
+
+  return {
+    ok: true,
+    clientId,
+    environment,
+    venueId,
+  };
+}
+
+function getTrustedCognitoStaffClaims(event) {
+  const gate = validateCognitoStaffGate();
+  if (!gate.ok) return gate;
+
+  const rawClaims = event?.requestContext?.authorizer?.jwt?.claims;
+  if (!rawClaims || typeof rawClaims !== 'object' || Array.isArray(rawClaims)) {
+    return {
+      ok: false,
+      code: 'staff_identity_claims_required',
+      statusCode: 401,
+      message: 'A trusted staff access token is required.',
+    };
+  }
+
+  const subject = boundedClaim(rawClaims.sub, 160);
+  const clientId = boundedClaim(rawClaims.client_id, 256);
+  const tokenUse = boundedClaim(rawClaims.token_use, 32);
+  const originJti = boundedClaim(rawClaims.origin_jti, 256);
+  const authTime = integerClaim(rawClaims.auth_time);
+  const issuedAt = integerClaim(rawClaims.iat);
+  const expiresAt = integerClaim(rawClaims.exp);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+
+  if (
+    !subject ||
+    !clientId ||
+    !originJti ||
+    tokenUse !== 'access' ||
+    authTime === null ||
+    issuedAt === null ||
+    expiresAt === null ||
+    authTime > issuedAt ||
+    authTime > nowSeconds + 60 ||
+    issuedAt > nowSeconds + 60 ||
+    expiresAt <= nowSeconds
+  ) {
+    return {
+      ok: false,
+      code: expiresAt !== null && expiresAt <= nowSeconds ? 'staff_auth_token_expired' : 'staff_identity_claims_invalid',
+      statusCode: 401,
+      message: expiresAt !== null && expiresAt <= nowSeconds
+        ? 'Staff authentication has expired.'
+        : 'The staff access token claims are invalid.',
+    };
+  }
+
+  if (clientId !== gate.clientId) {
+    return {
+      ok: false,
+      code: 'staff_identity_audience_invalid',
+      statusCode: 401,
+      message: 'The staff access token is not intended for this application.',
+    };
+  }
+
+  const absoluteExpiresAtSeconds = authTime + STAFF_SESSION_ABSOLUTE_HOURS * 60 * 60;
+  if (absoluteExpiresAtSeconds <= nowSeconds) {
+    return {
+      ok: false,
+      code: 'staff_auth_session_absolute_expired',
+      statusCode: 401,
+      message: 'The staff authentication session has reached its maximum duration.',
+    };
+  }
+
+  return {
+    ok: true,
+    claims: {
+      absoluteExpiresAt: new Date(absoluteExpiresAtSeconds * 1000).toISOString(),
+      authTime: new Date(authTime * 1000).toISOString(),
+      clientId,
+      environment: gate.environment,
+      issuedAt: new Date(issuedAt * 1000).toISOString(),
+      providerSessionHash: hashString(`${gate.environment}:${clientId}:${originJti}`),
+      subject,
+      tokenExpiresAt: new Date(expiresAt * 1000).toISOString(),
+      venueId: gate.venueId,
+    },
+  };
+}
+
+async function startCognitoStaffSession(claims, requiredPermission = STAFF_READ_PERMISSION) {
+  const identity = await findCognitoStaffIdentity(claims);
+  if (
+    !identity ||
+    !identity.active ||
+    identity.revokedAt ||
+    !staffRoleHasPermission(identity.role, requiredPermission)
+  ) {
+    return staffIdentityNotAuthorized();
+  }
+  if (Date.parse(claims.issuedAt) < Date.parse(identity.tokensValidAfter)) {
+    return {
+      ok: false,
+      code: 'staff_auth_token_revoked',
+      statusCode: 401,
+      message: 'Reauthenticate before starting a new staff session.',
+    };
+  }
+
+  const now = Date.now();
+  const absoluteExpiresAtMs = Date.parse(claims.absoluteExpiresAt);
+  const idleExpiresAt = new Date(
+    Math.min(now + STAFF_SESSION_IDLE_MINUTES * 60 * 1000, absoluteExpiresAtMs),
+  ).toISOString();
+  const staffSessionId = createStaffAuthSessionId();
+  const insert = await executeStatement(
+    `INSERT INTO jumpyard.staff_auth_sessions (
+       staff_session_id,
+       staff_identity_id,
+       identity_provider,
+       provider_session_hash,
+       client_id,
+       environment,
+       venue_id,
+       role_snapshot,
+       display_name_snapshot,
+       auth_time,
+       token_issued_at,
+       token_expires_at,
+       idle_expires_at,
+       absolute_expires_at,
+       last_seen_at
+     )
+     SELECT
+       :staffSessionId,
+       identity.staff_identity_id,
+       :identityProvider,
+       :providerSessionHash,
+       :clientId,
+       :environment,
+       :venueId,
+       identity.role,
+       identity.display_name,
+       CAST(:authTime AS timestamptz),
+       CAST(:tokenIssuedAt AS timestamptz),
+       CAST(:tokenExpiresAt AS timestamptz),
+       CAST(:idleExpiresAt AS timestamptz),
+       CAST(:absoluteExpiresAt AS timestamptz),
+       now()
+     FROM jumpyard.staff_identities AS identity
+     WHERE identity.staff_identity_id = :staffIdentityId
+       AND identity.identity_provider = :identityProvider
+       AND identity.provider_subject = :providerSubject
+       AND identity.environment = :environment
+       AND identity.venue_id = :venueId
+       AND identity.active = true
+       AND identity.revoked_at IS NULL
+       AND CAST(:tokenIssuedAt AS timestamptz) >= identity.tokens_valid_after
+       AND identity.role IN ('staff_reader', 'staff_operator', 'staff_admin')
+     ON CONFLICT (provider_session_hash) DO NOTHING`,
+    [
+      stringParameter('staffSessionId', staffSessionId),
+      stringParameter('staffIdentityId', identity.staffIdentityId),
+      stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_COGNITO),
+      stringParameter('providerSessionHash', claims.providerSessionHash),
+      stringParameter('providerSubject', claims.subject),
+      stringParameter('clientId', claims.clientId),
+      stringParameter('environment', claims.environment),
+      stringParameter('venueId', claims.venueId),
+      stringParameter('authTime', claims.authTime),
+      stringParameter('tokenIssuedAt', claims.issuedAt),
+      stringParameter('tokenExpiresAt', claims.tokenExpiresAt),
+      stringParameter('idleExpiresAt', idleExpiresAt),
+      stringParameter('absoluteExpiresAt', claims.absoluteExpiresAt),
+    ],
+  );
+
+  const auth = await authorizeCognitoStaffRequest(claims, requiredPermission);
+  if (!auth.ok) return auth;
+  return {
+    ...auth,
+    created: Number(insert.numberOfRecordsUpdated ?? 0) === 1,
+  };
+}
+
+async function authorizeStaffRequest(event, requiredPermission) {
+  if (isPinStaffIdentityMode()) {
+    return authorizePinStaffRequest(event, requiredPermission);
+  }
+
+  if (!isCognitoStaffIdentityMode()) {
+    return verifyStaffAuthToken(event);
+  }
+
+  const claimsResult = getTrustedCognitoStaffClaims(event);
+  if (!claimsResult.ok) return claimsResult;
+  return authorizeCognitoStaffRequest(claimsResult.claims, requiredPermission);
+}
+
+async function authorizeCognitoStaffRequest(claims, requiredPermission) {
+  const allowedRoleClause = requiredPermission === STAFF_REDEEM_PERMISSION
+    ? "identity.role = 'staff_operator'"
+    : requiredPermission === STAFF_ADMIN_PERMISSION
+      ? "identity.role = 'staff_admin'"
+      : "identity.role IN ('staff_reader', 'staff_operator')";
+  const result = await executeStatement(
+    `UPDATE jumpyard.staff_auth_sessions AS staff_session
+     SET
+       role_snapshot = identity.role,
+       display_name_snapshot = identity.display_name,
+       token_issued_at = CAST(:tokenIssuedAt AS timestamptz),
+       token_expires_at = CAST(:tokenExpiresAt AS timestamptz),
+       last_seen_at = now(),
+       idle_expires_at = LEAST(staff_session.absolute_expires_at, now() + interval '${STAFF_SESSION_IDLE_MINUTES} minutes'),
+       updated_at = now()
+     FROM jumpyard.staff_identities AS identity
+     WHERE staff_session.provider_session_hash = :providerSessionHash
+       AND staff_session.staff_identity_id = identity.staff_identity_id
+       AND staff_session.identity_provider = :identityProvider
+       AND staff_session.client_id = :clientId
+       AND staff_session.environment = :environment
+       AND staff_session.venue_id = :venueId
+       AND staff_session.auth_time = CAST(:authTime AS timestamptz)
+       AND staff_session.revoked_at IS NULL
+       AND staff_session.idle_expires_at > now()
+       AND staff_session.absolute_expires_at > now()
+       AND identity.identity_provider = :identityProvider
+       AND identity.provider_subject = :providerSubject
+       AND identity.environment = :environment
+       AND identity.venue_id = :venueId
+       AND identity.active = true
+       AND identity.revoked_at IS NULL
+       AND CAST(:tokenIssuedAt AS timestamptz) >= identity.tokens_valid_after
+       AND ${allowedRoleClause}
+     RETURNING
+       staff_session.staff_session_id,
+       staff_session.idle_expires_at::text AS idle_expires_at,
+       staff_session.absolute_expires_at::text AS absolute_expires_at,
+       staff_session.last_seen_at::text AS last_seen_at,
+       staff_session.revoked_at::text AS session_revoked_at,
+       identity.staff_identity_id,
+       identity.provider_subject,
+       identity.display_name,
+       identity.role,
+       identity.environment,
+       identity.venue_id,
+       identity.active,
+       identity.revoked_at::text AS identity_revoked_at,
+       identity.tokens_valid_after::text AS tokens_valid_after`,
+    staffAuthorizationParameters(claims),
+  );
+  const row = firstMappedRow(result);
+  if (row) {
+    return mapAuthorizedStaffRow(row);
+  }
+
+  return classifyCognitoStaffAuthorizationFailure(claims, requiredPermission);
+}
+
+async function classifyCognitoStaffAuthorizationFailure(claims, requiredPermission) {
+  const result = await executeStatement(
+    `SELECT
+       staff_session.staff_session_id,
+       staff_session.idle_expires_at::text AS idle_expires_at,
+       staff_session.absolute_expires_at::text AS absolute_expires_at,
+       staff_session.last_seen_at::text AS last_seen_at,
+       staff_session.revoked_at::text AS session_revoked_at,
+       identity.staff_identity_id,
+       identity.provider_subject,
+       identity.display_name,
+       identity.role,
+       identity.environment,
+       identity.venue_id,
+       identity.active,
+       identity.revoked_at::text AS identity_revoked_at,
+       identity.tokens_valid_after::text AS tokens_valid_after
+     FROM jumpyard.staff_auth_sessions AS staff_session
+     INNER JOIN jumpyard.staff_identities AS identity
+       ON identity.staff_identity_id = staff_session.staff_identity_id
+     WHERE staff_session.provider_session_hash = :providerSessionHash
+       AND staff_session.identity_provider = :identityProvider
+       AND staff_session.client_id = :clientId
+       AND staff_session.environment = :environment
+       AND staff_session.venue_id = :venueId
+       AND identity.identity_provider = :identityProvider
+       AND identity.provider_subject = :providerSubject
+     LIMIT 1`,
+    staffSessionLookupParameters(claims),
+  );
+  const row = firstMappedRow(result);
+  if (!row) {
+    return {
+      ok: false,
+      code: 'staff_auth_session_required',
+      statusCode: 401,
+      message: 'Start a personal staff session before using the staff application.',
+    };
+  }
+
+  if (
+    row.active !== true ||
+    stringOrNull(row.identity_revoked_at) ||
+    stringOrNull(row.environment) !== claims.environment ||
+    stringOrNull(row.venue_id) !== claims.venueId
+  ) {
+    return staffIdentityNotAuthorized();
+  }
+  if (Date.parse(claims.issuedAt) < Date.parse(String(row.tokens_valid_after ?? ''))) {
+    return {
+      ok: false,
+      code: 'staff_auth_token_revoked',
+      statusCode: 401,
+      message: 'The staff access token was issued before the latest identity change.',
+    };
+  }
+  if (stringOrNull(row.session_revoked_at)) {
+    return {
+      ok: false,
+      code: 'staff_auth_session_revoked',
+      statusCode: 401,
+      message: 'The staff authentication session has been revoked.',
+    };
+  }
+  if (isTimestampPast(row.absolute_expires_at)) {
+    return {
+      ok: false,
+      code: 'staff_auth_session_absolute_expired',
+      statusCode: 401,
+      message: 'The staff authentication session has reached its maximum duration.',
+    };
+  }
+  if (isTimestampPast(row.idle_expires_at)) {
+    return {
+      ok: false,
+      code: 'staff_auth_session_idle_expired',
+      statusCode: 401,
+      message: 'The staff authentication session expired after inactivity.',
+    };
+  }
+  if (!staffRoleHasPermission(stringOrNull(row.role), requiredPermission)) {
+    return {
+      ok: false,
+      code: 'staff_role_forbidden',
+      statusCode: 403,
+      message: 'This staff account is not allowed to perform that action.',
+      staff: mapStaffPrincipalRow(row),
+    };
+  }
+
+  return {
+    ok: false,
+    code: 'staff_auth_session_invalid',
+    statusCode: 401,
+    message: 'The staff authentication session is no longer valid.',
+  };
+}
+
+async function revokeCognitoStaffSession(claims) {
+  const result = await executeStatement(
+    `UPDATE jumpyard.staff_auth_sessions AS staff_session
+     SET
+       revoked_at = now(),
+       revoke_reason = 'staff_logout',
+       updated_at = now()
+     FROM jumpyard.staff_identities AS identity
+     WHERE staff_session.provider_session_hash = :providerSessionHash
+       AND staff_session.staff_identity_id = identity.staff_identity_id
+       AND staff_session.identity_provider = :identityProvider
+       AND staff_session.client_id = :clientId
+       AND staff_session.environment = :environment
+       AND staff_session.venue_id = :venueId
+       AND identity.identity_provider = :identityProvider
+       AND identity.provider_subject = :providerSubject
+       AND staff_session.revoked_at IS NULL
+     RETURNING
+       staff_session.staff_session_id,
+       staff_session.idle_expires_at::text AS idle_expires_at,
+       staff_session.absolute_expires_at::text AS absolute_expires_at,
+       staff_session.last_seen_at::text AS last_seen_at,
+       staff_session.revoked_at::text AS session_revoked_at,
+       identity.staff_identity_id,
+       identity.provider_subject,
+       identity.display_name,
+       identity.role,
+       identity.environment,
+       identity.venue_id,
+       identity.active,
+       identity.revoked_at::text AS identity_revoked_at`,
+    staffSessionLookupParameters(claims),
+  );
+  const row = firstMappedRow(result);
+  if (row) {
+    return {
+      ...mapAuthorizedStaffRow(row),
+      revoked: true,
+    };
+  }
+
+  const existing = await findCognitoStaffSession(claims);
+  if (!existing) {
+    return {
+      ok: false,
+      code: 'staff_auth_session_required',
+      statusCode: 401,
+      message: 'No personal staff session exists for this authentication.',
+    };
+  }
+  return {
+    ok: true,
+    revoked: false,
+    session: mapStaffAuthSessionRow(existing),
+    staff: mapStaffPrincipalRow(existing),
+  };
+}
+
+async function findCognitoStaffIdentity(claims) {
+  const result = await executeStatement(
+    `SELECT
+       staff_identity_id,
+       provider_subject,
+       display_name,
+       role,
+       environment,
+       venue_id,
+       active,
+       revoked_at::text AS identity_revoked_at,
+       tokens_valid_after::text AS tokens_valid_after
+     FROM jumpyard.staff_identities
+     WHERE identity_provider = :identityProvider
+       AND provider_subject = :providerSubject
+       AND environment = :environment
+       AND venue_id = :venueId
+     LIMIT 1`,
+    staffIdentityLookupParameters(claims),
+  );
+  const row = firstMappedRow(result);
+  if (!row) return null;
+  return {
+    actorId: stringOrNull(row.provider_subject),
+    active: row.active === true,
+    displayName: stringOrNull(row.display_name),
+    environment: stringOrNull(row.environment),
+    revokedAt: stringOrNull(row.identity_revoked_at),
+    role: stringOrNull(row.role),
+    staffIdentityId: stringOrNull(row.staff_identity_id),
+    tokensValidAfter: stringOrNull(row.tokens_valid_after),
+    venueId: stringOrNull(row.venue_id),
+  };
+}
+
+async function findCognitoStaffSession(claims) {
+  const result = await executeStatement(
+    `SELECT
+       staff_session.staff_session_id,
+       staff_session.idle_expires_at::text AS idle_expires_at,
+       staff_session.absolute_expires_at::text AS absolute_expires_at,
+       staff_session.last_seen_at::text AS last_seen_at,
+       staff_session.revoked_at::text AS session_revoked_at,
+       identity.staff_identity_id,
+       identity.provider_subject,
+       identity.display_name,
+       identity.role,
+       identity.environment,
+       identity.venue_id,
+       identity.active,
+       identity.revoked_at::text AS identity_revoked_at,
+       identity.tokens_valid_after::text AS tokens_valid_after
+     FROM jumpyard.staff_auth_sessions AS staff_session
+     INNER JOIN jumpyard.staff_identities AS identity
+       ON identity.staff_identity_id = staff_session.staff_identity_id
+     WHERE staff_session.provider_session_hash = :providerSessionHash
+       AND staff_session.identity_provider = :identityProvider
+       AND staff_session.client_id = :clientId
+       AND staff_session.environment = :environment
+       AND staff_session.venue_id = :venueId
+       AND identity.identity_provider = :identityProvider
+       AND identity.provider_subject = :providerSubject
+     LIMIT 1`,
+    staffSessionLookupParameters(claims),
+  );
+  return firstMappedRow(result);
+}
+
+function staffIdentityLookupParameters(claims) {
+  return [
+    stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_COGNITO),
+    stringParameter('providerSubject', claims.subject),
+    stringParameter('environment', claims.environment),
+    stringParameter('venueId', claims.venueId),
+  ];
+}
+
+function staffSessionLookupParameters(claims) {
+  return [
+    stringParameter('identityProvider', STAFF_IDENTITY_PROVIDER_COGNITO),
+    stringParameter('providerSessionHash', claims.providerSessionHash),
+    stringParameter('providerSubject', claims.subject),
+    stringParameter('clientId', claims.clientId),
+    stringParameter('environment', claims.environment),
+    stringParameter('venueId', claims.venueId),
+  ];
+}
+
+function staffAuthorizationParameters(claims) {
+  return [
+    ...staffSessionLookupParameters(claims),
+    stringParameter('authTime', claims.authTime),
+    stringParameter('tokenIssuedAt', claims.issuedAt),
+    stringParameter('tokenExpiresAt', claims.tokenExpiresAt),
+  ];
+}
+
+function mapAuthorizedStaffRow(row) {
+  return {
+    ok: true,
+    code: 'authorized',
+    session: mapStaffAuthSessionRow(row),
+    staff: mapStaffPrincipalRow(row),
+  };
+}
+
+function mapStaffPrincipalRow(row) {
+  return {
+    actorId: stringOrNull(row.provider_subject),
+    displayName: stringOrNull(row.display_name) || 'JumpYard Staff',
+    environment: stringOrNull(row.environment),
+    permissions: staffPermissionsForRole(stringOrNull(row.role)),
+    role: stringOrNull(row.role),
+    sessionId: stringOrNull(row.staff_session_id),
+    staffIdentityId: stringOrNull(row.staff_identity_id),
+    venueId: stringOrNull(row.venue_id),
+  };
+}
+
+function mapStaffAuthSessionRow(row) {
+  return {
+    absoluteExpiresAt: stringOrNull(row.absolute_expires_at),
+    idleExpiresAt: stringOrNull(row.idle_expires_at),
+    lastSeenAt: stringOrNull(row.last_seen_at),
+    revokedAt: stringOrNull(row.session_revoked_at),
+    sessionId: stringOrNull(row.staff_session_id),
+  };
+}
+
+function buildStaffPrincipalResponse(staff) {
+  return {
+    actorId: staff.actorId,
+    displayName: staff.displayName,
+    environment: staff.environment,
+    permissions: [...(staff.permissions ?? [])],
+    role: staff.role,
+    venueId: staff.venueId,
+  };
+}
+
+function buildStaffAuthSessionResponse(session) {
+  return {
+    absoluteExpiresAt: session.absoluteExpiresAt,
+    idleExpiresAt: session.idleExpiresAt,
+    lastSeenAt: session.lastSeenAt,
+    revokedAt: session.revokedAt,
+    sessionId: session.sessionId,
+  };
+}
+
+function staffIdentityNotAuthorized() {
+  return {
+    ok: false,
+    code: 'staff_identity_not_authorized',
+    statusCode: 403,
+    message: 'This personal staff account is not active for the selected park.',
+  };
+}
+
+function isStaffRole(role) {
+  return role === STAFF_ROLE_READER || role === STAFF_ROLE_OPERATOR || role === STAFF_ROLE_ADMIN;
+}
+
+function staffRoleHasPermission(role, permission) {
+  if (permission === STAFF_REDEEM_PERMISSION) return role === STAFF_ROLE_OPERATOR;
+  if (permission === STAFF_ADMIN_PERMISSION) return role === STAFF_ROLE_ADMIN;
+  return role === STAFF_ROLE_READER || role === STAFF_ROLE_OPERATOR;
+}
+
+function staffPermissionsForRole(role) {
+  if (role === STAFF_ROLE_OPERATOR) return [STAFF_READ_PERMISSION, STAFF_REDEEM_PERMISSION];
+  if (role === STAFF_ROLE_READER) return [STAFF_READ_PERMISSION];
+  if (role === STAFF_ROLE_ADMIN) return [STAFF_ADMIN_PERMISSION];
+  return [];
+}
+
+function boundedClaim(value, maxLength) {
+  const normalized = stringOrNull(value);
+  if (!normalized || normalized.length > maxLength) return null;
+  return normalized;
+}
+
+function integerClaim(value) {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return value;
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function isTimestampPast(value) {
+  const timestamp = Date.parse(String(value ?? ''));
+  return !Number.isFinite(timestamp) || timestamp <= Date.now();
+}
+
+function createStaffAuthSessionId() {
+  return `jystaffs_${Date.now().toString(36)}_${crypto.randomBytes(12).toString('hex')}`;
+}
+
+async function writeStaffIdentityAudit({ correlationId, eventType, principal, session, summary }) {
+  const stableActorId = principal.staffIdentityId || principal.actorId;
+  await writeEventLog({
+    booking: { checkinSessionId: stableActorId },
+    correlationId,
+    eventType,
+    payload: {
+      actorId: stableActorId,
+      displayName: principal.displayName,
+      environment: principal.environment,
+      role: principal.role,
+      staffSessionId: session.sessionId,
+      venueId: principal.venueId,
+    },
+    summary,
+  });
+}
+
 async function getStaffAuthConfig() {
   const now = Date.now();
   if (cachedStaffAuthConfig && cachedStaffAuthConfigExpiresAt > now) return cachedStaffAuthConfig;
@@ -4342,6 +6355,15 @@ function createStaffAuthToken(config) {
 }
 
 async function verifyStaffAuthToken(event) {
+  if (isCognitoStaffIdentityMode()) {
+    return {
+      ok: false,
+      code: 'staff_legacy_token_disabled',
+      statusCode: 401,
+      message: 'Legacy staff tokens are disabled for this environment.',
+    };
+  }
+
   const token = getStaffAuthToken(event);
   if (!token) {
     return { ok: false, code: 'staff_auth_token_required' };
@@ -4393,14 +6415,16 @@ function signStaffAuthPayload(encodedPayload, signingSecret) {
 }
 
 function staffAuthErrorResponse(correlationId, auth) {
-  return jsonResponse(auth.code === 'staff_auth_token_expired' ? 401 : 403, correlationId, {
-    status: 'forbidden',
+  const statusCode = auth.statusCode ?? (auth.code === 'staff_auth_token_expired' ? 401 : 403);
+  return jsonResponse(statusCode, correlationId, {
+    status: statusCode === 409 ? 'blocked' : statusCode >= 500 ? 'internal_error' : 'forbidden',
     error: {
       code: auth.code,
-      message:
+      message: auth.message ?? (
         auth.code === 'staff_auth_token_expired'
           ? 'Staff authentication has expired.'
-          : 'Staff authentication is required.',
+          : 'Staff authentication is required.'
+      ),
     },
   });
 }
@@ -4413,7 +6437,7 @@ function safeEquals(left, right) {
   return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-async function executeStatement(sql, parameters = []) {
+function databaseConnectionConfig() {
   const resourceArn = process.env.DATABASE_CLUSTER_ARN;
   const secretArn = process.env.DATABASE_SECRET_ARN;
 
@@ -4423,6 +6447,12 @@ async function executeStatement(sql, parameters = []) {
     throw error;
   }
 
+  return { resourceArn, secretArn };
+}
+
+async function executeStatement(sql, parameters = [], transactionId = undefined) {
+  const { resourceArn, secretArn } = databaseConnectionConfig();
+
   return rdsClient.send(
     new ExecuteStatementCommand({
       database: DATABASE_NAME,
@@ -4431,6 +6461,7 @@ async function executeStatement(sql, parameters = []) {
       resourceArn,
       secretArn,
       sql,
+      transactionId,
     }),
   );
 }
@@ -4630,6 +6661,33 @@ function classifyError(error) {
       status: 'config_error',
       code: 'staff_auth_config_error',
       message: 'JumpYard Cloud staff authentication configuration is incomplete.',
+    };
+  }
+
+  if (error.code === 'staff_pin_config_error') {
+    return {
+      statusCode: 500,
+      status: 'config_error',
+      code: 'staff_pin_config_error',
+      message: 'JumpYard Cloud staff PIN configuration is incomplete.',
+    };
+  }
+
+  if (error.code === 'staff_pin_unavailable') {
+    return {
+      statusCode: 409,
+      status: 'blocked',
+      code: 'staff_pin_unavailable',
+      message: 'That PIN is already in use. Choose another PIN.',
+    };
+  }
+
+  if (error.code === 'staff_identity_write_failed' || error.code === 'staff_auth_session_invalid') {
+    return {
+      statusCode: 500,
+      status: 'internal_error',
+      code: error.code,
+      message: 'The staff identity operation could not be completed.',
     };
   }
 
