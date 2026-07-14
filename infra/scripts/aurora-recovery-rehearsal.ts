@@ -245,6 +245,7 @@ interface DbClusterRecord {
     readonly EnableHttpEndpoint?: boolean;
     readonly Engine?: string;
     readonly EngineVersion?: string;
+    readonly HttpEndpointEnabled?: boolean;
     readonly LatestRestorableTime?: string;
     readonly KmsKeyId?: string;
     readonly Port?: number;
@@ -252,6 +253,10 @@ interface DbClusterRecord {
     readonly StorageEncrypted?: boolean;
     readonly TagList?: readonly AwsTag[];
     readonly VpcSecurityGroups?: readonly { readonly VpcSecurityGroupId?: string }[];
+}
+
+function readHttpEndpointEnabled(cluster: DbClusterRecord): boolean {
+  return cluster.HttpEndpointEnabled ?? cluster.EnableHttpEndpoint ?? false;
 }
 
 interface DbInstanceRecord {
@@ -757,7 +762,7 @@ function inspectSourceCluster(config: DeployConfig, profile?: string): DbCluster
     earliestRestorableTime: cluster.EarliestRestorableTime ?? "",
     engine: cluster.Engine ?? "",
     engineVersion: cluster.EngineVersion ?? "",
-    httpEndpointEnabled: cluster.EnableHttpEndpoint ?? false,
+    httpEndpointEnabled: readHttpEndpointEnabled(cluster),
     identifier,
     kmsKeyId: cluster.KmsKeyId ?? "",
     latestRestorableTime: cluster.LatestRestorableTime ?? "",
@@ -943,10 +948,12 @@ function restoreCluster(args: Args, config: DeployConfig, runId: string): Record
   requireMutationApproval("restore", args.apply, runId);
   if (!args.stateFile) throw new Error("Restore requires --state-file outside the repository.");
   const statePath = resolveExternalStatePath(args.stateFile);
-  if (existsSync(statePath)) throw new Error("Restore state file already exists; never overwrite a rehearsal record.");
   confirmIdentity(config, args.profile);
   const source = inspectSourceCluster(config, args.profile);
   const names = buildNames(runId);
+  if (existsSync(statePath)) {
+    return resumeRestoreCluster(args, config, runId, statePath, source, names);
+  }
   ensureIdentifiersUnused(config, args.profile, names);
   const sourceDataTime = validateRestoreSource(args, config, source, runId);
   let state: RecoveryState = {
@@ -1006,7 +1013,6 @@ function restoreCluster(args: Args, config: DeployConfig, runId: string): Record
       groupResponse.GroupId,
       "--port",
       String(source.port),
-      "--enable-http-endpoint",
       "--no-deletion-protection",
       "--copy-tags-to-snapshot",
       "--serverless-v2-scaling-configuration",
@@ -1043,7 +1049,26 @@ function restoreCluster(args: Args, config: DeployConfig, runId: string): Record
       "--db-cluster-identifier",
       names.clusterIdentifier,
     ]);
-    const restoredCluster = readCluster(config, args.profile, names.clusterIdentifier);
+    let restoredCluster = readCluster(config, args.profile, names.clusterIdentifier);
+    if (!restoredCluster.httpEndpointEnabled) {
+      awsVoid(config, args.profile, [
+        "rds",
+        "enable-http-endpoint",
+        "--resource-arn",
+        restoredCluster.arn,
+      ]);
+      awsVoid(config, args.profile, [
+        "rds",
+        "wait",
+        "db-cluster-available",
+        "--db-cluster-identifier",
+        names.clusterIdentifier,
+      ]);
+      restoredCluster = readCluster(config, args.profile, names.clusterIdentifier);
+    }
+    if (!restoredCluster.httpEndpointEnabled) {
+      throw new Error("Restored cluster Data API did not become enabled.");
+    }
     state = {
       ...state,
       restoreClusterArn: restoredCluster.arn,
@@ -1095,6 +1120,94 @@ function restoreCluster(args: Args, config: DeployConfig, runId: string): Record
   }
 }
 
+function resumeRestoreCluster(
+  args: Args,
+  config: DeployConfig,
+  runId: string,
+  statePath: string,
+  source: DbClusterSummary,
+  names: RestoreNames,
+): Record<string, unknown> {
+  let state = readState(statePath);
+  if (
+    state.runId !== runId ||
+    state.stage !== "failed" ||
+    state.failureStage !== "isolation-created" ||
+    state.restoreSource !== args.restoreSource ||
+    state.snapshotIdentifier !== args.snapshotIdentifier ||
+    state.restoreToTime !== args.restoreToTime ||
+    state.sourceClusterIdentifier !== source.identifier ||
+    !state.temporaryIsolationSecurityGroupId
+  ) {
+    throw new Error("Existing restore state is not an exact resumable isolation-created rehearsal.");
+  }
+
+  validateIsolationGroup(config, args.profile, state);
+  const restoredCluster = readCluster(config, args.profile, names.clusterIdentifier);
+  state = {
+    ...state,
+    failureStage: undefined,
+    restoreClusterArn: restoredCluster.arn,
+    stage: "cluster-available",
+  };
+  validateRestoredCluster(restoredCluster, source, state, config, args.profile);
+
+  const attachedInstances = (awsJson<DbInstanceApiResponse>(config, args.profile, [
+    "rds",
+    "describe-db-instances",
+  ]).DBInstances ?? []).filter(
+    (instance) => instance.DBClusterIdentifier === state.restoreClusterIdentifier,
+  );
+  if (attachedInstances.length > 0) {
+    throw new Error("Resumable restore cluster already has a database instance attached.");
+  }
+  writeState(statePath, state);
+
+  try {
+    awsVoid(config, args.profile, [
+      "rds",
+      "create-db-instance",
+      "--db-instance-identifier",
+      names.writerIdentifier,
+      "--db-cluster-identifier",
+      names.clusterIdentifier,
+      "--db-instance-class",
+      "db.serverless",
+      "--engine",
+      EXPECTED_ENGINE,
+      "--no-publicly-accessible",
+      ...tagArgs(temporaryTags(runId, "restore-rehearsal")),
+    ]);
+    awsVoid(config, args.profile, [
+      "rds",
+      "wait",
+      "db-instance-available",
+      "--db-instance-identifier",
+      names.writerIdentifier,
+    ]);
+    const restoreAvailableAt = new Date().toISOString();
+    state = {
+      ...state,
+      observedRecoverySeconds: secondsBetween(state.restoreStartedAt, restoreAvailableAt),
+      observedSourceDataAgeSeconds: state.sourceDataTime
+        ? secondsBetween(state.sourceDataTime, restoreAvailableAt)
+        : undefined,
+      restoreAvailableAt,
+      stage: "writer-available",
+    };
+    writeState(statePath, state);
+    return safeStateSummary(state);
+  } catch (error) {
+    state = { ...state, failureStage: state.stage, stage: "failed" };
+    writeState(statePath, state);
+    const reason = error instanceof Error ? error.message : "unknown restore-resume failure";
+    throw new Error(
+      `Restore resume failed after stage ${state.failureStage ?? "unknown"}: ${reason}. ` +
+        "No automatic deletion ran; use the separately approved cleanup action and the external state file.",
+    );
+  }
+}
+
 function validateRestoreSource(
   args: Args,
   config: DeployConfig,
@@ -1138,7 +1251,7 @@ function readCluster(config: DeployConfig, profile: string | undefined, identifi
     earliestRestorableTime: cluster.EarliestRestorableTime ?? "",
     engine: cluster.Engine ?? "",
     engineVersion: cluster.EngineVersion ?? "",
-    httpEndpointEnabled: cluster.EnableHttpEndpoint ?? false,
+    httpEndpointEnabled: readHttpEndpointEnabled(cluster),
     identifier,
     kmsKeyId: cluster.KmsKeyId ?? "",
     latestRestorableTime: cluster.LatestRestorableTime ?? "",
@@ -1916,6 +2029,15 @@ function assertThrows(description: string, action: () => void): void {
 function runSelfTest(): Record<string, unknown> {
   const runId = "20260714t120000z-a1b2c3";
   validateRunId(runId);
+  if (!readHttpEndpointEnabled({ HttpEndpointEnabled: true })) {
+    throw new Error("Self-test AWS CLI Data API flag mapping failed.");
+  }
+  if (!readHttpEndpointEnabled({ EnableHttpEndpoint: true })) {
+    throw new Error("Self-test legacy Data API flag mapping failed.");
+  }
+  if (readHttpEndpointEnabled({})) {
+    throw new Error("Self-test missing Data API flag must fail closed.");
+  }
   const names = buildNames(runId);
   if (!names.clusterIdentifier.startsWith("jy-park-test-restore-") || names.clusterIdentifier.includes("production")) {
     throw new Error("Self-test restore naming failed.");

@@ -2,7 +2,7 @@
 
 This runbook defines the guarded park-test snapshot and isolated Aurora restore path for Issue #194. It is deliberately narrower than disaster-recovery automation: the tool can plan, create an approved pre-change snapshot, create one approved isolated restore, verify it with safe aggregate evidence, and clean up only the temporary resources it recorded.
 
-No AWS action in this runbook is approved by repository implementation alone. The current approved phase is local planning and validation only. Snapshot creation, restore creation, cleanup, and snapshot deletion each require the separate external-write checkpoint plus their exact action-specific approval.
+No AWS action in this runbook is approved by repository implementation alone. Love separately approved the 2026-07-14 snapshot, isolated restore, migration test, cleanup, source-database migrations, stack rollout, and source lifecycle dry-run; those actions are complete. Snapshot deletion, a new restore, and lifecycle apply remain unapproved independent actions. Snapshot creation, restore creation, cleanup, and snapshot deletion each require the external-write checkpoint plus their exact action-specific approval.
 
 ## Fixed boundary
 
@@ -43,11 +43,13 @@ Every mutation requires `--apply` and both locks below:
 
 Snapshot and restore creation require a run id less than 24 hours old. Cleanup and snapshot deletion accept an older valid deterministic run id so delayed evidence review cannot permanently block necessary cost/data cleanup. Age never replaces authorization: approval for one action does not approve another, and every delete still requires both the global lock and its action-specific lock.
 
+Applying repository migrations to an already isolated restore is also separate from restore creation. It requires the same global checkpoint plus `T0195_RESTORE_MIGRATION_APPROVAL=I_APPROVE_T0195_MIGRATIONS_ON_ISOLATED_RESTORE`, the exact current restore run id, and that run's external state file at `stage=writer-available`. This approval never permits a source-cluster migration.
+
 ## Pre-change snapshot
 
 After the external-write checkpoint, use `--action snapshot --apply` with the approved run id. The tool verifies caller account, source metadata, source tags, encryption, engine, seven-day backup policy, and snapshot-copy tagging before creating `jy-park-test-prechange-<run-id>`. It waits for full availability and returns only safe metadata.
 
-For the standard T0195 recovery rehearsal, select a restore point after migrations `0010`-`0012` and restricted-role password provisioning have completed, but before the approved lifecycle mutation being rehearsed. This ensures the restored database already contains the repository migration set and the dedicated lifecycle role/password required by the verifier. A snapshot taken before those migrations remains useful as rollback evidence, but it is not by itself a valid standard rehearsal source.
+For a full lifecycle rehearsal, select a restore point after migrations `0010`-`0012` and restricted-role password provisioning have completed, but before the approved lifecycle mutation being rehearsed. This ensures the restored database already contains the repository migration set and the dedicated lifecycle role/password required by the verifier. A snapshot taken before those changes remains useful as rollback evidence and can prove the migrations through the guarded isolated-migration procedure below, but it cannot prove lifecycle execution until the dedicated role/password exists.
 
 Snapshot deletion is a separate `--action delete-snapshot --apply --snapshot-id ...` operation. It accepts only the deterministic identifier for the same run id and re-verifies the snapshot source, encryption, engine, and tags before deletion.
 
@@ -59,7 +61,17 @@ After approval, `--action restore --apply` supports:
 - `--restore-source time --restore-to-time <ISO-8601>` for a point inside the live seven-day PITR window;
 - `--restore-source snapshot --snapshot-id jy-park-test-prechange-<run-id>` for the guarded manual snapshot.
 
-The recovery tool intentionally does not apply migrations or rebind database-role passwords on an older restore point. If the selected point predates migrations `0010`-`0012`, predates restricted-role provisioning, or contains a database password that no longer matches the approved current Secrets Manager version, stop. That case requires a separately reviewed and approved migration/credential-recovery procedure before verification; it must not fall back to a handler credential or use the Aurora administrator credential for lifecycle apply.
+The recovery tool itself does not apply migrations or rebind database-role passwords. When the restore predates migrations `0010`-`0012` but still matches the current administrator credential, the separately approved guarded migration runner may target only the deterministic isolated cluster named by the restore state file:
+
+```powershell
+node node_modules/ts-node/dist/bin.js --prefer-ts-exts scripts/run-migrations.ts `
+  --config ./config/park-test.json `
+  --profile wrlds-dev `
+  --restore-run-id <run-id> `
+  --restore-state-file <absolute-external-state-file>
+```
+
+The runner derives the cluster ARN from the exact run id, accepts only account `376129878018`, region `eu-north-1`, the park-test config, state `writer-available`, `TrafficEligible=false`, and the deterministic cluster/writer identifiers. It uses the Aurora administrator credential only for schema migration. It never authorizes that credential for lifecycle dry-run/apply. If the restore predates restricted-role password provisioning or contains a database password that no longer matches the current administrator secret, stop for a new reviewed recovery procedure.
 
 Restore also requires an absolute `--state-file` path outside the repository. The state file contains resource ids, stages, safe timing, and cleanup data only; it never contains credentials, PII, PINs, tokens, or secret values. Keep it in an access-controlled operator directory through cleanup review, then delete it within 90 days of rehearsal completion. The aggregate lifecycle receipt follows the same 90-day limit.
 
@@ -71,7 +83,9 @@ The restore creates:
 
 All temporary resources carry exact project tags plus `Issue=194`, run id, purpose, `TrafficEligible=false`, and `LifecycleReapplied=false`. The restore security group is not a source/application group. The restore is never attached to the application, and the tool has no promotion or traffic-enable action.
 
-On partial failure, the tool records the last safe stage and stops. It does not destroy evidence or resources without the separate cleanup approval.
+On partial failure, the tool records the last safe stage and stops. It does not destroy evidence or resources without the separate cleanup approval. An exact same-run resume is allowed only from a recorded `failed/isolation-created` state when the existing cluster, tags, encryption, Data API, zero-ingress group, identifiers, source, and absence of any attached instance all revalidate. Any other partial state requires cleanup or a new reviewed procedure.
+
+AWS exposes Data API state as `HttpEndpointEnabled` on readback and does not accept `--enable-http-endpoint` on snapshot restore. The tool therefore restores the cluster first, enables Data API through the dedicated RDS action, waits for the asynchronous change, and verifies the flag before creating the private writer.
 
 ## Safe verification
 
@@ -145,6 +159,8 @@ After evidence review and explicit cleanup approval, `--action cleanup --apply -
 6. records `stage=cleaned` in the external state file.
 
 Cleanup does not delete the source cluster or pre-change snapshot. A missing or mismatched ownership signal fails closed before deletion. Snapshot retention/deletion remains the separate guarded action above and independently revalidates its exact source, engine, encryption, and tags.
+
+The 2026-07-14 approved cleanup completed for runs `20260714t155812z-ilzs0e` and `20260714t154842z-ghunbv`. Both external state files reached `stage=cleaned`; final AWS readback found no `jy-park-test-restore-*` cluster, instance, or security group. The source remained available, encrypted, Data API enabled, deletion-protected, and on migration `0009`. Snapshot `jy-park-test-prechange-20260714t154842z-ghunbv` remained available and encrypted.
 
 ## Local validation
 

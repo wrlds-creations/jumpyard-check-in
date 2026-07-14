@@ -95,8 +95,8 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 
 ## Current Readiness Gates
 
-- The remaining Sprint/production-readiness outcomes are maintained in the [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5), with legacy T0196-T0205 references retained for traceability. Issue #194 owns the approved T0195 repository implementation; its live migration, purge, secret, deploy, snapshot, and restore actions remain separately gated. T0192 has qualified park-test; the future complete-rehearsal outcome decides GO/NO-GO before any separately approved production creation/cutover.
-- Remaining blockers include the T0195 external-write/rehearsal checkpoint, alarm routing, sender access/setup, Live backfill/cutover, and webhook verification.
+- Sprint/production-readiness outcomes remain in the [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5), with legacy T0196-T0205 retained. T0195 migrations and least-privilege runtime are deployed; lifecycle apply, complete restore proof, snapshot deletion, and secret changes remain gated. [AWS_RESOURCES.md](AWS_RESOURCES.md) holds the evidence. T0192 qualified park-test, while T0204 still decides GO/NO-GO before separately approved production.
+- Remaining blockers include lifecycle apply/recovery proof, alarm routing, sender setup, Live backfill/cutover, and webhook verification.
 - Payment must stay on Roller's approved package; method visibility is Roller/Adyen controlled.
 
 ## Current Open Questions
