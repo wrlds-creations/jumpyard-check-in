@@ -19,17 +19,32 @@ import {
   loginStaff,
   listReadyStaffSessions,
   redeemStaffSession,
+  StaffApiError,
   type StaffBookingItem,
   type StaffAuthSession,
   type StaffSessionDetail,
   type StaffSessionSummary,
 } from "@/lib/adminApi";
+import {
+  canStaffRedeem as staffCanRedeem,
+  clearStaffAuthStorage,
+  endStaffAuth,
+  ensureFreshStaffAuth,
+  getStaffIdentityMode,
+  getStaffSessionExpiryReason,
+  heartbeatStaffAuth,
+  isStaffHeartbeatDue,
+  markStaffActivity,
+  openStaffLogoutChannel,
+  readStoredStaffAuth,
+  storeStaffAuth,
+  type StaffLogoutChannel,
+} from "@/lib/staffIdentity";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type RedeemState = "idle" | "loading" | "success" | "error";
 type ScannerState = "idle" | "starting" | "scanning" | "error";
 
-const STAFF_AUTH_STORAGE_KEY = "jumpyard_staff_auth_v1";
 const SWEDISH_SHORT_MONTHS = ["jan", "feb", "mars", "apr", "maj", "juni", "juli", "aug", "sep", "okt", "nov", "dec"];
 
 interface ParsedHandoffPayload {
@@ -366,36 +381,30 @@ function statusLabel(value?: string | null) {
   return labels[value] ?? value.replace(/_/g, " ");
 }
 
-function isStaffAuthExpired(auth: StaffAuthSession | null) {
-  if (!auth?.auth.expiresAt) return true;
-  return Date.parse(auth.auth.expiresAt) <= Date.now();
+function staffRoleLabel(value?: string | null) {
+  if (value === "staff_operator") return "Check-in-personal";
+  if (value === "staff_reader") return "Läsbehörighet";
+  return value ? value.replace(/_/g, " ") : "Personal";
 }
 
-function readStoredStaffAuth() {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const raw = window.sessionStorage.getItem(STAFF_AUTH_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as StaffAuthSession;
-    if (!parsed?.auth?.token || isStaffAuthExpired(parsed)) {
-      window.sessionStorage.removeItem(STAFF_AUTH_STORAGE_KEY);
-      return null;
-    }
-    return parsed;
-  } catch {
-    window.sessionStorage.removeItem(STAFF_AUTH_STORAGE_KEY);
-    return null;
+function isSameStaffSession(current: StaffAuthSession | null, expected: StaffAuthSession) {
+  if (!current) return false;
+  if (expected.identityMode === "pin") {
+    return (
+      current.identityMode === "pin" &&
+      current.session?.sessionId === expected.session?.sessionId &&
+      current.staff.actorId === expected.staff.actorId
+    );
   }
+  return current.identityMode === "legacy" && current.auth.token === expected.auth.token;
 }
 
-function storeStaffAuth(auth: StaffAuthSession | null) {
-  if (typeof window === "undefined") return;
-  if (!auth) {
-    window.sessionStorage.removeItem(STAFF_AUTH_STORAGE_KEY);
-    return;
-  }
-  window.sessionStorage.setItem(STAFF_AUTH_STORAGE_KEY, JSON.stringify(auth));
+function staffAuthSessionKey(auth: StaffAuthSession | null) {
+  return auth ? `${auth.identityMode}:${auth.session?.sessionId ?? auth.auth.token}` : null;
+}
+
+function queueRequestKey(auth: StaffAuthSession, queryVersion: number) {
+  return `${staffAuthSessionKey(auth)}:${queryVersion}`;
 }
 
 function SessionRow({
@@ -413,20 +422,20 @@ function SessionRow({
       onClick={onSelect}
       data-testid="handoff-session-row"
       data-handoff-code={session.handoffCode ?? ""}
-      className={`w-full rounded-2xl border px-3 py-3 text-left shadow-sm transition active:scale-[0.99] ${
+      className={`w-full min-w-0 rounded-2xl border px-3 py-3 text-left shadow-sm transition active:scale-[0.99] ${
         isSelected
           ? "border-primary bg-primary/5 ring-4 ring-primary/10"
           : "border-border bg-white hover:border-primary/40 hover:bg-surface"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface">
             <StaffIcon name="visitor-wristband" className="h-6 w-6" />
           </span>
           <div className="min-w-0">
             <p className="truncate text-lg font-black italic uppercase leading-none text-foreground">{getGuestDisplayName(session)}</p>
-            <p className="mt-1 truncate text-xs text-foreground/65">
+            <p className="mt-1 truncate text-xs text-foreground">
               {getDisplayCode(session)} · bokning {session.bookingReference ?? "-"}
             </p>
           </div>
@@ -436,7 +445,7 @@ function SessionRow({
         </span>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] uppercase text-foreground/60">
+      <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] uppercase text-foreground">
         <span className="rounded-xl bg-surface px-2 py-1.5 text-center">{formatDate(session.visitDate)}</span>
         <span className="rounded-xl bg-surface px-2 py-1.5 text-center">{formatClock(session.booking.startTime)}</span>
         <span className="rounded-xl bg-surface px-2 py-1.5 text-center">{session.counts.selectedTickets} biljetter</span>
@@ -465,9 +474,9 @@ function InfoTile({
 
   return (
     <div className="grid min-h-[92px] min-w-0 grid-rows-[auto_1fr_auto] rounded-2xl border border-border bg-white p-3 shadow-sm">
-      <div className="flex h-6 items-center text-muted">{icon}</div>
+      <div className="flex h-6 items-center text-foreground">{icon}</div>
       <p className={valueClasses}>{value}</p>
-      <p className="mt-1 text-[9px] uppercase leading-none tracking-wide text-foreground/55 sm:text-[10px]">{label}</p>
+      <p className="mt-1 text-[9px] uppercase leading-none tracking-wide text-foreground sm:text-[10px]">{label}</p>
     </div>
   );
 }
@@ -524,7 +533,7 @@ function HandoutSection({
       <div className="flex items-start justify-between gap-3 border-b border-border bg-surface px-3 py-2.5">
         <div className="min-w-0">
           <h4 className="text-sm font-black italic uppercase text-foreground">{sectionInfo.title}</h4>
-          <p className="mt-0.5 text-xs leading-snug text-foreground/60">{sectionInfo.note}</p>
+          <p className="mt-0.5 text-xs leading-snug text-foreground">{sectionInfo.note}</p>
         </div>
         <span className="shrink-0 rounded-xl bg-white px-2.5 py-1 text-xs font-black italic text-foreground">
           {totalQuantity} st
@@ -548,7 +557,7 @@ function HandoutSection({
                   </span>
                 ) : null}
               </div>
-              <p className="mt-0.5 truncate text-xs text-foreground/55">
+              <p className="mt-0.5 truncate text-xs text-foreground">
                 {group.note ?? formatHandoutItemNames(group.items)}
               </p>
             </div>
@@ -562,7 +571,7 @@ function HandoutSection({
 
 function ItemRows({ items }: { items: StaffBookingItem[] }) {
   if (items.length === 0) {
-    return <p className="rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground/65">Inga produktrader.</p>;
+    return <p className="rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground">Inga produktrader.</p>;
   }
 
   const groups = groupHandoutItems(items);
@@ -637,22 +646,22 @@ function RedeemSuccessPanel({
         <h2 className="mt-1 text-3xl font-black italic uppercase leading-none text-foreground">
           {confirmation.guestName}
         </h2>
-        <p className="mt-2 text-sm text-foreground/65">
+        <p className="mt-2 text-sm text-foreground">
           {confirmation.handoffCode} · bokning {confirmation.bookingReference ?? "-"}
         </p>
 
         <div className="mt-5 grid grid-cols-2 gap-2 text-left">
           <div className="rounded-2xl bg-success/10 p-3">
-            <p className="text-[10px] uppercase tracking-wide text-foreground/55">Biljetter</p>
+            <p className="text-[10px] uppercase tracking-wide text-foreground">Biljetter</p>
             <p className="mt-1 text-2xl font-black italic text-success">{confirmation.ticketCount}</p>
           </div>
           <div className="rounded-2xl bg-surface p-3">
-            <p className="text-[10px] uppercase tracking-wide text-foreground/55">Status</p>
+            <p className="text-[10px] uppercase tracking-wide text-foreground">Status</p>
             <p className="mt-1 text-base font-black italic text-foreground">Incheckad</p>
           </div>
         </div>
 
-        <p className="mt-4 text-xs text-foreground/55">
+        <p className="mt-4 text-xs text-foreground">
           {confirmation.completedAt ? `Klar ${formatDateTime(confirmation.completedAt)}` : "Välj nästa steg."}
         </p>
 
@@ -730,15 +739,17 @@ function DetailPanel({
         <div>
           <StaffIcon name="info" className="mx-auto mb-3 h-10 w-10 opacity-70" />
           <p className="text-lg font-black italic uppercase text-foreground">Välj handoff</p>
-          <p className="mt-1 text-sm text-foreground/65">Skanna QR eller tryck på en bokning i kön.</p>
+          <p className="mt-1 text-sm text-foreground">Skanna QR eller tryck på en bokning i kön.</p>
         </div>
       </section>
     );
   }
 
   const isCompleted = detail.status === "redeemed" || detail.handoffStatus === "completed";
+  const hasRedeemPermission = staffCanRedeem(auth);
   const canRedeem =
     !isCompleted &&
+    hasRedeemPermission &&
     detail.status === "ready_for_staff" &&
     detail.handoffStatus === "ready_for_staff" &&
     detail.safetyStatus === "completed" &&
@@ -761,7 +772,7 @@ function DetailPanel({
               <h2 className="truncate text-2xl font-black italic uppercase leading-none text-foreground sm:text-3xl">
                 {getGuestDisplayName(detail)}
               </h2>
-              <p className="mt-1 truncate text-sm text-foreground/65">
+              <p className="mt-1 truncate text-sm text-foreground">
                 {getDisplayCode(detail)} · bokning {detail.bookingReference ?? "-"}
               </p>
             </div>
@@ -845,6 +856,11 @@ function DetailPanel({
                 {redeemState === "loading" ? <Loader2 className="animate-spin" size={18} /> : <TicketCheck size={18} />}
                 Slutför
               </button>
+              {!hasRedeemPermission && auth?.identityMode === "pin" && (
+                <p className="text-center text-xs font-semibold text-foreground" data-testid="staff-redeem-role-note">
+                  Din roll kan läsa handoff men inte slutföra check-in.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -860,7 +876,7 @@ function DetailPanel({
         )}
       </div>
 
-      <p className="border-t border-border bg-white p-3 text-xs text-foreground/55">
+      <p className="border-t border-border bg-white p-3 text-xs text-foreground">
         Redo: {formatDateTime(detail.readyForStaffAt)} · Total: {formatMoney(detail.booking.totalCents)}
       </p>
     </section>
@@ -868,9 +884,10 @@ function DetailPanel({
 }
 
 export default function Home() {
+  const identityMode = getStaffIdentityMode();
   const [auth, setAuth] = useState<StaffAuthSession | null>(null);
   const [authError, setAuthError] = useState("");
-  const [authPasscode, setAuthPasscode] = useState("");
+  const [authPin, setAuthPin] = useState("");
   const [authState, setAuthState] = useState<LoadState>("loading");
   const [detail, setDetail] = useState<StaffSessionDetail | null>(null);
   const [detailState, setDetailState] = useState<LoadState>("idle");
@@ -886,19 +903,125 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<StaffSessionSummary[]>([]);
   const [state, setState] = useState<LoadState>("loading");
+  const authRef = useRef<StaffAuthSession | null>(null);
+  const activityWriteAtRef = useRef(0);
+  const heartbeatInFlightRef = useRef(false);
+  const lifecycleGenerationRef = useRef(0);
+  const logoutChannelRef = useRef<StaffLogoutChannel | null>(null);
+  const logoutInProgressRef = useRef(false);
+  const queueLastRequestedKeyRef = useRef<string | null>(null);
+  const queueQueryRef = useRef("");
+  const queueQueryVersionRef = useRef(0);
+  const queueRefreshInFlightRef = useRef(false);
+  const queueRefreshPendingRef = useRef(false);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const scannerHandledRef = useRef(false);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  const authSessionKey = staffAuthSessionKey(auth);
+
+  const setCurrentAuth = useCallback((nextAuth: StaffAuthSession | null) => {
+    authRef.current = nextAuth;
+    setAuth(nextAuth);
+  }, []);
+
+  const setCurrentQuery = useCallback((nextQuery: string) => {
+    if (nextQuery !== queueQueryRef.current) {
+      queueQueryRef.current = nextQuery;
+      queueQueryVersionRef.current += 1;
+    }
+    setQuery(nextQuery);
+  }, []);
+
+  const setCurrentSelectedId = useCallback((nextSelectedId: string | null) => {
+    selectedIdRef.current = nextSelectedId;
+    setSelectedId(nextSelectedId);
+  }, []);
+
+  const clearSensitiveUi = useCallback(() => {
+    lifecycleGenerationRef.current += 1;
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
+    setCurrentAuth(null);
+    setAuthError("");
+    setAuthPin("");
+    setAuthState("idle");
+    setDetail(null);
+    setDetailState("idle");
+    setError("");
+    setCurrentQuery("");
+    setRedeemConfirmation(null);
+    setRedeemMessage("");
+    setRedeemState("idle");
+    setScannerMessage("");
+    setScannerOpen(false);
+    setScannerState("idle");
+    setCurrentSelectedId(null);
+    setSessions([]);
+    setState("idle");
+  }, [setCurrentAuth, setCurrentQuery, setCurrentSelectedId]);
+
+  const terminateStaffSession = useCallback(async () => {
+    if (logoutInProgressRef.current) return;
+    logoutInProgressRef.current = true;
+    const currentAuth = authRef.current;
+
+    logoutChannelRef.current?.broadcast();
+    clearStaffAuthStorage();
+    clearSensitiveUi();
+    try {
+      await endStaffAuth(currentAuth);
+    } finally {
+      logoutInProgressRef.current = false;
+    }
+  }, [clearSensitiveUi]);
+
+  const getUsableAuth = useCallback(async () => {
+    const currentAuth = authRef.current;
+    if (!currentAuth) {
+      throw new Error("Staff session has ended.");
+    }
+    if (getStaffSessionExpiryReason(currentAuth)) {
+      await terminateStaffSession();
+      throw new Error("Personalsessionen har gått ut.");
+    }
+
+    try {
+      const freshAuth = await ensureFreshStaffAuth(currentAuth);
+      if (freshAuth !== currentAuth) setCurrentAuth(freshAuth);
+      return freshAuth;
+    } catch (refreshError) {
+      if (isSameStaffSession(authRef.current, currentAuth)) await terminateStaffSession();
+      throw refreshError;
+    }
+  }, [setCurrentAuth, terminateStaffSession]);
+
+  const handleProtectedAuthFailure = useCallback(
+    (requestError: unknown) => {
+      if (
+        requestError instanceof StaffApiError &&
+        (requestError.isAuthenticationFailure ||
+          requestError.code === "emergency_stop_active" ||
+          requestError.code === "staff_auth_disabled" ||
+          requestError.code === "staff_identity_mode_disabled")
+      ) {
+        void terminateStaffSession();
+        return true;
+      }
+      return false;
+    },
+    [terminateStaffSession],
+  );
 
   const selectSession = useCallback((checkinSessionId: string) => {
     setError("");
     setRedeemConfirmation(null);
     setRedeemMessage("");
     setRedeemState("idle");
-    setSelectedId(checkinSessionId);
+    setCurrentSelectedId(checkinSessionId);
     setDetailRequestId((current) => current + 1);
     setDetailState("loading");
-  }, []);
+  }, [setCurrentSelectedId]);
 
   const closeSelectedSession = useCallback(() => {
     setDetail(null);
@@ -906,19 +1029,19 @@ export default function Home() {
     setRedeemConfirmation(null);
     setRedeemMessage("");
     setRedeemState("idle");
-    setSelectedId(null);
-  }, []);
+    setCurrentSelectedId(null);
+  }, [setCurrentSelectedId]);
 
   const returnToQueueAfterRedeem = useCallback(() => {
     setDetail(null);
     setDetailState("idle");
-    setQuery("");
+    setCurrentQuery("");
     setRedeemConfirmation(null);
     setRedeemMessage("");
     setRedeemState("idle");
     setScannerMessage("");
-    setSelectedId(null);
-  }, []);
+    setCurrentSelectedId(null);
+  }, [setCurrentQuery, setCurrentSelectedId]);
 
   const scanNextAfterRedeem = useCallback(() => {
     returnToQueueAfterRedeem();
@@ -928,38 +1051,79 @@ export default function Home() {
   }, [returnToQueueAfterRedeem]);
 
   const refreshSessions = useCallback(async () => {
-    if (!auth || isStaffAuthExpired(auth)) {
-      setAuth(null);
-      setAuthState("idle");
-      setDetail(null);
-      setDetailState("idle");
-      setSelectedId(null);
-      setSessions([]);
-      storeStaffAuth(null);
-      setState("idle");
+    const requestedAuth = authRef.current;
+    if (requestedAuth) {
+      queueLastRequestedKeyRef.current = queueRequestKey(requestedAuth, queueQueryVersionRef.current);
+    }
+    if (queueRefreshInFlightRef.current) {
+      queueRefreshPendingRef.current = true;
       return;
     }
 
-    setState("loading");
-    setError("");
-
+    queueRefreshInFlightRef.current = true;
     try {
-      const nextSessions = await listReadyStaffSessions(auth.auth.token, query);
-      const nextSelectedId =
-        selectedId && nextSessions.some((session) => session.checkinSessionId === selectedId)
-          ? selectedId
-          : null;
+      do {
+        queueRefreshPendingRef.current = false;
+        let activeAuth: StaffAuthSession;
+        try {
+          activeAuth = await getUsableAuth();
+        } catch {
+          return;
+        }
 
-      setSessions(nextSessions);
-      setSelectedId(nextSelectedId);
-      setDetailState(nextSelectedId ? "loading" : "idle");
-      if (!nextSelectedId) setDetail(null);
-      setState("ready");
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Kunde inte hämta handovers.");
-      setState("error");
+        const requestedQuery = queueQueryRef.current;
+        const requestedQueryVersion = queueQueryVersionRef.current;
+        queueLastRequestedKeyRef.current = queueRequestKey(activeAuth, requestedQueryVersion);
+        setState("loading");
+        setError("");
+
+        try {
+          const nextSessions = await listReadyStaffSessions(activeAuth.auth.token, requestedQuery);
+          if (!isSameStaffSession(authRef.current, activeAuth)) {
+            if (authRef.current) queueRefreshPendingRef.current = true;
+            continue;
+          }
+          if (
+            requestedQueryVersion !== queueQueryVersionRef.current ||
+            requestedQuery !== queueQueryRef.current
+          ) {
+            continue;
+          }
+
+          const currentSelectedId = selectedIdRef.current;
+          const nextSelectedId =
+            currentSelectedId && nextSessions.some((session) => session.checkinSessionId === currentSelectedId)
+              ? currentSelectedId
+              : null;
+
+          setSessions(nextSessions);
+          setCurrentSelectedId(nextSelectedId);
+          if (!nextSelectedId) {
+            setDetailState("idle");
+            setDetail(null);
+          }
+          setState("ready");
+        } catch (loadError) {
+          if (!isSameStaffSession(authRef.current, activeAuth)) {
+            if (authRef.current) queueRefreshPendingRef.current = true;
+            continue;
+          }
+          if (
+            requestedQueryVersion !== queueQueryVersionRef.current ||
+            requestedQuery !== queueQueryRef.current ||
+            queueRefreshPendingRef.current
+          ) {
+            continue;
+          }
+          if (handleProtectedAuthFailure(loadError)) return;
+          setError(loadError instanceof Error ? loadError.message : "Kunde inte hämta handovers.");
+          setState("error");
+        }
+      } while (queueRefreshPendingRef.current);
+    } finally {
+      queueRefreshInFlightRef.current = false;
     }
-  }, [auth, query, selectedId]);
+  }, [getUsableAuth, handleProtectedAuthFailure, setCurrentSelectedId]);
 
   const openHandoffPayload = useCallback(
     (value: string) => {
@@ -972,7 +1136,7 @@ export default function Home() {
       setScannerMessage("");
 
       if (parsed.checkinSessionId) {
-        setQuery(parsed.handoffCode ?? parsed.checkinSessionId);
+        setCurrentQuery(parsed.handoffCode ?? parsed.checkinSessionId);
         selectSession(parsed.checkinSessionId);
         return;
       }
@@ -983,15 +1147,15 @@ export default function Home() {
         : null;
 
       if (matchingSession) {
-        setQuery(parsed.handoffCode ?? matchingSession.handoffCode ?? "");
+        setCurrentQuery(parsed.handoffCode ?? matchingSession.handoffCode ?? "");
         selectSession(matchingSession.checkinSessionId);
         return;
       }
 
-      setQuery(parsed.handoffCode ?? parsed.raw);
+      setCurrentQuery(parsed.handoffCode ?? parsed.raw);
       setError("Handoff-koden finns inte i väntelistan. Tryck Uppdatera eller klistra in hela QR-payloaden.");
     },
-    [selectSession, sessions]
+    [selectSession, sessions, setCurrentQuery]
   );
 
   const handleSearchSubmit = useCallback(() => {
@@ -1004,7 +1168,25 @@ export default function Home() {
   }, [openHandoffPayload, query, refreshSessions]);
 
   useEffect(() => {
+    const channel = openStaffLogoutChannel(() => {
+      const remoteAuth = authRef.current ?? readStoredStaffAuth();
+      clearStaffAuthStorage();
+      clearSensitiveUi();
+      void endStaffAuth(remoteAuth, { clearStorage: false, managedLogout: false });
+    });
+    logoutChannelRef.current = channel;
+
+    return () => {
+      if (logoutChannelRef.current === channel) logoutChannelRef.current = null;
+      channel.close();
+    };
+  }, [clearSensitiveUi]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const lifecycleGeneration = lifecycleGenerationRef.current;
     const timeoutId = window.setTimeout(() => {
+      if (lifecycleGeneration !== lifecycleGenerationRef.current) return;
       const storedAuth = readStoredStaffAuth();
       if (!storedAuth) {
         setAuthState("idle");
@@ -1012,23 +1194,110 @@ export default function Home() {
         return;
       }
 
-      setAuth(storedAuth);
-      setAuthState("ready");
+      if (getStaffSessionExpiryReason(storedAuth)) {
+        clearStaffAuthStorage();
+        setAuthState("idle");
+        setState("idle");
+        void endStaffAuth(storedAuth);
+        return;
+      }
+
+      void (storedAuth.identityMode === "pin" ? heartbeatStaffAuth(storedAuth) : Promise.resolve(storedAuth))
+        .then((activeAuth) => {
+          if (cancelled || lifecycleGeneration !== lifecycleGenerationRef.current) return;
+          setCurrentAuth(activeAuth);
+          setAuthState("ready");
+        })
+        .catch(() => {
+          if (cancelled || lifecycleGeneration !== lifecycleGenerationRef.current) return;
+          clearStaffAuthStorage();
+          clearSensitiveUi();
+          void endStaffAuth(storedAuth);
+        });
     }, 0);
 
-    return () => window.clearTimeout(timeoutId);
-  }, []);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [clearSensitiveUi, setCurrentAuth]);
 
   useEffect(() => {
-    if (!auth) return;
-    const timeoutId = window.setTimeout(() => void refreshSessions(), query.trim() ? 250 : 0);
+    if (!authSessionKey) return;
+    const scheduledRequestKey = `${authSessionKey}:${queueQueryVersionRef.current}`;
+    const timeoutId = window.setTimeout(() => {
+      if (queueLastRequestedKeyRef.current === scheduledRequestKey) return;
+      void refreshSessions();
+    }, query.trim() ? 250 : 0);
     return () => window.clearTimeout(timeoutId);
-  }, [auth, query, refreshSessions]);
+  }, [authSessionKey, query, refreshSessions]);
+
+  useEffect(() => {
+    const activeAuth = authRef.current;
+    if (!authSessionKey || !activeAuth || activeAuth.identityMode !== "pin") return;
+
+    activityWriteAtRef.current = 0;
+    const recordActivity = () => {
+      const currentAuth = authRef.current;
+      const now = Date.now();
+      if (!currentAuth || currentAuth.identityMode !== "pin") return;
+      if (getStaffSessionExpiryReason(currentAuth, now)) {
+        void terminateStaffSession();
+        return;
+      }
+      if (now - activityWriteAtRef.current < 15_000) return;
+
+      activityWriteAtRef.current = now;
+      const updatedAuth = markStaffActivity(currentAuth, new Date(now));
+      if (updatedAuth !== currentAuth) setCurrentAuth(updatedAuth);
+    };
+
+    const checkSession = () => {
+      const currentAuth = authRef.current;
+      if (!currentAuth || currentAuth.identityMode !== "pin") return;
+      if (getStaffSessionExpiryReason(currentAuth)) {
+        void terminateStaffSession();
+        return;
+      }
+      if (!isStaffHeartbeatDue(currentAuth) || heartbeatInFlightRef.current) return;
+
+      heartbeatInFlightRef.current = true;
+      void heartbeatStaffAuth(currentAuth)
+        .then((activeAuth) => {
+          if (isSameStaffSession(authRef.current, activeAuth)) setCurrentAuth(activeAuth);
+        })
+        .catch(() => {
+          if (isSameStaffSession(authRef.current, currentAuth)) void terminateStaffSession();
+        })
+        .finally(() => {
+          heartbeatInFlightRef.current = false;
+        });
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        recordActivity();
+        checkSession();
+      }
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = ["keydown", "pointerdown", "scroll", "touchstart"];
+    for (const eventName of activityEvents) window.addEventListener(eventName, recordActivity, { passive: true });
+    document.addEventListener("visibilitychange", handleVisibility);
+    const intervalId = window.setInterval(checkSession, 30_000);
+
+    return () => {
+      for (const eventName of activityEvents) window.removeEventListener(eventName, recordActivity);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.clearInterval(intervalId);
+    };
+  }, [authSessionKey, setCurrentAuth, terminateStaffSession]);
 
   useEffect(() => {
     if (!scannerOpen) return;
 
     let cancelled = false;
+    const lifecycleGeneration = lifecycleGenerationRef.current;
     scannerHandledRef.current = false;
 
     async function startScanner() {
@@ -1043,6 +1312,10 @@ export default function Home() {
           undefined,
           scannerVideoRef.current,
           (result, _error, controls) => {
+            if (lifecycleGeneration !== lifecycleGenerationRef.current) {
+              controls.stop();
+              return;
+            }
             const text = result?.getText();
             if (!text || scannerHandledRef.current) return;
 
@@ -1055,7 +1328,7 @@ export default function Home() {
           }
         );
 
-        if (cancelled) {
+        if (cancelled || lifecycleGeneration !== lifecycleGenerationRef.current) {
           controls.stop();
           return;
         }
@@ -1063,7 +1336,7 @@ export default function Home() {
         scannerControlsRef.current = controls;
         setScannerState("scanning");
       } catch (scanError) {
-        if (cancelled) return;
+        if (cancelled || lifecycleGeneration !== lifecycleGenerationRef.current) return;
         scannerControlsRef.current = null;
         setScannerState("error");
         setScannerMessage(
@@ -1084,18 +1357,24 @@ export default function Home() {
   }, [openHandoffPayload, scannerOpen]);
 
   useEffect(() => {
-    if (!selectedId || !auth || isStaffAuthExpired(auth)) return;
+    if (!selectedId || !authSessionKey) return;
 
     let cancelled = false;
+    let requestAuth: StaffAuthSession | null = null;
 
-    getStaffSession(selectedId, auth.auth.token)
+    void getUsableAuth()
+      .then((activeAuth) => {
+        requestAuth = activeAuth;
+        return getStaffSession(selectedId, activeAuth.auth.token);
+      })
       .then((nextDetail) => {
-        if (cancelled) return;
+        if (cancelled || !requestAuth || !isSameStaffSession(authRef.current, requestAuth)) return;
         setDetail(nextDetail);
         setDetailState("ready");
       })
       .catch((detailError) => {
-        if (cancelled) return;
+        if (cancelled || !requestAuth || !isSameStaffSession(authRef.current, requestAuth)) return;
+        if (handleProtectedAuthFailure(detailError)) return;
         setDetail(null);
         setDetailState("error");
         setError(detailError instanceof Error ? detailError.message : "Kunde inte hämta handoff-detaljen.");
@@ -1104,12 +1383,19 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [auth, detailRequestId, selectedId]);
+  }, [authSessionKey, detailRequestId, getUsableAuth, handleProtectedAuthFailure, selectedId]);
 
   const handleRedeem = useCallback(
     async () => {
-      if (!detail || !auth || isStaffAuthExpired(auth)) {
-        setRedeemMessage("Ange kod igen för att slutföra check-in.");
+      if (!detail || !auth || getStaffSessionExpiryReason(auth)) {
+        setRedeemMessage("Logga in igen för att slutföra check-in.");
+        setRedeemState("error");
+        void terminateStaffSession();
+        return;
+      }
+
+      if (!staffCanRedeem(auth)) {
+        setRedeemMessage("Din personalroll saknar behörighet att slutföra check-in.");
         setRedeemState("error");
         return;
       }
@@ -1120,11 +1406,13 @@ export default function Home() {
       setRedeemState("loading");
 
       try {
+        const activeAuth = await getUsableAuth();
         const result = await redeemStaffSession({
           checkinSessionId: detail.checkinSessionId,
-          staffToken: auth.auth.token,
+          staffToken: activeAuth.auth.token,
           idempotencyKey: `staff-redeem:${detail.checkinSessionId}:${crypto.randomUUID()}`,
         });
+        if (!isSameStaffSession(authRef.current, activeAuth)) return;
         const redeemedIds = new Set(result.redeemedTicketIds);
 
         setDetail((current) => {
@@ -1153,60 +1441,56 @@ export default function Home() {
         setRedeemMessage(`Incheckad: ${result.redeemedTicketIds.length} biljetter.`);
         setRedeemState("success");
       } catch (redeemError) {
+        if (!isSameStaffSession(authRef.current, auth)) return;
+        if (handleProtectedAuthFailure(redeemError)) return;
         setRedeemMessage(
           redeemError instanceof Error ? redeemError.message : "Kunde inte slutföra incheckningen."
         );
         setRedeemState("error");
       }
     },
-    [auth, detail]
+    [auth, detail, getUsableAuth, handleProtectedAuthFailure, terminateStaffSession]
   );
 
   const handleStaffLogin = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
 
-      const passcode = authPasscode.trim();
-      if (!passcode) {
+      const credential = authPin.trim();
+      if (identityMode === "pin" && !/^\d{6}$/.test(credential)) {
+        setAuthError("Ange din sexsiffriga PIN-kod.");
+        return;
+      }
+      if (!credential) {
         setAuthError("Ange kod.");
         return;
       }
 
       setAuthError("");
       setAuthState("loading");
+      const lifecycleGeneration = lifecycleGenerationRef.current;
 
       try {
-        const nextAuth = await loginStaff(passcode);
+        const nextAuth = await loginStaff(credential, identityMode);
+        if (lifecycleGeneration !== lifecycleGenerationRef.current) return;
         storeStaffAuth(nextAuth);
-        setAuth(nextAuth);
-        setAuthPasscode("");
+        setCurrentAuth(nextAuth);
+        setAuthPin("");
         setAuthState("ready");
         setState("loading");
       } catch (loginError) {
+        if (lifecycleGeneration !== lifecycleGenerationRef.current) return;
+        setAuthPin("");
         setAuthError(loginError instanceof Error ? loginError.message : "Kunde inte logga in.");
         setAuthState("error");
       }
     },
-    [authPasscode]
+    [authPin, identityMode, setCurrentAuth]
   );
 
   const handleStaffLogout = useCallback(() => {
-    storeStaffAuth(null);
-    setAuth(null);
-    setAuthError("");
-    setAuthPasscode("");
-    setAuthState("idle");
-    setDetail(null);
-    setDetailState("idle");
-    setError("");
-    setQuery("");
-    setRedeemConfirmation(null);
-    setRedeemMessage("");
-    setRedeemState("idle");
-    setSelectedId(null);
-    setSessions([]);
-    setState("idle");
-  }, []);
+    void terminateStaffSession();
+  }, [terminateStaffSession]);
 
   const filteredSessions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -1219,9 +1503,9 @@ export default function Home() {
 
   if (!auth) {
     return (
-      <main className="grid min-h-screen place-items-center bg-background px-4 py-8 text-foreground">
-        <section className="w-full max-w-md rounded-3xl border border-border bg-surface p-4 shadow-sm">
-          <div className="rounded-2xl border border-border bg-white p-5">
+      <main className="grid min-h-screen min-w-0 place-items-center bg-background px-3 py-4 text-foreground sm:px-4 sm:py-8">
+        <section className="w-full min-w-0 max-w-md rounded-3xl border border-border bg-surface p-3 shadow-sm sm:p-4">
+          <div className="min-w-0 rounded-2xl border border-border bg-white p-4 sm:p-5">
             <div className="flex items-center gap-3">
               <Image
                 src="/jumpyard_logo.png"
@@ -1234,19 +1518,34 @@ export default function Home() {
               <h1 className="text-2xl font-black italic uppercase text-foreground">Handoff</h1>
             </div>
 
-            <p className="mt-4 text-sm leading-relaxed text-foreground/70">Ange kod för att öppna handoff-kön.</p>
+            <p className="mt-4 text-sm leading-relaxed text-foreground">
+              {identityMode === "pin" ? "Ange din PIN-kod." : "Ange kod för att öppna handoff-kön."}
+            </p>
 
-            <form className="mt-6 grid gap-4" onSubmit={handleStaffLogin} data-testid="staff-auth-login">
-              <label className="grid gap-2">
-                <span className="text-[10px] uppercase tracking-[0.22em] text-foreground/60">Kod</span>
-                <span className="flex min-h-14 items-center rounded-2xl border border-border bg-white px-4 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
+            <form className="mt-6 grid min-w-0 gap-4" onSubmit={handleStaffLogin} data-testid="staff-auth-login">
+              <label className="grid min-w-0 gap-2">
+                <span className="text-[10px] font-black italic uppercase tracking-[0.22em] text-foreground">
+                  {identityMode === "pin" ? "PIN-kod" : "Kod"}
+                </span>
+                <span className="flex min-h-13 w-full min-w-0 items-center rounded-2xl border border-border bg-white px-3 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10 sm:min-h-14 sm:px-4">
                   <input
-                    value={authPasscode}
-                    onChange={(event) => setAuthPasscode(event.target.value)}
-                    data-testid="staff-auth-passcode"
+                    value={authPin}
+                    onChange={(event) => {
+                      const value = identityMode === "pin"
+                        ? event.target.value.replace(/\D/g, "").slice(0, 6)
+                        : event.target.value;
+                      setAuthPin(value);
+                      if (authError) setAuthError("");
+                    }}
+                    data-testid={identityMode === "pin" ? "staff-auth-pin" : "staff-auth-passcode"}
                     type="password"
-                    autoComplete="current-password"
-                    className="h-full min-w-0 flex-1 border-0 bg-transparent text-base font-bold outline-none"
+                    inputMode={identityMode === "pin" ? "numeric" : undefined}
+                    pattern={identityMode === "pin" ? "[0-9]*" : undefined}
+                    maxLength={identityMode === "pin" ? 6 : undefined}
+                    autoComplete="off"
+                    autoFocus
+                    aria-label={identityMode === "pin" ? "Sexsiffrig PIN-kod" : "Kod"}
+                    className="h-full w-full min-w-0 flex-1 border-0 bg-transparent text-center text-xl font-black tracking-[0.3em] outline-none sm:text-2xl sm:tracking-[0.45em]"
                   />
                 </span>
               </label>
@@ -1259,14 +1558,20 @@ export default function Home() {
 
               <button
                 type="submit"
-                disabled={authState === "loading"}
+                disabled={authState === "loading" || (identityMode === "pin" && authPin.length !== 6)}
                 data-testid="staff-auth-submit"
-                className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-lg font-black italic uppercase text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-surface-strong disabled:text-foreground/45"
+                className="flex min-h-13 min-w-0 items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-base font-black italic uppercase text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-surface-strong disabled:text-foreground/45 sm:min-h-14 sm:text-lg"
               >
                 {authState === "loading" && <Loader2 className="animate-spin" size={18} />}
-                Fortsätt
+                Logga in
               </button>
             </form>
+
+            {identityMode === "pin" && (
+              <p className="mt-4 text-center text-xs font-bold text-foreground">
+                Glömt PIN-koden? Be en administratör att återställa den.
+              </p>
+            )}
           </div>
         </section>
       </main>
@@ -1277,18 +1582,22 @@ export default function Home() {
     <main className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b border-border bg-white/95 px-4 py-2 backdrop-blur sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <Image
               src="/jumpyard_logo.png"
               alt="JumpYard"
               width={42}
               height={42}
               priority
-              className="h-9 w-9 object-contain"
+              className="h-8 w-8 shrink-0 object-contain sm:h-9 sm:w-9"
             />
             <div className="min-w-0">
               <h1 className="text-xl font-black italic uppercase leading-none text-foreground sm:text-2xl">Handoff</h1>
-              <p className="truncate text-xs text-foreground/65 sm:text-sm">Redo för check-in</p>
+              <p className="truncate text-xs font-bold text-foreground sm:text-sm" data-testid="staff-personal-identity">
+                {auth.identityMode === "pin"
+                  ? `${auth.staff.displayName} · ${staffRoleLabel(auth.staff.role)}`
+                  : "Redo för check-in"}
+              </p>
             </div>
           </div>
 
@@ -1305,10 +1614,10 @@ export default function Home() {
             <button
               type="button"
               onClick={handleStaffLogout}
-              aria-label="Avsluta"
-              className="min-h-11 rounded-2xl px-2 text-sm italic text-foreground/65 transition hover:text-danger sm:px-3"
+              aria-label="Byt personal"
+              className="min-h-11 rounded-2xl px-1 text-xs font-bold italic text-foreground transition hover:text-danger min-[360px]:px-2 min-[360px]:text-sm sm:px-3"
             >
-              Avsluta
+              Byt personal
             </button>
           </div>
         </div>
@@ -1333,13 +1642,13 @@ export default function Home() {
       )}
 
       <div className={`mx-auto max-w-7xl gap-4 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 lg:grid-cols-[minmax(340px,400px)_1fr] lg:px-8 ${selectedId ? "hidden lg:grid" : "grid"}`}>
-        <aside className={`${selectedId ? "hidden lg:block" : ""} order-1 rounded-3xl border border-border bg-white shadow-sm lg:order-1`}>
+        <aside className={`${selectedId ? "hidden lg:block" : ""} order-1 min-w-0 rounded-3xl border border-border bg-white shadow-sm lg:order-1`}>
           <div className="border-b border-border p-4">
             <label className="flex min-h-14 items-center gap-3 rounded-2xl border border-border bg-white px-4 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
-              <Search className="shrink-0 text-muted" size={18} />
+              <Search className="shrink-0 text-foreground" size={18} />
               <input
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => setCurrentQuery(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") handleSearchSubmit();
                 }}
@@ -1393,7 +1702,7 @@ export default function Home() {
                   playsInline
                 />
                 <div className="flex items-center justify-between gap-3 border-t border-border bg-white px-3 py-2">
-                  <p className="text-xs uppercase text-foreground/60">
+                  <p className="text-xs uppercase text-foreground">
                     {scannerState === "starting"
                       ? "Startar kamera"
                       : scannerState === "scanning"
@@ -1402,7 +1711,7 @@ export default function Home() {
                           ? scannerMessage
                           : "QR-skanner"}
                   </p>
-                  {scannerState === "starting" && <Loader2 className="shrink-0 animate-spin text-muted" size={16} />}
+                  {scannerState === "starting" && <Loader2 className="shrink-0 animate-spin text-foreground" size={16} />}
                 </div>
               </div>
             )}
@@ -1420,9 +1729,9 @@ export default function Home() {
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div>
               <p className="text-sm font-black italic uppercase text-foreground">Kö</p>
-              <p className="text-xs text-foreground/55">Redo för personal</p>
+              <p className="text-xs text-foreground">Redo för personal</p>
             </div>
-            <span className="rounded-full bg-surface px-3 py-1 text-xs text-foreground/60">{filteredSessions.length}</span>
+            <span className="rounded-full bg-surface px-3 py-1 text-xs text-foreground">{filteredSessions.length}</span>
           </div>
 
           <div className="grid max-h-none gap-3 overflow-auto p-3 lg:max-h-[calc(100vh-245px)]">
@@ -1434,7 +1743,7 @@ export default function Home() {
             )}
 
             {state !== "loading" && filteredSessions.length === 0 && (
-              <div className="rounded-2xl bg-surface px-4 py-8 text-sm text-foreground/65">Inga handovers väntar.</div>
+              <div className="rounded-2xl bg-surface px-4 py-8 text-sm text-foreground">Inga handovers väntar.</div>
             )}
 
             {filteredSessions.map((session) => (

@@ -1,6 +1,7 @@
 import { Stack, StackProps, Tags, CfnOutput, Duration, RemovalPolicy, ArnFormat } from 'aws-cdk-lib';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as cr from 'aws-cdk-lib/custom-resources';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -15,6 +16,9 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import * as path from 'path';
+import {
+  ADMIN_MANAGED_LOGIN_BRANDING_SETTINGS,
+} from './admin-managed-login-branding';
 import {
   JumpYardCloudConfig,
   PARK_TEST_FRONTEND_REDEEM_REHEARSAL_APPROVAL,
@@ -49,10 +53,19 @@ interface HandlerResources {
   readonly webhookDevTokenSecret: secretsmanager.Secret;
   readonly redeemDevTokenSecret: secretsmanager.Secret;
   readonly staffAuthSecret: secretsmanager.Secret;
+  readonly staffCognitoClientId?: string;
+  readonly staffIdentity: JumpYardCloudConfig['staffIdentity'];
   readonly checkinLinkDevTokenSecret: secretsmanager.Secret;
   readonly resourcePrefix: string;
   readonly safetyGates: JumpYardCloudConfig['safetyGates'];
   readonly wrldsEnvironment: string;
+}
+
+interface CognitoAdminIdentityResources {
+  readonly authorizer: apigatewayv2.CfnAuthorizer;
+  readonly domain: cognito.UserPoolDomain;
+  readonly userPool: cognito.UserPool;
+  readonly userPoolClient: cognito.UserPoolClient;
 }
 
 interface ObservabilityResources {
@@ -69,8 +82,10 @@ interface ObservabilityResources {
 }
 
 type ApiRouteHandler = 'booking' | 'lookup' | 'redeem' | 'session' | 'webhook';
-type ApiRouteAuthorizationType = 'AWS_IAM' | 'NONE';
+type ApiRouteAuthorizationType = 'AWS_IAM' | 'JWT' | 'NONE';
 type ApiRouteTrustClass =
+  | 'staff_admin'
+  | 'staff_admin_session'
   | 'guest_public'
   | 'guest_token'
   | 'guest_write'
@@ -78,6 +93,7 @@ type ApiRouteTrustClass =
   | 'legacy_dev_only'
   | 'roller_webhook'
   | 'staff_auth_entry'
+  | 'staff_identity_session'
   | 'staff_protected';
 
 interface ApiRouteProtection {
@@ -263,12 +279,62 @@ const API_ROUTE_PROTECTION_CATALOG = [
   },
 ] as const satisfies readonly ApiRouteProtection[];
 
-function buildApiRouteSettings(): Record<
+function buildApiRouteProtectionCatalog(
+  staffIdentityMode: JumpYardCloudConfig['staffIdentity']['mode'],
+): readonly ApiRouteProtection[] {
+  if (staffIdentityMode !== 'pin') return API_ROUTE_PROTECTION_CATALOG;
+
+  return [
+    ...API_ROUTE_PROTECTION_CATALOG,
+    {
+      authorizationType: 'NONE',
+      handler: 'session',
+      routeKey: 'POST /v1/staff/auth/session',
+      throttlingBurstLimit: 10,
+      throttlingRateLimit: 2,
+      trustClass: 'staff_identity_session',
+    },
+    {
+      authorizationType: 'JWT',
+      handler: 'session',
+      routeKey: 'POST /v1/admin/auth/session',
+      throttlingBurstLimit: 10,
+      throttlingRateLimit: 2,
+      trustClass: 'staff_admin_session',
+    },
+    {
+      authorizationType: 'JWT',
+      handler: 'session',
+      routeKey: 'GET /v1/admin/staff',
+      throttlingBurstLimit: 50,
+      throttlingRateLimit: 20,
+      trustClass: 'staff_admin',
+    },
+    {
+      authorizationType: 'JWT',
+      handler: 'session',
+      routeKey: 'POST /v1/admin/staff',
+      throttlingBurstLimit: 10,
+      throttlingRateLimit: 2,
+      trustClass: 'staff_admin',
+    },
+    {
+      authorizationType: 'JWT',
+      handler: 'session',
+      routeKey: 'PATCH /v1/admin/staff/{staffIdentityId}',
+      throttlingBurstLimit: 10,
+      throttlingRateLimit: 2,
+      trustClass: 'staff_admin',
+    },
+  ];
+}
+
+function buildApiRouteSettings(routeCatalog: readonly ApiRouteProtection[]): Record<
   string,
   { readonly DetailedMetricsEnabled: boolean; readonly ThrottlingBurstLimit: number; readonly ThrottlingRateLimit: number }
 > {
   return Object.fromEntries(
-    API_ROUTE_PROTECTION_CATALOG.map((route) => [
+    routeCatalog.map((route) => [
       route.routeKey,
       {
         DetailedMetricsEnabled: true,
@@ -372,12 +438,23 @@ export class JumpYardCloudStack extends Stack {
 
     const staffAuthSecret = new secretsmanager.Secret(this, 'StaffAuthSecret', {
       secretName: `/${config.resourcePrefix}/staff/auth`,
-      description: 'Pilot staff passcode used to issue short-lived JumpYard Cloud staff tokens.',
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({ displayName: 'JumpYard Staff', tokenTtlMinutes: 720 }),
-        generateStringKey: 'passcode',
-        excludePunctuation: true,
-      },
+      description:
+        config.staffIdentity.mode === 'pin'
+          ? 'Server-only pepper for park staff PIN lookup and verification.'
+          : 'Pilot staff passcode used to issue short-lived JumpYard Cloud staff tokens.',
+      generateSecretString:
+        config.staffIdentity.mode === 'pin'
+          ? {
+              secretStringTemplate: JSON.stringify({ purpose: 'staff-pin-pepper', version: 1 }),
+              generateStringKey: 'pinPepper',
+              excludePunctuation: true,
+              passwordLength: 64,
+            }
+          : {
+              secretStringTemplate: JSON.stringify({ displayName: 'JumpYard Staff', tokenTtlMinutes: 720 }),
+              generateStringKey: 'passcode',
+              excludePunctuation: true,
+            },
     });
 
     const checkinLinkDevTokenSecret = new secretsmanager.Secret(this, 'CheckinLinkDevTokenSecret', {
@@ -493,11 +570,18 @@ export class JumpYardCloudStack extends Stack {
           'x-jumpyard-redeem-token',
           'x-jumpyard-staff-token',
         ],
-        allowMethods: ['GET', 'OPTIONS', 'POST'],
+        allowMethods:
+          config.staffIdentity.mode === 'pin'
+            ? ['GET', 'OPTIONS', 'PATCH', 'POST']
+            : ['GET', 'OPTIONS', 'POST'],
         allowOrigins: [...config.api.allowedCorsOrigins],
         maxAge: 300,
       },
     });
+
+    const routeProtectionCatalog = buildApiRouteProtectionCatalog(config.staffIdentity.mode);
+    const adminIdentityResources =
+      config.staffIdentity.mode === 'pin' ? this.createCognitoAdminIdentity(config, api) : undefined;
 
     const apiAccessLogGroup = new logs.LogGroup(this, 'HttpApiAccessLogGroup', {
       logGroupName: `/aws/apigateway/${config.resourcePrefix}-api-access`,
@@ -525,7 +609,7 @@ export class JumpYardCloudStack extends Stack {
         throttlingBurstLimit: config.api.throttlingBurstLimit,
         throttlingRateLimit: config.api.throttlingRateLimit,
       },
-      routeSettings: buildApiRouteSettings(),
+      routeSettings: buildApiRouteSettings(routeProtectionCatalog),
       stageName: '$default',
     });
 
@@ -546,6 +630,8 @@ export class JumpYardCloudStack extends Stack {
       webhookDevTokenSecret,
       redeemDevTokenSecret,
       staffAuthSecret,
+      staffCognitoClientId: adminIdentityResources?.userPoolClient.userPoolClientId,
+      staffIdentity: config.staffIdentity,
       checkinLinkDevTokenSecret,
       resourcePrefix: config.resourcePrefix,
       safetyGates: config.safetyGates,
@@ -627,8 +713,13 @@ export class JumpYardCloudStack extends Stack {
       webhook: webhookHandler,
     };
 
-    for (const protection of API_ROUTE_PROTECTION_CATALOG) {
-      const route = this.addRoute(api, apiHandlers[protection.handler], protection);
+    for (const protection of routeProtectionCatalog) {
+      const route = this.addRoute(
+        api,
+        apiHandlers[protection.handler],
+        protection,
+        adminIdentityResources?.authorizer.ref,
+      );
       defaultStage.addDependency(route);
     }
 
@@ -660,6 +751,18 @@ export class JumpYardCloudStack extends Stack {
     new CfnOutput(this, 'OperationalDatabaseClusterArn', {
       value: databaseClusterArn,
     });
+
+    if (adminIdentityResources) {
+      new CfnOutput(this, 'AdminUserPoolId', {
+        value: adminIdentityResources.userPool.userPoolId,
+      });
+      new CfnOutput(this, 'AdminUserPoolClientId', {
+        value: adminIdentityResources.userPoolClient.userPoolClientId,
+      });
+      new CfnOutput(this, 'AdminUserPoolDomain', {
+        value: `https://${adminIdentityResources.domain.domainName}.auth.${this.region}.amazoncognito.com`,
+      });
+    }
   }
 
   private addOperationalObservability(config: JumpYardCloudConfig, resources: ObservabilityResources): void {
@@ -935,6 +1038,107 @@ export class JumpYardCloudStack extends Stack {
     smsDeliveryStatusAttributes.node.addDependency(smsDeliveryStatusRole);
   }
 
+  private createCognitoAdminIdentity(
+    config: JumpYardCloudConfig,
+    api: apigatewayv2.CfnApi,
+  ): CognitoAdminIdentityResources {
+    if (config.staffIdentity.mode !== 'pin') {
+      throw new Error('Cognito admin identity resources require staffIdentity.mode=pin.');
+    }
+
+    const userPool = new cognito.UserPool(this, 'AdminUserPool', {
+      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      autoVerify: { email: true },
+      deletionProtection: true,
+      featurePlan: cognito.FeaturePlan.ESSENTIALS,
+      mfa: cognito.Mfa.REQUIRED,
+      mfaSecondFactor: {
+        otp: true,
+        sms: false,
+      },
+      passwordPolicy: {
+        minLength: 8,
+        passwordHistorySize: 5,
+        requireDigits: true,
+        requireLowercase: true,
+        requireSymbols: false,
+        requireUppercase: true,
+        tempPasswordValidity: Duration.days(7),
+      },
+      removalPolicy: RemovalPolicy.RETAIN,
+      selfSignUpEnabled: false,
+      signInAliases: { email: true },
+      signInCaseSensitive: false,
+      standardAttributes: {
+        email: {
+          mutable: true,
+          required: true,
+        },
+      },
+      standardThreatProtectionMode: cognito.StandardThreatProtectionMode.NO_ENFORCEMENT,
+      userPoolName: `${config.resourcePrefix}-admin`,
+    });
+
+    const userPoolClient = userPool.addClient('AdminUserPoolClient', {
+      accessTokenValidity: Duration.minutes(config.staffIdentity.accessTokenValidityMinutes),
+      authFlows: {
+        userSrp: true,
+      },
+      enableTokenRevocation: true,
+      generateSecret: false,
+      idTokenValidity: Duration.minutes(config.staffIdentity.accessTokenValidityMinutes),
+      oAuth: {
+        callbackUrls: [...config.staffIdentity.callbackUrls],
+        flows: {
+          authorizationCodeGrant: true,
+          clientCredentials: false,
+          implicitCodeGrant: false,
+        },
+        logoutUrls: [...config.staffIdentity.logoutUrls],
+        scopes: [cognito.OAuthScope.OPENID],
+      },
+      preventUserExistenceErrors: true,
+      refreshTokenValidity: Duration.hours(config.staffIdentity.refreshTokenValidityHours),
+      refreshTokenRotationGracePeriod: Duration.seconds(10),
+      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
+      userPoolClientName: `${config.resourcePrefix}-admin`,
+    });
+
+    const domain = userPool.addDomain('AdminUserPoolDomain', {
+      cognitoDomain: {
+        domainPrefix: config.staffIdentity.domainPrefix,
+      },
+      managedLoginVersion: cognito.ManagedLoginVersion.NEWER_MANAGED_LOGIN,
+    });
+
+    const managedLoginBranding = new cognito.CfnManagedLoginBranding(this, 'AdminManagedLoginBranding', {
+      clientId: userPoolClient.userPoolClientId,
+      settings: ADMIN_MANAGED_LOGIN_BRANDING_SETTINGS,
+      useCognitoProvidedValues: false,
+      userPoolId: userPool.userPoolId,
+    });
+    managedLoginBranding.addDependency(userPoolClient.node.defaultChild as cognito.CfnUserPoolClient);
+    managedLoginBranding.addDependency(domain.node.defaultChild as cognito.CfnUserPoolDomain);
+
+    const authorizer = new apigatewayv2.CfnAuthorizer(this, 'AdminJwtAuthorizer', {
+      apiId: api.ref,
+      authorizerType: 'JWT',
+      identitySource: ['$request.header.Authorization'],
+      jwtConfiguration: {
+        audience: [userPoolClient.userPoolClientId],
+        issuer: `https://cognito-idp.${this.region}.amazonaws.com/${userPool.userPoolId}`,
+      },
+      name: `${config.resourcePrefix}-admin-jwt`,
+    });
+
+    return {
+      authorizer,
+      domain,
+      userPool,
+      userPoolClient,
+    };
+  }
+
   private createHandler(
     id: string,
     handlerName: string,
@@ -978,6 +1182,24 @@ export class JumpYardCloudStack extends Stack {
       environment.WEBHOOK_DEV_TOKEN_SECRET_ARN = resources.webhookDevTokenSecret.secretArn;
     }
 
+    if (handlerName === 'session' || handlerName === 'redeem') {
+      environment.ENABLE_STAFF_AUTH = String(resources.safetyGates.staffAuthEnabled);
+      environment.STAFF_IDENTITY_MODE = resources.staffIdentity.mode;
+      environment.STAFF_IDENTITY_ENVIRONMENT = resources.wrldsEnvironment;
+      if (resources.staffIdentity.mode === 'pin') {
+        environment.STAFF_IDENTITY_VENUE_ID = resources.staffIdentity.venueId;
+        if (handlerName === 'session') {
+          if (!resources.staffCognitoClientId) {
+            throw new Error('Cognito admin identity requires a user pool client id.');
+          }
+          environment.STAFF_COGNITO_CLIENT_ID = resources.staffCognitoClientId;
+          environment.STAFF_PIN_PEPPER_SECRET_ARN = resources.staffAuthSecret.secretArn;
+        }
+      } else {
+        environment.STAFF_AUTH_SECRET_ARN = resources.staffAuthSecret.secretArn;
+      }
+    }
+
     if (handlerName === 'session') {
       const fullFlowRehearsalEnabled =
         resources.safetyGates.fullFlowRehearsalApproval === PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL;
@@ -988,7 +1210,6 @@ export class JumpYardCloudStack extends Stack {
       environment.EMAIL_PROVIDER = 'aws_ses';
       environment.EMAIL_REPLY_TO_ADDRESSES = resources.checkinEmailReplyToAddresses.join(',');
       environment.ENABLE_GUEST_MESSAGE_SENDS = String(resources.safetyGates.guestMessagingSendsEnabled);
-      environment.ENABLE_STAFF_AUTH = String(resources.safetyGates.staffAuthEnabled);
       environment.ENABLE_T0166_LIVE_REDEEM_SMOKE = String(
         resources.safetyGates.liveRedeemSmokeApproval === PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL,
       );
@@ -1002,7 +1223,6 @@ export class JumpYardCloudStack extends Stack {
       environment.ENABLE_T0176_FULL_FLOW_REHEARSAL = String(fullFlowRehearsalEnabled);
       environment.SMS_PROVIDER = 'aws_sns';
       environment.SMS_SENDER_ID = 'JumpYard';
-      environment.STAFF_AUTH_SECRET_ARN = resources.staffAuthSecret.secretArn;
     }
 
     if (handlerName === 'booking') {
@@ -1073,7 +1293,6 @@ export class JumpYardCloudStack extends Stack {
       environment.T0176_FULL_FLOW_VENUE_ID =
         resources.safetyGates.fullFlowRehearsalVenueId ?? '';
       environment.REDEEM_DEV_TOKEN_SECRET_ARN = resources.redeemDevTokenSecret.secretArn;
-      environment.STAFF_AUTH_SECRET_ARN = resources.staffAuthSecret.secretArn;
       environment.T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS =
         resources.safetyGates.liveRedeemSmokeAllowedIdentifiers.join(',');
     }
@@ -1133,7 +1352,10 @@ exports.handler = async () => ({
         }),
       );
     }
-    if (handlerName === 'session' || handlerName === 'redeem') {
+    if ((handlerName === 'session' || handlerName === 'redeem') && resources.staffIdentity.mode === 'legacy') {
+      resources.staffAuthSecret.grantRead(fn);
+    }
+    if (handlerName === 'session' && resources.staffIdentity.mode === 'pin') {
       resources.staffAuthSecret.grantRead(fn);
     }
 
@@ -1171,7 +1393,12 @@ exports.handler = async () => ({
     api: apigatewayv2.CfnApi,
     handler: lambda.Function,
     protection: ApiRouteProtection,
+    staffJwtAuthorizerId?: string,
   ): apigatewayv2.CfnRoute {
+    if (protection.authorizationType === 'JWT' && !staffJwtAuthorizerId) {
+      throw new Error(`JWT route ${protection.routeKey} requires the staff Cognito authorizer.`);
+    }
+
     const logicalId = protection.routeKey
       .replace(/[^A-Za-z0-9]/g, ' ')
       .split(' ')
@@ -1189,6 +1416,7 @@ exports.handler = async () => ({
 
     const route = new apigatewayv2.CfnRoute(this, `${logicalId}Route`, {
       apiId: api.ref,
+      authorizerId: protection.authorizationType === 'JWT' ? staffJwtAuthorizerId : undefined,
       authorizationType: protection.authorizationType,
       routeKey: protection.routeKey,
       target: `integrations/${integration.ref}`,

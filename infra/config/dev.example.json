@@ -14,6 +14,9 @@
     "throttlingBurstLimit": 150,
     "throttlingRateLimit": 50
   },
+  "staffIdentity": {
+    "mode": "legacy"
+  },
   "roller": {
     "environment": "playground",
     "baseUrl": "https://api.play.roller.app"

@@ -13,6 +13,7 @@ const TEMPLATE_NAME = `${STACK_NAME}.template.json`;
 const EXPECTED_ROUTES = [
   ['POST /v1/check-in/lookup', 'NONE', 'lookup', 'guest_public', 'lookup'],
   ['POST /v1/staff/auth/login', 'NONE', 'session', 'staff_auth_entry', 'staff_login'],
+  ['POST /v1/staff/auth/session', 'NONE', 'session', 'staff_identity_session', 'staff_login'],
   ['POST /v1/check-in/session-links', 'AWS_IAM', 'session', 'internal_ops', 'internal_session_link'],
   ['POST /v1/check-in/session-links/send-sms', 'AWS_IAM', 'session', 'internal_ops', 'internal_send_sms'],
   ['POST /v1/check-in/session-links/send-email', 'AWS_IAM', 'session', 'internal_ops', 'internal_send_email'],
@@ -32,6 +33,10 @@ const EXPECTED_ROUTES = [
   ['POST /v1/bookings/{bookingReference}/add-products', 'NONE', 'booking', 'guest_write', 'addon_draft'],
   ['POST /v1/roller/webhooks/bookings', 'NONE', 'webhook', 'roller_webhook', 'webhook_bookings'],
   ['POST /v1/roller/webhooks/redemptions', 'NONE', 'webhook', 'roller_webhook', 'webhook_redemptions'],
+  ['POST /v1/admin/auth/session', 'JWT', 'session', 'staff_admin_session', 'staff_login'],
+  ['GET /v1/admin/staff', 'JWT', 'session', 'staff_admin', 'staff_list'],
+  ['POST /v1/admin/staff', 'JWT', 'session', 'staff_admin', 'staff_login'],
+  ['PATCH /v1/admin/staff/{staffIdentityId}', 'JWT', 'session', 'staff_admin', 'staff_login'],
 ].map(([routeKey, authorizationType, handler, trustClass, policyKey]) => ({
   authorizationType,
   burst: ROUTE_LIMITS[policyKey].burst,
@@ -84,7 +89,7 @@ function resourcesOfType(template, resourceType) {
 
 function validateRouteCatalog(template) {
   const routeEntries = resourcesOfType(template, 'AWS::ApiGatewayV2::Route');
-  assert.equal(routeEntries.length, EXPECTED_ROUTES.length, 'The HTTP API must synthesize exactly 21 routes.');
+  assert.equal(routeEntries.length, EXPECTED_ROUTES.length, 'The HTTP API must synthesize exactly 26 routes.');
 
   const routesByKey = new Map(
     routeEntries.map(([logicalId, resource]) => [resource.Properties.RouteKey, { logicalId, resource }]),
@@ -116,6 +121,21 @@ function validateRouteCatalog(template) {
     'Only five internal session-link routes and the legacy direct redeem route may use AWS_IAM.',
   );
 
+  const authorizers = resourcesOfType(template, 'AWS::ApiGatewayV2::Authorizer');
+  assert.equal(authorizers.length, 1, 'T0194 must add exactly one admin JWT authorizer.');
+  const [authorizerLogicalId, authorizer] = authorizers[0];
+  assert.equal(authorizer.Properties.AuthorizerType, 'JWT');
+  assert.deepEqual(authorizer.Properties.IdentitySource, ['$request.header.Authorization']);
+
+  for (const expected of EXPECTED_ROUTES.filter((route) => route.authorizationType === 'JWT')) {
+    const actual = routesByKey.get(expected.routeKey);
+    assert.deepEqual(
+      actual.resource.Properties.AuthorizerId,
+      { Ref: authorizerLogicalId },
+      `${expected.routeKey} must use the shared admin JWT authorizer.`,
+    );
+  }
+
   return routesByKey;
 }
 
@@ -146,12 +166,21 @@ function validateRouteSettings(template, routesByKey) {
   }
 }
 
-function validateNoNewProtectionResources(template) {
-  assert.equal(Object.keys(template.Resources).length, 134, 'T0193 route protection must keep the 134-resource foundation.');
+function validateApprovedProtectionResources(template) {
+  assert.equal(
+    Object.keys(template.Resources).length,
+    154,
+    'T0194 may add five Cognito/JWT resources plus five explicit PIN/admin API route triplets to the 134-resource foundation.',
+  );
+  assert.equal(resourcesOfType(template, 'AWS::Cognito::UserPool').length, 1);
+  assert.equal(resourcesOfType(template, 'AWS::Cognito::UserPoolClient').length, 1);
+  assert.equal(resourcesOfType(template, 'AWS::Cognito::UserPoolDomain').length, 1);
+  assert.equal(resourcesOfType(template, 'AWS::Cognito::ManagedLoginBranding').length, 1);
+  assert.equal(resourcesOfType(template, 'AWS::ApiGatewayV2::Authorizer').length, 1);
   for (const forbiddenType of [
-    'AWS::ApiGatewayV2::Authorizer',
     'AWS::ApiGatewayV2::DomainName',
     'AWS::CloudFront::Distribution',
+    'AWS::Cognito::IdentityPool',
     'AWS::WAFv2::WebACL',
   ]) {
     assert.equal(resourcesOfType(template, forbiddenType).length, 0, `${forbiddenType} requires separate approval.`);
@@ -162,12 +191,13 @@ function main() {
   const template = synthParkTestTemplate();
   const routesByKey = validateRouteCatalog(template);
   validateRouteSettings(template, routesByKey);
-  validateNoNewProtectionResources(template);
+  validateApprovedProtectionResources(template);
 
-  console.log('[pass] T0193 synthesizes one explicit protection record for all 21 API routes');
+  console.log('[pass] T0193/T0194 synthesize one explicit protection record for all 26 API routes');
   console.log('[pass] T0193 uses AWS_IAM only for five internal session-link routes and legacy direct redeem');
+  console.log('[pass] T0194 overlays one JWT authorizer on exactly four park-test admin routes');
   console.log('[pass] T0193 applies shared-IP-safe aggregate route limits and preserves a 50/150 default envelope');
-  console.log('[pass] T0193 adds no authorizer, domain, CloudFront, WAF, or other AWS resource');
+  console.log('[pass] T0194 adds only the approved admin Cognito/JWT resources and five PIN/admin API route triplets');
 }
 
 try {
