@@ -33,7 +33,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 - History: [completed tickets](docs/history/completed-tickets.md), [validation evidence](docs/history/validation-log.md), [Sprint 1 narrative](docs/history/sprint-1-ticket-history.md), and [done followups](docs/history/followups-done.md).
 - Planning migration: [Project policy/gates](docs/roadmap/backlog.md) and [legacy-to-Project mapping](docs/history/github-project-migration-2026-07-14.md).
-- Current evidence: [Sprint roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf) and the T0191-T0195 [environment](docs/t0191-park-test-preproduction-contract.md), [foundation](docs/t0192-park-test-foundation-qualification.md), [API](docs/t0193-api-protection.md), [identity](docs/t0194-staff-identity.md), and [lifecycle](docs/t0195-data-lifecycle-policy.md) records.
+- Current evidence: [Sprint roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf) and the T0191-T0196 [environment](docs/t0191-park-test-preproduction-contract.md), [foundation](docs/t0192-park-test-foundation-qualification.md), [API](docs/t0193-api-protection.md), [identity](docs/t0194-staff-identity.md), [lifecycle](docs/t0195-data-lifecycle-policy.md), and [booking-index](docs/t0196-booking-index-morning-seed.md) records.
 
 ## Durable Architecture Facts
 
@@ -78,7 +78,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Aurora stores normalized booking, item, ticket, payment, product, contact, webhook, session, token, delivery, and draft/link state. Data API windows populate an operational cache, never the source of truth.
 - Booking webhooks are registered in Roller Playground and use the confirmed `x-roller-apikey` header in dev; production webhook auth/signature/IP policy remains open.
 - Daily dev Data API sync runs internally; guest messaging uses opaque `jy_token` links resolved server-side.
-- Park-test daily sync is disabled; T0196 owns Live backfill/morning seed. Aurora contains scoped smoke snapshots only; lookup stays REST-on-demand, add-ons separately gated, and Live webhook processing off. Payment/add-on/redeem confirmation uses scoped responses plus Aurora audit/manual fallback.
+- Park-test Live/Nacka booking-index sync runs daily with bounded provider traffic, 30-day-past plus all-future visit retention, and freshness monitoring; the approved initial backfill is complete. Critical actions still confirm against Roller, and Live webhook processing stays off. See [the T0196 record](docs/t0196-booking-index-morning-seed.md).
 
 ## Security And Operational Constraints
 
@@ -95,8 +95,8 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 
 ## Current Readiness Gates
 
-- Sprint/production-readiness outcomes remain in the [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5), with legacy T0196-T0205 retained. T0195 migrations and least-privilege runtime are deployed; lifecycle apply, complete restore proof, snapshot deletion, and secret changes remain gated. [AWS_RESOURCES.md](AWS_RESOURCES.md) holds the evidence. T0192 qualified park-test, while T0204 still decides GO/NO-GO before separately approved production.
-- Remaining blockers include lifecycle apply/recovery proof, alarm routing, sender setup, Live backfill/cutover, and webhook verification.
+- Sprint/production-readiness outcomes remain in the [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5). T0195 foundations and T0196 booking index are deployed; lifecycle/recovery/secret actions stay gated. [AWS_RESOURCES.md](AWS_RESOURCES.md) holds evidence, and T0204 still decides GO/NO-GO before production approval.
+- Remaining blockers include lifecycle apply/recovery proof, durable alarm routing, sender setup, webhook verification/reconciliation, integrated rehearsal, and production cutover approval.
 - Payment must stay on Roller's approved package; method visibility is Roller/Adyen controlled.
 
 ## Current Open Questions

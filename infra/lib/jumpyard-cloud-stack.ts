@@ -832,15 +832,17 @@ exports.handler = async (event) => {
     });
     const dataSyncHandler = this.createHandler('DataSyncHandler', 'data-sync', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'data-sync')),
+      dataSync: config.dataSync,
       memorySize: 512,
+      reservedConcurrentExecutions: 1,
       timeout: Duration.minutes(10),
     });
 
     new events.Rule(this, 'DailyDataApiSyncRule', {
       ruleName: `${config.resourcePrefix}-data-api-daily-sync`,
       description:
-        'Runs the Playground Roller Data API modified-date sync for the previous UTC day. Roller writes are not performed.',
-      enabled: config.roller.environment === 'playground',
+        'Runs the approved serialized Roller Data API modified-date morning sync. Roller writes are not performed.',
+      enabled: config.dataSync.scheduleEnabled,
       schedule: events.Schedule.cron({ minute: '0', hour: '2' }),
       targets: [
         new targets.LambdaFunction(dataSyncHandler, {
@@ -990,6 +992,16 @@ exports.handler = async (event) => {
       statistic: 'Sum',
       period,
     });
+    const bookingIndexSyncSuccess = new cloudwatch.Metric({
+      namespace: 'JumpYard/Cloud',
+      metricName: 'BookingIndexSyncSuccess',
+      dimensionsMap: {
+        Environment: config.resourcePrefix,
+        Handler: 'data-sync',
+      },
+      statistic: 'Sum',
+      period: Duration.hours(6),
+    });
 
     new logs.MetricFilter(this, 'ApiThrottledRequestMetricFilter', {
       logGroup: resources.apiAccessLogGroup,
@@ -1134,6 +1146,19 @@ exports.handler = async (event) => {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
+
+    if (config.dataSync.scheduleEnabled) {
+      new cloudwatch.Alarm(this, 'BookingIndexFreshnessAlarm', {
+        alarmName: `${config.resourcePrefix}-booking-index-stale`,
+        alarmDescription: 'No successful booking-index seed has been observed for five consecutive six-hour periods.',
+        metric: bookingIndexSyncSuccess,
+        threshold: 1,
+        evaluationPeriods: 5,
+        datapointsToAlarm: 5,
+        comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+      });
+    }
 
     for (const handler of lambdaHandlers) {
       new cloudwatch.Alarm(this, `${handler.id}ErrorsAlarm`, {
@@ -1321,7 +1346,9 @@ exports.handler = async (event) => {
     resources: HandlerResources,
     options: {
       readonly code?: lambda.Code;
+      readonly dataSync?: JumpYardCloudConfig['dataSync'];
       readonly memorySize?: number;
+      readonly reservedConcurrentExecutions?: number;
       readonly timeout?: Duration;
     } = {},
   ): lambda.Function {
@@ -1347,7 +1374,17 @@ exports.handler = async (event) => {
     };
 
     if (handlerName === 'data-sync') {
-      environment.RESOURCE_PREFIX = resources.resourcePrefix;
+      if (!options.dataSync) {
+        throw new Error('data-sync handler requires the reviewed dataSync config.');
+      }
+      environment.ENABLE_ROLLER_LIVE_DATA_SYNC = String(options.dataSync.scheduleEnabled);
+      environment.ROLLER_DATA_SYNC_BOOKING_RETENTION_DAYS = String(options.dataSync.bookingRetentionDays);
+      environment.ROLLER_DATA_SYNC_LIVE_APPROVAL = options.dataSync.liveApproval;
+      environment.ROLLER_DATA_SYNC_MAX_PAGES = String(options.dataSync.maxPages);
+      environment.ROLLER_DATA_SYNC_MAX_WINDOW_DAYS = String(options.dataSync.maxWindowDays);
+      environment.ROLLER_DATA_SYNC_PAGE_SIZE = String(options.dataSync.pageSize);
+      environment.ROLLER_DATA_SYNC_REQUEST_INTERVAL_MS = String(options.dataSync.requestIntervalMs);
+      environment.ROLLER_DATA_SYNC_VENUE_ID = options.dataSync.venueId;
     }
 
     if (handlerName === 'webhook') {
@@ -1477,6 +1514,7 @@ exports.handler = async (event) => {
       handler: 'index.handler',
       timeout: options.timeout ?? Duration.seconds(10),
       memorySize: options.memorySize ?? 256,
+      reservedConcurrentExecutions: options.reservedConcurrentExecutions,
       code: options.code ?? lambda.Code.fromInline(`
 exports.handler = async () => ({
   statusCode: 501,

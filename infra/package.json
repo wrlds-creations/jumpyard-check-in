@@ -41,6 +41,9 @@
     "deploy:park-test-full-flow-rehearsal": "cdk deploy -c config=./config/park-test-full-flow-rehearsal.json --profile wrlds-dev --require-approval never",
     "migrate:dev": "ts-node --prefer-ts-exts scripts/run-migrations.ts --config ./config/dev.json --profile wrlds-dev",
     "migrate:dev:status": "ts-node --prefer-ts-exts scripts/run-migrations.ts --config ./config/dev.json --profile wrlds-dev --status",
+    "booking-index:park-test": "ts-node --prefer-ts-exts scripts/roller-live-booking-index.ts --config ./config/park-test-full-flow-rehearsal.json --profile wrlds-dev",
+    "booking-index:park-test:preflight": "ts-node --prefer-ts-exts scripts/roller-live-booking-index.ts --config ./config/park-test-full-flow-rehearsal.json --profile wrlds-dev --preflight",
+    "booking-index:park-test:apply": "ts-node --prefer-ts-exts scripts/roller-live-booking-index.ts --config ./config/park-test-full-flow-rehearsal.json --profile wrlds-dev --apply",
     "staff-admin-identity:park-test": "ts-node --prefer-ts-exts scripts/manage-staff-identity.ts --config ./config/park-test-full-flow-rehearsal.json --profile wrlds-dev",
     "import:bookingitems:dev": "ts-node --prefer-ts-exts scripts/import-bookingitems.ts --config ./config/dev.json --profile wrlds-dev",
     "import:bookingitems:dev:apply": "ts-node --prefer-ts-exts scripts/import-bookingitems.ts --config ./config/dev.json --profile wrlds-dev --apply",
@@ -72,6 +75,7 @@
     "validate:t0195-least-privilege": "ts-node --prefer-ts-exts scripts/validate-t0195-least-privilege.ts",
     "validate:t0195-pin-pepper-lifecycle": "node ../scripts/validate-t0195-pin-pepper-lifecycle.js",
     "validate:t0195-aurora-recovery": "node ../scripts/validate-t0195-aurora-recovery.js",
+    "validate:t0196-booking-index-ops": "ts-node --prefer-ts-exts scripts/roller-live-booking-index.ts --self-test",
     "validate:roller-live-contact-resolver": "ts-node --prefer-ts-exts scripts/roller-live-contact-resolver.ts --self-test",
     "validate:roller-live-readonly-preflight": "ts-node --prefer-ts-exts scripts/roller-live-readonly-preflight.ts --self-test",
     "validate:roller-live-catalog-index-readiness": "ts-node --prefer-ts-exts scripts/roller-live-catalog-index-readiness.ts --self-test",
@@ -79,11 +83,12 @@
     "validate:roller-live-webhook-register": "ts-node --prefer-ts-exts scripts/roller-live-webhook-register.ts --self-test",
     "validate:roller-live-quote-smoke": "ts-node --prefer-ts-exts scripts/roller-live-quote-smoke.ts --self-test",
     "validate:roller-live-draft-smoke": "ts-node --prefer-ts-exts scripts/roller-live-draft-smoke.ts --self-test",
-    "check": "npm run build && npm run validate:config-guards && npm run validate:park-test-synth && npm run validate:t0190-safety-gates && npm run validate:t0192-request-item-dates && npm run validate:t0193-api-protection && npm run validate:t0193-service-auth && npm run validate:t0194-staff-identity-infra && npm run validate:t0194-staff-identity-ops && npm run validate:t0195-data-lifecycle && npm run validate:t0195-least-privilege && npm run validate:t0195-pin-pepper-lifecycle && npm run validate:t0195-aurora-recovery && npm run validate:roller-live-readonly-preflight && npm run validate:roller-live-catalog-index-readiness && npm run validate:roller-live-contact-resolver && npm run validate:roller-live-webhook-dry-run && npm run validate:roller-live-webhook-register && npm run validate:roller-live-quote-smoke && npm run validate:roller-live-draft-smoke && npm run synth:example"
+    "check": "npm run build && npm run validate:config-guards && npm run validate:park-test-synth && npm run validate:t0190-safety-gates && npm run validate:t0192-request-item-dates && npm run validate:t0193-api-protection && npm run validate:t0193-service-auth && npm run validate:t0194-staff-identity-infra && npm run validate:t0194-staff-identity-ops && npm run validate:t0195-data-lifecycle && npm run validate:t0195-least-privilege && npm run validate:t0195-pin-pepper-lifecycle && npm run validate:t0195-aurora-recovery && npm run validate:t0196-booking-index-ops && npm run validate:roller-live-readonly-preflight && npm run validate:roller-live-catalog-index-readiness && npm run validate:roller-live-contact-resolver && npm run validate:roller-live-webhook-dry-run && npm run validate:roller-live-webhook-register && npm run validate:roller-live-quote-smoke && npm run validate:roller-live-draft-smoke && npm run synth:example"
   },
   "dependencies": {
     "@aws-sdk/client-cloudformation": "^3.1085.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.1085.0",
+    "@aws-sdk/client-lambda": "3.1085.0",
     "@aws-sdk/client-rds-data": "^3.1050.0",
     "@aws-sdk/client-secrets-manager": "^3.1050.0",
     "@aws-sdk/client-ssm": "^3.1050.0",

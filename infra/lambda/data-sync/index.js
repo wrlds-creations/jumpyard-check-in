@@ -13,6 +13,14 @@ const DATABASE_NAME = 'jumpyard_cloud';
 const DEFAULT_PAGE_SIZE = 100;
 const DEFAULT_MAX_PAGES = 50;
 const DEFAULT_PRODUCT_TTL_HOURS = 24;
+const DEFAULT_BOOKING_RETENTION_DAYS = 30;
+const DEFAULT_MAX_WINDOW_DAYS = 31;
+const DEFAULT_REQUEST_INTERVAL_MS = 1000;
+const DEFAULT_RETRY_ATTEMPTS = 3;
+const LIVE_DATA_SYNC_APPROVAL = 'T0196_LIVE_BOOKING_INDEX_APPROVED';
+const LIVE_BASE_URL = 'https://api.roller.app';
+const LIVE_ENVIRONMENT = 'park-test';
+const LIVE_VENUE_ID = '50871';
 const DATA_SYNC_SOURCE = 'scheduled_data_api_sync';
 const SOURCE_BOOKINGITEMS = 'scheduled_data_api_sync_bookingitems';
 const SOURCE_TICKETS = 'scheduled_data_api_sync_tickets';
@@ -30,21 +38,28 @@ const ssmClient = new SSMClient({});
 let cachedRollerConfig = null;
 let cachedRollerConfigExpiresAt = 0;
 let cachedToken = null;
+let lastRollerRequestStartedAt = null;
+let nowProvider = () => Date.now();
+let sleepProvider = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+let fetchProvider = (...args) => fetch(...args);
 
 exports.handler = async (event = {}) => {
   const startedAt = new Date().toISOString();
   const correlationId = stringOrNull(event.correlationId) || createCorrelationId();
-  const sourceWindow = resolveSourceWindow(event);
-  const pageSize = positiveInteger(event.pageSize) || positiveInteger(process.env.ROLLER_DATA_SYNC_PAGE_SIZE) || DEFAULT_PAGE_SIZE;
-  const maxPages = positiveInteger(event.maxPages) || positiveInteger(process.env.ROLLER_DATA_SYNC_MAX_PAGES) || DEFAULT_MAX_PAGES;
-  const venueId = process.env.JUMPYARD_VENUE_ID || process.env.RESOURCE_PREFIX || 'jumpyard-check-in-dev';
-  const runId = `scheduled-data-api:${sourceWindow.startDate}:${sourceWindow.endDate}:${Date.now()}`;
   const context = createDbContext();
+  let runId = `scheduled-data-api:unresolved:${Date.now()}`;
+  let sourceWindow = null;
   let transactionId = null;
 
   try {
     const config = await getRollerConfig();
-    const token = await getRollerAccessToken(config);
+    const venueId = requiredEnv('ROLLER_DATA_SYNC_VENUE_ID');
+    sourceWindow = await resolveSourceWindow(event, context, config.env, venueId);
+    const controls = resolveControls(event, sourceWindow);
+    const bookingRetentionDays =
+      positiveInteger(process.env.ROLLER_DATA_SYNC_BOOKING_RETENTION_DAYS) || DEFAULT_BOOKING_RETENTION_DAYS;
+    const retentionCutoff = addDays(new Date().toISOString().slice(0, 10), -bookingRetentionDays);
+    runId = `scheduled-data-api:${sourceWindow.startDate}:${sourceWindow.endDate}:${Date.now()}`;
 
     await insertRun(context, {
       runId,
@@ -53,15 +68,30 @@ exports.handler = async (event = {}) => {
       sourceWindow,
     });
 
-    const controls = { maxPages, pageSize, sourceWindow };
+    const token = await getRollerAccessToken(config);
     const bookingItemRecords = await fetchDataApiRecords(config, token, '/data/bookingitems', controls);
     const ticketRecords = await fetchDataApiRecords(config, token, '/data/tickets', controls);
     const paymentRecords = await fetchDataApiRecords(config, token, '/data/bookingpayments', controls);
     const customerRecords = await fetchDataApiRecords(config, token, '/data/customers', controls);
     const productRecords = event.skipProducts ? [] : await requestProducts(config, token, '/products');
 
-    const bookingImport = normalizeBookingItems(bookingItemRecords.records);
-    const relatedImport = normalizeRelated(ticketRecords.records, paymentRecords.records, customerRecords.records);
+    const scopedBookingItemRecords = bookingItemRecords.records.filter((record) => {
+      const bookingDate = dateOrNull(record.bookingDate);
+      return bookingDate !== null && bookingDate >= retentionCutoff;
+    });
+    const bookingImport = normalizeBookingItems(scopedBookingItemRecords);
+    const storedScope = await loadApprovedBookingScope(context, config.env, venueId, retentionCutoff);
+    const approvedBookingReferences = new Set(storedScope.bookingReferences);
+    const approvedCustomerIds = new Set(storedScope.customerIds);
+    for (const booking of bookingImport.bookings) {
+      approvedBookingReferences.add(booking.bookingReference);
+      if (booking.customerId) approvedCustomerIds.add(booking.customerId);
+    }
+    const relatedImport = normalizeRelated(ticketRecords.records, paymentRecords.records, customerRecords.records, {
+      approvedBookingReferences,
+      approvedCustomerIds,
+      retentionCutoff,
+    });
     const products = event.skipProducts ? [] : flattenProducts(productRecords, config.env, venueId);
 
     const begin = await rdsClient.send(
@@ -127,9 +157,13 @@ exports.handler = async (event = {}) => {
     const sourceCounts = {
       bookingitems: bookingItemRecords.records.length,
       bookingitemsTotalItems: bookingItemRecords.totalItems,
+      bookingitemsWithinRetention: scopedBookingItemRecords.length,
+      providerWindowCount: bookingItemRecords.providerWindowCount,
       customers: customerRecords.records.length,
+      customersApproved: relatedImport.customers.length,
       customersTotalItems: customerRecords.totalItems,
       payments: paymentRecords.records.length,
+      paymentsApproved: relatedImport.payments.length,
       paymentsTotalItems: paymentRecords.totalItems,
       products: products.length,
       skippedBookingitems: bookingImport.skippedRecords,
@@ -137,6 +171,7 @@ exports.handler = async (event = {}) => {
       skippedPayments: relatedImport.skippedPayments,
       skippedTickets: relatedImport.skippedTickets,
       tickets: ticketRecords.records.length,
+      ticketsApproved: relatedImport.tickets.length,
       ticketsTotalItems: ticketRecords.totalItems,
     };
 
@@ -145,8 +180,8 @@ exports.handler = async (event = {}) => {
     const summary = {
       correlationId,
       durationMs: Date.now() - Date.parse(startedAt),
-      maxPages,
-      pageSize,
+      maxPages: controls.maxPages,
+      pageSize: controls.pageSize,
       runId,
       sourceWindow,
       status: 'succeeded',
@@ -154,6 +189,7 @@ exports.handler = async (event = {}) => {
       upserts,
     };
 
+    emitBookingIndexRunMetric(true, upserts.bookings);
     console.info(JSON.stringify(summary));
     return summary;
   } catch (error) {
@@ -168,6 +204,7 @@ exports.handler = async (event = {}) => {
     }
 
     await safeFinishFailedRun(context, runId, error);
+    emitBookingIndexRunMetric(false, 0);
     console.error(
       JSON.stringify({
         correlationId,
@@ -181,14 +218,50 @@ exports.handler = async (event = {}) => {
   }
 };
 
-function resolveSourceWindow(event) {
+async function resolveSourceWindow(event, context, rollerEnv, venueId) {
   const eventStart = stringOrNull(event.startDate);
   const eventEnd = stringOrNull(event.endDate);
   const today = new Date().toISOString().slice(0, 10);
-  const startDate = eventStart || addDays(today, -1);
-  const endDate = eventEnd || addDays(startDate, 1);
+  const isLive = rollerEnv === 'live';
+
+  if (Boolean(eventStart) !== Boolean(eventEnd)) {
+    throw new Error('Data API sync startDate and endDate must be supplied together.');
+  }
+
+  if (isLive) {
+    if (event.source === 'eventbridge.daily') {
+      if (eventStart || eventEnd) {
+        throw new Error('Scheduled Live sync derives its own overlap window.');
+      }
+    } else if (event.source === 't0196.backfill') {
+      if (event.approval !== LIVE_DATA_SYNC_APPROVAL || !eventStart || !eventEnd) {
+        throw new Error('Live backfill requires the exact T0196 approval and explicit dates.');
+      }
+    } else {
+      throw new Error('Live data sync accepts only the scheduled or guarded T0196 backfill source.');
+    }
+  }
+
+  let startDate = eventStart;
+  let endDate = eventEnd;
+  if (!startDate || !endDate) {
+    const latestEndDate = await getLatestSuccessfulWindowEnd(context, rollerEnv, venueId);
+    const safeLatestEndDate = latestEndDate && latestEndDate < today ? latestEndDate : today;
+    startDate = addDays(safeLatestEndDate, -1);
+    endDate = today;
+  }
 
   validateDateWindow(startDate, endDate);
+
+  if (isLive) {
+    if (startDate < addDays(today, -366)) {
+      throw new Error('Live data sync startDate cannot be more than 366 days before today.');
+    }
+    if (endDate > addDays(today, 1)) {
+      throw new Error('Live data sync endDate cannot be later than tomorrow.');
+    }
+  }
+
   return { endDate, startDate };
 }
 
@@ -200,9 +273,78 @@ function validateDateWindow(startDate, endDate) {
   if (endDate <= startDate) {
     throw new Error('Data API sync endDate must be after startDate.');
   }
+
+  const maxWindowDays =
+    positiveInteger(process.env.ROLLER_DATA_SYNC_MAX_WINDOW_DAYS) || DEFAULT_MAX_WINDOW_DAYS;
+  if (dateDifferenceDays(startDate, endDate) > maxWindowDays) {
+    throw new Error(`Data API sync window cannot exceed ${maxWindowDays} days.`);
+  }
+}
+
+function resolveControls(event, sourceWindow) {
+  const configuredPageSize =
+    positiveInteger(process.env.ROLLER_DATA_SYNC_PAGE_SIZE) || DEFAULT_PAGE_SIZE;
+  const configuredMaxPages =
+    positiveInteger(process.env.ROLLER_DATA_SYNC_MAX_PAGES) || DEFAULT_MAX_PAGES;
+  const requestedPageSize = positiveInteger(event.pageSize);
+  const requestedMaxPages = positiveInteger(event.maxPages);
+
+  if (requestedPageSize && requestedPageSize > configuredPageSize) {
+    throw new Error('Data API sync pageSize cannot exceed the deployed bound.');
+  }
+  if (requestedMaxPages && requestedMaxPages > configuredMaxPages) {
+    throw new Error('Data API sync maxPages cannot exceed the deployed bound.');
+  }
+
+  return {
+    maxPages: requestedMaxPages || configuredMaxPages,
+    pageSize: requestedPageSize || configuredPageSize,
+    sourceWindow,
+  };
+}
+
+async function getLatestSuccessfulWindowEnd(context, rollerEnv, venueId) {
+  const result = await executeStatement(
+    context,
+    `SELECT date_range_end::text
+       FROM jumpyard.booking_seed_runs
+      WHERE roller_env = :rollerEnv
+        AND venue_id = :venueId
+        AND status = 'succeeded'
+      ORDER BY finished_at DESC NULLS LAST, started_at DESC
+      LIMIT 1`,
+    [stringParameter('rollerEnv', rollerEnv), stringParameter('venueId', venueId)],
+  );
+  return stringOrNull(result.records[0]?.[0]?.stringValue);
 }
 
 async function fetchDataApiRecords(config, token, endpointPath, controls) {
+  const records = [];
+  let totalItems = 0;
+  let totalItemsKnown = true;
+  let totalPages = 0;
+  const providerWindows = buildDailyWindows(controls.sourceWindow);
+
+  for (const providerWindow of providerWindows) {
+    const result = await fetchDataApiWindow(config, token, endpointPath, {
+      ...controls,
+      sourceWindow: providerWindow,
+    });
+    records.push(...result.records);
+    if (result.totalItems === null) totalItemsKnown = false;
+    else totalItems += result.totalItems;
+    if (result.totalPages !== null) totalPages += result.totalPages;
+  }
+
+  return {
+    providerWindowCount: providerWindows.length,
+    records,
+    totalItems: totalItemsKnown ? totalItems : null,
+    totalPages,
+  };
+}
+
+async function fetchDataApiWindow(config, token, endpointPath, controls) {
   const records = [];
   let totalItems = null;
   let totalPages = null;
@@ -215,19 +357,17 @@ async function fetchDataApiRecords(config, token, endpointPath, controls) {
     url.searchParams.set('pageNumber', String(pageNumber));
     url.searchParams.set('pageSize', String(controls.pageSize));
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        accept: 'application/json',
-        authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+    const response = await requestRoller(
+      url,
+      {
+        method: 'GET',
+        headers: {
+          accept: 'application/json',
+          authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+        },
       },
-    });
-    emitRollerApiMetric({
-      method: 'GET',
-      operation: rollerOperationFromEndpointPath(endpointPath),
-      status: response.status,
-      ok: response.ok,
-    });
+      rollerOperationFromEndpointPath(endpointPath),
+    );
     const body = await readJsonResponse(response);
 
     if (!response.ok) {
@@ -248,23 +388,27 @@ async function fetchDataApiRecords(config, token, endpointPath, controls) {
     pageNumber += 1;
   }
 
-  return { records, totalItems };
+  if (totalPages !== null && totalPages > controls.maxPages) {
+    throw new Error(
+      `Roller Data API response from ${endpointPath} requires ${totalPages} pages, above the ${controls.maxPages} page bound.`,
+    );
+  }
+
+  return { records, totalItems, totalPages };
 }
 
 async function requestProducts(config, token, endpointPath) {
-  const response = await fetch(buildRollerUrl(config.baseUrl, endpointPath), {
-    method: 'GET',
-    headers: {
-      accept: 'application/json',
-      authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+  const response = await requestRoller(
+    buildRollerUrl(config.baseUrl, endpointPath),
+    {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+      },
     },
-  });
-  emitRollerApiMetric({
-    method: 'GET',
-    operation: rollerOperationFromEndpointPath(endpointPath),
-    status: response.status,
-    ok: response.ok,
-  });
+    rollerOperationFromEndpointPath(endpointPath),
+  );
   const body = await readJsonResponse(response);
 
   if (!response.ok) {
@@ -372,7 +516,7 @@ function normalizeBookingItem(record, rollerUniqueId) {
   };
 }
 
-function normalizeRelated(ticketRecords, paymentRecords, customerRecords) {
+function normalizeRelated(ticketRecords, paymentRecords, customerRecords, scope) {
   const tickets = [];
   const payments = [];
   const customers = [];
@@ -382,23 +526,63 @@ function normalizeRelated(ticketRecords, paymentRecords, customerRecords) {
 
   for (const record of ticketRecords) {
     const normalized = normalizeTicket(record);
-    if (normalized) tickets.push(normalized);
+    const withinRetention =
+      normalized?.bookingDate === null || normalized?.bookingDate >= scope.retentionCutoff;
+    if (
+      normalized &&
+      withinRetention &&
+      scope.approvedBookingReferences.has(normalized.bookingReference)
+    ) {
+      tickets.push(normalized);
+      if (normalized.rollerCustomerId) scope.approvedCustomerIds.add(normalized.rollerCustomerId);
+    }
     else skippedTickets += 1;
   }
 
   for (const record of paymentRecords) {
     const normalized = normalizePayment(record);
-    if (normalized) payments.push(normalized);
+    if (normalized && scope.approvedBookingReferences.has(normalized.bookingReference)) payments.push(normalized);
     else skippedPayments += 1;
   }
 
   for (const record of customerRecords) {
     const normalized = normalizeCustomer(record);
-    if (normalized) customers.push(normalized);
+    if (
+      normalized &&
+      normalized.rollerCustomerId &&
+      scope.approvedCustomerIds.has(normalized.rollerCustomerId)
+    ) customers.push(normalized);
     else skippedCustomers += 1;
   }
 
   return { customers, payments, skippedCustomers, skippedPayments, skippedTickets, tickets };
+}
+
+async function loadApprovedBookingScope(context, rollerEnv, venueId, retentionCutoff) {
+  const result = await executeStatement(
+    context,
+    `SELECT booking_reference,
+            NULLIF(normalized_summary->>'bookingCustomerId', '')
+       FROM jumpyard.roller_bookings
+      WHERE roller_env = :rollerEnv
+        AND venue_id = :venueId
+        AND booking_date >= CAST(:retentionCutoff AS date)
+        AND is_tombstoned = false`,
+    [
+      stringParameter('rollerEnv', rollerEnv),
+      stringParameter('venueId', venueId),
+      stringParameter('retentionCutoff', retentionCutoff),
+    ],
+  );
+  const bookingReferences = [];
+  const customerIds = [];
+  for (const record of result.records) {
+    const bookingReference = stringOrNull(record?.[0]?.stringValue);
+    const customerId = stringOrNull(record?.[1]?.stringValue);
+    if (bookingReference) bookingReferences.push(bookingReference);
+    if (customerId) customerIds.push(customerId);
+  }
+  return { bookingReferences, customerIds };
 }
 
 function normalizeTicket(record) {
@@ -795,17 +979,27 @@ async function upsertTicket(context, ticket, transactionId) {
       ON item.booking_item_id = :bookingItemId
     WHERE booking.booking_reference = :bookingReference
     ON CONFLICT (ticket_id) DO UPDATE SET
-      roller_unique_id = EXCLUDED.roller_unique_id,
-      booking_item_key = EXCLUDED.booking_item_key,
-      booking_item_id = EXCLUDED.booking_item_id,
-      roller_customer_id = EXCLUDED.roller_customer_id,
-      custom_ticket_id = EXCLUDED.custom_ticket_id,
-      product_id = EXCLUDED.product_id,
-      booking_date = EXCLUDED.booking_date,
-      expiry_date = EXCLUDED.expiry_date,
-      membership_status = EXCLUDED.membership_status,
-      last_seen_from_roller_at = EXCLUDED.last_seen_from_roller_at,
-      ticket_summary = EXCLUDED.ticket_summary,
+      roller_unique_id = (
+        SELECT booking.roller_unique_id
+        FROM jumpyard.roller_bookings AS booking
+        WHERE booking.booking_reference = :bookingReference
+        LIMIT 1
+      ),
+      booking_item_key = (
+        SELECT item.booking_item_key
+        FROM jumpyard.roller_booking_items AS item
+        WHERE item.booking_item_id = :bookingItemId
+        LIMIT 1
+      ),
+      booking_item_id = :bookingItemId,
+      roller_customer_id = :rollerCustomerId,
+      custom_ticket_id = :customTicketId,
+      product_id = :productId,
+      booking_date = CAST(:bookingDate AS date),
+      expiry_date = CAST(:expiryDate AS date),
+      membership_status = NULLIF(:membershipStatus, ''),
+      last_seen_from_roller_at = now(),
+      ticket_summary = CAST(:ticketSummary AS jsonb),
       updated_at = now()`,
     [
       stringParameter('ticketId', ticket.ticketId),
@@ -850,12 +1044,17 @@ async function upsertPayment(context, payment, transactionId) {
     FROM jumpyard.roller_bookings AS booking
     WHERE booking.booking_reference = :bookingReference
     ON CONFLICT (payment_key) DO UPDATE SET
-      roller_unique_id = EXCLUDED.roller_unique_id,
-      booking_payment_id = EXCLUDED.booking_payment_id,
-      payment_method = EXCLUDED.payment_method,
-      amount_cents = EXCLUDED.amount_cents,
-      created_date = EXCLUDED.created_date,
-      payment_summary = EXCLUDED.payment_summary,
+      roller_unique_id = (
+        SELECT booking.roller_unique_id
+        FROM jumpyard.roller_bookings AS booking
+        WHERE booking.booking_reference = :bookingReference
+        LIMIT 1
+      ),
+      booking_payment_id = :bookingPaymentId,
+      payment_method = :paymentMethod,
+      amount_cents = :amountCents,
+      created_date = CAST(:createdDate AS timestamptz),
+      payment_summary = CAST(:paymentSummary AS jsonb),
       updated_at = now()`,
     [
       stringParameter('paymentKey', payment.paymentKey),
@@ -904,18 +1103,21 @@ async function upsertCustomer(context, customer, transactionId) {
       CAST(:lastSeenFromRollerAt AS timestamptz)
     )
     ON CONFLICT (guest_profile_id) DO UPDATE SET
-      roller_customer_id = EXCLUDED.roller_customer_id,
-      email = EXCLUDED.email,
-      email_hash = EXCLUDED.email_hash,
-      email_masked = EXCLUDED.email_masked,
-      contact_number = EXCLUDED.contact_number,
-      contact_number_hash = EXCLUDED.contact_number_hash,
-      contact_number_masked = EXCLUDED.contact_number_masked,
-      sms_ready = EXCLUDED.sms_ready,
-      contact_source = EXCLUDED.contact_source,
-      latest_booking_context = EXCLUDED.latest_booking_context,
-      last_seen_from_roller_at = EXCLUDED.last_seen_from_roller_at,
-      updated_at = now()`,
+      roller_customer_id = :rollerCustomerId,
+      email = :email,
+      email_hash = :emailHash,
+      email_masked = :emailMasked,
+      contact_number = :contactNumber,
+      contact_number_hash = :contactNumberHash,
+      contact_number_masked = :contactNumberMasked,
+      sms_ready = :smsReady,
+      contact_source = '${SOURCE_CUSTOMERS}',
+      latest_booking_context = CAST(:latestBookingContext AS jsonb),
+      last_seen_from_roller_at = CAST(:lastSeenFromRollerAt AS timestamptz),
+      updated_at = now()
+    WHERE jumpyard.guest_profiles.last_seen_from_roller_at IS NULL
+       OR CAST(:lastSeenFromRollerAt AS timestamptz) IS NULL
+       OR CAST(:lastSeenFromRollerAt AS timestamptz) >= jumpyard.guest_profiles.last_seen_from_roller_at`,
     [
       stringParameter('guestProfileId', customer.guestProfileId),
       stringParameter('rollerCustomerId', customer.rollerCustomerId),
@@ -1034,18 +1236,21 @@ async function getRollerAccessToken(config) {
     return cachedToken;
   }
 
-  const response = await fetch(buildRollerUrl(config.baseUrl, '/token'), {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/json',
+  const response = await requestRoller(
+    buildRollerUrl(config.baseUrl, '/token'),
+    {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+      }),
     },
-    body: JSON.stringify({
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-    }),
-  });
-  emitRollerApiMetric({ method: 'POST', operation: 'oauth_token', status: response.status, ok: response.ok });
+    'oauth_token',
+  );
   const body = await readJsonResponse(response);
 
   if (!response.ok) {
@@ -1068,10 +1273,10 @@ async function getRollerAccessToken(config) {
 
 function validateRollerConfig(config) {
   const errors = [];
-
-  if (config.env !== 'playground') {
-    errors.push('ROLLER_ENV must be exactly "playground".');
-  }
+  const deploymentEnvironment = stringOrNull(process.env.JUMPYARD_ENVIRONMENT);
+  const liveEnabled = process.env.ENABLE_ROLLER_LIVE_DATA_SYNC === 'true';
+  const liveApproval = stringOrNull(process.env.ROLLER_DATA_SYNC_LIVE_APPROVAL);
+  const venueId = stringOrNull(process.env.ROLLER_DATA_SYNC_VENUE_ID);
 
   if (!config.clientId.trim()) {
     errors.push('Roller client id is required.');
@@ -1085,12 +1290,25 @@ function validateRollerConfig(config) {
     const parsedBaseUrl = new URL(config.baseUrl);
     const searchableUrl = `${parsedBaseUrl.hostname}${parsedBaseUrl.pathname}`;
 
-    if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
-      errors.push('ROLLER_BASE_URL looks like production/live and is not allowed.');
-    }
-
-    if (!PLAYGROUND_URL_MARKER.test(searchableUrl)) {
-      errors.push('ROLLER_BASE_URL must clearly point to a playground environment.');
+    if (config.env === 'playground') {
+      if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
+        errors.push('Playground ROLLER_BASE_URL looks like production/live and is not allowed.');
+      }
+      if (!PLAYGROUND_URL_MARKER.test(searchableUrl)) {
+        errors.push('Playground ROLLER_BASE_URL must clearly point to a playground environment.');
+      }
+    } else if (config.env === 'live') {
+      if (
+        deploymentEnvironment !== LIVE_ENVIRONMENT ||
+        !liveEnabled ||
+        liveApproval !== LIVE_DATA_SYNC_APPROVAL ||
+        venueId !== LIVE_VENUE_ID ||
+        parsedBaseUrl.origin !== LIVE_BASE_URL
+      ) {
+        errors.push('Roller Live data sync requires the exact approved park-test/Nacka T0196 boundary.');
+      }
+    } else {
+      errors.push('ROLLER_ENV must be exactly "playground" or the approved "live" value.');
     }
   } catch {
     errors.push('ROLLER_BASE_URL must be a valid URL.');
@@ -1118,6 +1336,77 @@ function buildRollerUrl(baseUrl, endpointPath) {
   const parsedBaseUrl = new URL(baseUrl);
   const basePath = parsedBaseUrl.pathname.replace(/\/$/, '');
   return new URL(`${basePath}${endpointPath}`, parsedBaseUrl.origin);
+}
+
+async function requestRoller(url, init, operation) {
+  const maxRetries = DEFAULT_RETRY_ATTEMPTS;
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    await waitForRollerRequestSlot();
+    const response = await fetchProvider(url, init);
+    emitRollerApiMetric({
+      method: init.method || 'GET',
+      operation,
+      status: response.status,
+      ok: response.ok,
+    });
+
+    const retryable = response.status === 429 || (response.status >= 500 && response.status <= 599);
+    if (!retryable || attempt === maxRetries) return response;
+
+    if (typeof response.arrayBuffer === 'function') {
+      await response.arrayBuffer().catch(() => undefined);
+    }
+    const retryAfterMs = retryAfterMilliseconds(response.headers?.get?.('retry-after'));
+    const backoffMs = Math.min(30_000, 1000 * 2 ** attempt);
+    await sleepProvider(Math.max(backoffMs, retryAfterMs));
+  }
+
+  throw new Error('Roller request retry loop ended unexpectedly.');
+}
+
+async function waitForRollerRequestSlot() {
+  const requestIntervalMs = Math.max(
+    DEFAULT_REQUEST_INTERVAL_MS,
+    positiveInteger(process.env.ROLLER_DATA_SYNC_REQUEST_INTERVAL_MS) || DEFAULT_REQUEST_INTERVAL_MS,
+  );
+  if (lastRollerRequestStartedAt !== null) {
+    const waitMs = requestIntervalMs - (nowProvider() - lastRollerRequestStartedAt);
+    if (waitMs > 0) await sleepProvider(waitMs);
+  }
+  lastRollerRequestStartedAt = nowProvider();
+}
+
+function retryAfterMilliseconds(value) {
+  if (!value) return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(30_000, seconds * 1000);
+  const dateMs = Date.parse(value);
+  if (!Number.isFinite(dateMs)) return 0;
+  return Math.min(30_000, Math.max(0, dateMs - nowProvider()));
+}
+
+function emitBookingIndexRunMetric(succeeded, importedBookings) {
+  console.log(
+    JSON.stringify({
+      _aws: {
+        Timestamp: Date.now(),
+        CloudWatchMetrics: [
+          {
+            Namespace: 'JumpYard/Cloud',
+            Dimensions: [['Environment', 'Handler']],
+            Metrics: [
+              { Name: 'BookingIndexSyncSuccess', Unit: 'Count' },
+              { Name: 'BookingIndexImportedBookings', Unit: 'Count' },
+            ],
+          },
+        ],
+      },
+      Environment: sanitizeMetricValue(process.env.RESOURCE_PREFIX || 'unknown'),
+      Handler: 'data-sync',
+      BookingIndexSyncSuccess: succeeded ? 1 : 0,
+      BookingIndexImportedBookings: Math.max(0, Number(importedBookings) || 0),
+    }),
+  );
 }
 
 function emitRollerApiMetric({ method, operation, status, ok }) {
@@ -1347,6 +1636,21 @@ function addDays(isoDate, days) {
   return date.toISOString().slice(0, 10);
 }
 
+function buildDailyWindows(sourceWindow) {
+  const windows = [];
+  let cursor = sourceWindow.startDate;
+  while (cursor < sourceWindow.endDate) {
+    const next = addDays(cursor, 1);
+    windows.push({ startDate: cursor, endDate: next < sourceWindow.endDate ? next : sourceWindow.endDate });
+    cursor = next;
+  }
+  return windows;
+}
+
+function dateDifferenceDays(startDate, endDate) {
+  return Math.round((Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86_400_000);
+}
+
 function isTombstoned(status) {
   const normalized = String(status || '').toLowerCase();
   return normalized === 'cancelled' || normalized === 'deleted';
@@ -1387,3 +1691,30 @@ function createCorrelationId() {
 function safeErrorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
+
+exports.__test = {
+  addDays,
+  buildDailyWindows,
+  dateDifferenceDays,
+  normalizeBookingItems,
+  normalizeRelated,
+  requestRoller,
+  resolveControls,
+  retryAfterMilliseconds,
+  validateDateWindow,
+  validateRollerConfig,
+  reset() {
+    cachedRollerConfig = null;
+    cachedRollerConfigExpiresAt = 0;
+    cachedToken = null;
+    lastRollerRequestStartedAt = null;
+    nowProvider = () => Date.now();
+    sleepProvider = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+    fetchProvider = (...args) => fetch(...args);
+  },
+  setHooks(hooks = {}) {
+    if (typeof hooks.now === 'function') nowProvider = hooks.now;
+    if (typeof hooks.sleep === 'function') sleepProvider = hooks.sleep;
+    if (typeof hooks.fetch === 'function') fetchProvider = hooks.fetch;
+  },
+};
