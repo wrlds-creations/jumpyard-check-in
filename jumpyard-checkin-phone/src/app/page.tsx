@@ -32,6 +32,7 @@ import {
     getBuyFlowRecoveryTargetState,
     isPrePaymentBuyFlowRecovery,
     readBuyFlowRecovery,
+    startBuyFlowRecoveryCleanup,
     writeBuyFlowRecovery,
     type BuyFlowRecoverySnapshot,
 } from '@/flow/buyFlowRecovery';
@@ -320,6 +321,8 @@ function CheckInFlow() {
     const [buyRecoveryStatus, setBuyRecoveryStatus] = useState<BuyRecoveryStatus | null>(null);
     const addonsAvailabilityPrefetchRef = useRef<AddonsAvailabilityPrefetch | null>(null);
     const [addonsAvailabilityPrefetch, setAddonsAvailabilityPrefetch] = useState<AddonsAvailabilityPrefetch | null>(null);
+
+    useEffect(() => startBuyFlowRecoveryCleanup(), []);
 
     useEffect(() => {
         if (!linkToken || typeof window === 'undefined') return;

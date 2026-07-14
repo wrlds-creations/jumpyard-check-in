@@ -68,6 +68,10 @@
     "validate:t0193-service-auth": "node ../scripts/validate-t0193-service-auth.js",
     "validate:t0194-staff-identity-infra": "node ../scripts/validate-t0194-staff-identity-infra.js",
     "validate:t0194-staff-identity-ops": "ts-node --prefer-ts-exts scripts/manage-staff-identity.ts --self-test",
+    "validate:t0195-data-lifecycle": "node ../scripts/validate-t0195-data-lifecycle.js",
+    "validate:t0195-least-privilege": "ts-node --prefer-ts-exts scripts/validate-t0195-least-privilege.ts",
+    "validate:t0195-pin-pepper-lifecycle": "node ../scripts/validate-t0195-pin-pepper-lifecycle.js",
+    "validate:t0195-aurora-recovery": "node ../scripts/validate-t0195-aurora-recovery.js",
     "validate:roller-live-contact-resolver": "ts-node --prefer-ts-exts scripts/roller-live-contact-resolver.ts --self-test",
     "validate:roller-live-readonly-preflight": "ts-node --prefer-ts-exts scripts/roller-live-readonly-preflight.ts --self-test",
     "validate:roller-live-catalog-index-readiness": "ts-node --prefer-ts-exts scripts/roller-live-catalog-index-readiness.ts --self-test",
@@ -75,7 +79,7 @@
     "validate:roller-live-webhook-register": "ts-node --prefer-ts-exts scripts/roller-live-webhook-register.ts --self-test",
     "validate:roller-live-quote-smoke": "ts-node --prefer-ts-exts scripts/roller-live-quote-smoke.ts --self-test",
     "validate:roller-live-draft-smoke": "ts-node --prefer-ts-exts scripts/roller-live-draft-smoke.ts --self-test",
-    "check": "npm run build && npm run validate:config-guards && npm run validate:park-test-synth && npm run validate:t0190-safety-gates && npm run validate:t0192-request-item-dates && npm run validate:t0193-api-protection && npm run validate:t0193-service-auth && npm run validate:t0194-staff-identity-infra && npm run validate:t0194-staff-identity-ops && npm run validate:roller-live-readonly-preflight && npm run validate:roller-live-catalog-index-readiness && npm run validate:roller-live-contact-resolver && npm run validate:roller-live-webhook-dry-run && npm run validate:roller-live-webhook-register && npm run validate:roller-live-quote-smoke && npm run validate:roller-live-draft-smoke && npm run synth:example"
+    "check": "npm run build && npm run validate:config-guards && npm run validate:park-test-synth && npm run validate:t0190-safety-gates && npm run validate:t0192-request-item-dates && npm run validate:t0193-api-protection && npm run validate:t0193-service-auth && npm run validate:t0194-staff-identity-infra && npm run validate:t0194-staff-identity-ops && npm run validate:t0195-data-lifecycle && npm run validate:t0195-least-privilege && npm run validate:t0195-pin-pepper-lifecycle && npm run validate:t0195-aurora-recovery && npm run validate:roller-live-readonly-preflight && npm run validate:roller-live-catalog-index-readiness && npm run validate:roller-live-contact-resolver && npm run validate:roller-live-webhook-dry-run && npm run validate:roller-live-webhook-register && npm run validate:roller-live-quote-smoke && npm run validate:roller-live-draft-smoke && npm run synth:example"
   },
   "dependencies": {
     "@aws-sdk/client-cloudformation": "^3.1085.0",

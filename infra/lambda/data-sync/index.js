@@ -21,12 +21,14 @@ const SOURCE_CUSTOMERS = 'scheduled_data_api_sync_customers';
 const SOURCE_PRODUCTS = 'scheduled_data_api_sync_products';
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
+const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
 const ssmClient = new SSMClient({});
 
 let cachedRollerConfig = null;
+let cachedRollerConfigExpiresAt = 0;
 let cachedToken = null;
 
 exports.handler = async (event = {}) => {
@@ -991,6 +993,7 @@ async function enrichBookingItems(context, rollerEnv, venueId, transactionId) {
      WHERE product.roller_env = :rollerEnv
        AND product.venue_id = :venueId
        AND product.summary ->> 'id' = item.product_id
+       AND COALESCE(product.expires_at, product.fetched_at + interval '24 hours') > now()
        AND item.product_id IS NOT NULL`,
     [stringParameter('rollerEnv', rollerEnv), stringParameter('venueId', venueId)],
     transactionId,
@@ -1000,7 +1003,8 @@ async function enrichBookingItems(context, rollerEnv, venueId, transactionId) {
 }
 
 async function getRollerConfig() {
-  if (cachedRollerConfig) return cachedRollerConfig;
+  const now = Date.now();
+  if (cachedRollerConfig && cachedRollerConfigExpiresAt > now) return cachedRollerConfig;
 
   const [secretResponse, envResponse, baseUrlResponse] = await Promise.all([
     secretsClient.send(new GetSecretValueCommand({ SecretId: requiredEnv('ROLLER_CREDENTIALS_SECRET_ARN') })),
@@ -1021,6 +1025,7 @@ async function getRollerConfig() {
   }
 
   cachedRollerConfig = config;
+  cachedRollerConfigExpiresAt = now + PROVIDER_CONFIG_CACHE_MS;
   return cachedRollerConfig;
 }
 

@@ -73,7 +73,11 @@ function iamPoliciesReference(template, logicalId) {
 }
 
 function validateParkTest(template) {
-  assert.equal(Object.keys(template.Resources).length, 154);
+  assert.equal(
+    Object.keys(template.Resources).length,
+    170,
+    'T0194 remains intact inside the 154-resource deployed baseline plus the exact 16-resource T0195 database-identity delta.',
+  );
 
   const [userPoolId, userPool] = onlyResource(template, 'AWS::Cognito::UserPool');
   const [clientId, client] = onlyResource(template, 'AWS::Cognito::UserPoolClient');

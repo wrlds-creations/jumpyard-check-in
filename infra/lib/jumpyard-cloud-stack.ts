@@ -1,4 +1,4 @@
-import { Stack, StackProps, Tags, CfnOutput, Duration, RemovalPolicy, ArnFormat } from 'aws-cdk-lib';
+import { Stack, StackProps, Tags, CfnOutput, CustomResource, Duration, RemovalPolicy, ArnFormat } from 'aws-cdk-lib';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
@@ -44,7 +44,9 @@ interface HandlerResources {
   readonly checkinSmsBaseUrl: string;
   readonly rollerCredentialsSecret: secretsmanager.Secret;
   readonly databaseClusterArn: string;
-  readonly databaseSecret: secretsmanager.Secret;
+  readonly databaseAdminSecret: secretsmanager.Secret;
+  readonly databaseRuntimeRoleProvisioner?: CustomResource;
+  readonly databaseRuntimeSecrets?: Readonly<Record<RuntimeDatabaseHandler, secretsmanager.Secret>>;
   readonly rawPayloadBucket: s3.Bucket;
   readonly rollerOperationsQueue: sqs.Queue;
   readonly eventBus: events.EventBus;
@@ -60,6 +62,20 @@ interface HandlerResources {
   readonly safetyGates: JumpYardCloudConfig['safetyGates'];
   readonly wrldsEnvironment: string;
 }
+
+type RuntimeDatabaseHandler = 'booking' | 'data-sync' | 'lookup' | 'redeem' | 'session' | 'webhook';
+
+const RUNTIME_DATABASE_ROLES: Readonly<Record<RuntimeDatabaseHandler, string>> = {
+  booking: 'jumpyard_booking_runtime',
+  'data-sync': 'jumpyard_data_sync_runtime',
+  lookup: 'jumpyard_lookup_runtime',
+  redeem: 'jumpyard_redeem_runtime',
+  session: 'jumpyard_session_runtime',
+  webhook: 'jumpyard_webhook_runtime',
+};
+
+const LIFECYCLE_DATABASE_ROLE = 'jumpyard_lifecycle_runtime';
+const DATABASE_RUNTIME_ROLE_CONFIGURATION_VERSION = 't0195-v1';
 
 interface CognitoAdminIdentityResources {
   readonly authorizer: apigatewayv2.CfnAuthorizer;
@@ -493,6 +509,57 @@ export class JumpYardCloudStack extends Stack {
       },
     });
 
+    for (const retainedSecret of [
+      rollerCredentialsSecret,
+      webhookDevTokenSecret,
+      redeemDevTokenSecret,
+      staffAuthSecret,
+      checkinLinkDevTokenSecret,
+      databaseSecret,
+    ]) {
+      retainedSecret.applyRemovalPolicy(RemovalPolicy.RETAIN);
+    }
+
+    const restrictedDatabaseAccessRequired = config.tags['WRLDS:Environment'] !== 'dev';
+    const databaseRuntimeSecrets = restrictedDatabaseAccessRequired
+      ? (Object.fromEntries(
+          (Object.entries(RUNTIME_DATABASE_ROLES) as Array<[RuntimeDatabaseHandler, string]>).map(
+            ([handlerName, username]) => {
+              const logicalName = handlerName
+                .split('-')
+                .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+                .join('');
+              const secret = new secretsmanager.Secret(this, `DatabaseRuntime${logicalName}Secret`, {
+                secretName: `/${config.resourcePrefix}/aurora/runtime/${handlerName}`,
+                description: `Restricted Aurora Data API credentials for the ${handlerName} Lambda only.`,
+                generateSecretString: {
+                  secretStringTemplate: JSON.stringify({ username }),
+                  generateStringKey: 'password',
+                  excludePunctuation: true,
+                  passwordLength: 48,
+                },
+              });
+              secret.applyRemovalPolicy(RemovalPolicy.RETAIN);
+              return [handlerName, secret];
+            },
+          ),
+        ) as Record<RuntimeDatabaseHandler, secretsmanager.Secret>)
+      : undefined;
+
+    const databaseLifecycleSecret = restrictedDatabaseAccessRequired
+      ? new secretsmanager.Secret(this, 'DatabaseLifecycleSecret', {
+          secretName: `/${config.resourcePrefix}/aurora/lifecycle`,
+          description: 'Restricted Aurora Data API credentials for approved lifecycle maintenance only.',
+          generateSecretString: {
+            secretStringTemplate: JSON.stringify({ username: LIFECYCLE_DATABASE_ROLE }),
+            generateStringKey: 'password',
+            excludePunctuation: true,
+            passwordLength: 48,
+          },
+        })
+      : undefined;
+    databaseLifecycleSecret?.applyRemovalPolicy(RemovalPolicy.RETAIN);
+
     const databaseClusterIdentifier = `${config.resourcePrefix}-aurora`;
     const databaseClusterArn = Stack.of(this).formatArn({
       service: 'rds',
@@ -530,6 +597,114 @@ export class JumpYardCloudStack extends Stack {
       publiclyAccessible: false,
     });
     databaseWriter.applyRemovalPolicy(RemovalPolicy.RETAIN);
+
+    let databaseRuntimeRoleProvisioner: CustomResource | undefined;
+    if (databaseRuntimeSecrets && databaseLifecycleSecret) {
+      const provisionerFunctionName = `${config.resourcePrefix}-database-runtime-role-provisioner`;
+      const provisionerLogGroup = new logs.LogGroup(this, 'DatabaseRuntimeRoleProvisionerLogGroup', {
+        logGroupName: `/aws/lambda/${provisionerFunctionName}`,
+        retention: logs.RetentionDays.ONE_MONTH,
+        removalPolicy: RemovalPolicy.DESTROY,
+      });
+      const provisioner = new lambda.Function(this, 'DatabaseRuntimeRoleProvisionerHandler', {
+        functionName: provisionerFunctionName,
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: 'index.handler',
+        timeout: Duration.minutes(2),
+        environment: {
+          DATABASE_ADMIN_SECRET_ARN: databaseSecret.secretArn,
+          DATABASE_CLUSTER_ARN: databaseClusterArn,
+          RUNTIME_ROLE_SECRETS_JSON: JSON.stringify(
+            Object.fromEntries([
+              ...(Object.entries(RUNTIME_DATABASE_ROLES) as Array<[RuntimeDatabaseHandler, string]>).map(
+                ([handlerName, roleName]) => [roleName, databaseRuntimeSecrets[handlerName].secretArn],
+              ),
+              [LIFECYCLE_DATABASE_ROLE, databaseLifecycleSecret.secretArn],
+            ]),
+          ),
+        },
+        code: lambda.Code.fromInline(`
+const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
+const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client-secrets-manager');
+const rds = new RDSDataClient({});
+const secrets = new SecretsManagerClient({});
+const allowedRoles = ${JSON.stringify([
+  ...Object.values(RUNTIME_DATABASE_ROLES),
+  LIFECYCLE_DATABASE_ROLE,
+])};
+
+exports.handler = async (event) => {
+  const physicalResourceId = 'jumpyard-database-runtime-role-provisioner-v1';
+  if (event.RequestType === 'Delete') return { PhysicalResourceId: physicalResourceId };
+
+  const clusterArn = process.env.DATABASE_CLUSTER_ARN;
+  const adminSecretArn = process.env.DATABASE_ADMIN_SECRET_ARN;
+  const roleSecrets = JSON.parse(process.env.RUNTIME_ROLE_SECRETS_JSON || '{}');
+  if (!clusterArn || !adminSecretArn) {
+    throw new Error('Runtime database role provisioning properties are incomplete.');
+  }
+
+  let updated = 0;
+  for (const roleName of allowedRoles) {
+    if (!/^[a-z][a-z0-9_]{2,62}$/.test(roleName) || typeof roleSecrets[roleName] !== 'string') {
+      throw new Error('Runtime database role provisioning allowlist is invalid.');
+    }
+    const response = await secrets.send(new GetSecretValueCommand({ SecretId: roleSecrets[roleName] }));
+    const secret = JSON.parse(response.SecretString || '{}');
+    if (secret.username !== roleName || !/^[A-Za-z0-9]{32,128}$/.test(secret.password || '')) {
+      throw new Error('Runtime database credential shape is invalid.');
+    }
+    const escapedPassword = secret.password.replace(/'/g, "''");
+    try {
+      await rds.send(new ExecuteStatementCommand({
+        database: 'jumpyard_cloud',
+        resourceArn: clusterArn,
+        secretArn: adminSecretArn,
+        sql: 'ALTER ROLE ' + roleName + " PASSWORD '" + escapedPassword + "' VALID UNTIL 'infinity'",
+      }));
+    } catch {
+      // Do not let a provider/database error serialize the SQL request or the
+      // generated credential into the custom-resource log stream.
+      throw new Error('Runtime database role provisioning failed.');
+    }
+    updated += 1;
+  }
+
+  return { PhysicalResourceId: physicalResourceId, Data: { UpdatedRoleCount: updated } };
+};
+`),
+      });
+      provisioner.node.addDependency(provisionerLogGroup);
+      databaseSecret.grantRead(provisioner);
+      for (const runtimeSecret of Object.values(databaseRuntimeSecrets)) runtimeSecret.grantRead(provisioner);
+      databaseLifecycleSecret.grantRead(provisioner);
+      provisioner.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['rds-data:ExecuteStatement'],
+          resources: [databaseClusterArn],
+        }),
+      );
+
+      const providerLogGroup = new logs.LogGroup(this, 'DatabaseRuntimeRoleProviderLogGroup', {
+        logGroupName: `/aws/lambda/${config.resourcePrefix}-database-runtime-role-provider`,
+        retention: logs.RetentionDays.ONE_MONTH,
+        removalPolicy: RemovalPolicy.DESTROY,
+      });
+      const provider = new cr.Provider(this, 'DatabaseRuntimeRoleProvider', {
+        onEventHandler: provisioner,
+        logGroup: providerLogGroup,
+        providerFunctionName: `${config.resourcePrefix}-database-runtime-role-provider`,
+      });
+      databaseRuntimeRoleProvisioner = new CustomResource(this, 'DatabaseRuntimeRoleProvisioning', {
+        serviceToken: provider.serviceToken,
+        properties: {
+          ConfigurationVersion: DATABASE_RUNTIME_ROLE_CONFIGURATION_VERSION,
+        },
+      });
+      databaseRuntimeRoleProvisioner.node.addDependency(databaseCluster);
+      databaseRuntimeRoleProvisioner.node.addDependency(databaseWriter);
+    }
 
     const deadLetterQueue = new sqs.Queue(this, 'RollerOperationsDeadLetterQueue', {
       queueName: `${config.resourcePrefix}-roller-ops-dlq`,
@@ -621,7 +796,9 @@ export class JumpYardCloudStack extends Stack {
       checkinSmsBaseUrl: config.bookingTimeSms.checkinBaseUrl,
       rollerCredentialsSecret,
       databaseClusterArn,
-      databaseSecret,
+      databaseAdminSecret: databaseSecret,
+      databaseRuntimeRoleProvisioner,
+      databaseRuntimeSecrets,
       rawPayloadBucket,
       rollerOperationsQueue,
       eventBus,
@@ -655,7 +832,6 @@ export class JumpYardCloudStack extends Stack {
     });
     const dataSyncHandler = this.createHandler('DataSyncHandler', 'data-sync', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'data-sync')),
-      grantOperationalWriters: false,
       memorySize: 512,
       timeout: Duration.minutes(10),
     });
@@ -1141,16 +1317,16 @@ export class JumpYardCloudStack extends Stack {
 
   private createHandler(
     id: string,
-    handlerName: string,
+    handlerName: RuntimeDatabaseHandler,
     resources: HandlerResources,
     options: {
       readonly code?: lambda.Code;
-      readonly grantOperationalWriters?: boolean;
       readonly memorySize?: number;
       readonly timeout?: Duration;
     } = {},
   ): lambda.Function {
     const functionName = `${this.stackName}-${handlerName}`;
+    const handlerDatabaseSecret = resources.databaseRuntimeSecrets?.[handlerName] ?? resources.databaseAdminSecret;
 
     const logGroup = new logs.LogGroup(this, `${id}LogGroup`, {
       logGroupName: `/aws/lambda/${functionName}`,
@@ -1164,10 +1340,7 @@ export class JumpYardCloudStack extends Stack {
       ROLLER_ENV_PARAMETER_NAME: resources.rollerEnvParameter.parameterName,
       ROLLER_BASE_URL_PARAMETER_NAME: resources.rollerBaseUrlParameter.parameterName,
       DATABASE_CLUSTER_ARN: resources.databaseClusterArn,
-      DATABASE_SECRET_ARN: resources.databaseSecret.secretArn,
-      RAW_PAYLOAD_BUCKET_NAME: resources.rawPayloadBucket.bucketName,
-      ROLLER_OPERATIONS_QUEUE_URL: resources.rollerOperationsQueue.queueUrl,
-      EVENT_BUS_NAME: resources.eventBus.eventBusName,
+      DATABASE_SECRET_ARN: handlerDatabaseSecret.secretArn,
       RESOURCE_PREFIX: resources.resourcePrefix,
       JUMPYARD_EMERGENCY_STOP: String(resources.safetyGates.emergencyStop),
       JUMPYARD_ENVIRONMENT: resources.wrldsEnvironment,
@@ -1321,12 +1494,7 @@ exports.handler = async () => ({
     if (handlerName !== 'session') {
       resources.rollerCredentialsSecret.grantRead(fn);
     }
-    resources.databaseSecret.grantRead(fn);
-    if (options.grantOperationalWriters ?? handlerName !== 'session') {
-      resources.rawPayloadBucket.grantReadWrite(fn);
-      resources.rollerOperationsQueue.grantSendMessages(fn);
-      resources.eventBus.grantPutEventsTo(fn);
-    }
+    handlerDatabaseSecret.grantRead(fn);
     if (handlerName !== 'session') {
       resources.rollerEnvParameter.grantRead(fn);
       resources.rollerBaseUrlParameter.grantRead(fn);
@@ -1339,18 +1507,34 @@ exports.handler = async () => ({
     }
     if (handlerName === 'session') {
       resources.checkinLinkDevTokenSecret.grantRead(fn);
-      fn.addToRolePolicy(
-        new iam.PolicyStatement({
-          actions: ['sns:Publish'],
-          resources: ['*'],
-        }),
-      );
-      fn.addToRolePolicy(
-        new iam.PolicyStatement({
-          actions: ['ses:SendEmail'],
-          resources: ['*'],
-        }),
-      );
+      if (resources.safetyGates.guestMessagingSendsEnabled) {
+        fn.addToRolePolicy(
+          new iam.PolicyStatement({
+            actions: ['sns:Publish'],
+            resources: ['*'],
+            conditions: {
+              StringEquals: {
+                'aws:RequestedRegion': this.region,
+              },
+            },
+          }),
+        );
+        if (resources.checkinEmailFromAddress) {
+          fn.addToRolePolicy(
+            new iam.PolicyStatement({
+              actions: ['ses:SendEmail'],
+              resources: [
+                Stack.of(this).formatArn({
+                  service: 'ses',
+                  resource: 'identity',
+                  resourceName: resources.checkinEmailFromAddress,
+                  arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
+                }),
+              ],
+            }),
+          );
+        }
+      }
     }
     if ((handlerName === 'session' || handlerName === 'redeem') && resources.staffIdentity.mode === 'legacy') {
       resources.staffAuthSecret.grantRead(fn);
@@ -1359,15 +1543,17 @@ exports.handler = async () => ({
       resources.staffAuthSecret.grantRead(fn);
     }
 
+    const dataApiActions = ['rds-data:ExecuteStatement'];
+    if (handlerName === 'session' || handlerName === 'data-sync') {
+      dataApiActions.push(
+        'rds-data:BeginTransaction',
+        'rds-data:CommitTransaction',
+        'rds-data:RollbackTransaction',
+      );
+    }
     fn.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: [
-          'rds-data:BatchExecuteStatement',
-          'rds-data:BeginTransaction',
-          'rds-data:CommitTransaction',
-          'rds-data:ExecuteStatement',
-          'rds-data:RollbackTransaction',
-        ],
+        actions: dataApiActions,
         resources: [resources.databaseClusterArn],
       }),
     );
@@ -1385,6 +1571,7 @@ exports.handler = async () => ({
     );
 
     fn.node.addDependency(logGroup);
+    if (resources.databaseRuntimeRoleProvisioner) fn.node.addDependency(resources.databaseRuntimeRoleProvisioner);
 
     return fn;
   }

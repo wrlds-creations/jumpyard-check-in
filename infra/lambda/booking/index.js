@@ -13,6 +13,7 @@ const VENUE_TIME_ZONE = 'Europe/Stockholm';
 const GUEST_ACCESS_CHANNEL = 'guest_access';
 const GUEST_ACCESS_LINK_WINDOW_MINUTES = 60;
 const MAX_REQUEST_BODY_BYTES = 64 * 1024;
+const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 
 const PHONE_BOOKING_PRODUCTS = [
   { key: 'COMBO60', parentName: 'ComboDeal', label: 'ComboDeal', type: 'combo', durationMinutes: 60, jumpersPerUnit: 2 },
@@ -143,8 +144,10 @@ const secretsClient = new SecretsManagerClient({});
 const ssmClient = new SSMClient({});
 
 let cachedRollerConfig = null;
+let cachedRollerConfigExpiresAt = 0;
 let cachedToken = null;
 let cachedVenuePaymentConfig = null;
+let cachedVenuePaymentConfigExpiresAt = 0;
 
 exports.handler = async (event) => {
   let correlationId = normalizeCorrelationId(getHeader(event, 'x-correlation-id')) || createCorrelationId();
@@ -1646,7 +1649,8 @@ function buildQuoteCustomer() {
 }
 
 async function getRollerConfig() {
-  if (cachedRollerConfig) return cachedRollerConfig;
+  const now = Date.now();
+  if (cachedRollerConfig && cachedRollerConfigExpiresAt > now) return cachedRollerConfig;
 
   const [envParameter, baseUrlParameter, secret] = await Promise.all([
     readParameter(process.env.ROLLER_ENV_PARAMETER_NAME),
@@ -1663,6 +1667,7 @@ async function getRollerConfig() {
 
   validateRollerConfig(config);
   cachedRollerConfig = config;
+  cachedRollerConfigExpiresAt = now + PROVIDER_CONFIG_CACHE_MS;
   return config;
 }
 
@@ -2229,6 +2234,7 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
        summary ->> 'name' AS name
      FROM jumpyard.product_catalog_cache
      WHERE roller_env = :rollerEnv
+       AND COALESCE(expires_at, fetched_at + interval '24 hours') > now()
        AND (
          summary ->> 'parentProductName' IN (
            'Entré 60 min',
@@ -2333,6 +2339,7 @@ async function loadPhoneAddonProducts(rollerEnv) {
        summary ->> 'priceCents' AS price_cents
      FROM jumpyard.product_catalog_cache
      WHERE roller_env = :rollerEnv
+       AND COALESCE(expires_at, fetched_at + interval '24 hours') > now()
        AND (${clauses.join(' OR ')})`,
     parameters,
   );
@@ -2520,6 +2527,7 @@ async function loadParentProductsForChildIds(rollerEnv, productIds) {
        COALESCE(NULLIF(summary ->> 'parentProductId', ''), summary ->> 'id') AS parent_product_id
      FROM jumpyard.product_catalog_cache
      WHERE roller_env = :rollerEnv
+       AND COALESCE(expires_at, fetched_at + interval '24 hours') > now()
        AND (${clauses})`,
     [
       stringParameter('rollerEnv', rollerEnv),
@@ -2708,7 +2716,10 @@ function getSessionCapacityRemaining(session) {
 }
 
 async function getVenuePaymentConfig(config, token) {
-  if (cachedVenuePaymentConfig) return cachedVenuePaymentConfig;
+  const now = Date.now();
+  if (cachedVenuePaymentConfig && cachedVenuePaymentConfigExpiresAt > now) {
+    return cachedVenuePaymentConfig;
+  }
 
   const response = await fetch(buildRollerUrl(config.baseUrl, '/venues/me'), {
     method: 'GET',
@@ -2729,6 +2740,7 @@ async function getVenuePaymentConfig(config, token) {
       integrationId: null,
       lookupStatusCode: response.status,
     };
+    cachedVenuePaymentConfigExpiresAt = now + PROVIDER_CONFIG_CACHE_MS;
     return cachedVenuePaymentConfig;
   }
 
@@ -2740,6 +2752,7 @@ async function getVenuePaymentConfig(config, token) {
     integrationId: stringOrNull(settings.integrationId),
     lookupStatusCode: response.status,
   };
+  cachedVenuePaymentConfigExpiresAt = now + PROVIDER_CONFIG_CACHE_MS;
 
   return cachedVenuePaymentConfig;
 }
@@ -3006,7 +3019,15 @@ async function reserveIdempotencyKey(operation, idempotencyKey, requestHash) {
        'started',
        now() + interval '2 hours'
      )
-     ON CONFLICT (idempotency_key) DO NOTHING`,
+     ON CONFLICT (idempotency_key) DO UPDATE SET
+       operation = EXCLUDED.operation,
+       request_hash = EXCLUDED.request_hash,
+       status = EXCLUDED.status,
+       result_ref = NULL,
+       expires_at = EXCLUDED.expires_at,
+       created_at = now(),
+       updated_at = now()
+     WHERE jumpyard.idempotency_records.expires_at <= now()`,
     [
       stringParameter('idempotencyKey', idempotencyKey),
       stringParameter('operation', operation),

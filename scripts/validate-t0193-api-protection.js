@@ -169,14 +169,40 @@ function validateRouteSettings(template, routesByKey) {
 function validateApprovedProtectionResources(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    154,
-    'T0194 may add five Cognito/JWT resources plus five explicit PIN/admin API route triplets to the 134-resource foundation.',
+    170,
+    'The 154-resource T0194 boundary plus the exact 16-resource T0195 database-identity delta must synthesize.',
   );
   assert.equal(resourcesOfType(template, 'AWS::Cognito::UserPool').length, 1);
   assert.equal(resourcesOfType(template, 'AWS::Cognito::UserPoolClient').length, 1);
   assert.equal(resourcesOfType(template, 'AWS::Cognito::UserPoolDomain').length, 1);
   assert.equal(resourcesOfType(template, 'AWS::Cognito::ManagedLoginBranding').length, 1);
   assert.equal(resourcesOfType(template, 'AWS::ApiGatewayV2::Authorizer').length, 1);
+  for (const name of [
+    '/jumpyard-check-in-park-test/aurora/runtime/booking',
+    '/jumpyard-check-in-park-test/aurora/runtime/data-sync',
+    '/jumpyard-check-in-park-test/aurora/runtime/lookup',
+    '/jumpyard-check-in-park-test/aurora/runtime/redeem',
+    '/jumpyard-check-in-park-test/aurora/runtime/session',
+    '/jumpyard-check-in-park-test/aurora/runtime/webhook',
+    '/jumpyard-check-in-park-test/aurora/lifecycle',
+  ]) {
+    assert.equal(
+      resourcesOfType(template, 'AWS::SecretsManager::Secret').filter(([, secret]) => secret.Properties.Name === name).length,
+      1,
+      `T0195 must synthesize exactly one restricted secret ${name}.`,
+    );
+  }
+  for (const functionName of [
+    'jumpyard-check-in-park-test-database-runtime-role-provisioner',
+    'jumpyard-check-in-park-test-database-runtime-role-provider',
+  ]) {
+    assert.equal(
+      resourcesOfType(template, 'AWS::Lambda::Function').filter(([, fn]) => fn.Properties.FunctionName === functionName).length,
+      1,
+      `T0195 must synthesize exactly one ${functionName}.`,
+    );
+  }
+  assert.equal(resourcesOfType(template, 'AWS::CloudFormation::CustomResource').length, 1);
   for (const forbiddenType of [
     'AWS::ApiGatewayV2::DomainName',
     'AWS::CloudFront::Distribution',
@@ -197,7 +223,7 @@ function main() {
   console.log('[pass] T0193 uses AWS_IAM only for five internal session-link routes and legacy direct redeem');
   console.log('[pass] T0194 overlays one JWT authorizer on exactly four park-test admin routes');
   console.log('[pass] T0193 applies shared-IP-safe aggregate route limits and preserves a 50/150 default envelope');
-  console.log('[pass] T0194 adds only the approved admin Cognito/JWT resources and five PIN/admin API route triplets');
+  console.log('[pass] T0194 admin resources and the exact 16-resource T0195 database-identity delta are isolated from API protection');
 }
 
 try {
