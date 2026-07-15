@@ -115,6 +115,8 @@ function main() {
     'secrets.CLOUDFLARE_API_TOKEN',
     'apply_migrations',
     'detect-stack-drift',
+    'deployment_trigger.metadata.commit_hash',
+    'deployments?env=production&per_page=1',
     'validate-park-test-release.js',
     'compare-cloudformation-templates.js',
     'verify-public-park-test.js',
@@ -125,6 +127,7 @@ function main() {
   assert.match(ci, /pull_request:/);
   assert.match(release, /workflow_dispatch:/);
   assert.match(deploy, /workflow_dispatch:/);
+  assert.doesNotMatch(deploy, /source\.config\.commit_hash/);
 
   const accessStack = read('infra/lib/github-deployment-access-stack.ts');
   expectIncludes(
