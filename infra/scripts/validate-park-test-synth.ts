@@ -818,12 +818,28 @@ function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void 
     T0176_FRONTEND_REDEEM_REHEARSAL_ALLOWED_SESSION_IDS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
-    ENABLE_ROLLER_WEBHOOK_PROCESSING: 'false',
+    ENABLE_ROLLER_WEBHOOK_PROCESSING: 'true',
     JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    ROLLER_WEBHOOK_BOOKING_RETENTION_DAYS: '30',
+    ROLLER_WEBHOOK_LIVE_APPROVAL: 'T0197_LIVE_WEBHOOK_PROCESSING_APPROVED',
+    ROLLER_WEBHOOK_RECOVERY_LIMIT: '10',
+    ROLLER_WEBHOOK_REQUEST_INTERVAL_MS: '1000',
+    ROLLER_WEBHOOK_VENUE_ID: '50871',
+    WEBHOOK_AUTH_HEADER: 'x-roller-apikey',
+    WEBHOOK_RUNTIME_MODE: 'intake',
+  });
+  expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook-processor`, {
+    ENABLE_ROLLER_WEBHOOK_PROCESSING: 'true',
+    JUMPYARD_EMERGENCY_STOP: 'false',
+    JUMPYARD_ENVIRONMENT: 'park-test',
+    ROLLER_WEBHOOK_LIVE_APPROVAL: 'T0197_LIVE_WEBHOOK_PROCESSING_APPROVED',
+    ROLLER_WEBHOOK_VENUE_ID: '50871',
+    WEBHOOK_AUTH_HEADER: 'x-roller-apikey',
+    WEBHOOK_RUNTIME_MODE: 'processor',
   });
 
-  console.log('[pass] park-test full-flow rehearsal synth opens Nacka/date-scoped payment, lookup, add-on, staff auth, and redeem');
+  console.log('[pass] park-test full-flow rehearsal synth preserves the visitor flow and opens exact T0197 webhook processing');
 }
 
 const dev = synthConfig('config/dev.json');

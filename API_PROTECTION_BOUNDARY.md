@@ -9,7 +9,7 @@ This file is the source of truth for the route trust boundary first designed in 
 - Inventory: 21 explicit routes, 6 `AWS_IAM` and 15 explicit `NONE` at API Gateway.
 - Stage fallback: rate 50 requests/second, burst 150, detailed metrics enabled.
 - Every route has an explicit trust class, handler, authorization type, route-specific rate/burst setting, and stage dependency in one CDK catalog.
-- Application-layer guest, staff, service, legacy, and webhook credentials remain required behind the route boundary.
+- Application-layer guest, staff, service, legacy, and webhook credentials remain required behind the route boundary. T0197 changes webhook processing behind the existing route; it adds no public route or edge resource.
 - No WAF, CloudFront, custom domain, authorizer resource, or other AWS resource was added in T0193.
 
 `NONE` means that API Gateway does not require AWS signing. It does not mean that the route is trusted without application validation. Guest browsers, staff browsers, and Roller cannot use AWS IAM signing, so those routes enforce the appropriate opaque guest proof, staff token, webhook token, payload rules, idempotency, and business gates in Lambda.
@@ -24,7 +24,7 @@ This file is the source of truth for the route trust boundary first designed in 
 | `staff_auth_entry` | Temporary staff login entry. Public at Gateway, isolated low route bucket, safe logs, and server-side passcode verification; T0194 replaces the shared identity model. |
 | `staff_protected` | Requires the short-lived server-verified staff token before protected reads or redeem work. |
 | `internal_ops` | Requires AWS IAM signing at Gateway and the existing service token in Lambda. Not callable as a normal browser endpoint. |
-| `roller_webhook` | Public only so Roller can deliver. Requires the registered shared token and preserves fast safe HTTP `200` acknowledgement semantics. Processing remains disabled until T0197. |
+| `roller_webhook` | Public only so Roller can deliver. Requires the exact registered `x-roller-apikey` token, persists/enqueues safe metadata before HTTP `200`, and performs authoritative reconciliation asynchronously. |
 | `legacy_dev_only` | Lower-level direct redeem route. Requires AWS IAM plus the existing service/dev token; normal product flow does not use it. |
 
 ## Implemented Route Inventory
@@ -52,8 +52,8 @@ Rates are requests per second followed by burst capacity. They are aggregate per
 | `POST /v1/bookings/availability` | `guest_public` | `NONE` | Strict request/date/venue validation; no write | 20 / 60 |
 | `POST /v1/bookings/{bookingReference}/add-products/quote` | `guest_token` | `NONE` | Bearer guest proof bound to path booking plus strict validation | 10 / 40 |
 | `POST /v1/bookings/{bookingReference}/add-products` | `guest_write` | `NONE` | Bound guest proof, strict validation, confirm flag, idempotency | 5 / 20 |
-| `POST /v1/roller/webhooks/bookings` | `roller_webhook` | `NONE` | Registered Roller token; idempotent safe acknowledgement; processing disabled | 10 / 50 |
-| `POST /v1/roller/webhooks/redemptions` | `roller_webhook` | `NONE` | Registered Roller token; idempotent safe acknowledgement; processing disabled | 10 / 50 |
+| `POST /v1/roller/webhooks/bookings` | `roller_webhook` | `NONE` | Exact registered Roller token; safe metadata dedupe plus durable FIFO enqueue; async Live/Nacka reconciliation | 10 / 50 |
+| `POST /v1/roller/webhooks/redemptions` | `roller_webhook` | `NONE` | Registered token and safe acknowledgement; T0197 accepts only supported booking signals, so redemption events are not enriched | 10 / 50 |
 
 ## Guest Credential Rules
 
@@ -95,7 +95,7 @@ No per-IP limiter is used because many legitimate guests share the park's public
 
 - T0194: personal staff identity, roles, MFA/session/revoke policy, named actor audit.
 - T0195: token/data lifecycle, least privilege, rotation, backup/restore.
-- T0197: final Roller webhook verification, processing, replay, reconciliation.
+- T0197: completed park-test Roller booking webhook verification, durable processing, replay, and reconciliation; natural delivery observation remains bounded follow-up evidence.
 - T0199/T0205: domain/origin/default-endpoint topology and any WAF/edge control.
 - T0202: security/traffic alarm routing and operational thresholds.
 

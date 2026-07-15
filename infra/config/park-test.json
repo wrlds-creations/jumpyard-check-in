@@ -38,6 +38,14 @@
     "maxWindowDays": 31,
     "bookingRetentionDays": 30
   },
+  "webhookProcessing": {
+    "liveApproval": "",
+    "venueId": "50871",
+    "requestIntervalMs": 1000,
+    "bookingRetentionDays": 30,
+    "recoveryScheduleEnabled": false,
+    "recoveryLimit": 10
+  },
   "bookingTimeSms": {
     "scheduleEnabled": false,
     "confirmSend": false,

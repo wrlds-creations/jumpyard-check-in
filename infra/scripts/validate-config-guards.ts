@@ -70,6 +70,14 @@ interface TestConfig {
     rollerWebhookProcessingEnabled: boolean;
     staffAuthEnabled: boolean;
   };
+  webhookProcessing?: {
+    bookingRetentionDays?: number;
+    liveApproval?: string;
+    recoveryLimit?: number;
+    recoveryScheduleEnabled?: boolean;
+    requestIntervalMs?: number;
+    venueId?: string;
+  };
   readonly tags: Record<string, string>;
 }
 
@@ -375,6 +383,19 @@ parkTestFullFlowWithoutStaffAuth.safetyGates.staffAuthEnabled = false;
 
 const parkTestFullFlowWithWebhook = cloneConfig(parkTestApprovedFullFlowRehearsal);
 parkTestFullFlowWithWebhook.safetyGates.rollerWebhookProcessingEnabled = true;
+parkTestFullFlowWithWebhook.webhookProcessing = {
+  bookingRetentionDays: 30,
+  liveApproval: 'T0197_LIVE_WEBHOOK_PROCESSING_APPROVED',
+  recoveryLimit: 10,
+  recoveryScheduleEnabled: true,
+  requestIntervalMs: 1000,
+  venueId: '50871',
+};
+
+const parkTestFullFlowWithoutWebhookApproval = cloneConfig(parkTestFullFlowWithWebhook);
+if (parkTestFullFlowWithoutWebhookApproval.webhookProcessing) {
+  parkTestFullFlowWithoutWebhookApproval.webhookProcessing.liveApproval = '';
+}
 
 const parkTestFullFlowWithFrontendRehearsal = cloneConfig(parkTestApprovedFullFlowRehearsal);
 parkTestFullFlowWithFrontendRehearsal.safetyGates.frontendRedeemRehearsalApproval =
@@ -414,7 +435,7 @@ expectFail(
 expectFail(
   'park-test payment smoke still blocks webhook processing',
   parkTestPaymentSmokeWithWebhook,
-  /rollerWebhookProcessingEnabled/,
+  /webhookProcessing\.liveApproval/,
 );
 expectPass('approved park-test post-payment sync config passes', parkTestApprovedPostPaymentSync, 'park-test');
 expectFail(
@@ -483,7 +504,7 @@ expectFail(
 expectFail(
   'park-test add-on smoke still blocks webhook processing',
   parkTestAddOnSmokeWithWebhook,
-  /rollerWebhookProcessingEnabled/,
+  /webhookProcessing\.liveApproval/,
 );
 expectPass('approved park-test linked add-on settlement config passes', parkTestApprovedLinkedAddOnSettlement, 'park-test');
 expectFail(
@@ -535,7 +556,7 @@ expectFail(
 expectFail(
   'park-test redeem smoke still blocks webhook processing',
   parkTestRedeemSmokeWithWebhook,
-  /rollerWebhookProcessingEnabled/,
+  /webhookProcessing\.liveApproval/,
 );
 expectPass('approved park-test frontend redeem rehearsal config passes', parkTestApprovedFrontendRedeemRehearsal, 'park-test');
 expectFail(
@@ -619,10 +640,15 @@ expectFail(
   parkTestFullFlowWithoutStaffAuth,
   /staffAuthEnabled=true/,
 );
-expectFail(
-  'park-test full-flow rehearsal still blocks webhook processing',
+expectPass(
+  'park-test full-flow rehearsal accepts exact T0197 webhook processing approval',
   parkTestFullFlowWithWebhook,
-  /rollerWebhookProcessingEnabled/,
+  'park-test',
+);
+expectFail(
+  'park-test full-flow webhook processing without exact approval fails closed',
+  parkTestFullFlowWithoutWebhookApproval,
+  /webhookProcessing\.liveApproval/,
 );
 expectFail(
   'park-test full-flow rehearsal does not combine with frontend-only rehearsal',

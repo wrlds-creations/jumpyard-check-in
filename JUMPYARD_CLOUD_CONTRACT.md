@@ -95,10 +95,11 @@ Purpose:
 
 Rules:
 
-- Webhook processing must be idempotent.
-- Store raw webhook payloads only if a later ticket explicitly approves retention/PII policy.
-- Prefer a normalized event record plus a normalized booking index update.
-- If a webhook payload is incomplete or suspicious, schedule a live REST lookup to confirm.
+- Webhook processing is idempotent and treats arrival order as untrusted.
+- Public intake authenticates, validates, deduplicates, stores normalized event metadata, and durably enqueues before HTTP `200`; it does not call Roller REST.
+- Raw webhook payloads are prohibited. Persist only stable identifiers/hash, supported event type, safe status/attempt/timestamp fields, and bounded error summaries.
+- One serialized worker uses current `GET /bookings/{identifier}` as authoritative and never writes to Roller. In Live park-test it also verifies the credential venue is Nacka `50871` and applies the T0196 30-day-past plus all-future boundary.
+- Duplicate/processed event ids are no-ops. FIFO retry/DLQ, guarded replay, five-minute recovery, T0196 morning seed, and critical live confirmation cover failure and missed delivery.
 - Align webhook processing with the editor flow's `Booking webhook intake` and `Webhook enrichment`: webhook is the signal, `Get detail of a booking` is the authoritative enrichment read, and customer detail is fetched only when needed for late booking contact/SMS readiness.
 
 ### Live REST Lookup

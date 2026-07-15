@@ -8,6 +8,7 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -60,6 +61,8 @@ interface HandlerResources {
   readonly checkinLinkDevTokenSecret: secretsmanager.Secret;
   readonly resourcePrefix: string;
   readonly safetyGates: JumpYardCloudConfig['safetyGates'];
+  readonly webhookProcessing: JumpYardCloudConfig['webhookProcessing'];
+  readonly webhookQueue: sqs.Queue;
   readonly wrldsEnvironment: string;
 }
 
@@ -95,6 +98,9 @@ interface ObservabilityResources {
   readonly rollerOperationsQueue: sqs.Queue;
   readonly sessionHandler: lambda.Function;
   readonly webhookHandler: lambda.Function;
+  readonly webhookDeadLetterQueue: sqs.Queue;
+  readonly webhookProcessorHandler: lambda.Function;
+  readonly webhookQueue: sqs.Queue;
 }
 
 type ApiRouteHandler = 'booking' | 'lookup' | 'redeem' | 'session' | 'webhook';
@@ -723,6 +729,28 @@ exports.handler = async (event) => {
       },
     });
 
+    const webhookDeadLetterQueue = new sqs.Queue(this, 'WebhookDeadLetterQueue', {
+      queueName: `${config.resourcePrefix}-webhook-events-dlq.fifo`,
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+      enforceSSL: true,
+      fifo: true,
+      retentionPeriod: Duration.days(14),
+    });
+
+    const webhookQueue = new sqs.Queue(this, 'WebhookQueue', {
+      queueName: `${config.resourcePrefix}-webhook-events.fifo`,
+      contentBasedDeduplication: false,
+      deadLetterQueue: {
+        maxReceiveCount: 5,
+        queue: webhookDeadLetterQueue,
+      },
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+      enforceSSL: true,
+      fifo: true,
+      retentionPeriod: Duration.days(4),
+      visibilityTimeout: Duration.minutes(12),
+    });
+
     const eventBus = new events.EventBus(this, 'EventBus', {
       eventBusName: `${config.resourcePrefix}-events`,
     });
@@ -812,6 +840,8 @@ exports.handler = async (event) => {
       checkinLinkDevTokenSecret,
       resourcePrefix: config.resourcePrefix,
       safetyGates: config.safetyGates,
+      webhookProcessing: config.webhookProcessing,
+      webhookQueue,
       wrldsEnvironment: config.tags['WRLDS:Environment'],
     };
 
@@ -829,7 +859,28 @@ exports.handler = async (event) => {
     });
     const webhookHandler = this.createHandler('WebhookHandler', 'webhook', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'webhook')),
+      environment: {
+        WEBHOOK_RUNTIME_MODE: 'intake',
+      },
     });
+    const webhookProcessorHandler = this.createHandler('WebhookProcessorHandler', 'webhook', handlerResources, {
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'webhook')),
+      environment: {
+        WEBHOOK_RUNTIME_MODE: 'processor',
+      },
+      functionNameSuffix: 'webhook-processor',
+      memorySize: 512,
+      reservedConcurrentExecutions: 1,
+      timeout: Duration.minutes(2),
+    });
+    webhookQueue.grantSendMessages(webhookHandler);
+    webhookQueue.grantConsumeMessages(webhookProcessorHandler);
+    webhookProcessorHandler.addEventSource(
+      new SqsEventSource(webhookQueue, {
+        batchSize: 1,
+        reportBatchItemFailures: true,
+      }),
+    );
     const dataSyncHandler = this.createHandler('DataSyncHandler', 'data-sync', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'data-sync')),
       dataSync: config.dataSync,
@@ -848,6 +899,21 @@ exports.handler = async (event) => {
         new targets.LambdaFunction(dataSyncHandler, {
           event: events.RuleTargetInput.fromObject({
             source: 'eventbridge.daily',
+          }),
+          retryAttempts: 2,
+        }),
+      ],
+    });
+
+    new events.Rule(this, 'WebhookRecoveryRule', {
+      ruleName: `${config.resourcePrefix}-webhook-recovery`,
+      description: 'Reconciles durably received webhook events that were not completed by the queue worker.',
+      enabled: config.webhookProcessing.recoveryScheduleEnabled,
+      schedule: events.Schedule.rate(Duration.minutes(5)),
+      targets: [
+        new targets.LambdaFunction(webhookProcessorHandler, {
+          event: events.RuleTargetInput.fromObject({
+            source: 'jumpyard.webhook-recovery',
           }),
           retryAttempts: 2,
         }),
@@ -912,6 +978,9 @@ exports.handler = async (event) => {
       rollerOperationsQueue,
       sessionHandler,
       webhookHandler,
+      webhookDeadLetterQueue,
+      webhookProcessorHandler,
+      webhookQueue,
     });
 
     new CfnOutput(this, 'ApiEndpoint', {
@@ -928,6 +997,14 @@ exports.handler = async (event) => {
 
     new CfnOutput(this, 'OperationalDatabaseClusterArn', {
       value: databaseClusterArn,
+    });
+
+    new CfnOutput(this, 'WebhookQueueUrl', {
+      value: webhookQueue.queueUrl,
+    });
+
+    new CfnOutput(this, 'WebhookProcessorFunctionName', {
+      value: webhookProcessorHandler.functionName,
     });
 
     if (adminIdentityResources) {
@@ -951,6 +1028,7 @@ exports.handler = async (event) => {
       { id: 'Redeem', name: 'redeem', fn: resources.redeemHandler },
       { id: 'Session', name: 'session', fn: resources.sessionHandler },
       { id: 'Webhook', name: 'webhook', fn: resources.webhookHandler },
+      { id: 'WebhookProcessor', name: 'webhook-processor', fn: resources.webhookProcessorHandler },
       { id: 'DataSync', name: 'data-sync', fn: resources.dataSyncHandler },
     ];
 
@@ -1001,6 +1079,16 @@ exports.handler = async (event) => {
       },
       statistic: 'Sum',
       period: Duration.hours(6),
+    });
+    const webhookProcessingFailures = new cloudwatch.Metric({
+      namespace: 'JumpYard/Cloud',
+      metricName: 'WebhookProcessingFailure',
+      dimensionsMap: {
+        Environment: config.resourcePrefix,
+        Handler: 'webhook',
+      },
+      statistic: 'Sum',
+      period,
     });
 
     new logs.MetricFilter(this, 'ApiThrottledRequestMetricFilter', {
@@ -1073,6 +1161,12 @@ exports.handler = async (event) => {
           resources.deadLetterQueue
             .metricApproximateNumberOfMessagesVisible({ statistic: 'Maximum', period })
             .with({ label: 'dlq visible' }),
+          resources.webhookQueue
+            .metricApproximateNumberOfMessagesVisible({ statistic: 'Maximum', period })
+            .with({ label: 'webhook visible' }),
+          resources.webhookDeadLetterQueue
+            .metricApproximateNumberOfMessagesVisible({ statistic: 'Maximum', period })
+            .with({ label: 'webhook dlq visible' }),
         ],
         width: 12,
       }),
@@ -1140,6 +1234,41 @@ exports.handler = async (event) => {
     new cloudwatch.Alarm(this, 'RollerOpsDlqVisibleAlarm', {
       alarmName: `${config.resourcePrefix}-roller-ops-dlq-visible`,
       metric: resources.deadLetterQueue.metricApproximateNumberOfMessagesVisible({ statistic: 'Maximum', period }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    new cloudwatch.Alarm(this, 'WebhookDlqVisibleAlarm', {
+      alarmName: `${config.resourcePrefix}-webhook-dlq-visible`,
+      metric: resources.webhookDeadLetterQueue.metricApproximateNumberOfMessagesVisible({
+        statistic: 'Maximum',
+        period,
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    new cloudwatch.Alarm(this, 'WebhookQueueAgeAlarm', {
+      alarmName: `${config.resourcePrefix}-webhook-queue-stale`,
+      alarmDescription: 'A durable Roller webhook signal has waited more than five minutes for reconciliation.',
+      metric: resources.webhookQueue.metricApproximateAgeOfOldestMessage({ statistic: 'Maximum', period }),
+      threshold: 300,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    new cloudwatch.Alarm(this, 'WebhookProcessingFailureAlarm', {
+      alarmName: `${config.resourcePrefix}-webhook-processing-failures`,
+      alarmDescription: 'The Roller webhook worker failed an authoritative reconciliation attempt.',
+      metric: webhookProcessingFailures,
       threshold: 1,
       evaluationPeriods: 1,
       datapointsToAlarm: 1,
@@ -1347,12 +1476,14 @@ exports.handler = async (event) => {
     options: {
       readonly code?: lambda.Code;
       readonly dataSync?: JumpYardCloudConfig['dataSync'];
+      readonly environment?: Readonly<Record<string, string>>;
+      readonly functionNameSuffix?: string;
       readonly memorySize?: number;
       readonly reservedConcurrentExecutions?: number;
       readonly timeout?: Duration;
     } = {},
   ): lambda.Function {
-    const functionName = `${this.stackName}-${handlerName}`;
+    const functionName = `${this.stackName}-${options.functionNameSuffix ?? handlerName}`;
     const handlerDatabaseSecret = resources.databaseRuntimeSecrets?.[handlerName] ?? resources.databaseAdminSecret;
 
     const logGroup = new logs.LogGroup(this, `${id}LogGroup`, {
@@ -1389,8 +1520,19 @@ exports.handler = async (event) => {
 
     if (handlerName === 'webhook') {
       environment.ENABLE_ROLLER_WEBHOOK_PROCESSING = String(resources.safetyGates.rollerWebhookProcessingEnabled);
+      environment.ROLLER_WEBHOOK_BOOKING_RETENTION_DAYS = String(
+        resources.webhookProcessing.bookingRetentionDays,
+      );
+      environment.ROLLER_WEBHOOK_LIVE_APPROVAL = resources.webhookProcessing.liveApproval;
+      environment.ROLLER_WEBHOOK_RECOVERY_LIMIT = String(resources.webhookProcessing.recoveryLimit);
+      environment.ROLLER_WEBHOOK_REQUEST_INTERVAL_MS = String(resources.webhookProcessing.requestIntervalMs);
+      environment.ROLLER_WEBHOOK_VENUE_ID = resources.webhookProcessing.venueId;
+      environment.WEBHOOK_AUTH_HEADER = resources.wrldsEnvironment === 'park-test' ? 'x-roller-apikey' : 'legacy';
       environment.WEBHOOK_DEV_TOKEN_SECRET_ARN = resources.webhookDevTokenSecret.secretArn;
+      environment.WEBHOOK_QUEUE_URL = resources.webhookQueue.queueUrl;
     }
+
+    Object.assign(environment, options.environment ?? {});
 
     if (handlerName === 'session' || handlerName === 'redeem') {
       environment.ENABLE_STAFF_AUTH = String(resources.safetyGates.staffAuthEnabled);
