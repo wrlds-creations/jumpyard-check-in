@@ -18,16 +18,19 @@ Use this standard for WRLDS projects that deploy or validate AWS infrastructure.
 
 ## Staging Deploy
 
-- Deploy staging from a protected branch, manual workflow, or reviewed merge path.
-- Use GitHub Actions OIDC where possible.
-- Emit deployment outputs needed for review and QA.
+- Build one immutable release artifact from an eligible reviewed commit and promote that same artifact without rebuilding.
+- Produce a read-only target/diff plan before the protected deployment approval.
+- Deploy staging from a protected environment and reviewed merge path through a manual workflow.
+- Use separate least-privilege GitHub Actions OIDC plan and deploy roles when the approval must follow a live cloud diff.
+- Assert repository, commit, artifact hash, account, region, environment, stack, and external-hosting targets before any write.
+- Serialize deployments to one environment and emit deployment outputs needed for review and QA.
 - Update `AWS_RESOURCES.md` when resources change.
 
 ## Production Deploy
 
 - Require manual approval, `workflow_dispatch`, protected environments, or a release-based process.
-- Prefer deployment from immutable tags or reviewed release commits.
-- Include rollback notes where practical.
+- Deploy only reviewed immutable artifacts with explicit target guards and protected approval.
+- Roll back by selecting a previously successful artifact and promoting it through the same guarded path; do not rebuild old source during rollback.
 - Do not use production deploys as validation.
 
 ## GitHub Actions OIDC
@@ -35,7 +38,9 @@ Use this standard for WRLDS projects that deploy or validate AWS infrastructure.
 - Prefer OIDC role assumption over long-lived credentials.
 - Scope IAM trust policy to repository, branch, environment, or workflow.
 - Grant least privilege.
-- Use separate roles for staging and production when possible.
+- Use separate roles for staging and production. Split read-only planning from write-capable deployment where practical.
+- Scope environment-gated deploy trust to the exact GitHub environment subject.
+- Pin third-party Actions to full commit SHAs.
 
 ## Credential Policy
 

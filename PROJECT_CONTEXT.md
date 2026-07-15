@@ -1,6 +1,6 @@
 # Project Context
 
-This is the living project memory for confirmed durable facts. Operational planning lives in the private [JumpYard Check-in GitHub Project](https://github.com/orgs/wrlds-creations/projects/5), while approved scope lives in repository Issues. Ticket history is archived in [docs/history/sprint-1-ticket-history.md](docs/history/sprint-1-ticket-history.md). Unknowns remain `TBD`.
+This file holds confirmed durable facts. The private [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5) owns operations, repository Issues own approved scope, and [Sprint 1 history](docs/history/sprint-1-ticket-history.md) is archived. Unknowns remain `TBD`.
 
 ## Project Identity
 
@@ -11,9 +11,9 @@ This is the living project memory for confirmed durable facts. Operational plann
 
 ## Current Phase And Scope
 
-Sprint 2 is closed. The path is `dev/Playground -> park-test/Live pre-production -> separate production after GO`; no parallel staging stack is planned. Approved Sprint 3/4 maintenance windows may use park-test for ingestion and T-30 messaging rehearsals.
+Sprint 2 is closed. The path is `dev/Playground -> park-test/Live pre-production -> separate production after GO`; no parallel staging stack is planned. Approved maintenance windows may use park-test for ingestion and T-30 messaging rehearsals.
 
-The [latest roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf) is dated 2026-06-11. Sprint 3 covers phone, admin, and required cloud work; kiosk/print/terminal and JumpyBoard/AirHive belong to separate workstreams.
+The [2026-06-11 roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf) covers phone, admin, and required cloud work in Sprint 3. Kiosk/print/terminal and JumpyBoard/AirHive are separate.
 
 The check-in app suite connects to Roller Playground and park-test Live through a server-side layer. The target production architecture remains:
 
@@ -25,7 +25,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 ## Current Workstream Ownership
 
-- The Sprint 3 Project covers `jumpyard-checkin-phone`, `jumpyard-checkin-admin`, and their required JumpYard Cloud/API/AWS work. Drafts are unapproved; each implementation requires a plain-language explanation, Love's approval, a repository Issue, and an issue-linked branch/PR.
+- Sprint 3 covers `jumpyard-checkin-phone`, `jumpyard-checkin-admin`, and required Cloud/API/AWS work. Every implementation needs a plain-language explanation, Love's approval, an Issue, and an issue-linked branch/PR.
 - `jumpyard-checkin-kiosk`, including kiosk-owned staff help, print, and terminal work, is a separate project-folder workstream.
 - JumpyBoard/AirHive, Bluetooth bands, and activity data belong to the separate Connected Experience workstream. Only explicit interface contracts may cross workstream boundaries.
 
@@ -33,7 +33,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 - History: [completed tickets](docs/history/completed-tickets.md), [validation evidence](docs/history/validation-log.md), [Sprint 1 narrative](docs/history/sprint-1-ticket-history.md), and [done followups](docs/history/followups-done.md).
 - Planning migration: [Project policy/gates](docs/roadmap/backlog.md) and [legacy-to-Project mapping](docs/history/github-project-migration-2026-07-14.md).
-- Current evidence: [Sprint roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf) and T0191-T0197 [environment](docs/t0191-park-test-preproduction-contract.md), [foundation](docs/t0192-park-test-foundation-qualification.md), [API](docs/t0193-api-protection.md), [identity](docs/t0194-staff-identity.md), [lifecycle](docs/t0195-data-lifecycle-policy.md), [index](docs/t0196-booking-index-morning-seed.md), and [webhook](docs/t0197-webhook-reconciliation.md) records.
+- Current evidence: [roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf), [environment](docs/t0191-park-test-preproduction-contract.md), [foundation](docs/t0192-park-test-foundation-qualification.md), [API](docs/t0193-api-protection.md), [identity](docs/t0194-staff-identity.md), [lifecycle](docs/t0195-data-lifecycle-policy.md), [index](docs/t0196-booking-index-morning-seed.md), and [webhook](docs/t0197-webhook-reconciliation.md).
 
 ## Durable Architecture Facts
 
@@ -47,9 +47,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
 - Raw payloads, access tokens, PINs, secrets, and unmasked credentials are prohibited persisted data. Booking/contact state is removed or anonymized 30 days after visit; pseudonymous audit/run metadata at 90 days; expired access rows within 24 hours. Disabled staff lose display PII after 90 days; PIN-pepper changes require versioned security-driven re-enrollment. Non-dev handlers have restricted DB principals; Aurora admin is only for migrations, provisioning, and guarded recovery.
 - Dev is Playground. Existing park-test is the sole Live-backed pre-production environment for T0194-T0204; production is separate and requires T0204 GO plus new approval.
-- Park-test work is gated by approved repository Issues; AWS changes, Live reads/writes, payments, redemptions, webhooks, frontend rehearsal, UI/UX, and visitor traffic require explicit scope and approval.
-- Park-test is a separate WRLDS environment in account `376129878018`, region `eu-north-1`, namespace `jumpyard-check-in-park-test`, with server-side Roller Live Nacka access.
-- Park-test keeps its name, prefix, tags, data, and frontend targets; it is neither cloned nor reused as production.
+- Park-test work requires an approved Issue; AWS/Live, payments, redemption, webhooks, frontend rehearsal, UI/UX, and visitor traffic need explicit scope. It remains a separate WRLDS environment in `376129878018`/`eu-north-1`, namespace `jumpyard-check-in-park-test`, with server-side Roller Live Nacka access. It is not production.
 - `infra/config/park-test.json` is the normal closed config; approved Issue-specific configs open reviewed gates.
 - Park-test resources and gates are recorded in [AWS_RESOURCES.md](AWS_RESOURCES.md) and [the gate runbook](docs/t0170-park-test-gate-runbook.md); runtime variables stay ticket-numbered until scoped migration.
 - The Nacka `50871` full-flow window for `2026-06-29` through `2026-09-30` remains open until Love asks to close it; Issue/PR closeout is not a close-window deploy.
@@ -60,9 +58,10 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 ## Durable Workflow Facts
 
-- Private GitHub Project #5, linked to and defaulting issue creation to `wrlds-creations/jumpyard-check-in`, is the only operational source of truth for status, priority, work type, track, and owner.
-- Unapproved work remains a Project draft. Love's approval is required before conversion to a repository Issue; an Issue is required before implementation.
+- Private GitHub Project #5 owns status, priority, type, track, and owner. Unapproved work stays a draft until Love approves conversion to an Issue.
 - Approved branches use `codex/gh-<issue-number>-<short-slug>` and pull requests close their Issue. Work reaches `main` through review/merge, never by direct push.
+- Routine park-test releases are GitHub-native: CI validates pull requests, `main` builds one immutable hashed artifact, a read-only AWS plan precedes protected `park-test` approval, and deploy/rollback promote the selected artifact without rebuilding. AWS uses repository/environment-scoped OIDC roles rather than stored access keys; Cloudflare uses a scoped protected-environment token.
+- Production deployment is not enabled by the park-test workflow. Local park-test CDK/Wrangler deployment is break-glass only under a separately explicit approved Issue and follow-up record.
 - `CODEX_TASK.md` is a static resolver, not a mutable ticket ledger. `FOLLOWUPS.md` is policy only; completed legacy followups and the one-time mapping remain historical evidence.
 - Legacy ticket IDs are preserved for traceability. GitHub issue `#192` and legacy ticket `T0192` are unrelated and must retain their prefixes.
 
@@ -82,8 +81,8 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 ## Security And Operational Constraints
 
-- Roller Live, production credentials, `.env`, AWS resources/deploys, Aurora migrations, payment package/vendor source, SMS/email sending, and app behavior must not be changed by context-hygiene Issues.
-- AWS deploys require reading [AWS_RESOURCES.md](AWS_RESOURCES.md), using `skills/aws-project-infrastructure/`, and confirming account/region/environment/owner/tags/data/cost metadata first.
+- Context-hygiene Issues cannot change Roller Live, credentials, `.env`, AWS/deploys, Aurora migrations, payment source, messaging, or app behavior.
+- AWS work requires [AWS_RESOURCES.md](AWS_RESOURCES.md), `skills/aws-project-infrastructure/`, and confirmed metadata. Park-test releases follow [the T0198 runbook](docs/t0198-controlled-cicd.md); migrations are explicit and forward-only.
 - Dev guest messaging remains gated by SNS/SES sandbox and sender-readiness constraints; unattended real sends remain disabled until production-readiness gates pass.
 - Staff/admin PII is staff-only and must not be exposed in public guest UI or unauthenticated APIs.
 - Phone-local contact recovery uses a 12-hour device-clock expiry, active monotonic cleanup, minute checkpoints, and fail-closed detected rollback before reuse; a fully closed/offline browser cannot execute deletion or prove unobserved real time. Park-test Lambda/API logs and the private raw-payload bucket retain data for 30 days, while Aurora automated backup/PITR remains seven days.

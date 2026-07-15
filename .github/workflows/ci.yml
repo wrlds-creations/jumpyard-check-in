@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository:
+    name: Repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            infra/package-lock.json
+            jumpyard-checkin-phone/package-lock.json
+            jumpyard-checkin-admin/package-lock.json
+      - name: Install dependencies required by repository validators
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix infra
+          npm ci --prefix jumpyard-checkin-phone
+          npm ci --prefix jumpyard-checkin-admin
+      - name: Validate repository contracts
+        run: npm run validate
+      - name: Check whitespace
+        run: git diff --check origin/main...HEAD
+
+  infrastructure:
+    name: Infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+      - name: Install dependencies
+        run: npm ci --prefix infra
+      - name: Validate infrastructure
+        run: npm run infra:check
+      - name: Synth GitHub deployment access bootstrap
+        run: npm --prefix infra run synth:github-deployment-access -- --quiet
+      - name: Synth exact park-test release profile
+        run: npm --prefix infra run synth:park-test-full-flow-rehearsal -- --quiet
+
+  phone:
+    name: Phone
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL: https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com
+    steps:
+      - name: Check out source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: jumpyard-checkin-phone/package-lock.json
+      - name: Install dependencies
+        run: npm ci --prefix jumpyard-checkin-phone
+      - name: Lint
+        run: npm --prefix jumpyard-checkin-phone run lint
+      - name: Type-check
+        run: npm exec --prefix jumpyard-checkin-phone -- tsc --noEmit --project jumpyard-checkin-phone/tsconfig.json
+      - name: Build exact park-test output
+        run: npm --prefix jumpyard-checkin-phone run build
+
+  admin:
+    name: Admin
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_JUMPYARD_ADMIN_COGNITO_CLIENT_ID: 4cm36dkcrptlpq9j163q45ae56
+      NEXT_PUBLIC_JUMPYARD_ADMIN_COGNITO_DOMAIN: https://jumpyard-check-in-park-test-admin-376129878018.auth.eu-north-1.amazoncognito.com
+      NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL: https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com
+      NEXT_PUBLIC_JUMPYARD_STAFF_IDENTITY_MODE: pin
+    steps:
+      - name: Check out source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: jumpyard-checkin-admin/package-lock.json
+      - name: Install dependencies
+        run: npm ci --prefix jumpyard-checkin-admin
+      - name: Lint
+        run: npm --prefix jumpyard-checkin-admin run lint
+      - name: Type-check
+        run: npm exec --prefix jumpyard-checkin-admin -- tsc --noEmit --project jumpyard-checkin-admin/tsconfig.json
+      - name: Build exact park-test output
+        run: npm --prefix jumpyard-checkin-admin run build

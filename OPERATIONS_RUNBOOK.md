@@ -294,4 +294,16 @@ npm.cmd run validate
 git diff --check
 ```
 
-Run CDK synth/diff/deploy only when infra code changes. T0101 added this runbook and did not change AWS resources.
+## Park-Test Release And Rollback
+
+Routine park-test changes are deployed from GitHub, not from an operator laptop:
+
+1. Merge the approved Issue PR to `main` after the required `Repository`, `Infrastructure`, `Phone`, and `Admin` checks pass.
+2. Open the successful **Build park-test release** run for the intended full commit SHA and note its run ID.
+3. Dispatch **Deploy or roll back park-test** from `main` with that run ID, full SHA, intent, and `I_APPROVE_PARK_TEST_<full SHA>`.
+4. Inspect the read-only CloudFormation plan in the run summary, then approve the protected `park-test` job.
+5. Record the deployment run and post-deploy evidence in the Issue/PR.
+
+Rollback uses the same steps with `intent=rollback` and an earlier successful release run/SHA. The old source is not rebuilt. Re-promotion selects the intended newer artifact with `intent=re-promote`. Migration apply defaults to false and may be enabled only when the approved Issue explicitly includes the pending forward-only migrations; rollback does not reverse migrations.
+
+See [docs/t0198-controlled-cicd.md](docs/t0198-controlled-cicd.md) for exact targets, artifact contract, verification, and the emergency path. A local park-test CDK or Wrangler command is break-glass only and requires a separate explicit Issue approval and follow-up record. T0101 added the original runbook without changing AWS resources; T0198 supersedes its routine local-deploy wording for park-test.

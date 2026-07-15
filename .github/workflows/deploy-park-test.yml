@@ -1,0 +1,313 @@
+name: Deploy or roll back park-test
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Successful Build park-test release workflow run ID
+        required: true
+        type: string
+      release_sha:
+        description: Full commit SHA contained in the selected release
+        required: true
+        type: string
+      intent:
+        description: Audited release intent
+        required: true
+        default: promote
+        type: choice
+        options:
+          - promote
+          - rollback
+          - re-promote
+      approval_phrase:
+        description: I_APPROVE_PARK_TEST_<full release SHA>
+        required: true
+        type: string
+      apply_migrations:
+        description: Explicitly apply pending forward-only migrations from this bundle
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: park-test-deployment
+  cancel-in-progress: false
+
+env:
+  AWS_ACCOUNT_ID: '376129878018'
+  AWS_REGION: eu-north-1
+  CLOUDFLARE_ACCOUNT_ID: dc0a3855bc8a0b1db8fc27ee62bf7d40
+  PARK_TEST_ADMIN_PROJECT: jumpyard-checkin-admin-park-test
+  PARK_TEST_PHONE_PROJECT: jumpyard-check-in-park-test
+  PARK_TEST_STACK: jumpyard-check-in-park-test-stack
+
+jobs:
+  plan:
+    name: Plan selected release
+    runs-on: ubuntu-latest
+    outputs:
+      release_sha: ${{ steps.guard.outputs.sha }}
+    steps:
+      - name: Check out trusted tooling from main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          path: tooling
+      - name: Validate dispatch and release run
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Deployment workflow must run from refs/heads/main." >&2
+            exit 1
+          fi
+          sha="${{ inputs.release_sha }}"
+          run_id="${{ inputs.release_run_id }}"
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]] || [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "A lowercase full SHA and numeric release run ID are required." >&2
+            exit 1
+          fi
+          if [[ "${{ inputs.approval_phrase }}" != "I_APPROVE_PARK_TEST_${sha}" ]]; then
+            echo "The approval phrase does not match the selected release SHA." >&2
+            exit 1
+          fi
+          gh api "repos/wrlds-creations/jumpyard-check-in/actions/runs/${run_id}" > release-run.json
+          jq -e '
+            .status == "completed" and
+            .conclusion == "success" and
+            .path == ".github/workflows/release.yml" and
+            .head_repository.full_name == "wrlds-creations/jumpyard-check-in"
+          ' release-run.json > /dev/null
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Download selected immutable release
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: park-test-release-${{ steps.guard.outputs.sha }}
+          path: release
+          github-token: ${{ github.token }}
+          repository: wrlds-creations/jumpyard-check-in
+          run-id: ${{ inputs.release_run_id }}
+      - name: Validate artifact identity and target
+        run: node tooling/scripts/validate-park-test-release.js --release release --expected-sha "${{ steps.guard.outputs.sha }}"
+      - name: Configure read-only AWS plan identity
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          aws-region: eu-north-1
+          role-to-assume: arn:aws:iam::376129878018:role/jumpyard-check-in-park-test-github-actions-plan
+          role-session-name: gha-park-test-plan-${{ github.run_id }}
+      - name: Assert AWS identity and render live plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          account="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "$account" == "$AWS_ACCOUNT_ID" ]]
+          aws cloudformation get-template \
+            --stack-name "$PARK_TEST_STACK" \
+            --template-stage Processed \
+            --query TemplateBody \
+            --output json > current-template.json
+          node tooling/scripts/compare-cloudformation-templates.js \
+            --current current-template.json \
+            --release "release/infra/cdk.out/${PARK_TEST_STACK}.template.json" \
+            --output plan.json | tee plan.md
+          cat plan.md >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo
+            echo "- Intent: \`${{ inputs.intent }}\`"
+            echo "- Release: \`${{ steps.guard.outputs.sha }}\`"
+            echo "- Release workflow run: \`${{ inputs.release_run_id }}\`"
+            echo "- Apply migrations: \`${{ inputs.apply_migrations }}\`"
+            echo
+            echo "The protected park-test approval below authorizes this exact artifact and plan."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload plan evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: park-test-plan-${{ github.run_id }}
+          path: |
+            plan.json
+            plan.md
+          if-no-files-found: error
+          retention-days: 90
+
+  deploy:
+    name: Approved park-test deployment
+    needs: plan
+    runs-on: ubuntu-latest
+    environment:
+      name: park-test
+      url: https://jumpyard-check-in-park-test.pages.dev
+    steps:
+      - name: Check out trusted tooling from main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          path: tooling
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tooling/infra/package-lock.json
+      - name: Download selected immutable release
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: park-test-release-${{ needs.plan.outputs.release_sha }}
+          path: release
+          github-token: ${{ github.token }}
+          repository: wrlds-creations/jumpyard-check-in
+          run-id: ${{ inputs.release_run_id }}
+      - name: Revalidate approved artifact
+        run: node tooling/scripts/validate-park-test-release.js --release release --expected-sha "${{ needs.plan.outputs.release_sha }}"
+      - name: Configure approved AWS deploy identity
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          aws-region: eu-north-1
+          role-to-assume: arn:aws:iam::376129878018:role/jumpyard-check-in-park-test-github-actions-deploy
+          role-session-name: gha-park-test-deploy-${{ github.run_id }}
+      - name: Install artifact-contained deployment runtime
+        run: npm ci --prefix release/infra/runtime --ignore-scripts
+      - name: Check and optionally apply forward-only migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          account="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "$account" == "$AWS_ACCOUNT_ID" ]]
+          runner="release/infra/runtime/node_modules/.bin/ts-node"
+          config="release/infra/runtime/config/park-test-full-flow-rehearsal.json"
+          "$runner" --prefer-ts-exts release/infra/runtime/scripts/run-migrations.ts \
+            --config "$config" --status | tee migration-status-before.txt
+          if grep -q ': pending$' migration-status-before.txt; then
+            if [[ "${{ inputs.apply_migrations }}" != "true" ]]; then
+              echo "Pending migrations require apply_migrations=true and a new protected approval." >&2
+              exit 1
+            fi
+            "$runner" --prefer-ts-exts release/infra/runtime/scripts/run-migrations.ts --config "$config"
+          fi
+      - name: Deploy exact CDK cloud assembly
+        shell: bash
+        run: |
+          set -euo pipefail
+          cdk="release/infra/runtime/node_modules/.bin/cdk"
+          "$cdk" deploy "$PARK_TEST_STACK" \
+            --app "$GITHUB_WORKSPACE/release/infra/cdk.out" \
+            --require-approval never \
+            --ci \
+            --outputs-file "$GITHUB_WORKSPACE/deployment-outputs.json"
+      - name: Deploy exact phone and admin outputs to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          sha="${{ needs.plan.outputs.release_sha }}"
+          npx --yes wrangler@4.111.0 pages deploy release/phone/out \
+            --project-name "$PARK_TEST_PHONE_PROJECT" \
+            --branch main \
+            --commit-hash "$sha" \
+            --commit-message "${{ inputs.intent }} ${sha}" \
+            --commit-dirty=false | tee cloudflare-phone.txt
+          npx --yes wrangler@4.111.0 pages deploy release/admin/out \
+            --project-name "$PARK_TEST_ADMIN_PROJECT" \
+            --branch main \
+            --commit-hash "$sha" \
+            --commit-message "${{ inputs.intent }} ${sha}" \
+            --commit-dirty=false | tee cloudflare-admin.txt
+      - name: Verify exact AWS and Cloudflare release
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="${{ needs.plan.outputs.release_sha }}"
+          status="$(aws cloudformation describe-stacks --stack-name "$PARK_TEST_STACK" --query 'Stacks[0].StackStatus' --output text)"
+          [[ "$status" == "UPDATE_COMPLETE" || "$status" == "CREATE_COMPLETE" ]]
+
+          aws cloudformation get-template \
+            --stack-name "$PARK_TEST_STACK" \
+            --template-stage Processed \
+            --query TemplateBody \
+            --output json > deployed-template.json
+          node tooling/scripts/compare-cloudformation-templates.js \
+            --current deployed-template.json \
+            --release "release/infra/cdk.out/${PARK_TEST_STACK}.template.json" \
+            --output post-deploy-plan.json > post-deploy-plan.md
+          jq -e '
+            (.resources.added | length) == 0 and
+            (.resources.changed | length) == 0 and
+            (.resources.removed | length) == 0 and
+            ([.sections[] | length] | add) == 0
+          ' post-deploy-plan.json > /dev/null
+
+          detection_id="$(aws cloudformation detect-stack-drift --stack-name "$PARK_TEST_STACK" --query StackDriftDetectionId --output text)"
+          for attempt in {1..60}; do
+            drift_status="$(aws cloudformation describe-stack-drift-detection-status \
+              --stack-drift-detection-id "$detection_id" --query DetectionStatus --output text)"
+            [[ "$drift_status" == "DETECTION_IN_PROGRESS" ]] || break
+            sleep 10
+          done
+          [[ "$drift_status" == "DETECTION_COMPLETE" ]]
+          stack_drift="$(aws cloudformation describe-stack-drift-detection-status \
+            --stack-drift-detection-id "$detection_id" --query StackDriftStatus --output text)"
+          [[ "$stack_drift" == "IN_SYNC" ]]
+
+          alarm_count="$(aws cloudwatch describe-alarms \
+            --alarm-name-prefix jumpyard-check-in-park-test \
+            --state-value ALARM \
+            --query 'length(MetricAlarms)' --output text)"
+          [[ "$alarm_count" == "0" ]]
+
+          aws sqs list-queues --queue-name-prefix jumpyard-check-in-park-test --output json \
+            | jq -r '.QueueUrls[]?' | while read -r queue_url; do
+                attrs="$(aws sqs get-queue-attributes --queue-url "$queue_url" \
+                  --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible --output json)"
+                jq -e '(.Attributes.ApproximateNumberOfMessages | tonumber) == 0 and (.Attributes.ApproximateNumberOfMessagesNotVisible | tonumber) == 0' \
+                  <<< "$attrs" > /dev/null
+              done
+
+          for project in "$PARK_TEST_PHONE_PROJECT" "$PARK_TEST_ADMIN_PROJECT"; do
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${project}/deployments?per_page=1" \
+              | jq -e --arg sha "$sha" '
+                  .success == true and
+                  .result[0].environment == "production" and
+                  .result[0].source.config.commit_hash == $sha and
+                  .result[0].latest_stage.status == "success"
+                ' > /dev/null
+          done
+          node tooling/scripts/verify-public-park-test.js
+
+          runner="release/infra/runtime/node_modules/.bin/ts-node"
+          "$runner" --prefer-ts-exts release/infra/runtime/scripts/run-migrations.ts \
+            --config release/infra/runtime/config/park-test-full-flow-rehearsal.json --status \
+            | tee migration-status-after.txt
+          ! grep -q ': pending$' migration-status-after.txt
+      - name: Publish deployment evidence
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Park-test deployment"
+            echo
+            echo "- Intent: \`${{ inputs.intent }}\`"
+            echo "- Release: \`${{ needs.plan.outputs.release_sha }}\`"
+            echo "- Release workflow run: \`${{ inputs.release_run_id }}\`"
+            echo "- Deployment workflow run: \`${{ github.run_id }}\`"
+            echo "- Protected environment: \`park-test\`"
+            echo "- AWS account/region: \`${AWS_ACCOUNT_ID}/${AWS_REGION}\`"
+            echo "- Phone project: \`${PARK_TEST_PHONE_PROJECT}\`"
+            echo "- Admin project: \`${PARK_TEST_ADMIN_PROJECT}\`"
+            if [[ -f post-deploy-plan.md ]]; then
+              echo
+              cat post-deploy-plan.md
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

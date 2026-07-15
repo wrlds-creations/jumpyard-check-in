@@ -49,6 +49,8 @@ Park-test / Roller Live target:
 | Admin Cognito domain | `NEXT_PUBLIC_JUMPYARD_ADMIN_COGNITO_DOMAIN=https://jumpyard-check-in-park-test-admin-376129878018.auth.eu-north-1.amazoncognito.com` |
 | Admin Cognito app client | `NEXT_PUBLIC_JUMPYARD_ADMIN_COGNITO_CLIENT_ID=4cm36dkcrptlpq9j163q45ae56` |
 
+The table is the build contract, not a local deployment recipe. Routine park-test deployment uses `.github/workflows/release.yml` to build this output once together with phone and CDK, then `.github/workflows/deploy-park-test.yml` promotes the exact `release/admin/out` directory after a read-only plan and protected approval. Rollback selects an earlier successful artifact without rebuilding. Local Wrangler deployment is break-glass only under a separate explicit Issue approval; see `docs/t0198-controlled-cicd.md`.
+
 The app is static-exported with `output: "export"`. The same admin source can target dev or park-test through the public API environment variable. The staff handoff view reads JumpYard Cloud list/detail endpoints and does not call Roller directly.
 
 The dev JumpYard Cloud API CORS config must include the exact Pages origin before the public admin URL can call staff APIs. T0087 prepares `https://jumpyard-checkin-admin.pages.dev` in `infra/config/dev.json`; if the Cloudflare project gets another hostname, update the CORS origin and deploy the dev stack before testing.

@@ -108,6 +108,21 @@ The PR must:
 - identify unresolved risks and follow-up drafts;
 - avoid unrelated changes.
 
+## Release And Deployment
+
+Repository review and environment promotion are separate controls:
+
+1. Merge implementation through a reviewed, issue-backed PR.
+2. Build one immutable release artifact for the eligible `main` commit and record its full SHA and hashes.
+3. Plan the selected artifact against the exact target with a read-only identity.
+4. Approve the protected environment only after the plan is visible.
+5. Deploy the already-built artifact without rebuilding and record post-deploy evidence.
+6. Roll back by selecting a prior successful artifact and passing it through the same plan, approval, target guards, and verification.
+
+Do not store long-lived AWS access keys. Use GitHub OIDC with exact repository/branch/environment trust. Keep external-provider credentials scoped to the intended deployment capability and protected environment. Production requires its own Issue, identity, environment, and approval path.
+
+When a new workflow cannot be exercised safely until it exists on `main`, use a reviewed implementation PR followed by a dependent rollout-evidence PR under the same open Issue. The first PR references the Issue without closing it; the evidence PR uses `Closes #<issue>` only after deploy and rollback proof are complete.
+
 ## Stacked Work
 
 Stack only when issue B truly depends on unmerged issue A.

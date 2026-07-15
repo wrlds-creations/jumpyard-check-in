@@ -1,0 +1,134 @@
+name: Build park-test release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full commit SHA reachable from main; blank uses current main
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: park-test-release-${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Immutable release bundle
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_JUMPYARD_ADMIN_COGNITO_CLIENT_ID: 4cm36dkcrptlpq9j163q45ae56
+      NEXT_PUBLIC_JUMPYARD_ADMIN_COGNITO_DOMAIN: https://jumpyard-check-in-park-test-admin-376129878018.auth.eu-north-1.amazoncognito.com
+      NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL: https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com
+      NEXT_PUBLIC_JUMPYARD_STAFF_IDENTITY_MODE: pin
+      SOURCE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || github.sha }}
+    steps:
+      - name: Check out release tooling from main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          path: tooling
+      - name: Require main workflow and resolve source commit
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Release workflow must run from refs/heads/main." >&2
+            exit 1
+          fi
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "source_sha must be a full 40-character commit SHA." >&2
+            exit 1
+          fi
+          git -C tooling fetch origin main
+          resolved="$(git -C tooling rev-parse "${SOURCE_SHA}^{commit}")"
+          git -C tooling merge-base --is-ancestor "$resolved" origin/main
+          committed_at="$(git -C tooling show -s --format=%cI "$resolved")"
+          echo "sha=${resolved,,}" >> "$GITHUB_OUTPUT"
+          echo "committed_at=$committed_at" >> "$GITHUB_OUTPUT"
+      - name: Check out exact release source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          path: source
+          ref: ${{ steps.source.outputs.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            source/infra/package-lock.json
+            source/jumpyard-checkin-phone/package-lock.json
+            source/jumpyard-checkin-admin/package-lock.json
+      - name: Install exact source dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix source/infra
+          npm ci --prefix source/jumpyard-checkin-phone
+          npm ci --prefix source/jumpyard-checkin-admin
+      - name: Validate exact source
+        run: npm --prefix source run validate
+      - name: Validate infrastructure and synth release assembly
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix source/infra run check
+          npm --prefix source/infra run synth:park-test-full-flow-rehearsal -- --quiet
+      - name: Build phone output
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix source/jumpyard-checkin-phone run lint
+          npm exec --prefix source/jumpyard-checkin-phone -- tsc --noEmit --project source/jumpyard-checkin-phone/tsconfig.json
+          npm --prefix source/jumpyard-checkin-phone run build
+      - name: Build admin output
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix source/jumpyard-checkin-admin run lint
+          npm exec --prefix source/jumpyard-checkin-admin -- tsc --noEmit --project source/jumpyard-checkin-admin/tsconfig.json
+          npm --prefix source/jumpyard-checkin-admin run build
+      - name: Package and validate immutable bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tooling/scripts/build-park-test-release.js \
+            --source-root source \
+            --output-root release \
+            --sha "${{ steps.source.outputs.sha }}" \
+            --created-at "${{ steps.source.outputs.committed_at }}"
+          node tooling/scripts/validate-park-test-release.js \
+            --release release \
+            --expected-sha "${{ steps.source.outputs.sha }}"
+      - name: Upload immutable release
+        id: artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: park-test-release-${{ steps.source.outputs.sha }}
+          path: release
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 90
+          compression-level: 6
+          overwrite: false
+      - name: Publish release evidence
+        shell: bash
+        run: |
+          {
+            echo "## Immutable park-test release"
+            echo
+            echo "- Source: \`${{ steps.source.outputs.sha }}\`"
+            echo "- Artifact: \`park-test-release-${{ steps.source.outputs.sha }}\`"
+            echo "- Artifact digest: \`${{ steps.artifact.outputs.artifact-digest }}\`"
+            echo "- Retention: 90 days"
+            echo "- Target: park-test only"
+          } >> "$GITHUB_STEP_SUMMARY"

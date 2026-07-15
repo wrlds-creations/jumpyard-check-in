@@ -31,6 +31,12 @@ Manual verification:
 
 -
 
+Release/deployment verification (when applicable):
+
+- Release artifact/run: Not applicable
+- Protected deploy run: Not applicable
+- Rollback/re-promotion runs: Not applicable
+
 ## Durable Documentation
 
 - [ ] `PROJECT_CONTEXT.md` updated if confirmed facts changed
@@ -48,3 +54,4 @@ Manual verification:
 ## Review Notes
 
 - Semantic conflict decisions, stacked-PR context, and follow-up Project items:
+- For a two-phase release Issue, state whether this is the implementation PR (`Refs #...`) or rollout-evidence PR (`Closes #...`).

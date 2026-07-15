@@ -10,7 +10,7 @@ Start every implementation issue by reading:
 2. Read `DECISIONS.md`.
 3. Read `REPO_CURRENT_STATE.md`.
 4. Read the static task resolver in `CODEX_TASK.md`, resolve the issue number from the current branch, and load the issue with `gh issue view`.
-5. Check `skills/` for a matching domain or workflow skill, including `github-collaboration` for branch, PR, Project, or integration work.
+5. Check `skills/` for a matching domain or workflow skill, including `github-collaboration` for branch, PR, Project, integration, release, or deployment work.
 
 Before AWS work, also read `AWS_RESOURCES.md` and use the `aws-project-infrastructure` skill.
 
@@ -52,6 +52,9 @@ Before AWS work, also read `AWS_RESOURCES.md` and use the `aws-project-infrastru
 - Do not touch files outside the issue's allowed scope unless Love explicitly approves it.
 - Do not push directly to `main`.
 - Do not commit unless explicitly asked.
+- Local development and validation are normal. Routine park-test deployment is not: after T0198 it must promote an immutable GitHub release artifact through the protected `park-test` environment.
+- Do not rebuild during deploy or rollback. Select the successful release workflow run and exact commit SHA, review the plan, then promote that same artifact.
+- Local CDK or Wrangler deployment to park-test is break-glass only. It requires an approved Issue that explicitly authorizes the exception, the exact target and reason, and a follow-up record in GitHub.
 
 ## Branch And PR Workflow
 
@@ -62,6 +65,7 @@ Before AWS work, also read `AWS_RESOURCES.md` and use the `aws-project-infrastru
 - A PR must include `Closes #<issue>`, its base and dependencies, validation results, manual verification, and unresolved risks.
 - Bring work into `main` through a reviewed PR.
 - Follow `references/github-collaboration-workflow.md` for drafts, stacked work, stale branch integration, duplicate legacy IDs, and semantic documentation merges.
+- A release/deploy Issue may use one implementation PR and one dependent rollout-evidence PR when the protected workflow can only be proven after its workflow files reach `main`. Keep the Issue open until rollout evidence is merged.
 
 ## Project Boundary
 
@@ -81,6 +85,15 @@ Before creating, changing, deploying, or deleting AWS resources:
 
 No AWS resources should be created for an issue unless the issue explicitly allows AWS work.
 
+For routine park-test releases after T0198:
+
+1. Merge reviewed code through a PR and let `.github/workflows/release.yml` build the immutable artifact.
+2. Dispatch `.github/workflows/deploy-park-test.yml` from `main` with the successful release run ID, full SHA, intent, and exact approval phrase.
+3. Review the read-only plan before approving the protected `park-test` job.
+4. Use the same workflow and an earlier successful release artifact for rollback; never rebuild the old source during rollback.
+
+Production deployment remains disabled and requires a separate approved Issue.
+
 ## Completion Summary
 
 Always summarize:
@@ -92,4 +105,5 @@ Always summarize:
 - Durable docs updated
 - Risks or unresolved questions
 - Project drafts created for follow-ups
+- Release, deployment, rollback, and re-promotion run IDs when deployment work occurred
 - Recommended next step
