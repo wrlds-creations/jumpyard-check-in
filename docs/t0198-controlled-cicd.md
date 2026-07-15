@@ -92,7 +92,7 @@ The run summary records intent, source SHA, release run ID, deploy run ID, envir
 
 ## First Bootstrap
 
-The AWS account already has `token.actions.githubusercontent.com` as an OIDC provider. T0198 reuses it and does not change its broad shared provider configuration. The approved one-time local bootstrap reached `CREATE_COMPLETE` on `2026-07-15` with exactly four resources: two roles and their two inline policies:
+The AWS account already has `token.actions.githubusercontent.com` as an OIDC provider. T0198 reuses it and does not change its broad shared provider configuration. The approved one-time local bootstrap reached `CREATE_COMPLETE` on `2026-07-15` with exactly four resources: two roles and their two inline policies. The same access stack later reached `UPDATE_COMPLETE` after the post-deploy verifier proved that the deploy role also needed the read-only `cloudformation:DetectStackResourceDrift` action on the exact application stack:
 
 - `jumpyard-check-in-park-test-github-actions-plan`; and
 - `jumpyard-check-in-park-test-github-actions-deploy`.
@@ -122,4 +122,19 @@ The IAM roles and GitHub environment have no AWS runtime charge. Expected increm
 
 ## Rollout Evidence
 
-Implementation PR and live rollout evidence are intentionally separate because the protected workflows can run only after their definitions reach `main`. Issue #201 remains open through the implementation merge. The dependent evidence PR records the AWS bootstrap, GitHub protection/secret readback, release, promote, rollback, re-promotion, and final live checks before it closes the Issue.
+Implementation and the two narrowly scoped verifier corrections reached `main` through [PR #202](https://github.com/wrlds-creations/jumpyard-check-in/pull/202), [PR #203](https://github.com/wrlds-creations/jumpyard-check-in/pull/203), and [PR #204](https://github.com/wrlds-creations/jumpyard-check-in/pull/204). The final source is commit `bdd2d257151c032bd2ca74d77e04b860cf1e626c`.
+
+| Rehearsal step | Selected source / release | Deployment run | Result |
+|---|---|---|---|
+| Final release build | `bdd2d257151c032bd2ca74d77e04b860cf1e626c`; release run [29420469399](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/29420469399) | n/a | `park-test-release-bdd2d257151c032bd2ca74d77e04b860cf1e626c`, artifact id `8345140260`, digest `sha256:788f0c1edee5b4841b78875b9efdd220b55f279bc9b01eed63387238ead29794` |
+| Promote | final release above | [29420959168](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/29420959168) | Successful plan, approval, migration check, AWS/Pages deploy, and post-deploy verification |
+| Rollback | `020a84c6a8cc8a64cd348ce7a80e33b3a9b21e17`; release run [29406042752](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/29406042752); digest `sha256:e2f443cb7c1806d043289345a461c398fc2a1d115deb903d1e767d64da9a4902` | [29421274304](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/29421274304) | Earlier immutable artifact restored successfully without rebuilding |
+| Re-promote | final release above | [29421631770](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/29421631770) | Final intended version restored successfully end to end |
+
+Every rehearsal plan compared 187 selected resources with 187 deployed resources and reported zero additions, changes, or removals. The final AWS application stack remained `UPDATE_COMPLETE`, its selected and deployed templates had identical hashes, drift was `IN_SYNC`, all park-test alarms were outside `ALARM`, all related queues were empty, and migrations through `0016` were applied with none pending.
+
+The final phone deployment is `https://fdc422b2.jumpyard-check-in-park-test.pages.dev` behind `https://jumpyard-check-in-park-test.pages.dev`. The final staff/admin deployment is `https://92a3d55f.jumpyard-checkin-admin-park-test.pages.dev` behind `https://jumpyard-checkin-admin-park-test.pages.dev`. Cloudflare readback showed both production deployments at commit `bdd2d25`; phone, staff, admin, and the Apple Pay association route returned HTTP `200` with the exact park-test API target.
+
+The first two promotion attempts stopped only in post-deploy verification. Run `29406310068` exposed the missing drift-read permission; PR #203 added only that exact read action and a clean access-stack update. Run `29418336398` exposed an outdated Cloudflare response field; PR #204 corrected the production-deployment query and commit-hash field. Both failures remained inside the protected workflow and produced no production change, Roller write, guest send, lifecycle apply, venue/date expansion, staff-account change, or application-stack resource delta.
+
+GitHub readback confirmed required pull-request checks, protected `main`, and a `park-test` environment restricted to `main` with Love as required reviewer. The Cloudflare credential is stored only as the protected environment secret `CLOUDFLARE_API_TOKEN`; an unused setup token was revoked before the successful rehearsal and no credential value was committed.
