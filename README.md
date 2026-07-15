@@ -26,6 +26,7 @@ Project draft issue -> approved repository issue -> branch -> PR -> main
 - Repository Markdown owns durable project facts, decisions, external gates, guardrails, and useful legacy history.
 - Use `AWS_RESOURCES.md` and `skills/aws-project-infrastructure/` before AWS work.
 - Use `references/github-collaboration-workflow.md` and `skills/github-collaboration/` for Project, issue, branch, PR, migration, or integration work.
+- Local development stays local, but routine park-test deployment is GitHub-native: reviewed `main` commits create immutable artifacts, a read-only plan precedes protected approval, and the selected artifact is deployed or rolled back without rebuilding.
 
 New work does not receive a manual `T####` ID. Existing T/FU/TBD/Gate IDs remain legacy references in the migration record and history.
 
@@ -75,7 +76,7 @@ npm run infra:check
 npm run infra:synth
 ```
 
-The `infra/` CDK app has deployed `dev` and `park-test` environments. `infra/config/dev.example.json` remains synth-only. Never deploy from the example config, and do not run any deploy without an approved repository Issue that explicitly allows it, confirmed AWS identity/metadata, reviewed diff, and explicit deployment approval.
+The `infra/` CDK app has deployed `dev` and `park-test` environments. `infra/config/dev.example.json` remains synth-only. Never deploy from the example config. Park-test routine releases use `.github/workflows/release.yml` and `.github/workflows/deploy-park-test.yml`; direct local CDK/Wrangler commands are emergency-only and require a separately explicit approved Issue.
 
 ## Deployment Notes
 
@@ -84,6 +85,7 @@ The `infra/` CDK app has deployed `dev` and `park-test` environments. `infra/con
 - `jumpyard-checkin-kiosk` currently uses the default Next.js config.
 - Dev and park-test Cloudflare Pages targets exist for phone/admin. Production phone/admin domains are planned in Sprint 3 and are not yet approved or deployed.
 - Kiosk deployment is owned by the separate kiosk workstream.
+- Park-test release and rollback instructions are in `docs/t0198-controlled-cicd.md`. Production is deliberately absent from those workflows.
 
 ## Project Documentation
 

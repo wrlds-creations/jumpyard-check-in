@@ -15,6 +15,9 @@ const coreFiles = [
   'REPO_CURRENT_STATE.md',
   'FOLLOWUPS.md',
   '.github/pull_request_template.md',
+  '.github/workflows/ci.yml',
+  '.github/workflows/release.yml',
+  '.github/workflows/deploy-park-test.yml',
   '.github/ISSUE_TEMPLATE/implementation.yml',
   'references/aws-tagging-standard.md',
   'references/aws-resource-naming-standard.md',
@@ -23,6 +26,7 @@ const coreFiles = [
   'references/project-intake-questions.md',
   'references/codex-working-model.md',
   'references/github-collaboration-workflow.md',
+  'docs/t0198-controlled-cicd.md',
   'docs/history/completed-tickets.md',
   'docs/history/validation-log.md',
   'docs/history/sprint-1-ticket-history.md',
@@ -37,6 +41,11 @@ const coreFiles = [
   'scripts/validate-github-project-migration.js',
   'scripts/validate-skills.js',
   'scripts/validate-aws-tags.js',
+  'scripts/build-park-test-release.js',
+  'scripts/validate-park-test-release.js',
+  'scripts/compare-cloudformation-templates.js',
+  'scripts/verify-public-park-test.js',
+  'scripts/validate-t0198-cicd.js',
 ];
 
 const optionalFiles = [
