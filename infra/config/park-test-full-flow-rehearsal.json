@@ -28,6 +28,16 @@
     "environment": "live",
     "baseUrl": "https://api.roller.app"
   },
+  "dataSync": {
+    "scheduleEnabled": true,
+    "liveApproval": "T0196_LIVE_BOOKING_INDEX_APPROVED",
+    "venueId": "50871",
+    "requestIntervalMs": 1000,
+    "pageSize": 100,
+    "maxPages": 50,
+    "maxWindowDays": 31,
+    "bookingRetentionDays": 30
+  },
   "bookingTimeSms": {
     "scheduleEnabled": false,
     "confirmSend": false,

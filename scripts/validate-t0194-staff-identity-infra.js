@@ -75,8 +75,15 @@ function iamPoliciesReference(template, logicalId) {
 function validateParkTest(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    170,
-    'T0194 remains intact inside the 154-resource deployed baseline plus the exact 16-resource T0195 database-identity delta.',
+    171,
+    'T0194 remains intact inside the T0195 boundary plus the exact T0196 booking-index freshness alarm.',
+  );
+  assert.equal(
+    entriesOfType(template, 'AWS::CloudWatch::Alarm').filter(
+      ([, alarm]) => alarm.Properties.AlarmName === 'jumpyard-check-in-park-test-booking-index-stale',
+    ).length,
+    1,
+    'T0196 must add exactly one booking-index freshness alarm.',
   );
 
   const [userPoolId, userPool] = onlyResource(template, 'AWS::Cognito::UserPool');

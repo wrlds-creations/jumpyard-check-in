@@ -38,6 +38,7 @@ export const PARK_TEST_FRONTEND_REDEEM_REHEARSAL_APPROVAL =
   'T0176_FRONTEND_REDEEM_REHEARSAL_APPROVED';
 export const PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL =
   'T0176_FULL_FLOW_REHEARSAL_APPROVED';
+export const PARK_TEST_LIVE_DATA_SYNC_APPROVAL = 'T0196_LIVE_BOOKING_INDEX_APPROVED';
 export const PARK_TEST_ADMIN_IDENTITY_CALLBACK_URL =
   'https://jumpyard-checkin-admin-park-test.pages.dev/auth/callback';
 export const PARK_TEST_ADMIN_IDENTITY_LOGOUT_URL =
@@ -76,6 +77,16 @@ export interface JumpYardCloudConfig {
     readonly rateMinutes: number;
     readonly scheduleEnabled: boolean;
     readonly windowMinutes: number;
+  };
+  readonly dataSync: {
+    readonly bookingRetentionDays: number;
+    readonly liveApproval: string;
+    readonly maxPages: number;
+    readonly maxWindowDays: number;
+    readonly pageSize: number;
+    readonly requestIntervalMs: number;
+    readonly scheduleEnabled: boolean;
+    readonly venueId: string;
   };
   readonly guestEmail: {
     readonly checkinBaseUrl: string;
@@ -135,6 +146,16 @@ interface RawConfig {
     readonly rateMinutes?: unknown;
     readonly scheduleEnabled?: unknown;
     readonly windowMinutes?: unknown;
+  };
+  readonly dataSync?: {
+    readonly bookingRetentionDays?: unknown;
+    readonly liveApproval?: unknown;
+    readonly maxPages?: unknown;
+    readonly maxWindowDays?: unknown;
+    readonly pageSize?: unknown;
+    readonly requestIntervalMs?: unknown;
+    readonly scheduleEnabled?: unknown;
+    readonly venueId?: unknown;
   };
   readonly guestEmail?: {
     readonly checkinBaseUrl?: unknown;
@@ -208,6 +229,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   const rollerBaseUrl = normalizeBaseUrl(readString(raw.roller?.baseUrl, 'roller.baseUrl'), 'roller.baseUrl');
   const safetyGates = readSafetyGatesConfig(raw.safetyGates);
   const deploymentEnvironment = readDeploymentEnvironment(tags['WRLDS:Environment']);
+  const dataSync = readDataSyncConfig(raw.dataSync, deploymentEnvironment, resourcePrefix);
   const staffIdentity = readStaffIdentityConfig(raw.staffIdentity, deploymentEnvironment);
 
   if (!/^\d{12}$/.test(awsAccount)) {
@@ -230,6 +252,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     awsAccount,
     awsRegion,
     bookingTimeSms,
+    dataSync,
     deploymentEnvironment,
     resourcePrefix,
     rollerBaseUrl,
@@ -244,6 +267,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     awsAccount,
     awsRegion,
     bookingTimeSms,
+    dataSync,
     guestEmail,
     resourcePrefix,
     roller: {
@@ -260,6 +284,7 @@ interface EnvironmentContractInput {
   readonly awsAccount: string;
   readonly awsRegion: string;
   readonly bookingTimeSms: JumpYardCloudConfig['bookingTimeSms'];
+  readonly dataSync: JumpYardCloudConfig['dataSync'];
   readonly deploymentEnvironment: DeploymentEnvironment;
   readonly resourcePrefix: string;
   readonly rollerBaseUrl: string;
@@ -275,6 +300,9 @@ function validateEnvironmentContract(input: EnvironmentContractInput): void {
       throw new Error('dev staffIdentity.mode must remain legacy.');
     }
     validateDevRollerContract(input.rollerEnvironment, input.rollerBaseUrl);
+    if (!input.dataSync.scheduleEnabled) {
+      throw new Error('dev dataSync.scheduleEnabled must remain true.');
+    }
     return;
   }
 
@@ -344,6 +372,23 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
 
   if (input.rollerBaseUrl !== ROLLER_LIVE_BASE_URL) {
     throw new Error(`park-test config must use Roller Live base URL ${ROLLER_LIVE_BASE_URL}.`);
+  }
+
+  if (input.dataSync.venueId !== PARK_TEST_STAFF_IDENTITY_VENUE_ID) {
+    throw new Error(`park-test dataSync.venueId must be ${PARK_TEST_STAFF_IDENTITY_VENUE_ID}.`);
+  }
+
+  if (
+    input.dataSync.scheduleEnabled &&
+    input.dataSync.liveApproval !== PARK_TEST_LIVE_DATA_SYNC_APPROVAL
+  ) {
+    throw new Error(
+      `park-test dataSync.liveApproval must equal ${PARK_TEST_LIVE_DATA_SYNC_APPROVAL} when the schedule is enabled.`,
+    );
+  }
+
+  if (!input.dataSync.scheduleEnabled && input.dataSync.liveApproval.length > 0) {
+    throw new Error('park-test dataSync.liveApproval must be empty while the schedule is disabled.');
   }
 
   if (input.tags['WRLDS:Project'] !== 'jumpyard-check-in') {
@@ -689,6 +734,49 @@ function readApiConfig(raw: RawConfig['api']): JumpYardCloudConfig['api'] {
     throttlingBurstLimit,
     throttlingRateLimit,
   };
+}
+
+function readDataSyncConfig(
+  raw: RawConfig['dataSync'],
+  deploymentEnvironment: DeploymentEnvironment,
+  resourcePrefix: string,
+): JumpYardCloudConfig['dataSync'] {
+  const config = {
+    bookingRetentionDays: readOptionalInteger(
+      raw?.bookingRetentionDays,
+      30,
+      1,
+      90,
+      'dataSync.bookingRetentionDays',
+    ),
+    liveApproval: readOptionalString(raw?.liveApproval, '', 'dataSync.liveApproval'),
+    maxPages: readOptionalInteger(raw?.maxPages, 50, 1, 50, 'dataSync.maxPages'),
+    maxWindowDays: readOptionalInteger(raw?.maxWindowDays, 31, 1, 31, 'dataSync.maxWindowDays'),
+    pageSize: readOptionalInteger(raw?.pageSize, 100, 1, 100, 'dataSync.pageSize'),
+    requestIntervalMs: readOptionalInteger(
+      raw?.requestIntervalMs,
+      1000,
+      1000,
+      10_000,
+      'dataSync.requestIntervalMs',
+    ),
+    scheduleEnabled: readOptionalBoolean(
+      raw?.scheduleEnabled,
+      deploymentEnvironment === 'dev',
+      'dataSync.scheduleEnabled',
+    ),
+    venueId: readOptionalString(
+      raw?.venueId,
+      deploymentEnvironment === 'dev' ? resourcePrefix : PARK_TEST_STAFF_IDENTITY_VENUE_ID,
+      'dataSync.venueId',
+    ),
+  };
+
+  if (!/^[A-Za-z0-9-]+$/.test(config.venueId)) {
+    throw new Error('dataSync.venueId must use letters, numbers, or hyphens only.');
+  }
+
+  return config;
 }
 
 function readCorsOrigins(value: unknown, fieldName: string): readonly string[] {

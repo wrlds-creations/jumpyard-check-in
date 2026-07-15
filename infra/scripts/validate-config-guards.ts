@@ -23,6 +23,16 @@ interface TestConfig {
     scheduleEnabled: boolean;
     windowMinutes: number;
   };
+  dataSync?: {
+    bookingRetentionDays: number;
+    liveApproval: string;
+    maxPages: number;
+    maxWindowDays: number;
+    pageSize: number;
+    requestIntervalMs: number;
+    scheduleEnabled: boolean;
+    venueId: string;
+  };
   readonly guestEmail: {
     checkinBaseUrl: string;
     fromAddress: string;
@@ -319,6 +329,19 @@ parkTestApprovedFullFlowRehearsal.safetyGates.fullFlowRehearsalAllowedOperatingD
 ];
 parkTestApprovedFullFlowRehearsal.safetyGates.fullFlowRehearsalVenueId = '50871';
 
+const parkTestLiveSyncWithoutApproval = cloneConfig(parkTestApprovedFullFlowRehearsal);
+if (!parkTestLiveSyncWithoutApproval.dataSync) throw new Error('Expected park-test dataSync config.');
+parkTestLiveSyncWithoutApproval.dataSync.scheduleEnabled = true;
+parkTestLiveSyncWithoutApproval.dataSync.liveApproval = '';
+
+const parkTestLiveSyncWrongVenue = cloneConfig(parkTestApprovedFullFlowRehearsal);
+if (!parkTestLiveSyncWrongVenue.dataSync) throw new Error('Expected park-test dataSync config.');
+parkTestLiveSyncWrongVenue.dataSync.venueId = 'not-nacka';
+
+const parkTestLiveSyncApprovalWhileDisabled = cloneConfig(parkTestConfig);
+if (!parkTestLiveSyncApprovalWhileDisabled.dataSync) throw new Error('Expected park-test dataSync config.');
+parkTestLiveSyncApprovalWhileDisabled.dataSync.liveApproval = 'T0196_LIVE_BOOKING_INDEX_APPROVED';
+
 const parkTestFullFlowWithoutDates = cloneConfig(parkTestApprovedFullFlowRehearsal);
 parkTestFullFlowWithoutDates.safetyGates.fullFlowRehearsalAllowedOperatingDates = [];
 
@@ -546,6 +569,21 @@ expectFail(
   /must not be combined/,
 );
 expectPass('approved park-test full-flow rehearsal config passes', parkTestApprovedFullFlowRehearsal, 'park-test');
+expectFail(
+  'park-test Live data sync without exact approval fails closed',
+  parkTestLiveSyncWithoutApproval,
+  /dataSync.liveApproval/,
+);
+expectFail(
+  'park-test Live data sync wrong venue fails closed',
+  parkTestLiveSyncWrongVenue,
+  /dataSync.venueId/,
+);
+expectFail(
+  'park-test Live data sync approval cannot remain while disabled',
+  parkTestLiveSyncApprovalWhileDisabled,
+  /dataSync.liveApproval must be empty/,
+);
 expectFail(
   'park-test full-flow rehearsal approval without operating dates fails closed',
   parkTestFullFlowWithoutDates,

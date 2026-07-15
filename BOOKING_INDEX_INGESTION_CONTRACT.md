@@ -116,13 +116,13 @@ ROLLER Data API `startDate` and `endDate` are modified-date windows. They are no
 Default daily cadence:
 
 ```text
-01:00-07:00 Europe/Stockholm daily, outside business hours
+02:00 UTC daily through EventBridge (03:00 or 04:00 Europe/Stockholm)
 ```
 
 Initial backfill window:
 
 ```text
-TBD approved historical/future window, for example 12 months back plus relevant future bookings
+2025-07-14 -> 2026-07-15 modified-date discovery window for T0196 park-test
 ```
 
 Daily incremental window:
@@ -131,7 +131,7 @@ Daily incremental window:
 previous successful sync modified-date window -> current sync end
 ```
 
-The exact backfill range remains configurable because operational needs, API limits, and data retention policy must be approved before large imports.
+T0196 confirmed Roller Live accepts at most one modified-date day per provider request. The guarded operator may group those requests into bounded transaction windows, while the handler splits them back into one-day calls and keeps one request per second. Aurora retains visits from 30 days before the run plus all future visits; old provider rows and unrelated ticket/payment/customer rows are filtered before upsert. The complete Live contract and rollout evidence are in [docs/t0196-booking-index-morning-seed.md](docs/t0196-booking-index-morning-seed.md).
 
 ### Roller Inputs
 
@@ -140,9 +140,9 @@ The editor flow and Roller response material identify these Data API endpoints a
 | Endpoint | Purpose | T0005 Confidence |
 |---|---|---|
 | Get bookings / `/data/bookingitems` | Booking item baseline and lookup keys. | Confirmed in T0011 with `startDate`, `endDate`, `pageNumber`, `pageSize`. |
-| Get tickets | Ticket ids, ticket holder context, membership status, redeem readiness context. | Confirmed pattern, exact query params TBD. |
-| Get payments | Payment ledger/status context for check-in and support. | Confirmed pattern, exact query params TBD. |
-| Get customers | Customer/contact cache for SMS readiness. | Confirmed pattern, exact query params TBD. |
+| Get tickets / `/data/tickets` | Ticket ids, ticket holder context, membership status, redeem readiness context. | Confirmed in Roller Live with `startDate`, `endDate`, `pageNumber`, and `pageSize`; only approved booking references are retained. |
+| Get payments / `/data/bookingpayments` | Payment ledger/status context for check-in and support, including signed refund/credit amounts. | Confirmed in Roller Live with the same one-day pagination contract; only approved booking references are retained. |
+| Get customers / `/data/customers` | Customer/contact cache for check-in readiness. | Confirmed in Roller Live with the same one-day pagination contract; only customer ids linked to approved bookings are retained. |
 
 Do not use Get attendance for the expected-guest seed. Attendance is for actual arrivals/redeem reconciliation, not for building the morning list of expected guests.
 

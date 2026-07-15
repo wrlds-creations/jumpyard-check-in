@@ -169,8 +169,15 @@ function validateRouteSettings(template, routesByKey) {
 function validateApprovedProtectionResources(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    170,
-    'The 154-resource T0194 boundary plus the exact 16-resource T0195 database-identity delta must synthesize.',
+    171,
+    'The T0195 170-resource boundary plus the exact T0196 booking-index freshness alarm must synthesize.',
+  );
+  assert.equal(
+    resourcesOfType(template, 'AWS::CloudWatch::Alarm').filter(
+      ([, alarm]) => alarm.Properties.AlarmName === 'jumpyard-check-in-park-test-booking-index-stale',
+    ).length,
+    1,
+    'T0196 must add exactly one booking-index freshness alarm.',
   );
   assert.equal(resourcesOfType(template, 'AWS::Cognito::UserPool').length, 1);
   assert.equal(resourcesOfType(template, 'AWS::Cognito::UserPoolClient').length, 1);
@@ -223,7 +230,7 @@ function main() {
   console.log('[pass] T0193 uses AWS_IAM only for five internal session-link routes and legacy direct redeem');
   console.log('[pass] T0194 overlays one JWT authorizer on exactly four park-test admin routes');
   console.log('[pass] T0193 applies shared-IP-safe aggregate route limits and preserves a 50/150 default envelope');
-  console.log('[pass] T0194 admin resources and the exact 16-resource T0195 database-identity delta are isolated from API protection');
+  console.log('[pass] T0194/T0195 resources and the T0196 freshness alarm are isolated from API protection');
 }
 
 try {
