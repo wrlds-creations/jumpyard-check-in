@@ -298,7 +298,7 @@ git diff --check
 
 Routine park-test changes are deployed from GitHub, not from an operator laptop:
 
-1. Merge the approved Issue PR to `main` after the required `CI / Repository`, `CI / Infrastructure`, `CI / Phone`, and `CI / Admin` checks pass.
+1. Merge the approved Issue PR to `main` after the required `Repository`, `Infrastructure`, `Phone`, and `Admin` checks pass.
 2. Open the successful **Build park-test release** run for the intended full commit SHA and note its run ID.
 3. Dispatch **Deploy or roll back park-test** from `main` with that run ID, full SHA, intent, and `I_APPROVE_PARK_TEST_<full SHA>`.
 4. Inspect the read-only CloudFormation plan in the run summary, then approve the protected `park-test` job.
