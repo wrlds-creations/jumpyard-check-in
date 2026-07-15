@@ -39,6 +39,7 @@ export const PARK_TEST_FRONTEND_REDEEM_REHEARSAL_APPROVAL =
 export const PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL =
   'T0176_FULL_FLOW_REHEARSAL_APPROVED';
 export const PARK_TEST_LIVE_DATA_SYNC_APPROVAL = 'T0196_LIVE_BOOKING_INDEX_APPROVED';
+export const PARK_TEST_LIVE_WEBHOOK_PROCESSING_APPROVAL = 'T0197_LIVE_WEBHOOK_PROCESSING_APPROVED';
 export const PARK_TEST_ADMIN_IDENTITY_CALLBACK_URL =
   'https://jumpyard-checkin-admin-park-test.pages.dev/auth/callback';
 export const PARK_TEST_ADMIN_IDENTITY_LOGOUT_URL =
@@ -93,6 +94,14 @@ export interface JumpYardCloudConfig {
     readonly fromAddress: string;
     readonly provider: string;
     readonly replyToAddresses: readonly string[];
+  };
+  readonly webhookProcessing: {
+    readonly bookingRetentionDays: number;
+    readonly liveApproval: string;
+    readonly recoveryLimit: number;
+    readonly recoveryScheduleEnabled: boolean;
+    readonly requestIntervalMs: number;
+    readonly venueId: string;
   };
   readonly resourcePrefix: string;
   readonly roller: {
@@ -163,6 +172,14 @@ interface RawConfig {
     readonly provider?: unknown;
     readonly replyToAddresses?: unknown;
   };
+  readonly webhookProcessing?: {
+    readonly bookingRetentionDays?: unknown;
+    readonly liveApproval?: unknown;
+    readonly recoveryLimit?: unknown;
+    readonly recoveryScheduleEnabled?: unknown;
+    readonly requestIntervalMs?: unknown;
+    readonly venueId?: unknown;
+  };
   readonly resourcePrefix?: unknown;
   readonly roller?: {
     readonly environment?: unknown;
@@ -231,6 +248,11 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   const deploymentEnvironment = readDeploymentEnvironment(tags['WRLDS:Environment']);
   const dataSync = readDataSyncConfig(raw.dataSync, deploymentEnvironment, resourcePrefix);
   const staffIdentity = readStaffIdentityConfig(raw.staffIdentity, deploymentEnvironment);
+  const webhookProcessing = readWebhookProcessingConfig(
+    raw.webhookProcessing,
+    deploymentEnvironment,
+    safetyGates.rollerWebhookProcessingEnabled,
+  );
 
   if (!/^\d{12}$/.test(awsAccount)) {
     throw new Error('awsAccount must be a 12 digit AWS account id.');
@@ -260,6 +282,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     safetyGates,
     staffIdentity,
     tags,
+    webhookProcessing,
   });
 
   return {
@@ -277,6 +300,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     safetyGates,
     staffIdentity,
     tags,
+    webhookProcessing,
   };
 }
 
@@ -292,6 +316,7 @@ interface EnvironmentContractInput {
   readonly safetyGates: JumpYardCloudConfig['safetyGates'];
   readonly staffIdentity: JumpYardCloudConfig['staffIdentity'];
   readonly tags: Record<RequiredWrlDsTag, string>;
+  readonly webhookProcessing: JumpYardCloudConfig['webhookProcessing'];
 }
 
 function validateEnvironmentContract(input: EnvironmentContractInput): void {
@@ -302,6 +327,9 @@ function validateEnvironmentContract(input: EnvironmentContractInput): void {
     validateDevRollerContract(input.rollerEnvironment, input.rollerBaseUrl);
     if (!input.dataSync.scheduleEnabled) {
       throw new Error('dev dataSync.scheduleEnabled must remain true.');
+    }
+    if (input.webhookProcessing.liveApproval.length > 0) {
+      throw new Error('dev webhookProcessing.liveApproval must remain empty.');
     }
     return;
   }
@@ -389,6 +417,27 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
 
   if (!input.dataSync.scheduleEnabled && input.dataSync.liveApproval.length > 0) {
     throw new Error('park-test dataSync.liveApproval must be empty while the schedule is disabled.');
+  }
+
+  if (input.safetyGates.rollerWebhookProcessingEnabled) {
+    if (input.webhookProcessing.liveApproval !== PARK_TEST_LIVE_WEBHOOK_PROCESSING_APPROVAL) {
+      throw new Error(
+        `park-test webhookProcessing.liveApproval must equal ${PARK_TEST_LIVE_WEBHOOK_PROCESSING_APPROVAL} when webhook processing is enabled.`,
+      );
+    }
+    if (!input.webhookProcessing.recoveryScheduleEnabled) {
+      throw new Error('park-test webhookProcessing.recoveryScheduleEnabled must be true when webhook processing is enabled.');
+    }
+    if (input.webhookProcessing.venueId !== PARK_TEST_STAFF_IDENTITY_VENUE_ID) {
+      throw new Error(`park-test webhookProcessing.venueId must be ${PARK_TEST_STAFF_IDENTITY_VENUE_ID}.`);
+    }
+  } else if (
+    input.webhookProcessing.liveApproval.length > 0 ||
+    input.webhookProcessing.recoveryScheduleEnabled
+  ) {
+    throw new Error(
+      'park-test webhookProcessing approval and recovery schedule must stay empty/off while webhook processing is disabled.',
+    );
   }
 
   if (input.tags['WRLDS:Project'] !== 'jumpyard-check-in') {
@@ -686,10 +735,7 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     throw new Error('park-test safetyGates.staffAuthEnabled must stay false until a scoped ticket enables it.');
   }
 
-  const blockedGates: Array<keyof JumpYardCloudConfig['safetyGates']> = [
-    'guestMessagingSendsEnabled',
-    'rollerWebhookProcessingEnabled',
-  ];
+  const blockedGates: Array<keyof JumpYardCloudConfig['safetyGates']> = ['guestMessagingSendsEnabled'];
   for (const gate of blockedGates) {
     if (input.safetyGates[gate]) {
       throw new Error(`park-test safetyGates.${gate} must stay false until a scoped ticket enables it.`);
@@ -774,6 +820,47 @@ function readDataSyncConfig(
 
   if (!/^[A-Za-z0-9-]+$/.test(config.venueId)) {
     throw new Error('dataSync.venueId must use letters, numbers, or hyphens only.');
+  }
+
+  return config;
+}
+
+function readWebhookProcessingConfig(
+  raw: RawConfig['webhookProcessing'],
+  deploymentEnvironment: DeploymentEnvironment,
+  processingEnabled: boolean,
+): JumpYardCloudConfig['webhookProcessing'] {
+  const config = {
+    bookingRetentionDays: readOptionalInteger(
+      raw?.bookingRetentionDays,
+      30,
+      1,
+      90,
+      'webhookProcessing.bookingRetentionDays',
+    ),
+    liveApproval: readOptionalString(raw?.liveApproval, '', 'webhookProcessing.liveApproval'),
+    recoveryLimit: readOptionalInteger(raw?.recoveryLimit, 10, 1, 25, 'webhookProcessing.recoveryLimit'),
+    recoveryScheduleEnabled: readOptionalBoolean(
+      raw?.recoveryScheduleEnabled,
+      deploymentEnvironment === 'dev' && processingEnabled,
+      'webhookProcessing.recoveryScheduleEnabled',
+    ),
+    requestIntervalMs: readOptionalInteger(
+      raw?.requestIntervalMs,
+      1000,
+      1000,
+      10_000,
+      'webhookProcessing.requestIntervalMs',
+    ),
+    venueId: readOptionalString(
+      raw?.venueId,
+      deploymentEnvironment === 'park-test' ? PARK_TEST_STAFF_IDENTITY_VENUE_ID : '',
+      'webhookProcessing.venueId',
+    ),
+  };
+
+  if (config.venueId && !/^[A-Za-z0-9-]+$/.test(config.venueId)) {
+    throw new Error('webhookProcessing.venueId must use letters, numbers, or hyphens only.');
   }
 
   return config;

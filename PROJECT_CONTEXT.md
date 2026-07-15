@@ -33,7 +33,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 - History: [completed tickets](docs/history/completed-tickets.md), [validation evidence](docs/history/validation-log.md), [Sprint 1 narrative](docs/history/sprint-1-ticket-history.md), and [done followups](docs/history/followups-done.md).
 - Planning migration: [Project policy/gates](docs/roadmap/backlog.md) and [legacy-to-Project mapping](docs/history/github-project-migration-2026-07-14.md).
-- Current evidence: [Sprint roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf) and the T0191-T0196 [environment](docs/t0191-park-test-preproduction-contract.md), [foundation](docs/t0192-park-test-foundation-qualification.md), [API](docs/t0193-api-protection.md), [identity](docs/t0194-staff-identity.md), [lifecycle](docs/t0195-data-lifecycle-policy.md), and [booking-index](docs/t0196-booking-index-morning-seed.md) records.
+- Current evidence: [Sprint roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf) and T0191-T0197 [environment](docs/t0191-park-test-preproduction-contract.md), [foundation](docs/t0192-park-test-foundation-qualification.md), [API](docs/t0193-api-protection.md), [identity](docs/t0194-staff-identity.md), [lifecycle](docs/t0195-data-lifecycle-policy.md), [index](docs/t0196-booking-index-morning-seed.md), and [webhook](docs/t0197-webhook-reconciliation.md) records.
 
 ## Durable Architecture Facts
 
@@ -76,9 +76,9 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 ## Data And Integration Facts
 
 - Aurora stores normalized booking, item, ticket, payment, product, contact, webhook, session, token, delivery, and draft/link state. Data API windows populate an operational cache, never the source of truth.
-- Booking webhooks are registered in Roller Playground and use the confirmed `x-roller-apikey` header in dev; production webhook auth/signature/IP policy remains open.
+- Booking webhooks use `x-roller-apikey`; park-test validates its secret value. Production review remains open.
 - Daily dev Data API sync runs internally; guest messaging uses opaque `jy_token` links resolved server-side.
-- Park-test Live/Nacka booking-index sync runs daily with bounded provider traffic, 30-day-past plus all-future visit retention, and freshness monitoring; the approved initial backfill is complete. Critical actions still confirm against Roller, and Live webhook processing stays off. See [the T0196 record](docs/t0196-booking-index-morning-seed.md).
+- Park-test Live/Nacka index sync runs daily with bounded traffic, 30-day-past/all-future retention, and freshness monitoring. Webhook `1465` feeds durable FIFO intake and a serialized authoritative worker with DLQ/recovery/replay. Critical actions still confirm against Roller. See [T0196](docs/t0196-booking-index-morning-seed.md) and [T0197](docs/t0197-webhook-reconciliation.md).
 
 ## Security And Operational Constraints
 
@@ -95,8 +95,8 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 
 ## Current Readiness Gates
 
-- Sprint/production-readiness outcomes remain in the [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5). T0195 foundations and T0196 booking index are deployed; lifecycle/recovery/secret actions stay gated. [AWS_RESOURCES.md](AWS_RESOURCES.md) holds evidence, and T0204 still decides GO/NO-GO before production approval.
-- Remaining blockers include lifecycle apply/recovery proof, durable alarm routing, sender setup, webhook verification/reconciliation, integrated rehearsal, and production cutover approval.
+- The [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5) owns readiness. T0195-T0197 are deployed; gated actions remain. [AWS_RESOURCES.md](AWS_RESOURCES.md) holds evidence, and T0204 decides GO/NO-GO.
+- Remaining blockers: lifecycle recovery/apply proof, alarm routing, sender setup, integrated rehearsal, and production approval. Observe a natural Roller event when available; synthetic intake already proves the registered path.
 - Payment must stay on Roller's approved package; method visibility is Roller/Adyen controlled.
 
 ## Current Open Questions

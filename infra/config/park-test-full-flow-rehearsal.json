@@ -38,6 +38,14 @@
     "maxWindowDays": 31,
     "bookingRetentionDays": 30
   },
+  "webhookProcessing": {
+    "liveApproval": "T0197_LIVE_WEBHOOK_PROCESSING_APPROVED",
+    "venueId": "50871",
+    "requestIntervalMs": 1000,
+    "bookingRetentionDays": 30,
+    "recoveryScheduleEnabled": true,
+    "recoveryLimit": 10
+  },
   "bookingTimeSms": {
     "scheduleEnabled": false,
     "confirmSend": false,
@@ -59,7 +67,7 @@
     "guestMessagingSendsEnabled": false,
     "rollerBookingDraftWritesEnabled": true,
     "rollerRedeemWritesEnabled": true,
-    "rollerWebhookProcessingEnabled": false,
+    "rollerWebhookProcessingEnabled": true,
     "staffAuthEnabled": true,
     "fullFlowRehearsalApproval": "T0176_FULL_FLOW_REHEARSAL_APPROVED",
     "fullFlowRehearsalAllowedOperatingDates": [

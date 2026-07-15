@@ -169,8 +169,8 @@ function validateRouteSettings(template, routesByKey) {
 function validateApprovedProtectionResources(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    171,
-    'The T0195 170-resource boundary plus the exact T0196 booking-index freshness alarm must synthesize.',
+    187,
+    'The T0193 boundary must remain intact inside the exact T0197 async webhook stack.',
   );
   assert.equal(
     resourcesOfType(template, 'AWS::CloudWatch::Alarm').filter(

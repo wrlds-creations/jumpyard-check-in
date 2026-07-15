@@ -75,8 +75,8 @@ function iamPoliciesReference(template, logicalId) {
 function validateParkTest(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    171,
-    'T0194 remains intact inside the T0195 boundary plus the exact T0196 booking-index freshness alarm.',
+    187,
+    'T0194 remains intact inside the exact T0197 async webhook stack.',
   );
   assert.equal(
     entriesOfType(template, 'AWS::CloudWatch::Alarm').filter(

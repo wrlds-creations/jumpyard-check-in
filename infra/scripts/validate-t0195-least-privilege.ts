@@ -217,8 +217,16 @@ function main(): void {
     const roleId = functionRoleLogicalId(fn);
     const statements = roleStatements(template, roleId);
     const actions = statementActions(statements);
-    const forbiddenActions = actions.filter((action) => /^(?:s3|sqs|events):/i.test(action));
+    const queueActions = actions.filter((action) => /^sqs:/i.test(action)).sort();
+    const forbiddenActions = actions.filter((action) => /^(?:s3|events):/i.test(action));
     assert.deepEqual(forbiddenActions, [], `${handler} retains unused AWS write permissions.`);
+    assert.deepEqual(
+      queueActions,
+      handler === 'webhook'
+        ? ['sqs:GetQueueAttributes', 'sqs:GetQueueUrl', 'sqs:SendMessage']
+        : [],
+      `${handler} has unexpected queue permissions.`,
+    );
     assert.ok(!actions.includes('secretsmanager:*'), `${handler} has wildcard secret access.`);
 
     const rdsActions = [...new Set(actions.filter((action) => action.startsWith('rds-data:')))].sort();
@@ -248,6 +256,26 @@ function main(): void {
       );
     }
   }
+
+  const [, webhookProcessor] = findFunction(template, `${PREFIX}-stack-webhook-processor`);
+  const processorVariables = functionEnvironment(webhookProcessor);
+  const webhookSecretId = secretsByName.get(`/${PREFIX}/aurora/runtime/webhook`)!;
+  assert.deepEqual(processorVariables.DATABASE_SECRET_ARN, { Ref: webhookSecretId });
+  assert.equal(processorVariables.WEBHOOK_RUNTIME_MODE, 'processor');
+  const processorActions = statementActions(roleStatements(template, functionRoleLogicalId(webhookProcessor)));
+  assert.deepEqual(
+    processorActions.filter((action) => /^sqs:/i.test(action)).sort(),
+    [
+      'sqs:ChangeMessageVisibility',
+      'sqs:DeleteMessage',
+      'sqs:GetQueueAttributes',
+      'sqs:GetQueueUrl',
+      'sqs:ReceiveMessage',
+    ],
+    'T0197 processor must consume without queue-send permission.',
+  );
+  assert.ok(!processorActions.includes('sqs:SendMessage'), 'T0197 processor must not enqueue arbitrary work.');
+  assert.ok(!processorActions.includes('secretsmanager:*'), 'T0197 processor has wildcard secret access.');
 
   const provisioner = findFunction(template, `${PREFIX}-database-runtime-role-provisioner`)[1];
   const provisionerCode = collectStrings(provisioner.Properties?.Code).join('\n');
@@ -389,7 +417,7 @@ function main(): void {
   }
 
   console.log('[pass] every park-test handler uses its own restricted retained database secret');
-  console.log('[pass] synthesized handler IAM omits unused S3, SQS, EventBridge, and disabled messaging access');
+  console.log('[pass] synthesized handler IAM limits queue access to webhook intake send and processor consume');
   console.log('[pass] runtime SQL operations are covered by table-specific grants and admin surfaces remain denied');
   console.log('[pass] expiry-sensitive reads and bounded provider/shared-secret caches are enforced');
 }

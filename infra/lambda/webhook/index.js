@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client-secrets-manager');
 const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
+const { SendMessageCommand, SQSClient } = require('@aws-sdk/client-sqs');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const DEV_TOKEN_HEADERS = [
@@ -17,7 +18,13 @@ const MAX_BODY_BYTES = 256 * 1024;
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
 const PRODUCT_CACHE_TTL_MS = 15 * 60 * 1000;
-const RETRYABLE_DUPLICATE_STATUSES = new Set(['received', 'failed']);
+const RETRYABLE_DUPLICATE_STATUSES = new Set(['received', 'failed', 'pending_enrichment', 'processing']);
+const SUPPORTED_BOOKING_EVENT_TYPES = new Set(['Created', 'Updated', 'Cancelled']);
+const LIVE_APPROVAL = 'T0197_LIVE_WEBHOOK_PROCESSING_APPROVED';
+const LIVE_BASE_URL = 'https://api.roller.app';
+const LIVE_VENUE_ID = '50871';
+const MAX_ROLLER_ATTEMPTS = 4;
+const MAX_RETRY_AFTER_MS = 10_000;
 const SOURCE_WEBHOOK_GUEST_PROFILE = 'roller_webhook_booking_detail';
 const SOURCE_WEBHOOK_GUEST_DETAIL = 'roller_webhook_guest_detail';
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
@@ -26,6 +33,7 @@ const SHARED_TOKEN_CACHE_MS = 60 * 1000;
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
 const ssmClient = new SSMClient({});
+const sqsClient = new SQSClient({});
 
 let cachedWebhookToken = null;
 let cachedWebhookTokenExpiresAt = 0;
@@ -33,8 +41,38 @@ let cachedRollerConfig = null;
 let cachedRollerConfigExpiresAt = 0;
 let cachedToken = null;
 let cachedProducts = null;
+let cachedVerifiedVenue = null;
+let hooks = {
+  executeStatement: (command) => rdsClient.send(command),
+  fetch: (...args) => fetch(...args),
+  now: () => Date.now(),
+  readParameter: (name) => readParameter(name),
+  readSecret: (secretId) => readSecret(secretId),
+  sendQueue: (command) => sqsClient.send(command),
+  sleep: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+};
 
 exports.handler = async (event) => {
+  const runtimeMode = process.env.WEBHOOK_RUNTIME_MODE || 'legacy';
+
+  if (isSqsEvent(event)) {
+    if (runtimeMode !== 'processor') throw configurationError('SQS webhook events require processor mode.');
+    return handleWebhookQueue(event);
+  }
+
+  if (event?.source === 'jumpyard.webhook-recovery') {
+    if (runtimeMode !== 'processor') throw configurationError('Webhook recovery requires processor mode.');
+    return handleWebhookRecovery();
+  }
+
+  if (runtimeMode === 'processor') {
+    throw configurationError('Webhook processor does not accept public HTTP requests.');
+  }
+
+  return handleWebhookIntake(event);
+};
+
+async function handleWebhookIntake(event) {
   const correlationId = normalizeCorrelationId(getHeader(event, 'x-correlation-id')) || createCorrelationId();
 
   try {
@@ -62,7 +100,15 @@ exports.handler = async (event) => {
     }
 
     const intake = normalizeWebhookEvent(event, request);
-    const writeResult = await persistWebhookEvent(intake, auth.mode, correlationId);
+    validateWebhookSignal(intake);
+    let writeResult;
+    try {
+      writeResult = await persistWebhookEvent(intake, auth.mode, correlationId);
+    } catch {
+      const error = new Error('Webhook event metadata could not be persisted durably.');
+      error.code = 'webhook_persistence_error';
+      throw error;
+    }
 
     if (!writeResult.inserted && !RETRYABLE_DUPLICATE_STATUSES.has(writeResult.status)) {
       return jsonResponse(200, correlationId, {
@@ -77,17 +123,17 @@ exports.handler = async (event) => {
       });
     }
 
-    const enrichment = await enrichWebhookEvent(intake, correlationId);
+    await enqueueWebhookEvent(intake.eventId, correlationId);
 
     return jsonResponse(200, correlationId, {
-      status: 'accepted',
+      status: writeResult.inserted ? 'accepted' : 'duplicate_requeued',
       webhook: {
         eventId: intake.eventId,
         eventType: intake.eventType,
         bookingReference: intake.bookingReference,
         rollerUniqueId: intake.rollerUniqueId,
-        duplicate: false,
-        enrichment,
+        duplicate: !writeResult.inserted,
+        queued: true,
       },
     });
   } catch (error) {
@@ -100,7 +146,193 @@ exports.handler = async (event) => {
       },
     });
   }
-};
+}
+
+function isSqsEvent(event) {
+  return Array.isArray(event?.Records) && event.Records.some((record) => record?.eventSource === 'aws:sqs');
+}
+
+function configurationError(message) {
+  const error = new Error(message);
+  error.code = 'webhook_config_error';
+  return error;
+}
+
+function validateWebhookSignal(intake) {
+  if (!SUPPORTED_BOOKING_EVENT_TYPES.has(intake.eventType)) {
+    const error = new Error('Webhook event type is not an approved Roller booking signal.');
+    error.code = 'unsupported_event_type';
+    throw error;
+  }
+  if (!intake.bookingReference && !intake.rollerUniqueId) {
+    const error = new Error('Webhook signal did not include a usable booking identifier.');
+    error.code = 'booking_identifier_required';
+    throw error;
+  }
+  if (!intake.eventId || String(intake.eventId).length > 512) {
+    const error = new Error('Webhook event id is invalid.');
+    error.code = 'invalid_event_id';
+    throw error;
+  }
+}
+
+async function enqueueWebhookEvent(eventId, correlationId) {
+  const queueUrl = process.env.WEBHOOK_QUEUE_URL;
+  if (!queueUrl) throw configurationError('Webhook queue URL is not configured.');
+
+  try {
+    await hooks.sendQueue(
+      new SendMessageCommand({
+        QueueUrl: queueUrl,
+        MessageBody: JSON.stringify({
+          correlationId,
+          eventId,
+          operation: 'reconcile_booking_webhook',
+        }),
+        MessageDeduplicationId: hashString(eventId),
+        MessageGroupId: 'roller-booking-webhooks',
+      }),
+    );
+  } catch {
+    const error = new Error('Webhook event could not be queued durably.');
+    error.code = 'webhook_enqueue_error';
+    throw error;
+  }
+}
+
+async function handleWebhookQueue(event) {
+  const batchItemFailures = [];
+
+  for (const record of event.Records ?? []) {
+    try {
+      const message = parseWebhookQueueMessage(record.body);
+      await processWebhookEventById(message.eventId, message.correlationId);
+    } catch (error) {
+      console.error(JSON.stringify({
+        code: error?.code || 'webhook_queue_processing_failed',
+        messageId: record?.messageId || null,
+        status: 'failed',
+      }));
+      emitWebhookMetric('WebhookProcessingFailure', 1);
+      batchItemFailures.push({ itemIdentifier: record.messageId });
+    }
+  }
+
+  return { batchItemFailures };
+}
+
+function parseWebhookQueueMessage(body) {
+  let message;
+  try {
+    message = JSON.parse(String(body || ''));
+  } catch {
+    const error = new Error('Webhook queue message must be valid JSON.');
+    error.code = 'invalid_queue_message';
+    throw error;
+  }
+
+  if (
+    !isRecord(message) ||
+    message.operation !== 'reconcile_booking_webhook' ||
+    typeof message.eventId !== 'string' ||
+    message.eventId.length === 0 ||
+    message.eventId.length > 512
+  ) {
+    const error = new Error('Webhook queue message shape is invalid.');
+    error.code = 'invalid_queue_message';
+    throw error;
+  }
+
+  return {
+    correlationId: normalizeCorrelationId(message.correlationId) || createCorrelationId(),
+    eventId: message.eventId,
+  };
+}
+
+async function processWebhookEventById(eventId, correlationId = createCorrelationId()) {
+  if (!isRollerWebhookProcessingEnabled()) throw configurationError('Roller webhook processing is disabled.');
+
+  const intake = await loadWebhookEvent(eventId);
+  if (!intake) {
+    const error = new Error('Webhook event metadata was not found.');
+    error.code = 'webhook_event_not_found';
+    throw error;
+  }
+  if (intake.status === 'processed' || intake.status === 'ignored_scope') {
+    return { status: 'duplicate', updatedBooking: false };
+  }
+
+  await markWebhookEventPending(intake.eventId, null);
+  const result = await enrichWebhookEvent(intake, correlationId);
+  emitWebhookMetric('WebhookProcessed', 1);
+  return result;
+}
+
+async function loadWebhookEvent(eventId) {
+  const result = await executeStatement(
+    `SELECT
+       event_id_or_hash,
+       event_type,
+       booking_reference,
+       roller_unique_id,
+       payload_hash,
+       status
+     FROM jumpyard.roller_webhook_events
+     WHERE event_id_or_hash = :eventId
+     LIMIT 1`,
+    [stringParameter('eventId', eventId)],
+  );
+  const [row] = mappedRows(result);
+  if (!row) return null;
+
+  return {
+    bookingReference: stringOrNull(row.booking_reference),
+    eventId: stringOrNull(row.event_id_or_hash),
+    eventType: stringOrNull(row.event_type),
+    payloadHash: stringOrNull(row.payload_hash),
+    rollerUniqueId: stringOrNull(row.roller_unique_id),
+    status: stringOrNull(row.status),
+  };
+}
+
+async function handleWebhookRecovery() {
+  if (!isRollerWebhookProcessingEnabled()) {
+    return { status: 'ignored_disabled', attempted: 0, processed: 0 };
+  }
+
+  const limit = readBoundedIntegerEnv('ROLLER_WEBHOOK_RECOVERY_LIMIT', 10, 1, 25);
+  const result = await executeStatement(
+    `SELECT event_id_or_hash
+     FROM jumpyard.roller_webhook_events
+     WHERE status IN ('received', 'pending_enrichment', 'failed')
+       AND received_at <= now() - interval '2 minutes'
+     ORDER BY received_at ASC
+     LIMIT :limit`,
+    [{ name: 'limit', value: { longValue: limit } }],
+  );
+  const eventIds = mappedRows(result).map((row) => stringOrNull(row.event_id_or_hash)).filter(Boolean);
+  let processed = 0;
+  let failed = 0;
+
+  for (const eventId of eventIds) {
+    try {
+      await processWebhookEventById(eventId, createCorrelationId());
+      processed += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+
+  emitWebhookMetric('WebhookRecoveryProcessed', processed);
+  if (failed > 0) {
+    emitWebhookMetric('WebhookRecoveryFailure', failed);
+    const error = new Error(`Webhook recovery failed for ${failed} event(s).`);
+    error.code = 'webhook_recovery_failed';
+    throw error;
+  }
+
+  return { status: 'completed', attempted: eventIds.length, processed };
+}
 
 function parseWebhookRequest(event) {
   if (!event || event.requestContext?.http?.method !== 'POST') {
@@ -157,6 +389,10 @@ async function verifyWebhookToken(event) {
 }
 
 function getWebhookAuthToken(event) {
+  if (process.env.WEBHOOK_AUTH_HEADER === 'x-roller-apikey') {
+    return getHeader(event, 'x-roller-apikey');
+  }
+
   for (const header of DEV_TOKEN_HEADERS) {
     const value = getHeader(event, header);
     if (value) return value;
@@ -239,11 +475,11 @@ async function getWebhookToken() {
 }
 
 function safeEquals(left, right) {
-  const leftBuffer = Buffer.from(String(left));
-  const rightBuffer = Buffer.from(String(right));
-
-  if (leftBuffer.length !== rightBuffer.length) return false;
-  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+  // Compare fixed-length digests so wrong-length guesses do not take a visibly
+  // different comparison path from same-length guesses.
+  const leftDigest = crypto.createHash('sha256').update(String(left)).digest();
+  const rightDigest = crypto.createHash('sha256').update(String(right)).digest();
+  return crypto.timingSafeEqual(leftDigest, rightDigest);
 }
 
 function normalizeWebhookEvent(event, request) {
@@ -421,9 +657,13 @@ async function enrichWebhookEvent(intake, correlationId) {
   try {
     const config = await getRollerConfig();
     const token = await getRollerAccessToken(config);
+    const verifiedVenueId = await getVerifiedRollerVenueId(config, token);
     const bookingResult = await getBookingDetail(config, token, identifier);
 
     if (bookingResult.status === 404) {
+      if (intake.eventType === 'Cancelled') {
+        await markCancelledBookingNotFound(intake, config.env);
+      }
       await updateWebhookEventStatus(intake.eventId, 'processed', 'booking_detail_not_found_for_enrichment', true);
       return {
         status: 'booking_not_found',
@@ -440,6 +680,18 @@ async function enrichWebhookEvent(intake, correlationId) {
 
     const products = await getProductCatalogBestEffort(config, token);
     const booking = normalizeBooking(bookingResult.body, products);
+    booking.venueId = booking.venueId || verifiedVenueId;
+    const scope = applyWebhookBookingScope(booking, config.env);
+    if (!scope.accepted) {
+      await updateWebhookEventStatus(intake.eventId, 'ignored_scope', scope.reason, true);
+      emitWebhookMetric('WebhookScopeRejected', 1);
+      return {
+        status: 'ignored_scope',
+        updatedBooking: false,
+        reason: scope.reason,
+      };
+    }
+    booking.items = scope.items;
     const guestDetail = await enrichGuestProfileFromGuestDetailBestEffort(config, token, booking);
     if (!booking.bookingReference || !booking.rollerUniqueId) {
       const error = new Error('Roller booking detail did not include required booking identifiers.');
@@ -447,7 +699,8 @@ async function enrichWebhookEvent(intake, correlationId) {
       throw error;
     }
 
-    await upsertWebhookBooking(booking, config.env, null);
+    await upsertWebhookBooking(booking, config.env, scope.venueId);
+    await deleteMissingWebhookChildren(booking);
     const guestProfile = await upsertWebhookGuestProfile(booking);
     await reconcilePrepaymentDraftFromPaidBooking(booking, 'roller_webhook_enrichment');
     await updateWebhookEventStatus(intake.eventId, 'processed', null, true);
@@ -544,9 +797,9 @@ async function getRollerConfig() {
   if (cachedRollerConfig && cachedRollerConfigExpiresAt > now) return cachedRollerConfig;
 
   const [envParameter, baseUrlParameter, secret] = await Promise.all([
-    readParameter(process.env.ROLLER_ENV_PARAMETER_NAME),
-    readParameter(process.env.ROLLER_BASE_URL_PARAMETER_NAME),
-    readSecret(process.env.ROLLER_CREDENTIALS_SECRET_ARN),
+    hooks.readParameter(process.env.ROLLER_ENV_PARAMETER_NAME),
+    hooks.readParameter(process.env.ROLLER_BASE_URL_PARAMETER_NAME),
+    hooks.readSecret(process.env.ROLLER_CREDENTIALS_SECRET_ARN),
   ]);
 
   const config = {
@@ -594,9 +847,20 @@ async function readSecret(secretId) {
 function validateRollerConfig(config) {
   const errors = [];
   let parsedBaseUrl = null;
+  const environment = String(config.env || '').toLowerCase();
+  const jumpyardEnvironment = String(process.env.JUMPYARD_ENVIRONMENT || '').toLowerCase();
+  const liveApproved =
+    environment === 'live' &&
+    jumpyardEnvironment === 'park-test' &&
+    process.env.ENABLE_ROLLER_WEBHOOK_PROCESSING === 'true' &&
+    process.env.ROLLER_WEBHOOK_LIVE_APPROVAL === LIVE_APPROVAL &&
+    process.env.ROLLER_WEBHOOK_VENUE_ID === LIVE_VENUE_ID;
 
-  if (config.env !== 'playground') {
-    errors.push('Roller environment must be playground.');
+  if (environment !== 'playground' && !liveApproved) {
+    errors.push('Roller webhook environment must be Playground or the exact approved park-test/Nacka Live scope.');
+  }
+  if (environment === 'playground' && jumpyardEnvironment === 'park-test') {
+    errors.push('Park-test webhook processing must not use Roller Playground configuration.');
   }
 
   try {
@@ -610,11 +874,15 @@ function validateRollerConfig(config) {
     if (parsedBaseUrl.protocol !== 'https:') {
       errors.push('Roller base URL must use https.');
     }
-    if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
-      errors.push('Roller base URL looks like production/live.');
-    }
-    if (!PLAYGROUND_URL_MARKER.test(searchableUrl)) {
-      errors.push('Roller base URL must point to Playground.');
+    if (environment === 'playground') {
+      if (PRODUCTION_URL_MARKER.test(searchableUrl)) {
+        errors.push('Roller Playground base URL looks like production/live.');
+      }
+      if (!PLAYGROUND_URL_MARKER.test(searchableUrl)) {
+        errors.push('Roller base URL must point to Playground.');
+      }
+    } else if (liveApproved && parsedBaseUrl.origin !== LIVE_BASE_URL) {
+      errors.push(`Roller Live base URL must be exactly ${LIVE_BASE_URL}.`);
     }
   }
 
@@ -633,12 +901,57 @@ function validateRollerConfig(config) {
   }
 }
 
+async function requestRoller(url, options, operation) {
+  const intervalMs = readBoundedIntegerEnv('ROLLER_WEBHOOK_REQUEST_INTERVAL_MS', 1000, 1000, 10_000);
+
+  for (let attempt = 1; attempt <= MAX_ROLLER_ATTEMPTS; attempt += 1) {
+    const response = await hooks.fetch(url, options);
+    const retryable = response.status === 429 || (response.status >= 500 && response.status <= 599);
+    const retryAfterMs = parseRetryAfterMs(response.headers?.get?.('retry-after'));
+    const delayMs = retryable ? Math.max(intervalMs, retryAfterMs) : intervalMs;
+
+    // Waiting after every response keeps request starts at least one second apart,
+    // including across sequential FIFO Lambda invocations.
+    await hooks.sleep(delayMs);
+
+    if (!retryable || attempt === MAX_ROLLER_ATTEMPTS) return response;
+
+    console.warn(JSON.stringify({
+      attempt,
+      operation,
+      retryAfterMs: delayMs,
+      status: response.status,
+    }));
+  }
+
+  throw new Error('Roller request retry loop exhausted unexpectedly.');
+}
+
+function parseRetryAfterMs(value) {
+  if (value === undefined || value === null || value === '') return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.min(MAX_RETRY_AFTER_MS, Math.max(0, Math.ceil(seconds * 1000)));
+
+  const timestamp = Date.parse(String(value));
+  if (!Number.isFinite(timestamp)) return 0;
+  return Math.min(MAX_RETRY_AFTER_MS, Math.max(0, timestamp - hooks.now()));
+}
+
+function readBoundedIntegerEnv(name, fallback, minimum, maximum) {
+  const raw = process.env[name];
+  const parsed = raw === undefined || raw === '' ? fallback : Number(raw);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw configurationError(`${name} must be an integer between ${minimum} and ${maximum}.`);
+  }
+  return parsed;
+}
+
 async function getRollerAccessToken(config) {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) {
     return cachedToken;
   }
 
-  const response = await fetch(buildRollerUrl(config.baseUrl, '/token'), {
+  const response = await requestRoller(buildRollerUrl(config.baseUrl, '/token'), {
     method: 'POST',
     headers: {
       accept: 'application/json',
@@ -648,7 +961,7 @@ async function getRollerAccessToken(config) {
       client_id: config.clientId,
       client_secret: config.clientSecret,
     }),
-  });
+  }, 'oauth_token');
   emitRollerApiMetric({ method: 'POST', operation: 'oauth_token', status: response.status, ok: response.ok });
 
   if (!response.ok) {
@@ -675,13 +988,13 @@ async function getRollerAccessToken(config) {
 }
 
 async function getBookingDetail(config, token, identifier) {
-  const response = await fetch(buildRollerUrl(config.baseUrl, `/bookings/${encodeURIComponent(identifier)}`), {
+  const response = await requestRoller(buildRollerUrl(config.baseUrl, `/bookings/${encodeURIComponent(identifier)}`), {
     method: 'GET',
     headers: {
       accept: 'application/json',
       authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
     },
-  });
+  }, 'get_booking_detail');
   emitRollerApiMetric({ method: 'GET', operation: 'get_booking_detail', status: response.status, ok: response.ok });
 
   if (response.status === 404) {
@@ -699,13 +1012,13 @@ async function getBookingDetail(config, token, identifier) {
 }
 
 async function getGuestDetail(config, token, guestId) {
-  const response = await fetch(buildRollerUrl(config.baseUrl, `/guests/${encodeURIComponent(guestId)}`), {
+  const response = await requestRoller(buildRollerUrl(config.baseUrl, `/guests/${encodeURIComponent(guestId)}`), {
     method: 'GET',
     headers: {
       accept: 'application/json',
       authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
     },
-  });
+  }, 'get_guest_detail');
   emitRollerApiMetric({ method: 'GET', operation: 'get_guest_detail', status: response.status, ok: response.ok });
 
   if (response.status === 404) {
@@ -728,13 +1041,13 @@ async function getProductCatalogBestEffort(config, token) {
   }
 
   try {
-    const response = await fetch(buildRollerUrl(config.baseUrl, '/products'), {
+    const response = await requestRoller(buildRollerUrl(config.baseUrl, '/products'), {
       method: 'GET',
       headers: {
         accept: 'application/json',
         authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
       },
-    });
+    }, 'get_products');
     emitRollerApiMetric({ method: 'GET', operation: 'list_products', status: response.status, ok: response.ok });
 
     if (!response.ok) {
@@ -839,8 +1152,94 @@ function normalizeBooking(booking, products) {
     createdDate: stringOrNull(booking.createdDate),
     customerId: bookingCustomerId,
     guestProfile,
+    venueId: extractVenueId(booking),
     items: items.map((item) => normalizeBookingItem(item, products.byId, bookingCustomerId)),
   };
+}
+
+async function getVerifiedRollerVenueId(config, token) {
+  if (String(config.env).toLowerCase() !== 'live') return null;
+  if (cachedVerifiedVenue && cachedVerifiedVenue.expiresAt > hooks.now()) {
+    return cachedVerifiedVenue.venueId;
+  }
+
+  const response = await requestRoller(buildRollerUrl(config.baseUrl, '/venues/me'), {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+    },
+  }, 'get_venue_identity');
+  emitRollerApiMetric({ method: 'GET', operation: 'get_venue_identity', status: response.status, ok: response.ok });
+  if (!response.ok) {
+    const error = new Error(`Roller venue identity failed with HTTP ${response.status}.`);
+    error.code = 'roller_venue_error';
+    throw error;
+  }
+
+  const body = await response.json();
+  const venue = firstRecord([body?.venue, body?.data, body]);
+  const venueId = stringOrNull(venue?.id ?? venue?.venueId ?? venue?.venueID);
+  if (venueId !== LIVE_VENUE_ID) {
+    const error = new Error('Roller credentials are not bound to the approved Nacka venue.');
+    error.code = 'webhook_config_error';
+    throw error;
+  }
+
+  cachedVerifiedVenue = {
+    expiresAt: hooks.now() + PROVIDER_CONFIG_CACHE_MS,
+    venueId,
+  };
+  return venueId;
+}
+
+function applyWebhookBookingScope(booking, rollerEnvironment) {
+  if (String(rollerEnvironment).toLowerCase() !== 'live') {
+    return { accepted: true, items: booking.items, reason: null, venueId: booking.venueId };
+  }
+
+  const approvedVenueId = stringOrNull(process.env.ROLLER_WEBHOOK_VENUE_ID);
+  if (approvedVenueId !== LIVE_VENUE_ID || booking.venueId !== approvedVenueId) {
+    return { accepted: false, items: [], reason: 'booking_outside_approved_venue', venueId: approvedVenueId };
+  }
+
+  const retentionDays = readBoundedIntegerEnv('ROLLER_WEBHOOK_BOOKING_RETENTION_DAYS', 30, 1, 90);
+  const retentionCutoff = isoDateDaysAgo(retentionDays);
+  const items = booking.items.filter((item) => item.bookingDate && item.bookingDate >= retentionCutoff);
+  if (items.length === 0) {
+    return { accepted: false, items: [], reason: 'booking_outside_retention_window', venueId: approvedVenueId };
+  }
+
+  return { accepted: true, items, reason: null, venueId: approvedVenueId };
+}
+
+function extractVenueId(booking) {
+  const candidates = [
+    booking?.venueId,
+    booking?.venueID,
+    booking?.venue?.id,
+    booking?.venue?.venueId,
+    booking?.location?.venueId,
+    booking?.location?.id,
+  ];
+  for (const item of Array.isArray(booking?.items) ? booking.items : []) {
+    candidates.push(item?.venueId, item?.venueID, item?.venue?.id, item?.venue?.venueId);
+  }
+  return candidates.map(stringOrNull).find(Boolean) ?? null;
+}
+
+function isoDateDaysAgo(days) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Stockholm',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const today = formatter.format(new Date(hooks.now()));
+  const [year, month, day] = today.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() - days);
+  return date.toISOString().slice(0, 10);
 }
 
 function normalizeBookingItem(item, productById, bookingCustomerId) {
@@ -1150,6 +1549,76 @@ async function upsertWebhookBooking(booking, rollerEnv, venueId) {
       await upsertWebhookTicket(booking.rollerUniqueId, bookingItemKey, item, ticket);
     }
   }
+}
+
+async function deleteMissingWebhookChildren(booking) {
+  const ticketIds = booking.items
+    .flatMap((item) => item.tickets ?? [])
+    .map((ticket) => stringOrNull(ticket.ticketId))
+    .filter(Boolean);
+  const bookingItemKeys = booking.items.map((item) => localBookingItemKey(booking.rollerUniqueId, item));
+
+  await deleteMissingWebhookRows(
+    'roller_booking_tickets',
+    'ticket_id',
+    booking.rollerUniqueId,
+    ticketIds,
+    'ticketId',
+  );
+  await deleteMissingWebhookRows(
+    'roller_booking_items',
+    'booking_item_key',
+    booking.rollerUniqueId,
+    bookingItemKeys,
+    'bookingItemKey',
+  );
+}
+
+async function deleteMissingWebhookRows(tableName, keyColumn, rollerUniqueId, retainedIds, parameterPrefix) {
+  const parameters = [stringParameter('rollerUniqueId', rollerUniqueId)];
+  const retainedClause = retainedIds.length > 0
+    ? `AND ${keyColumn} NOT IN (${retainedIds.map((value, index) => {
+        const name = `${parameterPrefix}${index}`;
+        parameters.push(stringParameter(name, value));
+        return `:${name}`;
+      }).join(', ')})`
+    : '';
+
+  await executeStatement(
+    `DELETE FROM jumpyard.${tableName}
+     WHERE roller_unique_id = :rollerUniqueId
+     ${retainedClause}`,
+    parameters,
+  );
+}
+
+async function markCancelledBookingNotFound(intake, rollerEnvironment) {
+  if (String(rollerEnvironment).toLowerCase() !== 'live') return;
+  const venueId = stringOrNull(process.env.ROLLER_WEBHOOK_VENUE_ID);
+  if (venueId !== LIVE_VENUE_ID) throw configurationError('Cancelled webhook tombstone has no approved venue.');
+
+  await executeStatement(
+    `UPDATE jumpyard.roller_bookings
+     SET booking_status = 'Cancelled',
+         freshness_status = 'fresh',
+         is_tombstoned = true,
+         last_seen_from_roller_at = now(),
+         source_last_updated_at = now(),
+         source_last_updated_by = 'roller_webhook_cancelled_not_found',
+         updated_at = now()
+     WHERE roller_env = :rollerEnvironment
+       AND venue_id = :venueId
+       AND (
+         roller_unique_id = :rollerUniqueId
+         OR booking_reference = :bookingReference
+       )`,
+    [
+      stringParameter('rollerEnvironment', rollerEnvironment),
+      stringParameter('venueId', venueId),
+      stringParameter('rollerUniqueId', intake.rollerUniqueId),
+      stringParameter('bookingReference', intake.bookingReference),
+    ],
+  );
 }
 
 async function upsertWebhookBookingItem(rollerUniqueId, item) {
@@ -1561,6 +2030,26 @@ function emitRollerApiMetric({ method, operation, status, ok }) {
   );
 }
 
+function emitWebhookMetric(metricName, value) {
+  const metricValue = Number(value);
+  if (!Number.isFinite(metricValue) || metricValue <= 0) return;
+  console.log(JSON.stringify({
+    _aws: {
+      Timestamp: hooks.now(),
+      CloudWatchMetrics: [
+        {
+          Namespace: 'JumpYard/Cloud',
+          Dimensions: [['Environment'], ['Environment', 'Handler']],
+          Metrics: [{ Name: metricName, Unit: 'Count' }],
+        },
+      ],
+    },
+    Environment: sanitizeMetricValue(process.env.RESOURCE_PREFIX || 'unknown'),
+    Handler: sanitizeMetricValue(process.env.JUMPYARD_HANDLER || 'webhook'),
+    [metricName]: metricValue,
+  }));
+}
+
 function sanitizeMetricValue(value) {
   const sanitized = String(value).replace(/[^A-Za-z0-9_.:/-]/g, '_').slice(0, 100);
   return sanitized || 'unknown';
@@ -1576,7 +2065,7 @@ async function executeStatement(sql, parameters) {
     throw error;
   }
 
-  return rdsClient.send(
+  return hooks.executeStatement(
     new ExecuteStatementCommand({
       database: DATABASE_NAME,
       includeResultMetadata: true,
@@ -1754,7 +2243,13 @@ function classifyError(error) {
     };
   }
 
-  if (error.code === 'invalid_json' || error.code === 'payload_too_large') {
+  if (
+    error.code === 'invalid_json' ||
+    error.code === 'payload_too_large' ||
+    error.code === 'unsupported_event_type' ||
+    error.code === 'booking_identifier_required' ||
+    error.code === 'invalid_event_id'
+  ) {
     return {
       statusCode: 200,
       status: 'invalid_request',
@@ -1769,6 +2264,15 @@ function classifyError(error) {
       status: 'config_error',
       code: error.code,
       message: 'JumpYard Cloud webhook configuration is incomplete.',
+    };
+  }
+
+  if (error.code === 'webhook_enqueue_error' || error.code === 'webhook_persistence_error') {
+    return {
+      statusCode: 500,
+      status: 'intake_failed',
+      code: error.code,
+      message: 'JumpYard Cloud could not durably accept the webhook and Roller should retry the delivery.',
     };
   }
 
@@ -1802,3 +2306,44 @@ function jsonResponse(statusCode, correlationId, payload) {
     }),
   };
 }
+
+exports.__test = {
+  applyWebhookBookingScope,
+  extractVenueId,
+  getWebhookAuthToken,
+  handleWebhookIntake,
+  parseRetryAfterMs,
+  parseWebhookQueueMessage,
+  processWebhookEventById,
+  requestRoller,
+  reset() {
+    cachedWebhookToken = null;
+    cachedWebhookTokenExpiresAt = 0;
+    cachedRollerConfig = null;
+    cachedRollerConfigExpiresAt = 0;
+    cachedToken = null;
+    cachedProducts = null;
+    cachedVerifiedVenue = null;
+    hooks = {
+      executeStatement: (command) => rdsClient.send(command),
+      fetch: (...args) => fetch(...args),
+      now: () => Date.now(),
+      readParameter: (name) => readParameter(name),
+      readSecret: (secretId) => readSecret(secretId),
+      sendQueue: (command) => sqsClient.send(command),
+      sleep: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    };
+  },
+  setHooks(overrides) {
+    hooks = { ...hooks, ...overrides };
+  },
+  validateRollerConfig(config) {
+    try {
+      validateRollerConfig(config);
+      return [];
+    } catch (error) {
+      return [error.message];
+    }
+  },
+  validateWebhookSignal,
+};
