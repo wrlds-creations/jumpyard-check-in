@@ -27,9 +27,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: infra/package-lock.json
-      - name: Install infrastructure dependencies required by validators
-        run: npm ci --prefix infra
+          cache-dependency-path: |
+            infra/package-lock.json
+            jumpyard-checkin-phone/package-lock.json
+            jumpyard-checkin-admin/package-lock.json
+      - name: Install dependencies required by repository validators
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix infra
+          npm ci --prefix jumpyard-checkin-phone
+          npm ci --prefix jumpyard-checkin-admin
       - name: Validate repository contracts
         run: npm run validate
       - name: Check whitespace
