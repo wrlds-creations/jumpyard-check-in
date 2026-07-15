@@ -276,11 +276,11 @@ jobs:
           for project in "$PARK_TEST_PHONE_PROJECT" "$PARK_TEST_ADMIN_PROJECT"; do
             curl --fail --silent --show-error \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${project}/deployments?per_page=1" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${project}/deployments?env=production&per_page=1" \
               | jq -e --arg sha "$sha" '
                   .success == true and
                   .result[0].environment == "production" and
-                  .result[0].source.config.commit_hash == $sha and
+                  .result[0].deployment_trigger.metadata.commit_hash == $sha and
                   .result[0].latest_stage.status == "success"
                 ' > /dev/null
           done
