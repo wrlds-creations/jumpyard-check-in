@@ -132,6 +132,7 @@ function main() {
     accessStack,
     'repo:${REPOSITORY}:ref:refs/heads/main',
     'repo:${REPOSITORY}:environment:park-test',
+    'cloudformation:DetectStackResourceDrift',
     'cloudformation:GetTemplate',
     'sts:AssumeRole',
     'rds-data:ExecuteStatement',

@@ -90,6 +90,7 @@ export class GitHubDeploymentAccessStack extends Stack {
           'cloudformation:DescribeStacks',
           'cloudformation:DescribeStackResourceDrifts',
           'cloudformation:DetectStackDrift',
+          'cloudformation:DetectStackResourceDrift',
           'cloudformation:GetTemplate',
           'cloudformation:ListStackResources',
         ],
