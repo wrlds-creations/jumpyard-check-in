@@ -83,7 +83,7 @@ The `infra/` CDK app has deployed `dev` and `park-test` environments. `infra/con
 - `jumpyard-checkin-phone` is configured for static export with unoptimized images.
 - `jumpyard-checkin-admin` is configured for static export and Cloudflare Pages.
 - `jumpyard-checkin-kiosk` currently uses the default Next.js config.
-- Dev and park-test Cloudflare Pages targets exist for phone/admin. Production phone/admin domains are planned in Sprint 3 and are not yet approved or deployed.
+- Dev and park-test Cloudflare Pages targets exist for phone/admin. T0199 also created two empty production Pages projects for `checkin.jumpyard.se` and `staff-checkin.jumpyard.se`; their exact CNAME records and SSL are active, while application deployments, the production API, and traffic remain absent. See [the T0199 runbook](docs/t0199-production-domains.md).
 - Kiosk deployment is owned by the separate kiosk workstream.
 - Park-test release and rollback instructions are in `docs/t0198-controlled-cicd.md`. Production is deliberately absent from those workflows.
 
@@ -96,5 +96,6 @@ The `infra/` CDK app has deployed `dev` and `park-test` environments. `infra/con
 - `FOLLOWUPS.md`: policy and durable external-gate pointer; operational follow-ups are Project drafts.
 - `TEST_PLAN.md`: manual and automated test plan.
 - `AWS_RESOURCES.md`: AWS inventory and required WRLDS metadata.
+- `config/production-domains.json`: canonical DNS-ready but application-unrouted production web-domain contract.
 - `docs/roadmap/backlog.md`: linked Project policy, durable guardrails, external gates, and migration pointer.
 - `docs/history/`: completed legacy tickets, validation evidence, resolved follow-ups, and the one-time Project migration record.

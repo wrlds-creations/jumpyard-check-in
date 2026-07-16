@@ -89,14 +89,14 @@ This model protects JumpYard Cloud. It is not the upstream Roller one-request-pe
 
 ## Edge Boundary
 
-No per-IP limiter is used because many legitimate guests share the park's public IP. T0193 also does not attach WAF: the current API is API Gateway HTTP API, and a CloudFront layer would be bypassable while the default `execute-api` endpoint remains reachable. T0199/T0205 must decide custom-domain, origin, and default-endpoint policy before an edge layer is added. Route credentials, payload ceilings, idempotency, route buckets, and observability are the current enforceable boundary.
+No per-IP limiter is used because many legitimate guests share the park's public IP. T0193 also does not attach WAF: the current API is API Gateway HTTP API, and a CloudFront layer would be bypassable while the default `execute-api` endpoint remains reachable. T0199 approves only the guest and staff/admin web origins and deliberately adds no API custom hostname. Therefore a future production generated API endpoint must remain enabled and no non-bypassable edge claim is allowed unless another approved Issue first creates an alternative custom API topology. Route credentials, payload ceilings, idempotency, route buckets, and observability remain the enforceable boundary.
 
 ## Remaining Ticket Ownership
 
 - T0194: personal staff identity, roles, MFA/session/revoke policy, named actor audit.
 - T0195: token/data lifecycle, least privilege, rotation, backup/restore.
 - T0197: completed park-test Roller booking webhook verification, durable processing, replay, and reconciliation; natural delivery observation remains bounded follow-up evidence.
-- T0199/T0205: domain/origin/default-endpoint topology and any WAF/edge control.
+- T0205 or another approved production Issue: deploy the approved artifact to T0199's empty physical web targets, apply exact CORS, and either preserve the generated API endpoint under T0199's no-custom-hostname contract or separately approve a custom API/default-endpoint/edge topology.
 - T0202: security/traffic alarm routing and operational thresholds.
 
 Detailed implementation, validation, deployment, and rollback evidence is in [docs/t0193-api-protection.md](docs/t0193-api-protection.md).

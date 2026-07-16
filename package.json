@@ -4,7 +4,7 @@
   "private": true,
   "description": "JumpYard Check-in repository workflow and validation scripts.",
   "scripts": {
-    "validate": "npm run validate:template && npm run validate:current-ticket && npm run validate:followups && npm run validate:history-archives && npm run validate:github-project-migration && npm run validate:skills && npm run validate:aws && npm run validate:park-test-frontend-target && npm run validate:t0177-contact-lookup && npm run validate:t0190-safety-gates && npm run validate:t0192-request-item-dates && npm run validate:t0193-capacity && npm run validate:t0193-guest-access && npm run validate:t0193-payload-limits && npm run validate:t0193-service-auth && npm run validate:t0194-staff-identity-backend && npm run validate:t0194-staff-identity-frontend && npm run validate:t0194-staff-identity-infra && npm run validate:t0194-staff-identity-ops && npm run validate:t0195-data-lifecycle && npm run validate:t0195-least-privilege && npm run validate:t0195-pin-pepper-lifecycle && npm run validate:t0195-phone-local-contact && npm run validate:t0195-aurora-recovery && npm run validate:t0196-booking-index && npm run validate:t0197-webhook-reconciliation && npm run validate:t0198-cicd",
+    "validate": "npm run validate:template && npm run validate:current-ticket && npm run validate:followups && npm run validate:history-archives && npm run validate:github-project-migration && npm run validate:skills && npm run validate:aws && npm run validate:park-test-frontend-target && npm run validate:t0177-contact-lookup && npm run validate:t0190-safety-gates && npm run validate:t0192-request-item-dates && npm run validate:t0193-capacity && npm run validate:t0193-guest-access && npm run validate:t0193-payload-limits && npm run validate:t0193-service-auth && npm run validate:t0194-staff-identity-backend && npm run validate:t0194-staff-identity-frontend && npm run validate:t0194-staff-identity-infra && npm run validate:t0194-staff-identity-ops && npm run validate:t0195-data-lifecycle && npm run validate:t0195-least-privilege && npm run validate:t0195-pin-pepper-lifecycle && npm run validate:t0195-phone-local-contact && npm run validate:t0195-aurora-recovery && npm run validate:t0196-booking-index && npm run validate:t0197-webhook-reconciliation && npm run validate:t0198-cicd && npm run validate:t0199-production-domains",
     "validate:template": "node scripts/validate-template.js",
     "validate:current-ticket": "node scripts/validate-current-ticket.js",
     "validate:followups": "node scripts/validate-followups.js",
@@ -32,6 +32,7 @@
     "validate:t0196-booking-index": "node scripts/validate-t0196-booking-index.js",
     "validate:t0197-webhook-reconciliation": "node scripts/validate-t0197-webhook-reconciliation.js",
     "validate:t0198-cicd": "node scripts/validate-t0198-cicd.js",
+    "validate:t0199-production-domains": "node scripts/validate-t0199-production-domains.js",
     "infra:check": "npm --prefix infra run check",
     "infra:synth": "npm --prefix infra run synth:example",
     "roller:env:check": "node scripts/check-roller-env.js",
