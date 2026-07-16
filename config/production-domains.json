@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "contract": "jumpyard-check-in-production-web-domains",
+  "environment": "production",
+  "state": "dns-and-tls-active-awaiting-application-deployment",
+  "zone": "jumpyard.se",
+  "productionWebOrigins": [
+    "https://checkin.jumpyard.se",
+    "https://staff-checkin.jumpyard.se"
+  ],
+  "surfaces": {
+    "guest": {
+      "role": "guest-check-in",
+      "hostname": "checkin.jumpyard.se",
+      "origin": "https://checkin.jumpyard.se",
+      "sourceDirectory": "jumpyard-checkin-phone",
+      "cloudflarePages": {
+        "logicalTarget": "production-phone-pages",
+        "projectName": "jumpyard-check-in-production",
+        "pagesDevOrigin": "https://jumpyard-check-in-production.pages.dev",
+        "gitProviderConnected": false,
+        "applicationDeployments": 0,
+        "status": "created-empty",
+        "createdBy": "T0199-issue-206-explicit-scope-extension",
+        "customDomainAssociation": {
+          "hostname": "checkin.jumpyard.se",
+          "present": true,
+          "status": "active-ssl-enabled"
+        }
+      },
+      "dns": {
+        "recordType": "CNAME",
+        "name": "checkin.jumpyard.se",
+        "cnameTarget": "jumpyard-check-in-production.pages.dev",
+        "status": "published-and-publicly-verified",
+        "ttlSeconds": 3600,
+        "associationOrder": "cloudflare-first"
+      },
+      "tls": {
+        "status": "active",
+        "managedBy": "Cloudflare",
+        "dashboardReadback": "SSL enabled"
+      }
+    },
+    "staffAdmin": {
+      "role": "staff-admin",
+      "hostname": "staff-checkin.jumpyard.se",
+      "origin": "https://staff-checkin.jumpyard.se",
+      "sourceDirectory": "jumpyard-checkin-admin",
+      "cloudflarePages": {
+        "logicalTarget": "production-staff-admin-pages",
+        "projectName": "jumpyard-checkin-admin-production",
+        "pagesDevOrigin": "https://jumpyard-checkin-admin-production.pages.dev",
+        "gitProviderConnected": false,
+        "applicationDeployments": 0,
+        "status": "created-empty",
+        "createdBy": "T0199-issue-206-explicit-scope-extension",
+        "customDomainAssociation": {
+          "hostname": "staff-checkin.jumpyard.se",
+          "present": true,
+          "status": "active-ssl-enabled"
+        }
+      },
+      "dns": {
+        "recordType": "CNAME",
+        "name": "staff-checkin.jumpyard.se",
+        "cnameTarget": "jumpyard-checkin-admin-production.pages.dev",
+        "status": "published-and-publicly-verified",
+        "ttlSeconds": 3600,
+        "associationOrder": "cloudflare-first"
+      },
+      "tls": {
+        "status": "active",
+        "managedBy": "Cloudflare",
+        "dashboardReadback": "SSL enabled"
+      },
+      "identity": {
+        "callbackUrls": [
+          "https://staff-checkin.jumpyard.se/auth/callback"
+        ],
+        "logoutUrls": [
+          "https://staff-checkin.jumpyard.se/admin"
+        ]
+      }
+    }
+  },
+  "api": {
+    "customHostname": null,
+    "customHostnameApproved": false,
+    "browserBaseUrl": null,
+    "browserBaseUrlSource": "production-api-created-by-separately-approved-issue",
+    "corsAllowedOrigins": [
+      "https://checkin.jumpyard.se",
+      "https://staff-checkin.jumpyard.se"
+    ],
+    "defaultExecuteApiEndpointPolicy": "must-remain-enabled-without-approved-custom-api-hostname",
+    "edgeIsolationClaimAllowed": false
+  },
+  "dns": {
+    "owner": "JumpYard / Joao Henriques",
+    "handoffReady": true,
+    "recordsAuthorizedByOwner": true,
+    "recordsCreated": true,
+    "publicReadbackVerified": true,
+    "ttlSeconds": 3600,
+    "verifiedAt": "2026-07-16T17:09:40+02:00"
+  },
+  "cutover": {
+    "authorized": false,
+    "owner": "T0205-or-separately-approved-production-issue",
+    "requires": [
+      "T0204-GO",
+      "approved-production-resources-and-delivery",
+      "created-and-verified-cloudflare-pages-targets",
+      "reviewed-exact-dns-records",
+      "approved-production-api-and-cors"
+    ]
+  },
+  "parkTestBaseline": {
+    "mustRemainUnchanged": true,
+    "apiOrigin": "https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com",
+    "phoneOrigin": "https://jumpyard-check-in-park-test.pages.dev",
+    "staffAdminOrigin": "https://jumpyard-checkin-admin-park-test.pages.dev",
+    "allowedCorsOrigins": [
+      "https://jumpyard-check-in-park-test.pages.dev",
+      "https://jumpyard-checkin-admin-park-test.pages.dev",
+      "https://jumpyard-check-in-kiosk.pages.dev"
+    ]
+  }
+}
