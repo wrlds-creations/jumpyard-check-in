@@ -34,7 +34,10 @@
   "guestEmail": {
     "provider": "aws_ses",
     "checkinBaseUrl": "https://jumpyard-check-in.pages.dev/",
+    "configurationSetName": "",
     "fromAddress": "love@wrlds.com",
+    "fromDisplayName": "",
+    "identityDomain": "",
     "replyToAddresses": [
       "love@wrlds.com"
     ]

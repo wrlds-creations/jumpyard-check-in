@@ -35,7 +35,10 @@ interface TestConfig {
   };
   readonly guestEmail: {
     checkinBaseUrl: string;
+    configurationSetName: string;
     fromAddress: string;
+    fromDisplayName: string;
+    identityDomain: string;
     provider: string;
     replyToAddresses: string[];
   };
@@ -142,6 +145,21 @@ parkTestPlaygroundConfig.roller.baseUrl = 'https://api.play.roller.app';
 
 const parkTestWrongClassification = cloneConfig(parkTestConfig);
 parkTestWrongClassification.tags['WRLDS:DataClassification'] = 'internal';
+
+const parkTestWrongEmailIdentityDomain = cloneConfig(parkTestConfig);
+parkTestWrongEmailIdentityDomain.guestEmail.identityDomain = 'wrlds.com';
+
+const parkTestWrongEmailConfigurationSet = cloneConfig(parkTestConfig);
+parkTestWrongEmailConfigurationSet.guestEmail.configurationSetName = 'another-configuration-set';
+
+const parkTestWrongEmailFromAddress = cloneConfig(parkTestConfig);
+parkTestWrongEmailFromAddress.guestEmail.fromAddress = 'another@jumpyard.se';
+
+const parkTestWrongEmailDisplayName = cloneConfig(parkTestConfig);
+parkTestWrongEmailDisplayName.guestEmail.fromDisplayName = 'Another Park';
+
+const parkTestWrongEmailReplyTo = cloneConfig(parkTestConfig);
+parkTestWrongEmailReplyTo.guestEmail.replyToAddresses = ['love@wrlds.com'];
 
 const parkTestConfirmedSend = cloneConfig(parkTestConfig);
 parkTestConfirmedSend.bookingTimeSms.confirmSend = true;
@@ -414,6 +432,31 @@ expectPass('reviewed park-test Live config passes', parkTestConfig, 'park-test')
 expectFail('park-test missing resourcePrefix fails closed', parkTestMissingPrefix, /resourcePrefix/);
 expectFail('park-test Playground config fails closed', parkTestPlaygroundConfig, /park-test config must explicitly use Roller Live/);
 expectFail('park-test wrong data classification fails closed', parkTestWrongClassification, /DataClassification/);
+expectFail(
+  'park-test wrong email identity domain fails closed',
+  parkTestWrongEmailIdentityDomain,
+  /guestEmail.fromAddress must belong/,
+);
+expectFail(
+  'park-test wrong email configuration set fails closed',
+  parkTestWrongEmailConfigurationSet,
+  /guestEmail.configurationSetName/,
+);
+expectFail(
+  'park-test wrong email from address fails closed',
+  parkTestWrongEmailFromAddress,
+  /guestEmail.fromAddress/,
+);
+expectFail(
+  'park-test wrong email display name fails closed',
+  parkTestWrongEmailDisplayName,
+  /guestEmail.fromDisplayName/,
+);
+expectFail(
+  'park-test wrong email reply-to fails closed',
+  parkTestWrongEmailReplyTo,
+  /guestEmail.replyToAddresses/,
+);
 expectFail('park-test confirmed scheduled send fails closed', parkTestConfirmedSend, /confirmSend must stay false/);
 expectFail(
   'park-test emergency stop off without scoped approval fails closed',

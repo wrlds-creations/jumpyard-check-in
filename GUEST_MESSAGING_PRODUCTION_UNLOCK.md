@@ -1,10 +1,10 @@
 # Guest Messaging Production Unlock
 
-This document is the source of truth for moving JumpYard guest SMS and email from controlled dev smoke tests to production-capable unattended booking-time sends.
+This document is the source of truth for moving JumpYard guest email from controlled dev smoke tests to production-capable unattended booking-time sends. Love chose email-only for Sprint 3 on 2026-07-17; SMS is deferred and does not block the sprint.
 
 ## Current Dev State
 
-Read-only AWS checks were run on 2026-06-02 against account `376129878018`, region `eu-north-1`.
+Read-only AWS checks were repeated on 2026-07-17 against account `376129878018`, region `eu-north-1`.
 
 T0101 added the dev response runbook in `OPERATIONS_RUNBOOK.md`, including SMS/email delivery checks, SNS/SES sandbox meaning, and safe first actions. This does not replace production delivery monitoring or SNS/SES production access.
 
@@ -22,8 +22,9 @@ T0101 added the dev response runbook in `OPERATIONS_RUNBOOK.md`, including SMS/e
 | SES production access | `ProductionAccessEnabled=false` | Email can only go to verified recipients/domains or simulator. |
 | SES sending | `SendingEnabled=true` | Dev sending works inside sandbox rules. |
 | SES quota | `200/day`, `1/sec` | Sandbox email limits still apply. |
-| SES identities | `love@wrlds.com` verified | No JumpYard/WRLDS sending domain is configured for production. |
-| SES configuration set | not found for `jumpyard-check-in-dev-email` | No dedicated email event configuration set exists yet. |
+| SES identities | only `love@wrlds.com` verified | The approved `jumpyard.se` domain identity is defined by T0200 but not yet deployed. |
+| SES configuration sets | none | `jumpyard-check-in-park-test-email` is defined fail closed by T0200 but not yet deployed. |
+| SES suppression | account-level bounce and complaint suppression enabled; zero suppressed addresses at readback | Known bad destinations are suppressed without storing them in repository evidence. |
 
 ## Confirmed AWS Requirements
 
@@ -37,54 +38,51 @@ Amazon SNS supports message-level Sender ID via `AWS.SNS.SMS.SenderID`. Sender I
 
 ## Hard Gates
 
-Do not enable unattended `confirmSend=true` scheduled booking-time messages until all of these are true:
+Do not enable unattended `confirmSend=true` scheduled booking-time email until all of these are true:
 
 | Gate | Required state |
 |---|---|
-| SMS production access | AWS confirms SMS sandbox exit for `eu-north-1` and the planned destination countries. |
-| SMS sender identity | Sender ID or origination identity is configured, approved where required, and verified on a real handset. |
 | Email production access | SES production access is approved in the sending region. |
-| Email sender identity | A production sender domain or address is verified with DKIM, SPF/DMARC policy, and approved reply-to/from values. |
-| Guest consent/copy | Final transactional SMS and email copy, opt-in/consent basis, and support/opt-out wording are approved. |
-| Volume plan | Expected monthly volume, peak rate, countries, and spend limits are approved. |
-| Monitoring | Production delivery failure monitoring exists for SMS, email, and due-message processing; the T0101 dev runbook is not enough by itself. |
+| Email sender identity | `jumpyard.se` is SES/DKIM verified and runtime From plus Reply-To are exactly `nackaforum@jumpyard.se`. |
+| Guest consent/copy | Final transactional email copy, existing-booking contact basis, and support/reply wording are approved. |
+| Volume plan | Expected daily/monthly volume and peak email rate are approved. |
+| Monitoring | Configuration-set delivery, bounce, complaint, reject, rendering-failure, suppression, account-health, and due-message monitoring exists. |
 | Environment boundary | Dev, park-test pre-production, and future production config, base URLs, secrets, and sender identities are separated; park-test is never treated as production. |
 
 Until those gates are satisfied:
 
 - EventBridge due-message processing must stay in planning mode with `confirmSend=false`.
-- Manual confirmed sends remain dev-only controlled smokes.
-- Production guests must not depend on AWS SMS/SES delivery from this project.
+- Park-test application/manual sends remain disabled; one controlled email requires a separate final confirmation and an approved test recipient.
+- Production guests must not depend on AWS SES delivery from this project.
+- SMS remains sandbox/deferred and is not part of the Sprint 3 send plan.
 
 ## Inputs Needed From JumpYard/WRLDS
 
 | Input | Needed for |
 |---|---|
 | Final public check-in URL/custom domain | AWS support cases and message templates. |
-| Final SMS copy | SMS support case and production message approval. |
 | Final email copy/design | SES production access and customer experience review. |
-| Monthly SMS/email volume | AWS support case and quota sizing. |
-| Peak sends per minute | AWS support case, throttling, and queue planning. |
-| Destination countries | AWS SMS support case and sender-id support check. |
-| Consent/opt-in basis | AWS support case and compliance review. |
-| Support/opt-out wording | AWS support case and production copy. |
-| Sender display goal | SMS Sender ID or origination identity choice. |
-| Email from domain/address | SES identity, DKIM, SPF/DMARC, and reply-to setup. |
-| DNS owner/access | Domain verification and email deliverability setup. |
-| Approval to submit AWS support cases | Required before requesting sandbox exit/production access. |
+| Daily/monthly email volume | Absolute peak confirmed as 3,000 recipients in one day; normal and monthly volume remain unclaimed. |
+| Peak email sends per minute | Absolute peak confirmed as 150 recipients per 30 minutes (5/minute); request 5,000/day and 5/second for bounded headroom. |
+| Destination geography | Initial Nacka pilot scope and SES request. |
+| Contact basis | Confirm existing-booking transactional use. |
+| Support wording | Replies go to `nackaforum@jumpyard.se`. |
+| Email from domain/address | Confirmed as `jumpyard.se` / `nackaforum@jumpyard.se`. |
+| DNS owner/access | João owns authoritative DNS and applies only the exact three generated DKIM CNAMEs. |
+| Approval to submit SES production access | Approved by issue #208 once the factual volume/peak inputs are confirmed. |
 
 ## Future Codex Steps
 
-After the missing inputs are available and explicitly approved, the next implementation tickets can:
+Issue #208/T0200 now owns these ordered steps:
 
-1. Create SES domain identity and document required DNS records.
-2. Configure production email sender/reply-to values per environment.
-3. Request or configure SMS sender identity/origination according to AWS approval.
-4. Submit AWS Support production-access requests with approved content.
-5. Add channel-specific delivery alarms and link them to the T0101 operations runbook.
-6. Run sandbox-to-production smokes with real guest-like data.
-7. Flip unattended booking-time sends only after a reviewed CDK/config change.
+1. Merge reviewed SES identity/configuration-set/sender/telemetry code.
+2. Promote the immutable artifact through the protected park-test workflow with configuration-set sending and application sends still off.
+3. Give João the exact three generated DKIM CNAME records and verify public DNS plus SES DKIM status.
+4. Submit the factual SES production-access request for 5,000 recipients/day and 5/second, stating the confirmed extreme case of 3,000/day and 5/minute rather than implying that quota is normal usage.
+5. Enable only the SES configuration set through reviewed IaC after hard gates pass, then obtain separate confirmation for one approved test email.
+6. Keep automatic/manual application sends off at T0200 closeout.
+7. Let T0201 separately enable unattended booking-time email only after its timing/duplicate/kill-switch review.
 
 ## Current Decision
 
-T0089 does not unlock production sending. It makes the remaining external approvals and inputs explicit, keeps the dev safety gate intact, and prepares the next tickets to be precise instead of guessing inside AWS.
+T0200 prepares an email-only sender without unlocking guest delivery. The approved initial sender is `JumpYard Nacka <nackaforum@jumpyard.se>` with the same Reply-To. Dev remains on `love@wrlds.com`; SMS is deferred. Love confirmed an absolute peak case of 150 recipients per 30 minutes from 10:00 to 20:00, or 3,000 in one extreme day, and approved a request for 5,000/day and 5/second. DNS values and any unconfirmed normal/monthly volume must not be guessed.

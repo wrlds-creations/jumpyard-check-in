@@ -186,6 +186,8 @@ function validateDevTemplate(dev: SynthResult): void {
   expectContains(strings, 'playground', 'dev');
   expectContains(strings, `${DEV_PREFIX}-sns-sms-delivery-status`, 'dev');
   expectNotContains(strings, PARK_TEST_PREFIX, 'dev');
+  expect(countResourcesByType(dev.template, 'AWS::SES::ConfigurationSet') === 0, 'Dev must not create a new SES configuration set.');
+  expect(countResourcesByType(dev.template, 'AWS::SES::EmailIdentity') === 0, 'Dev must keep its existing email identity.');
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/env`);
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/base-url`);
   expectEventRuleState(dev.template, `${DEV_PREFIX}-data-api-daily-sync`, 'ENABLED');
@@ -216,6 +218,9 @@ function validateDevTemplate(dev: SynthResult): void {
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-session`, {
+    EMAIL_CONFIGURATION_SET_NAME: '',
+    EMAIL_FROM_ADDRESS: 'love@wrlds.com',
+    EMAIL_FROM_DISPLAY_NAME: '',
     ENABLE_GUEST_MESSAGE_SENDS: 'true',
     ENABLE_STAFF_AUTH: 'true',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
@@ -249,6 +254,77 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   expectContains(strings, PARK_TEST_KIOSK_ORIGIN, 'park-test existing kiosk interface contract');
   expectNotContains(strings, DEV_PREFIX, 'park-test');
   expectNotContains(strings, `${PARK_TEST_PREFIX}-sns-sms-delivery-status`, 'park-test');
+  expectNotContains(strings, 'ses:SendEmail', 'park-test closed guest-send policy');
+
+  const emailConfigurationSets = Object.values(getResources(parkTest.template)).filter(
+    (resource) => resource.Type === 'AWS::SES::ConfigurationSet',
+  );
+  expect(emailConfigurationSets.length === 1, 'Expected one park-test SES configuration set.');
+  expect(
+    emailConfigurationSets[0].Properties?.Name === `${PARK_TEST_PREFIX}-email`,
+    'Expected the dedicated park-test SES configuration-set name.',
+  );
+  expect(
+    JSON.stringify(emailConfigurationSets[0].Properties?.SendingOptions) === JSON.stringify({ SendingEnabled: false }),
+    'Park-test SES configuration-set sending must remain disabled before the external gates pass.',
+  );
+  expect(
+    JSON.stringify(emailConfigurationSets[0].Properties?.SuppressionOptions) ===
+      JSON.stringify({ SuppressedReasons: ['BOUNCE', 'COMPLAINT'] }),
+    'Park-test SES configuration set must suppress bounces and complaints.',
+  );
+  expect(
+    JSON.stringify(emailConfigurationSets[0].Properties?.DeliveryOptions) === JSON.stringify({ TlsPolicy: 'REQUIRE' }),
+    'Park-test guest email must require TLS delivery.',
+  );
+
+  const emailIdentities = Object.values(getResources(parkTest.template)).filter(
+    (resource) => resource.Type === 'AWS::SES::EmailIdentity',
+  );
+  expect(emailIdentities.length === 1, 'Expected one park-test SES domain identity.');
+  expect(emailIdentities[0].Properties?.EmailIdentity === 'jumpyard.se', 'Expected the jumpyard.se SES domain identity.');
+  expect(
+    JSON.stringify(emailIdentities[0].Properties?.DkimSigningAttributes) ===
+      JSON.stringify({ NextSigningKeyLength: 'RSA_2048_BIT' }),
+    'Expected Easy DKIM with a 2048-bit signing key.',
+  );
+
+  const emailEventDestinations = Object.values(getResources(parkTest.template)).filter(
+    (resource) => resource.Type === 'AWS::SES::ConfigurationSetEventDestination',
+  );
+  expect(emailEventDestinations.length === 1, 'Expected one park-test SES CloudWatch event destination.');
+  const emailEventDestination = emailEventDestinations[0].Properties?.EventDestination as
+    | Record<string, unknown>
+    | undefined;
+  expect(
+    JSON.stringify(emailEventDestination?.MatchingEventTypes) ===
+      JSON.stringify(['send', 'delivery', 'bounce', 'complaint', 'reject', 'renderingFailure']),
+    'Expected the reviewed SES delivery event catalog.',
+  );
+
+  for (const outputName of [
+    'GuestEmailConfigurationSetName',
+    'GuestEmailIdentityDomain',
+    'GuestEmailDkimRecordName1',
+    'GuestEmailDkimRecordValue1',
+    'GuestEmailDkimRecordName2',
+    'GuestEmailDkimRecordValue2',
+    'GuestEmailDkimRecordName3',
+    'GuestEmailDkimRecordValue3',
+  ]) {
+    expect(Boolean(parkTest.template.Outputs?.[outputName]), `Expected CloudFormation output ${outputName}.`);
+  }
+
+  for (const alarmName of [
+    `${PARK_TEST_PREFIX}-email-bounce`,
+    `${PARK_TEST_PREFIX}-email-complaint`,
+    `${PARK_TEST_PREFIX}-email-reject`,
+    `${PARK_TEST_PREFIX}-email-renderingfailure`,
+    `${PARK_TEST_PREFIX}-email-account-bounce-rate`,
+    `${PARK_TEST_PREFIX}-email-account-complaint-rate`,
+  ]) {
+    expectNamedResource(parkTest.template, 'AWS::CloudWatch::Alarm', 'AlarmName', alarmName);
+  }
 
   const expectedNames = [
     `/${PARK_TEST_PREFIX}/roller/credentials`,
@@ -314,6 +390,10 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
+    EMAIL_CONFIGURATION_SET_NAME: `${PARK_TEST_PREFIX}-email`,
+    EMAIL_FROM_ADDRESS: 'nackaforum@jumpyard.se',
+    EMAIL_FROM_DISPLAY_NAME: 'JumpYard Nacka',
+    EMAIL_REPLY_TO_ADDRESSES: 'nackaforum@jumpyard.se',
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_STAFF_AUTH: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',

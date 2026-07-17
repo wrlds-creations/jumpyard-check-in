@@ -256,9 +256,15 @@ function validateParkTestBaseline(contract) {
   for (const origin of EXPECTED_ORIGINS) {
     assert.ok(!parkTestText.includes(origin), `park-test config must not include production origin ${origin}`);
   }
-  for (const blocked of ['nackaforum@jumpyard.se', 'api-checkin.jumpyard.se']) {
+  for (const blocked of ['api-checkin.jumpyard.se']) {
     assert.ok(!contractText.includes(blocked), `production domain contract must not expand into ${blocked}`);
   }
+
+  assert.equal(
+    parkTest.guestEmail.fromAddress,
+    'nackaforum@jumpyard.se',
+    'T0200 owns the approved park-test sender without changing the T0199 production web-domain contract',
+  );
 }
 
 function main() {

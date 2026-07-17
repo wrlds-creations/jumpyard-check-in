@@ -59,8 +59,13 @@
   "guestEmail": {
     "provider": "aws_ses",
     "checkinBaseUrl": "https://jumpyard-check-in-park-test.pages.dev/",
-    "fromAddress": "",
-    "replyToAddresses": []
+    "configurationSetName": "jumpyard-check-in-park-test-email",
+    "fromAddress": "nackaforum@jumpyard.se",
+    "fromDisplayName": "JumpYard Nacka",
+    "identityDomain": "jumpyard.se",
+    "replyToAddresses": [
+      "nackaforum@jumpyard.se"
+    ]
   },
   "safetyGates": {
     "emergencyStop": true,

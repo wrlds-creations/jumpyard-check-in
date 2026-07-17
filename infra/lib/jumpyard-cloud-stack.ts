@@ -13,6 +13,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as ses from 'aws-cdk-lib/aws-ses';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
@@ -40,7 +41,10 @@ interface JumpYardCloudStackProps extends StackProps {
 interface HandlerResources {
   readonly api: apigatewayv2.CfnApi;
   readonly checkinEmailBaseUrl: string;
+  readonly checkinEmailConfigurationSetName: string;
   readonly checkinEmailFromAddress: string;
+  readonly checkinEmailFromDisplayName: string;
+  readonly checkinEmailIdentityDomain: string;
   readonly checkinEmailReplyToAddresses: readonly string[];
   readonly checkinSmsBaseUrl: string;
   readonly rollerCredentialsSecret: secretsmanager.Secret;
@@ -755,6 +759,68 @@ exports.handler = async (event) => {
       eventBusName: `${config.resourcePrefix}-events`,
     });
 
+    if (config.guestEmail.identityDomain) {
+      const emailConfigurationSet = new ses.ConfigurationSet(this, 'GuestEmailConfigurationSet', {
+        configurationSetName: config.guestEmail.configurationSetName,
+        reputationMetrics: true,
+        sendingEnabled: false,
+        suppressionReasons: ses.SuppressionReasons.BOUNCES_AND_COMPLAINTS,
+        tlsPolicy: ses.ConfigurationSetTlsPolicy.REQUIRE,
+      });
+
+      emailConfigurationSet.addEventDestination('GuestEmailCloudWatchEventDestination', {
+        configurationSetEventDestinationName: `${config.resourcePrefix}-email-cloudwatch`,
+        destination: ses.EventDestination.cloudWatchDimensions([
+          {
+            defaultValue: config.guestEmail.configurationSetName,
+            name: 'ses:configuration-set',
+            source: ses.CloudWatchDimensionSource.MESSAGE_TAG,
+          },
+        ]),
+        events: [
+          ses.EmailSendingEvent.SEND,
+          ses.EmailSendingEvent.DELIVERY,
+          ses.EmailSendingEvent.BOUNCE,
+          ses.EmailSendingEvent.COMPLAINT,
+          ses.EmailSendingEvent.REJECT,
+          ses.EmailSendingEvent.RENDERING_FAILURE,
+        ],
+      });
+
+      const emailIdentity = new ses.EmailIdentity(this, 'GuestEmailIdentity', {
+        configurationSet: emailConfigurationSet,
+        dkimIdentity: ses.DkimIdentity.easyDkim(ses.EasyDkimSigningKeyLength.RSA_2048_BIT),
+        dkimSigning: true,
+        feedbackForwarding: false,
+        identity: ses.Identity.domain(config.guestEmail.identityDomain),
+      });
+
+      new CfnOutput(this, 'GuestEmailConfigurationSetName', {
+        value: emailConfigurationSet.configurationSetName,
+      });
+      new CfnOutput(this, 'GuestEmailIdentityDomain', {
+        value: emailIdentity.emailIdentityName,
+      });
+      new CfnOutput(this, 'GuestEmailDkimRecordName1', {
+        value: emailIdentity.dkimDnsTokenName1,
+      });
+      new CfnOutput(this, 'GuestEmailDkimRecordValue1', {
+        value: emailIdentity.dkimDnsTokenValue1,
+      });
+      new CfnOutput(this, 'GuestEmailDkimRecordName2', {
+        value: emailIdentity.dkimDnsTokenName2,
+      });
+      new CfnOutput(this, 'GuestEmailDkimRecordValue2', {
+        value: emailIdentity.dkimDnsTokenValue2,
+      });
+      new CfnOutput(this, 'GuestEmailDkimRecordName3', {
+        value: emailIdentity.dkimDnsTokenName3,
+      });
+      new CfnOutput(this, 'GuestEmailDkimRecordValue3', {
+        value: emailIdentity.dkimDnsTokenValue3,
+      });
+    }
+
     // SNS SMS attributes are account-wide, so keep delivery-status ownership on dev until park-test messaging is scoped.
     if (config.tags['WRLDS:Environment'] === 'dev') {
       this.configureSmsDeliveryStatusLogging(config);
@@ -819,7 +885,10 @@ exports.handler = async (event) => {
     const handlerResources: HandlerResources = {
       api,
       checkinEmailBaseUrl: config.guestEmail.checkinBaseUrl,
+      checkinEmailConfigurationSetName: config.guestEmail.configurationSetName,
       checkinEmailFromAddress: config.guestEmail.fromAddress,
+      checkinEmailFromDisplayName: config.guestEmail.fromDisplayName,
+      checkinEmailIdentityDomain: config.guestEmail.identityDomain,
       checkinEmailReplyToAddresses: config.guestEmail.replyToAddresses,
       checkinSmsBaseUrl: config.bookingTimeSms.checkinBaseUrl,
       rollerCredentialsSecret,
@@ -1090,6 +1159,28 @@ exports.handler = async (event) => {
       statistic: 'Sum',
       period,
     });
+    const guestEmailMetric = (metricName: string) =>
+      new cloudwatch.Metric({
+        namespace: 'AWS/SES',
+        metricName,
+        dimensionsMap: {
+          'ses:configuration-set': config.guestEmail.configurationSetName,
+        },
+        statistic: 'Sum',
+        period,
+      });
+    const sesAccountBounceRate = new cloudwatch.Metric({
+      namespace: 'AWS/SES',
+      metricName: 'Reputation.BounceRate',
+      statistic: 'Average',
+      period,
+    });
+    const sesAccountComplaintRate = new cloudwatch.Metric({
+      namespace: 'AWS/SES',
+      metricName: 'Reputation.ComplaintRate',
+      statistic: 'Average',
+      period,
+    });
 
     new logs.MetricFilter(this, 'ApiThrottledRequestMetricFilter', {
       logGroup: resources.apiAccessLogGroup,
@@ -1191,6 +1282,31 @@ exports.handler = async (event) => {
       }),
     );
 
+    if (config.guestEmail.configurationSetName) {
+      dashboard.addWidgets(
+        new cloudwatch.GraphWidget({
+          title: 'Guest email delivery outcomes',
+          left: [
+            guestEmailMetric('Send').with({ label: 'send' }),
+            guestEmailMetric('Delivery').with({ label: 'delivery' }),
+          ],
+          right: [
+            guestEmailMetric('Bounce').with({ label: 'bounce' }),
+            guestEmailMetric('Complaint').with({ label: 'complaint' }),
+            guestEmailMetric('Reject').with({ label: 'reject' }),
+            guestEmailMetric('RenderingFailure').with({ label: 'rendering failure' }),
+          ],
+          width: 12,
+        }),
+        new cloudwatch.GraphWidget({
+          title: 'SES account reputation',
+          left: [sesAccountBounceRate.with({ label: 'bounce rate' })],
+          right: [sesAccountComplaintRate.with({ label: 'complaint rate' })],
+          width: 12,
+        }),
+      );
+    }
+
     new cloudwatch.Alarm(this, 'Api5xxAlarm', {
       alarmName: `${config.resourcePrefix}-api-5xx`,
       metric: apiMetric('5xx', 'Sum'),
@@ -1230,6 +1346,43 @@ exports.handler = async (event) => {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
+
+    if (config.guestEmail.configurationSetName) {
+      for (const event of ['Bounce', 'Complaint', 'Reject', 'RenderingFailure'] as const) {
+        new cloudwatch.Alarm(this, `GuestEmail${event}Alarm`, {
+          alarmName: `${config.resourcePrefix}-email-${event.toLowerCase()}`,
+          alarmDescription: `The park-test SES configuration set reported a ${event} event.`,
+          metric: guestEmailMetric(event),
+          threshold: 1,
+          evaluationPeriods: 1,
+          datapointsToAlarm: 1,
+          comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        });
+      }
+
+      new cloudwatch.Alarm(this, 'SesAccountBounceRateAlarm', {
+        alarmName: `${config.resourcePrefix}-email-account-bounce-rate`,
+        alarmDescription: 'SES account bounce rate reached the proactive two-percent warning threshold.',
+        metric: sesAccountBounceRate,
+        threshold: 0.02,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+
+      new cloudwatch.Alarm(this, 'SesAccountComplaintRateAlarm', {
+        alarmName: `${config.resourcePrefix}-email-account-complaint-rate`,
+        alarmDescription: 'SES account complaint rate reached the proactive 0.05-percent warning threshold.',
+        metric: sesAccountComplaintRate,
+        threshold: 0.0005,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+    }
 
     new cloudwatch.Alarm(this, 'RollerOpsDlqVisibleAlarm', {
       alarmName: `${config.resourcePrefix}-roller-ops-dlq-visible`,
@@ -1558,7 +1711,9 @@ exports.handler = async (event) => {
       environment.CHECKIN_EMAIL_BASE_URL = resources.checkinEmailBaseUrl;
       environment.CHECKIN_SMS_BASE_URL = resources.checkinSmsBaseUrl;
       environment.CHECKIN_LINK_DEV_TOKEN_SECRET_ARN = resources.checkinLinkDevTokenSecret.secretArn;
+      environment.EMAIL_CONFIGURATION_SET_NAME = resources.checkinEmailConfigurationSetName;
       environment.EMAIL_FROM_ADDRESS = resources.checkinEmailFromAddress;
+      environment.EMAIL_FROM_DISPLAY_NAME = resources.checkinEmailFromDisplayName;
       environment.EMAIL_PROVIDER = 'aws_ses';
       environment.EMAIL_REPLY_TO_ADDRESSES = resources.checkinEmailReplyToAddresses.join(',');
       environment.ENABLE_GUEST_MESSAGE_SENDS = String(resources.safetyGates.guestMessagingSendsEnabled);
@@ -1699,15 +1854,20 @@ exports.handler = async () => ({
             },
           }),
         );
-        if (resources.checkinEmailFromAddress) {
+        if (resources.checkinEmailFromAddress && resources.checkinEmailIdentityDomain) {
           fn.addToRolePolicy(
             new iam.PolicyStatement({
               actions: ['ses:SendEmail'],
+              conditions: {
+                StringEquals: {
+                  'ses:FromAddress': resources.checkinEmailFromAddress,
+                },
+              },
               resources: [
                 Stack.of(this).formatArn({
                   service: 'ses',
                   resource: 'identity',
-                  resourceName: resources.checkinEmailFromAddress,
+                  resourceName: resources.checkinEmailIdentityDomain,
                   arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
                 }),
               ],
