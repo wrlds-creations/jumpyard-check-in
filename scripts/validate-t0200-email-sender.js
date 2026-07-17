@@ -96,8 +96,10 @@ function validateImplementation() {
 function validateDocumentation() {
   const doc = read('docs/t0200-email-sender-readiness.md');
   for (const expected of [
-    'GuestEmailDkimRecordName1',
-    'GuestEmailDkimRecordValue3',
+    'kufzx7xe4jqyotkcbvg3iw6hzci54cpw._domainkey.jumpyard.se',
+    'd33aqoyuxzkydfrmpgck2v7enhjpmi3y.dkim.amazonses.com',
+    '29568860560',
+    '29569173836',
     '3,000 recipients in the most extreme operating day',
     '5,000 recipients per 24 hours and 5 recipients per second',
     'separate explicit confirmation immediately before sending',

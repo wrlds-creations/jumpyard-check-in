@@ -22,8 +22,8 @@ T0101 added the dev response runbook in `OPERATIONS_RUNBOOK.md`, including SMS/e
 | SES production access | `ProductionAccessEnabled=false` | Email can only go to verified recipients/domains or simulator. |
 | SES sending | `SendingEnabled=true` | Dev sending works inside sandbox rules. |
 | SES quota | `200/day`, `1/sec` | Sandbox email limits still apply. |
-| SES identities | only `love@wrlds.com` verified | The approved `jumpyard.se` domain identity is defined by T0200 but not yet deployed. |
-| SES configuration sets | none | `jumpyard-check-in-park-test-email` is defined fail closed by T0200 but not yet deployed. |
+| SES identities | `love@wrlds.com` verified; `jumpyard.se` deployed with verification/DKIM pending | João must publish the exact three CNAME records before domain verification. |
+| SES configuration sets | `jumpyard-check-in-park-test-email` deployed with sending disabled | Delivery cannot open before later reviewed gates. |
 | SES suppression | account-level bounce and complaint suppression enabled; zero suppressed addresses at readback | Known bad destinations are suppressed without storing them in repository evidence. |
 
 ## Confirmed AWS Requirements
