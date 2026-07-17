@@ -77,7 +77,9 @@ const DEFAULT_EMAIL_BASE_URL = process.env.CHECKIN_EMAIL_BASE_URL || DEFAULT_SMS
 const SMS_PROVIDER = process.env.SMS_PROVIDER || 'aws_sns';
 const SMS_SENDER_ID = process.env.SMS_SENDER_ID || '';
 const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER || 'aws_ses';
+const EMAIL_CONFIGURATION_SET_NAME = process.env.EMAIL_CONFIGURATION_SET_NAME || '';
 const EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS || '';
+const EMAIL_FROM_DISPLAY_NAME = process.env.EMAIL_FROM_DISPLAY_NAME || '';
 const EMAIL_REPLY_TO_ADDRESSES = parseEmailAddressList(process.env.EMAIL_REPLY_TO_ADDRESSES);
 const SMS_TRIGGER_TIME_ZONE = 'Europe/Stockholm';
 const DEFAULT_SMS_TRIGGER_LEAD_MINUTES = 30;
@@ -3222,8 +3224,10 @@ function getSmsProviderDiagnostics() {
 
 function getEmailProviderDiagnostics() {
   return {
+    configurationSetConfigured: Boolean(EMAIL_CONFIGURATION_SET_NAME),
     provider: EMAIL_PROVIDER,
     fromAddressConfigured: Boolean(normalizeEmailAddress(EMAIL_FROM_ADDRESS)),
+    fromDisplayNameConfigured: Boolean(EMAIL_FROM_DISPLAY_NAME),
     replyToConfigured: EMAIL_REPLY_TO_ADDRESSES.length > 0,
   };
 }
@@ -3265,8 +3269,11 @@ async function sendEmailWithSes({ destinationEmail, html, subject, text }) {
     Destination: {
       ToAddresses: [destinationEmail],
     },
-    FromEmailAddress: fromAddress,
+    FromEmailAddress: formatSesFromAddress(fromAddress),
   };
+  if (EMAIL_CONFIGURATION_SET_NAME) {
+    commandInput.ConfigurationSetName = EMAIL_CONFIGURATION_SET_NAME;
+  }
   if (EMAIL_REPLY_TO_ADDRESSES.length > 0) {
     commandInput.ReplyToAddresses = EMAIL_REPLY_TO_ADDRESSES;
   }
@@ -4431,18 +4438,21 @@ function buildCheckinEmailMessage({ booking, checkinUrl }) {
   const safeBookingReference = escapeHtml(bookingReference);
   const safeCheckinUrl = escapeHtml(checkinUrl);
   const timeText = buildSmsBookingTimeText(booking);
-  const intro = timeText ? `Din hopptid ${timeText} narmar sig.` : 'Din hopptid hos JumpYard narmar sig.';
-  const subject = timeText ? `Dags att checka in ${timeText}` : 'Dags att checka in hos JumpYard';
+  const intro = timeText ? `Din hopptid ${timeText} närmar sig.` : 'Din hopptid hos JumpYard Nacka närmar sig.';
+  const subject = 'Dags att checka in inför ditt besök hos JumpYard Nacka';
   const text = [
     'Hej!',
     '',
     intro,
-    `Checka in har: ${checkinUrl}`,
+    `Checka in här: ${checkinUrl}`,
     '',
     bookingReference ? `Bokning: ${bookingReference}` : null,
     '',
-    'Vi ses snart.',
-    'JumpYard',
+    'Länken är personlig och ska inte delas vidare.',
+    'Behöver du hjälp? Svara på det här mejlet så hjälper JumpYard Nacka dig.',
+    '',
+    'Vi ses snart!',
+    'JumpYard Nacka',
   ]
     .filter((line) => line !== null)
     .join('\n');
@@ -4461,7 +4471,7 @@ function buildCheckinEmailMessage({ booking, checkinUrl }) {
             </tr>
             <tr>
               <td style="padding:14px 24px 4px 24px;">
-                <p style="margin:0;font-size:16px;line-height:1.55;color:#374151;">${escapeHtml(intro)} Checka in innan du kommer fram sa gar handoffen snabbare i parken.</p>
+                <p style="margin:0;font-size:16px;line-height:1.55;color:#374151;">${escapeHtml(intro)} Checka in innan du kommer fram så går det snabbare i parken.</p>
               </td>
             </tr>
             <tr>
@@ -4471,7 +4481,8 @@ function buildCheckinEmailMessage({ booking, checkinUrl }) {
             </tr>
             <tr>
               <td style="padding:0 24px 26px 24px;">
-                <p style="margin:0;font-size:13px;line-height:1.45;color:#6b7280;">${safeBookingReference ? `Bokning: ${safeBookingReference}. ` : ''}Lanken ar personlig och ska inte delas vidare.</p>
+                <p style="margin:0 0 8px 0;font-size:13px;line-height:1.45;color:#6b7280;">${safeBookingReference ? `Bokning: ${safeBookingReference}. ` : ''}Länken är personlig och ska inte delas vidare.</p>
+                <p style="margin:0;font-size:13px;line-height:1.45;color:#111827;">Behöver du hjälp? Svara på det här mejlet så hjälper JumpYard Nacka dig.</p>
               </td>
             </tr>
           </table>
@@ -4540,6 +4551,11 @@ function normalizeEmailAddress(value) {
   if (normalized.length > 254) return null;
 
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? normalized : null;
+}
+
+function formatSesFromAddress(fromAddress) {
+  const displayName = String(EMAIL_FROM_DISPLAY_NAME).trim();
+  return displayName ? `${displayName} <${fromAddress}>` : fromAddress;
 }
 
 function maskPhoneNumber(phoneNumber) {

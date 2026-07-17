@@ -4,6 +4,12 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #208 Approved T0200 Email Sender Readiness (Not Deployed)
+
+Love approved issue [#208](https://github.com/wrlds-creations/jumpyard-check-in/issues/208) for the email-only Sprint 3 sender path. A 2026-07-17 read-only AWS console preflight confirmed account `376129878018`, region `eu-north-1`, SES sandbox quota `200/day` and `1/second`, account health `HEALTHY`, only verified identity `love@wrlds.com`, zero configuration sets, and enabled account-level suppression for bounce and complaint with zero suppressed destinations. No AWS resource, account setting, email, DNS record, or production-access request was changed by that preflight.
+
+The reviewed branch defines, but has not yet deployed, one Easy-DKIM `jumpyard.se` domain identity, one `jumpyard-check-in-park-test-email` configuration set, one CloudWatch event destination, and bounded SES delivery/reputation alarms. The exact application sender is `JumpYard Nacka <nackaforum@jumpyard.se>` with the same Reply-To. Configuration-set sending is initially false, park-test application guest sends remain false, the booking-time schedule remains off, and the session Lambda receives no SES send IAM permission in the closed template. The protected rollout must create the identity before its three AWS-generated DKIM CNAME pairs can be handed to João. Love confirmed an absolute peak case of 150 recipients per 30 minutes between 10:00 and 20:00, or 3,000 in one extreme day, and approved requesting 5,000 recipients/day plus 5/second. SES production access and the controlled test remain later checkpoints inside issue #208.
+
 ### Issue #201 GitHub Deployment Access Bootstrap
 
 Love approved issue [#201](https://github.com/wrlds-creations/jumpyard-check-in/issues/201) and the one-time local AWS bootstrap required before GitHub can own routine park-test releases. CloudFormation stack `jumpyard-check-in-park-test-github-deployment-access` reached `CREATE_COMPLETE` on `2026-07-15` with exactly four resources: two IAM roles and their two inline policies. It then reached `UPDATE_COMPLETE` when the live verifier proved that the protected deploy role needed the read-only `cloudformation:DetectStackResourceDrift` action on the exact application stack. The main-scoped plan role can only read the exact park-test application stack. The protected-environment deploy role can assume only the existing eu-north-1 CDK bootstrap roles and perform the exact migration and post-deploy readback operations documented for park-test. Both roles carry the complete WRLDS ownership, repository, environment, data-classification, exportability, and cost-center tags.
@@ -1009,6 +1015,9 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`. Park-test is appli
 | Async processing | EventBridge | Per environment | Scheduled reconciliation and recovery. | Deployed to `dev` and park-test; T0197 enables the five-minute park-test webhook recovery rule; production deferred to T0205 |
 | JumpYard logs | CloudWatch Logs | Per environment | Operational logs and error traces with Lambda log retention. | Deployed to `dev` and existing `park-test`; production deferred to T0205 |
 | Infrastructure deployment | CDK TypeScript | Per environment | Repeatable infrastructure with WRLDS tags. | `dev` and existing `park-test` deployed; production deferred to T0205 |
+| `jumpyard.se` guest email identity | Amazon SES | existing `park-test` | Easy DKIM domain identity for the exact Nacka transactional sender without MX/custom MAIL FROM changes. | Defined by issue #208; not deployed; João DNS handoff follows the protected rollout |
+| `jumpyard-check-in-park-test-email` | Amazon SES configuration set | existing `park-test` | Fail-closed TLS-required sending boundary with bounce/complaint suppression and dedicated event telemetry. | Defined with `SendingEnabled=false`; not deployed |
+| Guest email delivery/reputation monitoring | SES event destination and CloudWatch | existing `park-test` | Send/delivery/bounce/complaint/reject/rendering-failure metrics plus bounded event and account-health alarms without recipient/body/token dimensions. | Defined by issue #208; not deployed |
 
 ## Park-Test Target
 

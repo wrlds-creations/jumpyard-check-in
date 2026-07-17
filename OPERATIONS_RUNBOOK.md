@@ -183,18 +183,23 @@ Escalate to JumpYard/Gustav when:
 - Product eligibility or code coverage is unclear.
 - A code should cover entry products but not add-ons and Roller product configuration disagrees.
 
-### 4. SMS And Email Guest Messaging
+### 4. Guest Email And Deferred SMS
 
 Symptoms:
 
-- Expected pre-check-in SMS/email is not planned or sent.
-- SMS/email is planned but not delivered.
+- Expected pre-check-in email is not planned or sent.
+- Email is planned but not delivered, bounced, rejected, or complained about.
 - A link opens the wrong booking state.
 
 AWS checks:
 
 ```powershell
 aws logs tail /aws/lambda/jumpyard-check-in-dev-stack-session --profile wrlds-dev --region eu-north-1 --since 60m
+aws sesv2 get-account --profile wrlds-dev --region eu-north-1
+aws sesv2 get-email-identity --email-identity jumpyard.se --profile wrlds-dev --region eu-north-1
+aws sesv2 get-configuration-set --configuration-set-name jumpyard-check-in-park-test-email --profile wrlds-dev --region eu-north-1
+aws sesv2 list-suppressed-destinations --query "length(SuppressedDestinationSummaries)" --output text --profile wrlds-dev --region eu-north-1
+aws cloudwatch describe-alarms --alarm-name-prefix jumpyard-check-in-park-test-email --profile wrlds-dev --region eu-north-1
 ```
 
 Aurora checks:
@@ -215,14 +220,22 @@ limit 20;
 
 Safe first action:
 
-- Check whether the job is planning-only (`confirmSend=false`) or a real confirmed send.
-- For SMS, check SNS sandbox status and whether the destination is verified.
-- For email, check SES sandbox status and verified sender/recipient constraints.
+- Check whether the job is planning-only (`confirmSend=false`). T0200 keeps the booking-time schedule and application guest sends disabled.
+- Before the controlled proof, confirm SES production access, `jumpyard.se`/DKIM verification, exact From/Reply-To, and that the configuration-set state matches the reviewed rollout.
+- A disabled `jumpyard-check-in-park-test-email` configuration set is expected before the external gates pass; do not enable it manually in the console.
+- On bounce or complaint, do not retry the destination or remove it from suppression without a separately reviewed operational reason.
+- On reject or rendering failure, keep sends closed, inspect only masked audit/provider evidence, correct the cause through reviewed code/config, and rerun validation.
+- Treat a bounce rate at or above 2% or a complaint rate at or above 0.05% as an early warning. Stop the controlled proof and investigate before AWS review thresholds are approached.
+- SMS remains deferred for Sprint 3; if inspected, keep it inside the existing sandbox/approved-test boundary.
 - Resolve `jy_token` through the public phone app only; do not share raw token values in notes.
 
 Escalate to AWS Support when:
 
-- SNS sandbox exit, sender display, SMS quotas, SES production access, DKIM/domain, or SES deliverability setup is needed.
+- SES production access, account-health review, DKIM/domain, or SES deliverability setup is needed.
+
+Escalate to João when:
+
+- An exact AWS-generated DKIM CNAME is missing or does not match public `jumpyard.se` DNS. Send only the three CloudFormation output name/value pairs from the protected rollout; do not request MX or mailbox changes.
 
 Escalate to Roller only if:
 

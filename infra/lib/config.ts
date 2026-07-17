@@ -26,6 +26,10 @@ const ROLLER_LIVE_BASE_URL = 'https://api.roller.app';
 const PARK_TEST_AWS_ACCOUNT = '376129878018';
 const PARK_TEST_AWS_REGION = 'eu-north-1';
 const PARK_TEST_RESOURCE_PREFIX = 'jumpyard-check-in-park-test';
+export const PARK_TEST_EMAIL_CONFIGURATION_SET_NAME = 'jumpyard-check-in-park-test-email';
+export const PARK_TEST_EMAIL_FROM_ADDRESS = 'nackaforum@jumpyard.se';
+export const PARK_TEST_EMAIL_FROM_DISPLAY_NAME = 'JumpYard Nacka';
+export const PARK_TEST_EMAIL_IDENTITY_DOMAIN = 'jumpyard.se';
 export const PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL = 'T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED';
 export const PARK_TEST_POST_PAYMENT_SYNC_APPROVAL = 'T0169_POST_PAYMENT_SYNC_APPROVED';
 export const PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL = 'T0160_LIVE_LOOKUP_SMOKE_APPROVED';
@@ -91,7 +95,10 @@ export interface JumpYardCloudConfig {
   };
   readonly guestEmail: {
     readonly checkinBaseUrl: string;
+    readonly configurationSetName: string;
     readonly fromAddress: string;
+    readonly fromDisplayName: string;
+    readonly identityDomain: string;
     readonly provider: string;
     readonly replyToAddresses: readonly string[];
   };
@@ -168,7 +175,10 @@ interface RawConfig {
   };
   readonly guestEmail?: {
     readonly checkinBaseUrl?: unknown;
+    readonly configurationSetName?: unknown;
     readonly fromAddress?: unknown;
+    readonly fromDisplayName?: unknown;
+    readonly identityDomain?: unknown;
     readonly provider?: unknown;
     readonly replyToAddresses?: unknown;
   };
@@ -276,6 +286,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     bookingTimeSms,
     dataSync,
     deploymentEnvironment,
+    guestEmail,
     resourcePrefix,
     rollerBaseUrl,
     rollerEnvironment,
@@ -310,6 +321,7 @@ interface EnvironmentContractInput {
   readonly bookingTimeSms: JumpYardCloudConfig['bookingTimeSms'];
   readonly dataSync: JumpYardCloudConfig['dataSync'];
   readonly deploymentEnvironment: DeploymentEnvironment;
+  readonly guestEmail: JumpYardCloudConfig['guestEmail'];
   readonly resourcePrefix: string;
   readonly rollerBaseUrl: string;
   readonly rollerEnvironment: string;
@@ -404,6 +416,31 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
 
   if (input.dataSync.venueId !== PARK_TEST_STAFF_IDENTITY_VENUE_ID) {
     throw new Error(`park-test dataSync.venueId must be ${PARK_TEST_STAFF_IDENTITY_VENUE_ID}.`);
+  }
+
+  if (input.guestEmail.identityDomain !== PARK_TEST_EMAIL_IDENTITY_DOMAIN) {
+    throw new Error(`park-test guestEmail.identityDomain must be ${PARK_TEST_EMAIL_IDENTITY_DOMAIN}.`);
+  }
+
+  if (input.guestEmail.configurationSetName !== PARK_TEST_EMAIL_CONFIGURATION_SET_NAME) {
+    throw new Error(
+      `park-test guestEmail.configurationSetName must be ${PARK_TEST_EMAIL_CONFIGURATION_SET_NAME}.`,
+    );
+  }
+
+  if (input.guestEmail.fromAddress !== PARK_TEST_EMAIL_FROM_ADDRESS) {
+    throw new Error(`park-test guestEmail.fromAddress must be ${PARK_TEST_EMAIL_FROM_ADDRESS}.`);
+  }
+
+  if (input.guestEmail.fromDisplayName !== PARK_TEST_EMAIL_FROM_DISPLAY_NAME) {
+    throw new Error(`park-test guestEmail.fromDisplayName must be ${PARK_TEST_EMAIL_FROM_DISPLAY_NAME}.`);
+  }
+
+  if (
+    input.guestEmail.replyToAddresses.length !== 1 ||
+    input.guestEmail.replyToAddresses[0] !== PARK_TEST_EMAIL_FROM_ADDRESS
+  ) {
+    throw new Error(`park-test guestEmail.replyToAddresses must be exactly ${PARK_TEST_EMAIL_FROM_ADDRESS}.`);
   }
 
   if (
@@ -941,7 +978,14 @@ function readBookingTimeSmsConfig(raw: RawConfig['bookingTimeSms']): JumpYardClo
 function readGuestEmailConfig(raw: RawConfig['guestEmail']): JumpYardCloudConfig['guestEmail'] {
   const config = {
     checkinBaseUrl: readOptionalString(raw?.checkinBaseUrl, 'http://localhost:3000/', 'guestEmail.checkinBaseUrl'),
+    configurationSetName: readOptionalString(
+      raw?.configurationSetName,
+      '',
+      'guestEmail.configurationSetName',
+    ),
     fromAddress: readOptionalString(raw?.fromAddress, '', 'guestEmail.fromAddress'),
+    fromDisplayName: readOptionalString(raw?.fromDisplayName, '', 'guestEmail.fromDisplayName'),
+    identityDomain: readOptionalString(raw?.identityDomain, '', 'guestEmail.identityDomain').toLowerCase(),
     provider: readOptionalString(raw?.provider, 'aws_ses', 'guestEmail.provider'),
     replyToAddresses: readOptionalStringArray(raw?.replyToAddresses, 'guestEmail.replyToAddresses'),
   };
@@ -956,6 +1000,26 @@ function readGuestEmailConfig(raw: RawConfig['guestEmail']): JumpYardCloudConfig
 
   if (config.fromAddress && !isEmailLike(config.fromAddress)) {
     throw new Error('guestEmail.fromAddress must be a valid email address when supplied.');
+  }
+
+  if (config.fromDisplayName && (!/^[A-Za-z0-9 ]{1,64}$/.test(config.fromDisplayName) || config.fromDisplayName.trim() !== config.fromDisplayName)) {
+    throw new Error('guestEmail.fromDisplayName must contain only letters, numbers, and spaces without outer whitespace.');
+  }
+
+  if (config.identityDomain && !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(config.identityDomain)) {
+    throw new Error('guestEmail.identityDomain must be a valid lower-case domain when supplied.');
+  }
+
+  if (config.configurationSetName && !/^[A-Za-z0-9_-]{1,64}$/.test(config.configurationSetName)) {
+    throw new Error('guestEmail.configurationSetName must use 1-64 letters, numbers, underscores, or hyphens.');
+  }
+
+  if (config.identityDomain && !config.configurationSetName) {
+    throw new Error('guestEmail.configurationSetName is required when guestEmail.identityDomain is supplied.');
+  }
+
+  if (config.identityDomain && !config.fromAddress.endsWith(`@${config.identityDomain}`)) {
+    throw new Error('guestEmail.fromAddress must belong to guestEmail.identityDomain.');
   }
 
   for (const replyToAddress of config.replyToAddresses) {

@@ -169,8 +169,18 @@ function validateRouteSettings(template, routesByKey) {
 function validateApprovedProtectionResources(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    187,
-    'The T0193 boundary must remain intact inside the exact T0197 async webhook stack.',
+    196,
+    'The T0193 boundary must remain intact inside the T0197 stack plus the exact T0200 email-readiness delta.',
+  );
+  assert.equal(resourcesOfType(template, 'AWS::SES::ConfigurationSet').length, 1);
+  assert.equal(resourcesOfType(template, 'AWS::SES::ConfigurationSetEventDestination').length, 1);
+  assert.equal(resourcesOfType(template, 'AWS::SES::EmailIdentity').length, 1);
+  assert.equal(
+    resourcesOfType(template, 'AWS::CloudWatch::Alarm').filter(([, alarm]) =>
+      String(alarm.Properties.AlarmName || '').startsWith('jumpyard-check-in-park-test-email-'),
+    ).length,
+    6,
+    'T0200 must add exactly six bounded email event and reputation alarms.',
   );
   assert.equal(
     resourcesOfType(template, 'AWS::CloudWatch::Alarm').filter(

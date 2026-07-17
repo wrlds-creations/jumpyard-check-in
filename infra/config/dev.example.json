@@ -34,7 +34,10 @@
   "guestEmail": {
     "provider": "aws_ses",
     "checkinBaseUrl": "http://localhost:3000/",
+    "configurationSetName": "",
     "fromAddress": "",
+    "fromDisplayName": "",
+    "identityDomain": "",
     "replyToAddresses": []
   },
   "safetyGates": {

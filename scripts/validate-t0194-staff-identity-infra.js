@@ -75,8 +75,18 @@ function iamPoliciesReference(template, logicalId) {
 function validateParkTest(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    187,
-    'T0194 remains intact inside the exact T0197 async webhook stack.',
+    196,
+    'T0194 remains intact inside the T0197 async webhook stack plus the exact T0200 email-readiness delta.',
+  );
+  assert.equal(entriesOfType(template, 'AWS::SES::ConfigurationSet').length, 1);
+  assert.equal(entriesOfType(template, 'AWS::SES::ConfigurationSetEventDestination').length, 1);
+  assert.equal(entriesOfType(template, 'AWS::SES::EmailIdentity').length, 1);
+  assert.equal(
+    entriesOfType(template, 'AWS::CloudWatch::Alarm').filter(([, alarm]) =>
+      String(alarm.Properties.AlarmName || '').startsWith('jumpyard-check-in-park-test-email-'),
+    ).length,
+    6,
+    'T0200 must add exactly six bounded email event and reputation alarms.',
   );
   assert.equal(
     entriesOfType(template, 'AWS::CloudWatch::Alarm').filter(
