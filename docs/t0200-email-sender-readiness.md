@@ -30,15 +30,25 @@ No custom MAIL FROM domain is created. SES therefore uses its default MAIL FROM 
 
 ## Minimal DNS handoff to João
 
-The exact record names and values do not exist until the protected park-test rollout creates the SES identity. After that rollout, copy only these three CloudFormation output pairs:
+Protected release run `29568860560` and deployment run `29569173836` created the SES identity from merge commit `f74239e5f3640850ce2e34a01f4e53e1ecc314c1`. The exact DNS handoff is:
 
 | Type | Name | Value |
 | --- | --- | --- |
-| CNAME | `GuestEmailDkimRecordName1` output | `GuestEmailDkimRecordValue1` output |
-| CNAME | `GuestEmailDkimRecordName2` output | `GuestEmailDkimRecordValue2` output |
-| CNAME | `GuestEmailDkimRecordName3` output | `GuestEmailDkimRecordValue3` output |
+| CNAME | `kufzx7xe4jqyotkcbvg3iw6hzci54cpw._domainkey.jumpyard.se` | `kufzx7xe4jqyotkcbvg3iw6hzci54cpw.dkim.amazonses.com` |
+| CNAME | `5icli6vzkxeohb67lxe5bclwihyqg5a2._domainkey.jumpyard.se` | `5icli6vzkxeohb67lxe5bclwihyqg5a2.dkim.amazonses.com` |
+| CNAME | `d33aqoyuxzkydfrmpgck2v7enhjpmi3y._domainkey.jumpyard.se` | `d33aqoyuxzkydfrmpgck2v7enhjpmi3y.dkim.amazonses.com` |
 
-João adds the records to authoritative `jumpyard.se` DNS. WRLDS/Codex does not write them. Do not send placeholders or shorten the AWS-generated values. After public DNS resolves, read back the three records and confirm SES reports both the identity and DKIM as verified.
+João adds the records to authoritative `jumpyard.se` DNS. WRLDS/Codex does not write them. Do not shorten the AWS-generated values. AWS readback immediately after rollout reported identity `Verification pending`, DKIM `Pending`, 2048-bit Easy DKIM, and configuration generation at 2026-07-17 11:16 Europe/Stockholm. After public DNS resolves, read back the three records and confirm SES reports both the identity and DKIM as verified.
+
+## Protected rollout evidence
+
+- Implementation PR: `#209`, merged as `f74239e5f3640850ce2e34a01f4e53e1ecc314c1`
+- Immutable release run: `29568860560`
+- Protected park-test deployment run: `29569173836`
+- Plan: 187 -> 196 resources; nine additions, zero removals; migrations off
+- Verification: selected/deployed templates match, CloudFormation completed, drift is `IN_SYNC`, no alarm is in `ALARM`, queues are empty, migrations remain complete through `0016`, and both Cloudflare park-test projects report the exact commit
+- Closed gates: configuration-set sending is false, application guest sends are false, the booking-time schedule is off, and the session Lambda has no SES send IAM policy
+- Remaining gates: João publishes DNS, SES verifies DKIM/domain, AWS grants production access, final copy is confirmed, and one separately approved controlled message is proven
 
 ## Transactional email copy
 

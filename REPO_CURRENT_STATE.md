@@ -4,13 +4,13 @@ Use this file as the short snapshot of what actually exists. Operational work st
 
 ## Snapshot
 
-- Date: 2026-07-15
-- Latest merged baseline before this evidence closeout: `bdd2d25` after PRs #202-#204 added and corrected the T0198 controlled GitHub-native park-test release path for issue [#201](https://github.com/wrlds-creations/jumpyard-check-in/issues/201).
-- Latest deployed product baseline: T0197 durable Roller Live webhook reconciliation on top of the T0196 booking-index baseline, T0195 lifecycle/least-privilege runtime, T0194 staff identity, and T0193 API boundary. T0198 changes release provenance and control, not product behavior.
+- Date: 2026-07-17
+- Latest merged baseline: `f74239e` after PR #209 added the T0200 fail-closed SES email sender foundation for issue [#208](https://github.com/wrlds-creations/jumpyard-check-in/issues/208).
+- Latest deployed product baseline: T0200 sender readiness on top of T0197 durable Roller Live webhook reconciliation, T0196 booking index, T0195 lifecycle/least-privilege runtime, T0194 staff identity, and T0193 API boundary.
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
-- Product/runtime state: T0197 is deployed to park-test with migrations through `0016`, 187 stack resources, authenticated fast intake, FIFO queue/DLQ, a serialized worker, five-minute recovery, guarded replay, and seven webhook alarms. T0196 morning sync, T0194 PIN/Cognito identity, and T0193 protected API remain intact.
-- Completed legacy ticket after this evidence PR merges: latest `T0198`. Legacy ticket history was not backfilled into the Project.
+- Product/runtime state: T0200 is deployed fail closed to park-test with migrations through `0016` and 196 stack resources. The `jumpyard.se` SES identity, configuration set, telemetry, and alarms exist; DKIM/domain verification is pending João's DNS update. T0197 webhook reconciliation, T0196 morning sync, T0194 PIN/Cognito identity, and T0193 protected API remain intact.
+- Latest legacy ticket in progress: `T0200`; rollout is deployed but DNS verification, SES production access, and the controlled proof remain open. Legacy ticket history was not backfilled into the Project.
 - Product approval and implementation status are read from GitHub Issues and the Project rather than copied into this merged-mainline snapshot.
 
 GitHub issue `#192` and legacy ticket `T0192` are unrelated; preserve both prefixes.
@@ -37,8 +37,9 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 - Guest actions use short-lived booking-bound proof stored hash-only server-side and in phone memory client-side; token query parameters are removed immediately.
 - T0194 gives ordinary staff PIN-only login and administrators a separate Cognito/TOTP flow. The deployed backend uses keyed PIN lookup, scrypt verification, hash-only opaque sessions, transactional replacement, named audit, individual invalidation, venue boundaries, and failed-login brakes that do not throttle guest traffic or existing sessions.
 - Staff/admin Pages are mobile safe and use the phone font, black copy/icons, and red actions. Queue requests are coalesced by stable session/query so user activity cannot amplify traffic.
-- The stack has 187 resources and 26 routes (6 IAM, 4 JWT, 16 Lambda-protected). Six restricted handler database identities plus one lifecycle identity remain deployed. The intake/worker are `Active`, worker concurrency is one, recovery is enabled every five minutes, queue/DLQ are empty, post-deploy CDK diff is clean, and drift is `IN_SYNC`.
-- Routine park-test deployment is GitHub-native. Final artifact `park-test-release-bdd2d257151c032bd2ca74d77e04b860cf1e626c` was promoted, an earlier immutable artifact was restored, and the final artifact was re-promoted successfully through protected run `29421631770`. All three plans reported 187 selected/deployed resources with zero additions, changes, or removals.
+- The stack has 196 resources and 26 routes (6 IAM, 4 JWT, 16 Lambda-protected). Six restricted handler database identities plus one lifecycle identity remain deployed. The intake/worker are `Active`, worker concurrency is one, recovery is enabled every five minutes, queue/DLQ are empty, the selected and deployed templates match, and drift is `IN_SYNC`.
+- Routine park-test deployment is GitHub-native. T0200 immutable release run `29568860560` was promoted through protected run `29569173836`; the plan added nine resources, removed none, and kept migrations off. Post-deploy checks passed for AWS, Cloudflare, drift, alarms, queues, public targets, and migrations.
+- T0200 deploys `jumpyard.se` Easy DKIM, the fail-closed `jumpyard-check-in-park-test-email` configuration set, delivery/reputation telemetry, and six alarms. Configuration-set sending, application guest sends, booking-time scheduling, and SES send IAM permission remain off. Identity and DKIM are pending the three João-owned DNS CNAME records; SES remains in sandbox.
 - T0196 completed all 53 unique modified-date windows through `2026-07-15`. Aurora contains 6,174 Live/Nacka bookings, 8,921 items, 6,662 tickets, 6,127 payments, and 983 guest profiles; zero bookings are older than 30 days, 92 are for the current date, 120 are future, and future visits extend through `2026-12-30`. Roller remains authoritative and critical writes still refresh/confirm against Roller.
 - T0195 migrations `0010`-`0012`, T0196 migrations `0013`-`0014`, and T0197 migrations `0015`-`0016` are deployed to park-test. T0197 grants only child-row DELETE and the event-log conflict-key read needed by the restricted webhook role. The earlier lifecycle dry-run predates the booking-index import; lifecycle apply must be replanned/recounted and remains separately gated.
 
@@ -54,6 +55,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 - Completed followup archive: [docs/history/followups-done.md](docs/history/followups-done.md)
 - GitHub Project migration mapping: [docs/history/github-project-migration-2026-07-14.md](docs/history/github-project-migration-2026-07-14.md)
 - Controlled release and rollback evidence: [docs/t0198-controlled-cicd.md](docs/t0198-controlled-cicd.md)
+- Email sender rollout and DNS handoff: [docs/t0200-email-sender-readiness.md](docs/t0200-email-sender-readiness.md)
 - Latest application design/evidence: [docs/t0197-webhook-reconciliation.md](docs/t0197-webhook-reconciliation.md), [docs/t0196-booking-index-morning-seed.md](docs/t0196-booking-index-morning-seed.md), [docs/t0195-data-lifecycle-policy.md](docs/t0195-data-lifecycle-policy.md), and [docs/t0195-aurora-recovery-rehearsal.md](docs/t0195-aurora-recovery-rehearsal.md)
 
 ## Validation Baseline
@@ -68,6 +70,8 @@ Current workflow and product checks are defined in [TEST_PLAN.md](TEST_PLAN.md).
 The approved T0197 rollout passed exact Roller registration readback, negative auth/body tests, authenticated intake, authoritative normalized update, duplicate/out-of-order stability, guarded replay, direct recovery, retry/DLQ contract, migrations through `0016`, 187-resource deploy, aggregate retention checks, clean diff, and zero-drift checks. No natural Roller delivery occurred during the short validation window, so observing the next real booking change remains a bounded manual check. No Roller business write, guest send, lifecycle deletion, secret mutation, Cloudflare, or production change occurred.
 
 The T0198 rehearsal built final commit `bdd2d25` once, promoted it, rolled back to the immutable `020a84c` artifact, and re-promoted `bdd2d25`. The final run passed exact AWS account/stack/template checks, `IN_SYNC` drift, zero alarms, empty queues, migrations through `0016`, Cloudflare commit readback for both fixed Pages projects, and public HTTP/config checks. Required PR checks and protected-environment approval remain enforced; routine local park-test deployment is disabled by policy except for separately approved break-glass recovery.
+
+The T0200 rollout built `f74239e` once in release run `29568860560` and promoted it through protected run `29569173836`. The exact live plan added nine resources and removed none. Post-deploy verification passed with 196 resources, identical selected/deployed templates, `IN_SYNC` drift, zero alarms in `ALARM`, empty queues, migrations complete through `0016`, and exact Cloudflare commit readback. No email was sent and no application send gate or SES send IAM permission was opened.
 
 ## Current Risks And Boundaries
 
