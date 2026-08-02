@@ -14,6 +14,7 @@ const expectedGuestEmail = {
   identityDomain: 'jumpyard.se',
   replyToAddresses: ['nackaforum@jumpyard.se'],
 };
+const { buildCheckinEmailMessage } = require('../infra/lambda/session/email-template');
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
@@ -52,6 +53,7 @@ function validateImplementation() {
   const configSource = read('infra/lib/config.ts');
   const stackSource = read('infra/lib/jumpyard-cloud-stack.ts');
   const sessionSource = read('infra/lambda/session/index.js');
+  const templateSource = read('infra/lambda/session/email-template.js');
 
   for (const expected of [
     "PARK_TEST_EMAIL_IDENTITY_DOMAIN = 'jumpyard.se'",
@@ -86,11 +88,49 @@ function validateImplementation() {
     "const EMAIL_FROM_DISPLAY_NAME = process.env.EMAIL_FROM_DISPLAY_NAME || ''",
     'commandInput.ConfigurationSetName = EMAIL_CONFIGURATION_SET_NAME',
     'FromEmailAddress: formatSesFromAddress(fromAddress)',
-    "const subject = 'Dags att checka in inför ditt besök hos JumpYard Nacka'",
-    'Svara på det här mejlet',
+    "require('./email-template')",
   ]) {
     assert.ok(sessionSource.includes(expected), `Session email implementation must include ${expected}.`);
   }
+
+  for (const expected of [
+    "const subject = 'Dags att checka in inför ditt besök hos JumpYard Nacka'",
+    'Svara på det här mejlet',
+    'jumpyard_logo.png',
+    'booking-confirmed-on-red-white-calendar.png',
+    'color-scheme',
+    'role="presentation"',
+  ]) {
+    assert.ok(templateSource.includes(expected), `Email template must include ${expected}.`);
+  }
+}
+
+function validateEmailTemplate() {
+  const checkinUrl = 'https://jumpyard-check-in-park-test.pages.dev/?jy_token=preview&source=email';
+  const message = buildCheckinEmailMessage({
+    booking: {
+      bookingDate: '2026-07-22',
+      bookingReference: 'JY-50<&871',
+      startTime: '14:30:00',
+    },
+    checkinUrl,
+  });
+
+  assert.strictEqual(message.subject, 'Dags att checka in inför ditt besök hos JumpYard Nacka');
+  assert.ok(message.text.includes(checkinUrl), 'Text fallback must contain the original check-in URL.');
+  assert.ok(message.text.includes('22 juli 2026'), 'Text fallback must contain the Swedish booking date.');
+  assert.ok(message.text.includes('14:30'), 'Text fallback must contain the booking time.');
+  assert.ok(message.html.includes('JY-50&lt;&amp;871'), 'HTML must escape the booking reference.');
+  assert.ok(message.html.includes('jy_token=preview&amp;source=email'), 'HTML must escape the check-in URL.');
+  assert.strictEqual(
+    (message.html.match(/>CHECKA IN<\/a>/g) ?? []).length,
+    1,
+    'Email HTML must offer one check-in action directly after the greeting.',
+  );
+  assert.ok(!message.html.includes('JY-50<&871'), 'HTML must not contain the raw unsafe booking reference.');
+  assert.ok(!message.html.includes('<script'), 'Email HTML must not contain scripts.');
+  assert.ok(!message.html.includes('@font-face'), 'Email HTML must not depend on remote fonts.');
+  assert.ok(!message.html.includes('data:image'), 'Email HTML must use public image assets instead of data URIs.');
 }
 
 function validateDocumentation() {
@@ -102,7 +142,10 @@ function validateDocumentation() {
     '29569173836',
     '3,000 recipients in the most extreme operating day',
     '5,000 recipients per 24 hours and 5 recipients per second',
-    'separate explicit confirmation immediately before sending',
+    'Love explicitly approved two separate test messages',
+    'Send=3',
+    'recipient count',
+    'configuration-set sending false',
     'T0201, not T0200',
   ]) {
     assert.ok(doc.includes(expected), `T0200 documentation must include ${expected}.`);
@@ -112,5 +155,6 @@ function validateDocumentation() {
 validateParkTestConfigs();
 validateDevBaseline();
 validateImplementation();
+validateEmailTemplate();
 validateDocumentation();
 console.log('[pass] T0200 email sender contract, fail-closed gates, SES telemetry, and handoff documentation');

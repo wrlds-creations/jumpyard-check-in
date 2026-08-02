@@ -8,6 +8,7 @@ const {
 const { PublishCommand, SNSClient } = require('@aws-sdk/client-sns');
 const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client-secrets-manager');
 const crypto = require('crypto');
+const { buildCheckinEmailMessage, buildCheckinEmailPreview } = require('./email-template');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const ACTIVE_SESSION_STATUSES = ['guest_in_progress', 'ready_for_staff', 'staff_in_progress'];
@@ -4433,81 +4434,6 @@ function buildSmsBookingTimeText(booking) {
   return time ? `kl ${time}` : null;
 }
 
-function buildCheckinEmailMessage({ booking, checkinUrl }) {
-  const bookingReference = booking.bookingReference || '';
-  const safeBookingReference = escapeHtml(bookingReference);
-  const safeCheckinUrl = escapeHtml(checkinUrl);
-  const timeText = buildSmsBookingTimeText(booking);
-  const intro = timeText ? `Din hopptid ${timeText} närmar sig.` : 'Din hopptid hos JumpYard Nacka närmar sig.';
-  const subject = 'Dags att checka in inför ditt besök hos JumpYard Nacka';
-  const text = [
-    'Hej!',
-    '',
-    intro,
-    `Checka in här: ${checkinUrl}`,
-    '',
-    bookingReference ? `Bokning: ${bookingReference}` : null,
-    '',
-    'Länken är personlig och ska inte delas vidare.',
-    'Behöver du hjälp? Svara på det här mejlet så hjälper JumpYard Nacka dig.',
-    '',
-    'Vi ses snart!',
-    'JumpYard Nacka',
-  ]
-    .filter((line) => line !== null)
-    .join('\n');
-  const html = `<!doctype html>
-<html>
-  <body style="margin:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#111827;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f5f5;padding:24px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
-            <tr>
-              <td style="padding:28px 24px 8px 24px;">
-                <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#e7193f;">JumpYard</p>
-                <h1 style="margin:0;font-size:28px;line-height:1.1;font-weight:900;font-style:italic;color:#111827;">Dags att checka in</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:14px 24px 4px 24px;">
-                <p style="margin:0;font-size:16px;line-height:1.55;color:#374151;">${escapeHtml(intro)} Checka in innan du kommer fram så går det snabbare i parken.</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:20px 24px;">
-                <a href="${safeCheckinUrl}" style="display:block;background:#ed1745;color:#ffffff;text-decoration:none;text-align:center;border-radius:14px;padding:16px 20px;font-size:18px;font-weight:900;font-style:italic;">CHECKA IN</a>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 26px 24px;">
-                <p style="margin:0 0 8px 0;font-size:13px;line-height:1.45;color:#6b7280;">${safeBookingReference ? `Bokning: ${safeBookingReference}. ` : ''}Länken är personlig och ska inte delas vidare.</p>
-                <p style="margin:0;font-size:13px;line-height:1.45;color:#111827;">Behöver du hjälp? Svara på det här mejlet så hjälper JumpYard Nacka dig.</p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
-
-  return { html, subject, text };
-}
-
-function buildCheckinEmailPreview(booking) {
-  const message = buildCheckinEmailMessage({
-    booking,
-    checkinUrl: '[check-in-link]',
-  });
-
-  return {
-    html: message.html,
-    subject: message.subject,
-    text: message.text,
-  };
-}
-
 function buildSmsDestination(value, source) {
   const phoneNumber = normalizePhoneForSms(value);
   if (!phoneNumber) return null;
@@ -4578,15 +4504,6 @@ function parseEmailAddressList(value) {
     .split(',')
     .map((item) => normalizeEmailAddress(item))
     .filter(Boolean);
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
 }
 
 function booleanFromValue(value) {

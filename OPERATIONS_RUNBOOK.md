@@ -221,8 +221,8 @@ limit 20;
 Safe first action:
 
 - Check whether the job is planning-only (`confirmSend=false`). T0200 keeps the booking-time schedule and application guest sends disabled.
-- Before the controlled proof, confirm SES production access, `jumpyard.se`/DKIM verification, exact From/Reply-To, and that the configuration-set state matches the reviewed rollout.
-- A disabled `jumpyard-check-in-park-test-email` configuration set is expected before the external gates pass; do not enable it manually in the console.
+- Before a controlled proof, confirm SES production access, `jumpyard.se`/DKIM verification, exact From/Reply-To, and that the configuration-set state matches the reviewed rollout.
+- A disabled `jumpyard-check-in-park-test-email` configuration set is the normal state. Do not enable it manually in the console. The T0200 operator defaults to dry-run, accepts one or both of the same two approved recipient hashes, requires recipient-count-specific command and process-local confirmations, and restores the disabled state in `finally`.
 - On bounce or complaint, do not retry the destination or remove it from suppression without a separately reviewed operational reason.
 - On reject or rendering failure, keep sends closed, inspect only masked audit/provider evidence, correct the cause through reviewed code/config, and rerun validation.
 - Treat a bounce rate at or above 2% or a complaint rate at or above 0.05% as an early warning. Stop the controlled proof and investigate before AWS review thresholds are approached.

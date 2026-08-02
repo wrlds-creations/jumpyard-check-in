@@ -53,7 +53,8 @@ function fakeAwsModule(moduleId, state) {
 }
 
 function loadLambda(relativePath, options = {}) {
-  const source = fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
+  const absolutePath = path.join(ROOT, relativePath);
+  const source = fs.readFileSync(absolutePath, 'utf8');
   const state = {
     awsCalls: [],
     networkCalls: [],
@@ -82,11 +83,14 @@ function loadLambda(relativePath, options = {}) {
     require(moduleId) {
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule(moduleId, state);
+      if (relativePath === 'infra/lambda/session/index.js' && moduleId === './email-template') {
+        return require(path.join(path.dirname(absolutePath), 'email-template.js'));
+      }
       throw new Error(`Unexpected require(${JSON.stringify(moduleId)}).`);
     },
     setTimeout,
   };
-  vm.runInNewContext(source, sandbox, { filename: relativePath });
+  vm.runInNewContext(source, sandbox, { filename: absolutePath });
   return { handler: module.exports.handler, source, state };
 }
 
