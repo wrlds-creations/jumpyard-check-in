@@ -44,6 +44,7 @@
     "requestIntervalMs": 1000,
     "bookingRetentionDays": 30,
     "recoveryScheduleEnabled": true,
+    "maxRecoveryAttempts": 5,
     "recoveryLimit": 10
   },
   "bookingTimeSms": {

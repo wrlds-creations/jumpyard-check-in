@@ -9,11 +9,18 @@ const configPath = path.join(repoRoot, 'infra', 'config', 'park-test-full-flow-r
 const closedConfigPath = path.join(repoRoot, 'infra', 'config', 'park-test.json');
 const migrationPath = path.join(repoRoot, 'infra', 'migrations', '0015_t0197_webhook_reconciliation.sql');
 const eventLogMigrationPath = path.join(repoRoot, 'infra', 'migrations', '0016_t0197_event_log_conflict_key.sql');
+const signedBookingAmountPath = path.join(
+  repoRoot,
+  'infra',
+  'migrations',
+  '0017_gh_212_signed_booking_amount_owing.sql',
+);
 const operatorPath = path.join(repoRoot, 'infra', 'scripts', 'roller-live-webhook-reconciliation.ts');
 const handlerSource = fs.readFileSync(handlerPath, 'utf8');
 const stackSource = fs.readFileSync(stackPath, 'utf8');
 const migrationSource = fs.readFileSync(migrationPath, 'utf8');
 const eventLogMigrationSource = fs.readFileSync(eventLogMigrationPath, 'utf8');
+const signedBookingAmountSource = fs.readFileSync(signedBookingAmountPath, 'utf8');
 const operatorSource = fs.readFileSync(operatorPath, 'utf8');
 const liveConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 const closedConfig = JSON.parse(fs.readFileSync(closedConfigPath, 'utf8'));
@@ -25,6 +32,7 @@ async function main() {
     testExactAuthenticationAndLiveGuard();
     await testFastDurableIntake();
     await testSafeInvalidDuplicateAndFailureResponses();
+    await testBoundedAutomaticRecovery();
     testSignalAndQueueValidation();
     testVenueAndRetentionScope();
     await testPacingAndRetry();
@@ -44,6 +52,7 @@ function setLiveEnv() {
   process.env.JUMPYARD_ENVIRONMENT = 'park-test';
   process.env.ROLLER_WEBHOOK_BOOKING_RETENTION_DAYS = '30';
   process.env.ROLLER_WEBHOOK_LIVE_APPROVAL = 'T0197_LIVE_WEBHOOK_PROCESSING_APPROVED';
+  process.env.ROLLER_WEBHOOK_MAX_RECOVERY_ATTEMPTS = '5';
   process.env.ROLLER_WEBHOOK_REQUEST_INTERVAL_MS = '1000';
   process.env.ROLLER_WEBHOOK_VENUE_ID = '50871';
   process.env.WEBHOOK_AUTH_HEADER = 'x-roller-apikey';
@@ -87,7 +96,9 @@ async function testSafeInvalidDuplicateAndFailureResponses() {
   __test.setHooks({
     executeStatement: async (command) => {
       if (/INSERT INTO jumpyard\.roller_webhook_events/.test(command.input.sql)) return { records: [] };
-      if (/SELECT status/.test(command.input.sql)) return { records: [[{ stringValue: 'processed' }]] };
+      if (/SELECT status, enrichment_attempts/.test(command.input.sql)) {
+        return { records: [[{ stringValue: 'processed' }, { longValue: 1 }]] };
+      }
       return { records: [] };
     },
     sendQueue: async () => {
@@ -101,6 +112,28 @@ async function testSafeInvalidDuplicateAndFailureResponses() {
     bookingReference: 'BOOKING-1',
   }));
   assert.equal(JSON.parse(duplicate.body).status, 'duplicate');
+  assert.equal(queueCalls, 0);
+
+  __test.reset();
+  __test.setHooks({
+    executeStatement: async (command) => {
+      if (/INSERT INTO jumpyard\.roller_webhook_events/.test(command.input.sql)) return { records: [] };
+      if (/SELECT status, enrichment_attempts/.test(command.input.sql)) {
+        return { records: [[{ stringValue: 'failed' }, { longValue: 5 }]] };
+      }
+      return { records: [] };
+    },
+    sendQueue: async () => {
+      queueCalls += 1;
+      return {};
+    },
+  });
+  const exhaustedDuplicate = await __test.handleWebhookIntake(httpEvent({
+    eventId: 'evt-exhausted',
+    eventType: 'Updated',
+    bookingReference: 'BOOKING-1',
+  }));
+  assert.equal(JSON.parse(exhaustedDuplicate.body).status, 'duplicate');
   assert.equal(queueCalls, 0);
 
   __test.reset();
@@ -131,6 +164,32 @@ async function testSafeInvalidDuplicateAndFailureResponses() {
   assert.equal(JSON.parse(queueFailure.body).status, 'intake_failed');
   assert.doesNotMatch(queueFailure.body, /hidden queue failure/);
   console.log('[pass] malformed, oversized, duplicate, persistence, and queue outcomes fail safely');
+}
+
+async function testBoundedAutomaticRecovery() {
+  setLiveEnv();
+  process.env.WEBHOOK_RUNTIME_MODE = 'processor';
+  __test.reset();
+  let selectorSql = '';
+  let selectorParameters = [];
+  __test.setHooks({
+    executeStatement: async (command) => {
+      selectorSql = command.input.sql;
+      selectorParameters = command.input.parameters || [];
+      return { records: [] };
+    },
+  });
+
+  const result = await __test.handleWebhookRecovery();
+  const maxAttempts = selectorParameters.find((entry) => entry.name === 'maxRecoveryAttempts');
+  assert.match(selectorSql, /enrichment_attempts < :maxRecoveryAttempts/);
+  assert.equal(maxAttempts.value.longValue, 5);
+  assert.equal(result.status, 'completed');
+  assert.equal(result.maxRecoveryAttempts, 5);
+  assert.equal(__test.isWebhookEventAutomaticallyRetryable({ status: 'failed', enrichmentAttempts: 4 }), true);
+  assert.equal(__test.isWebhookEventAutomaticallyRetryable({ status: 'failed', enrichmentAttempts: 5 }), false);
+  assert.equal(__test.isWebhookEventAutomaticallyRetryable({ status: 'processed', enrichmentAttempts: 0 }), false);
+  console.log('[pass] automatic recovery and duplicate requeue stop at the configured attempt limit');
 }
 
 function testExactAuthenticationAndLiveGuard() {
@@ -293,18 +352,19 @@ async function testAuthoritativeIdempotentProcessing() {
   __test.reset();
   const statuses = new Map([
     ['evt-newer', 'received'],
-    ['evt-older', 'received'],
+    ['evt-older', 'failed'],
   ]);
   let bookingReads = 0;
   let deleteCalls = 0;
+  const writtenAmountOwingCents = [];
   const writtenBookingStatuses = [];
   const authoritativeBooking = {
     bookingReference: 'BOOKING-AUTHORITATIVE',
     uniqueId: 'ROLLER-AUTHORITATIVE',
     status: 'Confirmed',
-    paymentStatus: 'Unpaid',
-    amountOwing: 100,
-    total: 100,
+    paymentStatus: 'Paid',
+    amountOwing: -3716,
+    total: 38456,
     items: [{
       bookingItemId: 'item-1',
       bookingDate: '2026-12-01',
@@ -349,7 +409,8 @@ async function testAuthoritativeIdempotentProcessing() {
     },
     executeStatement: async (command) => {
       const sql = command.input.sql;
-      const parameter = (name) => command.input.parameters?.find((entry) => entry.name === name)?.value?.stringValue;
+      const parameterEntry = (name) => command.input.parameters?.find((entry) => entry.name === name);
+      const parameter = (name) => parameterEntry(name)?.value?.stringValue;
       if (/SELECT\s+event_id_or_hash,[\s\S]*FROM jumpyard\.roller_webhook_events/.test(sql)) {
         const eventId = parameter('eventId');
         return {
@@ -360,6 +421,7 @@ async function testAuthoritativeIdempotentProcessing() {
             { name: 'roller_unique_id' },
             { name: 'payload_hash' },
             { name: 'status' },
+            { name: 'enrichment_attempts' },
           ],
           records: [[
             { stringValue: eventId },
@@ -368,6 +430,7 @@ async function testAuthoritativeIdempotentProcessing() {
             { isNull: true },
             { stringValue: 'safe-hash' },
             { stringValue: statuses.get(eventId) },
+            { longValue: eventId === 'evt-older' ? 99 : 0 },
           ]],
         };
       }
@@ -375,6 +438,7 @@ async function testAuthoritativeIdempotentProcessing() {
       if (/SET status = :status/.test(sql)) statuses.set(parameter('eventId'), parameter('status'));
       if (/INSERT INTO jumpyard\.roller_bookings/.test(sql)) {
         writtenBookingStatuses.push(parameter('bookingStatus'));
+        writtenAmountOwingCents.push(parameterEntry('amountOwingCents')?.value?.longValue);
       }
       if (/DELETE FROM jumpyard\.roller_booking_(tickets|items)/.test(sql)) deleteCalls += 1;
       return { records: [] };
@@ -387,13 +451,14 @@ async function testAuthoritativeIdempotentProcessing() {
   assert.equal(older.status, 'processed');
   assert.equal(bookingReads, 2);
   assert.deepEqual(writtenBookingStatuses, ['Confirmed', 'Confirmed']);
+  assert.deepEqual(writtenAmountOwingCents, [-371600, -371600]);
   assert.equal(deleteCalls, 4);
 
   const readsBeforeDuplicate = bookingReads;
   const duplicate = await __test.processWebhookEventById('evt-newer', 'correlation-duplicate');
   assert.equal(duplicate.status, 'duplicate');
   assert.equal(bookingReads, readsBeforeDuplicate);
-  console.log('[pass] out-of-order signals both re-read current Roller state and processed duplicates are no-ops');
+  console.log('[pass] signed amount owing is preserved and explicit replay can recover an exhausted failed event');
 }
 
 function fakeResponse(status, retryAfter) {
@@ -415,6 +480,7 @@ function testInfrastructureAndLeastPrivilege() {
   assert.match(stackSource, /WebhookDlqVisibleAlarm/);
   assert.match(stackSource, /WebhookQueueAgeAlarm/);
   assert.match(stackSource, /WebhookProcessingFailureAlarm/);
+  assert.match(stackSource, /WebhookRetryExhaustedAlarm/);
   assert.match(stackSource, /visibilityTimeout: Duration\.minutes\(12\)/);
   const intakeSection = handlerSource.slice(
     handlerSource.indexOf('async function handleWebhookIntake'),
@@ -423,12 +489,17 @@ function testInfrastructureAndLeastPrivilege() {
   assert.doesNotMatch(intakeSection, /getBookingDetail|enrichWebhookEvent|getRollerAccessToken/);
   assert.match(handlerSource, /applyWebhookBookingScope/);
   assert.match(handlerSource, /deleteMissingWebhookChildren/);
-  assert.match(handlerSource, /status IN \('received', 'pending_enrichment', 'failed'\)/);
+  assert.match(handlerSource, /status IN \('received', 'pending_enrichment', 'failed'\)[\s\S]*enrichment_attempts < :maxRecoveryAttempts/);
   assert.match(handlerSource, /createHash\('sha256'\)[\s\S]*timingSafeEqual/);
   assert.match(migrationSource, /GRANT DELETE ON[\s\S]*roller_booking_tickets[\s\S]*roller_booking_items[\s\S]*jumpyard_webhook_runtime/);
   assert.doesNotMatch(migrationSource, /roller_bookings,|guest_profiles|GRANT ALL|TRUNCATE|DROP TABLE/);
   assert.match(eventLogMigrationSource, /GRANT SELECT \(event_id\) ON jumpyard\.event_log TO jumpyard_webhook_runtime/);
   assert.doesNotMatch(eventLogMigrationSource, /GRANT SELECT ON|event_payload|subject_ref|GRANT ALL|TRUNCATE|DROP TABLE/);
+  assert.match(
+    signedBookingAmountSource,
+    /DROP CONSTRAINT IF EXISTS roller_bookings_amount_owing_nonnegative/,
+  );
+  assert.doesNotMatch(signedBookingAmountSource, /UPDATE|DELETE|TRUNCATE|DROP TABLE|GRANT/);
   assert.match(operatorSource, /I_APPROVE_T0197_PARK_TEST_SYNTHETIC_WEBHOOK/);
   assert.match(operatorSource, /I_APPROVE_T0197_PARK_TEST_EVENT_REPLAY/);
   assert.match(operatorSource, /method: "GET"/);

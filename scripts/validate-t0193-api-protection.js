@@ -169,8 +169,8 @@ function validateRouteSettings(template, routesByKey) {
 function validateApprovedProtectionResources(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    196,
-    'The T0193 boundary must remain intact inside the T0197 stack plus the exact T0200 email-readiness delta.',
+    197,
+    'The T0193 boundary must remain intact inside T0197/T0200 plus the exact issue #212 retry alarm.',
   );
   assert.equal(resourcesOfType(template, 'AWS::SES::ConfigurationSet').length, 1);
   assert.equal(resourcesOfType(template, 'AWS::SES::ConfigurationSetEventDestination').length, 1);
@@ -188,6 +188,13 @@ function validateApprovedProtectionResources(template) {
     ).length,
     1,
     'T0196 must add exactly one booking-index freshness alarm.',
+  );
+  assert.equal(
+    resourcesOfType(template, 'AWS::CloudWatch::Alarm').filter(
+      ([, alarm]) => alarm.Properties.AlarmName === 'jumpyard-check-in-park-test-webhook-retry-exhausted',
+    ).length,
+    1,
+    'Issue #212 must add exactly one bounded webhook retry-exhausted alarm.',
   );
   assert.equal(resourcesOfType(template, 'AWS::Cognito::UserPool').length, 1);
   assert.equal(resourcesOfType(template, 'AWS::Cognito::UserPoolClient').length, 1);

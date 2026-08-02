@@ -75,8 +75,8 @@ function iamPoliciesReference(template, logicalId) {
 function validateParkTest(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    196,
-    'T0194 remains intact inside the T0197 async webhook stack plus the exact T0200 email-readiness delta.',
+    197,
+    'T0194 remains intact inside T0197/T0200 plus the exact issue #212 retry alarm.',
   );
   assert.equal(entriesOfType(template, 'AWS::SES::ConfigurationSet').length, 1);
   assert.equal(entriesOfType(template, 'AWS::SES::ConfigurationSetEventDestination').length, 1);
@@ -94,6 +94,13 @@ function validateParkTest(template) {
     ).length,
     1,
     'T0196 must add exactly one booking-index freshness alarm.',
+  );
+  assert.equal(
+    entriesOfType(template, 'AWS::CloudWatch::Alarm').filter(
+      ([, alarm]) => alarm.Properties.AlarmName === 'jumpyard-check-in-park-test-webhook-retry-exhausted',
+    ).length,
+    1,
+    'Issue #212 must add exactly one bounded webhook retry-exhausted alarm.',
   );
 
   const [userPoolId, userPool] = onlyResource(template, 'AWS::Cognito::UserPool');

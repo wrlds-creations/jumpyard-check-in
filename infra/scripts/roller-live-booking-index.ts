@@ -8,7 +8,12 @@ import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-sec
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { fromIni } from "@aws-sdk/credential-providers";
 import { App } from "aws-cdk-lib";
-import { loadJumpYardCloudConfig, PARK_TEST_LIVE_DATA_SYNC_APPROVAL, type JumpYardCloudConfig } from "../lib/config";
+import {
+  loadJumpYardCloudConfig,
+  PARK_TEST_LIVE_DATA_SYNC_APPROVAL,
+  PARK_TEST_LIVE_WEBHOOK_PROCESSING_APPROVAL,
+  type JumpYardCloudConfig,
+} from "../lib/config";
 
 const APPLY_CONFIRMATION = "I_APPROVE_T0196_PARK_TEST_AURORA_BACKFILL";
 const PREFLIGHT_CONFIRMATION = "I_APPROVE_T0196_ROLLER_LIVE_DATA_API_READS";
@@ -142,8 +147,19 @@ function validateConfig(config: JumpYardCloudConfig): void {
   if (config.dataSync.liveApproval !== PARK_TEST_LIVE_DATA_SYNC_APPROVAL) errors.push("T0196 approval mismatch.");
   if (config.dataSync.venueId !== EXPECTED_VENUE_ID) errors.push("dataSync venue must be Nacka 50871.");
   if (config.dataSync.requestIntervalMs < 1000) errors.push("Roller pacing must be at least one second.");
-  if (config.safetyGates.rollerWebhookProcessingEnabled || config.safetyGates.guestMessagingSendsEnabled) {
-    errors.push("Webhook processing and guest sends must remain disabled.");
+  if (config.safetyGates.guestMessagingSendsEnabled) {
+    errors.push("Guest messaging must remain disabled.");
+  }
+  if (config.safetyGates.rollerWebhookProcessingEnabled) {
+    if (config.webhookProcessing.liveApproval !== PARK_TEST_LIVE_WEBHOOK_PROCESSING_APPROVAL) {
+      errors.push("Enabled webhook processing must retain the exact T0197 approval.");
+    }
+    if (!config.webhookProcessing.recoveryScheduleEnabled) {
+      errors.push("Enabled webhook processing must retain bounded recovery.");
+    }
+    if (config.webhookProcessing.venueId !== EXPECTED_VENUE_ID) {
+      errors.push("Enabled webhook processing must remain scoped to Nacka 50871.");
+    }
   }
   for (const [key, value] of Object.entries(expectedTags)) {
     if (config.tags[key as keyof typeof config.tags] !== value) errors.push(`${key} mismatch.`);
