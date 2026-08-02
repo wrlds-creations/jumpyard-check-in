@@ -12,7 +12,7 @@ The webhook is a doorbell, not the guest register:
 4. One reserved-concurrency worker verifies the current credentials belong to Nacka `50871`, reads current `GET /bookings/{identifier}`, applies the same 30-day-past plus all-future visit boundary as T0196, and upserts normalized booking/item/ticket/contact state.
 5. Duplicate and older signals are harmless because every accepted signal re-reads current Roller state. Processed event ids are no-ops.
 
-The queue retries a failed message five times before its FIFO DLQ. A five-minute recovery rule also finds `received`, `pending_enrichment`, or `failed` rows older than two minutes. T0196 remains the morning catch-all when Roller sends no webhook, and check-in-critical work still confirms live state.
+The queue retries a failed message five times before its FIFO DLQ. A five-minute recovery rule finds `received`, `pending_enrichment`, or `failed` rows older than two minutes only while their enrichment-attempt count is below five. Exhaustion emits a dedicated alarm and remains explicitly replayable after repair; it cannot retry indefinitely. T0196 remains the morning catch-all when Roller sends no webhook, and check-in-critical work still confirms live state.
 
 ## Exact Boundary
 
@@ -36,7 +36,7 @@ The 2026-07-15 rollout moved the park-test stack from 171 to 187 resources witho
 - DLQ-visible, queue-age, processing-failure, worker-error, and worker-throttle alarms
 - 30-day worker log group and updated operations dashboard
 
-Migration `0015` grants the restricted webhook role DELETE only on booking item/ticket child rows so authoritative snapshots can remove stale children. Migration `0016` grants SELECT only on `event_log.event_id`, which PostgreSQL requires for the existing `ON CONFLICT` audit insert. It does not expose audit payload, subject, or summary columns.
+Migration `0015` grants the restricted webhook role DELETE only on booking item/ticket child rows so authoritative snapshots can remove stale children. Migration `0016` grants SELECT only on `event_log.event_id`, which PostgreSQL requires for the existing `ON CONFLICT` audit insert. It does not expose audit payload, subject, or summary columns. Issue #212 migration `0017` removes only the obsolete nonnegative constraint on booking-level amount owing so Roller refunds, credits, or overpayment state can remain signed instead of rejecting an otherwise authoritative snapshot.
 
 ## Guarded Operations
 
@@ -65,6 +65,15 @@ Rollback is a reviewed deploy of `infra/config/park-test.json`, which closes web
 - Four final synthetic events are `processed`, four early venue-proof test events are terminal `ignored_scope`, and none are `received`, `pending_enrichment`, or `failed`.
 - Final CDK diff has zero differences. CloudFormation drift is `IN_SYNC` with zero drifted resources.
 - No non-synthetic Roller delivery arrived during the validation window. Observing the next real booking change is the remaining manual confirmation; it is not substituted with a Roller business write.
+
+### Issue #212 Repair And Recovery Evidence
+
+- The 2026-08-02 repair added a five-attempt recovery bound and the `jumpyard-check-in-park-test-webhook-retry-exhausted` alarm. Migration `0017` is applied, and the stack now has 197 resources.
+- Both known high-attempt failed events reached `processed`; their one authoritative booking snapshot preserved `amount_owing_cents = -371600`. No `received`, `pending_enrichment`, or `failed` rows remained.
+- All five DLQ messages were matched to five already processed event rows before guarded 5/5 redrive. Unknown messages were zero; the main queue and DLQ ended empty.
+- A new safe synthetic signal processed successfully with event-id hash `cb703ca664c2d117`; Roller webhook `1465` retained its exact registration.
+- Initial protected run `30763549295` completed all write stages but exposed API Gateway access-log ARN normalization in final drift verification. PR #214 synthesized the canonical ARN, and immutable release `30765157585` re-promoted successfully as run `30765356271`.
+- The approved re-promotion plan added and removed no resources and changed only `DefaultStage`. Final readback returned `UPDATE_COMPLETE`, drift `IN_SYNC`, zero alarms in `ALARM`, empty queues, migrations through `0017`, exact Cloudflare commit readback, and public phone/admin/Apple Pay HTTP 200 checks. No rollback was needed.
 
 ## Non-Goals Preserved
 
