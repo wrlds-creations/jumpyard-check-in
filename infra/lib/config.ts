@@ -105,6 +105,7 @@ export interface JumpYardCloudConfig {
   readonly webhookProcessing: {
     readonly bookingRetentionDays: number;
     readonly liveApproval: string;
+    readonly maxRecoveryAttempts: number;
     readonly recoveryLimit: number;
     readonly recoveryScheduleEnabled: boolean;
     readonly requestIntervalMs: number;
@@ -185,6 +186,7 @@ interface RawConfig {
   readonly webhookProcessing?: {
     readonly bookingRetentionDays?: unknown;
     readonly liveApproval?: unknown;
+    readonly maxRecoveryAttempts?: unknown;
     readonly recoveryLimit?: unknown;
     readonly recoveryScheduleEnabled?: unknown;
     readonly requestIntervalMs?: unknown;
@@ -876,6 +878,13 @@ function readWebhookProcessingConfig(
       'webhookProcessing.bookingRetentionDays',
     ),
     liveApproval: readOptionalString(raw?.liveApproval, '', 'webhookProcessing.liveApproval'),
+    maxRecoveryAttempts: readOptionalInteger(
+      raw?.maxRecoveryAttempts,
+      5,
+      1,
+      20,
+      'webhookProcessing.maxRecoveryAttempts',
+    ),
     recoveryLimit: readOptionalInteger(raw?.recoveryLimit, 10, 1, 25, 'webhookProcessing.recoveryLimit'),
     recoveryScheduleEnabled: readOptionalBoolean(
       raw?.recoveryScheduleEnabled,

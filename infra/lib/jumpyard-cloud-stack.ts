@@ -1159,6 +1159,16 @@ exports.handler = async (event) => {
       statistic: 'Sum',
       period,
     });
+    const webhookRetryExhausted = new cloudwatch.Metric({
+      namespace: 'JumpYard/Cloud',
+      metricName: 'WebhookRetryExhausted',
+      dimensionsMap: {
+        Environment: config.resourcePrefix,
+        Handler: 'webhook',
+      },
+      statistic: 'Sum',
+      period,
+    });
     const guestEmailMetric = (metricName: string) =>
       new cloudwatch.Metric({
         namespace: 'AWS/SES',
@@ -1429,6 +1439,17 @@ exports.handler = async (event) => {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
+    new cloudwatch.Alarm(this, 'WebhookRetryExhaustedAlarm', {
+      alarmName: `${config.resourcePrefix}-webhook-retry-exhausted`,
+      alarmDescription: 'A Roller webhook event reached the automatic reconciliation attempt limit.',
+      metric: webhookRetryExhausted,
+      threshold: 1,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
     if (config.dataSync.scheduleEnabled) {
       new cloudwatch.Alarm(this, 'BookingIndexFreshnessAlarm', {
         alarmName: `${config.resourcePrefix}-booking-index-stale`,
@@ -1677,6 +1698,9 @@ exports.handler = async (event) => {
         resources.webhookProcessing.bookingRetentionDays,
       );
       environment.ROLLER_WEBHOOK_LIVE_APPROVAL = resources.webhookProcessing.liveApproval;
+      environment.ROLLER_WEBHOOK_MAX_RECOVERY_ATTEMPTS = String(
+        resources.webhookProcessing.maxRecoveryAttempts,
+      );
       environment.ROLLER_WEBHOOK_RECOVERY_LIMIT = String(resources.webhookProcessing.recoveryLimit);
       environment.ROLLER_WEBHOOK_REQUEST_INTERVAL_MS = String(resources.webhookProcessing.requestIntervalMs);
       environment.ROLLER_WEBHOOK_VENUE_ID = resources.webhookProcessing.venueId;

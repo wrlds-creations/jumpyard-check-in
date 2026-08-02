@@ -110,7 +110,7 @@ async function handleWebhookIntake(event) {
       throw error;
     }
 
-    if (!writeResult.inserted && !RETRYABLE_DUPLICATE_STATUSES.has(writeResult.status)) {
+    if (!writeResult.inserted && !isWebhookEventAutomaticallyRetryable(writeResult)) {
       return jsonResponse(200, correlationId, {
         status: 'duplicate',
         webhook: {
@@ -276,7 +276,8 @@ async function loadWebhookEvent(eventId) {
        booking_reference,
        roller_unique_id,
        payload_hash,
-       status
+       status,
+       enrichment_attempts
      FROM jumpyard.roller_webhook_events
      WHERE event_id_or_hash = :eventId
      LIMIT 1`,
@@ -292,6 +293,7 @@ async function loadWebhookEvent(eventId) {
     payloadHash: stringOrNull(row.payload_hash),
     rollerUniqueId: stringOrNull(row.roller_unique_id),
     status: stringOrNull(row.status),
+    enrichmentAttempts: numberOrNull(row.enrichment_attempts) ?? 0,
   };
 }
 
@@ -301,14 +303,19 @@ async function handleWebhookRecovery() {
   }
 
   const limit = readBoundedIntegerEnv('ROLLER_WEBHOOK_RECOVERY_LIMIT', 10, 1, 25);
+  const maxRecoveryAttempts = readBoundedIntegerEnv('ROLLER_WEBHOOK_MAX_RECOVERY_ATTEMPTS', 5, 1, 20);
   const result = await executeStatement(
     `SELECT event_id_or_hash
      FROM jumpyard.roller_webhook_events
      WHERE status IN ('received', 'pending_enrichment', 'failed')
+       AND enrichment_attempts < :maxRecoveryAttempts
        AND received_at <= now() - interval '2 minutes'
      ORDER BY received_at ASC
      LIMIT :limit`,
-    [{ name: 'limit', value: { longValue: limit } }],
+    [
+      { name: 'limit', value: { longValue: limit } },
+      { name: 'maxRecoveryAttempts', value: { longValue: maxRecoveryAttempts } },
+    ],
   );
   const eventIds = mappedRows(result).map((row) => stringOrNull(row.event_id_or_hash)).filter(Boolean);
   let processed = 0;
@@ -326,12 +333,15 @@ async function handleWebhookRecovery() {
   emitWebhookMetric('WebhookRecoveryProcessed', processed);
   if (failed > 0) {
     emitWebhookMetric('WebhookRecoveryFailure', failed);
-    const error = new Error(`Webhook recovery failed for ${failed} event(s).`);
-    error.code = 'webhook_recovery_failed';
-    throw error;
   }
 
-  return { status: 'completed', attempted: eventIds.length, processed };
+  return {
+    status: failed > 0 ? 'completed_with_failures' : 'completed',
+    attempted: eventIds.length,
+    failed,
+    maxRecoveryAttempts,
+    processed,
+  };
 }
 
 function parseWebhookRequest(event) {
@@ -627,11 +637,11 @@ async function persistWebhookEvent(intake, authMode, correlationId) {
   }
 
   if (inserted) {
-    return { inserted, status: 'received' };
+    return { enrichmentAttempts: 0, inserted, status: 'received' };
   }
 
   const existingEvent = await executeStatement(
-    `SELECT status
+    `SELECT status, enrichment_attempts
      FROM jumpyard.roller_webhook_events
      WHERE event_id_or_hash = :eventId
      LIMIT 1`,
@@ -639,7 +649,14 @@ async function persistWebhookEvent(intake, authMode, correlationId) {
   );
 
   const existingStatus = existingEvent.records?.[0]?.[0]?.stringValue ?? 'duplicate';
-  return { inserted, status: existingStatus };
+  const enrichmentAttempts = Number(existingEvent.records?.[0]?.[1]?.longValue ?? 0);
+  return { enrichmentAttempts, inserted, status: existingStatus };
+}
+
+function isWebhookEventAutomaticallyRetryable(event) {
+  if (!RETRYABLE_DUPLICATE_STATUSES.has(event.status)) return false;
+  const maxRecoveryAttempts = readBoundedIntegerEnv('ROLLER_WEBHOOK_MAX_RECOVERY_ATTEMPTS', 5, 1, 20);
+  return Number(event.enrichmentAttempts ?? 0) < maxRecoveryAttempts;
 }
 
 async function enrichWebhookEvent(intake, correlationId) {
@@ -720,7 +737,18 @@ async function enrichWebhookEvent(intake, correlationId) {
       lookupPath: guestDetail.used ? 'GET /bookings/{identifier} + GET /guests/{guestId}' : 'GET /bookings/{identifier}',
     };
   } catch (error) {
-    await updateWebhookEventStatus(intake.eventId, 'failed', safeErrorSummary(error), false).catch(() => {});
+    const enrichmentAttempts = await updateWebhookEventStatus(
+      intake.eventId,
+      'failed',
+      safeErrorSummary(error),
+      false,
+    ).catch(() => null);
+    if (
+      enrichmentAttempts !== null &&
+      enrichmentAttempts >= readBoundedIntegerEnv('ROLLER_WEBHOOK_MAX_RECOVERY_ATTEMPTS', 5, 1, 20)
+    ) {
+      emitWebhookMetric('WebhookRetryExhausted', 1);
+    }
     throw error;
   }
 }
@@ -736,13 +764,14 @@ async function markWebhookEventPending(eventId, errorSummary) {
 }
 
 async function updateWebhookEventStatus(eventId, status, errorSummary, processed) {
-  await executeStatement(
+  const result = await executeStatement(
     `UPDATE jumpyard.roller_webhook_events
      SET status = :status,
          error_summary = :errorSummary,
          enrichment_attempts = enrichment_attempts + 1,
          processed_at = CASE WHEN :processed THEN now() ELSE processed_at END
-     WHERE event_id_or_hash = :eventId`,
+     WHERE event_id_or_hash = :eventId
+     RETURNING enrichment_attempts`,
     [
       stringParameter('eventId', eventId),
       stringParameter('status', status),
@@ -750,6 +779,7 @@ async function updateWebhookEventStatus(eventId, status, errorSummary, processed
       { name: 'processed', value: { booleanValue: Boolean(processed) } },
     ],
   );
+  return result.records?.[0]?.[0]?.longValue ?? null;
 }
 
 async function persistEnrichmentEventLog(intake, correlationId, booking, productCatalogStatus, guestProfile) {
@@ -2312,6 +2342,8 @@ exports.__test = {
   extractVenueId,
   getWebhookAuthToken,
   handleWebhookIntake,
+  handleWebhookRecovery,
+  isWebhookEventAutomaticallyRetryable,
   parseRetryAfterMs,
   parseWebhookQueueMessage,
   processWebhookEventById,
