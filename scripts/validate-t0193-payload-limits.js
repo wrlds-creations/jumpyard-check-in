@@ -131,6 +131,9 @@ function loadLambda(testCase) {
     require(moduleId) {
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule(moduleId, state);
+      if (testCase.relativePath === 'infra/lambda/session/index.js' && moduleId === './email-template') {
+        return require(path.join(path.dirname(absolutePath), 'email-template.js'));
+      }
       throw new Error(`Unexpected require(${JSON.stringify(moduleId)}) in ${testCase.relativePath}.`);
     },
     setTimeout,

@@ -38,7 +38,7 @@ Protected release run `29568860560` and deployment run `29569173836` created the
 | CNAME | `5icli6vzkxeohb67lxe5bclwihyqg5a2._domainkey.jumpyard.se` | `5icli6vzkxeohb67lxe5bclwihyqg5a2.dkim.amazonses.com` |
 | CNAME | `d33aqoyuxzkydfrmpgck2v7enhjpmi3y._domainkey.jumpyard.se` | `d33aqoyuxzkydfrmpgck2v7enhjpmi3y.dkim.amazonses.com` |
 
-João adds the records to authoritative `jumpyard.se` DNS. WRLDS/Codex does not write them. Do not shorten the AWS-generated values. AWS readback immediately after rollout reported identity `Verification pending`, DKIM `Pending`, 2048-bit Easy DKIM, and configuration generation at 2026-07-17 11:16 Europe/Stockholm. After public DNS resolves, read back the three records and confirm SES reports both the identity and DKIM as verified.
+João added the records to authoritative `jumpyard.se` DNS. WRLDS/Codex did not write them. AWS readback on 2026-07-22 reports identity verified, DKIM `SUCCESS`, DKIM signing enabled, and SES production access enabled at 50,000 messages/day and 14/second.
 
 ## Protected rollout evidence
 
@@ -48,7 +48,8 @@ João adds the records to authoritative `jumpyard.se` DNS. WRLDS/Codex does not 
 - Plan: 187 -> 196 resources; nine additions, zero removals; migrations off
 - Verification: selected/deployed templates match, CloudFormation completed, drift is `IN_SYNC`, no alarm is in `ALARM`, queues are empty, migrations remain complete through `0016`, and both Cloudflare park-test projects report the exact commit
 - Closed gates: configuration-set sending is false, application guest sends are false, the booking-time schedule is off, and the session Lambda has no SES send IAM policy
-- Remaining gates: João publishes DNS, SES verifies DKIM/domain, AWS grants production access, final copy is confirmed, and one separately approved controlled message is proven
+- Completed later gates: DNS/DKIM verification, SES production access, approved responsive HTML/text copy, and two separately approved controlled visual-client deliveries
+- Remaining gate: Love manually confirms Gmail/Outlook rendering, display name, Reply-To, link host, and message-header authentication before issue closeout
 
 ## Transactional email copy
 
@@ -82,15 +83,19 @@ Use only these confirmed facts in the AWS request:
 
 Love confirmed the absolute peak case and requested quota on 2026-07-17. The request must describe 3,000 recipients as the extreme case, not normal daily usage, and must not claim a larger routine or monthly volume without new evidence.
 
-## Controlled proof checkpoint
+## Controlled proof evidence
 
-The later proof requires a separate explicit confirmation immediately before sending. It may target only an address Love approves for the test. Before the send:
+Love explicitly approved two separate test messages so the same design could be compared in Gmail and Outlook, then approved one additional Gmail-only message on 2026-08-02 to inspect the final single-CTA revision. Raw destinations are not stored in repository evidence; the operator accepts only the two approved SHA-256 recipient hashes and reports `l***@w***.com` plus `l***@g***.com`.
 
-1. Confirm account `376129878018`, region `eu-north-1`, SES production access enabled, identity/DKIM verified, and configuration-set sending enabled through reviewed IaC.
-2. Confirm automatic/manual application guest sends and the booking-time schedule remain disabled.
-3. Confirm the exact masked recipient, sender, Reply-To, subject, and public HTTPS check-in origin.
-4. Send exactly one controlled message through the approved configuration set.
-5. Verify receipt, display name, Reply-To, link host, DKIM authentication, SES delivery event, safe audit row, and absence of recipient/token/full-link data in logs.
-6. Return the configuration set to the reviewed fail-closed state if any hard gate fails.
+Guarded operator `scripts/send-t0200-controlled-email.js` defaults to dry-run, accepts only one or both destinations from the same fixed hash allowlist, and requires matching command plus process-local confirmations specific to the recipient count. Immediately before each write it proved the exact AWS account/region, production access, verified identity/DKIM, TLS/suppression/event destination, sender/Reply-To/origin, recipient hashes, zero email alarms, application guest sends false, no booking-time messaging rule, and session-Lambda SES permission denied.
+
+The operator temporarily enabled only `jumpyard-check-in-park-test-email`, sent one message per approved address using a deliberately invalid non-booking test token, and restored the configuration set to false in `finally`. SES returned provider message ids:
+
+- `0110019f8a8336e8-dd8fd0e1-4870-4393-a28b-aac50769579b-000000`
+- `0110019f8a8341be-d407ee70-ddcb-4b4d-b901-acee3a0d896f-000000`
+
+The original CloudWatch readback reached `Send=2`, `Delivery=2`, `Bounce=0`, `Complaint=0`, `Reject=0`, and `RenderingFailure=0`. The 2026-08-02 one-address run exceeded the local 60-second reporting window after SES acceptance, so it was not retried; immediate containment readback showed configuration-set sending already false, and the bounded metric window reached exactly `Send=1`, `Delivery=1`, and zero failure events. Cumulative controlled evidence is therefore `Send=3`, `Delivery=3`, and zero `Bounce`, `Complaint`, `Reject`, or `RenderingFailure`. Final AWS readback confirms configuration-set sending false and application guest sends false. Because these proofs intentionally bypassed the disabled application route, they did not create Aurora `email_deliveries` rows; application audit/deduplication remains part of the separately reviewed T0201 unattended-delivery path.
+
+The original two-address proof used the then-approved two-CTA revision. The explicitly approved 2026-08-02 Gmail message used the final single-CTA revision, reached provider delivery, and Love approved its visual result the same day. The proof correctly kept the park-test origin. A later approved production/cutover issue must change the email link to `https://checkin.jumpyard.se/` only after revalidating that exact domain for the production payment flow and Apple Pay; T0200 does not make that provider approval claim.
 
 T0201, not T0200, owns automatic timing and unattended booking-time delivery.
