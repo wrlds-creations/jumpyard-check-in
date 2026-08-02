@@ -143,6 +143,38 @@ function expectNoBookingTimeMessagingSchedule(template: CloudFormationTemplate):
   expect(!hasBookingTimeRule, 'park-test synth must keep booking-time guest messaging schedule disabled.');
 }
 
+function expectCanonicalApiAccessLogDestination(
+  template: CloudFormationTemplate,
+  account: string,
+  region: string,
+  prefix: string,
+): void {
+  const stage = Object.values(getResources(template)).find(
+    (resource) => resource.Type === 'AWS::ApiGatewayV2::Stage' && resource.Properties?.StageName === '$default',
+  );
+  expect(Boolean(stage), `Expected ${prefix} default API Gateway stage.`);
+  const accessLogSettings = stage?.Properties?.AccessLogSettings;
+  expect(
+    Boolean(accessLogSettings) && typeof accessLogSettings === 'object' && !Array.isArray(accessLogSettings),
+    `Expected ${prefix} API access-log settings.`,
+  );
+  const destinationArn = (accessLogSettings as Record<string, unknown>).DestinationArn;
+  const destinationJson = JSON.stringify(destinationArn);
+  expect(
+    destinationJson.includes(`:logs:${region}:${account}:log-group:`),
+    `${prefix}: expected canonical API access-log destination ARN without a wildcard suffix.`,
+  );
+  expect(
+    destinationJson.includes('"Ref":"HttpApiAccessLogGroup'),
+    `${prefix}: access-log destination must reference the named log group.`,
+  );
+  expect(
+    !destinationJson.includes('Fn::GetAtt'),
+    `${prefix}: access-log destination must not use LogGroup.Arn because API Gateway removes its trailing wildcard.`,
+  );
+  expect(!destinationJson.includes(':*'), `${prefix}: access-log destination must not include a wildcard suffix.`);
+}
+
 function getLambdaEnvironment(template: CloudFormationTemplate, functionName: string): Record<string, unknown> {
   const lambdaResource = Object.values(getResources(template)).find((resource) => {
     return resource.Type === 'AWS::Lambda::Function' && resource.Properties?.FunctionName === functionName;
@@ -191,6 +223,7 @@ function validateDevTemplate(dev: SynthResult): void {
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/env`);
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/base-url`);
   expectEventRuleState(dev.template, `${DEV_PREFIX}-data-api-daily-sync`, 'ENABLED');
+  expectCanonicalApiAccessLogDestination(dev.template, '376129878018', 'eu-north-1', DEV_PREFIX);
   expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-lookup`, {
     ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'false',
     ENABLE_T0165_LINKED_ADDON_SETTLEMENT: 'false',
@@ -361,6 +394,7 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   expectNamedResource(parkTest.template, 'AWS::Events::Rule', 'Name', `${PARK_TEST_PREFIX}-data-api-daily-sync`);
   expectEventRuleState(parkTest.template, `${PARK_TEST_PREFIX}-data-api-daily-sync`, 'DISABLED');
   expectNoBookingTimeMessagingSchedule(parkTest.template);
+  expectCanonicalApiAccessLogDestination(parkTest.template, '376129878018', 'eu-north-1', PARK_TEST_PREFIX);
   expect(countResourcesByType(parkTest.template, 'AWS::ApiGatewayV2::Api') === 1, 'Expected one park-test HTTP API.');
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-lookup`, {
     ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'false',

@@ -861,7 +861,17 @@ exports.handler = async (event) => {
     const defaultStage = new apigatewayv2.CfnStage(this, 'DefaultStage', {
       apiId: api.ref,
       accessLogSettings: {
-        destinationArn: apiAccessLogGroup.logGroupArn,
+        // CloudWatch Logs exposes LogGroup.Arn with a trailing `:*`, while
+        // API Gateway stores the stage destination without that suffix. Build
+        // the destination from the known log-group name so CloudFormation
+        // drift detection compares the same canonical ARN that API Gateway
+        // persists.
+        destinationArn: Stack.of(this).formatArn({
+          service: 'logs',
+          resource: 'log-group',
+          resourceName: apiAccessLogGroup.logGroupName,
+          arnFormat: ArnFormat.COLON_RESOURCE_NAME,
+        }),
         format: JSON.stringify({
           requestId: '$context.requestId',
           routeKey: '$context.routeKey',
@@ -881,6 +891,7 @@ exports.handler = async (event) => {
       routeSettings: buildApiRouteSettings(routeProtectionCatalog),
       stageName: '$default',
     });
+    defaultStage.addDependency(apiAccessLogGroup.node.defaultChild as logs.CfnLogGroup);
 
     const handlerResources: HandlerResources = {
       api,
