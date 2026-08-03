@@ -27,11 +27,23 @@ Missing, malformed, stale, early, ambiguous, or mismatched control state returns
 
 The check-in link continues to use `https://jumpyard-check-in-park-test.pages.dev/` for this proof. `https://checkin.jumpyard.se/` is not selected by T0201 and remains a separate domain/payment/Apple Pay readiness decision.
 
-## First controlled proof attempt
+## Controlled proof evidence
+
+### First attempt and verifier correction
 
 The 2026-08-03 proof armed one exact hash-only tuple and reached both the scheduled session Lambda and the authoritative Roller lookup during the bounded T-30 window. Identifier, schedule, active state, and settled payment all matched, but no email delivery row was created because Roller booking detail omitted every venue/location field and the original verifier required one there. A separate safe structural read confirmed that the same Roller credentials returned Nacka `50871` from `/venues/me`. The control was disarmed after the window; aggregate evidence remained zero sent, zero failed, zero queued, and zero active alarms.
 
 The corrected verifier therefore requires a fresh `/venues/me` Nacka identity on every controlled authoritative refresh. A booking-detail venue field is optional only when absent; if present, it must also equal Nacka. No send is possible when either source contradicts Nacka or when credential venue identity is missing or unavailable.
+
+### Successful automatic proof
+
+The corrected Lookup Lambda shipped through PR #218 and immutable release run `30811646770`; protected park-test promotion run `30812035906` deployed the exact release commit `8cb73b3a569758de82cae1f7599eb86afb2c8883`. Its reviewed plan kept 199 resources, added and removed none, and changed only the Lookup Lambda code. Post-deploy verification reported `UPDATE_COMPLETE`, exact deployed-template equality, drift `IN_SYNC`, zero active alarms, empty queues, complete migrations, and healthy public park-test endpoints.
+
+Love then confirmed one new Nacka booking, exact 15:00 Europe/Stockholm start, and the retained booking recipient. A hash-based Aurora preflight found exactly one fresh, active, settled venue-`50871` candidate with the agreed start and recipient. The control dry-run persisted neither raw identifier nor raw email, and the applied control contained only the approved hashes and bounded metadata. The 14:26 scheduler run produced zero deliveries because it was earlier than the allowed boundary. The next run sent at 14:31:52 Europe/Stockholm, inside the 25-to-30-minute window.
+
+Safe aggregate evidence reported exactly one non-dry-run Aurora email-delivery row with status `sent`, a masked destination, and provider-message-id presence. The matching SES window reported `Send=1`, `Delivery=1`, and zero `Bounce`, `Complaint`, `Reject`, or `RenderingFailure`. Love confirmed receipt and approved the delivered rendering. The control was disarmed before the next schedule; readback confirmed `enabled=false`, empty approval/booking/start/recipient fields, zero active alarms, and empty queues. The general guest-send gate remains false, so the deployed scheduler cannot send another message without a separately approved control or future general-release configuration.
+
+The proof sent no SMS, changed no Roller booking/payment/redemption state, exposed no raw booking identifier, recipient, token, or secret in repository evidence, and did not select `https://checkin.jumpyard.se/`. No rollback or re-promotion was required.
 
 ## Arming one agreed booking
 
