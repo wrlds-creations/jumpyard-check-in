@@ -14,6 +14,7 @@ interface TestConfig {
   awsAccount: string;
   awsRegion: string;
   readonly bookingTimeSms: {
+    channels?: string[];
     checkinBaseUrl: string;
     confirmedSendApproval: string;
     confirmSend: boolean;
@@ -21,6 +22,7 @@ interface TestConfig {
     limit: number;
     rateMinutes: number;
     scheduleEnabled: boolean;
+    windowEndsAtLead?: boolean;
     windowMinutes: number;
   };
   dataSync?: {
@@ -48,6 +50,7 @@ interface TestConfig {
     environment: string;
   };
   readonly safetyGates: {
+    controlledT30EmailApproval?: string;
     emergencyStop: boolean;
     guestMessagingSendsEnabled: boolean;
     liveAddOnSmokeAllowedIdentifiers?: string[];
@@ -164,6 +167,16 @@ parkTestWrongEmailReplyTo.guestEmail.replyToAddresses = ['love@wrlds.com'];
 const parkTestConfirmedSend = cloneConfig(parkTestConfig);
 parkTestConfirmedSend.bookingTimeSms.confirmSend = true;
 parkTestConfirmedSend.bookingTimeSms.confirmedSendApproval = 'I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS';
+
+const parkTestControlledT30 = readConfig('config/park-test-full-flow-rehearsal.json');
+const parkTestControlledT30WithSms = cloneConfig(parkTestControlledT30);
+parkTestControlledT30WithSms.bookingTimeSms.channels = ['sms', 'email'];
+const parkTestControlledT30WithoutApproval = cloneConfig(parkTestControlledT30);
+delete parkTestControlledT30WithoutApproval.safetyGates.controlledT30EmailApproval;
+const parkTestControlledT30WithBroadGuestGate = cloneConfig(parkTestControlledT30);
+parkTestControlledT30WithBroadGuestGate.safetyGates.guestMessagingSendsEnabled = true;
+const parkTestControlledT30WithEarlyWindow = cloneConfig(parkTestControlledT30);
+parkTestControlledT30WithEarlyWindow.bookingTimeSms.windowEndsAtLead = false;
 
 const parkTestEmergencyStopOff = cloneConfig(parkTestConfig);
 parkTestEmergencyStopOff.safetyGates.emergencyStop = false;
@@ -457,7 +470,32 @@ expectFail(
   parkTestWrongEmailReplyTo,
   /guestEmail.replyToAddresses/,
 );
-expectFail('park-test confirmed scheduled send fails closed', parkTestConfirmedSend, /confirmSend must stay false/);
+expectFail(
+  'park-test confirmed scheduled send without the T0201 gate fails closed',
+  parkTestConfirmedSend,
+  /controlledT30EmailApproval/,
+);
+expectPass('approved single-booking park-test T-30 email config passes', parkTestControlledT30, 'park-test');
+expectFail(
+  'controlled park-test T-30 email rejects SMS',
+  parkTestControlledT30WithSms,
+  /email channel only/,
+);
+expectFail(
+  'controlled park-test T-30 email requires its explicit approval',
+  parkTestControlledT30WithoutApproval,
+  /controlledT30EmailApproval/,
+);
+expectFail(
+  'controlled park-test T-30 email cannot open the broad guest gate',
+  parkTestControlledT30WithBroadGuestGate,
+  /must not open the general guest messaging send gate/,
+);
+expectFail(
+  'controlled park-test T-30 email cannot use the old early window',
+  parkTestControlledT30WithEarlyWindow,
+  /bounded 25-to-30-minute-before-start window/,
+);
 expectFail(
   'park-test emergency stop off without scoped approval fails closed',
   parkTestEmergencyStopOff,

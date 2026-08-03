@@ -7,6 +7,7 @@ const {
 } = require('@aws-sdk/client-rds-data');
 const { PublishCommand, SNSClient } = require('@aws-sdk/client-sns');
 const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client-secrets-manager');
+const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
 const { buildCheckinEmailMessage, buildCheckinEmailPreview } = require('./email-template');
 
@@ -88,6 +89,9 @@ const DEFAULT_SMS_TRIGGER_WINDOW_MINUTES = 10;
 const MAX_SMS_TRIGGER_WINDOW_MINUTES = 180;
 const MAX_SMS_TRIGGER_LIMIT = 10;
 const SCHEDULED_SMS_CONFIRMED_SEND_APPROVAL = 'I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS';
+const T0201_CONTROLLED_T30_EMAIL_APPROVAL = 'T0201_SINGLE_BOOKING_T30_EMAIL_APPROVED';
+const T0201_CONTROL_SCHEMA_VERSION = 't0201-v1';
+const T0201_CONTROLLED_VENUE_ID = '50871';
 const BOOKING_TIME_MESSAGE_CHANNELS = new Set(['sms', 'email']);
 const GUEST_ACCESS_CHANNEL = 'guest_access';
 const TOKEN_BYTES = 32;
@@ -95,6 +99,7 @@ const TOKEN_BYTES = 32;
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
 const snsClient = new SNSClient({});
+const lambdaClient = new LambdaClient({});
 
 let cachedCheckinLinkDevToken = null;
 let cachedCheckinLinkDevTokenExpiresAt = 0;
@@ -1120,16 +1125,18 @@ async function handleSendSessionLinkSms(event, body, correlationId, options = {}
   }
 }
 
-async function handleSendSessionLinkEmail(event, body, correlationId) {
-  const auth = await verifyCheckinLinkDevToken(event);
-  if (!auth.ok) {
-    return jsonResponse(401, correlationId, {
-      status: 'unauthorized',
-      error: {
-        code: auth.code,
-        message: 'Check-in email sending requires the JumpYard Cloud development token.',
-      },
-    });
+async function handleSendSessionLinkEmail(event, body, correlationId, options = {}) {
+  if (!options.trustedScheduler) {
+    const auth = await verifyCheckinLinkDevToken(event);
+    if (!auth.ok) {
+      return jsonResponse(401, correlationId, {
+        status: 'unauthorized',
+        error: {
+          code: auth.code,
+          message: 'Check-in email sending requires the JumpYard Cloud development token.',
+        },
+      });
+    }
   }
 
   const request = normalizeSessionLinkEmailRequest(event, body);
@@ -1141,7 +1148,11 @@ async function handleSendSessionLinkEmail(event, body, correlationId) {
     });
   }
 
-  if (!request.dryRun && !isGuestMessagingSendEnabled()) {
+  if (
+    !request.dryRun &&
+    !isGuestMessagingSendEnabled() &&
+    !isT0201ControlledT30EmailDeliveryAuthorized(options)
+  ) {
     return safetyGateBlockedResponse(correlationId, 'guest_message_sends_disabled', 'Guest message sends are disabled for this JumpYard Cloud environment.');
   }
 
@@ -1167,6 +1178,18 @@ async function handleSendSessionLinkEmail(event, body, correlationId) {
         message: 'No email address was found for this booking. Provide email for dev testing.',
       },
     });
+  }
+
+  if (
+    !request.dryRun &&
+    options.controlledT30Email &&
+    !doesT0201FinalDeliveryTupleMatch({ context, destination, options })
+  ) {
+    return safetyGateBlockedResponse(
+      correlationId,
+      't0201_delivery_tuple_mismatch',
+      'The controlled T-30 email tuple no longer matches at the final delivery boundary.',
+    );
   }
 
   const requestHash = hashJson({
@@ -1384,17 +1407,6 @@ async function handleSendDueSessionLinkMessages(event, body, correlationId, opti
     });
   }
 
-  if (request.confirmSend && !isGuestMessagingSendEnabled()) {
-    return jsonResponse(409, correlationId, {
-      status: options.legacySmsResponse ? 'booking_time_sms_blocked' : 'booking_time_messages_blocked',
-      error: {
-        code: 'guest_message_sends_disabled',
-        message: 'Guest message sends are disabled for this JumpYard Cloud environment.',
-      },
-      trigger: buildDueSmsTriggerSummary(request, window, true),
-    });
-  }
-
   if (options.trustedScheduler && request.confirmSend) {
     const confirmationError = validateConfirmedScheduledDueMessagingRequest(request);
     if (confirmationError) {
@@ -1406,12 +1418,43 @@ async function handleSendDueSessionLinkMessages(event, body, correlationId, opti
     }
   }
 
-  const candidates = await findDueMessagingBookings({
+  let controlledT30Email = null;
+  if (request.confirmSend && !isGuestMessagingSendEnabled()) {
+    controlledT30Email = options.trustedScheduler
+      ? await loadT0201ControlledT30EmailAuthorization(request, window)
+      : { ok: false, reason: 'trusted_scheduler_required' };
+    if (!controlledT30Email.ok) {
+      return controlledT30EmailBlockedResponse(correlationId, request, window, controlledT30Email.reason);
+    }
+  }
+
+  let candidates = await findDueMessagingBookings({
     limit: request.limit,
     recentSinceAt: new Date(window.start.getTime() - 24 * 60 * 60 * 1000).toISOString(),
     windowEndAt: window.end.toISOString(),
     windowStartAt: window.start.toISOString(),
   });
+
+  if (controlledT30Email?.ok) {
+    const selection = selectT0201ControlledT30EmailCandidate(candidates, controlledT30Email.control);
+    if (!selection.ok) {
+      return controlledT30EmailBlockedResponse(correlationId, request, window, selection.reason);
+    }
+
+    const refresh = await verifyT0201BookingWithRoller(selection.candidate, controlledT30Email.control);
+    if (!refresh.ok) {
+      return controlledT30EmailBlockedResponse(correlationId, request, window, refresh.reason);
+    }
+
+    candidates = [selection.candidate];
+    options = {
+      ...options,
+      controlledCandidate: selection.candidate,
+      controlledT30Email: true,
+      controlledT30EmailControl: controlledT30Email.control,
+      controlledT30EmailRollerVerified: true,
+    };
+  }
 
   const items = [];
   for (const candidate of candidates) {
@@ -1456,7 +1499,7 @@ async function handleSendDueSessionLinkMessages(event, body, correlationId, opti
     status,
     summary,
     trigger: buildDueSmsTriggerSummary(request, window, false),
-    items,
+    items: controlledT30Email?.ok ? items.map(sanitizeT0201DueMessageItem) : items,
   });
 }
 
@@ -1655,6 +1698,7 @@ function normalizeDueSessionLinkMessagingRequest(body, forcedChannels = null) {
     smsBaseUrl: stringOrNull(body.smsBaseUrl) || baseUrl || DEFAULT_SMS_BASE_URL,
     ttlMinutes: normalizeTtlMinutes(body.ttlMinutes, body.ttlHours),
     windowEndAt: stringOrNull(body.windowEndAt),
+    windowEndsAtLead: booleanFromValue(body.windowEndsAtLead),
     windowMinutes: clampInteger(body.windowMinutes, 1, MAX_SMS_TRIGGER_WINDOW_MINUTES, DEFAULT_SMS_TRIGGER_WINDOW_MINUTES),
     windowStartAt: stringOrNull(body.windowStartAt),
   };
@@ -1947,6 +1991,7 @@ async function getBookingContext(identifier) {
        b.payment_status,
        b.amount_owing_cents,
        b.total_cents,
+       b.venue_id,
        b.booking_date::text AS booking_date,
        b.start_time::text AS start_time,
        b.end_time::text AS end_time,
@@ -2017,6 +2062,7 @@ async function getBookingContext(identifier) {
        b.payment_status,
        b.amount_owing_cents,
        b.total_cents,
+       b.venue_id,
        b.booking_date,
        b.start_time,
        b.end_time,
@@ -2043,6 +2089,7 @@ async function getBookingContext(identifier) {
       rollerUniqueId: stringOrNull(row.roller_unique_id),
       startTime: stringOrNull(row.start_time),
       totalCents: numberOrNull(row.total_cents),
+      venueId: stringOrNull(row.venue_id),
     },
     tickets: parseJsonArray(row.tickets_json).map((ticket) => ({
       bookingDate: stringOrNull(ticket.bookingDate),
@@ -2162,6 +2209,7 @@ async function findDueMessagingBookings({ limit, recentSinceAt, windowEndAt, win
          b.booking_status,
          b.payment_status,
          b.amount_owing_cents,
+         b.venue_id,
          b.booking_date::text AS booking_date,
          b.start_time::text AS start_time,
          (((b.booking_date + b.start_time) AT TIME ZONE 'Europe/Stockholm')::text) AS booking_start_at
@@ -2330,7 +2378,9 @@ async function sendDueMessageChannel(event, { candidate, channel, correlationId,
     bookingReference: candidate.bookingReference,
     confirmSend: true,
     dryRun: false,
-    idempotencyKey: createDueMessageIdempotencyKey(window, candidate, channel),
+    idempotencyKey: options.controlledT30Email
+      ? createT0201ControlledEmailIdempotencyKey(options.controlledT30EmailControl)
+      : createDueMessageIdempotencyKey(window, candidate, channel),
     ttlMinutes: request.ttlMinutes,
   };
 
@@ -3974,6 +4024,7 @@ function mapDueMessagingBookingRow(row) {
     paymentStatus: stringOrNull(row.payment_status),
     rollerUniqueId: stringOrNull(row.roller_unique_id),
     startTime: stringOrNull(row.start_time),
+    venueId: stringOrNull(row.venue_id),
   };
 }
 
@@ -4052,10 +4103,10 @@ function createDueMessageIdempotencyKey(window, candidate, channel) {
   const destination = candidate.destinations?.[channel] ?? candidate.destination ?? null;
   const seed = [
     `booking-time-${channel}`,
-    window.start.toISOString(),
-    window.end.toISOString(),
-    candidate.bookingReference,
-    destination?.hash?.slice(0, 16) || 'no-destination',
+    channel === 'email' ? CHECKIN_EMAIL_TEMPLATE : CHECKIN_SMS_TEMPLATE,
+    candidate.rollerUniqueId || candidate.bookingReference,
+    candidate.bookingStartAt || `${candidate.bookingDate}:${candidate.startTime}`,
+    destination?.hash || 'no-destination',
   ].join(':');
 
   return `booking-time-${channel}:${hashString(seed).slice(0, 48)}`;
@@ -4086,6 +4137,7 @@ function normalizeScheduledDueSessionLinkMessagingBody(event) {
     smsBaseUrl: stringOrNull(detail.smsBaseUrl) || DEFAULT_SMS_BASE_URL,
     ttlMinutes: detail.ttlMinutes,
     windowEndAt: stringOrNull(detail.windowEndAt),
+    windowEndsAtLead: booleanFromValue(detail.windowEndsAtLead),
     windowMinutes: detail.windowMinutes,
     windowStartAt: stringOrNull(detail.windowStartAt),
   };
@@ -4215,6 +4267,231 @@ function isEmergencyStopEnabled() {
 
 function isGuestMessagingSendEnabled() {
   return process.env.ENABLE_GUEST_MESSAGE_SENDS === 'true' && !isEmergencyStopEnabled();
+}
+
+function createT0201ControlledEmailIdempotencyKey(control) {
+  const seed = [
+    't0201-controlled-email',
+    CHECKIN_EMAIL_TEMPLATE,
+    control.bookingIdentifierSha256,
+    control.bookingStartAt,
+    control.recipientEmailSha256,
+    control.venueId,
+  ].join(':');
+  return `booking-time-email:${hashString(seed).slice(0, 48)}`;
+}
+
+async function loadT0201ControlledT30EmailAuthorization(request, window) {
+  if (
+    process.env.JUMPYARD_ENVIRONMENT !== 'park-test' ||
+    process.env.ENABLE_T0201_CONTROLLED_T30_EMAIL !== 'true' ||
+    process.env.T0201_CONTROLLED_T30_EMAIL_APPROVAL !== T0201_CONTROLLED_T30_EMAIL_APPROVAL ||
+    isEmergencyStopEnabled()
+  ) {
+    return { ok: false, reason: 'runtime_gate_closed' };
+  }
+  if (
+    request.channels.length !== 1 ||
+    request.channels[0] !== 'email' ||
+    request.leadMinutes !== 30 ||
+    request.windowMinutes !== 5 ||
+    request.windowEndsAtLead !== true
+  ) {
+    return { ok: false, reason: 'scheduled_request_scope_invalid' };
+  }
+  try {
+    const origin = new URL(request.emailBaseUrl).origin;
+    if (origin !== 'https://jumpyard-check-in-park-test.pages.dev') {
+      return { ok: false, reason: 'checkin_origin_not_approved' };
+    }
+  } catch {
+    return { ok: false, reason: 'checkin_origin_not_approved' };
+  }
+
+  const secretId = stringOrNull(process.env.T0201_CONTROLLED_T30_EMAIL_SECRET_ARN);
+  if (!secretId) return { ok: false, reason: 'control_secret_not_configured' };
+
+  let secret;
+  try {
+    const response = await secretsClient.send(
+      new GetSecretValueCommand({ SecretId: secretId, VersionStage: 'AWSCURRENT' }),
+    );
+    secret = JSON.parse(response.SecretString || '{}').t0201Control ?? {};
+  } catch {
+    return { ok: false, reason: 'control_secret_unavailable' };
+  }
+
+  const bookingIdentifierSha256 = stringOrNull(secret.bookingIdentifierSha256)?.toLowerCase();
+  const recipientEmailSha256 = stringOrNull(secret.recipientEmailSha256)?.toLowerCase();
+  const bookingStartAt = stringOrNull(secret.bookingStartAt);
+  const bookingStart = bookingStartAt && /(?:Z|[+-]\d{2}:\d{2})$/i.test(bookingStartAt)
+    ? parseDateValue(bookingStartAt)
+    : null;
+  const controlIsValid =
+    secret.enabled === true &&
+    secret.schemaVersion === T0201_CONTROL_SCHEMA_VERSION &&
+    secret.approval === T0201_CONTROLLED_T30_EMAIL_APPROVAL &&
+    secret.venueId === T0201_CONTROLLED_VENUE_ID &&
+    /^[a-f0-9]{64}$/.test(bookingIdentifierSha256 ?? '') &&
+    /^[a-f0-9]{64}$/.test(recipientEmailSha256 ?? '') &&
+    /^[A-Za-z0-9_-]{16,128}$/.test(stringOrNull(secret.armingNonce) ?? '') &&
+    bookingStart;
+  if (!controlIsValid) return { ok: false, reason: 'control_secret_not_armed' };
+
+  if (bookingStart.getTime() < window.start.getTime() || bookingStart.getTime() >= window.end.getTime()) {
+    return { ok: false, reason: 'approved_booking_not_due' };
+  }
+
+  return {
+    ok: true,
+    control: {
+      bookingIdentifierSha256,
+      bookingStartAt: bookingStart.toISOString(),
+      recipientEmailSha256,
+      venueId: secret.venueId,
+    },
+  };
+}
+
+function selectT0201ControlledT30EmailCandidate(candidates, control) {
+  const matches = candidates.filter((candidate) => {
+    const identifierMatches = [candidate.bookingReference, candidate.rollerUniqueId]
+      .filter(Boolean)
+      .some((identifier) => hashString(identifier) === control.bookingIdentifierSha256);
+    const startMatches =
+      parseDateValue(candidate.bookingStartAt)?.getTime() === Date.parse(control.bookingStartAt);
+    const destinationMatches =
+      candidate.destinations?.email?.hash === control.recipientEmailSha256 &&
+      hashString(candidate.destinations?.email?.email) === control.recipientEmailSha256;
+    return (
+      identifierMatches &&
+      startMatches &&
+      destinationMatches &&
+      candidate.venueId === control.venueId
+    );
+  });
+
+  if (matches.length === 0) return { ok: false, reason: 'approved_tuple_not_found' };
+  if (matches.length !== 1) return { ok: false, reason: 'approved_tuple_ambiguous' };
+  return { ok: true, candidate: matches[0] };
+}
+
+async function verifyT0201BookingWithRoller(candidate, control) {
+  const functionName = stringOrNull(process.env.ROLLER_LIVE_LOOKUP_FUNCTION_NAME);
+  if (!functionName || !candidate.rollerUniqueId) {
+    return { ok: false, reason: 'authoritative_refresh_not_configured' };
+  }
+
+  try {
+    const response = await lambdaClient.send(
+      new InvokeCommand({
+        FunctionName: functionName,
+        InvocationType: 'RequestResponse',
+        Payload: Buffer.from(
+          JSON.stringify({
+            source: 'jumpyard.t0201-controlled-t30-email',
+            detail: {
+              approval: T0201_CONTROLLED_T30_EMAIL_APPROVAL,
+              expectedBookingDate: candidate.bookingDate,
+              expectedIdentifierSha256: control.bookingIdentifierSha256,
+              expectedStartTime: candidate.startTime,
+              expectedVenueId: control.venueId,
+              identifier: candidate.rollerUniqueId,
+              trigger: 'authoritative_booking_refresh',
+            },
+          }),
+        ),
+      }),
+    );
+    if (response.FunctionError || !response.Payload) {
+      return { ok: false, reason: 'authoritative_refresh_failed' };
+    }
+
+    const payload = parseJsonObject(Buffer.from(response.Payload).toString('utf8'));
+    const body = parseJsonObject(payload.body);
+    if (
+      Number(payload.statusCode) < 200 ||
+      Number(payload.statusCode) >= 300 ||
+      body.verification?.ok !== true ||
+      body.verification?.refreshedFromRoller !== true
+    ) {
+      return { ok: false, reason: stringOrNull(body.verification?.reason) || 'authoritative_refresh_rejected' };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: 'authoritative_refresh_failed' };
+  }
+}
+
+function isT0201ControlledT30EmailDeliveryAuthorized(options) {
+  return (
+    options.controlledT30Email === true &&
+    options.controlledT30EmailRollerVerified === true &&
+    process.env.JUMPYARD_ENVIRONMENT === 'park-test' &&
+    process.env.ENABLE_T0201_CONTROLLED_T30_EMAIL === 'true' &&
+    process.env.T0201_CONTROLLED_T30_EMAIL_APPROVAL === T0201_CONTROLLED_T30_EMAIL_APPROVAL &&
+    !isEmergencyStopEnabled()
+  );
+}
+
+function doesT0201FinalDeliveryTupleMatch({ context, destination, options }) {
+  if (!isT0201ControlledT30EmailDeliveryAuthorized(options)) return false;
+  const control = options.controlledT30EmailControl;
+  const candidate = options.controlledCandidate;
+  if (!control || !candidate) return false;
+
+  const identifierMatches = [context.booking.bookingReference, context.booking.rollerUniqueId]
+    .filter(Boolean)
+    .some((identifier) => hashString(identifier) === control.bookingIdentifierSha256);
+  const candidateStartMatches =
+    parseDateValue(candidate.bookingStartAt)?.getTime() === Date.parse(control.bookingStartAt);
+  const contextMatchesCandidate =
+    context.booking.bookingDate === candidate.bookingDate &&
+    normalizeT0201ClockTime(context.booking.startTime) === normalizeT0201ClockTime(candidate.startTime) &&
+    context.booking.venueId === control.venueId;
+
+  return (
+    identifierMatches &&
+    candidateStartMatches &&
+    contextMatchesCandidate &&
+    candidate.venueId === control.venueId &&
+    destination.hash === control.recipientEmailSha256 &&
+    hashString(destination.email) === control.recipientEmailSha256 &&
+    candidate.destinations?.email?.hash === control.recipientEmailSha256 &&
+    hashString(candidate.destinations?.email?.email) === control.recipientEmailSha256
+  );
+}
+
+function normalizeT0201ClockTime(value) {
+  const match = String(value ?? '').trim().match(/^(\d{2}):(\d{2})(?::(\d{2}))?/);
+  return match ? `${match[1]}:${match[2]}:${match[3] ?? '00'}` : null;
+}
+
+function controlledT30EmailBlockedResponse(correlationId, request, window, reason) {
+  return jsonResponse(409, correlationId, {
+    status: 'booking_time_messages_blocked',
+    error: {
+      code: 't0201_controlled_email_blocked',
+      reason,
+      message: 'The single-booking T-30 email gate is closed or the approved tuple does not match.',
+    },
+    trigger: buildDueSmsTriggerSummary(request, window, true),
+  });
+}
+
+function sanitizeT0201DueMessageItem(item) {
+  return {
+    action: item.action,
+    channel: item.channel,
+    deliveryId: item.deliveryId,
+    destinationMasked: item.destinationMasked,
+    errorCode: item.errorCode,
+    fromAddressConfigured: item.fromAddressConfigured,
+    provider: item.provider,
+    providerMessageIdPresent: item.providerMessageIdPresent,
+    reason: item.reason,
+    replyToConfigured: item.replyToConfigured,
+  };
 }
 
 function isStaffAuthEnabled() {
@@ -4356,8 +4633,13 @@ function buildDueSmsWindow(request) {
     };
   }
 
-  const start = new Date(now.getTime() + request.leadMinutes * 60 * 1000);
-  const end = new Date(start.getTime() + request.windowMinutes * 60 * 1000);
+  const leadAt = new Date(now.getTime() + request.leadMinutes * 60 * 1000);
+  const start = request.windowEndsAtLead
+    ? new Date(leadAt.getTime() - request.windowMinutes * 60 * 1000)
+    : leadAt;
+  const end = request.windowEndsAtLead
+    ? leadAt
+    : new Date(start.getTime() + request.windowMinutes * 60 * 1000);
   return { end, start };
 }
 
@@ -4374,6 +4656,7 @@ function buildDueSmsTriggerSummary(request, window, blocked) {
     smsBaseUrlConfigured: Boolean(request.smsBaseUrl),
     timezone: SMS_TRIGGER_TIME_ZONE,
     windowEndAt: window.end.toISOString(),
+    windowEndsAtLead: request.windowEndsAtLead,
     windowMinutes: request.windowMinutes,
     windowStartAt: window.start.toISOString(),
   };

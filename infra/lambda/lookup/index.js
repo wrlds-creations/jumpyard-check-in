@@ -15,6 +15,7 @@ const MAX_ACTIVE_GUEST_ACCESS_TOKENS_PER_BOOKING = 64;
 const MAX_REQUEST_BODY_BYTES = 8 * 1024;
 const TOKEN_BYTES = 32;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
+const T0201_CONTROLLED_T30_EMAIL_APPROVAL = 'T0201_SINGLE_BOOKING_T30_EMAIL_APPROVED';
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
@@ -30,6 +31,10 @@ exports.handler = async (event) => {
   let parkTestAccess = { ok: true, mode: 'not_park_test' };
 
   try {
+    if (isT0201ControlledT30EmailRefreshEvent(event)) {
+      return await handleT0201ControlledT30EmailRefresh(event, correlationId);
+    }
+
     const request = parseRequest(event);
     correlationId = normalizeCorrelationId(request.correlationId) || correlationId;
 
@@ -218,6 +223,108 @@ exports.handler = async (event) => {
     });
   }
 };
+
+async function handleT0201ControlledT30EmailRefresh(event, correlationId) {
+  const detail = event?.detail ?? {};
+  if (
+    !isParkTestEnvironment() ||
+    isEmergencyStopEnabled() ||
+    process.env.ENABLE_T0201_CONTROLLED_T30_EMAIL_REFRESH !== 'true' ||
+    stringOrNull(detail.approval) !== T0201_CONTROLLED_T30_EMAIL_APPROVAL
+  ) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      verification: { ok: false, reason: 't0201_refresh_gate_closed' },
+    });
+  }
+
+  const identifier = stringOrNull(detail.identifier);
+  const expectedIdentifierSha256 = stringOrNull(detail.expectedIdentifierSha256)?.toLowerCase();
+  const expectedVenueId = stringOrNull(detail.expectedVenueId);
+  const expectedBookingDate = normalizeDate(detail.expectedBookingDate);
+  const expectedStartTime = normalizeClockTime(detail.expectedStartTime);
+  if (
+    !identifier ||
+    !/^[a-f0-9]{64}$/.test(expectedIdentifierSha256 ?? '') ||
+    expectedVenueId !== '50871' ||
+    !expectedBookingDate ||
+    !expectedStartTime
+  ) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      verification: { ok: false, reason: 't0201_refresh_request_invalid' },
+    });
+  }
+
+  const config = await getRollerConfig();
+  const token = await getRollerAccessToken(config);
+  const detailResult = await getBookingDetail(config, token, identifier);
+  if (detailResult.status === 404) {
+    return jsonResponse(200, correlationId, {
+      status: 'verified',
+      verification: { ok: false, reason: 'roller_booking_not_found', refreshedFromRoller: true },
+    });
+  }
+  if (!detailResult.ok || !detailResult.body) {
+    const error = new Error('Roller booking refresh failed.');
+    error.code = 'roller_lookup_failed';
+    throw error;
+  }
+
+  const checks = evaluateT0201ControlledT30RollerBooking(detailResult.body, {
+    expectedBookingDate,
+    expectedIdentifierSha256,
+    expectedStartTime,
+    expectedVenueId,
+  });
+  const reason = Object.entries(checks).find(([, passed]) => !passed)?.[0] ?? 'verified';
+
+  return jsonResponse(200, correlationId, {
+    status: 'verified',
+    verification: {
+      checks,
+      ok: Object.values(checks).every(Boolean),
+      reason,
+      refreshedFromRoller: true,
+    },
+  });
+}
+
+function evaluateT0201ControlledT30RollerBooking(rollerBooking, expected) {
+  const booking = normalizeBooking(rollerBooking, { byId: new Map() });
+  const identifierMatches = [booking.bookingReference, booking.rollerUniqueId]
+    .filter(Boolean)
+    .some((value) => hashString(value) === expected.expectedIdentifierSha256);
+  const venueMatches = extractVenueId(rollerBooking) === expected.expectedVenueId;
+  const scheduleMatches = booking.items.some(
+    (item) =>
+      normalizeDate(item.bookingDate) === expected.expectedBookingDate &&
+      normalizeClockTime(item.startTime) === expected.expectedStartTime,
+  );
+  const status = String(booking.status ?? '').trim().toLowerCase();
+  const bookingIsActive = Boolean(status) && !['cancelled', 'deleted', 'draft'].includes(status);
+
+  return {
+    bookingIsActive,
+    identifierMatches,
+    paymentIsSettled: isPaymentSettled(booking),
+    scheduleMatches,
+    venueMatches,
+  };
+}
+
+function isT0201ControlledT30EmailRefreshEvent(event) {
+  return (
+    stringOrNull(event?.source) === 'jumpyard.t0201-controlled-t30-email' &&
+    stringOrNull(event?.detail?.trigger) === 'authoritative_booking_refresh'
+  );
+}
+
+function normalizeClockTime(value) {
+  const match = String(value ?? '').trim().match(/^(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return null;
+  return `${match[1]}:${match[2]}:${match[3] ?? '00'}`;
+}
 
 function parseRequest(event) {
   if (!event || !event.body) return {};

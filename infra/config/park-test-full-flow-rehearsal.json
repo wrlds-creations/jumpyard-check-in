@@ -48,13 +48,17 @@
     "recoveryLimit": 10
   },
   "bookingTimeSms": {
-    "scheduleEnabled": false,
-    "confirmSend": false,
-    "confirmedSendApproval": "",
+    "channels": [
+      "email"
+    ],
+    "scheduleEnabled": true,
+    "confirmSend": true,
+    "confirmedSendApproval": "I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS",
     "checkinBaseUrl": "https://jumpyard-check-in-park-test.pages.dev/",
     "rateMinutes": 5,
     "leadMinutes": 30,
-    "windowMinutes": 10,
+    "windowEndsAtLead": true,
+    "windowMinutes": 5,
     "limit": 10
   },
   "guestEmail": {
@@ -69,6 +73,7 @@
     ]
   },
   "safetyGates": {
+    "controlledT30EmailApproval": "T0201_SINGLE_BOOKING_T30_EMAIL_APPROVED",
     "emergencyStop": false,
     "guestMessagingSendsEnabled": false,
     "rollerBookingDraftWritesEnabled": true,
