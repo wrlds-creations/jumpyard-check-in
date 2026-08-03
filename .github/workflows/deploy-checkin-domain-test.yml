@@ -217,6 +217,8 @@ jobs:
       - name: Verify exact Cloudflare release and public Apple Pay prerequisites
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CHECKIN_VERIFY_ATTEMPTS: 24
+          CHECKIN_VERIFY_RETRY_MS: 5000
         shell: bash
         run: |
           set -euo pipefail

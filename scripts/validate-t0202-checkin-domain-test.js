@@ -76,6 +76,8 @@ function validateWorkflow() {
     'validate-park-test-release.js',
     'validate-checkin-domain-release.js',
     'verify-public-checkin-domain.js',
+    'CHECKIN_VERIFY_ATTEMPTS: 24',
+    'CHECKIN_VERIFY_RETRY_MS: 5000',
     'release/phone/out',
     '--commit-hash',
     'deployment_trigger.metadata.commit_hash',

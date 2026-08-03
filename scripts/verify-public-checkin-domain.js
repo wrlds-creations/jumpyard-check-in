@@ -4,6 +4,26 @@ const EXPECTED_API = 'https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com';
 const EXPECTED_ASSOCIATION_SHA256 = '8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6';
 const CHECKIN_URL = 'https://checkin.jumpyard.se';
 
+function positiveInteger(name, fallback) {
+  const value = process.env[name] ?? String(fallback);
+  if (!/^\d+$/.test(value) || Number(value) < 1) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+  return Number(value);
+}
+
+function nonNegativeInteger(name, fallback) {
+  const value = process.env[name] ?? String(fallback);
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${name} must be a non-negative integer.`);
+  }
+  return Number(value);
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 async function fetchOk(url) {
   const response = await fetch(url, { redirect: 'follow' });
   if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}.`);
@@ -22,7 +42,7 @@ function assetUrls(baseUrl, html) {
   return [...urls];
 }
 
-async function main() {
+async function verifyPublicDomain() {
   const rootResponse = await fetchOk(`${CHECKIN_URL}/`);
   const html = await rootResponse.text();
   const assets = assetUrls(CHECKIN_URL, html);
@@ -41,6 +61,28 @@ async function main() {
 
   console.log(`Guest domain: HTTP 200 with exact park-test API target (${assets.length} assets checked).`);
   console.log(`Apple Pay association: HTTP 200 and SHA256 ${associationSha}.`);
+}
+
+async function main() {
+  const attempts = positiveInteger('CHECKIN_VERIFY_ATTEMPTS', 1);
+  const retryMilliseconds = nonNegativeInteger('CHECKIN_VERIFY_RETRY_MS', 0);
+  let lastError;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await verifyPublicDomain();
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) break;
+      console.warn(
+        `Public domain verification attempt ${attempt}/${attempts} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      await delay(retryMilliseconds);
+    }
+  }
+
+  throw lastError;
 }
 
 main().catch((error) => {
