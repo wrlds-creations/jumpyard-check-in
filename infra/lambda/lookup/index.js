@@ -16,6 +16,8 @@ const MAX_REQUEST_BODY_BYTES = 8 * 1024;
 const TOKEN_BYTES = 32;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 const T0201_CONTROLLED_T30_EMAIL_APPROVAL = 'T0201_SINGLE_BOOKING_T30_EMAIL_APPROVED';
+const T0201_CONTROLLED_VENUE_ID = '50871';
+const T0201_VENUE_IDENTITY_DELAY_MS = 1000;
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
@@ -271,19 +273,31 @@ async function handleT0201ControlledT30EmailRefresh(event, correlationId) {
     throw error;
   }
 
+  const verifiedVenueId = await getVerifiedT0201RollerVenueId(config, token);
   const checks = evaluateT0201ControlledT30RollerBooking(detailResult.body, {
     expectedBookingDate,
     expectedIdentifierSha256,
     expectedStartTime,
     expectedVenueId,
+    verifiedVenueId,
   });
   const reason = Object.entries(checks).find(([, passed]) => !passed)?.[0] ?? 'verified';
+  const ok = Object.values(checks).every(Boolean);
+
+  if (!ok) {
+    console.warn(JSON.stringify({
+      checks,
+      correlationId,
+      event: 't0201_authoritative_booking_refresh_blocked',
+      reason,
+    }));
+  }
 
   return jsonResponse(200, correlationId, {
     status: 'verified',
     verification: {
       checks,
-      ok: Object.values(checks).every(Boolean),
+      ok,
       reason,
       refreshedFromRoller: true,
     },
@@ -295,7 +309,10 @@ function evaluateT0201ControlledT30RollerBooking(rollerBooking, expected) {
   const identifierMatches = [booking.bookingReference, booking.rollerUniqueId]
     .filter(Boolean)
     .some((value) => hashString(value) === expected.expectedIdentifierSha256);
-  const venueMatches = extractVenueId(rollerBooking) === expected.expectedVenueId;
+  const bookingVenueId = extractVenueId(rollerBooking);
+  const venueMatches =
+    expected.verifiedVenueId === expected.expectedVenueId &&
+    (!bookingVenueId || bookingVenueId === expected.expectedVenueId);
   const scheduleMatches = booking.items.some(
     (item) =>
       normalizeDate(item.bookingDate) === expected.expectedBookingDate &&
@@ -823,6 +840,43 @@ async function getBookingDetail(config, token, identifier) {
     status: response.status,
     body,
   };
+}
+
+async function getVerifiedT0201RollerVenueId(config, token) {
+  if (String(config.env).toLowerCase() !== 'live') return null;
+
+  // The booking-detail call immediately precedes this check. Keeping the next
+  // request start at least one second later preserves the Roller pacing boundary.
+  await new Promise((resolve) => setTimeout(resolve, T0201_VENUE_IDENTITY_DELAY_MS));
+  const response = await fetch(buildRollerUrl(config.baseUrl, '/venues/me'), {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+    },
+  });
+  emitRollerApiMetric({ method: 'GET', operation: 'get_venue_identity', status: response.status, ok: response.ok });
+  if (!response.ok) return null;
+
+  const text = await response.text();
+  let body = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    return null;
+  }
+  const venueId = extractT0201RollerVenueIdentity(body);
+  if (venueId !== T0201_CONTROLLED_VENUE_ID) return null;
+  return venueId;
+}
+
+function extractT0201RollerVenueIdentity(body) {
+  for (const candidate of [body?.venue, body?.data, body]) {
+    if (!isPlainObject(candidate)) continue;
+    const venueId = stringOrNull(candidate.id ?? candidate.venueId ?? candidate.venueID);
+    if (venueId) return venueId;
+  }
+  return null;
 }
 
 async function searchBookings(config, token, date, keyword) {
