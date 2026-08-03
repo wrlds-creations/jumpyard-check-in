@@ -83,8 +83,8 @@ function validateContract(contract) {
   add(contract?.contract === 'jumpyard-check-in-production-web-domains', 'contract name is invalid');
   add(contract?.environment === 'production', 'environment must be production');
   add(
-    contract?.state === 'guest-controlled-park-test-alias-approved-awaiting-deployment',
-    'state must record the approved controlled guest alias awaiting deployment',
+    contract?.state === 'guest-controlled-park-test-alias-active-awaiting-apple-pay-result',
+    'state must record the active controlled guest alias awaiting Love\'s Apple Pay result',
   );
   add(contract?.zone === 'jumpyard.se', 'zone must be jumpyard.se');
   add(sameValues(contract?.productionWebOrigins, EXPECTED_ORIGINS), 'productionWebOrigins must contain exactly the approved guest and staff origins');
@@ -108,10 +108,10 @@ function validateContract(contract) {
     add(pages?.pagesDevOrigin === expected.pagesDevOrigin, `surfaces.${key}.cloudflarePages.pagesDevOrigin is invalid`);
     add(pages?.gitProviderConnected === false, `surfaces.${key}.cloudflarePages must not connect a Git provider`);
     if (key === 'guest') {
-      add(pages?.applicationDeployments === 0, 'surfaces.guest.cloudflarePages must remain empty before the protected first deployment');
+      add(pages?.applicationDeployments === 2, 'surfaces.guest.cloudflarePages must record the initial protected deployment and re-promotion');
       add(
-        pages?.status === 'controlled-park-test-alias-approved-awaiting-first-deployment',
-        'surfaces.guest.cloudflarePages.status must record the approved pending controlled alias',
+        pages?.status === 'controlled-park-test-alias-active',
+        'surfaces.guest.cloudflarePages.status must record the active controlled alias',
       );
       add(
         pages?.deploymentPolicy === 'selected-immutable-park-test-phone-artifact-only',
@@ -201,7 +201,7 @@ function validateContract(contract) {
   const alias = contract?.controlledParkTestAlias;
   add(alias?.approved === true, 'controlled alias must be approved');
   add(alias?.approvedByIssue === 220, 'controlled alias must be owned by issue 220');
-  add(alias?.deployed === false, 'controlled alias must remain pending until protected deployment evidence exists');
+  add(alias?.deployed === true, 'controlled alias must record the protected deployment evidence');
   add(alias?.guestOrigin === EXPECTED_ORIGINS[0], 'controlled alias guest origin is invalid');
   add(alias?.cloudflareProject === 'jumpyard-check-in-production', 'controlled alias Cloudflare project is invalid');
   add(
@@ -220,6 +220,17 @@ function validateContract(contract) {
     'controlled alias must not change message links',
   );
   add(alias?.manualApplePayPaymentOwner === 'Love', 'manual Apple Pay payment owner is invalid');
+  add(alias?.manualApplePayStatus === 'pending', 'manual Apple Pay result must remain pending until Love reports it');
+  add(alias?.awsCorsReleaseRunId === 30832695522, 'controlled alias AWS CORS release run is invalid');
+  add(alias?.awsCorsDeploymentRunId === 30833080999, 'controlled alias AWS CORS deployment run is invalid');
+  add(alias?.initialDomainDeploymentRunId === 30833724481, 'controlled alias initial domain run is invalid');
+  add(alias?.selectedReleaseSha === '9ffe379e6deb13da509114e70665b56bcaeb471a', 'controlled alias selected release SHA is invalid');
+  add(alias?.selectedReleaseRunId === 30834669772, 'controlled alias selected release run is invalid');
+  add(alias?.successfulDomainRepromotionRunId === 30835107405, 'controlled alias successful re-promotion run is invalid');
+  add(alias?.publicVerification?.rootHttpStatus === 200, 'controlled alias root verification is invalid');
+  add(alias?.publicVerification?.appleAssociationHttpStatus === 200, 'controlled alias Apple association HTTP result is invalid');
+  add(alias?.publicVerification?.approvedCorsOrigins === 4, 'controlled alias approved CORS count is invalid');
+  add(alias?.publicVerification?.unapprovedOriginBlocked === true, 'controlled alias unapproved origin must remain blocked');
 
   return errors;
 }
@@ -252,8 +263,8 @@ function runNegativeCases(validContract) {
   expectInvalid('duplicate origin', candidate, 'exactly the approved guest and staff origins');
 
   candidate = clone(validContract);
-  candidate.surfaces.guest.cloudflarePages.applicationDeployments = 1;
-  expectInvalid('application deployment', candidate, 'must remain empty');
+  candidate.surfaces.guest.cloudflarePages.applicationDeployments = 0;
+  expectInvalid('application deployment evidence', candidate, 'must record the initial protected deployment and re-promotion');
 
   candidate = clone(validContract);
   candidate.surfaces.guest.cloudflarePages.customDomainAssociation.present = false;

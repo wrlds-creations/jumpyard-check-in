@@ -42,4 +42,15 @@ The safe first containment action is to run `Deploy or roll back park-test` with
 
 Cloudflare rollback or re-promotion uses `Deploy or roll back controlled guest domain test` with the selected successful immutable artifact and matching intent. It never rebuilds source during deployment. A later compatible alias artifact can replace the current phone output; re-promotion selects the approved issue-#220 artifact again.
 
-The first rollout evidence must record the release run ID, park-test deployment run ID, controlled-domain deployment run ID, selected SHA, public checks, CORS checks, and Love's separate iPhone result. The implementation contract stays in `approved-awaiting-deployment` state until that evidence exists.
+## First rollout evidence
+
+- AWS CORS release: [30832695522](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/30832695522).
+- Protected park-test CORS promotion: [30833080999](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/30833080999). The 199-to-199-resource plan changed only API Gateway CORS.
+- Initial domain deployment: [30833724481](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/30833724481). The artifact published successfully; the immediate public verification saw a transient Cloudflare HTTP 522 during propagation.
+- Propagation-verification fix: PR [#222](https://github.com/wrlds-creations/jumpyard-check-in/pull/222).
+- Selected successful release: [30834669772](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/30834669772), SHA `9ffe379e6deb13da509114e70665b56bcaeb471a`.
+- Successful protected domain re-promotion: [30835107405](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/30835107405).
+
+The final public proof returned HTTP 200, embedded the exact park-test API target, and served the 9,094-byte Apple association file with SHA-256 `8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6`. All four approved browser origins received their exact allow-origin value; an unapproved origin received none. The in-app browser displayed the JumpYard booking/entry start page.
+
+The implementation contract is now `active-awaiting-apple-pay-result`. Love's separate iPhone Apple Pay payment remains the only pending acceptance item and no automated workflow submits that financial transaction.

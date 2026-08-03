@@ -5,11 +5,11 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-08-03
-- Latest merged product baseline: `8cb73b3` after PR #218 corrected the T0201 Roller venue verification; PR #217 contains the controlled automatic T-30 email implementation for issue [#216](https://github.com/wrlds-creations/jumpyard-check-in/issues/216).
-- Latest deployed product baseline: issue #216 controlled automatic T-30 email on top of issue #212 and the T0193-T0200 foundations.
+- Latest merged product baseline: `9ffe379` after PR #222 made the controlled guest-domain verification tolerant of bounded Cloudflare propagation; PR #221 added the issue [#220](https://github.com/wrlds-creations/jumpyard-check-in/issues/220) alias and protected release path.
+- Latest deployed product baseline: the controlled `https://checkin.jumpyard.se` alias serves selected phone artifact `9ffe379` against the same park-test API; the normal park-test release remains deployed separately. Issue #216 controlled automatic T-30 email remains deployed and disarmed on top of issue #212 and the T0193-T0200 foundations.
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
-- Product/runtime state: issue #216 is deployed to park-test with migrations through `0017` and 199 resources. One automatic Nacka T-30 email was delivered exactly once and approved by Love; its hash-only control is disarmed and the general send gate is false. Issue #212 and the T0193-T0200 foundations remain intact.
+- Product/runtime state: park-test remains at 199 resources with migrations through `0017`. API Gateway accepts the three established park-test origins plus the controlled `https://checkin.jumpyard.se` origin and blocks unapproved origins. The alias serves exact release `9ffe379` and its Apple Pay association file; the automated proof is complete while Love's manual iPhone payment result remains pending. One automatic Nacka T-30 email was delivered exactly once and approved by Love; its hash-only control is disarmed and the general send gate is false. Issue #212 and the T0193-T0200 foundations remain intact.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
 - Product approval and implementation status are read from GitHub Issues and the Project rather than copied into this merged-mainline snapshot.
 
