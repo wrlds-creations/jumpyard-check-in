@@ -169,8 +169,8 @@ function validateRouteSettings(template, routesByKey) {
 function validateApprovedProtectionResources(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    197,
-    'The T0193 boundary must remain intact inside T0197/T0200 plus the exact issue #212 retry alarm.',
+    199,
+    'The T0193 boundary must remain intact inside T0197/T0200, issue #212, and the exact #216 scheduler boundary.',
   );
   assert.equal(resourcesOfType(template, 'AWS::SES::ConfigurationSet').length, 1);
   assert.equal(resourcesOfType(template, 'AWS::SES::ConfigurationSetEventDestination').length, 1);

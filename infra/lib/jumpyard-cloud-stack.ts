@@ -32,6 +32,7 @@ import {
   PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL,
   PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL,
   PARK_TEST_POST_PAYMENT_SYNC_APPROVAL,
+  PARK_TEST_CONTROLLED_T30_EMAIL_APPROVAL,
 } from './config';
 
 interface JumpYardCloudStackProps extends StackProps {
@@ -47,6 +48,7 @@ interface HandlerResources {
   readonly checkinEmailIdentityDomain: string;
   readonly checkinEmailReplyToAddresses: readonly string[];
   readonly checkinSmsBaseUrl: string;
+  readonly controlledT30EmailEnabled: boolean;
   readonly rollerCredentialsSecret: secretsmanager.Secret;
   readonly databaseClusterArn: string;
   readonly databaseAdminSecret: secretsmanager.Secret;
@@ -376,6 +378,8 @@ export class JumpYardCloudStack extends Stack {
     super(scope, id, props);
 
     const { config } = props;
+    const controlledT30EmailEnabled =
+      config.safetyGates.controlledT30EmailApproval === PARK_TEST_CONTROLLED_T30_EMAIL_APPROVAL;
     applyRequiredTags(this, config);
 
     const vpc = new ec2.CfnVPC(this, 'Vpc', {
@@ -763,7 +767,7 @@ exports.handler = async (event) => {
       const emailConfigurationSet = new ses.ConfigurationSet(this, 'GuestEmailConfigurationSet', {
         configurationSetName: config.guestEmail.configurationSetName,
         reputationMetrics: true,
-        sendingEnabled: false,
+        sendingEnabled: controlledT30EmailEnabled,
         suppressionReasons: ses.SuppressionReasons.BOUNCES_AND_COMPLAINTS,
         tlsPolicy: ses.ConfigurationSetTlsPolicy.REQUIRE,
       });
@@ -902,6 +906,7 @@ exports.handler = async (event) => {
       checkinEmailIdentityDomain: config.guestEmail.identityDomain,
       checkinEmailReplyToAddresses: config.guestEmail.replyToAddresses,
       checkinSmsBaseUrl: config.bookingTimeSms.checkinBaseUrl,
+      controlledT30EmailEnabled,
       rollerCredentialsSecret,
       databaseClusterArn,
       databaseAdminSecret: databaseSecret,
@@ -927,6 +932,7 @@ exports.handler = async (event) => {
 
     const lookupHandler = this.createHandler('LookupHandler', 'lookup', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'lookup')),
+      timeout: controlledT30EmailEnabled ? Duration.seconds(15) : undefined,
     });
     const bookingHandler = this.createHandler('BookingHandler', 'booking', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'booking')),
@@ -936,7 +942,14 @@ exports.handler = async (event) => {
     });
     const sessionHandler = this.createHandler('SessionHandler', 'session', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'session')),
+      environment: {
+        ROLLER_LIVE_LOOKUP_FUNCTION_NAME: lookupHandler.functionName,
+      },
+      timeout: controlledT30EmailEnabled ? Duration.seconds(30) : undefined,
     });
+    if (controlledT30EmailEnabled) {
+      lookupHandler.grantInvoke(sessionHandler);
+    }
     const webhookHandler = this.createHandler('WebhookHandler', 'webhook', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'webhook')),
       environment: {
@@ -1004,7 +1017,7 @@ exports.handler = async (event) => {
       new events.Rule(this, 'BookingTimeSmsScheduleRule', {
         ruleName: `${config.resourcePrefix}-booking-time-sms-schedule`,
         description:
-          'Runs the dev booking-time guest messaging trigger on a fixed cadence. Real sends require config confirmation and a public HTTPS check-in URL.',
+          'Runs the bounded booking-time messaging trigger. Park-test sends additionally require the T0201 hash-only single-booking control tuple.',
         schedule: events.Schedule.rate(Duration.minutes(config.bookingTimeSms.rateMinutes)),
         targets: [
           new targets.LambdaFunction(sessionHandler, {
@@ -1012,7 +1025,7 @@ exports.handler = async (event) => {
               source: 'jumpyard.booking-time-messaging-scheduler',
               detail: {
                 baseUrl: config.bookingTimeSms.checkinBaseUrl,
-                channels: ['sms', 'email'],
+                channels: config.bookingTimeSms.channels,
                 confirmSend: config.bookingTimeSms.confirmSend,
                 confirmedSendApproval: config.bookingTimeSms.confirmedSendApproval,
                 emailBaseUrl: config.guestEmail.checkinBaseUrl,
@@ -1020,6 +1033,7 @@ exports.handler = async (event) => {
                 limit: config.bookingTimeSms.limit,
                 smsBaseUrl: config.bookingTimeSms.checkinBaseUrl,
                 trigger: 'scheduled_booking_time_messaging',
+                windowEndsAtLead: config.bookingTimeSms.windowEndsAtLead,
                 windowMinutes: config.bookingTimeSms.windowMinutes,
               },
             }),
@@ -1752,6 +1766,11 @@ exports.handler = async (event) => {
       environment.EMAIL_PROVIDER = 'aws_ses';
       environment.EMAIL_REPLY_TO_ADDRESSES = resources.checkinEmailReplyToAddresses.join(',');
       environment.ENABLE_GUEST_MESSAGE_SENDS = String(resources.safetyGates.guestMessagingSendsEnabled);
+      environment.ENABLE_T0201_CONTROLLED_T30_EMAIL = String(resources.controlledT30EmailEnabled);
+      environment.T0201_CONTROLLED_T30_EMAIL_APPROVAL =
+        resources.safetyGates.controlledT30EmailApproval ?? '';
+      environment.T0201_CONTROLLED_T30_EMAIL_SECRET_ARN =
+        resources.checkinLinkDevTokenSecret.secretArn;
       environment.ENABLE_T0166_LIVE_REDEEM_SMOKE = String(
         resources.safetyGates.liveRedeemSmokeApproval === PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL,
       );
@@ -1820,6 +1839,7 @@ exports.handler = async (event) => {
         (fullFlowRehearsalEnabled
           ? resources.safetyGates.fullFlowRehearsalVenueId
           : resources.safetyGates.liveAssistedLookupVenueId) ?? '';
+      environment.ENABLE_T0201_CONTROLLED_T30_EMAIL_REFRESH = String(resources.controlledT30EmailEnabled);
     }
 
     if (handlerName === 'redeem') {
@@ -1889,26 +1909,39 @@ exports.handler = async () => ({
             },
           }),
         );
-        if (resources.checkinEmailFromAddress && resources.checkinEmailIdentityDomain) {
-          fn.addToRolePolicy(
-            new iam.PolicyStatement({
-              actions: ['ses:SendEmail'],
-              conditions: {
-                StringEquals: {
-                  'ses:FromAddress': resources.checkinEmailFromAddress,
-                },
+      }
+      if (
+        (resources.safetyGates.guestMessagingSendsEnabled || resources.controlledT30EmailEnabled) &&
+        resources.checkinEmailFromAddress &&
+        resources.checkinEmailIdentityDomain
+      ) {
+        fn.addToRolePolicy(
+          new iam.PolicyStatement({
+            actions: ['ses:SendEmail'],
+            conditions: {
+              StringEquals: {
+                'ses:FromAddress': resources.checkinEmailFromAddress,
               },
-              resources: [
-                Stack.of(this).formatArn({
-                  service: 'ses',
-                  resource: 'identity',
-                  resourceName: resources.checkinEmailIdentityDomain,
-                  arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
-                }),
-              ],
-            }),
-          );
-        }
+            },
+            resources: [
+              // SES models the configuration set as a SendEmail resource, not as a
+              // service-specific condition key. Listing both ARNs keeps another
+              // configuration set outside this role's send boundary.
+              Stack.of(this).formatArn({
+                service: 'ses',
+                resource: 'identity',
+                resourceName: resources.checkinEmailIdentityDomain,
+                arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
+              }),
+              Stack.of(this).formatArn({
+                service: 'ses',
+                resource: 'configuration-set',
+                resourceName: resources.checkinEmailConfigurationSetName,
+                arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
+              }),
+            ],
+          }),
+        );
       }
     }
     if ((handlerName === 'session' || handlerName === 'redeem') && resources.staffIdentity.mode === 'legacy') {

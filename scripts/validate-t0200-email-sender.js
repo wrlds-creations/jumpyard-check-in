@@ -35,8 +35,20 @@ function validateParkTestConfigs() {
     const config = readJson(path.join('infra', 'config', file));
     assert.deepStrictEqual(config.guestEmail, expectedGuestEmail, `${file} must use the exact T0200 sender contract.`);
     assert.strictEqual(config.safetyGates.guestMessagingSendsEnabled, false, `${file} must keep guest sends disabled.`);
-    assert.strictEqual(config.bookingTimeSms.confirmSend, false, `${file} must keep confirmed sends disabled.`);
-    assert.strictEqual(config.bookingTimeSms.scheduleEnabled, false, `${file} must keep the booking-time schedule disabled.`);
+    if (file === 'park-test-full-flow-rehearsal.json') {
+      assert.strictEqual(config.bookingTimeSms.confirmSend, true, `${file} must use the T0201 controlled send gate.`);
+      assert.strictEqual(config.bookingTimeSms.scheduleEnabled, true, `${file} must run the bounded T0201 scheduler.`);
+      assert.deepStrictEqual(config.bookingTimeSms.channels, ['email'], `${file} must remain email-only.`);
+      assert.strictEqual(
+        config.safetyGates.controlledT30EmailApproval,
+        'T0201_SINGLE_BOOKING_T30_EMAIL_APPROVED',
+        `${file} must use the exact T0201 approval.`,
+      );
+    } else {
+      assert.strictEqual(config.bookingTimeSms.confirmSend, false, `${file} must keep confirmed sends disabled.`);
+      assert.strictEqual(config.bookingTimeSms.scheduleEnabled, false, `${file} must keep the booking-time schedule disabled.`);
+      assert.ok(!config.safetyGates.controlledT30EmailApproval, `${file} must keep the T0201 gate closed.`);
+    }
   }
 }
 
@@ -66,7 +78,7 @@ function validateImplementation() {
 
   for (const expected of [
     "new ses.ConfigurationSet(this, 'GuestEmailConfigurationSet'",
-    'sendingEnabled: false',
+    'sendingEnabled: controlledT30EmailEnabled',
     'ses.SuppressionReasons.BOUNCES_AND_COMPLAINTS',
     'ses.ConfigurationSetTlsPolicy.REQUIRE',
     "new ses.EmailIdentity(this, 'GuestEmailIdentity'",

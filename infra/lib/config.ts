@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export const BOOKING_TIME_SMS_CONFIRMED_SEND_APPROVAL = 'I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS';
+export const PARK_TEST_CONTROLLED_T30_EMAIL_APPROVAL = 'T0201_SINGLE_BOOKING_T30_EMAIL_APPROVED';
 
 export const REQUIRED_WRLDS_TAGS = [
   'WRLDS:Client',
@@ -74,6 +75,7 @@ export interface JumpYardCloudConfig {
   readonly awsAccount: string;
   readonly awsRegion: string;
   readonly bookingTimeSms: {
+    readonly channels: readonly ('sms' | 'email')[];
     readonly checkinBaseUrl: string;
     readonly confirmedSendApproval: string;
     readonly confirmSend: boolean;
@@ -81,6 +83,7 @@ export interface JumpYardCloudConfig {
     readonly limit: number;
     readonly rateMinutes: number;
     readonly scheduleEnabled: boolean;
+    readonly windowEndsAtLead: boolean;
     readonly windowMinutes: number;
   };
   readonly dataSync: {
@@ -117,6 +120,7 @@ export interface JumpYardCloudConfig {
     readonly baseUrl: string;
   };
   readonly safetyGates: {
+    readonly controlledT30EmailApproval?: string;
     readonly emergencyStop: boolean;
     readonly guestMessagingSendsEnabled: boolean;
     readonly liveAddOnSmokeAllowedIdentifiers: readonly string[];
@@ -155,6 +159,7 @@ interface RawConfig {
   readonly awsAccount?: unknown;
   readonly awsRegion?: unknown;
   readonly bookingTimeSms?: {
+    readonly channels?: unknown;
     readonly checkinBaseUrl?: unknown;
     readonly confirmedSendApproval?: unknown;
     readonly confirmSend?: unknown;
@@ -162,6 +167,7 @@ interface RawConfig {
     readonly limit?: unknown;
     readonly rateMinutes?: unknown;
     readonly scheduleEnabled?: unknown;
+    readonly windowEndsAtLead?: unknown;
     readonly windowMinutes?: unknown;
   };
   readonly dataSync?: {
@@ -198,6 +204,7 @@ interface RawConfig {
     readonly baseUrl?: unknown;
   };
   readonly safetyGates?: {
+    readonly controlledT30EmailApproval?: unknown;
     readonly emergencyStop?: unknown;
     readonly guestMessagingSendsEnabled?: unknown;
     readonly liveAddOnSmokeAllowedIdentifiers?: unknown;
@@ -491,8 +498,45 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     throw new Error('park-test WRLDS:DataClassification must be confidential.');
   }
 
+  const controlledT30EmailApproved =
+    input.safetyGates.controlledT30EmailApproval === PARK_TEST_CONTROLLED_T30_EMAIL_APPROVAL;
+
   if (input.bookingTimeSms.confirmSend) {
-    throw new Error('park-test bookingTimeSms.confirmSend must stay false until a scoped messaging ticket enables it.');
+    if (!controlledT30EmailApproved) {
+      throw new Error(
+        `park-test confirmed booking-time sends require safetyGates.controlledT30EmailApproval=${PARK_TEST_CONTROLLED_T30_EMAIL_APPROVAL}.`,
+      );
+    }
+    if (!input.bookingTimeSms.scheduleEnabled) {
+      throw new Error('park-test controlled T-30 email approval requires bookingTimeSms.scheduleEnabled=true.');
+    }
+    if (
+      input.bookingTimeSms.channels.length !== 1 ||
+      input.bookingTimeSms.channels[0] !== 'email'
+    ) {
+      throw new Error('park-test controlled T-30 messaging must use the email channel only.');
+    }
+    if (
+      input.bookingTimeSms.leadMinutes !== 30 ||
+      input.bookingTimeSms.rateMinutes !== 5 ||
+      input.bookingTimeSms.windowMinutes !== 5 ||
+      !input.bookingTimeSms.windowEndsAtLead
+    ) {
+      throw new Error(
+        'park-test controlled T-30 email must run every 5 minutes in the bounded 25-to-30-minute-before-start window.',
+      );
+    }
+    if (input.safetyGates.guestMessagingSendsEnabled) {
+      throw new Error('park-test controlled T-30 email must not open the general guest messaging send gate.');
+    }
+    if (!input.dataSync.scheduleEnabled || !input.safetyGates.rollerWebhookProcessingEnabled) {
+      throw new Error('park-test controlled T-30 email requires the approved booking index and webhook processing.');
+    }
+    if (input.bookingTimeSms.checkinBaseUrl !== input.guestEmail.checkinBaseUrl) {
+      throw new Error('park-test controlled T-30 email must use the reviewed guest email check-in URL.');
+    }
+  } else if (controlledT30EmailApproved) {
+    throw new Error('park-test controlled T-30 email approval must be empty unless confirmed sends are enabled.');
   }
 
   const livePaymentSmokeApproved =
@@ -522,7 +566,8 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     liveLinkedAddOnSettlementApproved ||
     liveRedeemSmokeApproved ||
     frontendRedeemRehearsalApproved ||
-    fullFlowRehearsalApproved;
+    fullFlowRehearsalApproved ||
+    controlledT30EmailApproved;
 
   if (!input.safetyGates.emergencyStop && !scopedTrafficApproved) {
     throw new Error(
@@ -950,7 +995,16 @@ function normalizeCorsOrigin(value: unknown, fieldName: string): string {
 }
 
 function readBookingTimeSmsConfig(raw: RawConfig['bookingTimeSms']): JumpYardCloudConfig['bookingTimeSms'] {
+  const rawChannels = raw?.channels === undefined
+    ? ['sms', 'email']
+    : readOptionalStringArray(raw.channels, 'bookingTimeSms.channels');
+  const channels = [...new Set(rawChannels.map((channel) => channel.toLowerCase()))];
+  if (channels.length === 0 || channels.some((channel) => channel !== 'sms' && channel !== 'email')) {
+    throw new Error('bookingTimeSms.channels must contain one or both of sms and email.');
+  }
+
   const config = {
+    channels: channels as Array<'sms' | 'email'>,
     checkinBaseUrl: readOptionalString(raw?.checkinBaseUrl, 'http://localhost:3000/', 'bookingTimeSms.checkinBaseUrl'),
     confirmedSendApproval: readOptionalString(
       raw?.confirmedSendApproval,
@@ -962,6 +1016,7 @@ function readBookingTimeSmsConfig(raw: RawConfig['bookingTimeSms']): JumpYardClo
     limit: readOptionalInteger(raw?.limit, 10, 1, 10, 'bookingTimeSms.limit'),
     rateMinutes: readOptionalInteger(raw?.rateMinutes, 5, 1, 60, 'bookingTimeSms.rateMinutes'),
     scheduleEnabled: readOptionalBoolean(raw?.scheduleEnabled, false, 'bookingTimeSms.scheduleEnabled'),
+    windowEndsAtLead: readOptionalBoolean(raw?.windowEndsAtLead, false, 'bookingTimeSms.windowEndsAtLead'),
     windowMinutes: readOptionalInteger(raw?.windowMinutes, 10, 1, 180, 'bookingTimeSms.windowMinutes'),
   };
 
@@ -1042,6 +1097,11 @@ function readGuestEmailConfig(raw: RawConfig['guestEmail']): JumpYardCloudConfig
 
 function readSafetyGatesConfig(raw: RawConfig['safetyGates']): JumpYardCloudConfig['safetyGates'] {
   return {
+    controlledT30EmailApproval: readOptionalString(
+      raw?.controlledT30EmailApproval,
+      '',
+      'safetyGates.controlledT30EmailApproval',
+    ),
     emergencyStop: readOptionalBoolean(raw?.emergencyStop, false, 'safetyGates.emergencyStop'),
     guestMessagingSendsEnabled: readOptionalBoolean(
       raw?.guestMessagingSendsEnabled,

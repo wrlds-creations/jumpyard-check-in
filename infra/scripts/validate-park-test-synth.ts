@@ -19,6 +19,7 @@ interface CloudFormationTemplate {
 }
 
 interface CloudFormationResource {
+  readonly DeletionPolicy?: string;
   readonly Type?: string;
   readonly Properties?: Record<string, unknown>;
 }
@@ -141,6 +142,29 @@ function expectNoBookingTimeMessagingSchedule(template: CloudFormationTemplate):
   });
 
   expect(!hasBookingTimeRule, 'park-test synth must keep booking-time guest messaging schedule disabled.');
+}
+
+function expectControlledT30EmailSchedule(template: CloudFormationTemplate): void {
+  const ruleName = `${PARK_TEST_PREFIX}-booking-time-sms-schedule`;
+  expectEventRuleState(template, ruleName, 'ENABLED');
+  const rule = findResourceByTypeAndProperty(template, 'AWS::Events::Rule', 'Name', ruleName);
+  const targets = rule?.Properties?.Targets;
+  expect(Array.isArray(targets) && targets.length === 1, 'T0201 must synthesize exactly one schedule target.');
+  const input = (targets as Array<Record<string, unknown>>)[0]?.Input;
+  expect(typeof input === 'string', 'T0201 schedule target must contain a fixed JSON input.');
+  const payload = JSON.parse(input as string) as {
+    detail?: Record<string, unknown>;
+    source?: string;
+  };
+  expect(payload.source === 'jumpyard.booking-time-messaging-scheduler', 'T0201 must use the internal scheduler source.');
+  expect(
+    JSON.stringify(payload.detail?.channels) === JSON.stringify(['email']),
+    'T0201 schedule must be email-only.',
+  );
+  expect(payload.detail?.confirmSend === true, 'T0201 schedule must enter the guarded confirmed-send path.');
+  expect(payload.detail?.leadMinutes === 30, 'T0201 schedule must target a 30-minute lead.');
+  expect(payload.detail?.windowMinutes === 5, 'T0201 schedule must use a five-minute window.');
+  expect(payload.detail?.windowEndsAtLead === true, 'T0201 window must end at T-30 instead of sending early.');
 }
 
 function expectCanonicalApiAccessLogDestination(
@@ -397,6 +421,7 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   expectCanonicalApiAccessLogDestination(parkTest.template, '376129878018', 'eu-north-1', PARK_TEST_PREFIX);
   expect(countResourcesByType(parkTest.template, 'AWS::ApiGatewayV2::Api') === 1, 'Expected one park-test HTTP API.');
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-lookup`, {
+    ENABLE_T0201_CONTROLLED_T30_EMAIL_REFRESH: 'false',
     ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'false',
     ENABLE_T0165_LINKED_ADDON_SETTLEMENT: 'false',
     ENABLE_T0169_POST_PAYMENT_SYNC: 'false',
@@ -429,11 +454,13 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
     EMAIL_FROM_DISPLAY_NAME: 'JumpYard Nacka',
     EMAIL_REPLY_TO_ADDRESSES: 'nackaforum@jumpyard.se',
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
+    ENABLE_T0201_CONTROLLED_T30_EMAIL: 'false',
     ENABLE_STAFF_AUTH: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     ENABLE_T0176_FRONTEND_REDEEM_REHEARSAL: 'false',
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0201_CONTROLLED_T30_EMAIL_APPROVAL: '',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
     T0176_FRONTEND_REDEEM_REHEARSAL_ALLOWED_SESSION_IDS: '',
   });
@@ -483,10 +510,12 @@ function validateParkTestPaymentSmokeTemplate(parkTest: SynthResult): void {
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
+    ENABLE_T0201_CONTROLLED_T30_EMAIL: 'false',
     ENABLE_STAFF_AUTH: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0201_CONTROLLED_T30_EMAIL_APPROVAL: '',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
@@ -886,8 +915,19 @@ function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void 
   expectContains(strings, PARK_TEST_PREFIX, 'park-test full-flow rehearsal');
   expectContains(strings, 'https://api.roller.app', 'park-test full-flow rehearsal');
   expectContains(strings, 'live', 'park-test full-flow rehearsal');
-  expectNoBookingTimeMessagingSchedule(parkTest.template);
+  expectControlledT30EmailSchedule(parkTest.template);
+  const emailConfigurationSet = findResourceByTypeAndProperty(
+    parkTest.template,
+    'AWS::SES::ConfigurationSet',
+    'Name',
+    `${PARK_TEST_PREFIX}-email`,
+  );
+  expect(
+    JSON.stringify(emailConfigurationSet?.Properties?.SendingOptions) === JSON.stringify({ SendingEnabled: true }),
+    'The protected T0201 profile must enable only the reviewed SES configuration set.',
+  );
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-lookup`, {
+    ENABLE_T0201_CONTROLLED_T30_EMAIL_REFRESH: 'true',
     ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'false',
     ENABLE_T0165_LINKED_ADDON_SETTLEMENT: 'false',
     ENABLE_T0169_POST_PAYMENT_SYNC: 'true',
@@ -922,15 +962,34 @@ function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void 
   });
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
+    ENABLE_T0201_CONTROLLED_T30_EMAIL: 'true',
     ENABLE_STAFF_AUTH: 'true',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     ENABLE_T0176_FRONTEND_REDEEM_REHEARSAL: 'false',
     ENABLE_T0176_FULL_FLOW_REHEARSAL: 'true',
     JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
+    T0201_CONTROLLED_T30_EMAIL_APPROVAL: 'T0201_SINGLE_BOOKING_T30_EMAIL_APPROVED',
     T0166_LIVE_REDEEM_SMOKE_ALLOWED_IDENTIFIERS: '',
     T0176_FRONTEND_REDEEM_REHEARSAL_ALLOWED_SESSION_IDS: '',
   });
+
+  const sessionPolicy = Object.values(getResources(parkTest.template)).find(
+    (resource) =>
+      resource.Type === 'AWS::IAM::Policy' &&
+      typeof resource.Properties?.PolicyName === 'string' &&
+      resource.Properties.PolicyName.includes('SessionHandlerServiceRoleDefaultPolicy'),
+  );
+  const sessionPolicyJson = JSON.stringify(sessionPolicy?.Properties?.PolicyDocument);
+  expect(sessionPolicyJson.includes('ses:SendEmail'), 'T0201 session role must receive the narrow SES send action.');
+  expect(
+    sessionPolicyJson.includes('nackaforum@jumpyard.se') &&
+      sessionPolicyJson.includes('jumpyard-check-in-park-test-email') &&
+      sessionPolicyJson.includes('identity/jumpyard.se'),
+    'T0201 SES IAM must bind the exact From address, configuration set, and identity.',
+  );
+  expect(sessionPolicyJson.includes('lambda:InvokeFunction'), 'T0201 session role must invoke only the lookup refresh Lambda.');
+  expect(!sessionPolicyJson.includes('sns:Publish'), 'T0201 must not grant the session role SMS publish permission.');
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-webhook`, {
     ENABLE_ROLLER_WEBHOOK_PROCESSING: 'true',
     JUMPYARD_EMERGENCY_STOP: 'false',
