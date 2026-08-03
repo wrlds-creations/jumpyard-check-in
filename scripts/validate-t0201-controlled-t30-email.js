@@ -108,7 +108,7 @@ function loadLookupInternals() {
     setTimeout,
   };
   vm.runInNewContext(
-    `${source}\nmodule.exports.__t0201 = { evaluateT0201ControlledT30RollerBooking, hashString };`,
+    `${source}\nmodule.exports.__t0201 = { evaluateT0201ControlledT30RollerBooking, extractT0201RollerVenueIdentity, hashString };`,
     sandbox,
     { filename: absolutePath },
   );
@@ -291,17 +291,17 @@ function validateAuthoritativeRollerChecks(lookup) {
   const rollerBooking = {
     amountOwing: 0,
     bookingReference: 'test-booking-reference',
-    items: [{ bookingDate: '2026-08-04', startTime: '12:00:00', venueId: '50871' }],
+    items: [{ bookingDate: '2026-08-04', startTime: '12:00:00' }],
     paymentStatus: 'paid',
     status: 'confirmed',
     uniqueId: 'test-roller-unique-id',
-    venueId: '50871',
   };
   const expected = {
     expectedBookingDate: '2026-08-04',
     expectedIdentifierSha256: lookup.hashString(rollerBooking.bookingReference),
     expectedStartTime: '12:00:00',
     expectedVenueId: '50871',
+    verifiedVenueId: '50871',
   };
   assert.deepEqual(
     { ...lookup.evaluateT0201ControlledT30RollerBooking(rollerBooking, expected) },
@@ -312,11 +312,11 @@ function validateAuthoritativeRollerChecks(lookup) {
       scheduleMatches: true,
       venueMatches: true,
     },
-    'Roller must confirm every send-critical field.',
+    'Roller must confirm every send-critical field when booking detail omits venue fields.',
   );
 
   const failures = [
-    [{ ...rollerBooking, venueId: '99999', items: [] }, 'venueMatches'],
+    [{ ...rollerBooking, venueId: '99999' }, 'venueMatches'],
     [{ ...rollerBooking, status: 'cancelled' }, 'bookingIsActive'],
     [{ ...rollerBooking, amountOwing: 1 }, 'paymentIsSettled'],
     [{ ...rollerBooking, items: [{ bookingDate: '2026-08-04', startTime: '12:01:00' }] }, 'scheduleMatches'],
@@ -326,6 +326,21 @@ function validateAuthoritativeRollerChecks(lookup) {
     const checks = lookup.evaluateT0201ControlledT30RollerBooking(booking, expected);
     assert.equal(checks[failedCheck], false, `Roller ${failedCheck} mismatch must fail closed.`);
   }
+
+  assert.equal(
+    lookup.evaluateT0201ControlledT30RollerBooking(rollerBooking, { ...expected, verifiedVenueId: null }).venueMatches,
+    false,
+    'Missing Roller credential venue identity must fail closed.',
+  );
+  assert.equal(
+    lookup.evaluateT0201ControlledT30RollerBooking(rollerBooking, { ...expected, verifiedVenueId: '99999' }).venueMatches,
+    false,
+    'A Roller credential bound to another venue must fail closed.',
+  );
+  assert.equal(lookup.extractT0201RollerVenueIdentity({ id: '50871' }), '50871');
+  assert.equal(lookup.extractT0201RollerVenueIdentity({ venue: { venueId: '50871' } }), '50871');
+  assert.equal(lookup.extractT0201RollerVenueIdentity({ data: { venueID: '50871' } }), '50871');
+  assert.equal(lookup.extractT0201RollerVenueIdentity({ name: 'No identifier' }), null);
 }
 
 function validateStaticContracts() {
@@ -367,6 +382,9 @@ function validateStaticContracts() {
     assert.ok(session.includes(expected), `Session runtime must include ${expected}.`);
   }
   assert.ok(lookup.includes('handleT0201ControlledT30EmailRefresh'));
+  assert.ok(lookup.includes("buildRollerUrl(config.baseUrl, '/venues/me')"));
+  assert.ok(lookup.includes('getVerifiedT0201RollerVenueId'));
+  assert.ok(lookup.includes('t0201_authoritative_booking_refresh_blocked'));
   assert.ok(lookup.includes("trigger) === 'authoritative_booking_refresh'"));
   assert.ok(session.includes(".t0201Control ?? {}"), 'Session runtime must read only the nested T0201 control object.');
 }

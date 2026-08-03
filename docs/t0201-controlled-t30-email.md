@@ -21,11 +21,17 @@ Missing, malformed, stale, early, ambiguous, or mismatched control state returns
 1. EventBridge invokes the email-only processor every five minutes.
 2. The processor considers bookings starting 25–30 minutes later. It never sends earlier than T-30 and performs no stale catch-up.
 3. The booking identifier hash, Nacka venue, exact start timestamp, and recipient hash must all match once.
-4. The session Lambda synchronously asks the existing lookup Lambda to refresh that booking from Roller Live. Roller must still report the same identifier, venue, date/time, active state, and settled payment.
+4. The session Lambda synchronously asks the existing lookup Lambda to refresh that booking from Roller Live. The same Roller credentials must live-confirm Nacka `50871` through `/venues/me`; the booking detail must still report the same identifier, date/time, active state, and settled payment, and any venue field present in booking detail must not contradict Nacka. Missing or mismatched venue identity fails closed.
 5. The final email boundary rechecks the complete tuple before reserving a stable booking/start/channel idempotency key and calling SES.
 6. Overlapping schedules, EventBridge retries, Lambda retries, provider ambiguity, and restarts reuse the same key. A replay is blocked rather than risking a second message.
 
 The check-in link continues to use `https://jumpyard-check-in-park-test.pages.dev/` for this proof. `https://checkin.jumpyard.se/` is not selected by T0201 and remains a separate domain/payment/Apple Pay readiness decision.
+
+## First controlled proof attempt
+
+The 2026-08-03 proof armed one exact hash-only tuple and reached both the scheduled session Lambda and the authoritative Roller lookup during the bounded T-30 window. Identifier, schedule, active state, and settled payment all matched, but no email delivery row was created because Roller booking detail omitted every venue/location field and the original verifier required one there. A separate safe structural read confirmed that the same Roller credentials returned Nacka `50871` from `/venues/me`. The control was disarmed after the window; aggregate evidence remained zero sent, zero failed, zero queued, and zero active alarms.
+
+The corrected verifier therefore requires a fresh `/venues/me` Nacka identity on every controlled authoritative refresh. A booking-detail venue field is optional only when absent; if present, it must also equal Nacka. No send is possible when either source contradicts Nacka or when credential venue identity is missing or unavailable.
 
 ## Arming one agreed booking
 
@@ -35,13 +41,13 @@ Do not arm the control until Love has separately confirmed the exact Roller book
 $env:T0201_BOOKING_IDENTIFIER = '<agreed Roller booking identifier>'
 $env:T0201_BOOKING_START_AT = '<ISO 8601 timestamp with offset>'
 $env:T0201_RECIPIENT_EMAIL = '<agreed booking email>'
-npm run t0201:control -- --profile wrlds-dev
+node infra/node_modules/ts-node/dist/bin.js --prefer-ts-exts infra/scripts/t0201-controlled-t30-email.ts --profile wrlds-dev
 ```
 
 The first command is a redacted dry-run. After reviewing the exact booking time and AWS target, the separately approved apply is:
 
 ```powershell
-npm run t0201:control -- --profile wrlds-dev --approval I_APPROVE_T0201_SINGLE_BOOKING_CONTROL_UPDATE --apply
+node infra/node_modules/ts-node/dist/bin.js --prefer-ts-exts infra/scripts/t0201-controlled-t30-email.ts --profile wrlds-dev --approval I_APPROVE_T0201_SINGLE_BOOKING_CONTROL_UPDATE --apply
 ```
 
 Clear the process-local values immediately afterwards:
@@ -55,8 +61,8 @@ Remove-Item Env:T0201_RECIPIENT_EMAIL
 Disarm without supplying any raw values:
 
 ```powershell
-npm run t0201:control -- --profile wrlds-dev --disarm
-npm run t0201:control -- --profile wrlds-dev --disarm --approval I_APPROVE_T0201_SINGLE_BOOKING_CONTROL_UPDATE --apply
+node infra/node_modules/ts-node/dist/bin.js --prefer-ts-exts infra/scripts/t0201-controlled-t30-email.ts --profile wrlds-dev --disarm
+node infra/node_modules/ts-node/dist/bin.js --prefer-ts-exts infra/scripts/t0201-controlled-t30-email.ts --profile wrlds-dev --disarm --approval I_APPROVE_T0201_SINGLE_BOOKING_CONTROL_UPDATE --apply
 ```
 
 ## Proof and rollback
