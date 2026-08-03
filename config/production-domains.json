@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "contract": "jumpyard-check-in-production-web-domains",
   "environment": "production",
-  "state": "guest-controlled-park-test-alias-approved-awaiting-deployment",
+  "state": "guest-controlled-park-test-alias-active-awaiting-apple-pay-result",
   "zone": "jumpyard.se",
   "productionWebOrigins": [
     "https://checkin.jumpyard.se",
@@ -19,8 +19,8 @@
         "projectName": "jumpyard-check-in-production",
         "pagesDevOrigin": "https://jumpyard-check-in-production.pages.dev",
         "gitProviderConnected": false,
-        "applicationDeployments": 0,
-        "status": "controlled-park-test-alias-approved-awaiting-first-deployment",
+        "applicationDeployments": 2,
+        "status": "controlled-park-test-alias-active",
         "deploymentPolicy": "selected-immutable-park-test-phone-artifact-only",
         "createdBy": "T0199-issue-206-explicit-scope-extension",
         "customDomainAssociation": {
@@ -120,7 +120,7 @@
   "controlledParkTestAlias": {
     "approved": true,
     "approvedByIssue": 220,
-    "deployed": false,
+    "deployed": true,
     "guestOrigin": "https://checkin.jumpyard.se",
     "cloudflareProject": "jumpyard-check-in-production",
     "sourceArtifact": "selected-successful-immutable-park-test-release-phone-output",
@@ -132,7 +132,25 @@
     "staffAdminDeployment": false,
     "guestMessagingOpened": false,
     "messageLinkOrigin": "https://jumpyard-check-in-park-test.pages.dev/",
-    "manualApplePayPaymentOwner": "Love"
+    "manualApplePayPaymentOwner": "Love",
+    "manualApplePayStatus": "pending",
+    "awsCorsReleaseRunId": 30832695522,
+    "awsCorsDeploymentRunId": 30833080999,
+    "initialDomainDeploymentRunId": 30833724481,
+    "initialDomainDeploymentResult": "artifact-published-verification-raced-cloudflare-propagation",
+    "selectedReleaseSha": "9ffe379e6deb13da509114e70665b56bcaeb471a",
+    "selectedReleaseRunId": 30834669772,
+    "successfulDomainRepromotionRunId": 30835107405,
+    "verifiedAt": "2026-08-03T17:06:07Z",
+    "publicVerification": {
+      "rootHttpStatus": 200,
+      "embeddedApiTarget": "https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com",
+      "appleAssociationHttpStatus": 200,
+      "appleAssociationBytes": 9094,
+      "appleAssociationSha256": "8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6",
+      "approvedCorsOrigins": 4,
+      "unapprovedOriginBlocked": true
+    }
   },
   "parkTestBaseline": {
     "mustRemainUnchanged": false,

@@ -45,10 +45,10 @@ function validateDomainContract() {
   const contract = readJson('config/production-domains.json');
   const alias = contract.controlledParkTestAlias;
   assert.equal(contract.schemaVersion, 2);
-  assert.equal(contract.state, 'guest-controlled-park-test-alias-approved-awaiting-deployment');
+  assert.equal(contract.state, 'guest-controlled-park-test-alias-active-awaiting-apple-pay-result');
   assert.equal(alias.approved, true);
   assert.equal(alias.approvedByIssue, 220);
-  assert.equal(alias.deployed, false);
+  assert.equal(alias.deployed, true);
   assert.equal(alias.guestOrigin, CHECKIN_ORIGIN);
   assert.equal(alias.cloudflareProject, 'jumpyard-check-in-production');
   assert.equal(alias.apiOrigin, 'https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com');
@@ -58,8 +58,20 @@ function validateDomainContract() {
   assert.equal(alias.staffAdminDeployment, false);
   assert.equal(alias.guestMessagingOpened, false);
   assert.equal(alias.messageLinkOrigin, MESSAGE_ORIGIN);
+  assert.equal(alias.manualApplePayStatus, 'pending');
+  assert.equal(alias.awsCorsDeploymentRunId, 30833080999);
+  assert.equal(alias.selectedReleaseSha, '9ffe379e6deb13da509114e70665b56bcaeb471a');
+  assert.equal(alias.selectedReleaseRunId, 30834669772);
+  assert.equal(alias.successfulDomainRepromotionRunId, 30835107405);
+  assert.equal(alias.publicVerification.rootHttpStatus, 200);
+  assert.equal(alias.publicVerification.appleAssociationHttpStatus, 200);
+  assert.equal(alias.publicVerification.appleAssociationSha256, EXPECTED_ASSOCIATION_SHA256);
+  assert.equal(alias.publicVerification.approvedCorsOrigins, 4);
+  assert.equal(alias.publicVerification.unapprovedOriginBlocked, true);
   assert.equal(contract.cutover.authorized, false);
   assert.deepStrictEqual(contract.parkTestBaseline.allowedCorsOrigins, EXPECTED_ORIGINS);
+  assert.equal(contract.surfaces.guest.cloudflarePages.applicationDeployments, 2);
+  assert.equal(contract.surfaces.guest.cloudflarePages.status, 'controlled-park-test-alias-active');
   assert.equal(contract.surfaces.staffAdmin.cloudflarePages.applicationDeployments, 0);
   assert.equal(contract.surfaces.staffAdmin.cloudflarePages.status, 'created-empty');
 }
