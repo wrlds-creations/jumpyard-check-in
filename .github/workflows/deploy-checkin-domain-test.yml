@@ -1,0 +1,250 @@
+name: Deploy or roll back controlled guest domain test
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Successful Build park-test release workflow run ID
+        required: true
+        type: string
+      release_sha:
+        description: Full commit SHA contained in the selected release
+        required: true
+        type: string
+      intent:
+        description: Audited domain-test release intent
+        required: true
+        default: promote
+        type: choice
+        options:
+          - promote
+          - rollback
+          - re-promote
+      approval_phrase:
+        description: I_APPROVE_CHECKIN_DOMAIN_TEST_<full release SHA>
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: checkin-domain-test-deployment
+  cancel-in-progress: false
+
+env:
+  CHECKIN_DOMAIN: checkin.jumpyard.se
+  CHECKIN_ORIGIN: https://checkin.jumpyard.se
+  CLOUDFLARE_ACCOUNT_ID: dc0a3855bc8a0b1db8fc27ee62bf7d40
+  CLOUDFLARE_PROJECT: jumpyard-check-in-production
+  PARK_TEST_API: https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com
+
+jobs:
+  plan:
+    name: Plan selected domain-test release
+    runs-on: ubuntu-latest
+    outputs:
+      release_sha: ${{ steps.guard.outputs.sha }}
+    steps:
+      - name: Check out trusted tooling from main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          path: tooling
+      - name: Validate dispatch and release run
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Domain-test workflow must run from refs/heads/main." >&2
+            exit 1
+          fi
+          sha="${{ inputs.release_sha }}"
+          run_id="${{ inputs.release_run_id }}"
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]] || [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "A lowercase full SHA and numeric release run ID are required." >&2
+            exit 1
+          fi
+          if [[ "${{ inputs.approval_phrase }}" != "I_APPROVE_CHECKIN_DOMAIN_TEST_${sha}" ]]; then
+            echo "The approval phrase does not match the selected release SHA." >&2
+            exit 1
+          fi
+          gh api "repos/wrlds-creations/jumpyard-check-in/actions/runs/${run_id}" > release-run.json
+          jq -e '
+            .status == "completed" and
+            .conclusion == "success" and
+            .path == ".github/workflows/release.yml" and
+            .head_repository.full_name == "wrlds-creations/jumpyard-check-in"
+          ' release-run.json > /dev/null
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Download selected immutable release
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: park-test-release-${{ steps.guard.outputs.sha }}
+          path: release
+          github-token: ${{ github.token }}
+          repository: wrlds-creations/jumpyard-check-in
+          run-id: ${{ inputs.release_run_id }}
+      - name: Validate artifact identity and controlled target
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tooling/scripts/validate-park-test-release.js \
+            --release release \
+            --expected-sha "${{ steps.guard.outputs.sha }}"
+          node tooling/scripts/validate-checkin-domain-release.js \
+            --release release \
+            --expected-sha "${{ steps.guard.outputs.sha }}"
+      - name: Publish immutable deployment plan
+        shell: bash
+        run: |
+          {
+            echo "## Controlled guest-domain deployment plan"
+            echo
+            echo "- Intent: \`${{ inputs.intent }}\`"
+            echo "- Release: \`${{ steps.guard.outputs.sha }}\`"
+            echo "- Release workflow run: \`${{ inputs.release_run_id }}\`"
+            echo "- Source output: \`release/phone/out\` from the selected immutable park-test artifact"
+            echo "- Cloudflare target: \`${CLOUDFLARE_PROJECT}\`"
+            echo "- Public hostname: \`${CHECKIN_ORIGIN}\`"
+            echo "- API target: existing park-test API only"
+            echo "- AWS mutations: none in this workflow"
+            echo "- Roller writes and guest messages: none"
+            echo
+            echo "The protected park-test approval below authorizes this exact phone artifact and target only."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Approved controlled guest-domain deployment
+    needs: plan
+    runs-on: ubuntu-latest
+    environment:
+      name: park-test
+      url: https://checkin.jumpyard.se
+    steps:
+      - name: Check out trusted tooling from main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          path: tooling
+      - name: Download selected immutable release
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: park-test-release-${{ needs.plan.outputs.release_sha }}
+          path: release
+          github-token: ${{ github.token }}
+          repository: wrlds-creations/jumpyard-check-in
+          run-id: ${{ inputs.release_run_id }}
+      - name: Revalidate approved artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tooling/scripts/validate-park-test-release.js \
+            --release release \
+            --expected-sha "${{ needs.plan.outputs.release_sha }}"
+          node tooling/scripts/validate-checkin-domain-release.js \
+            --release release \
+            --expected-sha "${{ needs.plan.outputs.release_sha }}"
+      - name: Verify exact Cloudflare project and custom domain
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${CLOUDFLARE_PROJECT}" \
+            | jq -e --arg project "$CLOUDFLARE_PROJECT" '
+                .success == true and
+                .result.name == $project and
+                .result.production_branch == "main" and
+                .result.source == null
+              ' > /dev/null
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${CLOUDFLARE_PROJECT}/domains" \
+            | jq -e --arg domain "$CHECKIN_DOMAIN" '
+                .success == true and
+                any(.result[]; .name == $domain and .status == "active")
+              ' > /dev/null
+      - name: Require live park-test CORS before publishing the alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe_cors() {
+            local origin="$1"
+            local headers
+            headers="$(mktemp)"
+            curl --fail --silent --show-error \
+              -D "$headers" -o /dev/null -X OPTIONS \
+              -H "Origin: ${origin}" \
+              -H "Access-Control-Request-Method: POST" \
+              -H "Access-Control-Request-Headers: content-type" \
+              "${PARK_TEST_API}/v1/bookings/availability"
+            tr -d '\r' < "$headers" | grep -Fxi "access-control-allow-origin: ${origin}" > /dev/null
+            rm -f "$headers"
+          }
+          probe_cors "$CHECKIN_ORIGIN"
+          probe_cors "https://jumpyard-check-in-park-test.pages.dev"
+          probe_cors "https://jumpyard-checkin-admin-park-test.pages.dev"
+          probe_cors "https://jumpyard-check-in-kiosk.pages.dev"
+
+          blocked_headers="$(mktemp)"
+          curl --fail --silent --show-error \
+            -D "$blocked_headers" -o /dev/null -X OPTIONS \
+            -H "Origin: https://unapproved.example" \
+            -H "Access-Control-Request-Method: POST" \
+            "${PARK_TEST_API}/v1/bookings/availability"
+          ! tr -d '\r' < "$blocked_headers" | grep -qi '^access-control-allow-origin:'
+          rm -f "$blocked_headers"
+      - name: Deploy exact phone output to the controlled guest domain project
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          sha="${{ needs.plan.outputs.release_sha }}"
+          npx --yes wrangler@4.111.0 pages deploy release/phone/out \
+            --project-name "$CLOUDFLARE_PROJECT" \
+            --branch main \
+            --commit-hash "$sha" \
+            --commit-message "controlled-domain-${{ inputs.intent }} ${sha}" \
+            --commit-dirty=false | tee cloudflare-checkin-domain.txt
+      - name: Verify exact Cloudflare release and public Apple Pay prerequisites
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="${{ needs.plan.outputs.release_sha }}"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${CLOUDFLARE_PROJECT}/deployments?env=production&per_page=1" \
+            | jq -e --arg sha "$sha" '
+                .success == true and
+                .result[0].environment == "production" and
+                .result[0].deployment_trigger.metadata.commit_hash == $sha and
+                .result[0].latest_stage.status == "success"
+              ' > /dev/null
+          node tooling/scripts/verify-public-checkin-domain.js
+      - name: Publish deployment evidence
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Controlled guest-domain deployment"
+            echo
+            echo "- Intent: \`${{ inputs.intent }}\`"
+            echo "- Release: \`${{ needs.plan.outputs.release_sha }}\`"
+            echo "- Release workflow run: \`${{ inputs.release_run_id }}\`"
+            echo "- Deployment workflow run: \`${{ github.run_id }}\`"
+            echo "- Protected environment: \`park-test\`"
+            echo "- Cloudflare project: \`${CLOUDFLARE_PROJECT}\`"
+            echo "- Public hostname: \`${CHECKIN_ORIGIN}\`"
+            echo "- AWS/production backend changes: none"
+            echo "- Manual financial action: Love's iPhone Apple Pay test remains separate"
+          } >> "$GITHUB_STEP_SUMMARY"
