@@ -6,7 +6,8 @@
     "allowedCorsOrigins": [
       "https://jumpyard-check-in-park-test.pages.dev",
       "https://jumpyard-checkin-admin-park-test.pages.dev",
-      "https://jumpyard-check-in-kiosk.pages.dev"
+      "https://jumpyard-check-in-kiosk.pages.dev",
+      "https://checkin.jumpyard.se"
     ],
     "throttlingBurstLimit": 150,
     "throttlingRateLimit": 50

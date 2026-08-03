@@ -38,7 +38,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 ## Durable Architecture Facts
 
 - Frontend apps must not call Roller directly in the real production architecture.
-- Production origins: `https://checkin.jumpyard.se` (guest) and `https://staff-checkin.jumpyard.se` (staff/admin). DNS/SSL are active; Pages targets have zero deployments; API/traffic are absent. [Contract](config/production-domains.json).
+- Public hostnames are `checkin.jumpyard.se` and `staff-checkin.jumpyard.se`; DNS/TLS are active. #220 approves only the guest name as a pending controlled park-test alias. Staff/admin and production AWS/API remain absent. [Contract](config/production-domains.json).
 - Roller remains the source of truth for bookings, products, payments, and ticket redemption.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, session status, idempotency, audit events, and guest messaging state.
 - The production booking index uses an approved initial backfill, scheduled morning seed, idempotent webhook updates/reconciliation, and live REST confirmation. Roller remains authoritative; Aurora is the operational cache.
@@ -84,7 +84,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 - Context-hygiene Issues cannot change Roller Live, credentials, `.env`, AWS/deploys, Aurora migrations, payment source, messaging, or app behavior.
 - AWS work requires [AWS_RESOURCES.md](AWS_RESOURCES.md), `skills/aws-project-infrastructure/`, and confirmed metadata. Park-test releases follow [the T0198 runbook](docs/t0198-controlled-cicd.md); migrations are explicit and forward-only.
-- Guest messaging remains gated. Issue #216 proved one automatic Nacka T-30 email: one SES delivery, zero failures, Love-approved rendering, and a disarmed control. The scheduler is deployed but the general gate is false. Broader delivery needs a separately approved time window; `checkin.jumpyard.se` remains blocked on application/payment/Apple Pay readiness. Peak remains 3,000/day and 5/minute.
+- Guest messaging remains gated. #216 proved one automatic Nacka T-30 email, then disarmed its control. The scheduler exists but the general gate is false. Broader delivery needs an approved time window; #220 changes neither message links nor send authority. Peak remains 3,000/day and 5/minute.
 - Staff/admin PII is staff-only and must not be exposed in public guest UI or unauthenticated APIs.
 - Phone-local contact recovery uses a 12-hour device-clock expiry, active monotonic cleanup, minute checkpoints, and fail-closed detected rollback before reuse; a fully closed/offline browser cannot execute deletion or prove unobserved real time. Park-test Lambda/API logs and the private raw-payload bucket retain data for 30 days, while Aurora automated backup/PITR remains seven days.
 - Aurora lifecycle apply, migration apply, secret mutation, deploy, snapshot, and isolated restore are separate external-write checkpoints. A restored database must reapply lifecycle policy and prove database-backed aggregate evidence before any application attachment or traffic.

@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "contract": "jumpyard-check-in-production-web-domains",
   "environment": "production",
-  "state": "dns-and-tls-active-awaiting-application-deployment",
+  "state": "guest-controlled-park-test-alias-approved-awaiting-deployment",
   "zone": "jumpyard.se",
   "productionWebOrigins": [
     "https://checkin.jumpyard.se",
@@ -20,7 +20,8 @@
         "pagesDevOrigin": "https://jumpyard-check-in-production.pages.dev",
         "gitProviderConnected": false,
         "applicationDeployments": 0,
-        "status": "created-empty",
+        "status": "controlled-park-test-alias-approved-awaiting-first-deployment",
+        "deploymentPolicy": "selected-immutable-park-test-phone-artifact-only",
         "createdBy": "T0199-issue-206-explicit-scope-extension",
         "customDomainAssociation": {
           "hostname": "checkin.jumpyard.se",
@@ -116,15 +117,34 @@
       "approved-production-api-and-cors"
     ]
   },
+  "controlledParkTestAlias": {
+    "approved": true,
+    "approvedByIssue": 220,
+    "deployed": false,
+    "guestOrigin": "https://checkin.jumpyard.se",
+    "cloudflareProject": "jumpyard-check-in-production",
+    "sourceArtifact": "selected-successful-immutable-park-test-release-phone-output",
+    "apiOrigin": "https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com",
+    "rollerEnvironment": "live",
+    "rollerVenueId": "50871",
+    "protectedEnvironment": "park-test",
+    "productionCutover": false,
+    "staffAdminDeployment": false,
+    "guestMessagingOpened": false,
+    "messageLinkOrigin": "https://jumpyard-check-in-park-test.pages.dev/",
+    "manualApplePayPaymentOwner": "Love"
+  },
   "parkTestBaseline": {
-    "mustRemainUnchanged": true,
+    "mustRemainUnchanged": false,
+    "approvedChange": "add-checkin.jumpyard.se-cors-origin-only",
     "apiOrigin": "https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com",
     "phoneOrigin": "https://jumpyard-check-in-park-test.pages.dev",
     "staffAdminOrigin": "https://jumpyard-checkin-admin-park-test.pages.dev",
     "allowedCorsOrigins": [
       "https://jumpyard-check-in-park-test.pages.dev",
       "https://jumpyard-checkin-admin-park-test.pages.dev",
-      "https://jumpyard-check-in-kiosk.pages.dev"
+      "https://jumpyard-check-in-kiosk.pages.dev",
+      "https://checkin.jumpyard.se"
     ]
   }
 }

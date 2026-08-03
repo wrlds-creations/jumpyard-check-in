@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #220 Controlled `checkin.jumpyard.se` Test Alias (Approved, Not Yet Deployed)
+
+Love approved issue [#220](https://github.com/wrlds-creations/jumpyard-check-in/issues/220) to serve the selected immutable park-test phone artifact at `https://checkin.jumpyard.se` for a controlled iPhone Apple Pay test. The existing Cloudflare project/domain is external and reused. No AWS resource is created, replaced, or deleted; production AWS/API/database/secrets/data remain absent.
+
+The only planned AWS property change is the existing park-test API Gateway CORS allowlist: add exactly `https://checkin.jumpyard.se` while preserving the park-test phone, admin, and kiosk origins. Every repository park-test profile carries the same four-origin list so a later scoped profile promotion does not accidentally remove the alias. The selected artifact stays pointed at API `ij4rnaui2b`, Roller Live Nacka venue `50871`, and the existing dedicated park-test resources. Email/SMS links remain on the park-test Pages origin, `guestMessagingSendsEnabled=false`, and the T0201 hash-only control remains disarmed.
+
+The AWS change must be promoted through the existing immutable `Deploy or roll back park-test` workflow after a read-only plan and protected `park-test` approval. A separate protected Cloudflare-only workflow then deploys only the exact selected `release/phone/out` to `jumpyard-check-in-production`; it receives no AWS identity and performs no Roller write or guest send. Rollback selects an earlier successful park-test artifact to remove the new CORS origin and make browser calls from the alias fail closed. Deployment run IDs, selected SHA, exact CORS/public/domain-association proof, and Love's separate manual iPhone result remain pending.
+
 ### Issue #216 T0201 Controlled T-30 Email (Deployed, Proven, and Disarmed)
 
 Love approved issue [#216](https://github.com/wrlds-creations/jumpyard-check-in/issues/216) for one automatic park-test email tied to one separately agreed Roller Live booking, start time, and retained booking email. PR #217 added the five-minute email-only EventBridge rule plus invoke permission, conditional session-to-lookup final Roller Live read, restricted session SES permission, hash-only single-booking control, and deterministic safety coverage. Its first controlled run selected the exact Aurora candidate and confirmed identifier, schedule, active state, and settled payment, but sent nothing because Roller booking detail omitted every venue field. The control was disarmed with zero delivery rows, failed sends, queued messages, or active alarms.
