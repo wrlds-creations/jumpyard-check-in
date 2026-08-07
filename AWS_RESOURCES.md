@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #227 Kiosk Booking-Cost Payload Correction (Deployed, Physical Proof Pending)
+
+Love approved issue [#227](https://github.com/wrlds-creations/jumpyard-check-in/issues/227) after a redacted, non-financial comparison proved that ROLLER Live accepts the kiosk booking-cost payload without `paymentTerminal` and rejects the otherwise identical cost payload when that terminal-only field is present. Implementation PR [#228](https://github.com/wrlds-creations/jumpyard-check-in/pull/228) merged as `b272c5f774bf7317dbeb6310370b654c89f93233`. The booking handler now derives a non-mutating cost payload without `paymentTerminal`, keeps the server-resolved opaque terminal value on the subsequent draft request, and retains fail-closed quote/draft amount and SEK verification.
+
+Immutable release run [31200297119](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/31200297119) built that exact SHA. Protected promotion run [31200740299](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/31200740299) reviewed a 202-to-202-resource plan with no additions or removals and changes only to `BookingHandler5D1461BB` and `CDKMetadata`. Migrations remained off and complete through `0018`. Final verification passed exact selected/deployed template equality, `UPDATE_COMPLETE`, `IN_SYNC` drift, zero alarms in `ALARM`, empty queues, exact Cloudflare release readback, and public endpoint checks.
+
+A post-deploy empty draft request returned HTTP 400 `idempotency_key_required` before database or ROLLER work. The existing server-owned `primary` terminal mapping was not changed or exposed. No ROLLER draft, booking, publish, payment, refund, redemption, terminal activation, guest send, or production change occurred. The remaining acceptance gate is one separately supervised kiosk attempt under kiosk issue [#17](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/issues/17) to prove the deployed flow passes Booking Costs and reaches the physical terminal without duplicate drafts or charges.
+
 ### Issue #224 Shared Kiosk Terminal Backend (Deployed, Configuration Fail-Closed)
 
 Love approved issue [#224](https://github.com/wrlds-creations/jumpyard-check-in/issues/224) to port the ROLLER card-present backend delta onto the current shared stack without regressing CJ's later runtime roles, webhook, SES/Cognito, or release controls. Implementation PR [#225](https://github.com/wrlds-creations/jumpyard-check-in/pull/225) merged as `e84df51bdb4ed5cebebebd5296b56fdf0ca675d5`. Immutable release run [31164063864](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/31164063864) built that exact SHA; protected promotion run [31164423038](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/31164423038) applied it with migrations enabled.

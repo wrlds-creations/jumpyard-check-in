@@ -2,6 +2,14 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## Issue #227 Kiosk Booking-Cost Payload Correction
+
+- 2026-08-07: A redacted direct ROLLER Live comparison with neutral diagnostic customer data returned HTTP 200 for Booking Costs without `paymentTerminal` and HTTP 400 for the otherwise identical request with the server-owned terminal field. No draft, JWT, booking, payment, terminal activation, or customer PII was created or exposed.
+- 2026-08-07: PR #228 merged as `b272c5f774bf7317dbeb6310370b654c89f93233`. Focused tests proved that the derived cost payload excludes `paymentTerminal`, the original draft payload retains the opaque server-owned value, and amount/currency verification remains fail-closed. Full `npm run validate`, TypeScript build, exact park-test synth, whitespace checks, and CI Repository/Infrastructure/Phone/Admin jobs passed.
+- 2026-08-07: Immutable release run `31200297119` built the exact merged SHA. Protected promotion run `31200740299` reviewed a 202-to-202-resource plan changing only `BookingHandler5D1461BB` and `CDKMetadata`, with no added or removed resources and migrations disabled.
+- 2026-08-07: The promotion completed exact AWS/CDK and Cloudflare deployment plus `UPDATE_COMPLETE`, `IN_SYNC` drift, zero active alarms, empty queues, complete migrations through `0018`, exact commit readback, and healthy public checks. A post-deploy empty draft request returned HTTP 400 `idempotency_key_required` before database/provider work.
+- 2026-08-07: The existing opaque terminal mapping was unchanged and no ROLLER draft, booking, publish, payment, refund, redemption, terminal action, guest send, or production change occurred. The remaining proof is one Love-supervised physical kiosk attempt under kiosk issue #17.
+
 ## Issue #224 Shared Kiosk Terminal Backend Rollout
 
 - 2026-08-07: PR #225 merged as `e84df51bdb4ed5cebebebd5296b56fdf0ca675d5` after the full repository validation, full infrastructure check/synth, focused kiosk terminal contract suite, `git diff --check`, and CI Repository/Infrastructure/Phone/Admin checks passed.
