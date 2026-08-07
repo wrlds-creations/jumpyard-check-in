@@ -28,6 +28,7 @@ const EXPECTED_ROUTES = [
   ['POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem', 'NONE', 'redeem', 'staff_protected', 'staff_redeem'],
   ['POST /v1/bookings/quote', 'NONE', 'booking', 'guest_public', 'quote'],
   ['POST /v1/bookings/draft', 'NONE', 'booking', 'guest_write', 'draft'],
+  ['POST /v1/bookings/draft/finalize', 'NONE', 'booking', 'guest_write', 'draft'],
   ['POST /v1/bookings/availability', 'NONE', 'booking', 'guest_public', 'availability'],
   ['POST /v1/bookings/{bookingReference}/add-products/quote', 'NONE', 'booking', 'guest_token', 'addon_quote'],
   ['POST /v1/bookings/{bookingReference}/add-products', 'NONE', 'booking', 'guest_write', 'addon_draft'],
@@ -89,7 +90,7 @@ function resourcesOfType(template, resourceType) {
 
 function validateRouteCatalog(template) {
   const routeEntries = resourcesOfType(template, 'AWS::ApiGatewayV2::Route');
-  assert.equal(routeEntries.length, EXPECTED_ROUTES.length, 'The HTTP API must synthesize exactly 26 routes.');
+  assert.equal(routeEntries.length, EXPECTED_ROUTES.length, 'The HTTP API must synthesize exactly 27 routes.');
 
   const routesByKey = new Map(
     routeEntries.map(([logicalId, resource]) => [resource.Properties.RouteKey, { logicalId, resource }]),
@@ -169,8 +170,8 @@ function validateRouteSettings(template, routesByKey) {
 function validateApprovedProtectionResources(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    199,
-    'The T0193 boundary must remain intact inside T0197/T0200, issue #212, and the exact #216 scheduler boundary.',
+    202,
+    'The T0193 boundary must remain intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, and the GH-224 terminal route.',
   );
   assert.equal(resourcesOfType(template, 'AWS::SES::ConfigurationSet').length, 1);
   assert.equal(resourcesOfType(template, 'AWS::SES::ConfigurationSetEventDestination').length, 1);
@@ -243,7 +244,7 @@ function main() {
   validateRouteSettings(template, routesByKey);
   validateApprovedProtectionResources(template);
 
-  console.log('[pass] T0193/T0194 synthesize one explicit protection record for all 26 API routes');
+  console.log('[pass] T0193/T0194/GH-224 synthesize one explicit protection record for all 27 API routes');
   console.log('[pass] T0193 uses AWS_IAM only for five internal session-link routes and legacy direct redeem');
   console.log('[pass] T0194 overlays one JWT authorizer on exactly four park-test admin routes');
   console.log('[pass] T0193 applies shared-IP-safe aggregate route limits and preserves a 50/150 default envelope');

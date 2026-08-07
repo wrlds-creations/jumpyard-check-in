@@ -2,6 +2,14 @@ const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client
 const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 const crypto = require('crypto');
+const {
+  KIOSK_PAYMENT_CURRENCY,
+  normalizeBookingReadback,
+  normalizePaymentTerminalMap,
+  normalizeTerminalOutcome,
+  resolveKioskPaymentTerminal,
+  verifyKioskDraftPayment,
+} = require('./kiosk-terminal-contract');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const MAX_BOOKING_ITEMS = 10;
@@ -184,6 +192,10 @@ exports.handler = async (event) => {
 
     if (isDraftRoute(routeKey, event)) {
       return await handleDraft(event, body, correlationId);
+    }
+
+    if (isDraftFinalizeRoute(routeKey, event)) {
+      return await handleDraftFinalize(event, body, correlationId);
     }
 
     return jsonResponse(404, correlationId, {
@@ -418,11 +430,13 @@ async function handleDraft(event, body, correlationId) {
   }
 
   const requestHash = hashJson({
+    channel: request.channel,
     customer: maskCustomerForHash(request.customer),
     discounts: hashDiscountsForHash(request.discounts),
     giftCards: hashGiftCardsForHash(request.giftCards),
     items: request.items,
     operation: 'booking_draft_create',
+    paymentTerminalAlias: request.paymentTerminalAlias,
     sendConfirmations: request.sendConfirmations,
     customerPaysFees: request.customerPaysFees,
   });
@@ -442,6 +456,15 @@ async function handleDraft(event, body, correlationId) {
   }
 
   const config = await getRollerConfig();
+  const terminalSelection = resolveKioskPaymentTerminal(config, request);
+  if (terminalSelection.error) {
+    await completeIdempotencyKey(request.idempotencyKey, 'failed', terminalSelection.error.code);
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: terminalSelection.error,
+    });
+  }
+  request.paymentTerminal = terminalSelection.paymentTerminal;
   const token = await getRollerAccessToken(config);
   const availabilityError = request.requireAvailability ? await validateItemsAvailable(config, token, request.items) : null;
   if (availabilityError) {
@@ -456,6 +479,20 @@ async function handleDraft(event, body, correlationId) {
     customer: request.customer,
     externalIdPrefix: 'JY-D',
   });
+  let kioskQuoteResult = null;
+  if (terminalSelection.enabled) {
+    kioskQuoteResult = await postRollerJson(config, token, '/bookings/draft/costs', payload);
+    if (!kioskQuoteResult.ok) {
+      await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_quote_http_${kioskQuoteResult.status}`);
+      return jsonResponse(kioskQuoteResult.status === 409 ? 409 : 502, correlationId, {
+        status: kioskQuoteResult.status === 409 ? 'rejected' : 'roller_error',
+        error: {
+          code: 'roller_kiosk_quote_failed',
+          message: `ROLLER kiosk quote failed with HTTP ${kioskQuoteResult.status}.`,
+        },
+      });
+    }
+  }
   const rollerResult = await postRollerJson(config, token, '/bookings/draft', payload);
 
   if (!rollerResult.ok) {
@@ -486,6 +523,31 @@ async function handleDraft(event, body, correlationId) {
   }
 
   let draft = normalizeDraftResponse(rollerResult.body, request.items.length, request);
+  if (terminalSelection.enabled) {
+    const verification = verifyKioskDraftPayment({
+      draftBody: rollerResult.body,
+      paymentJwt: rollerResult.body?.paymentJwt,
+      quoteBody: kioskQuoteResult.body,
+    });
+    if (!verification.ok) {
+      await completeIdempotencyKey(request.idempotencyKey, 'failed', verification.error.code);
+      await writeBookingEventLog({
+        correlationId,
+        eventType: 'booking.kiosk_terminal_contract_failed',
+        payload: {
+          endpoint: 'POST /bookings/draft',
+          itemCount: request.items.length,
+          reason: verification.error.code,
+        },
+        subjectRef: draft.uniqueId || payload.externalId,
+        summary: 'ROLLER kiosk terminal draft failed amount or currency verification.',
+      });
+      return jsonResponse(502, correlationId, {
+        status: 'roller_error',
+        error: verification.error,
+      });
+    }
+  }
   const giftCards = draft.giftCards;
   const discountCodes = draft.discountCodes;
   let noPaymentPublish = null;
@@ -577,6 +639,7 @@ async function handleDraft(event, body, correlationId) {
       giftCardRequestedCount: giftCards.requestedCount,
       itemCount: request.items.length,
       paymentJwtPresent: jwtSummary.present,
+      paymentChannel: terminalSelection.enabled ? 'card_present' : 'ecommerce',
       prepaymentDraftId: prepaymentDraft.prepaymentDraftId,
       rollerEnvironment: config.env,
       rollerDraftUniqueId: draft.uniqueId,
@@ -597,6 +660,13 @@ async function handleDraft(event, body, correlationId) {
       jwtPresent: jwtSummary.present,
       jwtSummary,
       config: paymentConfig,
+      terminal: terminalSelection.enabled
+        ? {
+            apiUrl: paymentConfig.apiUrl,
+            available: Boolean(paymentConfig.apiUrl && jwtSummary.present),
+            currency: KIOSK_PAYMENT_CURRENCY,
+          }
+        : undefined,
     },
     source: {
       system: 'roller',
@@ -605,6 +675,185 @@ async function handleDraft(event, body, correlationId) {
       wroteBooking: true,
     },
   });
+}
+
+async function handleDraftFinalize(event, body, correlationId) {
+  const request = {
+    idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
+    outcome: normalizeTerminalOutcome(body.outcome),
+    paymentAttemptId: stringOrNull(body.paymentAttemptId),
+    prepaymentDraftId: stringOrNull(body.prepaymentDraftId),
+    rollerDraftUniqueId: stringOrNull(body.rollerDraftUniqueId),
+  };
+  const validationError = validateDraftFinalizeRequest(request);
+  if (validationError) {
+    return jsonResponse(400, correlationId, { status: 'invalid_request', error: validationError });
+  }
+
+  const prepayment = await findKioskPrepaymentAttempt(request);
+  if (!prepayment) {
+    return jsonResponse(404, correlationId, {
+      status: 'blocked',
+      error: {
+        code: 'kiosk_payment_attempt_not_found',
+        message: 'The kiosk payment attempt was not found.',
+      },
+    });
+  }
+
+  if (request.outcome !== 'approved') {
+    await recordKioskTerminalOutcome(request, request.outcome);
+    return jsonResponse(200, correlationId, {
+      status: 'terminal_result_recorded',
+      booking: null,
+    });
+  }
+
+  if (!isNewBookingDraftWriteEnabled()) {
+    return safetyGateBlockedResponse(correlationId, 'roller_booking_draft_writes_disabled');
+  }
+
+  const alreadyReconciled =
+    prepayment.payment_attempt_status === 'reconciled' || prepayment.status === 'published';
+  if (!alreadyReconciled) await recordKioskTerminalOutcome(request, 'approved');
+  const config = await getRollerConfig();
+  const token = await getRollerAccessToken(config);
+  const publishResult = alreadyReconciled
+    ? { body: null, ok: true, status: 200 }
+    : await publishNoPaymentDraft(config, token, request.rollerDraftUniqueId);
+  const lookupCandidates = [
+    stringOrNull(publishResult.body?.uniqueId),
+    stringOrNull(publishResult.body?.bookingReference),
+    request.rollerDraftUniqueId,
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+
+  let readback = null;
+  for (const identifier of lookupCandidates) {
+    const result = await getRollerJson(config, token, `/bookings/${encodeURIComponent(identifier)}`);
+    if (!result.ok) continue;
+    const candidate = normalizeBookingReadback(result.body);
+    if (candidate.confirmed) {
+      readback = candidate;
+      break;
+    }
+  }
+
+  if (!readback) {
+    await writeBookingEventLog({
+      correlationId,
+      eventType: 'booking.kiosk_terminal_confirmation_pending',
+      payload: {
+        publishStatus: publishResult.status,
+      },
+      subjectRef: request.prepaymentDraftId,
+      summary: 'Kiosk terminal payment was approved but ROLLER booking readback is still pending.',
+    });
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: 'kiosk_booking_confirmation_pending',
+        message: 'Payment is approved but the ROLLER booking is not confirmed yet.',
+      },
+    });
+  }
+
+  await executeStatement(
+    `UPDATE jumpyard.prepayment_booking_drafts
+     SET
+       status = 'published',
+       payment_attempt_status = 'reconciled',
+       amount_owing_cents = 0,
+       updated_at = now()
+     WHERE prepayment_draft_id = :prepaymentDraftId
+       AND payment_attempt_id = :paymentAttemptId`,
+    [
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+    ],
+  );
+  await writeBookingEventLog({
+    correlationId,
+    eventType: 'booking.kiosk_terminal_reconciled',
+    payload: {
+      paymentChannel: 'card_present',
+    },
+    subjectRef: request.prepaymentDraftId,
+    summary: 'ROLLER kiosk terminal payment and booking were reconciled.',
+  });
+
+  return jsonResponse(200, correlationId, {
+    status: 'booking_confirmed',
+    booking: readback,
+  });
+}
+
+function validateDraftFinalizeRequest(request) {
+  if (!request.idempotencyKey) {
+    return { code: 'idempotency_key_required', message: 'An idempotency key is required.' };
+  }
+  if (!request.outcome) {
+    return { code: 'terminal_outcome_invalid', message: 'A supported terminal outcome is required.' };
+  }
+  if (!/^jypd_[a-f0-9]{18}$/.test(request.prepaymentDraftId ?? '')) {
+    return { code: 'prepayment_draft_id_invalid', message: 'A valid prepayment draft id is required.' };
+  }
+  if (!/^jytp_[a-f0-9]{18}$/.test(request.paymentAttemptId ?? '')) {
+    return { code: 'payment_attempt_id_invalid', message: 'A valid payment attempt id is required.' };
+  }
+  if (!request.rollerDraftUniqueId || request.rollerDraftUniqueId.length > 128) {
+    return { code: 'roller_draft_id_invalid', message: 'A valid ROLLER draft id is required.' };
+  }
+  return null;
+}
+
+async function findKioskPrepaymentAttempt(request) {
+  const result = await executeStatement(
+    `SELECT
+       prepayment_draft_id,
+       roller_draft_unique_id,
+       payment_attempt_id,
+       payment_attempt_status,
+       status
+     FROM jumpyard.prepayment_booking_drafts
+     WHERE prepayment_draft_id = :prepaymentDraftId
+       AND roller_draft_unique_id = :rollerDraftUniqueId
+       AND payment_attempt_id = :paymentAttemptId
+       AND payment_channel = 'card_present'
+       AND flow_type = 'new_booking'
+     LIMIT 1`,
+    [
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('rollerDraftUniqueId', request.rollerDraftUniqueId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+    ],
+  );
+  return firstMappedRow(result) ?? null;
+}
+
+async function recordKioskTerminalOutcome(request, outcome) {
+  const status = outcome === 'failed' ? 'failed' : outcome === 'cancelled' ? 'cancelled' : 'payment_pending';
+  await executeStatement(
+    `UPDATE jumpyard.prepayment_booking_drafts
+     SET
+       payment_attempt_status = CASE
+         WHEN payment_attempt_status = 'reconciled' THEN payment_attempt_status
+         WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved' THEN payment_attempt_status
+         ELSE :outcome
+       END,
+       status = CASE
+         WHEN status = 'published' THEN status
+         ELSE :status
+       END,
+       updated_at = now()
+     WHERE prepayment_draft_id = :prepaymentDraftId
+       AND payment_attempt_id = :paymentAttemptId`,
+    [
+      stringParameter('outcome', outcome),
+      stringParameter('status', status),
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+    ],
+  );
 }
 
 async function handleAddProductQuote(event, body, correlationId) {
@@ -972,6 +1221,7 @@ function normalizeQuoteRequest(body) {
 function normalizeDraftRequest(event, body) {
   return {
     capacityReservationId: stringOrNull(body.capacityReservationId),
+    channel: body.channel === 'kiosk' ? 'kiosk' : body.channel ? 'unsupported' : null,
     comments: stringOrNull(body.comments),
     companyId: numberOrNull(body.companyId),
     confirmDraft: body.confirmDraft === true,
@@ -984,6 +1234,7 @@ function normalizeDraftRequest(event, body) {
     idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
     items: normalizeItems(body.items),
     name: stringOrNull(body.name),
+    paymentTerminalAlias: stringOrNull(body.paymentTerminalAlias),
     requireAvailability: body.requireAvailability === true,
     sendConfirmations: body.sendConfirmations === true,
     venueId: stringOrNull(body.venueId),
@@ -1276,7 +1527,12 @@ function redactPaymentInputSecrets(value, requestOrGiftCards = []) {
       ? requestOrGiftCards.giftCards
       : [];
   const requestedDiscounts = Array.isArray(requestOrGiftCards?.discounts) ? requestOrGiftCards.discounts : [];
-  return redactDiscountCodeSecrets(redactGiftCardSecrets(value, requestedGiftCards), requestedDiscounts);
+  let redacted = redactDiscountCodeSecrets(redactGiftCardSecrets(value, requestedGiftCards), requestedDiscounts);
+  const paymentTerminal = Array.isArray(requestOrGiftCards)
+    ? null
+    : stringOrNull(requestOrGiftCards?.paymentTerminal);
+  if (paymentTerminal) redacted = redacted.split(paymentTerminal).join('[REDACTED_TERMINAL]');
+  return redacted;
 }
 
 function validateQuoteRequest(request) {
@@ -1485,6 +1741,27 @@ function validateDraftRequest(request) {
     };
   }
 
+  if (request.channel === 'unsupported') {
+    return {
+      code: 'payment_channel_invalid',
+      message: 'Unsupported booking payment channel.',
+    };
+  }
+
+  if (request.channel === 'kiosk' && !request.paymentTerminalAlias) {
+    return {
+      code: 'payment_terminal_alias_required',
+      message: 'Kiosk draft creation requires a payment terminal alias.',
+    };
+  }
+
+  if (request.channel !== 'kiosk' && request.paymentTerminalAlias) {
+    return {
+      code: 'payment_terminal_alias_not_allowed',
+      message: 'A payment terminal alias is only allowed for the kiosk channel.',
+    };
+  }
+
   const customerError = validateCustomer(request.customer);
   if (customerError) return customerError;
 
@@ -1633,6 +1910,7 @@ function buildRollerBookingPayload(request, { customer, externalIdPrefix }) {
   if (request.companyId !== null) payload.companyId = request.companyId;
   if (request.discounts.length > 0) payload.discounts = request.discounts;
   if (request.giftCards.length > 0) payload.giftCards = request.giftCards;
+  if (request.paymentTerminal) payload.paymentTerminal = request.paymentTerminal;
 
   return payload;
 }
@@ -1663,6 +1941,7 @@ async function getRollerConfig() {
     baseUrl: baseUrlParameter,
     clientId: String(secret.clientId ?? secret.client_id ?? '').trim(),
     clientSecret: String(secret.clientSecret ?? secret.client_secret ?? '').trim(),
+    paymentTerminals: normalizePaymentTerminalMap(secret.paymentTerminals ?? secret.kioskPaymentTerminals),
   };
 
   validateRollerConfig(config);
@@ -2802,6 +3081,10 @@ async function persistPrepaymentDraft({
   const prepaymentDraftId = `jypd_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`;
   const firstItem = request.items[0] ?? {};
   const flowType = request.flowType === 'add_product' ? 'add_product' : 'new_booking';
+  const paymentChannel = request.channel === 'kiosk' ? 'card_present' : 'ecommerce';
+  const paymentAttemptId = paymentChannel === 'card_present'
+    ? `jytp_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`
+    : null;
   const totalCents = centsFromAmount(draft.costs.total);
   const amountOwingCents = centsFromAmount(draft.costs.amountOwing);
   const email = request.customer.email;
@@ -2813,7 +3096,7 @@ async function persistPrepaymentDraft({
     startTime: item.startTime,
   }));
 
-  await executeStatement(
+  const persisted = await executeStatement(
     `INSERT INTO jumpyard.prepayment_booking_drafts (
        prepayment_draft_id,
        roller_draft_unique_id,
@@ -2825,6 +3108,9 @@ async function persistPrepaymentDraft({
        original_roller_unique_id,
        add_on_group_id,
        status,
+       payment_channel,
+       payment_attempt_id,
+       payment_attempt_status,
        roller_env,
        booking_date,
        start_time,
@@ -2856,6 +3142,9 @@ async function persistPrepaymentDraft({
        :originalRollerUniqueId,
        :addOnGroupId,
        :status,
+       :paymentChannel,
+       :paymentAttemptId,
+       :paymentAttemptStatus,
        :rollerEnv,
        CAST(:bookingDate AS date),
        CAST(:startTime AS time),
@@ -2884,6 +3173,9 @@ async function persistPrepaymentDraft({
        original_roller_unique_id = EXCLUDED.original_roller_unique_id,
        add_on_group_id = EXCLUDED.add_on_group_id,
        status = EXCLUDED.status,
+       payment_channel = EXCLUDED.payment_channel,
+       payment_attempt_id = COALESCE(jumpyard.prepayment_booking_drafts.payment_attempt_id, EXCLUDED.payment_attempt_id),
+       payment_attempt_status = COALESCE(jumpyard.prepayment_booking_drafts.payment_attempt_status, EXCLUDED.payment_attempt_status),
        total_cents = EXCLUDED.total_cents,
        amount_owing_cents = EXCLUDED.amount_owing_cents,
        customer_first_name = EXCLUDED.customer_first_name,
@@ -2891,7 +3183,8 @@ async function persistPrepaymentDraft({
        items_summary = EXCLUDED.items_summary,
        payment_jwt_present = EXCLUDED.payment_jwt_present,
        payment_config_available = EXCLUDED.payment_config_available,
-       updated_at = now()`,
+       updated_at = now()
+     RETURNING prepayment_draft_id, payment_attempt_id`,
     [
       stringParameter('prepaymentDraftId', prepaymentDraftId),
       stringParameter('rollerDraftUniqueId', draft.uniqueId),
@@ -2903,6 +3196,9 @@ async function persistPrepaymentDraft({
       stringParameter('originalRollerUniqueId', request.originalRollerUniqueId),
       stringParameter('addOnGroupId', request.addOnGroupId),
       stringParameter('status', status),
+      stringParameter('paymentChannel', paymentChannel),
+      stringParameter('paymentAttemptId', paymentAttemptId),
+      stringParameter('paymentAttemptStatus', paymentAttemptId ? 'created' : null),
       stringParameter('rollerEnv', config.env),
       stringParameter('bookingDate', firstItem.bookingDate),
       stringParameter('startTime', firstItem.startTime),
@@ -2923,6 +3219,7 @@ async function persistPrepaymentDraft({
       booleanParameter('paymentConfigAvailable', paymentConfig?.available === true),
     ],
   );
+  const persistedRow = firstMappedRow(persisted);
 
   return {
     amountOwing: draft.costs.amountOwing,
@@ -2932,8 +3229,15 @@ async function persistPrepaymentDraft({
     flowType,
     originalBookingReference: request.originalBookingReference ?? null,
     originalRollerUniqueId: request.originalRollerUniqueId ?? null,
-    paymentBlockedReason: status === 'published' ? null : 'payment_dropin_not_configured',
-    prepaymentDraftId,
+    paymentAttemptId: stringOrNull(persistedRow?.payment_attempt_id),
+    paymentBlockedReason:
+      status === 'published'
+        ? null
+        : paymentChannel === 'card_present'
+          ? null
+          : 'payment_dropin_not_configured',
+    paymentChannel,
+    prepaymentDraftId: stringOrNull(persistedRow?.prepayment_draft_id) || prepaymentDraftId,
     rollerDraftUniqueId: draft.uniqueId,
     status,
     total: draft.costs.total,
@@ -3383,6 +3687,13 @@ function isQuoteRoute(routeKey, event) {
 
 function isDraftRoute(routeKey, event) {
   return routeKey === 'POST /v1/bookings/draft' || event?.rawPath === '/v1/bookings/draft';
+}
+
+function isDraftFinalizeRoute(routeKey, event) {
+  return (
+    routeKey === 'POST /v1/bookings/draft/finalize' ||
+    event?.rawPath === '/v1/bookings/draft/finalize'
+  );
 }
 
 function isAvailabilityRoute(routeKey, event) {

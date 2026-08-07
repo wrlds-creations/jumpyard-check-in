@@ -86,6 +86,9 @@ function loadLambda(relativePath, options = {}) {
       if (relativePath === 'infra/lambda/session/index.js' && moduleId === './email-template') {
         return require(path.join(path.dirname(absolutePath), 'email-template.js'));
       }
+      if (relativePath === 'infra/lambda/booking/index.js' && moduleId === './kiosk-terminal-contract') {
+        return require(path.join(path.dirname(absolutePath), 'kiosk-terminal-contract.js'));
+      }
       throw new Error(`Unexpected require(${JSON.stringify(moduleId)}).`);
     },
     setTimeout,
