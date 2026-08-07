@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
+  buildKioskQuotePayload,
   normalizeBookingReadback,
   normalizePaymentTerminalMap,
   normalizeTerminalOutcome,
@@ -42,6 +43,19 @@ assert.equal(
   ).error.code,
   'kiosk_payment_terminal_not_configured',
 );
+
+const kioskDraftPayload = {
+  externalId: 'safe-external-reference',
+  items: [{ productId: 'safe-product-reference', quantity: 1 }],
+  paymentTerminal: 'server-owned-reference',
+};
+const kioskQuotePayload = buildKioskQuotePayload(kioskDraftPayload);
+assert.deepEqual(kioskQuotePayload, {
+  externalId: 'safe-external-reference',
+  items: [{ productId: 'safe-product-reference', quantity: 1 }],
+});
+assert.equal(Object.hasOwn(kioskQuotePayload, 'paymentTerminal'), false);
+assert.equal(kioskDraftPayload.paymentTerminal, 'server-owned-reference');
 
 const jwt = makeJwt({ currency: 'SEK', merchantReference: 'safe-reference' });
 assert.deepEqual(
@@ -96,6 +110,12 @@ assert.match(stackSource, /routeKey: 'POST \/v1\/bookings\/draft\/finalize'/);
 assert.match(bookingSource, /paymentTerminals: normalizePaymentTerminalMap/);
 assert.match(bookingSource, /paymentTerminalAlias: request\.paymentTerminalAlias/);
 assert.match(bookingSource, /if \(request\.paymentTerminal\) payload\.paymentTerminal = request\.paymentTerminal/);
+assert.match(bookingSource, /const kioskQuotePayload = buildKioskQuotePayload\(payload\)/);
+assert.match(
+  bookingSource,
+  /postRollerJson\(config, token, '\/bookings\/draft\/costs', kioskQuotePayload\)/,
+);
+assert.match(bookingSource, /postRollerJson\(config, token, '\/bookings\/draft', payload\)/);
 assert.match(bookingSource, /payment_attempt_status = 'reconciled'/);
 assert.match(bookingSource, /WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved'/);
 assert.match(bookingSource, /kiosk_booking_confirmation_pending/);

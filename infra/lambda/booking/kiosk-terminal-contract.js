@@ -26,6 +26,12 @@ function resolveKioskPaymentTerminal(config, request) {
   return { enabled: true, paymentTerminal };
 }
 
+function buildKioskQuotePayload(draftPayload) {
+  if (!draftPayload || typeof draftPayload !== 'object' || Array.isArray(draftPayload)) return {};
+  const { paymentTerminal: _paymentTerminal, ...quotePayload } = draftPayload;
+  return quotePayload;
+}
+
 function verifyKioskDraftPayment({ draftBody, paymentJwt, quoteBody }) {
   const draftAmountCents = amountToCents(readAmountOwing(draftBody));
   const quoteAmountCents = amountToCents(readAmountOwing(quoteBody));
@@ -137,6 +143,7 @@ function stringOrNull(value) {
 }
 
 module.exports = {
+  buildKioskQuotePayload,
   KIOSK_PAYMENT_CURRENCY,
   normalizeBookingReadback,
   normalizePaymentTerminalMap,

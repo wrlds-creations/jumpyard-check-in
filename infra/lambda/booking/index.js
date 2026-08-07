@@ -3,6 +3,7 @@ const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 const crypto = require('crypto');
 const {
+  buildKioskQuotePayload,
   KIOSK_PAYMENT_CURRENCY,
   normalizeBookingReadback,
   normalizePaymentTerminalMap,
@@ -481,7 +482,8 @@ async function handleDraft(event, body, correlationId) {
   });
   let kioskQuoteResult = null;
   if (terminalSelection.enabled) {
-    kioskQuoteResult = await postRollerJson(config, token, '/bookings/draft/costs', payload);
+    const kioskQuotePayload = buildKioskQuotePayload(payload);
+    kioskQuoteResult = await postRollerJson(config, token, '/bookings/draft/costs', kioskQuotePayload);
     if (!kioskQuoteResult.ok) {
       await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_quote_http_${kioskQuoteResult.status}`);
       return jsonResponse(kioskQuoteResult.status === 409 ? 409 : 502, correlationId, {
