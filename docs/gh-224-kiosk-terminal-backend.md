@@ -1,6 +1,6 @@
 # GH-224 shared kiosk terminal backend
 
-Status: implementation prepared for protected park-test release; physical proof and terminal mapping remain separate gates.
+Status: backend deployed to park-test; physical proof and terminal mapping remain separate gates.
 
 Date: 2026-08-07
 
@@ -26,6 +26,14 @@ The kiosk repository contains the ROLLER card-present browser flow, but its copi
 - The CDK delta adds one existing-BookingHandler API route with the established `guest_write` protection and throttling profile.
 - Routine park-test rollout must merge first, build one immutable release artifact from `main`, show the protected read-only plan, and apply migration 0018 only with the explicit deployment input.
 - The ROLLER secret currently has no `paymentTerminals.primary` mapping. The path therefore remains fail-closed after code deployment until an approved opaque value is supplied without printing or committing it.
+
+## Deployment evidence
+
+- Implementation PR [#225](https://github.com/wrlds-creations/jumpyard-check-in/pull/225) merged as `e84df51bdb4ed5cebebebd5296b56fdf0ca675d5`.
+- Immutable release run [31164063864](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/31164063864) built and validated that exact `main` SHA.
+- Protected promotion run [31164423038](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/31164423038) applied migration `0018`, added only the finalize integration/route/invoke permission, and changed only the existing BookingHandler, API stage, and CDK metadata. The reviewed plan moved from 199 to 202 resources with zero removals.
+- Post-deploy readback returned `UPDATE_COMPLETE`, 202 resources, migration `0018` applied, and the exact `POST /v1/bookings/draft/finalize` route. An empty request returned HTTP 400 `idempotency_key_required` before database or provider work.
+- Safe secret readback reports `paymentTerminalsPresent=false` and `primaryPresent=false`; no value was printed or changed. No ROLLER draft, booking, publish, payment, refund, redemption, terminal operation, or guest send occurred.
 
 ## Explicit exclusions
 

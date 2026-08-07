@@ -2,6 +2,14 @@
 
 This archive was created in T0128 to keep active source-of-truth files short while preserving historical validation evidence.
 
+## Issue #224 Shared Kiosk Terminal Backend Rollout
+
+- 2026-08-07: PR #225 merged as `e84df51bdb4ed5cebebebd5296b56fdf0ca675d5` after the full repository validation, full infrastructure check/synth, focused kiosk terminal contract suite, `git diff --check`, and CI Repository/Infrastructure/Phone/Admin checks passed.
+- 2026-08-07: Read-only CDK diff and protected plan both reported 199 current and 202 release resources: only the finalize route/integration/invoke permission were added; BookingHandler, DefaultStage, and CDK metadata changed; nothing was removed or replaced.
+- 2026-08-07: Immutable release run `31164063864` built the exact merged SHA. Protected promotion run `31164423038` applied migration `0018`, deployed the exact cloud assembly plus existing phone/admin outputs without rebuilding, and passed its AWS, Cloudflare, migration, queue, alarm, drift, and public verification steps.
+- 2026-08-07: Independent readback confirmed `UPDATE_COMPLETE`, 202 stack resources, migration `0018 kiosk terminal payment attempts` applied, and `POST /v1/bookings/draft/finalize` present. An empty request returned HTTP 400 `idempotency_key_required` before database/provider work.
+- 2026-08-07: Safe secret inspection returned only `paymentTerminalsPresent=false` and `primaryPresent=false`; the path remains fail-closed. No terminal identifier/credential was printed or changed, and no ROLLER draft, booking, publish, payment, refund, redemption, terminal action, guest send, or production change occurred.
+
 ## T0196 Live Booking Index And Morning Seed
 
 - 2026-07-14: Love approved GitHub Issue #197, the recommended Live/Nacka policy, read-only Roller preflight, park-test deploy, migrations, bounded Aurora backfill, scheduled-path smoke, and GitHub closeout. Confirmed target metadata was account `376129878018`, region `eu-north-1`, environment `park-test`, owner `love`, repository `wrlds-creations/jumpyard-check-in`, confidential/exportable data, unassigned cost center, and the ten existing WRLDS tags.
