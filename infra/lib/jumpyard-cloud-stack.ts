@@ -268,6 +268,14 @@ const API_ROUTE_PROTECTION_CATALOG = [
   {
     authorizationType: 'NONE',
     handler: 'booking',
+    routeKey: 'POST /v1/bookings/draft/finalize',
+    throttlingBurstLimit: 20,
+    throttlingRateLimit: 5,
+    trustClass: 'guest_write',
+  },
+  {
+    authorizationType: 'NONE',
+    handler: 'booking',
     routeKey: 'POST /v1/bookings/availability',
     throttlingBurstLimit: 60,
     throttlingRateLimit: 20,

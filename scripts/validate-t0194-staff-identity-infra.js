@@ -75,7 +75,7 @@ function iamPoliciesReference(template, logicalId) {
 function validateParkTest(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    199,
+    202,
     'T0194 remains intact inside T0197/T0200, issue #212, and the exact #216 scheduler boundary.',
   );
   assert.equal(entriesOfType(template, 'AWS::SES::ConfigurationSet').length, 1);
@@ -203,7 +203,7 @@ function validateParkTest(template) {
   ]);
 
   const routes = routesByKey(template);
-  assert.equal(routes.size, 26);
+  assert.equal(routes.size, 27);
   const jwtRouteKeys = [
     'POST /v1/admin/auth/session',
     'GET /v1/admin/staff',
@@ -275,7 +275,7 @@ function validateDev(template) {
   assert.equal(entriesOfType(template, 'AWS::ApiGatewayV2::Authorizer').length, 0);
 
   const routes = routesByKey(template);
-  assert.equal(routes.size, 21);
+  assert.equal(routes.size, 22);
   assert.equal(routes.get('POST /v1/staff/auth/login').route.Properties.AuthorizationType, 'NONE');
   for (const routeKey of [
     'GET /v1/staff/check-in/sessions',

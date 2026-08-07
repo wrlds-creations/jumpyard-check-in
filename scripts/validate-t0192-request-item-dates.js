@@ -53,6 +53,9 @@ function loadBooking(environment) {
     require(moduleId) {
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule();
+      if (moduleId === './kiosk-terminal-contract') {
+        return require(path.join(ROOT, 'infra/lambda/booking/kiosk-terminal-contract.js'));
+      }
       throw new Error(`Unexpected require(${JSON.stringify(moduleId)}) in booking handler.`);
     },
     setTimeout,

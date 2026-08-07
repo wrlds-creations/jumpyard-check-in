@@ -696,8 +696,16 @@ Draft rules:
 - Return the draft unique id, normalized costs, payment config from `GET /venues/me`, and the raw `paymentJwt` only in the API response.
 - Do not log, print, or persist the raw `paymentJwt`.
 - T0033 persists safe draft metadata to `jumpyard.prepayment_booking_drafts`, including `payment_jwt_present` and `payment_config_available` flags, but no raw `paymentJwt` value.
+- For the kiosk card-present path, the client adds `channel: "kiosk"` and `paymentTerminalAlias: "primary"`. JumpYard Cloud resolves the alias from `paymentTerminals` in the existing server-side ROLLER secret and sends the opaque `paymentTerminal` only to ROLLER.
+- The kiosk response contains a safe payment-attempt id plus the ROLLER payment API origin and currency, never the terminal reference. JumpYard Cloud re-quotes server-side and requires exact amount plus SEK evidence before returning the terminal-bound JWT.
 - If amount owing is zero, use `POST /bookings/draft/publish`.
 - Payment implementation must first confirm how Roller's returned `paymentJwt` is used, which fake/test card numbers are supported in Playground, and whether the payment component can run inside the JumpYard PWA without a hosted payment-link detour.
+
+### `POST /v1/bookings/draft/finalize`
+
+Records a sanitized ROLLER terminal result for one server-owned kiosk payment attempt. `approved` calls ROLLER draft publish and then reads the booking back; only a settled authoritative booking returns `booking_confirmed`. `failed`, `cancelled`, and `unknown` update only monotonic safe attempt state.
+
+Required fields are `prepaymentDraftId`, `paymentAttemptId`, `rollerDraftUniqueId`, `outcome`, and an idempotency key. All identifiers must match one `card_present` new-booking row. The endpoint accepts no card data, receipt data, processor reference, terminal id, or raw payment JWT. A late non-approved result cannot downgrade an approved or reconciled attempt.
 
 T0030 discovery result:
 
