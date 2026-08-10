@@ -150,7 +150,43 @@ async function validateVenueEvidence() {
     {},
     lookupBooking(null),
   );
-  assert.equal(missingLookup.ok, false, 'Lookup must reject missing booking venue evidence.');
+  assert.equal(missingLookup.ok, false, 'Lookup must reject missing booking and provider venue evidence.');
+
+  const providerVerifiedLookup = lookup.validateParkTestBookingScope(
+    lookupAccess,
+    lookupRequest,
+    {},
+    lookupBooking(null),
+    APPROVED_VENUE,
+  );
+  assert.equal(
+    providerVerifiedLookup.ok,
+    true,
+    'Lookup must allow missing booking venue when the authenticated Roller venue matches Nacka.',
+  );
+  assert.equal(providerVerifiedLookup.venueId, APPROVED_VENUE);
+
+  const wrongProviderLookup = lookup.validateParkTestBookingScope(
+    lookupAccess,
+    lookupRequest,
+    {},
+    lookupBooking(null),
+    '99999',
+  );
+  assert.equal(wrongProviderLookup.ok, false, 'Lookup must reject the wrong authenticated Roller venue.');
+
+  const explicitWrongLookup = lookup.validateParkTestBookingScope(
+    lookupAccess,
+    lookupRequest,
+    { venueId: '99999' },
+    lookupBooking('99999'),
+    APPROVED_VENUE,
+  );
+  assert.equal(
+    explicitWrongLookup.ok,
+    false,
+    'An explicit wrong booking venue must override the authenticated account venue and remain blocked.',
+  );
 
   const lookupWithoutApprovedVenue = loadHandler(
     'infra/lambda/lookup/index.js',
