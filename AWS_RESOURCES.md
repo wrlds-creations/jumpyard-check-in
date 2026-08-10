@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #230 Missing-Booking-Venue Lookup Correction (Deployed and Proven)
+
+Love approved issue [#230](https://github.com/wrlds-creations/jumpyard-check-in/issues/230) after a controlled Nacka kiosk lookup showed that ROLLER Live returned valid booking detail without a venue field. Implementation PR [#231](https://github.com/wrlds-creations/jumpyard-check-in/pull/231) merged as `ae6391324fe71b8f6a8184250ee6b8c04210c80b`. The lookup handler now uses authenticated ROLLER Live `GET /venues/me` only when booking venue is absent and accepts the fallback only for exact configured venue `50871`. Explicit booking venue remains authoritative; mismatch, provider failure, malformed identity, missing configuration, and non-Live provider use remain fail-closed.
+
+Immutable release run [31374270132](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/31374270132) built the exact merge commit. Protected promotion run [31374686605](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/31374686605) reviewed a 202-to-202-resource plan changing only `LookupHandler` code and CDK metadata. Migrations remained off and complete through `0018`. Final verification passed exact selected/deployed templates, `UPDATE_COMPLETE`, `IN_SYNC` drift, zero active alarms, empty queues, exact phone/admin Cloudflare release readback, and public endpoint checks. No AWS resource, route, IAM boundary, environment variable, database schema, secret, payment, booking, redemption, guest send, or production resource was created or changed beyond the existing Lambda code asset.
+
+Post-deploy API proof returned HTTP 200 with `status=found`, `eligibility=ready`, and server-owned guest access without exposing customer data. The physical Android kiosk then found the controlled paid booking, skipped payment with zero payable additions, completed safety, and reached the ready-for-entry handoff screen. Native receipt printing remains owned by kiosk issue [#20](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/issues/20), not this shared-backend correction.
+
 ### Issue #227 Kiosk Booking-Cost Payload Correction (Deployed, Physical Proof Pending)
 
 Love approved issue [#227](https://github.com/wrlds-creations/jumpyard-check-in/issues/227) after a redacted, non-financial comparison proved that ROLLER Live accepts the kiosk booking-cost payload without `paymentTerminal` and rejects the otherwise identical cost payload when that terminal-only field is present. Implementation PR [#228](https://github.com/wrlds-creations/jumpyard-check-in/pull/228) merged as `b272c5f774bf7317dbeb6310370b654c89f93233`. The booking handler now derives a non-mutating cost payload without `paymentTerminal`, keeps the server-resolved opaque terminal value on the subsequent draft request, and retains fail-closed quote/draft amount and SEK verification.

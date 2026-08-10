@@ -31,4 +31,13 @@ This is a server-side lookup correction. It does not change the kiosk APK, QR fo
 - infrastructure build/check and park-test full-flow synth
 - read-only CDK diff proving only the lookup Lambda asset changes
 
-Physical kiosk QR lookup and the remainder of the no-payment check-in/print flow remain rollout evidence after protected park-test deployment.
+## Rollout evidence
+
+- PR #231 merged as `ae6391324fe71b8f6a8184250ee6b8c04210c80b`.
+- Immutable release run `31374270132` built the exact merge commit.
+- Protected park-test promotion run `31374686605` reviewed a 202-to-202-resource plan changing only the existing lookup Lambda code asset and CDK metadata; migrations remained off.
+- Final verification passed exact-artifact AWS and Cloudflare readback, `UPDATE_COMPLETE`, `IN_SYNC` drift, zero active alarms, empty queues, migrations through `0018`, and healthy public endpoints.
+- A sanitized deployed API probe returned HTTP 200 with `status=found` and `eligibility=ready`.
+- On the physical Android kiosk, the controlled paid ROLLER booking was found, the no-payable-add-on path skipped payment, safety completed, and the ready-for-entry handoff screen rendered.
+
+The controlled booking reference, QR payload, guest identity, access proof, and session identifiers are intentionally absent from repository evidence. Native receipt printing is separate kiosk issue #20 and is not an acceptance condition for this shared lookup correction.
