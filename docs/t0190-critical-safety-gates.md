@@ -9,6 +9,8 @@ T0190 makes two cloud safety rules dependable before Sprint 3 adds staging and p
 
 The useful analogy is a building with a main breaker and several locked rooms. Turning off the main breaker does not unlock any room; each room still needs its own approved key. Turning the main breaker on cuts power to every room regardless of which keys are present.
 
+Issue #230 and D0179 later added one narrow assisted-lookup exception: when ROLLER omits venue from booking detail, the authenticated Live API account may supply the missing evidence through `GET /venues/me`. The configured venue and provider identity must both equal `50871`; an explicit booking venue still takes precedence and a mismatch remains blocked. Add-on and redeem gates are unchanged.
+
 ## Why The Old Model Was Unsafe
 
 | Finding | Old behavior | Corrected behavior |

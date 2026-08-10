@@ -17,7 +17,7 @@ const TOKEN_BYTES = 32;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 const T0201_CONTROLLED_T30_EMAIL_APPROVAL = 'T0201_SINGLE_BOOKING_T30_EMAIL_APPROVED';
 const T0201_CONTROLLED_VENUE_ID = '50871';
-const T0201_VENUE_IDENTITY_DELAY_MS = 1000;
+const ROLLER_VENUE_IDENTITY_DELAY_MS = 1000;
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
@@ -107,9 +107,23 @@ exports.handler = async (event) => {
     let booking = null;
     let lookupPath = 'GET /bookings/{identifier}';
     let searchMatchCount = null;
+    let verifiedVenueId = null;
 
     if (shouldUseRollerBookingSearch(request, parkTestAccess)) {
-      const searchResult = await getBookingFromRollerSearch(config, token, products, request, parkTestAccess);
+      const approvedVenueId = getT0171AssistedLookupVenueId();
+      if (approvedVenueId) {
+        verifiedVenueId = await getVerifiedRollerVenueId(config, token, approvedVenueId);
+        // Keep the first booking-search request outside the same Roller request window.
+        await waitForRollerRequestPacing();
+      }
+      const searchResult = await getBookingFromRollerSearch(
+        config,
+        token,
+        products,
+        request,
+        parkTestAccess,
+        verifiedVenueId,
+      );
       if (searchResult.status === 'not_found') {
         return jsonResponse(404, correlationId, {
           status: 'not_found',
@@ -169,6 +183,13 @@ exports.handler = async (event) => {
 
       bookingResult = detailResult;
       booking = normalizeBooking(detailResult.body, products);
+      if (needsVerifiedAssistedLookupVenue(parkTestAccess, detailResult.body, booking)) {
+        verifiedVenueId = await getVerifiedRollerVenueId(
+          config,
+          token,
+          getT0171AssistedLookupVenueId(),
+        );
+      }
     }
 
     if (!bookingResult || !booking) {
@@ -181,7 +202,13 @@ exports.handler = async (event) => {
       });
     }
 
-    const parkTestScope = validateParkTestBookingScope(parkTestAccess, request, bookingResult.body, booking);
+    const parkTestScope = validateParkTestBookingScope(
+      parkTestAccess,
+      request,
+      bookingResult.body,
+      booking,
+      verifiedVenueId,
+    );
     if (!parkTestScope.ok) {
       return jsonResponse(parkTestScope.statusCode, correlationId, {
         status: parkTestScope.code === 'booking_not_found' ? 'not_found' : 'blocked',
@@ -842,12 +869,15 @@ async function getBookingDetail(config, token, identifier) {
   };
 }
 
-async function getVerifiedT0201RollerVenueId(config, token) {
-  if (String(config.env).toLowerCase() !== 'live') return null;
+async function waitForRollerRequestPacing() {
+  await new Promise((resolve) => setTimeout(resolve, ROLLER_VENUE_IDENTITY_DELAY_MS));
+}
 
-  // The booking-detail call immediately precedes this check. Keeping the next
-  // request start at least one second later preserves the Roller pacing boundary.
-  await new Promise((resolve) => setTimeout(resolve, T0201_VENUE_IDENTITY_DELAY_MS));
+async function getVerifiedRollerVenueId(config, token, expectedVenueId) {
+  if (String(config.env).toLowerCase() !== 'live' || !stringOrNull(expectedVenueId)) return null;
+
+  // Keep the venue-identity request outside the preceding Roller request window.
+  await waitForRollerRequestPacing();
   const response = await fetch(buildRollerUrl(config.baseUrl, '/venues/me'), {
     method: 'GET',
     headers: {
@@ -865,18 +895,26 @@ async function getVerifiedT0201RollerVenueId(config, token) {
   } catch {
     return null;
   }
-  const venueId = extractT0201RollerVenueIdentity(body);
-  if (venueId !== T0201_CONTROLLED_VENUE_ID) return null;
+  const venueId = extractRollerVenueIdentity(body);
+  if (venueId !== stringOrNull(expectedVenueId)) return null;
   return venueId;
 }
 
-function extractT0201RollerVenueIdentity(body) {
+async function getVerifiedT0201RollerVenueId(config, token) {
+  return getVerifiedRollerVenueId(config, token, T0201_CONTROLLED_VENUE_ID);
+}
+
+function extractRollerVenueIdentity(body) {
   for (const candidate of [body?.venue, body?.data, body]) {
     if (!isPlainObject(candidate)) continue;
     const venueId = stringOrNull(candidate.id ?? candidate.venueId ?? candidate.venueID);
     if (venueId) return venueId;
   }
   return null;
+}
+
+function extractT0201RollerVenueIdentity(body) {
+  return extractRollerVenueIdentity(body);
 }
 
 async function searchBookings(config, token, date, keyword) {
@@ -903,7 +941,7 @@ async function searchBookings(config, token, date, keyword) {
   };
 }
 
-async function getBookingFromRollerSearch(config, token, products, request, access) {
+async function getBookingFromRollerSearch(config, token, products, request, access, verifiedVenueId = null) {
   const lookupDate = access.lookupDate || normalizeDate(request.expectedDate) || getVenueToday();
   const keywords = getSearchKeywordCandidates(request.identifier, request.identifierType);
   const matches = [];
@@ -928,7 +966,13 @@ async function getBookingFromRollerSearch(config, token, products, request, acce
       }
 
       const booking = normalizeBooking(detailResult.body, products);
-      const scope = validateParkTestBookingScope(access, request, detailResult.body, booking);
+      const scope = validateParkTestBookingScope(
+        access,
+        request,
+        detailResult.body,
+        booking,
+        verifiedVenueId,
+      );
       if (!scope.ok) {
         if (scope.statusCode >= 500) return { status: 'scope_error', scope };
         continue;
@@ -1309,7 +1353,15 @@ async function validateParkTestLookupAccess(request) {
   };
 }
 
-function validateParkTestBookingScope(access, request, rollerBooking, booking) {
+function needsVerifiedAssistedLookupVenue(access, rollerBooking, booking) {
+  return (
+    access?.mode === 'assisted_lookup' &&
+    !extractVenueId(rollerBooking) &&
+    !stringOrNull(booking?.venueId)
+  );
+}
+
+function validateParkTestBookingScope(access, request, rollerBooking, booking, verifiedVenueId = null) {
   if (!isParkTestEnvironment() || access?.mode !== 'assisted_lookup') {
     return { ok: true, venueId: request.venueId };
   }
@@ -1346,7 +1398,8 @@ function validateParkTestBookingScope(access, request, rollerBooking, booking) {
   }
 
   const approvedVenueId = getT0171AssistedLookupVenueId();
-  const rollerVenueId = extractVenueId(rollerBooking) || stringOrNull(booking?.venueId);
+  const bookingVenueId = extractVenueId(rollerBooking) || stringOrNull(booking?.venueId);
+  const rollerVenueId = bookingVenueId || stringOrNull(verifiedVenueId);
 
   if (!approvedVenueId) {
     return {
@@ -2351,10 +2404,13 @@ function jsonResponse(statusCode, correlationId, payload) {
 }
 
 exports._internal = {
+  extractRollerVenueIdentity,
   getSearchKeywordCandidates,
   getStockholmNowParts,
   inferIdentifierType,
+  needsVerifiedAssistedLookupVenue,
   normalizePhoneForSearch,
   scopeBookingForLookupDate,
   selectBestBookingSearchMatch,
+  validateParkTestBookingScope,
 };
