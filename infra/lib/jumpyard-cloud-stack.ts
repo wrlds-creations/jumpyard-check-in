@@ -603,8 +603,9 @@ export class JumpYardCloudStack extends Stack {
       masterUsername: 'jumpyard_admin',
       masterUserPassword: databaseSecret.secretValueFromJson('password').toString(),
       serverlessV2ScalingConfiguration: {
-        minCapacity: 0.5,
-        maxCapacity: 2,
+        minCapacity: config.auroraServerless.minCapacity,
+        maxCapacity: config.auroraServerless.maxCapacity,
+        secondsUntilAutoPause: config.auroraServerless.secondsUntilAutoPause,
       },
       storageEncrypted: true,
       vpcSecurityGroupIds: [databaseSecurityGroup.attrGroupId],

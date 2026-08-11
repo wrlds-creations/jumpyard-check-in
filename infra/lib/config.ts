@@ -74,6 +74,11 @@ export interface JumpYardCloudConfig {
   };
   readonly awsAccount: string;
   readonly awsRegion: string;
+  readonly auroraServerless: {
+    readonly maxCapacity: number;
+    readonly minCapacity: number;
+    readonly secondsUntilAutoPause?: number;
+  };
   readonly bookingTimeSms: {
     readonly channels: readonly ('sms' | 'email')[];
     readonly checkinBaseUrl: string;
@@ -158,6 +163,11 @@ interface RawConfig {
   };
   readonly awsAccount?: unknown;
   readonly awsRegion?: unknown;
+  readonly auroraServerless?: {
+    readonly maxCapacity?: unknown;
+    readonly minCapacity?: unknown;
+    readonly secondsUntilAutoPause?: unknown;
+  };
   readonly bookingTimeSms?: {
     readonly channels?: unknown;
     readonly checkinBaseUrl?: unknown;
@@ -258,13 +268,14 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   const tags = readRequiredTags(raw.tags);
   const awsAccount = readString(raw.awsAccount, 'awsAccount');
   const awsRegion = readString(raw.awsRegion, 'awsRegion');
+  const deploymentEnvironment = readDeploymentEnvironment(tags['WRLDS:Environment']);
+  const auroraServerless = readAuroraServerlessConfig(raw.auroraServerless, deploymentEnvironment);
   const bookingTimeSms = readBookingTimeSmsConfig(raw.bookingTimeSms);
   const guestEmail = readGuestEmailConfig(raw.guestEmail);
   const resourcePrefix = readString(raw.resourcePrefix, 'resourcePrefix');
   const rollerEnvironment = readString(raw.roller?.environment, 'roller.environment');
   const rollerBaseUrl = normalizeBaseUrl(readString(raw.roller?.baseUrl, 'roller.baseUrl'), 'roller.baseUrl');
   const safetyGates = readSafetyGatesConfig(raw.safetyGates);
-  const deploymentEnvironment = readDeploymentEnvironment(tags['WRLDS:Environment']);
   const dataSync = readDataSyncConfig(raw.dataSync, deploymentEnvironment, resourcePrefix);
   const staffIdentity = readStaffIdentityConfig(raw.staffIdentity, deploymentEnvironment);
   const webhookProcessing = readWebhookProcessingConfig(
@@ -292,6 +303,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   validateEnvironmentContract({
     awsAccount,
     awsRegion,
+    auroraServerless,
     bookingTimeSms,
     dataSync,
     deploymentEnvironment,
@@ -309,6 +321,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     api,
     awsAccount,
     awsRegion,
+    auroraServerless,
     bookingTimeSms,
     dataSync,
     guestEmail,
@@ -327,6 +340,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
 interface EnvironmentContractInput {
   readonly awsAccount: string;
   readonly awsRegion: string;
+  readonly auroraServerless: JumpYardCloudConfig['auroraServerless'];
   readonly bookingTimeSms: JumpYardCloudConfig['bookingTimeSms'];
   readonly dataSync: JumpYardCloudConfig['dataSync'];
   readonly deploymentEnvironment: DeploymentEnvironment;
@@ -346,13 +360,34 @@ function validateEnvironmentContract(input: EnvironmentContractInput): void {
       throw new Error('dev staffIdentity.mode must remain legacy.');
     }
     validateDevRollerContract(input.rollerEnvironment, input.rollerBaseUrl);
-    if (!input.dataSync.scheduleEnabled) {
-      throw new Error('dev dataSync.scheduleEnabled must remain true.');
+    if (
+      input.auroraServerless.minCapacity !== 0 ||
+      input.auroraServerless.maxCapacity !== 2 ||
+      input.auroraServerless.secondsUntilAutoPause !== 300
+    ) {
+      throw new Error('dev Aurora Serverless must remain hibernated at min 0, max 2, and 300-second auto-pause.');
+    }
+    if (input.bookingTimeSms.scheduleEnabled) {
+      throw new Error('dev bookingTimeSms.scheduleEnabled must remain false while Playground is hibernated.');
+    }
+    if (input.dataSync.scheduleEnabled) {
+      throw new Error('dev dataSync.scheduleEnabled must remain false while Playground is hibernated.');
+    }
+    if (input.webhookProcessing.recoveryScheduleEnabled) {
+      throw new Error('dev webhookProcessing.recoveryScheduleEnabled must remain false while Playground is hibernated.');
     }
     if (input.webhookProcessing.liveApproval.length > 0) {
       throw new Error('dev webhookProcessing.liveApproval must remain empty.');
     }
     return;
+  }
+
+  if (
+    input.auroraServerless.minCapacity !== 0.5 ||
+    input.auroraServerless.maxCapacity !== 2 ||
+    input.auroraServerless.secondsUntilAutoPause !== undefined
+  ) {
+    throw new Error('park-test Aurora Serverless must remain continuously available at min 0.5 and max 2.');
   }
 
   if (input.staffIdentity.mode !== 'pin') {
@@ -866,6 +901,37 @@ function readApiConfig(raw: RawConfig['api']): JumpYardCloudConfig['api'] {
   };
 }
 
+function readAuroraServerlessConfig(
+  raw: RawConfig['auroraServerless'],
+  deploymentEnvironment: DeploymentEnvironment,
+): JumpYardCloudConfig['auroraServerless'] {
+  const minCapacity = readOptionalAuroraCapacity(
+    raw?.minCapacity,
+    deploymentEnvironment === 'dev' ? 0 : 0.5,
+    'auroraServerless.minCapacity',
+  );
+  const maxCapacity = readOptionalAuroraCapacity(raw?.maxCapacity, 2, 'auroraServerless.maxCapacity');
+  const secondsUntilAutoPause = raw?.secondsUntilAutoPause === undefined
+    ? deploymentEnvironment === 'dev' ? 300 : undefined
+    : readInteger(raw.secondsUntilAutoPause, 300, 86_400, 'auroraServerless.secondsUntilAutoPause');
+
+  if (maxCapacity < minCapacity) {
+    throw new Error('auroraServerless.maxCapacity must be greater than or equal to minCapacity.');
+  }
+  if (minCapacity === 0 && secondsUntilAutoPause === undefined) {
+    throw new Error('auroraServerless.secondsUntilAutoPause is required when minCapacity is 0.');
+  }
+  if (minCapacity > 0 && secondsUntilAutoPause !== undefined) {
+    throw new Error('auroraServerless.secondsUntilAutoPause is only valid when minCapacity is 0.');
+  }
+
+  return {
+    maxCapacity,
+    minCapacity,
+    secondsUntilAutoPause,
+  };
+}
+
 function readDataSyncConfig(
   raw: RawConfig['dataSync'],
   deploymentEnvironment: DeploymentEnvironment,
@@ -892,7 +958,7 @@ function readDataSyncConfig(
     ),
     scheduleEnabled: readOptionalBoolean(
       raw?.scheduleEnabled,
-      deploymentEnvironment === 'dev',
+      false,
       'dataSync.scheduleEnabled',
     ),
     venueId: readOptionalString(
@@ -1331,6 +1397,21 @@ function readOptionalInteger(
   if (value === undefined) return fallback;
   if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
     throw new Error(`Config field ${fieldName} must be an integer between ${min} and ${max}.`);
+  }
+
+  return value;
+}
+
+function readOptionalAuroraCapacity(value: unknown, fallback: number, fieldName: string): number {
+  if (value === undefined) return fallback;
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value < 0 ||
+    value > 256 ||
+    !Number.isInteger(value * 2)
+  ) {
+    throw new Error(`Config field ${fieldName} must be between 0 and 256 in 0.5 ACU increments.`);
   }
 
   return value;

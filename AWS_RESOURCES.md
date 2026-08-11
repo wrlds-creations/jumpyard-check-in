@@ -4,6 +4,16 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #234 Retired Playground Dev Aurora Hibernation (Applied Live, IaC Pending Review)
+
+Love approved [issue #234](https://github.com/wrlds-creations/jumpyard-check-in/issues/234) on 2026-08-11 to stop continuous Aurora compute charges for the unused Roller Playground-only `dev` environment without affecting park-test. Preflight confirmed AWS account `376129878018`, region `eu-north-1`, cluster `jumpyard-check-in-dev-aurora`, deletion protection, Aurora PostgreSQL `16.13`, and the complete live WRLDS metadata set. The live resource has `WRLDS:CostCenter=JumpYard`; that tag was preserved and is intentionally not reconciled in this issue because issue #233 owns cost-allocation-tag work.
+
+The two existing dev EventBridge rules `jumpyard-check-in-dev-booking-time-sms-schedule` and `jumpyard-check-in-dev-data-api-daily-sync` were changed from `ENABLED` to `DISABLED`. The dev cluster's Serverless v2 configuration was changed from min `0.5`/max `2` ACU with no auto-pause to min `0`/max `2` ACU with `SecondsUntilAutoPause=300`. Deletion protection, encryption, Data API, the seven-day automated backup/PITR policy, database contents, schema, credentials, networking, and writer identity were unchanged. Auto-pause removes DB-instance compute charges while idle; storage, backup, I/O, and brief compute after an explicit Playground request can still incur small charges.
+
+The live changes used exact AWS APIs rather than a CDK/CloudFormation deployment. A normal dev stack update was explicitly prohibited because current source synthesizes substantial unrelated changes against the live dev stack. This is intentional, documented CloudFormation drift until the issue's dev-only source settings are reviewed and later reconciled through a safe bounded stack plan. Source sets dev min `0`, max `2`, 300-second auto-pause, disables booking-time/data-sync/webhook-recovery schedules, and fails closed if park-test deviates from min `0.5`, max `2`, and continuous availability.
+
+Immediate post-change readback confirmed both dev rules `DISABLED` and dev scaling min `0`, max `2`, auto-pause `300`. At `2026-08-11 16:15 Europe/Stockholm`, CloudWatch `ServerlessDatabaseCapacity` reported dev at `0.0` ACU and park-test at `0.5` ACU. Separate park-test readback remained `available` with min `0.5`, max `2`, no auto-pause, and all three pre-existing park-test schedules `ENABLED`; no park-test API, Lambda, EventBridge, Aurora, data, secret, or configuration was changed.
+
 ### Issue #230 Missing-Booking-Venue Lookup Correction (Deployed and Proven)
 
 Love approved issue [#230](https://github.com/wrlds-creations/jumpyard-check-in/issues/230) after a controlled Nacka kiosk lookup showed that ROLLER Live returned valid booking detail without a venue field. Implementation PR [#231](https://github.com/wrlds-creations/jumpyard-check-in/pull/231) merged as `ae6391324fe71b8f6a8184250ee6b8c04210c80b`. The lookup handler now uses authenticated ROLLER Live `GET /venues/me` only when booking venue is absent and accepts the fallback only for exact configured venue `50871`. Explicit booking venue remains authoritative; mismatch, provider failure, malformed identity, missing configuration, and non-Live provider use remain fail-closed.
@@ -1006,7 +1016,7 @@ The same review found a narrow reset/login race: an old PIN could finish slow ve
 | `sns/eu-north-1/376129878018/DirectPublishToPhoneNumber` | CloudWatch Logs | `dev` | `eu-north-1` | SNS/CDK attributes | SNS SMS delivery status success logs. T0043 confirmed verified-phone delivery acceptance here. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-webhook` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
 | `/aws/lambda/jumpyard-check-in-dev-stack-data-sync` | CloudWatch Logs | `dev` | `eu-north-1` | `cdk` | 30-day retention. |
-| `jumpyard-check-in-dev-aurora` | Aurora PostgreSQL Serverless v2 | `dev` | `eu-north-1` | `cdk` plus SQL migrations | Engine `aurora-postgresql 16.13`, database `jumpyard_cloud`, encrypted, deletion protection enabled, Data API enabled, schema `jumpyard` created by T0007. |
+| `jumpyard-check-in-dev-aurora` | Aurora PostgreSQL Serverless v2 | `dev` | `eu-north-1` | `cdk` plus SQL migrations; issue #234 direct cost containment | Engine `aurora-postgresql 16.13`, database `jumpyard_cloud`, encrypted, deletion protection enabled, Data API enabled, schema `jumpyard` created by T0007. The retired Playground cluster uses min `0`, max `2` ACU and 300-second auto-pause; its booking-time and daily-sync rules are disabled. |
 | `jumpyard-check-in-dev-aurora-writer` | RDS DB instance | `dev` | `eu-north-1` | `cdk` | Serverless writer instance. |
 | `jumpyard-check-in-dev-aurora-subnets` | RDS DB subnet group | `dev` | `eu-north-1` | `cdk` | Uses isolated subnets. |
 | `/jumpyard-check-in-dev/aurora/admin` | Secrets Manager | `dev` | `eu-north-1` | `cdk` | Generated Aurora admin credentials. |
