@@ -132,6 +132,37 @@ function expectEventRuleState(template: CloudFormationTemplate, ruleName: string
   );
 }
 
+function expectAuroraServerlessScaling(
+  template: CloudFormationTemplate,
+  clusterIdentifier: string,
+  expected: {
+    readonly maxCapacity: number;
+    readonly minCapacity: number;
+    readonly secondsUntilAutoPause?: number;
+  },
+): void {
+  const cluster = findResourceByTypeAndProperty(
+    template,
+    'AWS::RDS::DBCluster',
+    'DBClusterIdentifier',
+    clusterIdentifier,
+  );
+  expect(Boolean(cluster), `Expected Aurora cluster ${clusterIdentifier}.`);
+  const scaling = cluster?.Properties?.ServerlessV2ScalingConfiguration as Record<string, unknown> | undefined;
+  expect(
+    scaling?.MinCapacity === expected.minCapacity,
+    `Expected ${clusterIdentifier} min capacity ${expected.minCapacity}, got ${JSON.stringify(scaling?.MinCapacity)}.`,
+  );
+  expect(
+    scaling?.MaxCapacity === expected.maxCapacity,
+    `Expected ${clusterIdentifier} max capacity ${expected.maxCapacity}, got ${JSON.stringify(scaling?.MaxCapacity)}.`,
+  );
+  expect(
+    scaling?.SecondsUntilAutoPause === expected.secondsUntilAutoPause,
+    `Expected ${clusterIdentifier} auto-pause seconds ${JSON.stringify(expected.secondsUntilAutoPause)}, got ${JSON.stringify(scaling?.SecondsUntilAutoPause)}.`,
+  );
+}
+
 function expectNoBookingTimeMessagingSchedule(template: CloudFormationTemplate): void {
   const eventRules = Object.values(getResources(template)).filter(
     (resource) => resource.Type === 'AWS::Events::Rule',
@@ -246,7 +277,13 @@ function validateDevTemplate(dev: SynthResult): void {
   expect(countResourcesByType(dev.template, 'AWS::SES::EmailIdentity') === 0, 'Dev must keep its existing email identity.');
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/env`);
   expectNamedResource(dev.template, 'AWS::SSM::Parameter', 'Name', `/${DEV_PREFIX}/roller/base-url`);
-  expectEventRuleState(dev.template, `${DEV_PREFIX}-data-api-daily-sync`, 'ENABLED');
+  expectEventRuleState(dev.template, `${DEV_PREFIX}-data-api-daily-sync`, 'DISABLED');
+  expectEventRuleState(dev.template, `${DEV_PREFIX}-webhook-recovery`, 'DISABLED');
+  expectAuroraServerlessScaling(dev.template, `${DEV_PREFIX}-aurora`, {
+    maxCapacity: 2,
+    minCapacity: 0,
+    secondsUntilAutoPause: 300,
+  });
   expectCanonicalApiAccessLogDestination(dev.template, '376129878018', 'eu-north-1', DEV_PREFIX);
   expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-lookup`, {
     ENABLE_T0160_LIVE_LOOKUP_SMOKE: 'false',
@@ -415,6 +452,10 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
   expectNamedResource(parkTest.template, 'AWS::SSM::Parameter', 'Name', `/${PARK_TEST_PREFIX}/roller/base-url`);
   expectNamedResource(parkTest.template, 'AWS::RDS::DBCluster', 'DBClusterIdentifier', `${PARK_TEST_PREFIX}-aurora`);
   expectNamedResource(parkTest.template, 'AWS::RDS::DBInstance', 'DBInstanceIdentifier', `${PARK_TEST_PREFIX}-aurora-writer`);
+  expectAuroraServerlessScaling(parkTest.template, `${PARK_TEST_PREFIX}-aurora`, {
+    maxCapacity: 2,
+    minCapacity: 0.5,
+  });
   expectNamedResource(parkTest.template, 'AWS::Events::Rule', 'Name', `${PARK_TEST_PREFIX}-data-api-daily-sync`);
   expectEventRuleState(parkTest.template, `${PARK_TEST_PREFIX}-data-api-daily-sync`, 'DISABLED');
   expectNoBookingTimeMessagingSchedule(parkTest.template);

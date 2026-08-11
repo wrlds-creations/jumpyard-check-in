@@ -47,7 +47,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
 - Kiosk costs omit `paymentTerminal`; drafts retain it server-side. ROLLER readback confirms completion; physical proof is pending.
 - Raw payloads, access tokens, PINs, secrets, and unmasked credentials are prohibited persisted data. Booking/contact state is removed or anonymized 30 days after visit; pseudonymous audit/run metadata at 90 days; expired access rows within 24 hours. Disabled staff lose display PII after 90 days; PIN-pepper changes require versioned security-driven re-enrollment. Non-dev handlers have restricted DB principals; Aurora admin is only for migrations, provisioning, and guarded recovery.
-- Dev is Playground. Existing park-test is the sole Live-backed pre-production environment for T0194-T0204; production is separate and requires T0204 GO plus new approval.
+- Dev is retired Playground and its Aurora auto-pauses. Park-test remains the sole Live pre-production environment; production requires GO and separate approval.
 - Park-test work requires an approved Issue; AWS/Live, payments, redemption, webhooks, frontend rehearsal, UI/UX, and visitor traffic need explicit scope. It remains a separate WRLDS environment in `376129878018`/`eu-north-1`, namespace `jumpyard-check-in-park-test`, with server-side Roller Live Nacka access. It is not production.
 - `infra/config/park-test.json` is the normal closed config; approved Issue-specific configs open reviewed gates.
 - Park-test resources and gates are recorded in [AWS_RESOURCES.md](AWS_RESOURCES.md) and [the gate runbook](docs/t0170-park-test-gate-runbook.md); runtime variables stay ticket-numbered until scoped migration.
@@ -77,7 +77,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 - Aurora stores normalized booking, item, ticket, payment, product, contact, webhook, session, token, delivery, and draft/link state. Data API windows populate an operational cache, never the source of truth.
 - Booking webhooks use `x-roller-apikey`; park-test validates its secret value. Production review remains open.
-- Daily dev Data API sync runs internally; guest messaging uses opaque `jy_token` links resolved server-side.
+- Dev schedules are off for Aurora auto-pause; manual operations wake it. Guest messaging resolves opaque `jy_token` links server-side.
 - Park-test Live/Nacka index sync runs daily with bounded traffic, 30-day-past/all-future retention, and freshness monitoring. Webhook `1465` feeds durable FIFO intake and a serialized authoritative worker with DLQ/recovery/replay. Critical actions still confirm against Roller. See [T0196](docs/t0196-booking-index-morning-seed.md) and [T0197](docs/t0197-webhook-reconciliation.md).
 
 ## Security And Operational Constraints

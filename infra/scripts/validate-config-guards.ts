@@ -13,6 +13,11 @@ interface TestConfig {
   };
   awsAccount: string;
   awsRegion: string;
+  auroraServerless?: {
+    maxCapacity?: number;
+    minCapacity?: number;
+    secondsUntilAutoPause?: number;
+  };
   readonly bookingTimeSms: {
     channels?: string[];
     checkinBaseUrl: string;
@@ -138,7 +143,29 @@ const unsafeDevLiveConfig = cloneConfig(devConfig);
 unsafeDevLiveConfig.roller.environment = 'live';
 unsafeDevLiveConfig.roller.baseUrl = 'https://api.roller.app';
 
+const devWithContinuousAurora = cloneConfig(devConfig);
+if (!devWithContinuousAurora.auroraServerless) throw new Error('Expected dev Aurora Serverless config.');
+devWithContinuousAurora.auroraServerless.minCapacity = 0.5;
+delete devWithContinuousAurora.auroraServerless.secondsUntilAutoPause;
+
+const devWithBookingSchedule = cloneConfig(devConfig);
+devWithBookingSchedule.bookingTimeSms.scheduleEnabled = true;
+
+const devWithDataSyncSchedule = cloneConfig(devConfig);
+if (!devWithDataSyncSchedule.dataSync) throw new Error('Expected dev dataSync config.');
+devWithDataSyncSchedule.dataSync.scheduleEnabled = true;
+
+const devWithWebhookRecoverySchedule = cloneConfig(devConfig);
+if (!devWithWebhookRecoverySchedule.webhookProcessing) throw new Error('Expected dev webhook processing config.');
+devWithWebhookRecoverySchedule.webhookProcessing.recoveryScheduleEnabled = true;
+
 const parkTestConfig = readConfig('config/park-test.json');
+const parkTestWithAutoPause = cloneConfig(parkTestConfig);
+parkTestWithAutoPause.auroraServerless = {
+  maxCapacity: 2,
+  minCapacity: 0,
+  secondsUntilAutoPause: 300,
+};
 const parkTestMissingPrefix = cloneConfig(parkTestConfig);
 delete parkTestMissingPrefix.resourcePrefix;
 
@@ -441,7 +468,16 @@ parkTestFullFlowWithPaymentSmoke.safetyGates.livePaymentSmokeApproval =
 
 expectPass('dev Playground config passes', devConfig, 'dev');
 expectFail('unsafe dev-to-Live config fails', unsafeDevLiveConfig, /dev config must use Roller Playground/);
+expectFail('dev continuous Aurora config fails closed', devWithContinuousAurora, /only valid when minCapacity is 0/);
+expectFail('dev booking-time schedule fails closed', devWithBookingSchedule, /bookingTimeSms.scheduleEnabled/);
+expectFail('dev data-sync schedule fails closed', devWithDataSyncSchedule, /dataSync.scheduleEnabled/);
+expectFail(
+  'dev webhook-recovery schedule fails closed',
+  devWithWebhookRecoverySchedule,
+  /webhookProcessing.recoveryScheduleEnabled/,
+);
 expectPass('reviewed park-test Live config passes', parkTestConfig, 'park-test');
+expectFail('park-test auto-pause config fails closed', parkTestWithAutoPause, /must remain continuously available/);
 expectFail('park-test missing resourcePrefix fails closed', parkTestMissingPrefix, /resourcePrefix/);
 expectFail('park-test Playground config fails closed', parkTestPlaygroundConfig, /park-test config must explicitly use Roller Live/);
 expectFail('park-test wrong data classification fails closed', parkTestWrongClassification, /DataClassification/);

@@ -2,6 +2,11 @@
   "awsAccount": "376129878018",
   "awsRegion": "eu-north-1",
   "resourcePrefix": "jumpyard-check-in-dev",
+  "auroraServerless": {
+    "minCapacity": 0,
+    "maxCapacity": 2,
+    "secondsUntilAutoPause": 300
+  },
   "api": {
     "allowedCorsOrigins": [
       "http://localhost:3000",
@@ -21,8 +26,14 @@
     "environment": "playground",
     "baseUrl": "https://api.play.roller.app"
   },
+  "dataSync": {
+    "scheduleEnabled": false
+  },
+  "webhookProcessing": {
+    "recoveryScheduleEnabled": false
+  },
   "bookingTimeSms": {
-    "scheduleEnabled": true,
+    "scheduleEnabled": false,
     "confirmSend": false,
     "confirmedSendApproval": "",
     "checkinBaseUrl": "https://jumpyard-check-in.pages.dev/",

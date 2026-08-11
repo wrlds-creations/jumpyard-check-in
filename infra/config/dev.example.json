@@ -2,6 +2,11 @@
   "awsAccount": "000000000000",
   "awsRegion": "eu-north-1",
   "resourcePrefix": "jumpyard-cloud-dev",
+  "auroraServerless": {
+    "minCapacity": 0,
+    "maxCapacity": 2,
+    "secondsUntilAutoPause": 300
+  },
   "api": {
     "allowedCorsOrigins": [
       "http://localhost:3000",
@@ -20,6 +25,12 @@
   "roller": {
     "environment": "playground",
     "baseUrl": "https://api.play.roller.app"
+  },
+  "dataSync": {
+    "scheduleEnabled": false
+  },
+  "webhookProcessing": {
+    "recoveryScheduleEnabled": false
   },
   "bookingTimeSms": {
     "scheduleEnabled": false,
