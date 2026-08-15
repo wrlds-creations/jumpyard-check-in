@@ -37,4 +37,8 @@ ROLLER then supplied the object contract:
 
 ## Rollout Boundary
 
-Code must reach park-test through the immutable release and protected promotion workflow. The existing secret mapping must then be migrated from the legacy string to the object without printing either identifier. Until both steps are complete, the path remains fail-closed. A later Love-supervised physical attempt is the only approved way to prove that the terminal receives the payment request; no automated test may start a real card-present payment.
+PR [#236](https://github.com/wrlds-creations/jumpyard-check-in/pull/236) merged as `506cbcb45ea20bfc1272db1e64c7bf4d35dec908`. Immutable release run [31876150698](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/31876150698) built that exact commit, and protected promotion run [31876392673](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/31876392673) applied a 202-to-202-resource plan changing only the Booking Lambda and CDK metadata, with migrations disabled. AWS/CDK and Cloudflare deployment completed. The final verification step reported only the pre-existing cost-center tag drift owned by issue #233; direct readback confirmed `UPDATE_COMPLETE`, an active and successfully updated Booking Lambda, zero active park-test alarms, and empty queues.
+
+After explicit approval, the existing park-test credentials secret was migrated in place from a legacy terminal string to the complete object. Guarded readback confirmed the approved caller `deviceId`, preserved masked `terminalId`, `promptForTip=false`, and absent `amount` without exposing either operational identifier. No payment or ROLLER draft was started.
+
+The only remaining proof is a Love-supervised physical attempt showing that Create Draft succeeds and the intended terminal receives exactly one request. No automated test may start a real card-present payment, and an ambiguous result must not be retried until its status is known.
