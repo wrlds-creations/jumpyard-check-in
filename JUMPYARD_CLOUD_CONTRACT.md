@@ -696,7 +696,7 @@ Draft rules:
 - Return the draft unique id, normalized costs, payment config from `GET /venues/me`, and the raw `paymentJwt` only in the API response.
 - Do not log, print, or persist the raw `paymentJwt`.
 - T0033 persists safe draft metadata to `jumpyard.prepayment_booking_drafts`, including `payment_jwt_present` and `payment_config_available` flags, but no raw `paymentJwt` value.
-- For the kiosk card-present path, the client adds `channel: "kiosk"` and `paymentTerminalAlias: "primary"`. JumpYard Cloud resolves the alias from `paymentTerminals` in the existing server-side ROLLER secret and sends the opaque `paymentTerminal` only to ROLLER.
+- For the kiosk card-present path, the client adds `channel: "kiosk"` and `paymentTerminalAlias: "primary"`. JumpYard Cloud resolves the alias from `paymentTerminals` in the existing server-side ROLLER secret. The mapping must contain server-owned `deviceId` and `terminalId` values; JumpYard Cloud forces `promptForTip: false`, omits `amount` so ROLLER uses the booking remainder, excludes the entire object from Booking Costs, and sends it only to Create Draft Booking.
 - The kiosk response contains a safe payment-attempt id plus the ROLLER payment API origin and currency, never the terminal reference. JumpYard Cloud re-quotes server-side and requires exact amount plus SEK evidence before returning the terminal-bound JWT.
 - If amount owing is zero, use `POST /bookings/draft/publish`.
 - Payment implementation must first confirm how Roller's returned `paymentJwt` is used, which fake/test card numbers are supported in Playground, and whether the payment component can run inside the JumpYard PWA without a hosted payment-link detour.

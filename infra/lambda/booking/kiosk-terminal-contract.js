@@ -4,9 +4,21 @@ function normalizePaymentTerminalMap(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return Object.fromEntries(
     Object.entries(value)
-      .map(([alias, reference]) => [String(alias).trim(), typeof reference === 'string' ? reference.trim() : ''])
-      .filter(([alias, reference]) => alias && reference),
+      .map(([alias, terminal]) => [String(alias).trim(), normalizePaymentTerminal(terminal)])
+      .filter(([alias, terminal]) => alias && terminal),
   );
+}
+
+function normalizePaymentTerminal(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const deviceId = stringOrNull(value.deviceId);
+  const terminalId = stringOrNull(value.terminalId);
+  if (!deviceId || !terminalId) return null;
+  return {
+    deviceId,
+    terminalId,
+    promptForTip: false,
+  };
 }
 
 function resolveKioskPaymentTerminal(config, request) {
@@ -30,6 +42,17 @@ function buildKioskQuotePayload(draftPayload) {
   if (!draftPayload || typeof draftPayload !== 'object' || Array.isArray(draftPayload)) return {};
   const { paymentTerminal: _paymentTerminal, ...quotePayload } = draftPayload;
   return quotePayload;
+}
+
+function redactPaymentTerminalValues(value, paymentTerminal) {
+  let redacted = stringOrNull(value) || '';
+  const secrets = typeof paymentTerminal === 'string'
+    ? [stringOrNull(paymentTerminal)]
+    : [stringOrNull(paymentTerminal?.deviceId), stringOrNull(paymentTerminal?.terminalId)];
+  for (const secret of secrets.filter(Boolean)) {
+    redacted = redacted.split(secret).join('[REDACTED_TERMINAL]');
+  }
+  return redacted;
 }
 
 function verifyKioskDraftPayment({ draftBody, paymentJwt, quoteBody }) {
@@ -148,6 +171,7 @@ module.exports = {
   normalizeBookingReadback,
   normalizePaymentTerminalMap,
   normalizeTerminalOutcome,
+  redactPaymentTerminalValues,
   resolveKioskPaymentTerminal,
   verifyKioskDraftPayment,
 };

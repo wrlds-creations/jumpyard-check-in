@@ -8,6 +8,7 @@ const {
   normalizeBookingReadback,
   normalizePaymentTerminalMap,
   normalizeTerminalOutcome,
+  redactPaymentTerminalValues,
   resolveKioskPaymentTerminal,
   verifyKioskDraftPayment,
 } = require('./kiosk-terminal-contract');
@@ -1530,11 +1531,9 @@ function redactPaymentInputSecrets(value, requestOrGiftCards = []) {
       : [];
   const requestedDiscounts = Array.isArray(requestOrGiftCards?.discounts) ? requestOrGiftCards.discounts : [];
   let redacted = redactDiscountCodeSecrets(redactGiftCardSecrets(value, requestedGiftCards), requestedDiscounts);
-  const paymentTerminal = Array.isArray(requestOrGiftCards)
-    ? null
-    : stringOrNull(requestOrGiftCards?.paymentTerminal);
-  if (paymentTerminal) redacted = redacted.split(paymentTerminal).join('[REDACTED_TERMINAL]');
-  return redacted;
+  return Array.isArray(requestOrGiftCards)
+    ? redacted
+    : redactPaymentTerminalValues(redacted, requestOrGiftCards?.paymentTerminal);
 }
 
 function validateQuoteRequest(request) {
