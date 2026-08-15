@@ -7,12 +7,17 @@ const {
   normalizeBookingReadback,
   normalizePaymentTerminalMap,
   normalizeTerminalOutcome,
+  redactPaymentTerminalValues,
   resolveKioskPaymentTerminal,
   verifyKioskDraftPayment,
 } = require('../infra/lambda/booking/kiosk-terminal-contract');
 
 const root = path.resolve(__dirname, '..');
 const bookingSource = fs.readFileSync(path.join(root, 'infra/lambda/booking/index.js'), 'utf8');
+const terminalContractSource = fs.readFileSync(
+  path.join(root, 'infra/lambda/booking/kiosk-terminal-contract.js'),
+  'utf8',
+);
 const stackSource = fs.readFileSync(path.join(root, 'infra/lib/jumpyard-cloud-stack.ts'), 'utf8');
 const migrationSource = fs.readFileSync(
   path.join(root, 'infra/migrations/0018_kiosk_terminal_payment_attempts.sql'),
@@ -20,21 +25,38 @@ const migrationSource = fs.readFileSync(
 );
 
 const terminalMap = normalizePaymentTerminalMap({
-  primary: 'server-owned-reference',
-  blank: '  ',
+  primary: {
+    amount: 49.95,
+    deviceId: ' server-owned-device ',
+    promptForTip: true,
+    terminalId: ' server-owned-terminal ',
+  },
+  legacyString: 'server-owned-reference',
+  missingDevice: { terminalId: 'server-owned-terminal' },
+  missingTerminal: { deviceId: 'server-owned-device' },
   ignored: 123,
 });
-assert.deepEqual(terminalMap, { primary: 'server-owned-reference' });
+assert.deepEqual(terminalMap, {
+  primary: {
+    deviceId: 'server-owned-device',
+    terminalId: 'server-owned-terminal',
+    promptForTip: false,
+  },
+});
 assert.deepEqual(resolveKioskPaymentTerminal({ paymentTerminals: terminalMap }, { channel: null }), {
   enabled: false,
   paymentTerminal: null,
 });
-assert.equal(
+assert.deepEqual(
   resolveKioskPaymentTerminal(
     { paymentTerminals: terminalMap },
     { channel: 'kiosk', paymentTerminalAlias: 'primary' },
   ).paymentTerminal,
-  'server-owned-reference',
+  {
+    deviceId: 'server-owned-device',
+    terminalId: 'server-owned-terminal',
+    promptForTip: false,
+  },
 );
 assert.equal(
   resolveKioskPaymentTerminal(
@@ -47,7 +69,7 @@ assert.equal(
 const kioskDraftPayload = {
   externalId: 'safe-external-reference',
   items: [{ productId: 'safe-product-reference', quantity: 1 }],
-  paymentTerminal: 'server-owned-reference',
+  paymentTerminal: terminalMap.primary,
 };
 const kioskQuotePayload = buildKioskQuotePayload(kioskDraftPayload);
 assert.deepEqual(kioskQuotePayload, {
@@ -55,7 +77,20 @@ assert.deepEqual(kioskQuotePayload, {
   items: [{ productId: 'safe-product-reference', quantity: 1 }],
 });
 assert.equal(Object.hasOwn(kioskQuotePayload, 'paymentTerminal'), false);
-assert.equal(kioskDraftPayload.paymentTerminal, 'server-owned-reference');
+assert.deepEqual(kioskDraftPayload.paymentTerminal, {
+  deviceId: 'server-owned-device',
+  terminalId: 'server-owned-terminal',
+  promptForTip: false,
+});
+assert.equal(Object.hasOwn(kioskDraftPayload.paymentTerminal, 'amount'), false);
+
+assert.equal(
+  redactPaymentTerminalValues(
+    'ROLLER rejected server-owned-device and server-owned-terminal.',
+    terminalMap.primary,
+  ),
+  'ROLLER rejected [REDACTED_TERMINAL] and [REDACTED_TERMINAL].',
+);
 
 const jwt = makeJwt({ currency: 'SEK', merchantReference: 'safe-reference' });
 assert.deepEqual(
@@ -119,7 +154,7 @@ assert.match(bookingSource, /postRollerJson\(config, token, '\/bookings\/draft',
 assert.match(bookingSource, /payment_attempt_status = 'reconciled'/);
 assert.match(bookingSource, /WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved'/);
 assert.match(bookingSource, /kiosk_booking_confirmation_pending/);
-assert.match(bookingSource, /\[REDACTED_TERMINAL\]/);
+assert.match(terminalContractSource, /\[REDACTED_TERMINAL\]/);
 assert.doesNotMatch(bookingSource, /server-owned-reference/);
 
 assert.match(migrationSource, /ADD COLUMN IF NOT EXISTS payment_channel/);
