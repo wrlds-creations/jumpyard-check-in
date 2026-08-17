@@ -60,7 +60,13 @@ for (const outcome of ['failed', 'cancelled']) {
   );
 }
 
-assert.match(bookingSource, /KIOSK_RECONCILIATION_DELAYS_MS = \[0, 5_000, 10_000, 15_000, 20_000, 25_000\]/);
+assert.match(bookingSource, /KIOSK_PUBLISH_SETTLEMENT_DELAY_MS = 10_000/);
+assert.match(bookingSource, /KIOSK_RECONCILIATION_OFFSETS_MS = \[[\s\S]*75_000,[\s\S]*\]/);
+assert.match(bookingSource, /const waitMs = startedAt \+ offsetMs - Date\.now\(\)/);
+assert.doesNotMatch(bookingSource, /await wait\(offsetMs\)/);
+const offsetsSource = bookingSource.match(/KIOSK_RECONCILIATION_OFFSETS_MS = \[([\s\S]*?)\];/)?.[1] ?? '';
+const offsets = [...offsetsSource.matchAll(/\b\d[\d_]*\b/g)].map((match) => Number(match[0].replaceAll('_', '')));
+assert.deepEqual(offsets, Array.from({ length: 16 }, (_, index) => index * 5_000));
 assert.match(bookingSource, /InvocationType: 'Event'/);
 assert.match(bookingSource, /process\.env\.AWS_LAMBDA_FUNCTION_NAME/);
 assert.match(bookingSource, /publish_attempted_at IS NULL/);
@@ -78,7 +84,7 @@ assert.match(bookingSource, /if \(publishResult\.ok\) \{[\s\S]*normalizeBookingR
 assert.match(bookingSource, /candidate\?\.rollerUniqueId[\s\S]*readbackIdentifiers\.push\(candidate\.rollerUniqueId\)/);
 assert.match(bookingSource, /for \(const identifier of readbackIdentifiers\)/);
 assert.ok(
-  bookingSource.indexOf('recordKioskPublishResult') < bookingSource.indexOf('for (let index = 0; index < KIOSK_RECONCILIATION_DELAYS_MS.length'),
+  bookingSource.indexOf('recordKioskPublishResult') < bookingSource.indexOf('await recordKioskReconciliationAttempt'),
   'a rejected, conflicting, or ambiguous publish must still continue into bounded booking readback',
 );
 assert.ok(
@@ -88,6 +94,11 @@ assert.ok(
       bookingSource.indexOf('const publishClaimed = await claimKioskPublishAttempt(request)'),
     ),
   'the durable one-publish claim must execute before the provider publish call',
+);
+assert.ok(
+  bookingSource.indexOf('offsetMs >= KIOSK_PUBLISH_SETTLEMENT_DELAY_MS') <
+    bookingSource.indexOf('publishNoPaymentDraft(config, token', bookingSource.indexOf('offsetMs >= KIOSK_PUBLISH_SETTLEMENT_DELAY_MS')),
+  'the single provider publish must wait for the bounded terminal-payment settlement window',
 );
 assert.ok(
   bookingSource.indexOf("WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved'") > -1,

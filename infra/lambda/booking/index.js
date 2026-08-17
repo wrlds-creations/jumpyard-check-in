@@ -28,7 +28,25 @@ const GUEST_ACCESS_LINK_WINDOW_MINUTES = 60;
 const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 const KIOSK_RECONCILIATION_SOURCE = 'jumpyard.kiosk-payment-reconciliation';
-const KIOSK_RECONCILIATION_DELAYS_MS = [0, 5_000, 10_000, 15_000, 20_000, 25_000];
+const KIOSK_PUBLISH_SETTLEMENT_DELAY_MS = 10_000;
+const KIOSK_RECONCILIATION_OFFSETS_MS = [
+  0,
+  5_000,
+  10_000,
+  15_000,
+  20_000,
+  25_000,
+  30_000,
+  35_000,
+  40_000,
+  45_000,
+  50_000,
+  55_000,
+  60_000,
+  65_000,
+  70_000,
+  75_000,
+];
 
 const PHONE_BOOKING_PRODUCTS = [
   { key: 'COMBO60', parentName: 'ComboDeal', label: 'ComboDeal', type: 'combo', durationMinutes: 60, jumpersPerUnit: 2 },
@@ -974,30 +992,12 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
   const publishClaimed = await claimKioskPublishAttempt(request);
   const readbackIdentifiers = [claimed.roller_draft_unique_id];
   let publishReadback = null;
-  if (publishClaimed) {
-    try {
-      const publishResult = await publishNoPaymentDraft(config, token, claimed.roller_draft_unique_id);
-      await recordKioskPublishResult(request, publishResult.status, publishResult.ok ? 'accepted' : 'provider_rejected');
-      emitKioskPublishMetric(publishResult.status, publishResult.ok ? 'accepted' : 'provider_rejected');
-      if (publishResult.ok) {
-        const candidate = normalizeBookingReadback(publishResult.body);
-        if (candidate?.rollerUniqueId && !readbackIdentifiers.includes(candidate.rollerUniqueId)) {
-          readbackIdentifiers.push(candidate.rollerUniqueId);
-        }
-        if (candidate?.bookingReference && !readbackIdentifiers.includes(candidate.bookingReference)) {
-          readbackIdentifiers.push(candidate.bookingReference);
-        }
-        if (candidate?.confirmed) publishReadback = candidate;
-      }
-    } catch {
-      await recordKioskPublishResult(request, 0, 'transport_unknown');
-      emitKioskPublishMetric(0, 'transport_unknown');
-    }
-  }
+  let publishPending = Boolean(publishClaimed);
 
-  for (let index = 0; index < KIOSK_RECONCILIATION_DELAYS_MS.length; index += 1) {
-    const delayMs = KIOSK_RECONCILIATION_DELAYS_MS[index];
-    if (delayMs > 0) await wait(delayMs);
+  for (let index = 0; index < KIOSK_RECONCILIATION_OFFSETS_MS.length; index += 1) {
+    const offsetMs = KIOSK_RECONCILIATION_OFFSETS_MS[index];
+    const waitMs = startedAt + offsetMs - Date.now();
+    if (waitMs > 0) await wait(waitMs);
 
     const current = await findKioskPrepaymentAttempt(request);
     if (current?.booking_confirmation_status === 'confirmed' || current?.status === 'published') {
@@ -1005,6 +1005,32 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
     }
     if (current?.payment_attempt_status !== 'approved') {
       return { status: publicKioskPaymentStatus(current).status };
+    }
+
+    // The terminal library can report approval before ROLLER has attached the
+    // payment to the draft. The live P400 proof returned HTTP 409 when publish
+    // was called immediately, so retain the durable one-publish claim but give
+    // ROLLER a bounded settlement window before making that provider write.
+    if (publishPending && offsetMs >= KIOSK_PUBLISH_SETTLEMENT_DELAY_MS) {
+      publishPending = false;
+      try {
+        const publishResult = await publishNoPaymentDraft(config, token, claimed.roller_draft_unique_id);
+        await recordKioskPublishResult(request, publishResult.status, publishResult.ok ? 'accepted' : 'provider_rejected');
+        emitKioskPublishMetric(publishResult.status, publishResult.ok ? 'accepted' : 'provider_rejected');
+        if (publishResult.ok) {
+          const candidate = normalizeBookingReadback(publishResult.body);
+          if (candidate?.rollerUniqueId && !readbackIdentifiers.includes(candidate.rollerUniqueId)) {
+            readbackIdentifiers.push(candidate.rollerUniqueId);
+          }
+          if (candidate?.bookingReference && !readbackIdentifiers.includes(candidate.bookingReference)) {
+            readbackIdentifiers.push(candidate.bookingReference);
+          }
+          if (candidate?.confirmed) publishReadback = candidate;
+        }
+      } catch {
+        await recordKioskPublishResult(request, 0, 'transport_unknown');
+        emitKioskPublishMetric(0, 'transport_unknown');
+      }
     }
 
     await recordKioskReconciliationAttempt(request, 'readback_pending');
@@ -1051,7 +1077,7 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
     correlationId,
     eventType: 'booking.kiosk_terminal_reconciliation_exhausted',
     payload: {
-      attemptCount: KIOSK_RECONCILIATION_DELAYS_MS.length,
+      attemptCount: KIOSK_RECONCILIATION_OFFSETS_MS.length,
       elapsedMs: Date.now() - startedAt,
     },
     subjectRef: request.prepaymentDraftId,
@@ -1059,7 +1085,7 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
   });
   emitKioskReconciliationMetric(
     'needs_staff',
-    KIOSK_RECONCILIATION_DELAYS_MS.length,
+    KIOSK_RECONCILIATION_OFFSETS_MS.length,
     Date.now() - startedAt,
   );
   return { status: 'needs_staff' };
