@@ -6,6 +6,7 @@
     "dev": "next dev",
     "dev:tunnel": "concurrently \"next dev\" \"npx cloudflared tunnel --url http://localhost:3000\"",
     "build": "next build",
+    "test:product-visibility": "node --experimental-default-type=module --experimental-strip-types --test src/flow/productVisibility.test.mjs",
     "start": "next start",
     "lint": "eslint"
   },
