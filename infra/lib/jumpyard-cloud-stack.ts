@@ -945,7 +945,20 @@ exports.handler = async (event) => {
     });
     const bookingHandler = this.createHandler('BookingHandler', 'booking', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'booking')),
+      timeout: Duration.minutes(2),
     });
+    bookingHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['lambda:InvokeFunction'],
+        resources: [
+          Stack.of(this).formatArn({
+            service: 'lambda',
+            resource: 'function',
+            resourceName: `${this.stackName}-booking`,
+          }),
+        ],
+      }),
+    );
     const redeemHandler = this.createHandler('RedeemHandler', 'redeem', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'redeem')),
     });

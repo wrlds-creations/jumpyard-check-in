@@ -1,13 +1,16 @@
 const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client-secrets-manager');
 const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
+const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
 const {
   buildKioskQuotePayload,
   KIOSK_PAYMENT_CURRENCY,
+  normalizeDraftFinalizeAction,
   normalizeBookingReadback,
   normalizePaymentTerminalMap,
   normalizeTerminalOutcome,
+  publicKioskPaymentStatus,
   redactPaymentTerminalValues,
   resolveKioskPaymentTerminal,
   verifyKioskDraftPayment,
@@ -24,6 +27,8 @@ const GUEST_ACCESS_CHANNEL = 'guest_access';
 const GUEST_ACCESS_LINK_WINDOW_MINUTES = 60;
 const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
+const KIOSK_RECONCILIATION_SOURCE = 'jumpyard.kiosk-payment-reconciliation';
+const KIOSK_RECONCILIATION_DELAYS_MS = [0, 5_000, 10_000, 15_000, 20_000, 25_000];
 
 const PHONE_BOOKING_PRODUCTS = [
   { key: 'COMBO60', parentName: 'ComboDeal', label: 'ComboDeal', type: 'combo', durationMinutes: 60, jumpersPerUnit: 2 },
@@ -150,6 +155,7 @@ const LIVE_PHONE_ADDON_PRODUCTS = [
 ];
 
 const rdsClient = new RDSDataClient({});
+const lambdaClient = new LambdaClient({});
 const secretsClient = new SecretsManagerClient({});
 const ssmClient = new SSMClient({});
 
@@ -167,6 +173,15 @@ exports.handler = async (event) => {
 
     const body = parseBody(event);
     correlationId = normalizeCorrelationId(body.correlationId) || correlationId;
+
+    if (isKioskReconciliationEvent(event)) {
+      correlationId = normalizeCorrelationId(event?.detail?.correlationId) || correlationId;
+      return await handleKioskPaymentReconciliation(event.detail, correlationId);
+    }
+
+    if (isDraftFinalizeRoute(routeKey, event)) {
+      return await handleDraftFinalize(event, body, correlationId);
+    }
 
     if (isEmergencyStopEnabled()) {
       return safetyGateBlockedResponse(
@@ -194,10 +209,6 @@ exports.handler = async (event) => {
 
     if (isDraftRoute(routeKey, event)) {
       return await handleDraft(event, body, correlationId);
-    }
-
-    if (isDraftFinalizeRoute(routeKey, event)) {
-      return await handleDraftFinalize(event, body, correlationId);
     }
 
     return jsonResponse(404, correlationId, {
@@ -682,6 +693,7 @@ async function handleDraft(event, body, correlationId) {
 
 async function handleDraftFinalize(event, body, correlationId) {
   const request = {
+    action: normalizeDraftFinalizeAction(body.action),
     idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
     outcome: normalizeTerminalOutcome(body.outcome),
     paymentAttemptId: stringOrNull(body.paymentAttemptId),
@@ -704,104 +716,88 @@ async function handleDraftFinalize(event, body, correlationId) {
     });
   }
 
-  if (request.outcome !== 'approved') {
-    await recordKioskTerminalOutcome(request, request.outcome);
-    return jsonResponse(200, correlationId, {
-      status: 'terminal_result_recorded',
-      booking: null,
-    });
+  if (request.action === 'status') {
+    return jsonResponse(200, correlationId, publicKioskPaymentStatus(prepayment));
   }
 
-  if (!isNewBookingDraftWriteEnabled()) {
-    return safetyGateBlockedResponse(correlationId, 'roller_booking_draft_writes_disabled');
-  }
-
-  const alreadyReconciled =
-    prepayment.payment_attempt_status === 'reconciled' || prepayment.status === 'published';
-  if (!alreadyReconciled) await recordKioskTerminalOutcome(request, 'approved');
-  const config = await getRollerConfig();
-  const token = await getRollerAccessToken(config);
-  const publishResult = alreadyReconciled
-    ? { body: null, ok: true, status: 200 }
-    : await publishNoPaymentDraft(config, token, request.rollerDraftUniqueId);
-  const lookupCandidates = [
-    stringOrNull(publishResult.body?.uniqueId),
-    stringOrNull(publishResult.body?.bookingReference),
-    request.rollerDraftUniqueId,
-  ].filter((value, index, values) => value && values.indexOf(value) === index);
-
-  let readback = null;
-  for (const identifier of lookupCandidates) {
-    const result = await getRollerJson(config, token, `/bookings/${encodeURIComponent(identifier)}`);
-    if (!result.ok) continue;
-    const candidate = normalizeBookingReadback(result.body);
-    if (candidate.confirmed) {
-      readback = candidate;
-      break;
-    }
-  }
-
-  if (!readback) {
-    await writeBookingEventLog({
-      correlationId,
-      eventType: 'booking.kiosk_terminal_confirmation_pending',
-      payload: {
-        publishStatus: publishResult.status,
-      },
-      subjectRef: request.prepaymentDraftId,
-      summary: 'Kiosk terminal payment was approved but ROLLER booking readback is still pending.',
-    });
-    return jsonResponse(409, correlationId, {
+  if (prepayment.roller_draft_unique_id !== request.rollerDraftUniqueId) {
+    return jsonResponse(404, correlationId, {
       status: 'blocked',
       error: {
-        code: 'kiosk_booking_confirmation_pending',
-        message: 'Payment is approved but the ROLLER booking is not confirmed yet.',
+        code: 'kiosk_payment_attempt_not_found',
+        message: 'The kiosk payment attempt was not found.',
       },
     });
   }
 
-  await executeStatement(
-    `UPDATE jumpyard.prepayment_booking_drafts
-     SET
-       status = 'published',
-       payment_attempt_status = 'reconciled',
-       amount_owing_cents = 0,
-       updated_at = now()
-     WHERE prepayment_draft_id = :prepaymentDraftId
-       AND payment_attempt_id = :paymentAttemptId`,
-    [
-      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
-      stringParameter('paymentAttemptId', request.paymentAttemptId),
-    ],
-  );
-  await writeBookingEventLog({
-    correlationId,
-    eventType: 'booking.kiosk_terminal_reconciled',
-    payload: {
-      paymentChannel: 'card_present',
-    },
-    subjectRef: request.prepaymentDraftId,
-    summary: 'ROLLER kiosk terminal payment and booking were reconciled.',
-  });
+  if (request.outcome !== 'approved') {
+    const recorded = await recordKioskTerminalOutcome(request, request.outcome);
+    emitKioskTerminalOutcomeMetric(request.outcome);
+    return jsonResponse(200, correlationId, {
+      ...publicKioskPaymentStatus(recorded ?? prepayment),
+      result: 'terminal_result_recorded',
+    });
+  }
 
-  return jsonResponse(200, correlationId, {
-    status: 'booking_confirmed',
-    booking: readback,
-  });
+  const recorded = await recordKioskTerminalOutcome(request, 'approved');
+  emitKioskTerminalOutcomeMetric('approved');
+  if (recorded?.booking_confirmation_status === 'confirmed' || recorded?.status === 'published') {
+    return jsonResponse(200, correlationId, publicKioskPaymentStatus(recorded));
+  }
+
+  if (isEmergencyStopEnabled() || !isNewBookingDraftWriteEnabled()) {
+    const blocked = await markKioskReconciliationNeedsStaff(
+      request,
+      isEmergencyStopEnabled() ? 'emergency_stop_active' : 'roller_booking_draft_writes_disabled',
+    );
+    await writeBookingEventLog({
+      correlationId,
+      eventType: 'booking.kiosk_terminal_reconciliation_blocked',
+      payload: {
+        reason: isEmergencyStopEnabled() ? 'emergency_stop_active' : 'roller_booking_draft_writes_disabled',
+      },
+      subjectRef: request.prepaymentDraftId,
+      summary: 'Kiosk payment was approved but automatic booking reconciliation is blocked.',
+    });
+    emitKioskReconciliationMetric('needs_staff', 0, 0);
+    return jsonResponse(202, correlationId, publicKioskPaymentStatus(blocked ?? recorded));
+  }
+
+  try {
+    await queueKioskPaymentReconciliation(request, correlationId);
+  } catch {
+    const blocked = await markKioskReconciliationNeedsStaff(request, 'background_dispatch_failed');
+    await writeBookingEventLog({
+      correlationId,
+      eventType: 'booking.kiosk_terminal_reconciliation_dispatch_failed',
+      payload: {},
+      subjectRef: request.prepaymentDraftId,
+      summary: 'Kiosk payment was approved but background reconciliation could not be dispatched.',
+    });
+    emitKioskReconciliationMetric('needs_staff', 0, 0);
+    return jsonResponse(202, correlationId, publicKioskPaymentStatus(blocked ?? recorded));
+  }
+
+  emitKioskReconciliationMetric('pending', 0, 0);
+  return jsonResponse(202, correlationId, publicKioskPaymentStatus(recorded ?? prepayment));
 }
 
 function validateDraftFinalizeRequest(request) {
-  if (!request.idempotencyKey) {
-    return { code: 'idempotency_key_required', message: 'An idempotency key is required.' };
-  }
-  if (!request.outcome) {
-    return { code: 'terminal_outcome_invalid', message: 'A supported terminal outcome is required.' };
+  if (!request.action) {
+    return { code: 'draft_finalize_action_invalid', message: 'A supported finalize action is required.' };
   }
   if (!/^jypd_[a-f0-9]{18}$/.test(request.prepaymentDraftId ?? '')) {
     return { code: 'prepayment_draft_id_invalid', message: 'A valid prepayment draft id is required.' };
   }
   if (!/^jytp_[a-f0-9]{18}$/.test(request.paymentAttemptId ?? '')) {
     return { code: 'payment_attempt_id_invalid', message: 'A valid payment attempt id is required.' };
+  }
+  if (request.action === 'status') return null;
+  if (!request.idempotencyKey) {
+    return { code: 'idempotency_key_required', message: 'An idempotency key is required.' };
+  }
+  if (!request.outcome) {
+    return { code: 'terminal_outcome_invalid', message: 'A supported terminal outcome is required.' };
   }
   if (!request.rollerDraftUniqueId || request.rollerDraftUniqueId.length > 128) {
     return { code: 'roller_draft_id_invalid', message: 'A valid ROLLER draft id is required.' };
@@ -816,17 +812,26 @@ async function findKioskPrepaymentAttempt(request) {
        roller_draft_unique_id,
        payment_attempt_id,
        payment_attempt_status,
-       status
+       status,
+       booking_confirmation_status,
+       roller_booking_reference,
+       payment_approved_at::text AS payment_approved_at,
+       reconciliation_started_at::text AS reconciliation_started_at,
+       reconciliation_claimed_at::text AS reconciliation_claimed_at,
+       reconciliation_last_attempt_at::text AS reconciliation_last_attempt_at,
+       reconciliation_completed_at::text AS reconciliation_completed_at,
+       reconciliation_attempt_count,
+       reconciliation_last_result,
+       publish_attempted_at::text AS publish_attempted_at,
+       publish_http_status
      FROM jumpyard.prepayment_booking_drafts
      WHERE prepayment_draft_id = :prepaymentDraftId
-       AND roller_draft_unique_id = :rollerDraftUniqueId
        AND payment_attempt_id = :paymentAttemptId
        AND payment_channel = 'card_present'
        AND flow_type = 'new_booking'
      LIMIT 1`,
     [
       stringParameter('prepaymentDraftId', request.prepaymentDraftId),
-      stringParameter('rollerDraftUniqueId', request.rollerDraftUniqueId),
       stringParameter('paymentAttemptId', request.paymentAttemptId),
     ],
   );
@@ -835,7 +840,12 @@ async function findKioskPrepaymentAttempt(request) {
 
 async function recordKioskTerminalOutcome(request, outcome) {
   const status = outcome === 'failed' ? 'failed' : outcome === 'cancelled' ? 'cancelled' : 'payment_pending';
-  await executeStatement(
+  const confirmationStatus = outcome === 'approved'
+    ? 'pending'
+    : outcome === 'unknown'
+      ? 'needs_staff'
+      : 'failed';
+  const result = await executeStatement(
     `UPDATE jumpyard.prepayment_booking_drafts
      SET
        payment_attempt_status = CASE
@@ -845,18 +855,332 @@ async function recordKioskTerminalOutcome(request, outcome) {
        END,
        status = CASE
          WHEN status = 'published' THEN status
+         WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved' THEN status
          ELSE :status
+       END,
+       booking_confirmation_status = CASE
+         WHEN status = 'published' OR payment_attempt_status = 'reconciled' THEN 'confirmed'
+         WHEN payment_attempt_status = 'approved' THEN booking_confirmation_status
+         ELSE :confirmationStatus
+       END,
+       payment_approved_at = CASE
+         WHEN :outcome = 'approved' THEN COALESCE(payment_approved_at, now())
+         ELSE payment_approved_at
        END,
        updated_at = now()
      WHERE prepayment_draft_id = :prepaymentDraftId
-       AND payment_attempt_id = :paymentAttemptId`,
+       AND payment_attempt_id = :paymentAttemptId
+     RETURNING
+       prepayment_draft_id,
+       roller_draft_unique_id,
+       payment_attempt_id,
+       payment_attempt_status,
+       status,
+       booking_confirmation_status,
+       roller_booking_reference`,
     [
       stringParameter('outcome', outcome),
       stringParameter('status', status),
+      stringParameter('confirmationStatus', confirmationStatus),
       stringParameter('prepaymentDraftId', request.prepaymentDraftId),
       stringParameter('paymentAttemptId', request.paymentAttemptId),
     ],
   );
+  return firstMappedRow(result) ?? null;
+}
+
+async function queueKioskPaymentReconciliation(request, correlationId) {
+  const functionName = stringOrNull(process.env.AWS_LAMBDA_FUNCTION_NAME);
+  if (!functionName) throw new Error('Kiosk reconciliation function is not configured.');
+
+  const response = await lambdaClient.send(
+    new InvokeCommand({
+      FunctionName: functionName,
+      InvocationType: 'Event',
+      Payload: Buffer.from(
+        JSON.stringify({
+          source: KIOSK_RECONCILIATION_SOURCE,
+          detail: {
+            correlationId,
+            paymentAttemptId: request.paymentAttemptId,
+            prepaymentDraftId: request.prepaymentDraftId,
+          },
+        }),
+      ),
+    }),
+  );
+  if (response.StatusCode !== 202) throw new Error('Kiosk reconciliation dispatch was not accepted.');
+}
+
+async function handleKioskPaymentReconciliation(detail, correlationId) {
+  const request = {
+    paymentAttemptId: stringOrNull(detail?.paymentAttemptId),
+    prepaymentDraftId: stringOrNull(detail?.prepaymentDraftId),
+  };
+  if (
+    !/^jypd_[a-f0-9]{18}$/.test(request.prepaymentDraftId ?? '') ||
+    !/^jytp_[a-f0-9]{18}$/.test(request.paymentAttemptId ?? '')
+  ) {
+    return { status: 'invalid_reconciliation_request' };
+  }
+
+  const existing = await findKioskPrepaymentAttempt(request);
+  if (!existing || existing.payment_attempt_status !== 'approved') {
+    return { status: publicKioskPaymentStatus(existing).status };
+  }
+  if (existing.booking_confirmation_status === 'confirmed' || existing.status === 'published') {
+    return { status: 'confirmed' };
+  }
+  if (isEmergencyStopEnabled() || !isNewBookingDraftWriteEnabled()) {
+    await markKioskReconciliationNeedsStaff(
+      request,
+      isEmergencyStopEnabled() ? 'emergency_stop_active' : 'roller_booking_draft_writes_disabled',
+    );
+    emitKioskReconciliationMetric('needs_staff', 0, 0);
+    return { status: 'needs_staff' };
+  }
+
+  const claimed = await claimKioskReconciliation(request);
+  if (!claimed) return { status: 'already_claimed' };
+
+  const startedAt = Date.now();
+  const approvedAt = Date.parse(claimed.payment_approved_at ?? '') || startedAt;
+  let config;
+  let token;
+  try {
+    config = await getRollerConfig();
+    token = await getRollerAccessToken(config);
+  } catch {
+    await markKioskReconciliationNeedsStaff(request, 'provider_setup_failed');
+    emitKioskReconciliationMetric('needs_staff', 0, Date.now() - startedAt);
+    return { status: 'needs_staff' };
+  }
+  const publishClaimed = await claimKioskPublishAttempt(request);
+  const readbackIdentifiers = [claimed.roller_draft_unique_id];
+  let publishReadback = null;
+  if (publishClaimed) {
+    try {
+      const publishResult = await publishNoPaymentDraft(config, token, claimed.roller_draft_unique_id);
+      await recordKioskPublishResult(request, publishResult.status, publishResult.ok ? 'accepted' : 'provider_rejected');
+      emitKioskPublishMetric(publishResult.status, publishResult.ok ? 'accepted' : 'provider_rejected');
+      if (publishResult.ok) {
+        const candidate = normalizeBookingReadback(publishResult.body);
+        if (candidate?.rollerUniqueId && !readbackIdentifiers.includes(candidate.rollerUniqueId)) {
+          readbackIdentifiers.push(candidate.rollerUniqueId);
+        }
+        if (candidate?.bookingReference && !readbackIdentifiers.includes(candidate.bookingReference)) {
+          readbackIdentifiers.push(candidate.bookingReference);
+        }
+        if (candidate?.confirmed) publishReadback = candidate;
+      }
+    } catch {
+      await recordKioskPublishResult(request, 0, 'transport_unknown');
+      emitKioskPublishMetric(0, 'transport_unknown');
+    }
+  }
+
+  for (let index = 0; index < KIOSK_RECONCILIATION_DELAYS_MS.length; index += 1) {
+    const delayMs = KIOSK_RECONCILIATION_DELAYS_MS[index];
+    if (delayMs > 0) await wait(delayMs);
+
+    const current = await findKioskPrepaymentAttempt(request);
+    if (current?.booking_confirmation_status === 'confirmed' || current?.status === 'published') {
+      return { status: 'confirmed' };
+    }
+    if (current?.payment_attempt_status !== 'approved') {
+      return { status: publicKioskPaymentStatus(current).status };
+    }
+
+    await recordKioskReconciliationAttempt(request, 'readback_pending');
+    let readback = publishReadback;
+    publishReadback = null;
+    for (const identifier of readbackIdentifiers) {
+      if (readback) break;
+      try {
+        const result = await getRollerJson(config, token, `/bookings/${encodeURIComponent(identifier)}`);
+        const candidate = result.ok ? normalizeBookingReadback(result.body) : null;
+        if (candidate?.confirmed) readback = candidate;
+      } catch {
+        // A provider transport failure is ambiguous. The same approved attempt is
+        // read again; no new payment or publish request is created.
+      }
+    }
+
+    if (readback) {
+      const confirmed = await confirmKioskReconciliation(request, readback);
+      await writeBookingEventLog({
+        correlationId,
+        eventType: 'booking.kiosk_terminal_reconciled',
+        payload: {
+          attemptCount: Number(confirmed?.reconciliation_attempt_count ?? index + 1),
+          elapsedMs: Date.now() - startedAt,
+          paymentChannel: 'card_present',
+        },
+        subjectRef: request.prepaymentDraftId,
+        summary: 'ROLLER kiosk terminal payment and booking were reconciled.',
+      });
+      emitKioskReconciliationMetric(
+        'confirmed',
+        Number(confirmed?.reconciliation_attempt_count ?? index + 1),
+        Date.now() - approvedAt,
+      );
+      return { status: 'confirmed' };
+    }
+
+    emitKioskReconciliationMetric('pending', index + 1, Date.now() - startedAt);
+  }
+
+  await markKioskReconciliationNeedsStaff(request, 'confirmation_timeout');
+  await writeBookingEventLog({
+    correlationId,
+    eventType: 'booking.kiosk_terminal_reconciliation_exhausted',
+    payload: {
+      attemptCount: KIOSK_RECONCILIATION_DELAYS_MS.length,
+      elapsedMs: Date.now() - startedAt,
+    },
+    subjectRef: request.prepaymentDraftId,
+    summary: 'Kiosk payment was approved but booking confirmation exceeded the bounded retry window.',
+  });
+  emitKioskReconciliationMetric(
+    'needs_staff',
+    KIOSK_RECONCILIATION_DELAYS_MS.length,
+    Date.now() - startedAt,
+  );
+  return { status: 'needs_staff' };
+}
+
+async function claimKioskReconciliation(request) {
+  const result = await executeStatement(
+    `UPDATE jumpyard.prepayment_booking_drafts
+     SET reconciliation_started_at = COALESCE(reconciliation_started_at, now()),
+         reconciliation_claimed_at = now(),
+         booking_confirmation_status = 'pending',
+         updated_at = now()
+     WHERE prepayment_draft_id = :prepaymentDraftId
+       AND payment_attempt_id = :paymentAttemptId
+       AND payment_attempt_status = 'approved'
+       AND booking_confirmation_status = 'pending'
+       AND (
+         reconciliation_claimed_at IS NULL
+         OR reconciliation_claimed_at < now() - interval '3 minutes'
+       )
+     RETURNING roller_draft_unique_id, payment_approved_at::text AS payment_approved_at`,
+    [
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+    ],
+  );
+  return firstMappedRow(result) ?? null;
+}
+
+async function claimKioskPublishAttempt(request) {
+  const result = await executeStatement(
+    `UPDATE jumpyard.prepayment_booking_drafts
+     SET publish_attempted_at = now(),
+         reconciliation_last_result = 'publish_dispatched',
+         updated_at = now()
+     WHERE prepayment_draft_id = :prepaymentDraftId
+       AND payment_attempt_id = :paymentAttemptId
+       AND payment_attempt_status = 'approved'
+       AND publish_attempted_at IS NULL
+     RETURNING prepayment_draft_id`,
+    [
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+    ],
+  );
+  return Boolean(firstMappedRow(result));
+}
+
+async function recordKioskPublishResult(request, statusCode, resultCode) {
+  await executeStatement(
+    `UPDATE jumpyard.prepayment_booking_drafts
+     SET publish_http_status = :statusCode,
+         reconciliation_last_result = :resultCode,
+         updated_at = now()
+     WHERE prepayment_draft_id = :prepaymentDraftId
+       AND payment_attempt_id = :paymentAttemptId`,
+    [
+      integerParameter('statusCode', statusCode),
+      stringParameter('resultCode', resultCode),
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+    ],
+  );
+}
+
+async function recordKioskReconciliationAttempt(request, resultCode) {
+  await executeStatement(
+    `UPDATE jumpyard.prepayment_booking_drafts
+     SET reconciliation_attempt_count = reconciliation_attempt_count + 1,
+         reconciliation_last_attempt_at = now(),
+         reconciliation_last_result = :resultCode,
+         updated_at = now()
+     WHERE prepayment_draft_id = :prepaymentDraftId
+       AND payment_attempt_id = :paymentAttemptId
+       AND payment_attempt_status = 'approved'`,
+    [
+      stringParameter('resultCode', resultCode),
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+    ],
+  );
+}
+
+async function confirmKioskReconciliation(request, readback) {
+  const result = await executeStatement(
+    `UPDATE jumpyard.prepayment_booking_drafts
+     SET status = 'published',
+         payment_attempt_status = 'reconciled',
+         booking_confirmation_status = 'confirmed',
+         roller_booking_reference = :bookingReference,
+         amount_owing_cents = 0,
+         reconciliation_completed_at = COALESCE(reconciliation_completed_at, now()),
+         reconciliation_last_result = 'confirmed',
+         updated_at = now()
+     WHERE prepayment_draft_id = :prepaymentDraftId
+       AND payment_attempt_id = :paymentAttemptId
+       AND payment_attempt_status IN ('approved', 'reconciled')
+     RETURNING reconciliation_attempt_count`,
+    [
+      stringParameter('bookingReference', readback.bookingReference),
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+    ],
+  );
+  return firstMappedRow(result) ?? null;
+}
+
+async function markKioskReconciliationNeedsStaff(request, reason) {
+  const result = await executeStatement(
+    `UPDATE jumpyard.prepayment_booking_drafts
+     SET booking_confirmation_status = CASE
+           WHEN booking_confirmation_status = 'confirmed' THEN booking_confirmation_status
+           ELSE 'needs_staff'
+         END,
+         reconciliation_last_result = CASE
+           WHEN booking_confirmation_status = 'confirmed' THEN reconciliation_last_result
+           ELSE :reason
+         END,
+         updated_at = now()
+     WHERE prepayment_draft_id = :prepaymentDraftId
+       AND payment_attempt_id = :paymentAttemptId
+     RETURNING
+       payment_attempt_status,
+       status,
+       booking_confirmation_status,
+       roller_booking_reference`,
+    [
+      stringParameter('reason', reason),
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+    ],
+  );
+  return firstMappedRow(result) ?? null;
+}
+
+function wait(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 async function handleAddProductQuote(event, body, correlationId) {
@@ -3112,6 +3436,7 @@ async function persistPrepaymentDraft({
        payment_channel,
        payment_attempt_id,
        payment_attempt_status,
+       booking_confirmation_status,
        roller_env,
        booking_date,
        start_time,
@@ -3146,6 +3471,7 @@ async function persistPrepaymentDraft({
        :paymentChannel,
        :paymentAttemptId,
        :paymentAttemptStatus,
+       :bookingConfirmationStatus,
        :rollerEnv,
        CAST(:bookingDate AS date),
        CAST(:startTime AS time),
@@ -3177,6 +3503,10 @@ async function persistPrepaymentDraft({
        payment_channel = EXCLUDED.payment_channel,
        payment_attempt_id = COALESCE(jumpyard.prepayment_booking_drafts.payment_attempt_id, EXCLUDED.payment_attempt_id),
        payment_attempt_status = COALESCE(jumpyard.prepayment_booking_drafts.payment_attempt_status, EXCLUDED.payment_attempt_status),
+       booking_confirmation_status = COALESCE(
+         jumpyard.prepayment_booking_drafts.booking_confirmation_status,
+         EXCLUDED.booking_confirmation_status
+       ),
        total_cents = EXCLUDED.total_cents,
        amount_owing_cents = EXCLUDED.amount_owing_cents,
        customer_first_name = EXCLUDED.customer_first_name,
@@ -3200,6 +3530,7 @@ async function persistPrepaymentDraft({
       stringParameter('paymentChannel', paymentChannel),
       stringParameter('paymentAttemptId', paymentAttemptId),
       stringParameter('paymentAttemptStatus', paymentAttemptId ? 'created' : null),
+      stringParameter('bookingConfirmationStatus', paymentAttemptId ? 'pending' : null),
       stringParameter('rollerEnv', config.env),
       stringParameter('bookingDate', firstItem.bookingDate),
       stringParameter('startTime', firstItem.startTime),
@@ -3665,6 +3996,89 @@ function emitRollerApiMetric({ method, operation, status, ok }) {
   );
 }
 
+function emitKioskReconciliationMetric(state, attemptCount, elapsedMs) {
+  const metrics = [
+    { Name: 'KioskReconciliationStateCount', Unit: 'Count' },
+    { Name: 'KioskReconciliationAttemptCount', Unit: 'Count' },
+  ];
+  const values = {
+    KioskReconciliationStateCount: 1,
+    KioskReconciliationAttemptCount: Math.max(0, Number(attemptCount) || 0),
+  };
+  if (state === 'confirmed') {
+    metrics.push({ Name: 'KioskApprovalToBookingLatency', Unit: 'Milliseconds' });
+    values.KioskApprovalToBookingLatency = Math.max(0, Number(elapsedMs) || 0);
+  }
+
+  console.log(
+    JSON.stringify({
+      _aws: {
+        Timestamp: Date.now(),
+        CloudWatchMetrics: [
+          {
+            Namespace: 'JumpYard/Cloud',
+            Dimensions: [['Environment', 'Handler', 'State']],
+            Metrics: metrics,
+          },
+        ],
+      },
+      Environment: sanitizeMetricValue(process.env.RESOURCE_PREFIX || 'unknown'),
+      Handler: 'booking',
+      State: sanitizeMetricValue(state || 'unknown'),
+      ...values,
+    }),
+  );
+}
+
+function emitKioskTerminalOutcomeMetric(outcome) {
+  console.log(
+    JSON.stringify({
+      _aws: {
+        Timestamp: Date.now(),
+        CloudWatchMetrics: [
+          {
+            Namespace: 'JumpYard/Cloud',
+            Dimensions: [['Environment', 'Handler', 'Outcome']],
+            Metrics: [{ Name: 'KioskTerminalOutcomeCount', Unit: 'Count' }],
+          },
+        ],
+      },
+      Environment: sanitizeMetricValue(process.env.RESOURCE_PREFIX || 'unknown'),
+      Handler: 'booking',
+      Outcome: sanitizeMetricValue(outcome || 'unknown'),
+      KioskTerminalOutcomeCount: 1,
+    }),
+  );
+}
+
+function emitKioskPublishMetric(statusCode, result) {
+  const isConflict = Number(statusCode) === 409;
+  const metrics = [{ Name: 'KioskPublishAttemptCount', Unit: 'Count' }];
+  const values = { KioskPublishAttemptCount: 1 };
+  if (isConflict) {
+    metrics.push({ Name: 'KioskPublishConflictCount', Unit: 'Count' });
+    values.KioskPublishConflictCount = 1;
+  }
+  console.log(
+    JSON.stringify({
+      _aws: {
+        Timestamp: Date.now(),
+        CloudWatchMetrics: [
+          {
+            Namespace: 'JumpYard/Cloud',
+            Dimensions: [['Environment', 'Handler', 'Result']],
+            Metrics: metrics,
+          },
+        ],
+      },
+      Environment: sanitizeMetricValue(process.env.RESOURCE_PREFIX || 'unknown'),
+      Handler: 'booking',
+      Result: sanitizeMetricValue(result || 'unknown'),
+      ...values,
+    }),
+  );
+}
+
 function rollerOperationFromEndpointPath(endpointPath, method) {
   const path = String(endpointPath || '').split('?')[0];
   if (path === '/bookings/draft/costs') return 'create_draft_costs';
@@ -3695,6 +4109,10 @@ function isDraftFinalizeRoute(routeKey, event) {
     routeKey === 'POST /v1/bookings/draft/finalize' ||
     event?.rawPath === '/v1/bookings/draft/finalize'
   );
+}
+
+function isKioskReconciliationEvent(event) {
+  return event?.source === KIOSK_RECONCILIATION_SOURCE && event?.detail?.trigger !== 'http';
 }
 
 function isAvailabilityRoute(routeKey, event) {
