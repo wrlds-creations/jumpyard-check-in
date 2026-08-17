@@ -54,7 +54,7 @@ The first protected Cloudflare run [30833724481](https://github.com/wrlds-creati
 
 Final automated proof returned HTTP 200 for the public root and 9,094-byte Apple Pay association file, exact association SHA-256 `8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6`, the exact park-test API target `ij4rnaui2b`, and the exact selected Cloudflare commit SHA. The in-app browser displayed `JumpYard Connected Entry` with the booking and entry choices. Email/SMS links remain on the park-test Pages origin, `guestMessagingSendsEnabled=false`, and the T0201 hash-only control remains disarmed. Rollback selects an earlier immutable park-test release to remove the new CORS origin and fail the alias closed; Cloudflare rollback/re-promotion selects an earlier immutable artifact without rebuilding.
 
-On 2026-08-17, Love separately reported that the exact custom origin loaded payment options and completed the controlled iPhone Apple Pay payment successfully. This closes the manual proof without an AWS, Cloudflare, CORS, application, or release change and without Codex or deployment automation submitting a financial transaction. The alias remains park-test-backed and is not a production cutover.
+On 2026-08-17, Love separately reported that the exact custom origin loaded payment options and completed the controlled iPhone Apple Pay payment successfully. This closes the manual proof without changing the controlled alias's AWS, Cloudflare configuration, CORS, application runtime, or selected release artifact, and without Codex or deployment automation submitting a financial transaction. The alias remains park-test-backed and is not a production cutover.
 
 ### Issue #216 T0201 Controlled T-30 Email (Deployed, Proven, and Disarmed)
 

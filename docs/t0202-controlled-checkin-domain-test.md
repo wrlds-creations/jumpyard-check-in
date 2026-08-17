@@ -57,6 +57,6 @@ The final public proof returned HTTP 200, embedded the exact park-test API targe
 
 On 2026-08-17, Love reported that the exact `https://checkin.jumpyard.se` origin loaded the payment options and completed the controlled Apple Pay payment successfully on iPhone. No booking, transaction, guest, or payment identifier is recorded in repository evidence.
 
-An earlier attempt on the same origin showed only Roller's generic payment-session error before any payment method rendered. The later successful test proves the final origin now works, but the repository has no provider-side trace that establishes a definitive cause for the earlier transient failure. No application, AWS, Cloudflare, CORS, or release change was made as part of this manual closeout.
+An earlier attempt on the same origin showed only Roller's generic payment-session error before any payment method rendered. The later successful test proves the final origin now works, but the repository has no provider-side trace that establishes a definitive cause for the earlier transient failure. The manual closeout required no change to the controlled alias's application runtime, AWS, Cloudflare configuration, CORS, or selected release artifact.
 
 The implementation contract is now `active-apple-pay-passed`. Love performed the financial action manually; no automated workflow or Codex action submitted the transaction. This completes the final acceptance item for issue #220 without authorizing production cutover, broad guest traffic, message-link changes, or staff/admin deployment.
