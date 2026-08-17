@@ -153,7 +153,8 @@ assert.match(
 assert.match(bookingSource, /postRollerJson\(config, token, '\/bookings\/draft', payload\)/);
 assert.match(bookingSource, /payment_attempt_status = 'reconciled'/);
 assert.match(bookingSource, /WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved'/);
-assert.match(bookingSource, /kiosk_booking_confirmation_pending/);
+assert.match(bookingSource, /booking\.kiosk_terminal_reconciled/);
+assert.match(bookingSource, /request\.action === 'status'/);
 assert.match(terminalContractSource, /\[REDACTED_TERMINAL\]/);
 assert.doesNotMatch(bookingSource, /server-owned-reference/);
 

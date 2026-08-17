@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #239 Kiosk Payment Reconciliation (Implementation Ready, Not Deployed)
+
+Love approved [issue #239](https://github.com/wrlds-creations/jumpyard-check-in/issues/239) on 2026-08-17 after the supervised P400 proof showed that a definitive card-present approval can arrive before ROLLER exposes the paid booking. The approved boundary is the existing park-test stack in AWS account `376129878018`, region `eu-north-1`, client `JumpYard`, project `jumpyard-check-in`, environment `park-test`, owner/creator `love`, repository `wrlds-creations/jumpyard-check-in`, `ManagedBy=cdk`, data classification `confidential`, exportable `true`, and live `WRLDS:CostCenter=JumpYard` under the existing issue #233 exception.
+
+The implementation changes only the existing Booking, Lookup, and Webhook Lambda code, the existing Booking Lambda timeout/IAM policy, and the existing Aurora schema. Booking records terminal approval before reconciliation, reuses `POST /v1/bookings/draft/finalize` for a minimal server-identifier status read, invokes the same Booking Lambda asynchronously, claims at most one publish attempt, and performs bounded ROLLER readback before moving unresolved approvals to `needs_staff`. Existing signed webhook and lookup paths can later complete the same monotonic record. Migration `0019_kiosk_payment_reconciliation.sql` adds only reconciliation status, timing, attempt-count, safe booking-reference, and publish-result columns plus one partial index to `jumpyard.prepayment_booking_drafts`.
+
+The synthesized park-test stack remains at 27 routes. The existing Booking Lambda timeout changes to 120 seconds and its existing role receives `lambda:InvokeFunction` only for its exact own function ARN. No new API route, Lambda, queue, schedule, database, secret, alarm, external endpoint, production resource, or direct Adyen access is added. No AWS or ROLLER mutation has been performed from this issue branch. Deployment and migration remain pending an immutable merged artifact, reviewed plan, protected park-test approval, redacted readback, and one supervised P400 retest.
+
 ### Issue #234 Retired Playground Dev Aurora Hibernation (Applied Live, IaC Pending Review)
 
 Love approved [issue #234](https://github.com/wrlds-creations/jumpyard-check-in/issues/234) on 2026-08-11 to stop continuous Aurora compute charges for the unused Roller Playground-only `dev` environment without affecting park-test. Preflight confirmed AWS account `376129878018`, region `eu-north-1`, cluster `jumpyard-check-in-dev-aurora`, deletion protection, Aurora PostgreSQL `16.13`, and the complete live WRLDS metadata set. The live resource has `WRLDS:CostCenter=JumpYard`; that tag was preserved and is intentionally not reconciled in this issue because issue #233 owns cost-allocation-tag work.

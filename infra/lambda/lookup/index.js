@@ -1837,14 +1837,37 @@ async function reconcilePrepaymentDraftFromPaidBooking(booking, source) {
   const result = await executeStatement(
     `UPDATE jumpyard.prepayment_booking_drafts
      SET status = 'published',
+         payment_attempt_status = CASE
+           WHEN payment_channel = 'card_present' AND payment_attempt_status = 'approved' THEN 'reconciled'
+           ELSE payment_attempt_status
+         END,
+         booking_confirmation_status = CASE
+           WHEN payment_channel = 'card_present' AND payment_attempt_status IN ('approved', 'reconciled') THEN 'confirmed'
+           ELSE booking_confirmation_status
+         END,
+         roller_booking_reference = CASE
+           WHEN payment_channel = 'card_present' THEN :bookingReference
+           ELSE roller_booking_reference
+         END,
          amount_owing_cents = COALESCE(:amountOwingCents, 0),
          total_cents = COALESCE(:totalCents, total_cents),
+         reconciliation_completed_at = CASE
+           WHEN payment_channel = 'card_present' AND payment_attempt_status IN ('approved', 'reconciled')
+             THEN COALESCE(reconciliation_completed_at, now())
+           ELSE reconciliation_completed_at
+         END,
+         reconciliation_last_result = CASE
+           WHEN payment_channel = 'card_present' AND payment_attempt_status IN ('approved', 'reconciled')
+             THEN 'confirmed_by_lookup'
+           ELSE reconciliation_last_result
+         END,
          updated_at = now()
      WHERE roller_draft_unique_id = :rollerUniqueId
        AND status IN ('payment_pending', 'payment_blocked')
      RETURNING prepayment_draft_id, flow_type`,
     [
       stringParameter('rollerUniqueId', booking.rollerUniqueId),
+      stringParameter('bookingReference', booking.bookingReference),
       intParameter('amountOwingCents', currencyToCents(booking.amountOwing)),
       intParameter('totalCents', currencyToCents(booking.total)),
     ],

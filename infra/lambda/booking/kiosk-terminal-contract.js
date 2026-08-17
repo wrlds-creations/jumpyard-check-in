@@ -101,6 +101,39 @@ function normalizeTerminalOutcome(value) {
   return ['approved', 'failed', 'cancelled', 'unknown'].includes(value) ? value : null;
 }
 
+function normalizeDraftFinalizeAction(value) {
+  if (value === undefined || value === null || value === '') return 'result';
+  return ['result', 'status'].includes(value) ? value : null;
+}
+
+function publicKioskPaymentStatus(row) {
+  const paymentStatus = stringOrNull(row?.payment_attempt_status);
+  const storedConfirmationStatus = stringOrNull(row?.booking_confirmation_status);
+  const bookingReference = stringOrNull(row?.roller_booking_reference);
+  const confirmed =
+    storedConfirmationStatus === 'confirmed' ||
+    paymentStatus === 'reconciled' ||
+    row?.status === 'published';
+  const confirmationStatus = confirmed
+    ? 'confirmed'
+    : storedConfirmationStatus === 'needs_staff' || paymentStatus === 'unknown'
+      ? 'needs_staff'
+      : storedConfirmationStatus === 'failed' || ['failed', 'cancelled'].includes(paymentStatus)
+        ? 'failed'
+        : 'pending';
+
+  return {
+    status: confirmationStatus,
+    payment: {
+      status: paymentStatus,
+    },
+    booking: {
+      bookingReference: confirmed ? bookingReference : null,
+      status: confirmationStatus,
+    },
+  };
+}
+
 function normalizeBookingReadback(body) {
   const booking = body?.booking && typeof body.booking === 'object' ? body.booking : body;
   const costs = booking?.costs && typeof booking.costs === 'object' ? booking.costs : booking;
@@ -168,9 +201,11 @@ function stringOrNull(value) {
 module.exports = {
   buildKioskQuotePayload,
   KIOSK_PAYMENT_CURRENCY,
+  normalizeDraftFinalizeAction,
   normalizeBookingReadback,
   normalizePaymentTerminalMap,
   normalizeTerminalOutcome,
+  publicKioskPaymentStatus,
   redactPaymentTerminalValues,
   resolveKioskPaymentTerminal,
   verifyKioskDraftPayment,
