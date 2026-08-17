@@ -23,16 +23,17 @@ POST /v1/bookings/draft/finalize  action=result
 background reconciliation
   1. claim one worker for the approved attempt
   2. claim at most one POST /bookings/draft/publish attempt
-  3. inspect publish response and authoritative GET /bookings/{id}
-  4. retry readback after 0, 5, 10, 15, 20 and 25 seconds
-  5. confirmed paid booking -> confirmed
+  3. allow 10 seconds for the approved terminal payment to settle on the draft
+  4. inspect publish response and authoritative GET /bookings/{id}
+  5. retry readback at absolute 5-second offsets from 0 through 75 seconds
+  6. confirmed paid booking -> confirmed
      exhausted/blocked/provider setup failure -> needs_staff
 
 signed booking webhook or later lookup
   `-- may confirm the same approved record without creating another payment
 ```
 
-The delays total 75 seconds. Booking Lambda timeout is 120 seconds. A publish transport error is ambiguous, so the worker does not publish a second time; it continues readback because ROLLER can automatically create the booking.
+The bounded window is 75 seconds from worker start, not a sum of successively longer sleeps. Booking Lambda timeout is 120 seconds. The 10-second settlement delay is based on the supervised 2026-08-17 P400 trace: an immediate publish returned HTTP 409 while the same approved booking became visible 51.635 seconds later. A publish transport error remains ambiguous, so the worker does not publish a second time; it continues readback because ROLLER can automatically create the booking.
 
 ## Public status contract
 
