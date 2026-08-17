@@ -29,6 +29,16 @@ const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 const KIOSK_RECONCILIATION_SOURCE = 'jumpyard.kiosk-payment-reconciliation';
 const KIOSK_PUBLISH_SETTLEMENT_DELAY_MS = 10_000;
+const KIOSK_PUBLISH_RETRY_OFFSETS_MS = [
+  10_000,
+  15_000,
+  20_000,
+  25_000,
+  30_000,
+  35_000,
+  40_000,
+  45_000,
+];
 const KIOSK_RECONCILIATION_OFFSETS_MS = [
   0,
   5_000,
@@ -989,10 +999,10 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
     emitKioskReconciliationMetric('needs_staff', 0, Date.now() - startedAt);
     return { status: 'needs_staff' };
   }
-  const publishClaimed = await claimKioskPublishAttempt(request);
   const readbackIdentifiers = [claimed.roller_draft_unique_id];
   let publishReadback = null;
-  let publishPending = Boolean(publishClaimed);
+  let publishSequenceClaimed = false;
+  let publishRetryAllowed = false;
 
   for (let index = 0; index < KIOSK_RECONCILIATION_OFFSETS_MS.length; index += 1) {
     const offsetMs = KIOSK_RECONCILIATION_OFFSETS_MS[index];
@@ -1007,16 +1017,30 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
       return { status: publicKioskPaymentStatus(current).status };
     }
 
-    // The terminal library can report approval before ROLLER has attached the
-    // payment to the draft. The live P400 proof returned HTTP 409 when publish
-    // was called immediately, so retain the durable one-publish claim but give
-    // ROLLER a bounded settlement window before making that provider write.
-    if (publishPending && offsetMs >= KIOSK_PUBLISH_SETTLEMENT_DELAY_MS) {
-      publishPending = false;
+    // Claim one bounded publish sequence immediately before its first provider
+    // write. A duplicate worker can never start another sequence for the same
+    // approved payment attempt.
+    if (!publishSequenceClaimed && offsetMs >= KIOSK_PUBLISH_SETTLEMENT_DELAY_MS) {
+      publishSequenceClaimed = true;
+      publishRetryAllowed = await claimKioskPublishAttempt(request);
+    }
+
+    // A definitive HTTP 409 means ROLLER rejected the publish while the
+    // terminal payment was still settling. Retry only that explicit conflict;
+    // a transport-ambiguous response or any other status permanently stops
+    // provider writes and leaves the worker on authoritative readback.
+    if (publishRetryAllowed && KIOSK_PUBLISH_RETRY_OFFSETS_MS.includes(offsetMs)) {
       try {
         const publishResult = await publishNoPaymentDraft(config, token, claimed.roller_draft_unique_id);
-        await recordKioskPublishResult(request, publishResult.status, publishResult.ok ? 'accepted' : 'provider_rejected');
-        emitKioskPublishMetric(publishResult.status, publishResult.ok ? 'accepted' : 'provider_rejected');
+        const retryableConflict = publishResult.status === 409;
+        const resultCode = publishResult.ok
+          ? 'accepted'
+          : retryableConflict
+            ? 'provider_conflict_retryable'
+            : 'provider_rejected';
+        publishRetryAllowed = retryableConflict;
+        await recordKioskPublishResult(request, publishResult.status, resultCode);
+        emitKioskPublishMetric(publishResult.status, resultCode);
         if (publishResult.ok) {
           const candidate = normalizeBookingReadback(publishResult.body);
           if (candidate?.rollerUniqueId && !readbackIdentifiers.includes(candidate.rollerUniqueId)) {
@@ -1028,6 +1052,7 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
           if (candidate?.confirmed) publishReadback = candidate;
         }
       } catch {
+        publishRetryAllowed = false;
         await recordKioskPublishResult(request, 0, 'transport_unknown');
         emitKioskPublishMetric(0, 'transport_unknown');
       }

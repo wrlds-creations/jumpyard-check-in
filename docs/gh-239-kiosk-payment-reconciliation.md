@@ -22,18 +22,19 @@ POST /v1/bookings/draft/finalize  action=result
 
 background reconciliation
   1. claim one worker for the approved attempt
-  2. claim at most one POST /bookings/draft/publish attempt
-  3. allow 10 seconds for the approved terminal payment to settle on the draft
-  4. inspect publish response and authoritative GET /bookings/{id}
-  5. retry readback at absolute 5-second offsets from 0 through 75 seconds
-  6. confirmed paid booking -> confirmed
+  2. allow 10 seconds for the approved terminal payment to settle on the draft
+  3. claim one bounded POST /bookings/draft/publish sequence
+  4. retry the same publish at 15, 20, ... 45 seconds only after explicit HTTP 409
+  5. stop provider writes after success, transport ambiguity, or any other response
+  6. retry authoritative GET /bookings/{id} readback at absolute 5-second offsets through 75 seconds
+  7. confirmed paid booking -> confirmed
      exhausted/blocked/provider setup failure -> needs_staff
 
 signed booking webhook or later lookup
   `-- may confirm the same approved record without creating another payment
 ```
 
-The bounded window is 75 seconds from worker start, not a sum of successively longer sleeps. Booking Lambda timeout is 120 seconds. The 10-second settlement delay is based on the supervised 2026-08-17 P400 trace: an immediate publish returned HTTP 409 while the same approved booking became visible 51.635 seconds later. A publish transport error remains ambiguous, so the worker does not publish a second time; it continues readback because ROLLER can automatically create the booking.
+The bounded window is 75 seconds from worker start, not a sum of successively longer sleeps. Booking Lambda timeout is 120 seconds. The retry sequence is based on two supervised 2026-08-17 P400 traces: publish returned HTTP 409 while the approved bookings became visible 51.635 and 55.470 seconds after approval. The same draft is retried at absolute offsets 10 through 45 seconds only when the previous response was definitively HTTP 409. A transport error is ambiguous and any other response is non-retryable, so both stop provider writes while authoritative readback continues because ROLLER can still create the booking automatically.
 
 ## Public status contract
 
@@ -73,7 +74,7 @@ The two high-entropy ids are issued by JumpYard Cloud as the existing guest capa
 | Paid ROLLER booking read back, webhook-confirmed, or lookup-confirmed | `confirmed` | Terminal state becomes reconciled and cannot regress. |
 | Reconciliation blocked or bounded window exhausted | `needs_staff` | Staff handles recovery; a later authoritative webhook/lookup may still move it to confirmed. |
 
-Database claims make duplicate callbacks and workers harmless: one payment-attempt id is unique, one worker owns the active reconciliation window, and `publish_attempted_at` permits only one publish call. Late failed/cancelled/unknown results cannot overwrite approval. Existing ROLLER webhook/lookup updates are monotonic and may only complete the record.
+Database claims make duplicate callbacks and workers harmless: one payment-attempt id is unique, one worker owns the active reconciliation window, and `publish_attempted_at` permits only one bounded publish sequence. Within that sequence, only an explicit HTTP 409 permits another call for the same draft; transport ambiguity or any other result stops writes. Late failed/cancelled/unknown results cannot overwrite approval. Existing ROLLER webhook/lookup updates are monotonic and may only complete the record.
 
 ## AWS and deployment boundary
 
