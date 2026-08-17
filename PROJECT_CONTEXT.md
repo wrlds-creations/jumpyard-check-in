@@ -37,7 +37,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 ## Durable Architecture Facts
 
 - Frontend apps must not call Roller directly in the real production architecture.
-- Public hostnames are `checkin.jumpyard.se` and `staff-checkin.jumpyard.se`; DNS/TLS are active. The guest name is an active controlled alias to the selected park-test phone artifact and park-test API under #220, pending only Love's manual iPhone Apple Pay result. Staff/admin and production AWS/API remain absent. [Contract](config/production-domains.json).
+- Public hostnames are `checkin.jumpyard.se` and `staff-checkin.jumpyard.se`; DNS/TLS are active. The guest name is an active controlled park-test alias; Love's 2026-08-17 iPhone payment/Apple Pay test passed. It is not production, and staff/admin plus production AWS/API remain absent. [Contract](config/production-domains.json).
 - Roller remains the source of truth for bookings, products, payments, and ticket redemption.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, session status, idempotency, audit events, and guest messaging state.
 - The production booking index uses an approved initial backfill, scheduled morning seed, idempotent webhook updates/reconciliation, and live REST confirmation. Roller remains authoritative; Aurora is the operational cache.
@@ -96,7 +96,7 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 ## Current Readiness Gates
 
 - The [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5) owns readiness. T0195-T0197 are deployed; gated actions remain. [AWS_RESOURCES.md](AWS_RESOURCES.md) holds evidence, and T0204 decides GO/NO-GO.
-- Remaining blockers: lifecycle recovery/apply, alarm routing, integrated rehearsal, final-origin/payment/Apple Pay readiness, messaging-window approval, production approval, and natural webhook observation.
+- Remaining blockers: lifecycle recovery/apply, alarm routing, integrated rehearsal, messaging-window approval, production approval, and natural webhook observation.
 - Payment must stay on Roller's approved package; method visibility is Roller/Adyen controlled.
 
 ## Current Open Questions
