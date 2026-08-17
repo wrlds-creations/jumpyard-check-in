@@ -83,8 +83,8 @@ function validateContract(contract) {
   add(contract?.contract === 'jumpyard-check-in-production-web-domains', 'contract name is invalid');
   add(contract?.environment === 'production', 'environment must be production');
   add(
-    contract?.state === 'guest-controlled-park-test-alias-active-awaiting-apple-pay-result',
-    'state must record the active controlled guest alias awaiting Love\'s Apple Pay result',
+    contract?.state === 'guest-controlled-park-test-alias-active-apple-pay-passed',
+    'state must record the active controlled guest alias with Love\'s Apple Pay result passed',
   );
   add(contract?.zone === 'jumpyard.se', 'zone must be jumpyard.se');
   add(sameValues(contract?.productionWebOrigins, EXPECTED_ORIGINS), 'productionWebOrigins must contain exactly the approved guest and staff origins');
@@ -220,7 +220,16 @@ function validateContract(contract) {
     'controlled alias must not change message links',
   );
   add(alias?.manualApplePayPaymentOwner === 'Love', 'manual Apple Pay payment owner is invalid');
-  add(alias?.manualApplePayStatus === 'pending', 'manual Apple Pay result must remain pending until Love reports it');
+  add(alias?.manualApplePayStatus === 'passed', 'manual Apple Pay result must record Love\'s successful test');
+  add(alias?.manualApplePayVerifiedAt === '2026-08-17', 'manual Apple Pay verification date is invalid');
+  add(
+    alias?.manualApplePayResult === 'payment-options-loaded-and-apple-pay-payment-succeeded',
+    'manual Apple Pay result detail is invalid',
+  );
+  add(
+    alias?.manualApplePayEvidenceSource === 'Love manual iPhone test report',
+    'manual Apple Pay evidence source is invalid',
+  );
   add(alias?.awsCorsReleaseRunId === 30832695522, 'controlled alias AWS CORS release run is invalid');
   add(alias?.awsCorsDeploymentRunId === 30833080999, 'controlled alias AWS CORS deployment run is invalid');
   add(alias?.initialDomainDeploymentRunId === 30833724481, 'controlled alias initial domain run is invalid');

@@ -45,7 +45,7 @@ function validateDomainContract() {
   const contract = readJson('config/production-domains.json');
   const alias = contract.controlledParkTestAlias;
   assert.equal(contract.schemaVersion, 2);
-  assert.equal(contract.state, 'guest-controlled-park-test-alias-active-awaiting-apple-pay-result');
+  assert.equal(contract.state, 'guest-controlled-park-test-alias-active-apple-pay-passed');
   assert.equal(alias.approved, true);
   assert.equal(alias.approvedByIssue, 220);
   assert.equal(alias.deployed, true);
@@ -58,7 +58,10 @@ function validateDomainContract() {
   assert.equal(alias.staffAdminDeployment, false);
   assert.equal(alias.guestMessagingOpened, false);
   assert.equal(alias.messageLinkOrigin, MESSAGE_ORIGIN);
-  assert.equal(alias.manualApplePayStatus, 'pending');
+  assert.equal(alias.manualApplePayStatus, 'passed');
+  assert.equal(alias.manualApplePayVerifiedAt, '2026-08-17');
+  assert.equal(alias.manualApplePayResult, 'payment-options-loaded-and-apple-pay-payment-succeeded');
+  assert.equal(alias.manualApplePayEvidenceSource, 'Love manual iPhone test report');
   assert.equal(alias.awsCorsDeploymentRunId, 30833080999);
   assert.equal(alias.selectedReleaseSha, '9ffe379e6deb13da509114e70665b56bcaeb471a');
   assert.equal(alias.selectedReleaseRunId, 30834669772);
