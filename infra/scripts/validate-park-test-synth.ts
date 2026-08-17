@@ -264,6 +264,27 @@ function expectLambdaEnvironment(
   }
 }
 
+function expectBookingSelfInvokePolicy(template: CloudFormationTemplate, account: string, region: string, stackName: string): void {
+  const policy = Object.values(getResources(template)).find(
+    (resource) =>
+      resource.Type === 'AWS::IAM::Policy' &&
+      typeof resource.Properties?.PolicyName === 'string' &&
+      resource.Properties.PolicyName.includes('BookingHandlerServiceRoleDefaultPolicy'),
+  );
+  expect(Boolean(policy), `Expected the booking Lambda IAM policy for ${stackName}.`);
+
+  const policyStrings = collectStrings(policy?.Properties?.PolicyDocument);
+  const expectedArnSuffix = `:lambda:${region}:${account}:function:${stackName}-booking`;
+  expect(
+    policyStrings.some((value) => value.includes(expectedArnSuffix)),
+    `Expected booking reconciliation self-invoke permission ending in ${expectedArnSuffix}.`,
+  );
+  expect(
+    !policyStrings.some((value) => value.includes(`:lambda:${region}:${account}:function/${stackName}-booking`)),
+    'Lambda function ARNs must use a colon before the function name.',
+  );
+}
+
 function validateDevTemplate(dev: SynthResult): void {
   const strings = collectStrings(dev.template);
 
@@ -304,6 +325,7 @@ function validateDevTemplate(dev: SynthResult): void {
     JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'dev',
   });
+  expectBookingSelfInvokePolicy(dev.template, '376129878018', 'eu-north-1', `${DEV_PREFIX}-stack`);
   expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'true',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
@@ -482,6 +504,12 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
+  expectBookingSelfInvokePolicy(
+    parkTest.template,
+    '376129878018',
+    'eu-north-1',
+    `${PARK_TEST_PREFIX}-stack`,
+  );
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-redeem`, {
     ENABLE_ROLLER_REDEEM_WRITES: 'false',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',

@@ -955,6 +955,7 @@ exports.handler = async (event) => {
             service: 'lambda',
             resource: 'function',
             resourceName: `${this.stackName}-booking`,
+            arnFormat: ArnFormat.COLON_RESOURCE_NAME,
           }),
         ],
       }),
