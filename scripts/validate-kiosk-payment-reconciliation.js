@@ -71,6 +71,8 @@ assert.match(bookingSource, /booking\.kiosk_terminal_reconciliation_exhausted/);
 assert.match(bookingSource, /KioskApprovalToBookingLatency/);
 assert.match(bookingSource, /KioskTerminalOutcomeCount/);
 assert.match(bookingSource, /KioskPublishConflictCount/);
+assert.match(bookingSource, /KioskReconciliationDispatchFailureCount/);
+assert.match(bookingSource, /payload: \{ failureClass \}/);
 assert.match(bookingSource, /request\.action === 'status'/);
 assert.match(bookingSource, /if \(publishResult\.ok\) \{[\s\S]*normalizeBookingReadback\(publishResult\.body\)/);
 assert.match(bookingSource, /candidate\?\.rollerUniqueId[\s\S]*readbackIdentifiers\.push\(candidate\.rollerUniqueId\)/);
@@ -94,6 +96,7 @@ assert.ok(
 
 assert.match(stackSource, /timeout: Duration\.minutes\(2\)/);
 assert.match(stackSource, /actions: \['lambda:InvokeFunction'\]/);
+assert.match(stackSource, /arnFormat: ArnFormat\.COLON_RESOURCE_NAME/);
 assert.equal(
   (stackSource.match(/routeKey: 'POST \/v1\/bookings\/draft\/finalize'/g) ?? []).length,
   1,

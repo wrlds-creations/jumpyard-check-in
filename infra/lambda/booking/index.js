@@ -765,15 +765,17 @@ async function handleDraftFinalize(event, body, correlationId) {
 
   try {
     await queueKioskPaymentReconciliation(request, correlationId);
-  } catch {
+  } catch (error) {
+    const failureClass = kioskReconciliationDispatchFailureClass(error);
     const blocked = await markKioskReconciliationNeedsStaff(request, 'background_dispatch_failed');
     await writeBookingEventLog({
       correlationId,
       eventType: 'booking.kiosk_terminal_reconciliation_dispatch_failed',
-      payload: {},
+      payload: { failureClass },
       subjectRef: request.prepaymentDraftId,
       summary: 'Kiosk payment was approved but background reconciliation could not be dispatched.',
     });
+    emitKioskReconciliationDispatchFailureMetric(failureClass);
     emitKioskReconciliationMetric('needs_staff', 0, 0);
     return jsonResponse(202, correlationId, publicKioskPaymentStatus(blocked ?? recorded));
   }
@@ -910,6 +912,20 @@ async function queueKioskPaymentReconciliation(request, correlationId) {
     }),
   );
   if (response.StatusCode !== 202) throw new Error('Kiosk reconciliation dispatch was not accepted.');
+}
+
+function kioskReconciliationDispatchFailureClass(error) {
+  const name = stringOrNull(error?.name);
+  const allowlistedNames = new Set([
+    'AccessDeniedException',
+    'InvalidParameterValueException',
+    'RecursiveInvocationException',
+    'ResourceNotFoundException',
+    'ServiceException',
+    'TooManyRequestsException',
+  ]);
+  if (name && allowlistedNames.has(name)) return name;
+  return 'unknown';
 }
 
 async function handleKioskPaymentReconciliation(detail, correlationId) {
@@ -4047,6 +4063,27 @@ function emitKioskTerminalOutcomeMetric(outcome) {
       Handler: 'booking',
       Outcome: sanitizeMetricValue(outcome || 'unknown'),
       KioskTerminalOutcomeCount: 1,
+    }),
+  );
+}
+
+function emitKioskReconciliationDispatchFailureMetric(failureClass) {
+  console.log(
+    JSON.stringify({
+      _aws: {
+        Timestamp: Date.now(),
+        CloudWatchMetrics: [
+          {
+            Namespace: 'JumpYard/Cloud',
+            Dimensions: [['Environment', 'Handler', 'FailureClass']],
+            Metrics: [{ Name: 'KioskReconciliationDispatchFailureCount', Unit: 'Count' }],
+          },
+        ],
+      },
+      Environment: sanitizeMetricValue(process.env.RESOURCE_PREFIX || 'unknown'),
+      Handler: 'booking',
+      FailureClass: sanitizeMetricValue(failureClass || 'unknown'),
+      KioskReconciliationDispatchFailureCount: 1,
     }),
   );
 }
