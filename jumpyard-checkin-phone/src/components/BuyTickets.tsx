@@ -21,6 +21,12 @@ import {
 import type { Addon, AddonId, Booking } from '@/flow/types';
 import { ADDON_CATALOG_CONFIG, BUY_ENTRY_ADDON_IDS } from '@/flow/addonCatalog';
 import {
+  findRecoveredBookingProduct,
+  getMaxBookingProductQuantity,
+  getVisibleBookingProductSections,
+  isPurchasableBookingProduct,
+} from '@/flow/productVisibility';
+import {
   clearBuyFlowRecovery,
   isPrePaymentBuyFlowRecovery,
   writeBuyFlowRecovery,
@@ -258,15 +264,6 @@ function writeDraftRecovery(
   });
 }
 
-function getMaxQuantity(product: NewBookingProduct | null) {
-  if (!product?.available) return 0;
-  if (product.capacityRemaining === null) return 10;
-
-  const unitCapacity = Math.floor(product.capacityRemaining / Math.max(1, product.jumpersPerUnit));
-
-  return Math.max(0, Math.min(10, unitCapacity));
-}
-
 function getCapacityRemaining(product: NewBookingProduct | null) {
   if (!product?.available) return 0;
   return product.capacityRemaining;
@@ -456,43 +453,6 @@ function toRecoveryProduct(product: NewBookingProduct): BuyFlowRecoveryProduct {
     type: product.type === 'family' || product.type === 'combo' ? product.type : 'entry',
     unitPrice: product.unitPrice,
   };
-}
-
-function isBaseBookingProduct(product: NewBookingProduct) {
-  return product.type === 'entry' || product.type === 'family' || product.type === 'combo';
-}
-
-function findRecoveredProduct(
-  slot: NewBookingAvailability['slots'][number] | null,
-  recovered: BuyFlowRecoveryProduct | null
-) {
-  if (!slot || !recovered) return null;
-  const candidates = slot.products.filter(
-    (product) =>
-      isBaseBookingProduct(product) &&
-      product.available &&
-      product.productId !== null &&
-      getMaxQuantity(product) > 0
-  );
-
-  if (recovered.productId) {
-    const byProductId = candidates.find((product) => product.productId === recovered.productId);
-    if (byProductId) return byProductId;
-  }
-
-  if (recovered.key) {
-    const byKey = candidates.find((product) => product.key === recovered.key);
-    if (byKey) return byKey;
-  }
-
-  return (
-    candidates.find(
-      (product) =>
-        product.type === recovered.type &&
-        product.startTime === recovered.startTime &&
-        product.durationMinutes === recovered.durationMinutes
-    ) ?? null
-  );
 }
 
 function getRecoveredQuantity(snapshot: BuyFlowRecoverySnapshot, product: NewBookingProduct) {
@@ -752,10 +712,11 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   const [paymentApprovedForSync, setPaymentApprovedForSync] = useState(false);
 
   const selectedSlot = availability?.slots.find((slot) => slot.startTime === selectedTime) ?? null;
-  const comboProducts = selectedSlot?.products.filter((product) => product.type === 'combo') ?? [];
-  const entryProducts = selectedSlot?.products.filter((product) => product.type === 'entry') ?? [];
-  const familyProducts = selectedSlot?.products.filter((product) => product.type === 'family') ?? [];
-  const maxQuantity = getMaxQuantity(selectedProduct);
+  const visibleProductSections = getVisibleBookingProductSections(selectedSlot);
+  const comboProducts = visibleProductSections.combo;
+  const entryProducts = visibleProductSections.entry;
+  const familyProducts = visibleProductSections.family;
+  const maxQuantity = getMaxBookingProductQuantity(selectedProduct);
   const jumperCount = getJumperCount(selectedProduct, quantity);
   const buyAddons = useMemo<BuyAddonEntry[]>(
     () => getBuyAddonEntriesForSlot(selectedSlot, t.addons),
@@ -903,7 +864,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
           return;
         }
 
-        const recoveredProduct = findRecoveredProduct(freshSlot, recoverySnapshot.selectedProduct);
+        const recoveredProduct = findRecoveredBookingProduct(freshSlot, recoverySnapshot.selectedProduct);
         if (!recoveredProduct) {
           setSelectedProduct(null);
           setQuantity(1);
@@ -917,7 +878,10 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
 
         const recoveredQuantity = Math.max(
           1,
-          Math.min(getMaxQuantity(recoveredProduct) || 1, getRecoveredQuantity(recoverySnapshot, recoveredProduct))
+          Math.min(
+            getMaxBookingProductQuantity(recoveredProduct) || 1,
+            getRecoveredQuantity(recoverySnapshot, recoveredProduct)
+          )
         );
         const recoveredJumperCount = getJumperCount(recoveredProduct, recoveredQuantity);
         const recoveredBuyAddons = getBuyAddonEntriesForSlot(freshSlot, t.addons);
@@ -1159,7 +1123,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   };
 
   const handleProductSelect = (product: NewBookingProduct) => {
-    const max = getMaxQuantity(product);
+    const max = getMaxBookingProductQuantity(product);
     if (max <= 0) return;
     setSelectedProduct(product);
     setQuantity(1);
@@ -1386,8 +1350,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
 
   const renderProductCard = (product: NewBookingProduct) => {
     const isCombo = product.type === 'combo';
-    const max = getMaxQuantity(product);
-    const available = product.available && max > 0 && product.productId !== null;
+    const available = isPurchasableBookingProduct(product);
     const cardTitle = getProductCardTitle(product);
     const capacityLabel = getCapacityLabel(product, t.buy.spotsAvailable, t.buy.spotsLeft);
     const iconName = getProductIconName(product);
@@ -1604,15 +1567,43 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
             </div>
           )}
 
-          <div className="mb-3">
-            <p className="text-xs text-foreground uppercase font-black italic tracking-wider mb-2 px-1">{t.buy.sectionEntry}</p>
-            <div className="flex flex-col gap-2">{entryProducts.map(renderProductCard)}</div>
-          </div>
+          {entryProducts.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs text-foreground uppercase font-black italic tracking-wider mb-2 px-1">
+                {t.buy.sectionEntry}
+              </p>
+              <div className="flex flex-col gap-2">{entryProducts.map(renderProductCard)}</div>
+            </div>
+          )}
 
-          <div>
-            <p className="text-xs text-foreground uppercase font-black italic tracking-wider mb-2 px-1">{t.buy.sectionFamily}</p>
-            <div className="flex flex-col gap-2">{familyProducts.map(renderProductCard)}</div>
-          </div>
+          {familyProducts.length > 0 && (
+            <div>
+              <p className="text-xs text-foreground uppercase font-black italic tracking-wider mb-2 px-1">
+                {t.buy.sectionFamily}
+              </p>
+              <div className="flex flex-col gap-2">{familyProducts.map(renderProductCard)}</div>
+            </div>
+          )}
+
+          {visibleProductSections.total === 0 && (
+            <div className="rounded-2xl border border-border bg-white p-5 text-center">
+              <AlertCircle size={28} className="mx-auto mb-2 text-primary" />
+              <p className="text-base font-black italic uppercase text-foreground">
+                {t.buy.noProductsAvailableTitle}
+              </p>
+              <p className="mt-1 text-sm text-muted">{t.buy.noProductsAvailableDesc}</p>
+              <button
+                onClick={() => {
+                  setAvailability(null);
+                  setSelectedTime(null);
+                  setStep('TIMESLOT');
+                }}
+                className="mt-4 w-full rounded-xl bg-primary py-3 text-sm font-black italic uppercase text-white active:scale-[0.98]"
+              >
+                {t.buy.chooseAnotherTime}
+              </button>
+            </div>
+          )}
         </>
       )}
 
