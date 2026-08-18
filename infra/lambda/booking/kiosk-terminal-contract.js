@@ -122,6 +122,38 @@ function publicKioskPaymentStatus(row) {
         ? 'failed'
         : 'pending';
 
+  const provisionalHandoff = stringOrNull(row?.checkin_session_id)
+    ? {
+        booking: {
+          amountOwing: 0,
+          bookingReference: confirmed ? bookingReference : stringOrNull(row?.roller_draft_unique_id),
+          customer: {
+            firstName: stringOrNull(row?.customer_first_name),
+            lastName: stringOrNull(row?.customer_last_name),
+          },
+          items: normalizeItemsSummary(row?.items_summary),
+          paymentStatus: 'paid',
+          rollerUniqueId: confirmed
+            ? stringOrNull(row?.confirmed_roller_unique_id)
+            : stringOrNull(row?.roller_draft_unique_id),
+          status: confirmed ? 'confirmed' : 'payment_approved_booking_syncing',
+        },
+        guestAccess: {
+          expiresAt: stringOrNull(row?.guest_access_expires_at),
+          token: stringOrNull(row?.payment_attempt_id),
+        },
+        session: {
+          bookingSyncStatus: confirmed ? 'confirmed' : 'pending',
+          checkinSessionId: stringOrNull(row?.checkin_session_id),
+          expiresAt: stringOrNull(row?.session_expires_at),
+          handoffCode: stringOrNull(row?.handoff_code),
+          handoffStatus: stringOrNull(row?.handoff_status),
+          safetyStatus: stringOrNull(row?.safety_status),
+          status: stringOrNull(row?.session_status),
+        },
+      }
+    : null;
+
   return {
     status: confirmationStatus,
     payment: {
@@ -131,7 +163,36 @@ function publicKioskPaymentStatus(row) {
       bookingReference: confirmed ? bookingReference : null,
       status: confirmationStatus,
     },
+    ...(provisionalHandoff ? { provisionalHandoff } : {}),
   };
+}
+
+function normalizeItemsSummary(value) {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? parseJsonArray(value)
+      : [];
+  return items.map((item) => ({
+    bookingDate: stringOrNull(item?.bookingDate),
+    endTime: stringOrNull(item?.endTime),
+    parentProductName: null,
+    productId: stringOrNull(item?.productId),
+    productName: stringOrNull(item?.productName),
+    productType: 'entry',
+    quantity: finiteNumber(item?.quantity) ?? 1,
+    startTime: stringOrNull(item?.startTime),
+    tickets: [],
+  }));
+}
+
+function parseJsonArray(value) {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function normalizeBookingReadback(body) {
@@ -140,12 +201,50 @@ function normalizeBookingReadback(body) {
   const amountOwing = finiteNumber(costs?.amountOwing ?? booking?.amountOwing ?? booking?.remainder);
   const paymentStatus = stringOrNull(booking?.paymentStatus ?? booking?.status ?? booking?.bookingStatus);
   const unsafeStatus = /pending|unpaid|partial|cancel|fail|draft/i.test(paymentStatus ?? '');
+  const items = normalizeReadbackItems(booking);
+  const ticketIds = items.flatMap((item) => item.tickets.map((ticket) => ticket.ticketId)).filter(Boolean);
+  const bookingReference = stringOrNull(booking?.bookingReference ?? booking?.reference ?? booking?.bookingId);
+  const rollerUniqueId = stringOrNull(booking?.uniqueId ?? booking?.id ?? booking?.bookingUniqueId);
   return {
-    bookingReference: stringOrNull(booking?.bookingReference ?? booking?.reference ?? booking?.bookingId),
-    confirmed: amountOwing !== null && amountOwing <= 0 && !unsafeStatus,
+    bookingReference,
+    confirmed:
+      amountOwing !== null &&
+      amountOwing <= 0 &&
+      !unsafeStatus &&
+      Boolean(bookingReference && rollerUniqueId) &&
+      ticketIds.length > 0,
+    items,
     paymentStatus,
-    rollerUniqueId: stringOrNull(booking?.uniqueId ?? booking?.id ?? booking?.bookingUniqueId),
+    rollerUniqueId,
+    ticketIds,
   };
+}
+
+function normalizeReadbackItems(booking) {
+  const rawItems = Array.isArray(booking?.items) ? booking.items : [];
+  return rawItems.map((item, itemIndex) => {
+    const rawTickets = Array.isArray(item?.tickets)
+      ? item.tickets
+      : Array.isArray(item?.ticketInstances)
+        ? item.ticketInstances
+        : [];
+    return {
+      bookingDate: stringOrNull(item?.bookingDate ?? booking?.bookingDate),
+      bookingItemId: stringOrNull(item?.bookingItemId ?? item?.id ?? item?.uniqueId),
+      endTime: stringOrNull(item?.endTime ?? item?.sessionEndTime),
+      itemIndex,
+      productId: stringOrNull(item?.productId ?? item?.product?.id),
+      productName: stringOrNull(item?.productName ?? item?.name ?? item?.product?.name),
+      quantity: finiteNumber(item?.quantity) ?? rawTickets.length ?? 1,
+      startTime: stringOrNull(item?.startTime ?? item?.sessionStartTime),
+      tickets: rawTickets
+        .map((ticket) => ({
+          redeemStatus: stringOrNull(ticket?.redeemStatus ?? ticket?.status),
+          ticketId: stringOrNull(ticket?.ticketId ?? ticket?.id),
+        }))
+        .filter((ticket) => ticket.ticketId),
+    };
+  });
 }
 
 function readAmountOwing(body) {

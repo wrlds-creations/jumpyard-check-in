@@ -681,6 +681,7 @@ async function getStaffRedeemSession(checkinSessionId, staffVenueId = null) {
        cs.safety_status,
        cs.handoff_code,
        cs.handoff_status,
+       COALESCE(cs.session_summary ->> 'bookingSyncStatus', 'confirmed') AS booking_sync_status,
        cs.selected_ticket_ids::text AS selected_ticket_ids,
        cs.expires_at::text AS expires_at,
        cs.ready_for_staff_at::text AS ready_for_staff_at,
@@ -702,6 +703,14 @@ async function getStaffRedeemSession(checkinSessionId, staffVenueId = null) {
 }
 
 function evaluateStaffRedeemSession(session) {
+  if (session.bookingSyncStatus !== 'confirmed') {
+    return {
+      canRedeem: false,
+      reason: 'booking_sync_pending',
+      message: 'Payment is approved, but the ROLLER booking and tickets are still syncing.',
+    };
+  }
+
   if (isExpired(session.expiresAt)) {
     return {
       canRedeem: false,
@@ -821,6 +830,7 @@ function mapStaffRedeemSessionRow(row) {
 
   return {
     bookingReference: stringOrNull(row.booking_reference),
+    bookingSyncStatus: stringOrNull(row.booking_sync_status) || 'confirmed',
     checkinSessionId: stringOrNull(row.checkin_session_id),
     completedAt: stringOrNull(row.completed_at),
     expiresAt: stringOrNull(row.expires_at),

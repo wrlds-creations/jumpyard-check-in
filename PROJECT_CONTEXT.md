@@ -45,7 +45,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Check-in is modeled as ticket-level redemption through Roller `POST /redemptions`, not a booking-level flag.
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
-- Kiosk drafts use server-owned terminal objects. Approval precedes async ROLLER reconciliation; handoff/print needs confirmation.
+- Kiosk safety/handoff may follow durable terminal approval; redemption requires confirmed ROLLER booking and ticket ids.
 - Raw payloads, access tokens, PINs, secrets, and unmasked credentials are prohibited persisted data. Booking/contact state is removed or anonymized 30 days after visit; pseudonymous audit/run metadata at 90 days; expired access rows within 24 hours. Disabled staff lose display PII after 90 days; PIN-pepper changes require versioned security-driven re-enrollment. Non-dev handlers have restricted DB principals; Aurora admin is only for migrations, provisioning, and guarded recovery.
 - Dev is retired Playground and its Aurora auto-pauses. Park-test remains the sole Live pre-production environment; production requires GO and separate approval.
 - Park-test work requires an approved Issue; AWS/Live, payments, redemption, webhooks, frontend rehearsal, UI/UX, and visitor traffic need explicit scope. It remains a separate WRLDS environment in `376129878018`/`eu-north-1`, namespace `jumpyard-check-in-park-test`, with server-side Roller Live Nacka access. It is not production.

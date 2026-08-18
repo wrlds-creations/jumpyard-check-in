@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import path from 'path';
 import { App } from 'aws-cdk-lib';
 
@@ -322,7 +322,12 @@ function main(): void {
   assert.equal(database?.DeletionPolicy, 'Retain');
   assert.equal(database?.UpdateReplacePolicy, 'Retain');
 
-  const migration = readFileSync(path.resolve(__dirname, '..', 'migrations', '0011_runtime_database_roles.sql'), 'utf8');
+  const migrationsDirectory = path.resolve(__dirname, '..', 'migrations');
+  const migration = readdirSync(migrationsDirectory)
+    .filter((fileName) => fileName.endsWith('.sql'))
+    .sort()
+    .map((fileName) => readFileSync(path.join(migrationsDirectory, fileName), 'utf8'))
+    .join('\n');
   assert.match(migration, /REVOKE ALL PRIVILEGES ON SCHEMA jumpyard FROM PUBLIC/);
   assert.match(migration, /REVOKE CONNECT, TEMPORARY ON DATABASE jumpyard_cloud FROM PUBLIC/);
   assert.match(migration, /REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA jumpyard FROM PUBLIC/);

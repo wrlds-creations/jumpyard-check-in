@@ -770,7 +770,19 @@ async function handleDraftFinalize(event, body, correlationId) {
   const recorded = await recordKioskTerminalOutcome(request, 'approved');
   emitKioskTerminalOutcomeMetric('approved');
   if (recorded?.booking_confirmation_status === 'confirmed' || recorded?.status === 'published') {
-    return jsonResponse(200, correlationId, publicKioskPaymentStatus(recorded));
+    return jsonResponse(200, correlationId, publicKioskPaymentStatus(await findKioskPrepaymentAttempt(request)));
+  }
+
+  try {
+    await ensureProvisionalKioskHandoff(request);
+  } catch (error) {
+    await writeBookingEventLog({
+      correlationId,
+      eventType: 'booking.kiosk_provisional_handoff_failed',
+      payload: { failureClass: error?.name || 'unknown' },
+      subjectRef: request.prepaymentDraftId,
+      summary: 'Approved kiosk payment could not create its provisional handoff session.',
+    });
   }
 
   if (isEmergencyStopEnabled() || !isNewBookingDraftWriteEnabled()) {
@@ -788,7 +800,7 @@ async function handleDraftFinalize(event, body, correlationId) {
       summary: 'Kiosk payment was approved but automatic booking reconciliation is blocked.',
     });
     emitKioskReconciliationMetric('needs_staff', 0, 0);
-    return jsonResponse(202, correlationId, publicKioskPaymentStatus(blocked ?? recorded));
+    return jsonResponse(202, correlationId, publicKioskPaymentStatus(await findKioskPrepaymentAttempt(request)));
   }
 
   try {
@@ -805,11 +817,11 @@ async function handleDraftFinalize(event, body, correlationId) {
     });
     emitKioskReconciliationDispatchFailureMetric(failureClass);
     emitKioskReconciliationMetric('needs_staff', 0, 0);
-    return jsonResponse(202, correlationId, publicKioskPaymentStatus(blocked ?? recorded));
+    return jsonResponse(202, correlationId, publicKioskPaymentStatus(await findKioskPrepaymentAttempt(request)));
   }
 
   emitKioskReconciliationMetric('pending', 0, 0);
-  return jsonResponse(202, correlationId, publicKioskPaymentStatus(recorded ?? prepayment));
+  return jsonResponse(202, correlationId, publicKioskPaymentStatus(await findKioskPrepaymentAttempt(request)));
 }
 
 function validateDraftFinalizeRequest(request) {
@@ -838,27 +850,51 @@ function validateDraftFinalizeRequest(request) {
 async function findKioskPrepaymentAttempt(request) {
   const result = await executeStatement(
     `SELECT
-       prepayment_draft_id,
-       roller_draft_unique_id,
-       payment_attempt_id,
-       payment_attempt_status,
-       status,
-       booking_confirmation_status,
-       roller_booking_reference,
-       payment_approved_at::text AS payment_approved_at,
-       reconciliation_started_at::text AS reconciliation_started_at,
-       reconciliation_claimed_at::text AS reconciliation_claimed_at,
-       reconciliation_last_attempt_at::text AS reconciliation_last_attempt_at,
-       reconciliation_completed_at::text AS reconciliation_completed_at,
-       reconciliation_attempt_count,
-       reconciliation_last_result,
-       publish_attempted_at::text AS publish_attempted_at,
-       publish_http_status
-     FROM jumpyard.prepayment_booking_drafts
-     WHERE prepayment_draft_id = :prepaymentDraftId
-       AND payment_attempt_id = :paymentAttemptId
-       AND payment_channel = 'card_present'
-       AND flow_type = 'new_booking'
+       draft.prepayment_draft_id,
+       draft.roller_draft_unique_id,
+       draft.payment_attempt_id,
+       draft.payment_attempt_status,
+       draft.status,
+       draft.booking_confirmation_status,
+       draft.roller_booking_reference,
+       draft.roller_env,
+       draft.booking_date::text AS booking_date,
+       draft.start_time::text AS start_time,
+       draft.total_cents,
+       draft.currency,
+       draft.customer_first_name,
+       draft.customer_last_name,
+       draft.items_summary::text AS items_summary,
+       draft.payment_approved_at::text AS payment_approved_at,
+       draft.reconciliation_started_at::text AS reconciliation_started_at,
+       draft.reconciliation_claimed_at::text AS reconciliation_claimed_at,
+       draft.reconciliation_last_attempt_at::text AS reconciliation_last_attempt_at,
+       draft.reconciliation_completed_at::text AS reconciliation_completed_at,
+       draft.reconciliation_attempt_count,
+       draft.reconciliation_last_result,
+       draft.publish_attempted_at::text AS publish_attempted_at,
+       draft.publish_http_status,
+       session.checkin_session_id,
+       session.roller_unique_id AS confirmed_roller_unique_id,
+       session.status AS session_status,
+       session.safety_status,
+       session.handoff_code,
+       session.handoff_status,
+       session.expires_at::text AS session_expires_at,
+       session.expires_at::text AS guest_access_expires_at
+     FROM jumpyard.prepayment_booking_drafts AS draft
+     LEFT JOIN LATERAL (
+       SELECT cs.*
+       FROM jumpyard.checkin_sessions AS cs
+       WHERE cs.source_lookup_ref = draft.prepayment_draft_id
+         AND cs.session_summary ->> 'paymentAttemptId' = draft.payment_attempt_id
+       ORDER BY cs.created_at DESC
+       LIMIT 1
+     ) AS session ON true
+     WHERE draft.prepayment_draft_id = :prepaymentDraftId
+       AND draft.payment_attempt_id = :paymentAttemptId
+       AND draft.payment_channel = 'card_present'
+       AND draft.flow_type = 'new_booking'
      LIMIT 1`,
     [
       stringParameter('prepaymentDraftId', request.prepaymentDraftId),
@@ -866,6 +902,148 @@ async function findKioskPrepaymentAttempt(request) {
     ],
   );
   return firstMappedRow(result) ?? null;
+}
+
+async function ensureProvisionalKioskHandoff(request) {
+  const draft = await findKioskPrepaymentAttempt(request);
+  if (!draft || draft.payment_attempt_status !== 'approved') return null;
+
+  const checkinSessionId = `jycs_${request.paymentAttemptId.replace(/^jytp_/, '')}`;
+  const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+  const venueId =
+    stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID) ||
+    stringOrNull(process.env.ROLLER_DATA_SYNC_VENUE_ID) ||
+    stringOrNull(process.env.STAFF_IDENTITY_VENUE_ID);
+  const sessionSummary = {
+    bookingSyncStatus: 'pending',
+    paymentAttemptId: request.paymentAttemptId,
+    paymentStatus: 'approved',
+    prepaymentDraftId: request.prepaymentDraftId,
+    source: 'kiosk_terminal_approved',
+  };
+
+  await executeStatement(
+    `INSERT INTO jumpyard.roller_bookings (
+         roller_unique_id,
+         booking_reference,
+         roller_env,
+         venue_id,
+         booking_status,
+         payment_status,
+         amount_owing_cents,
+         total_cents,
+         currency,
+         booking_date,
+         start_time,
+         source_last_updated_by,
+         freshness_status,
+         normalized_summary
+       )
+       VALUES (
+         :rollerDraftUniqueId,
+         :rollerDraftUniqueId,
+         :rollerEnv,
+         :venueId,
+         'payment_approved_booking_syncing',
+         'paid',
+         0,
+         :totalCents,
+         :currency,
+         CAST(:bookingDate AS date),
+         CAST(:startTime AS time),
+         'kiosk_terminal_approved',
+         'stale',
+         CAST(:bookingSummary AS jsonb)
+       )
+       ON CONFLICT (roller_unique_id) DO NOTHING`,
+    [
+      stringParameter('rollerDraftUniqueId', draft.roller_draft_unique_id),
+      stringParameter('rollerEnv', draft.roller_env),
+      stringParameter('venueId', venueId),
+      integerParameter('totalCents', Number(draft.total_cents ?? 0)),
+      stringParameter('currency', draft.currency || KIOSK_PAYMENT_CURRENCY),
+      stringParameter('bookingDate', draft.booking_date),
+      stringParameter('startTime', draft.start_time),
+      stringParameter('bookingSummary', JSON.stringify({
+        bookingSyncStatus: 'pending',
+        customerFirstName: draft.customer_first_name,
+        customerLastName: draft.customer_last_name,
+        items: Array.isArray(parseJsonOrNull(draft.items_summary)) ? parseJsonOrNull(draft.items_summary) : [],
+        paymentAttemptId: request.paymentAttemptId,
+        prepaymentDraftId: request.prepaymentDraftId,
+      })),
+    ],
+  );
+
+  await executeStatement(
+    `INSERT INTO jumpyard.checkin_tokens (
+         token_hash,
+         roller_unique_id,
+         channel,
+         expires_at
+       )
+       VALUES (
+         :tokenHash,
+         :rollerDraftUniqueId,
+         :guestAccessChannel,
+         CAST(:expiresAt AS timestamptz)
+       )
+       ON CONFLICT (token_hash) DO UPDATE SET
+         expires_at = GREATEST(jumpyard.checkin_tokens.expires_at, EXCLUDED.expires_at)`,
+    [
+      stringParameter('tokenHash', hashString(request.paymentAttemptId)),
+      stringParameter('rollerDraftUniqueId', draft.roller_draft_unique_id),
+      stringParameter('guestAccessChannel', GUEST_ACCESS_CHANNEL),
+      stringParameter('expiresAt', expiresAt),
+    ],
+  );
+
+  await executeStatement(
+    `INSERT INTO jumpyard.checkin_sessions (
+       checkin_session_id,
+       roller_unique_id,
+       booking_reference,
+       visit_date,
+       status,
+       safety_status,
+       handoff_status,
+       selected_ticket_ids,
+       source_lookup_ref,
+       idempotency_key,
+       expires_at,
+       session_summary
+     )
+     VALUES (
+       :checkinSessionId,
+       :rollerDraftUniqueId,
+       :rollerDraftUniqueId,
+       CAST(:bookingDate AS date),
+       'guest_in_progress',
+       'not_started',
+       'not_ready',
+       '[]'::jsonb,
+       :prepaymentDraftId,
+       :sessionIdempotencyKey,
+       CAST(:expiresAt AS timestamptz),
+       CAST(:sessionSummary AS jsonb)
+     )
+     ON CONFLICT (checkin_session_id) DO UPDATE SET
+       expires_at = GREATEST(jumpyard.checkin_sessions.expires_at, EXCLUDED.expires_at),
+       updated_at = now(),
+       session_summary = jumpyard.checkin_sessions.session_summary || EXCLUDED.session_summary
+    RETURNING checkin_session_id`,
+    [
+      stringParameter('rollerDraftUniqueId', draft.roller_draft_unique_id),
+      stringParameter('bookingDate', draft.booking_date),
+      stringParameter('expiresAt', expiresAt),
+      stringParameter('checkinSessionId', checkinSessionId),
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('sessionIdempotencyKey', `kiosk-provisional-session:${request.paymentAttemptId}`),
+      stringParameter('sessionSummary', JSON.stringify(sessionSummary)),
+    ],
+  );
+
+  return checkinSessionId;
 }
 
 async function recordKioskTerminalOutcome(request, outcome) {
@@ -1074,6 +1252,7 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
     }
 
     if (readback) {
+      await persistKioskReconciliationBookingSnapshot(existing, readback);
       const confirmed = await confirmKioskReconciliation(request, readback);
       await writeBookingEventLog({
         correlationId,
@@ -1196,26 +1375,210 @@ async function recordKioskReconciliationAttempt(request, resultCode) {
 
 async function confirmKioskReconciliation(request, readback) {
   const result = await executeStatement(
-    `UPDATE jumpyard.prepayment_booking_drafts
-     SET status = 'published',
-         payment_attempt_status = 'reconciled',
-         booking_confirmation_status = 'confirmed',
-         roller_booking_reference = :bookingReference,
-         amount_owing_cents = 0,
-         reconciliation_completed_at = COALESCE(reconciliation_completed_at, now()),
-         reconciliation_last_result = 'confirmed',
-         updated_at = now()
-     WHERE prepayment_draft_id = :prepaymentDraftId
-       AND payment_attempt_id = :paymentAttemptId
-       AND payment_attempt_status IN ('approved', 'reconciled')
-     RETURNING reconciliation_attempt_count`,
+    `WITH confirmed AS (
+       UPDATE jumpyard.prepayment_booking_drafts
+       SET status = 'published',
+           payment_attempt_status = 'reconciled',
+           booking_confirmation_status = 'confirmed',
+           roller_booking_reference = :bookingReference,
+           amount_owing_cents = 0,
+           reconciliation_completed_at = COALESCE(reconciliation_completed_at, now()),
+           reconciliation_last_result = 'confirmed',
+           updated_at = now()
+       WHERE prepayment_draft_id = :prepaymentDraftId
+         AND payment_attempt_id = :paymentAttemptId
+         AND payment_attempt_status IN ('approved', 'reconciled')
+       RETURNING reconciliation_attempt_count
+     ), attached_session AS (
+       UPDATE jumpyard.checkin_sessions
+       SET roller_unique_id = :rollerUniqueId,
+           booking_reference = :bookingReference,
+           selected_ticket_ids = CAST(:selectedTicketIds AS jsonb),
+           updated_at = now(),
+           session_summary = session_summary || CAST(:sessionSummary AS jsonb)
+       WHERE source_lookup_ref = :prepaymentDraftId
+         AND session_summary ->> 'paymentAttemptId' = :paymentAttemptId
+       RETURNING checkin_session_id
+     ), attached_guest_access AS (
+       UPDATE jumpyard.checkin_tokens
+       SET roller_unique_id = :rollerUniqueId
+       WHERE token_hash = :guestAccessTokenHash
+       RETURNING token_hash
+     )
+     SELECT reconciliation_attempt_count FROM confirmed`,
     [
       stringParameter('bookingReference', readback.bookingReference),
+      stringParameter('rollerUniqueId', readback.rollerUniqueId),
+      stringParameter('guestAccessTokenHash', hashString(request.paymentAttemptId)),
+      stringParameter('selectedTicketIds', JSON.stringify(readback.ticketIds)),
+      stringParameter('sessionSummary', JSON.stringify({
+        bookingSyncStatus: 'confirmed',
+        rollerBookingReference: readback.bookingReference,
+        rollerUniqueId: readback.rollerUniqueId,
+        ticketCount: readback.ticketIds.length,
+      })),
       stringParameter('prepaymentDraftId', request.prepaymentDraftId),
       stringParameter('paymentAttemptId', request.paymentAttemptId),
     ],
   );
   return firstMappedRow(result) ?? null;
+}
+
+async function persistKioskReconciliationBookingSnapshot(existing, readback) {
+  await executeStatement(
+    `INSERT INTO jumpyard.roller_bookings (
+       roller_unique_id,
+       booking_reference,
+       roller_env,
+       venue_id,
+       booking_status,
+       payment_status,
+       amount_owing_cents,
+       total_cents,
+       currency,
+       booking_date,
+       start_time,
+       source_last_updated_by,
+       last_seen_from_roller_at,
+       freshness_status,
+       normalized_summary
+     )
+     VALUES (
+       :rollerUniqueId,
+       :bookingReference,
+       :rollerEnv,
+       :venueId,
+       'confirmed',
+       :paymentStatus,
+       0,
+       :totalCents,
+       :currency,
+       CAST(:bookingDate AS date),
+       CAST(:startTime AS time),
+       'kiosk_payment_reconciliation',
+       now(),
+       'fresh',
+       CAST(:normalizedSummary AS jsonb)
+     )
+     ON CONFLICT (roller_unique_id) DO UPDATE SET
+       booking_reference = EXCLUDED.booking_reference,
+       booking_status = EXCLUDED.booking_status,
+       payment_status = EXCLUDED.payment_status,
+       amount_owing_cents = EXCLUDED.amount_owing_cents,
+       source_last_updated_by = EXCLUDED.source_last_updated_by,
+       source_last_updated_at = now(),
+       last_seen_from_roller_at = EXCLUDED.last_seen_from_roller_at,
+       freshness_status = EXCLUDED.freshness_status,
+       normalized_summary = jumpyard.roller_bookings.normalized_summary || EXCLUDED.normalized_summary,
+       updated_at = now()`,
+    [
+      stringParameter('rollerUniqueId', readback.rollerUniqueId),
+      stringParameter('bookingReference', readback.bookingReference),
+      stringParameter('rollerEnv', existing.roller_env),
+      stringParameter(
+        'venueId',
+        stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID) ||
+          stringOrNull(process.env.ROLLER_DATA_SYNC_VENUE_ID) ||
+          stringOrNull(process.env.STAFF_IDENTITY_VENUE_ID),
+      ),
+      stringParameter('paymentStatus', readback.paymentStatus || 'paid'),
+      integerParameter('totalCents', Number(existing.total_cents ?? 0)),
+      stringParameter('currency', existing.currency || KIOSK_PAYMENT_CURRENCY),
+      stringParameter('bookingDate', existing.booking_date),
+      stringParameter('startTime', existing.start_time),
+      stringParameter('normalizedSummary', JSON.stringify({
+        bookingSyncStatus: 'confirmed',
+        paymentAttemptId: existing.payment_attempt_id,
+        prepaymentDraftId: existing.prepayment_draft_id,
+      })),
+    ],
+  );
+
+  for (const item of readback.items) {
+    const bookingItemKey = `jybi_${hashString(`${readback.rollerUniqueId}:${item.bookingItemId || item.itemIndex}`).slice(0, 32)}`;
+    await executeStatement(
+      `INSERT INTO jumpyard.roller_booking_items (
+         booking_item_key,
+         roller_unique_id,
+         booking_item_id,
+         product_id,
+         product_name,
+         quantity,
+         booking_date,
+         start_time,
+         end_time,
+         item_summary
+       )
+       VALUES (
+         :bookingItemKey,
+         :rollerUniqueId,
+         :bookingItemId,
+         :productId,
+         :productName,
+         :quantity,
+         CAST(:bookingDate AS date),
+         CAST(:startTime AS time),
+         CAST(:endTime AS time),
+         CAST(:itemSummary AS jsonb)
+       )
+       ON CONFLICT (booking_item_key) DO UPDATE SET
+         product_id = EXCLUDED.product_id,
+         product_name = EXCLUDED.product_name,
+         quantity = EXCLUDED.quantity,
+         booking_date = EXCLUDED.booking_date,
+         start_time = EXCLUDED.start_time,
+         end_time = EXCLUDED.end_time,
+         item_summary = EXCLUDED.item_summary,
+         updated_at = now()`,
+      [
+        stringParameter('bookingItemKey', bookingItemKey),
+        stringParameter('rollerUniqueId', readback.rollerUniqueId),
+        stringParameter('bookingItemId', item.bookingItemId),
+        stringParameter('productId', item.productId),
+        stringParameter('productName', item.productName),
+        integerParameter('quantity', Math.max(1, Math.floor(Number(item.quantity ?? 1)))),
+        stringParameter('bookingDate', item.bookingDate || existing.booking_date),
+        stringParameter('startTime', item.startTime || existing.start_time),
+        stringParameter('endTime', item.endTime),
+        stringParameter('itemSummary', JSON.stringify(item)),
+      ],
+    );
+
+    for (const ticket of item.tickets) {
+      await executeStatement(
+        `INSERT INTO jumpyard.roller_booking_tickets (
+           ticket_id,
+           roller_unique_id,
+           booking_item_key,
+           booking_item_id,
+           redeem_status_last_seen,
+           last_seen_from_roller_at
+         )
+         VALUES (
+           :ticketId,
+           :rollerUniqueId,
+           :bookingItemKey,
+           :bookingItemId,
+           :redeemStatus,
+           now()
+         )
+         ON CONFLICT (ticket_id) DO UPDATE SET
+           roller_unique_id = EXCLUDED.roller_unique_id,
+           booking_item_key = EXCLUDED.booking_item_key,
+           booking_item_id = EXCLUDED.booking_item_id,
+           redeem_status_last_seen = EXCLUDED.redeem_status_last_seen,
+           last_seen_from_roller_at = EXCLUDED.last_seen_from_roller_at,
+           updated_at = now()`,
+        [
+          stringParameter('ticketId', ticket.ticketId),
+          stringParameter('rollerUniqueId', readback.rollerUniqueId),
+          stringParameter('bookingItemKey', bookingItemKey),
+          stringParameter('bookingItemId', item.bookingItemId),
+          stringParameter('redeemStatus', ticket.redeemStatus),
+        ],
+      );
+    }
+  }
 }
 
 async function markKioskReconciliationNeedsStaff(request, reason) {
@@ -1239,6 +1602,19 @@ async function markKioskReconciliationNeedsStaff(request, reason) {
        roller_booking_reference`,
     [
       stringParameter('reason', reason),
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+    ],
+  );
+  await executeStatement(
+    `UPDATE jumpyard.checkin_sessions
+     SET updated_at = now(),
+         session_summary = session_summary || CAST(:sessionSummary AS jsonb)
+     WHERE source_lookup_ref = :prepaymentDraftId
+       AND session_summary ->> 'paymentAttemptId' = :paymentAttemptId
+       AND COALESCE(session_summary ->> 'bookingSyncStatus', '') <> 'confirmed'`,
+    [
+      stringParameter('sessionSummary', JSON.stringify({ bookingSyncStatus: 'needs_staff', reconciliationReason: reason })),
       stringParameter('prepaymentDraftId', request.prepaymentDraftId),
       stringParameter('paymentAttemptId', request.paymentAttemptId),
     ],

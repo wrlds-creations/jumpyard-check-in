@@ -2423,6 +2423,7 @@ async function findReadyStaffSessions(request, staffVenueId = null) {
          cs.safety_status,
          cs.handoff_code,
          cs.handoff_status,
+         COALESCE(cs.session_summary ->> 'bookingSyncStatus', 'confirmed') AS booking_sync_status,
          cs.selected_ticket_ids::text AS selected_ticket_ids,
          cs.expires_at::text AS expires_at,
          cs.ready_for_staff_at::text AS ready_for_staff_at,
@@ -2611,6 +2612,7 @@ async function findStaffSessionDetail(checkinSessionId, staffVenueId = null) {
        cs.safety_status,
        cs.handoff_code,
        cs.handoff_status,
+       COALESCE(cs.session_summary ->> 'bookingSyncStatus', 'confirmed') AS booking_sync_status,
        cs.selected_ticket_ids::text AS selected_ticket_ids,
        cs.expires_at::text AS expires_at,
        cs.ready_for_staff_at::text AS ready_for_staff_at,
@@ -3703,6 +3705,7 @@ function mapStaffSessionSummaryRow(row) {
       totalCents: numberOrNull(row.total_cents),
     },
     bookingReference: stringOrNull(row.booking_reference),
+    bookingSyncStatus: stringOrNull(row.booking_sync_status) || 'confirmed',
     checkinSessionId: stringOrNull(row.checkin_session_id),
     completedAt: stringOrNull(row.completed_at),
     counts: {

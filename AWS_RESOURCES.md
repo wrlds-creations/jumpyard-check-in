@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #249 Provisional Kiosk Handoff (Implementation Validated; Park-Test Deployment Pending)
+
+Love approved [issue #249](https://github.com/wrlds-creations/jumpyard-check-in/issues/249) on 2026-08-18 so a definitively approved ROLLER card-present attempt can continue to safety and an opaque JumpYard handoff while the authoritative ROLLER booking is still synchronizing. The approved target remains the existing park-test stack in AWS account `376129878018`, region `eu-north-1`, client `JumpYard`, project `jumpyard-check-in`, environment `park-test`, owner/creator `love`, repository `wrlds-creations/jumpyard-check-in`, `ManagedBy=cdk`, data classification `confidential`, exportable `true`, and `WRLDS:CostCenter=JumpYard`.
+
+The implementation changes only the existing Booking, Session, and Redeem Lambda code, the existing staff/admin frontend contract, and the existing Aurora schema. Migration `0020_provisional_kiosk_handoff.sql` grants the Booking runtime the minimum table access required to create one idempotent provisional local booking, guest token, and check-in session after durable approval. Reconciliation later attaches the authoritative ROLLER booking and ticket ids to the same session. Staff redeem remains fail-closed until `bookingSyncStatus=confirmed`; bounded exhaustion becomes `needs_staff` and never authorizes another charge.
+
+No AWS resource, API route, Lambda, queue, schedule, database, secret, terminal configuration, credential, alarm, external endpoint, production target, or direct Adyen integration is added. The protected park-test release must apply migration `0020`; implementation validation, immutable release planning, protected deployment, and physical end-to-end proof remain separate checkpoints.
+
 ### Issue #239 Kiosk Payment Reconciliation (Initial Rollout Deployed; Latency Correction Pending)
 
 Love approved [issue #239](https://github.com/wrlds-creations/jumpyard-check-in/issues/239) on 2026-08-17 after the supervised P400 proof showed that a definitive card-present approval can arrive before ROLLER exposes the paid booking. The approved boundary is the existing park-test stack in AWS account `376129878018`, region `eu-north-1`, client `JumpYard`, project `jumpyard-check-in`, environment `park-test`, owner/creator `love`, repository `wrlds-creations/jumpyard-check-in`, `ManagedBy=cdk`, data classification `confidential`, exportable `true`, and live `WRLDS:CostCenter=JumpYard` under the existing issue #233 exception.

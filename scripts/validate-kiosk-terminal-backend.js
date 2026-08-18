@@ -128,15 +128,48 @@ assert.deepEqual(
   normalizeBookingReadback({
     amountOwing: 0,
     bookingReference: '123456789',
+    items: [
+      {
+        bookingDate: '2026-08-18',
+        id: 'item-a',
+        productId: '101',
+        quantity: 1,
+        startTime: '10:00',
+        tickets: [{ ticketId: 'ticket-a', status: 'NotRedeemed' }],
+      },
+    ],
     paymentStatus: 'Paid',
     uniqueId: 'booking-a',
   }),
   {
     bookingReference: '123456789',
     confirmed: true,
+    items: [
+      {
+        bookingDate: '2026-08-18',
+        bookingItemId: 'item-a',
+        endTime: null,
+        itemIndex: 0,
+        productId: '101',
+        productName: null,
+        quantity: 1,
+        startTime: '10:00',
+        tickets: [{ redeemStatus: 'NotRedeemed', ticketId: 'ticket-a' }],
+      },
+    ],
     paymentStatus: 'Paid',
     rollerUniqueId: 'booking-a',
+    ticketIds: ['ticket-a'],
   },
+);
+assert.equal(
+  normalizeBookingReadback({
+    amountOwing: 0,
+    bookingReference: '123456789',
+    paymentStatus: 'Paid',
+    uniqueId: 'booking-a',
+  }).confirmed,
+  false,
 );
 assert.equal(normalizeBookingReadback({ amountOwing: 220, paymentStatus: 'Pending' }).confirmed, false);
 assert.equal(normalizeBookingReadback({ paymentStatus: 'Paid' }).confirmed, false);
