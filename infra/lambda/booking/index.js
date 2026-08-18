@@ -15,6 +15,13 @@ const {
   resolveKioskPaymentTerminal,
   verifyKioskDraftPayment,
 } = require('./kiosk-terminal-contract');
+const {
+  LIVE_PHONE_BOOKING_PRODUCTS,
+  fetchPublicCheckoutCatalog,
+  filterPhoneProductsByPublicCatalog,
+  isPhoneAvailabilityProductAvailable,
+  selectMappedAvailabilityProduct,
+} = require('./phone-product-catalog');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const MAX_BOOKING_ITEMS = 10;
@@ -59,7 +66,15 @@ const KIOSK_RECONCILIATION_OFFSETS_MS = [
 ];
 
 const PHONE_BOOKING_PRODUCTS = [
-  { key: 'COMBO60', parentName: 'ComboDeal', label: 'ComboDeal', type: 'combo', durationMinutes: 60, jumpersPerUnit: 2 },
+  {
+    key: 'COMBO60',
+    parentName: 'Weekday Combo',
+    label: 'Weekday Combo',
+    type: 'combo',
+    durationMinutes: 60,
+    jumpersPerUnit: 2,
+    publicCatalogRequired: true,
+  },
   { key: 'E60', parentName: 'Entré 60 min', label: '60 min entré', type: 'entry', durationMinutes: 60, jumpersPerUnit: 1 },
   { key: 'E90', parentName: 'Entré 90 min', label: '90 min entré', type: 'entry', durationMinutes: 90, jumpersPerUnit: 1 },
   { key: 'E120', parentName: 'Entré 120 min', label: '120 min entré', type: 'entry', durationMinutes: 120, jumpersPerUnit: 1 },
@@ -132,10 +147,6 @@ const T0162_LIVE_ADDON_SMOKE_PRODUCTS = [
   { key: 'F60', parentProductId: '1189814' },
   { key: 'F90', parentProductId: '1189832' },
   { key: 'F120', parentProductId: '1189794' },
-];
-
-const LIVE_PHONE_BOOKING_PRODUCTS = [
-  { key: 'COMBO60', parentProductId: '1318777', productIds: ['1318778', '1318779', '1318780'] },
 ];
 
 const LIVE_PHONE_ADDON_PRODUCTS = [
@@ -270,9 +281,57 @@ async function handleAvailability(body, correlationId) {
 
   const config = await getRollerConfig();
   const token = await getRollerAccessToken(config);
-  const parentProducts = await loadPhoneBookingParentProducts(config.env);
-  const addonProducts = await loadPhoneAddonProducts(config.env);
-  const requiredProducts = getRequiredPhoneBookingProducts(config.env);
+  const [loadedParentProducts, addonProducts, publicCatalogResult] = await Promise.all([
+    loadPhoneBookingParentProducts(config.env),
+    loadPhoneAddonProducts(config.env),
+    fetchPublicCheckoutCatalog(config.env),
+  ]);
+
+  if (!publicCatalogResult.ok) {
+    emitRollerApiMetric({
+      method: 'GET',
+      operation: 'get_public_checkout_products',
+      status: publicCatalogResult.status,
+      ok: false,
+    });
+    await writeBookingEventLog({
+      correlationId,
+      eventType: 'booking.public_catalog_failed',
+      payload: {
+        endpoint: 'GET /api/checkout/boka/products',
+        rollerStatus: publicCatalogResult.status,
+      },
+      subjectRef: request.date,
+      summary: `Roller public checkout catalog failed with HTTP ${publicCatalogResult.status || 'network_error'}.`,
+    });
+
+    return jsonResponse(502, correlationId, {
+      status: 'roller_error',
+      error: {
+        code: 'roller_public_catalog_failed',
+        message: 'Roller public checkout catalog could not be verified. Try again.',
+      },
+      roller: {
+        statusCode: publicCatalogResult.status,
+      },
+    });
+  }
+
+  if (!publicCatalogResult.skipped) {
+    emitRollerApiMetric({
+      method: 'GET',
+      operation: 'get_public_checkout_products',
+      status: publicCatalogResult.status,
+      ok: true,
+    });
+  }
+
+  const parentProducts = filterPhoneProductsByPublicCatalog(
+    config.env,
+    loadedParentProducts,
+    publicCatalogResult.body,
+  );
+  const requiredProducts = getRequiredPhoneBookingProducts();
   const missingParents = requiredProducts.filter((product) => !parentProducts.some((parent) => parent.key === product.key));
 
   if (missingParents.length > 0) {
@@ -344,6 +403,7 @@ async function handleAvailability(body, correlationId) {
     status: 'available',
     availability,
     source: {
+      catalogEndpoint: publicCatalogResult.skipped ? null : 'GET /api/checkout/boka/products',
       system: 'roller',
       environment: config.env,
       endpoint: 'GET /product-availability',
@@ -3297,7 +3357,7 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
            'Entré 60 min',
            'Entré 90 min',
            'Entré 120 min',
-           'ComboDeal',
+           'Weekday Combo',
            'Entré 60 min - Familj',
            'Entré 90 min - Familj',
            'Entré 120 min - Familj'
@@ -3306,7 +3366,7 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
            'Entré 60 min',
            'Entré 90 min',
            'Entré 120 min',
-           'ComboDeal',
+           'Weekday Combo',
            'Entré 60 min - Familj',
            'Entré 90 min - Familj',
            'Entré 120 min - Familj'
@@ -3330,6 +3390,7 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
   const candidateRows = [...rows, ...fallbackRows];
 
   return PHONE_BOOKING_PRODUCTS.map((product) => {
+    const liveMapping = liveFallbackProducts.find((candidate) => candidate.key === product.key);
     const row = candidateRows.find(
       (candidate) =>
         candidate.parent_product_name === product.parentName ||
@@ -3341,16 +3402,14 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
 
     return {
       ...product,
+      availabilityProductIds: liveMapping?.productIds,
       parentProductId,
     };
   }).filter(Boolean);
 }
 
-function getRequiredPhoneBookingProducts(rollerEnv) {
-  if (rollerEnv !== 'live') {
-    return PHONE_BOOKING_PRODUCTS.filter((product) => product.type !== 'combo');
-  }
-  return PHONE_BOOKING_PRODUCTS;
+function getRequiredPhoneBookingProducts() {
+  return PHONE_BOOKING_PRODUCTS.filter((product) => product.type !== 'combo');
 }
 
 function getLiveSmokeBookingProductFallbacks(rollerEnv) {
@@ -3656,10 +3715,14 @@ function buildPhoneAvailability(request, parentProducts, rollerBody) {
 
       const parent = rollerProducts.find((candidate) => String(candidate.parentProductId ?? candidate.id) === definition.parentProductId);
       const session = findSessionForParent(parent, startTime);
-      const selectedProduct = selectAvailabilityProduct(parent, session);
+      const selectedProduct = selectMappedAvailabilityProduct(
+        parent,
+        session,
+        definition.availabilityProductIds,
+      );
       const capacityRemaining = getSessionCapacityRemaining(session);
       const onlineSalesOpen = session?.onlineSalesOpen !== false;
-      const available = Boolean(session && selectedProduct && onlineSalesOpen && (capacityRemaining === null || capacityRemaining > 0));
+      const available = isPhoneAvailabilityProductAvailable(session, selectedProduct, capacityRemaining);
       const unitPrice = numberOrNull(selectedProduct?.cost);
       const product = {
         available,
@@ -3736,19 +3799,6 @@ function findSessionForProduct(parent, productId, startTime) {
 function findAvailabilityProduct(parent, productId) {
   const products = Array.isArray(parent?.products) ? parent.products : [];
   return products.find((product) => String(product?.id ?? '') === productId) || null;
-}
-
-function selectAvailabilityProduct(parent, session) {
-  const products = Array.isArray(parent?.products) ? parent.products : [];
-  if (products.length === 0) return null;
-
-  const allocationProductId = Array.isArray(session?.allocations)
-    ? stringOrNull(session.allocations.find((allocation) => allocation?.productId)?.productId)
-    : null;
-  const matching = allocationProductId ? products.find((product) => String(product?.id) === allocationProductId) : null;
-  if (matching) return matching;
-
-  return products.find((product) => product?.isSuspended !== true) ?? products[0];
 }
 
 function getSessionCapacityRemaining(session) {

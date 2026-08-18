@@ -6,6 +6,7 @@ import {
   getVisibleBookingProductSections,
   isPurchasableBookingProduct,
 } from './productVisibility.ts';
+import { weekdayComboCopy } from '../context/weekdayComboCopy.ts';
 
 function product(overrides = {}) {
   return {
@@ -81,18 +82,28 @@ test('recovery cannot restore an unavailable or otherwise hidden product', () =>
   const recovered = {
     durationMinutes: 60,
     key: 'COMBO60',
-    label: 'ComboDeal',
-    productId: 'combo-1',
+    label: 'Weekday Combo',
+    productId: '1242136',
     startTime: '10:00',
     type: 'combo',
-    unitPrice: 430,
+    unitPrice: 450,
   };
 
   const unavailableSlot = slot([
-    product({ available: false, key: 'COMBO60', productId: 'combo-1', type: 'combo' }),
+    product({ available: false, key: 'COMBO60', productId: '1242136', type: 'combo' }),
   ]);
   assert.equal(findRecoveredBookingProduct(unavailableSlot, recovered), null);
 
-  const availableReplacement = product({ key: 'COMBO60', productId: 'combo-2', type: 'combo' });
+  const availableReplacement = product({ key: 'COMBO60', productId: '1242136', type: 'combo' });
   assert.equal(findRecoveredBookingProduct(slot([availableReplacement]), recovered), availableReplacement);
+});
+
+test('uses Weekday Combo copy without the retired name or all-days claim', () => {
+  assert.deepEqual(weekdayComboCopy, {
+    en: { availability: 'Weekdays', name: 'Weekday Combo' },
+    sv: { availability: 'Vardagar', name: 'Weekday Combo' },
+  });
+  assert.equal(JSON.stringify(weekdayComboCopy).includes('ComboDeal'), false);
+  assert.equal(JSON.stringify(weekdayComboCopy).includes('Alla dagar'), false);
+  assert.equal(JSON.stringify(weekdayComboCopy).includes('All days'), false);
 });
