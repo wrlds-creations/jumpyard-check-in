@@ -40,3 +40,15 @@ If reconciliation exhausts its bounded attempts, the state becomes `needs_staff`
 - Admin app lint and production build
 
 Physical kiosk validation is owned by the paired kiosk issue and still requires the approved APK against the real Nacka terminal.
+
+## Park-test rollout evidence
+
+- Implementation PR: [#251](https://github.com/wrlds-creations/jumpyard-check-in/pull/251)
+- Merge commit: `5bc18a03e7e4843c1606617bdf8aa94146044bd4`
+- Immutable release: [32113533632](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/32113533632), artifact digest `sha256:66c96f8c30f8c5551ba391e2a1a338adca46f872463cdf33be940fc00db1ccfd`
+- Protected promotion: [32114023750](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/32114023750)
+- Reviewed plan: 202 resources before and after, with no additions or removals
+- Migration `0020 provisional kiosk handoff`: applied
+- Final readback: exact release template deployed, stack `UPDATE_COMPLETE`, drift `IN_SYNC`, zero alarms in `ALARM`, empty queues, and exact phone/admin Cloudflare release checks passed
+
+The remaining non-automated evidence is the supervised physical P400 flow in the paired kiosk repository. No automated release step submitted a payment or created a ROLLER booking.

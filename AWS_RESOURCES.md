@@ -4,13 +4,15 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-### Issue #249 Provisional Kiosk Handoff (Implementation Validated; Park-Test Deployment Pending)
+### Issue #249 Provisional Kiosk Handoff (Deployed to Park-Test; Physical Proof Pending)
 
 Love approved [issue #249](https://github.com/wrlds-creations/jumpyard-check-in/issues/249) on 2026-08-18 so a definitively approved ROLLER card-present attempt can continue to safety and an opaque JumpYard handoff while the authoritative ROLLER booking is still synchronizing. The approved target remains the existing park-test stack in AWS account `376129878018`, region `eu-north-1`, client `JumpYard`, project `jumpyard-check-in`, environment `park-test`, owner/creator `love`, repository `wrlds-creations/jumpyard-check-in`, `ManagedBy=cdk`, data classification `confidential`, exportable `true`, and `WRLDS:CostCenter=JumpYard`.
 
 The implementation changes only the existing Booking, Session, and Redeem Lambda code, the existing staff/admin frontend contract, and the existing Aurora schema. Migration `0020_provisional_kiosk_handoff.sql` grants the Booking runtime the minimum table access required to create one idempotent provisional local booking, guest token, and check-in session after durable approval. Reconciliation later attaches the authoritative ROLLER booking and ticket ids to the same session. Staff redeem remains fail-closed until `bookingSyncStatus=confirmed`; bounded exhaustion becomes `needs_staff` and never authorizes another charge.
 
-No AWS resource, API route, Lambda, queue, schedule, database, secret, terminal configuration, credential, alarm, external endpoint, production target, or direct Adyen integration is added. The protected park-test release must apply migration `0020`; implementation validation, immutable release planning, protected deployment, and physical end-to-end proof remain separate checkpoints.
+No AWS resource, API route, Lambda, queue, schedule, database, secret, terminal configuration, credential, alarm, external endpoint, production target, or direct Adyen integration was added. Implementation PR [#251](https://github.com/wrlds-creations/jumpyard-check-in/pull/251) merged as `5bc18a03e7e4843c1606617bdf8aa94146044bd4`. Immutable release run [32113533632](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/32113533632) produced artifact `park-test-release-5bc18a03e7e4843c1606617bdf8aa94146044bd4` with digest `sha256:66c96f8c30f8c5551ba391e2a1a338adca46f872463cdf33be940fc00db1ccfd`.
+
+Protected promotion run [32114023750](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/32114023750) applied migration `0020` and deployed the exact selected release. Its reviewed plan kept 202 resources with no additions or removals. Property-level preflight found runtime changes only to the existing Booking, Session, and Redeem Lambda code plus the issue #233 cost-tag source correction. Final verification passed exact selected/deployed template equality, `UPDATE_COMPLETE`, `IN_SYNC` drift, zero alarms in `ALARM`, empty park-test queues, migrations applied through `0020`, exact phone/admin Cloudflare commit readback, and public HTTP/config checks. The remaining checkpoint is one supervised physical P400 proof through kiosk issue [#40](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/issues/40).
 
 ### Issue #239 Kiosk Payment Reconciliation (Initial Rollout Deployed; Latency Correction Pending)
 
