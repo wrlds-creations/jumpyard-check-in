@@ -8,8 +8,14 @@ const ROOT = path.resolve(__dirname, '..');
 const INFRA = path.join(ROOT, 'infra');
 const PARK_TEST_STACK_NAME = 'jumpyard-check-in-park-test-stack';
 const DEV_STACK_NAME = 'jumpyard-check-in-dev-stack';
-const ADMIN_CALLBACK_URL = 'https://jumpyard-checkin-admin-park-test.pages.dev/auth/callback';
-const ADMIN_LOGOUT_URL = 'https://jumpyard-checkin-admin-park-test.pages.dev/admin';
+const ADMIN_CALLBACK_URLS = [
+  'https://jumpyard-checkin-admin-park-test.pages.dev/auth/callback',
+  'https://staff-checkin.jumpyard.se/auth/callback',
+];
+const ADMIN_LOGOUT_URLS = [
+  'https://jumpyard-checkin-admin-park-test.pages.dev/admin',
+  'https://staff-checkin.jumpyard.se/admin',
+];
 const ADMIN_DOMAIN_PREFIX = 'jumpyard-check-in-park-test-admin-376129878018';
 
 function synthTemplate(configPath, stackName) {
@@ -152,8 +158,8 @@ function validateParkTest(template) {
   assert.deepEqual(client.Properties.AllowedOAuthFlows, ['code']);
   assert.deepEqual(client.Properties.ExplicitAuthFlows, ['ALLOW_USER_SRP_AUTH']);
   assert.deepEqual(client.Properties.AllowedOAuthScopes, ['openid']);
-  assert.deepEqual(client.Properties.CallbackURLs, [ADMIN_CALLBACK_URL]);
-  assert.deepEqual(client.Properties.LogoutURLs, [ADMIN_LOGOUT_URL]);
+  assert.deepEqual(client.Properties.CallbackURLs, ADMIN_CALLBACK_URLS);
+  assert.deepEqual(client.Properties.LogoutURLs, ADMIN_LOGOUT_URLS);
   assert.equal(client.Properties.AccessTokenValidity, 60);
   assert.equal(client.Properties.IdTokenValidity, 60);
   assert.equal(client.Properties.RefreshTokenValidity, 480);

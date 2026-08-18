@@ -1,10 +1,10 @@
-name: Deploy or roll back controlled guest domain test
+name: Deploy or roll back Nacka pilot public frontends
 
 on:
   workflow_dispatch:
     inputs:
       release_run_id:
-        description: Successful Build park-test release workflow run ID
+        description: Successful Build Park pilot release workflow run ID
         required: true
         type: string
       release_sha:
@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       intent:
-        description: Audited domain-test release intent
+        description: Audited Nacka pilot-production release intent
         required: true
         default: promote
         type: choice
@@ -21,7 +21,7 @@ on:
           - rollback
           - re-promote
       approval_phrase:
-        description: I_APPROVE_CHECKIN_DOMAIN_TEST_<full release SHA>
+        description: I_APPROVE_NACKA_PILOT_PRODUCTION_<full release SHA>
         required: true
         type: string
 
@@ -30,19 +30,24 @@ permissions:
   contents: read
 
 concurrency:
-  group: checkin-domain-test-deployment
+  group: nacka-pilot-production-deployment
   cancel-in-progress: false
 
 env:
   CHECKIN_DOMAIN: checkin.jumpyard.se
   CHECKIN_ORIGIN: https://checkin.jumpyard.se
+  STAFF_DOMAIN: staff-checkin.jumpyard.se
+  STAFF_ORIGIN: https://staff-checkin.jumpyard.se
   CLOUDFLARE_ACCOUNT_ID: dc0a3855bc8a0b1db8fc27ee62bf7d40
-  CLOUDFLARE_PROJECT: jumpyard-check-in-production
+  PHONE_PROJECT: jumpyard-check-in-production
+  ADMIN_PROJECT: jumpyard-checkin-admin-production
+  COGNITO_CLIENT_ID: 4cm36dkcrptlpq9j163q45ae56
+  COGNITO_DOMAIN: https://jumpyard-check-in-park-test-admin-376129878018.auth.eu-north-1.amazoncognito.com
   PARK_TEST_API: https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com
 
 jobs:
   plan:
-    name: Plan selected domain-test release
+    name: Plan selected pilot-production release
     runs-on: ubuntu-latest
     outputs:
       release_sha: ${{ steps.guard.outputs.sha }}
@@ -59,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
-            echo "Domain-test workflow must run from refs/heads/main." >&2
+            echo "Pilot-production workflow must run from refs/heads/main." >&2
             exit 1
           fi
           sha="${{ inputs.release_sha }}"
@@ -68,7 +73,7 @@ jobs:
             echo "A lowercase full SHA and numeric release run ID are required." >&2
             exit 1
           fi
-          if [[ "${{ inputs.approval_phrase }}" != "I_APPROVE_CHECKIN_DOMAIN_TEST_${sha}" ]]; then
+          if [[ "${{ inputs.approval_phrase }}" != "I_APPROVE_NACKA_PILOT_PRODUCTION_${sha}" ]]; then
             echo "The approval phrase does not match the selected release SHA." >&2
             exit 1
           fi
@@ -88,7 +93,7 @@ jobs:
           github-token: ${{ github.token }}
           repository: wrlds-creations/jumpyard-check-in
           run-id: ${{ inputs.release_run_id }}
-      - name: Validate artifact identity and controlled target
+      - name: Validate artifact identity and pilot-production targets
         shell: bash
         run: |
           set -euo pipefail
@@ -102,23 +107,23 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## Controlled guest-domain deployment plan"
+            echo "## Nacka pilot-production frontend plan"
             echo
             echo "- Intent: \`${{ inputs.intent }}\`"
             echo "- Release: \`${{ steps.guard.outputs.sha }}\`"
             echo "- Release workflow run: \`${{ inputs.release_run_id }}\`"
-            echo "- Source output: \`release/phone/out\` from the selected immutable park-test artifact"
-            echo "- Cloudflare target: \`${CLOUDFLARE_PROJECT}\`"
-            echo "- Public hostname: \`${CHECKIN_ORIGIN}\`"
-            echo "- API target: existing park-test API only"
+            echo "- Source outputs: \`release/phone/out\` and \`release/admin/out\` from the selected immutable Park artifact"
+            echo "- Cloudflare targets: \`${PHONE_PROJECT}\` and \`${ADMIN_PROJECT}\`"
+            echo "- Public hostnames: \`${CHECKIN_ORIGIN}\` and \`${STAFF_ORIGIN}\`"
+            echo "- API target: existing technically named park-test API, approved as Nacka pilot production"
             echo "- AWS mutations: none in this workflow"
             echo "- Roller writes and guest messages: none"
             echo
-            echo "The protected park-test approval below authorizes this exact phone artifact and target only."
+            echo "The protected Park approval below authorizes these exact phone/admin artifacts and public targets only."
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
-    name: Approved controlled guest-domain deployment
+    name: Approved Nacka pilot-production frontend deployment
     needs: plan
     runs-on: ubuntu-latest
     environment:
@@ -147,30 +152,36 @@ jobs:
           node tooling/scripts/validate-checkin-domain-release.js \
             --release release \
             --expected-sha "${{ needs.plan.outputs.release_sha }}"
-      - name: Verify exact Cloudflare project and custom domain
+      - name: Verify exact Cloudflare projects and custom domains
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
-          curl --fail --silent --show-error \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${CLOUDFLARE_PROJECT}" \
-            | jq -e --arg project "$CLOUDFLARE_PROJECT" '
-                .success == true and
-                .result.name == $project and
-                .result.production_branch == "main" and
-                .result.source == null
-              ' > /dev/null
-          curl --fail --silent --show-error \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${CLOUDFLARE_PROJECT}/domains" \
-            | jq -e --arg domain "$CHECKIN_DOMAIN" '
-                .success == true and
-                any(.result[]; .name == $domain and .status == "active")
-              ' > /dev/null
-      - name: Require live park-test CORS before publishing the alias
+          verify_project() {
+            local project="$1"
+            local domain="$2"
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${project}" \
+              | jq -e --arg project "$project" '
+                  .success == true and
+                  .result.name == $project and
+                  .result.production_branch == "main" and
+                  .result.source == null
+                ' > /dev/null
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${project}/domains" \
+              | jq -e --arg domain "$domain" '
+                  .success == true and
+                  any(.result[]; .name == $domain and .status == "active")
+                ' > /dev/null
+          }
+          verify_project "$PHONE_PROJECT" "$CHECKIN_DOMAIN"
+          verify_project "$ADMIN_PROJECT" "$STAFF_DOMAIN"
+      - name: Require live Park CORS and Cognito callbacks before publishing public frontends
         shell: bash
         run: |
           set -euo pipefail
@@ -188,6 +199,7 @@ jobs:
             rm -f "$headers"
           }
           probe_cors "$CHECKIN_ORIGIN"
+          probe_cors "$STAFF_ORIGIN"
           probe_cors "https://jumpyard-check-in-park-test.pages.dev"
           probe_cors "https://jumpyard-checkin-admin-park-test.pages.dev"
           probe_cors "https://jumpyard-check-in-kiosk.pages.dev"
@@ -200,7 +212,21 @@ jobs:
             "${PARK_TEST_API}/v1/bookings/availability"
           ! tr -d '\r' < "$blocked_headers" | grep -qi '^access-control-allow-origin:'
           rm -f "$blocked_headers"
-      - name: Deploy exact phone output to the controlled guest domain project
+
+          probe_callback() {
+            local redirect_uri="$1"
+            curl --fail --silent --show-error --location --output /dev/null --get \
+              "${COGNITO_DOMAIN}/oauth2/authorize" \
+              --data-urlencode "client_id=${COGNITO_CLIENT_ID}" \
+              --data-urlencode "response_type=code" \
+              --data-urlencode "scope=openid" \
+              --data-urlencode "redirect_uri=${redirect_uri}" \
+              --data-urlencode "code_challenge=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" \
+              --data-urlencode "code_challenge_method=S256"
+          }
+          probe_callback "https://jumpyard-checkin-admin-park-test.pages.dev/auth/callback"
+          probe_callback "https://staff-checkin.jumpyard.se/auth/callback"
+      - name: Deploy exact phone and admin outputs to public projects
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         shell: bash
@@ -209,12 +235,18 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN"
           sha="${{ needs.plan.outputs.release_sha }}"
           npx --yes wrangler@4.111.0 pages deploy release/phone/out \
-            --project-name "$CLOUDFLARE_PROJECT" \
+            --project-name "$PHONE_PROJECT" \
             --branch main \
             --commit-hash "$sha" \
-            --commit-message "controlled-domain-${{ inputs.intent }} ${sha}" \
+            --commit-message "pilot-production-${{ inputs.intent }} ${sha}" \
             --commit-dirty=false | tee cloudflare-checkin-domain.txt
-      - name: Verify exact Cloudflare release and public Apple Pay prerequisites
+          npx --yes wrangler@4.111.0 pages deploy release/admin/out \
+            --project-name "$ADMIN_PROJECT" \
+            --branch main \
+            --commit-hash "$sha" \
+            --commit-message "pilot-production-${{ inputs.intent }} ${sha}" \
+            --commit-dirty=false | tee cloudflare-staff-domain.txt
+      - name: Verify exact Cloudflare releases and public prerequisites
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CHECKIN_VERIFY_ATTEMPTS: 24
@@ -223,30 +255,33 @@ jobs:
         run: |
           set -euo pipefail
           sha="${{ needs.plan.outputs.release_sha }}"
-          curl --fail --silent --show-error \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${CLOUDFLARE_PROJECT}/deployments?env=production&per_page=1" \
-            | jq -e --arg sha "$sha" '
-                .success == true and
-                .result[0].environment == "production" and
-                .result[0].deployment_trigger.metadata.commit_hash == $sha and
-                .result[0].latest_stage.status == "success"
-              ' > /dev/null
+          for project in "$PHONE_PROJECT" "$ADMIN_PROJECT"; do
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${project}/deployments?env=production&per_page=1" \
+              | jq -e --arg sha "$sha" '
+                  .success == true and
+                  .result[0].environment == "production" and
+                  .result[0].deployment_trigger.metadata.commit_hash == $sha and
+                  .result[0].latest_stage.status == "success"
+                ' > /dev/null
+          done
           node tooling/scripts/verify-public-checkin-domain.js
       - name: Publish deployment evidence
         if: always()
         shell: bash
         run: |
           {
-            echo "## Controlled guest-domain deployment"
+            echo "## Nacka pilot-production frontend deployment"
             echo
             echo "- Intent: \`${{ inputs.intent }}\`"
             echo "- Release: \`${{ needs.plan.outputs.release_sha }}\`"
             echo "- Release workflow run: \`${{ inputs.release_run_id }}\`"
             echo "- Deployment workflow run: \`${{ github.run_id }}\`"
             echo "- Protected environment: \`park-test\`"
-            echo "- Cloudflare project: \`${CLOUDFLARE_PROJECT}\`"
-            echo "- Public hostname: \`${CHECKIN_ORIGIN}\`"
-            echo "- AWS/production backend changes: none"
+            echo "- Cloudflare projects: \`${PHONE_PROJECT}\`, \`${ADMIN_PROJECT}\`"
+            echo "- Public hostnames: \`${CHECKIN_ORIGIN}\`, \`${STAFF_ORIGIN}\`"
+            echo "- Backend: existing \`park-test\` resources in their approved Nacka pilot-production role"
+            echo "- AWS mutations: none in this frontend-only workflow"
             echo "- Manual financial action: Love's iPhone Apple Pay test remains separate"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -3,7 +3,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const page = fs.readFileSync(path.join(root, 'jumpyard-checkin-admin', 'src', 'app', 'page.tsx'), 'utf8');
+const page = fs
+  .readFileSync(path.join(root, 'jumpyard-checkin-admin', 'src', 'app', 'page.tsx'), 'utf8')
+  .replace(/\r\n/g, '\n');
 
 function section(source, start, end, label) {
   const startIndex = source.indexOf(start);

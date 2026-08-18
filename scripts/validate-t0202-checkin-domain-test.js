@@ -5,12 +5,14 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const CHECKIN_ORIGIN = 'https://checkin.jumpyard.se';
+const STAFF_ORIGIN = 'https://staff-checkin.jumpyard.se';
 const MESSAGE_ORIGIN = 'https://jumpyard-check-in-park-test.pages.dev/';
 const EXPECTED_ORIGINS = [
   'https://jumpyard-check-in-park-test.pages.dev',
   'https://jumpyard-checkin-admin-park-test.pages.dev',
   'https://jumpyard-check-in-kiosk.pages.dev',
   CHECKIN_ORIGIN,
+  STAFF_ORIGIN,
 ];
 const EXPECTED_ASSOCIATION_SHA256 = '8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6';
 
@@ -38,14 +40,23 @@ function validateParkTestProfiles() {
     assert.equal(config.guestEmail?.checkinBaseUrl, MESSAGE_ORIGIN, `${relativePath} email link origin`);
     assert.equal(config.safetyGates?.guestMessagingSendsEnabled, false, `${relativePath} general guest messaging gate`);
     assert.equal(config.tags?.['WRLDS:Environment'], 'park-test', `${relativePath} environment tag`);
+    assert.deepStrictEqual(config.staffIdentity?.callbackUrls, [
+      'https://jumpyard-checkin-admin-park-test.pages.dev/auth/callback',
+      `${STAFF_ORIGIN}/auth/callback`,
+    ], `${relativePath} callback URLs`);
+    assert.deepStrictEqual(config.staffIdentity?.logoutUrls, [
+      'https://jumpyard-checkin-admin-park-test.pages.dev/admin',
+      `${STAFF_ORIGIN}/admin`,
+    ], `${relativePath} logout URLs`);
   }
 }
 
 function validateDomainContract() {
   const contract = readJson('config/production-domains.json');
   const alias = contract.controlledParkTestAlias;
-  assert.equal(contract.schemaVersion, 2);
-  assert.equal(contract.state, 'guest-controlled-park-test-alias-active-apple-pay-passed');
+  assert.equal(contract.schemaVersion, 3);
+  assert.equal(contract.state, 'pilot-production-approved-guest-live-staff-pending-protected-rollout');
+  assert.equal(contract.technicalBackendEnvironment, 'park-test');
   assert.equal(alias.approved, true);
   assert.equal(alias.approvedByIssue, 220);
   assert.equal(alias.deployed, true);
@@ -71,12 +82,14 @@ function validateDomainContract() {
   assert.equal(alias.publicVerification.appleAssociationSha256, EXPECTED_ASSOCIATION_SHA256);
   assert.equal(alias.publicVerification.approvedCorsOrigins, 4);
   assert.equal(alias.publicVerification.unapprovedOriginBlocked, true);
-  assert.equal(contract.cutover.authorized, false);
+  assert.equal(contract.cutover.authorized, true);
+  assert.equal(contract.cutover.owner, 'issue-264');
+  assert.equal(contract.pilotProduction.approvedByIssue, 264);
   assert.deepStrictEqual(contract.parkTestBaseline.allowedCorsOrigins, EXPECTED_ORIGINS);
   assert.equal(contract.surfaces.guest.cloudflarePages.applicationDeployments, 2);
-  assert.equal(contract.surfaces.guest.cloudflarePages.status, 'controlled-park-test-alias-active');
+  assert.equal(contract.surfaces.guest.cloudflarePages.status, 'pilot-production-guest-active');
   assert.equal(contract.surfaces.staffAdmin.cloudflarePages.applicationDeployments, 0);
-  assert.equal(contract.surfaces.staffAdmin.cloudflarePages.status, 'created-empty');
+  assert.equal(contract.surfaces.staffAdmin.cloudflarePages.status, 'pilot-production-approved-pending-deployment');
 }
 
 function validateWorkflow() {
@@ -84,19 +97,22 @@ function validateWorkflow() {
   const source = read(relativePath);
   for (const required of [
     'workflow_dispatch:',
-    'I_APPROVE_CHECKIN_DOMAIN_TEST_',
+    'I_APPROVE_NACKA_PILOT_PRODUCTION_',
     'name: park-test',
     'url: https://checkin.jumpyard.se',
-    'CLOUDFLARE_PROJECT: jumpyard-check-in-production',
+    'PHONE_PROJECT: jumpyard-check-in-production',
+    'ADMIN_PROJECT: jumpyard-checkin-admin-production',
+    'STAFF_ORIGIN: https://staff-checkin.jumpyard.se',
     'validate-park-test-release.js',
     'validate-checkin-domain-release.js',
     'verify-public-checkin-domain.js',
     'CHECKIN_VERIFY_ATTEMPTS: 24',
     'CHECKIN_VERIFY_RETRY_MS: 5000',
     'release/phone/out',
+    'release/admin/out',
     '--commit-hash',
     'deployment_trigger.metadata.commit_hash',
-    'Require live park-test CORS before publishing the alias',
+    'Require live Park CORS and Cognito callbacks before publishing public frontends',
     'https://unapproved.example',
   ]) {
     assert.ok(source.includes(required), `${relativePath} must include ${required}`);
@@ -106,8 +122,7 @@ function validateWorkflow() {
     'aws-access-key-id',
     'aws-secret-access-key',
     'configure-aws-credentials',
-    'release/admin/out',
-    'jumpyard-checkin-admin-production',
+    'I_APPROVE_CHECKIN_DOMAIN_TEST_',
   ]) {
     assert.ok(!source.includes(blocked), `${relativePath} must not include ${blocked}`);
   }
@@ -132,7 +147,7 @@ function main() {
   validateDomainContract();
   validateWorkflow();
   validateAppleAssociation();
-  console.log('[pass] T0202 controlled checkin.jumpyard.se park-test alias, immutable deployment, CORS, and Apple Pay guards');
+  console.log('[pass] issue #220 evidence plus issue #264 protected Nacka pilot-production frontend path');
 }
 
 main();

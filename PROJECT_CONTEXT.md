@@ -7,11 +7,11 @@ This file holds confirmed durable facts. The private [GitHub Project](https://gi
 - Project: `JumpYard Next`
 - Repository: `wrlds-creations/jumpyard-check-in`
 - App: JumpYard check-in app suite
-- Current phase: `Sprint 2 closed`; Sprint 3 uses the existing park-test foundation as pre-production.
+- Current phase: `Sprint 2 closed`; technical `park-test` is Nacka pilot production.
 
 ## Current Phase And Scope
 
-Sprint 2 is closed. The path is `dev/Playground -> park-test/Live pre-production -> separate production after GO`; no parallel staging stack is planned. Approved maintenance windows may use park-test for ingestion and T-30 messaging rehearsals.
+The Nacka path is `dev/Playground -> Park verification -> protected public promotion`, using the existing technical `park-test` Live backend. Multi-park topology needs a separate decision; no duplicate pilot backend is planned.
 
 The [2026-06-11 roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf) covers phone, admin, and required cloud work in Sprint 3. Kiosk/print/terminal and JumpyBoard/AirHive are separate.
 
@@ -37,7 +37,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 ## Durable Architecture Facts
 
 - Frontend apps must not call Roller directly in the real production architecture.
-- Public hostnames are `checkin.jumpyard.se` and `staff-checkin.jumpyard.se`; DNS/TLS are active. The guest name is an active controlled park-test alias; Love's 2026-08-17 iPhone payment/Apple Pay test passed. It is not production, and staff/admin plus production AWS/API remain absent. [Contract](config/production-domains.json).
+- Public pilot hosts are `checkin.jumpyard.se` and `staff-checkin.jumpyard.se`; DNS/TLS are active. Guest passed Love's 2026-08-17 iPhone/Apple Pay test. #264 approves both on Park API; staff promotion is pending. [Contract](config/production-domains.json).
 - Roller remains the source of truth for bookings, products, payments, and ticket redemption.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, session status, idempotency, audit events, and guest messaging state.
 - The production booking index uses an approved initial backfill, scheduled morning seed, idempotent webhook updates/reconciliation, and live REST confirmation. Roller remains authoritative; Aurora is the operational cache.
@@ -47,8 +47,8 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
 - Kiosk safety/handoff may follow durable terminal approval; redemption requires confirmed ROLLER booking and ticket ids.
 - Raw payloads, access tokens, PINs, secrets, and unmasked credentials are prohibited persisted data. Booking/contact state is removed or anonymized 30 days after visit; pseudonymous audit/run metadata at 90 days; expired access rows within 24 hours. Disabled staff lose display PII after 90 days; PIN-pepper changes require versioned security-driven re-enrollment. Non-dev handlers have restricted DB principals; Aurora admin is only for migrations, provisioning, and guarded recovery.
-- Dev is retired Playground and its Aurora auto-pauses. Park-test remains the sole Live pre-production environment; production requires GO and separate approval.
-- Park-test work requires an approved Issue; AWS/Live, payments, redemption, webhooks, frontend rehearsal, UI/UX, and visitor traffic need explicit scope. It remains a separate WRLDS environment in `376129878018`/`eu-north-1`, namespace `jumpyard-check-in-park-test`, with server-side Roller Live Nacka access. It is not production.
+- Dev is retired Playground and its Aurora auto-pauses. The existing Park environment is the sole Live backend and sharp pilot-production environment for Nacka.
+- Park work requires an approved Issue and explicit scope. Its technical identity remains `WRLDS:Environment=park-test` in `376129878018`/`eu-north-1`, namespace `jumpyard-check-in-park-test`, with server-side Roller Live Nacka. Pilot production is a business role, not a rename or wider venue authority.
 - `infra/config/park-test.json` is the normal closed config; approved Issue-specific configs open reviewed gates.
 - Park-test resources and gates are recorded in [AWS_RESOURCES.md](AWS_RESOURCES.md) and [the gate runbook](docs/t0170-park-test-gate-runbook.md); runtime variables stay ticket-numbered until scoped migration.
 - The Nacka `50871` full-flow window for `2026-06-29` through `2026-09-30` remains open until Love asks to close it; Issue/PR closeout is not a close-window deploy.
@@ -62,9 +62,9 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Private GitHub Project #5 owns operational fields; drafts require Love's approval before conversion to an Issue.
 - AWS billing uses the exact JumpYard pair `WRLDS:Client=JumpYard` and `WRLDS:CostCenter=JumpYard`. Client, Project, Environment, and CostCenter are management-account cost allocation keys; active check-in configs fail closed if the JumpYard cost center differs.
 - Approved branches use `codex/gh-<issue-number>-<short-slug>`; reviewed PRs are the only route to `main`.
-- Routine park-test releases promote one immutable hashed `main` artifact after CI, read-only AWS plan, and protected approval; rollback never rebuilds. AWS uses repository/environment-scoped OIDC, and Cloudflare uses a protected scoped token.
-- Production deployment remains disabled. Local park-test CDK/Wrangler is break-glass only under an explicit approved Issue and follow-up.
-- `CODEX_TASK.md` is a static resolver, not a mutable ticket ledger. `FOLLOWUPS.md` is policy only; completed legacy followups and the one-time mapping remain historical evidence.
+- Merges to `main` build one immutable Park artifact but deploy nothing. Park and public promotion each require its selected artifact, reviewed plan, and protected approval; rollback never rebuilds. AWS uses scoped OIDC and Cloudflare a protected token.
+- New multi-park production infrastructure remains disabled. Local Park CDK/Wrangler deployment is break-glass only under an explicit approved Issue and follow-up.
+- `CODEX_TASK.md` is a static resolver. `FOLLOWUPS.md` is policy only; completed followups and migration mapping are historical.
 - Legacy ticket IDs are preserved for traceability. GitHub issue `#192` and legacy ticket `T0192` are unrelated and must retain their prefixes.
 
 ## Current Implemented Flow Facts
@@ -77,7 +77,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 ## Data And Integration Facts
 
 - Aurora stores normalized booking, item, ticket, payment, product, contact, webhook, session, token, delivery, and draft/link state. Data API windows populate an operational cache, never the source of truth.
-- Booking webhooks use `x-roller-apikey`; park-test validates its secret value. Production review remains open.
+- Booking webhooks use `x-roller-apikey`; the Park pilot-production backend validates its secret value. A broader multi-park webhook and credential model remains open.
 - Dev schedules are off for Aurora auto-pause; manual operations wake it. Guest messaging resolves opaque `jy_token` links server-side.
 - Park-test Live/Nacka index sync runs daily with bounded traffic, 30-day-past/all-future retention, and freshness monitoring. Webhook `1465` feeds durable FIFO intake and a serialized authoritative worker with DLQ/recovery/replay. Critical actions still confirm against Roller. See [T0196](docs/t0196-booking-index-morning-seed.md) and [T0197](docs/t0197-webhook-reconciliation.md).
 
@@ -96,8 +96,8 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 
 ## Current Readiness Gates
 
-- The [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5) owns readiness. T0195-T0197 are deployed; gated actions remain. [AWS_RESOURCES.md](AWS_RESOURCES.md) holds evidence, and T0204 decides GO/NO-GO.
-- Remaining blockers: lifecycle recovery/apply, alarm routing, integrated rehearsal, messaging-window approval, production approval, and natural webhook observation.
+- The [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5) owns readiness. T0195-T0197 are deployed; gated actions remain. [AWS_RESOURCES.md](AWS_RESOURCES.md) holds evidence. #264 approves the pilot role; each promotion still needs protected plan/approval.
+- Remaining blockers include lifecycle recovery/apply, alarm routing, integrated rehearsal, messaging-window approval, #264 Park/public rollout evidence, and natural webhook observation.
 - Payment must stay on Roller's approved package; method visibility is Roller/Adyen controlled.
 
 ## Current Open Questions
