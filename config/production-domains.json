@@ -3,7 +3,7 @@
   "contract": "jumpyard-check-in-production-web-domains",
   "environment": "nacka-pilot-production",
   "technicalBackendEnvironment": "park-test",
-  "state": "pilot-production-approved-guest-live-staff-pending-protected-rollout",
+  "state": "pilot-production-live-manual-and-rollback-evidence-pending",
   "zone": "jumpyard.se",
   "productionWebOrigins": [
     "https://checkin.jumpyard.se",
@@ -20,8 +20,8 @@
         "projectName": "jumpyard-check-in-production",
         "pagesDevOrigin": "https://jumpyard-check-in-production.pages.dev",
         "gitProviderConnected": false,
-        "applicationDeployments": 2,
-        "status": "pilot-production-guest-active",
+        "applicationDeployments": 3,
+        "status": "pilot-production-active",
         "deploymentPolicy": "selected-immutable-park-pilot-artifact-only",
         "createdBy": "T0199-issue-206-explicit-scope-extension",
         "customDomainAssociation": {
@@ -54,8 +54,8 @@
         "projectName": "jumpyard-checkin-admin-production",
         "pagesDevOrigin": "https://jumpyard-checkin-admin-production.pages.dev",
         "gitProviderConnected": false,
-        "applicationDeployments": 0,
-        "status": "pilot-production-approved-pending-deployment",
+        "applicationDeployments": 1,
+        "status": "pilot-production-active",
         "deploymentPolicy": "selected-immutable-park-pilot-artifact-only",
         "createdBy": "T0199-issue-206-explicit-scope-extension",
         "customDomainAssociation": {
@@ -140,8 +140,46 @@
     ],
     "promotionPolicy": "build-on-main-promote-selected-artifact-through-protected-approval",
     "guestStatus": "active-on-selected-park-artifact",
-    "staffAdminStatus": "pending-first-protected-deployment",
-    "guestMessagingOpened": false
+    "staffAdminStatus": "active-on-selected-park-artifact-manual-login-pending",
+    "guestMessagingOpened": false,
+    "rolloutEvidence": {
+      "implementationPr": 268,
+      "mergedSha": "fc8e1c4cf1d42f25790dbcc817cdc9be483ca5f0",
+      "releaseWorkflowRunId": 32145647163,
+      "releaseArtifactId": 9327831112,
+      "releaseArtifactDigest": "sha256:cb4bada0d550085bd06b32b1054e80cc3f59a3db6307437b00bc5446a83f8a77",
+      "initialParkDeploymentRunId": 32146182366,
+      "initialParkDeploymentResult": "deployed-final-verification-blocked-by-pre-existing-transient-roller-alarm",
+      "successfulParkRepromotionRunId": 32146904664,
+      "parkPhoneDeploymentId": "b2d938e3",
+      "parkStaffAdminDeploymentId": "d022214c",
+      "publicFrontendPromotionRunId": 32147234728,
+      "publicPhoneDeploymentId": "a34804e0",
+      "publicStaffAdminDeploymentId": "835630e8",
+      "verifiedAt": "2026-08-18T14:17:11Z",
+      "gitProviderDisconnectedProjects": [
+        "jumpyard-check-in-park-test",
+        "jumpyard-checkin-admin-park-test",
+        "jumpyard-check-in-production",
+        "jumpyard-checkin-admin-production"
+      ],
+      "publicVerification": {
+        "guestRootHttpStatus": 200,
+        "liveRollerCapacityLoaded": true,
+        "staffRoutesHttpStatus": 200,
+        "staffPinScreenLoaded": true,
+        "adminCognitoRedirectVerified": true,
+        "adminCallbackOrigin": "https://staff-checkin.jumpyard.se/auth/callback",
+        "appleAssociationHttpStatus": 200,
+        "appleAssociationSha256": "8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6"
+      },
+      "remainingManualEvidence": [
+        "selected-release-iphone-apple-pay-payment",
+        "credentialed-admin-login-callback-logout-and-read-only-flow"
+      ],
+      "rollbackEvidence": "pending-second-compatible-immutable-release",
+      "retiredDevProjectCleanup": "pending-manual-and-rollback-gates"
+    }
   },
   "controlledParkTestAlias": {
     "approved": true,

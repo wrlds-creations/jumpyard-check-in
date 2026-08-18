@@ -67,6 +67,18 @@ function validateDomainContract() {
   assert.equal(contract.pilotProduction.renamesExistingResources, false);
   assert.equal(contract.pilotProduction.futureMultiParkArchitectureDeferred, true);
   assert.deepEqual(contract.pilotProduction.publicOrigins, [PUBLIC_PHONE, PUBLIC_ADMIN]);
+  assert.equal(contract.state, 'pilot-production-live-manual-and-rollback-evidence-pending');
+  assert.equal(contract.surfaces.guest.cloudflarePages.status, 'pilot-production-active');
+  assert.equal(contract.surfaces.staffAdmin.cloudflarePages.status, 'pilot-production-active');
+  assert.ok(contract.surfaces.guest.cloudflarePages.applicationDeployments >= 3);
+  assert.ok(contract.surfaces.staffAdmin.cloudflarePages.applicationDeployments >= 1);
+  assert.equal(contract.pilotProduction.rolloutEvidence.implementationPr, 268);
+  assert.equal(contract.pilotProduction.rolloutEvidence.mergedSha, 'fc8e1c4cf1d42f25790dbcc817cdc9be483ca5f0');
+  assert.equal(contract.pilotProduction.rolloutEvidence.releaseWorkflowRunId, 32145647163);
+  assert.equal(contract.pilotProduction.rolloutEvidence.successfulParkRepromotionRunId, 32146904664);
+  assert.equal(contract.pilotProduction.rolloutEvidence.publicFrontendPromotionRunId, 32147234728);
+  assert.equal(contract.pilotProduction.rolloutEvidence.publicVerification.liveRollerCapacityLoaded, true);
+  assert.equal(contract.pilotProduction.rolloutEvidence.publicVerification.adminCognitoRedirectVerified, true);
   assert.deepEqual(contract.parkTestBaseline.allowedCorsOrigins, PARK_ORIGINS);
   assert.equal(contract.controlledParkTestAlias.approvedByIssue, 220, 'issue #220 evidence must remain historical');
 }

@@ -2,7 +2,7 @@
 
 Date: 2026-08-18
 
-Status: Approved implementation contract. Repository changes do not themselves mutate AWS, Cloudflare, DNS, ROLLER, or running traffic.
+Status: Initial protected rollout complete. Manual financial/admin evidence, compatible rollback/re-promotion, and retired-project cleanup remain.
 
 ## Decision
 
@@ -76,14 +76,21 @@ The Park verification origins and kiosk CORS origin stay present. The generated 
 - No future multi-park tenancy or isolation model is selected.
 - Issue #256 must finish or be explicitly superseded before an external #264 promotion selects its release baseline.
 
-## Rollout Evidence Still Required
+## Initial Rollout Evidence
 
-- implementation PR and merged SHA;
-- automatic release run ID and artifact digest;
-- Park plan, deployment, and exact verification run ID;
-- public phone/admin plan, deployment, and exact verification run ID;
-- manual iPhone/Apple Pay confirmation on `checkin.jumpyard.se` for the selected release;
-- manual staff/admin login, callback/logout, and read-only staff-flow confirmation on `staff-checkin.jumpyard.se`;
-- rollback and re-promotion run IDs for both target groups;
-- Cloudflare Git-source disablement readback;
-- exact IDs and deletion readback for the two retired dev Pages projects.
+- Implementation PR [#268](https://github.com/wrlds-creations/jumpyard-check-in/pull/268) merged as `fc8e1c4cf1d42f25790dbcc817cdc9be483ca5f0`.
+- Automatic release run [32145647163](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/32145647163) produced artifact id `9327831112` with digest `sha256:cb4bada0d550085bd06b32b1054e80cc3f59a3db6307437b00bc5446a83f8a77`.
+- Initial Park run [32146182366](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/32146182366) deployed the exact release but its final verifier stopped on a pre-existing transient ROLLER error alarm. The alarm was neither reset nor suppressed and returned naturally to `OK`.
+- Same-artifact Park re-promotion [32146904664](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/32146904664) passed the no-change 202-to-202 plan and exact AWS/Cloudflare verification. Park phone/admin deployment ids are `b2d938e3` and `d022214c`.
+- Protected public promotion [32147234728](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/32147234728) deployed the same outputs without rebuilding or mutating AWS. Public phone/admin deployment ids are `a34804e0` and `835630e8`.
+- The verifier proved HTTP 200, exact Park API/Cognito targets, both custom domains, exact commit SHA, and the Apple association SHA256 `8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6`. Independent Chrome readback loaded live Roller capacity, the PIN screen, `/admin`, and the Cognito login with `redirect_uri=https://staff-checkin.jumpyard.se/auth/callback`.
+- Cloudflare dashboard readback showed no Git source on all four retained phone/admin projects.
+
+## Remaining Closeout Gates
+
+- Love's iPhone/Apple Pay confirmation on `checkin.jumpyard.se` for the selected release;
+- credentialed admin login, callback/logout, and read-only staff-flow confirmation on `staff-checkin.jumpyard.se`;
+- rollback and re-promotion run IDs for both target groups using two compatible immutable releases;
+- exact IDs and deletion readback for the two retired dev Pages projects after every prior gate passes.
+
+The last successful artifact before #264 is intentionally not a rollback candidate: its manifest predates the public staff origin and is rejected by the current release validators. Merging this evidence change produces a second compatible immutable release, after which the protected workflows can prove rollback and re-promotion without rebuilding either selected artifact.
