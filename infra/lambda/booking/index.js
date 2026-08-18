@@ -1485,6 +1485,8 @@ async function confirmKioskReconciliation(request, readback) {
 }
 
 async function persistKioskReconciliationBookingSnapshot(existing, readback) {
+  const enrichedItems = await enrichKioskReadbackItems(existing, readback.items);
+
   await executeStatement(
     `INSERT INTO jumpyard.roller_bookings (
        roller_unique_id,
@@ -1554,7 +1556,7 @@ async function persistKioskReconciliationBookingSnapshot(existing, readback) {
     ],
   );
 
-  for (const item of readback.items) {
+  for (const item of enrichedItems) {
     const bookingItemKey = `jybi_${hashString(`${readback.rollerUniqueId}:${item.bookingItemId || item.itemIndex}`).slice(0, 32)}`;
     await executeStatement(
       `INSERT INTO jumpyard.roller_booking_items (
@@ -1562,7 +1564,9 @@ async function persistKioskReconciliationBookingSnapshot(existing, readback) {
          roller_unique_id,
          booking_item_id,
          product_id,
+         parent_product_id,
          product_name,
+         parent_product_name,
          quantity,
          booking_date,
          start_time,
@@ -1574,7 +1578,9 @@ async function persistKioskReconciliationBookingSnapshot(existing, readback) {
          :rollerUniqueId,
          :bookingItemId,
          :productId,
+         :parentProductId,
          :productName,
+         :parentProductName,
          :quantity,
          CAST(:bookingDate AS date),
          CAST(:startTime AS time),
@@ -1583,7 +1589,9 @@ async function persistKioskReconciliationBookingSnapshot(existing, readback) {
        )
        ON CONFLICT (booking_item_key) DO UPDATE SET
          product_id = EXCLUDED.product_id,
+         parent_product_id = EXCLUDED.parent_product_id,
          product_name = EXCLUDED.product_name,
+         parent_product_name = EXCLUDED.parent_product_name,
          quantity = EXCLUDED.quantity,
          booking_date = EXCLUDED.booking_date,
          start_time = EXCLUDED.start_time,
@@ -1595,7 +1603,9 @@ async function persistKioskReconciliationBookingSnapshot(existing, readback) {
         stringParameter('rollerUniqueId', readback.rollerUniqueId),
         stringParameter('bookingItemId', item.bookingItemId),
         stringParameter('productId', item.productId),
+        stringParameter('parentProductId', item.parentProductId),
         stringParameter('productName', item.productName),
+        stringParameter('parentProductName', item.parentProductName),
         integerParameter('quantity', Math.max(1, Math.floor(Number(item.quantity ?? 1)))),
         stringParameter('bookingDate', item.bookingDate || existing.booking_date),
         stringParameter('startTime', item.startTime || existing.start_time),
@@ -3886,6 +3896,125 @@ function normalizeCosts(body) {
   };
 }
 
+async function loadProductDisplayMetadata(rollerEnv, productIds) {
+  const uniqueProductIds = [...new Set(productIds.map(stringOrNull).filter(Boolean))];
+  if (uniqueProductIds.length === 0) return new Map();
+
+  const placeholders = uniqueProductIds.map((_, index) => `:displayProductId${index}`).join(', ');
+  const result = await executeStatement(
+    `SELECT DISTINCT ON (summary ->> 'id')
+       summary ->> 'id' AS product_id,
+       summary::text AS product_summary
+     FROM jumpyard.product_catalog_cache
+     WHERE roller_env = :rollerEnv
+       AND summary ->> 'id' IN (${placeholders})
+     ORDER BY summary ->> 'id', fetched_at DESC`,
+    [
+      stringParameter('rollerEnv', rollerEnv),
+      ...uniqueProductIds.map((productId, index) => stringParameter(`displayProductId${index}`, productId)),
+    ],
+  );
+
+  return new Map(
+    mappedRows(result)
+      .map((row) => [stringOrNull(row.product_id), parseJsonOrNull(row.product_summary)])
+      .filter(([productId, summary]) => productId && summary && typeof summary === 'object' && !Array.isArray(summary)),
+  );
+}
+
+function findConfiguredProductDisplay(metadata, productId) {
+  const normalizedNames = [metadata?.parentProductName, metadata?.name]
+    .map((value) => stringOrNull(value)?.toLowerCase())
+    .filter(Boolean);
+  const definitions = [...PHONE_BOOKING_PRODUCTS, ...PHONE_ADDON_PRODUCTS];
+  return definitions.find((definition) => {
+    const definitionNames = [definition.parentName, definition.label]
+      .map((value) => stringOrNull(value)?.toLowerCase())
+      .filter(Boolean);
+    return (
+      (definition.productId && String(definition.productId) === String(productId)) ||
+      definitionNames.some((name) => normalizedNames.includes(name))
+    );
+  }) ?? null;
+}
+
+function addMinutesToClock(startTime, durationMinutes) {
+  const match = stringOrNull(startTime)?.match(/^(\d{1,2}):(\d{2})/);
+  const duration = numberOrNull(durationMinutes);
+  if (!match || duration === null || duration <= 0) return null;
+  const minutes = (Number(match[1]) * 60 + Number(match[2]) + Math.round(duration)) % (24 * 60);
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+function buildProductDisplayItem(item, metadata = {}, provisional = null) {
+  const productId = stringOrNull(item?.productId ?? provisional?.productId ?? metadata?.id);
+  const definition = findConfiguredProductDisplay(metadata, productId);
+  const durationMinutes =
+    numberOrNull(item?.durationMinutes) ??
+    numberOrNull(metadata?.durationMinutes) ??
+    numberOrNull(provisional?.durationMinutes) ??
+    numberOrNull(definition?.durationMinutes);
+  const startTime = stringOrNull(item?.startTime ?? provisional?.startTime);
+
+  return {
+    ...item,
+    bookingDate: stringOrNull(item?.bookingDate ?? provisional?.bookingDate),
+    durationMinutes,
+    endTime:
+      stringOrNull(item?.endTime ?? metadata?.endTime ?? provisional?.endTime) ||
+      addMinutesToClock(startTime, durationMinutes),
+    parentProductId: stringOrNull(
+      item?.parentProductId ?? metadata?.parentProductId ?? provisional?.parentProductId,
+    ),
+    parentProductName: stringOrNull(
+      item?.parentProductName ?? metadata?.parentProductName ?? provisional?.parentProductName ?? definition?.parentName,
+    ),
+    parentType: stringOrNull(item?.parentType ?? metadata?.parentType ?? provisional?.parentType),
+    productId,
+    productName: stringOrNull(
+      item?.productName ?? metadata?.name ?? provisional?.productName ?? definition?.label,
+    ),
+    productSubType: stringOrNull(
+      item?.productSubType ?? metadata?.productSubType ?? provisional?.productSubType,
+    ),
+    productType: stringOrNull(
+      item?.productType ?? metadata?.productType ?? provisional?.productType ?? definition?.type,
+    ),
+    quantity: numberOrNull(item?.quantity ?? provisional?.quantity) ?? 1,
+    startTime,
+  };
+}
+
+async function buildPrepaymentItemsSummary(rollerEnv, items) {
+  const metadataByProductId = await loadProductDisplayMetadata(
+    rollerEnv,
+    items.map((item) => item.productId),
+  );
+  return items.map((item) => buildProductDisplayItem(item, metadataByProductId.get(String(item.productId))));
+}
+
+async function enrichKioskReadbackItems(existing, items) {
+  const parsedItemsSummary = parseJsonOrNull(existing.items_summary);
+  const provisionalItems = Array.isArray(parsedItemsSummary) ? parsedItemsSummary : [];
+  const metadataByProductId = await loadProductDisplayMetadata(
+    existing.roller_env,
+    items.map((item) => item.productId),
+  );
+
+  return items.map((item, index) => {
+    const provisional = provisionalItems.find((candidate) =>
+      String(candidate?.productId ?? '') === String(item?.productId ?? '') &&
+      (!candidate?.bookingDate || !item?.bookingDate || candidate.bookingDate === item.bookingDate) &&
+      (!candidate?.startTime || !item?.startTime || candidate.startTime === item.startTime)
+    ) ?? provisionalItems[index] ?? null;
+    return buildProductDisplayItem(
+      item,
+      metadataByProductId.get(String(item.productId)),
+      provisional,
+    );
+  });
+}
+
 async function persistPrepaymentDraft({
   config,
   draft,
@@ -3907,12 +4036,7 @@ async function persistPrepaymentDraft({
   const amountOwingCents = centsFromAmount(draft.costs.amountOwing);
   const email = request.customer.email;
   const phone = request.customer.phone;
-  const itemsSummary = request.items.map((item) => ({
-    bookingDate: item.bookingDate,
-    productId: item.productId,
-    quantity: item.quantity,
-    startTime: item.startTime,
-  }));
+  const itemsSummary = await buildPrepaymentItemsSummary(config.env, request.items);
 
   const persisted = await executeStatement(
     `INSERT INTO jumpyard.prepayment_booking_drafts (
