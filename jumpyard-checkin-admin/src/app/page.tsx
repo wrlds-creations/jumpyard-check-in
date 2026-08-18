@@ -868,11 +868,12 @@ function DetailPanel({
         className="border-t border-border bg-white p-4"
       >
         {detail.bookingSyncStatus === "pending" && (
-          <div className="mb-3 flex items-start gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-semibold text-foreground">
-            <Loader2 className="mt-0.5 shrink-0 animate-spin text-primary" size={18} />
-            <span>
-              Betalningen är godkänd. ROLLER-bokningen och biljetterna synkas fortfarande. Den här vyn uppdateras automatiskt var femte sekund.
-            </span>
+          <div
+            data-testid="handoff-sync-pending"
+            className="mb-3 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-2 text-xs font-black uppercase text-primary"
+          >
+            <Loader2 className="shrink-0 animate-spin" size={14} />
+            <span>Synkar bokningen…</span>
           </div>
         )}
         {detail.bookingSyncStatus === "needs_staff" && (
@@ -1106,7 +1107,7 @@ export default function Home() {
     setScannerOpen(true);
   }, [returnToQueueAfterRedeem]);
 
-  const refreshSessions = useCallback(async () => {
+  const refreshSessions = useCallback(async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
     const requestedAuth = authRef.current;
     if (requestedAuth) {
       queueLastRequestedKeyRef.current = queueRequestKey(requestedAuth, queueQueryVersionRef.current);
@@ -1130,7 +1131,7 @@ export default function Home() {
         const requestedQuery = queueQueryRef.current;
         const requestedQueryVersion = queueQueryVersionRef.current;
         queueLastRequestedKeyRef.current = queueRequestKey(activeAuth, requestedQueryVersion);
-        setState("loading");
+        if (showLoading) setState("loading");
         setError("");
 
         try {
@@ -1215,7 +1216,7 @@ export default function Home() {
             previousDetail.bookingSyncStatus === "pending" &&
             nextDetail.bookingSyncStatus !== "pending"
           ) {
-            void refreshSessions();
+            void refreshSessions({ showLoading: false });
           }
         } catch (detailError) {
           if (
@@ -1503,6 +1504,37 @@ export default function Home() {
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [authSessionKey, detail?.bookingSyncStatus, refreshSelectedDetail, selectedId]);
+
+  useEffect(() => {
+    if (!authSessionKey) return;
+
+    let stopped = false;
+    let timeoutId: number | null = null;
+    const clearScheduledRefresh = () => {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      timeoutId = null;
+    };
+    const scheduleRefresh = () => {
+      clearScheduledRefresh();
+      if (stopped || document.visibilityState !== "visible") return;
+      timeoutId = window.setTimeout(() => {
+        void refreshSessions({ showLoading: false }).finally(scheduleRefresh);
+      }, 5_000);
+    };
+    const handleVisibility = () => {
+      clearScheduledRefresh();
+      if (document.visibilityState !== "visible") return;
+      void refreshSessions({ showLoading: false }).finally(scheduleRefresh);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    scheduleRefresh();
+    return () => {
+      stopped = true;
+      clearScheduledRefresh();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [authSessionKey, refreshSessions]);
 
   const handleRedeem = useCallback(
     async () => {
