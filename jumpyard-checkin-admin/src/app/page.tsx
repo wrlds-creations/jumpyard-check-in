@@ -440,8 +440,10 @@ function SessionRow({
             </p>
           </div>
         </div>
-        <span className="shrink-0 rounded-full bg-success/10 px-2.5 py-1 text-[10px] font-black uppercase text-success">
-          {statusLabel(session.handoffStatus)}
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
+          session.bookingSyncStatus === "confirmed" ? "bg-success/10 text-success" : "bg-primary/10 text-primary"
+        }`}>
+          {session.bookingSyncStatus === "confirmed" ? statusLabel(session.handoffStatus) : "Bokning synkas"}
         </span>
       </div>
 
@@ -750,6 +752,7 @@ function DetailPanel({
   const canRedeem =
     !isCompleted &&
     hasRedeemPermission &&
+    detail.bookingSyncStatus === "confirmed" &&
     detail.status === "ready_for_staff" &&
     detail.handoffStatus === "ready_for_staff" &&
     detail.safetyStatus === "completed" &&
@@ -831,6 +834,11 @@ function DetailPanel({
         data-testid="staff-redeem-panel"
         className="border-t border-border bg-white p-4"
       >
+        {detail.bookingSyncStatus !== "confirmed" && (
+          <div className="mb-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-semibold text-foreground">
+            Betalningen är godkänd. ROLLER-bokningen och biljetterna synkas fortfarande; check-in kan slutföras när synken är klar.
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="mb-2 flex items-center gap-2">

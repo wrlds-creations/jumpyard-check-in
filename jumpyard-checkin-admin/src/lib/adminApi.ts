@@ -26,6 +26,7 @@ export interface StaffGuestIdentity {
 export interface StaffSessionSummary {
   booking: StaffBookingSummary;
   bookingReference: string | null;
+  bookingSyncStatus: 'pending' | 'confirmed' | 'needs_staff' | string;
   checkinSessionId: string;
   completedAt: string | null;
   counts: StaffSessionCounts;

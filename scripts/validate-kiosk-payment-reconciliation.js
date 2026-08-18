@@ -14,6 +14,7 @@ const lookupSource = read('infra', 'lambda', 'lookup', 'index.js');
 const webhookSource = read('infra', 'lambda', 'webhook', 'index.js');
 const stackSource = read('infra', 'lib', 'jumpyard-cloud-stack.ts');
 const migrationSource = read('infra', 'migrations', '0019_kiosk_payment_reconciliation.sql');
+const provisionalMigrationSource = read('infra', 'migrations', '0020_provisional_kiosk_handoff.sql');
 
 assert.equal(normalizeDraftFinalizeAction(undefined), 'result');
 assert.equal(normalizeDraftFinalizeAction('result'), 'result');
@@ -32,6 +33,27 @@ assert.deepEqual(
     booking: { bookingReference: null, status: 'pending' },
   },
 );
+const provisionalStatus = publicKioskPaymentStatus({
+  booking_confirmation_status: 'pending',
+  booking_date: '2026-08-18',
+  checkin_session_id: 'jycs_test',
+  customer_first_name: 'Love',
+  customer_last_name: 'Wrlds',
+  guest_access_expires_at: '2026-08-18T12:00:00.000Z',
+  handoff_status: 'not_ready',
+  items_summary: JSON.stringify([{ bookingDate: '2026-08-18', productId: '101', quantity: 1, startTime: '10:00' }]),
+  payment_attempt_id: 'jytp_123456789012345678',
+  payment_attempt_status: 'approved',
+  roller_draft_unique_id: 'draft-a',
+  safety_status: 'not_started',
+  session_expires_at: '2026-08-18T12:00:00.000Z',
+  session_status: 'guest_in_progress',
+  status: 'payment_pending',
+});
+assert.equal(provisionalStatus.status, 'pending');
+assert.equal(provisionalStatus.provisionalHandoff.booking.paymentStatus, 'paid');
+assert.equal(provisionalStatus.provisionalHandoff.guestAccess.token, 'jytp_123456789012345678');
+assert.equal(provisionalStatus.provisionalHandoff.session.bookingSyncStatus, 'pending');
 assert.deepEqual(
   publicKioskPaymentStatus({
     booking_confirmation_status: 'confirmed',
@@ -85,6 +107,11 @@ assert.match(bookingSource, /KioskPublishConflictCount/);
 assert.match(bookingSource, /KioskReconciliationDispatchFailureCount/);
 assert.match(bookingSource, /payload: \{ failureClass \}/);
 assert.match(bookingSource, /request\.action === 'status'/);
+assert.match(bookingSource, /ensureProvisionalKioskHandoff\(request\)/);
+assert.match(bookingSource, /selected_ticket_ids = CAST\(:selectedTicketIds AS jsonb\)/);
+assert.match(bookingSource, /bookingSyncStatus: 'needs_staff'/);
+assert.match(provisionalMigrationSource, /jumpyard\.checkin_sessions/);
+assert.match(provisionalMigrationSource, /jumpyard_booking_runtime/);
 assert.match(bookingSource, /if \(publishResult\.ok\) \{[\s\S]*normalizeBookingReadback\(publishResult\.body\)/);
 assert.match(bookingSource, /candidate\?\.rollerUniqueId[\s\S]*readbackIdentifiers\.push\(candidate\.rollerUniqueId\)/);
 assert.match(bookingSource, /for \(const identifier of readbackIdentifiers\)/);
