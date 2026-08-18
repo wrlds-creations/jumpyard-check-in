@@ -4,12 +4,12 @@ Use this file as the short snapshot of what actually exists. Operational work st
 
 ## Snapshot
 
-- Date: 2026-08-17
-- Latest merged product baseline: `adf4155`; PR #245 corrects kiosk reconciliation to use absolute five-second readback offsets and delays draft publication by 10 seconds without changing phone ecommerce.
-- Latest deployed product baseline: protected run `32031787624` promoted immutable release `adf4155`; only `BookingHandler` and CDK metadata changed and migrations remained off. AWS/CDK and Cloudflare deployment completed; final verification reported only the known cost-center tag drift owned by #233.
+- Date: 2026-08-18
+- Latest merged product baseline: `5bc18a0`; PR #251 lets a durably approved kiosk payment continue with a server-created provisional handoff while redemption stays locked until ROLLER booking/ticket reconciliation confirms it.
+- Latest deployed product baseline: protected run `32114023750` promoted immutable release `5bc18a0` after a 202-to-202-resource plan with no additions or removals. Migration `0020` is applied; exact AWS/Cloudflare release, `UPDATE_COMPLETE`, `IN_SYNC`, zero alarms, and empty queues all passed.
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
-- Product/runtime state: park-test has 202 resources, migrations through `0019`, and 27 API routes. Physical lookup and P400 approval are proven. Async kiosk reconciliation is deployed, but a second trace still needed 55.470 seconds and returned HTTP 409 from the delayed single publish. Issue #239 now owns a bounded retry sequence that may repeat only after explicit 409, pending protected deployment and physical timing proof. The controlled check-in alias passed Love's 2026-08-17 iPhone payment/Apple Pay test but remains park-test-backed. The T-30 control is disarmed and the general send gate is false.
+- Product/runtime state: park-test has 202 resources, migrations through `0020`, and 27 API routes. Physical lookup and P400 approval are proven. A durably approved kiosk attempt can now create one idempotent provisional local session and continue to safety/handoff without waiting roughly 50 seconds for ROLLER visibility; staff redemption remains blocked until reconciliation confirms authoritative booking and ticket ids. The controlled check-in alias passed Love's 2026-08-17 iPhone payment/Apple Pay test but remains park-test-backed. The T-30 control is disarmed and the general send gate is false.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
 - Product approval and implementation status are read from GitHub Issues and the Project rather than copied into this merged-mainline snapshot.
 
@@ -41,7 +41,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 - Routine park-test deployment is GitHub-native. Issue #227 release `31876150698` and protected promotion `31876392673` kept 202 resources, changed only `BookingHandler` and CDK metadata, and applied no migration. Deployment completed; the final job status is red only because the independent #233 tag drift remains unresolved.
 - T0200/T0201 provide verified DKIM, SES suppression/telemetry, six alarms, and restricted application sending. Three direct proofs plus one automatic proof delivered with zero provider failures; the general gate is false and the T0201 control is disarmed.
 - T0196 completed all 53 unique modified-date windows through `2026-07-15`. Aurora contains 6,174 Live/Nacka bookings, 8,921 items, 6,662 tickets, 6,127 payments, and 983 guest profiles; zero bookings are older than 30 days, 92 are for the current date, 120 are future, and future visits extend through `2026-12-30`. Roller remains authoritative and critical writes still refresh/confirm against Roller.
-- Migrations `0010`-`0019` are deployed to park-test. `0018` adds safe kiosk payment-attempt state and a partial unique index; `0019` adds bounded reconciliation state and timing. The earlier lifecycle dry-run predates the booking-index import; lifecycle apply must be replanned/recounted and remains separately gated.
+- Migrations `0010`-`0020` are deployed to park-test. `0018` adds safe kiosk payment-attempt state and a partial unique index, `0019` adds bounded reconciliation state and timing, and `0020` adds the least-privilege provisional kiosk handoff state. The earlier lifecycle dry-run predates the booking-index import; lifecycle apply must be replanned/recounted and remains separately gated.
 
 ## Durable Documents And History
 
