@@ -25,6 +25,13 @@ const filesToCheck = [
   'skills/aws-project-infrastructure/references/tagging.md',
 ];
 
+const activeConfigDirectory = path.join(root, 'infra', 'config');
+const expectedJumpYardTags = {
+  'WRLDS:Client': 'JumpYard',
+  'WRLDS:CostCenter': 'JumpYard',
+  'WRLDS:ManagedBy': 'cdk',
+};
+
 let failures = 0;
 
 function fail(message) {
@@ -45,6 +52,27 @@ for (const relativePath of filesToCheck) {
       fail(`${relativePath} missing ${tag}`);
     }
   }
+}
+
+for (const filename of fs.readdirSync(activeConfigDirectory)) {
+  if (!filename.endsWith('.json') || filename === 'dev.example.json') {
+    continue;
+  }
+
+  const relativePath = path.join('infra', 'config', filename);
+  const config = JSON.parse(fs.readFileSync(path.join(root, relativePath), 'utf8'));
+
+  for (const [tagKey, expectedValue] of Object.entries(expectedJumpYardTags)) {
+    if (config.tags?.[tagKey] !== expectedValue) {
+      fail(`${relativePath} must set ${tagKey}=${expectedValue}`);
+    }
+  }
+}
+
+const deploymentAccessStackPath = path.join(root, 'infra', 'lib', 'github-deployment-access-stack.ts');
+const deploymentAccessStack = fs.readFileSync(deploymentAccessStackPath, 'utf8');
+if (!deploymentAccessStack.includes("'WRLDS:CostCenter': 'JumpYard'")) {
+  fail('infra/lib/github-deployment-access-stack.ts must set WRLDS:CostCenter=JumpYard');
 }
 
 if (failures > 0) {

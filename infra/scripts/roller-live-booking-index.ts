@@ -133,7 +133,7 @@ function validateConfig(config: JumpYardCloudConfig): void {
     "WRLDS:ManagedBy": "cdk",
     "WRLDS:DataClassification": "confidential",
     "WRLDS:Exportable": "true",
-    "WRLDS:CostCenter": "unassigned",
+    "WRLDS:CostCenter": "JumpYard",
     "WRLDS:CreatedBy": "love",
   };
   const errors: string[] = [];

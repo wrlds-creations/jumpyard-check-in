@@ -20,7 +20,7 @@ const REQUIRED_TAGS: Record<string, string> = {
   "WRLDS:ManagedBy": "cdk",
   "WRLDS:DataClassification": "confidential",
   "WRLDS:Exportable": "true",
-  "WRLDS:CostCenter": "unassigned",
+  "WRLDS:CostCenter": "JumpYard",
   "WRLDS:CreatedBy": "love",
 };
 

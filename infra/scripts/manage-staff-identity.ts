@@ -371,7 +371,7 @@ function validateParkTestConfig(config: DeployConfig): void {
     config.tags["WRLDS:Repository"] === "wrlds-creations/jumpyard-check-in",
     config.tags["WRLDS:DataClassification"] === "confidential",
     config.tags["WRLDS:Exportable"] === "true",
-    config.tags["WRLDS:CostCenter"] === "unassigned",
+    config.tags["WRLDS:CostCenter"] === "JumpYard",
   ];
   if (failures.some((valid) => !valid)) {
     throw new PublicError("Config is not the reviewed T0194 park-test target.");
@@ -1489,7 +1489,7 @@ function fakeConfig(overrides: Partial<DeployConfig> = {}): DeployConfig {
     },
     tags: {
       "WRLDS:Client": "JumpYard",
-      "WRLDS:CostCenter": "unassigned",
+      "WRLDS:CostCenter": "JumpYard",
       "WRLDS:DataClassification": "confidential",
       "WRLDS:Environment": EXPECTED_ENVIRONMENT,
       "WRLDS:Exportable": "true",

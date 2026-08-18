@@ -70,7 +70,7 @@
     "WRLDS:ManagedBy": "cdk",
     "WRLDS:DataClassification": "internal",
     "WRLDS:Exportable": "true",
-    "WRLDS:CostCenter": "unassigned",
+    "WRLDS:CostCenter": "JumpYard",
     "WRLDS:CreatedBy": "love"
   }
 }
