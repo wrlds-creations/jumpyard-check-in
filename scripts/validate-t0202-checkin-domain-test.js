@@ -55,7 +55,7 @@ function validateDomainContract() {
   const contract = readJson('config/production-domains.json');
   const alias = contract.controlledParkTestAlias;
   assert.equal(contract.schemaVersion, 3);
-  assert.equal(contract.state, 'pilot-production-approved-guest-live-staff-pending-protected-rollout');
+  assert.equal(contract.state, 'pilot-production-live-manual-and-rollback-evidence-pending');
   assert.equal(contract.technicalBackendEnvironment, 'park-test');
   assert.equal(alias.approved, true);
   assert.equal(alias.approvedByIssue, 220);
@@ -86,10 +86,10 @@ function validateDomainContract() {
   assert.equal(contract.cutover.owner, 'issue-264');
   assert.equal(contract.pilotProduction.approvedByIssue, 264);
   assert.deepStrictEqual(contract.parkTestBaseline.allowedCorsOrigins, EXPECTED_ORIGINS);
-  assert.equal(contract.surfaces.guest.cloudflarePages.applicationDeployments, 2);
-  assert.equal(contract.surfaces.guest.cloudflarePages.status, 'pilot-production-guest-active');
-  assert.equal(contract.surfaces.staffAdmin.cloudflarePages.applicationDeployments, 0);
-  assert.equal(contract.surfaces.staffAdmin.cloudflarePages.status, 'pilot-production-approved-pending-deployment');
+  assert.ok(contract.surfaces.guest.cloudflarePages.applicationDeployments >= 3);
+  assert.equal(contract.surfaces.guest.cloudflarePages.status, 'pilot-production-active');
+  assert.ok(contract.surfaces.staffAdmin.cloudflarePages.applicationDeployments >= 1);
+  assert.equal(contract.surfaces.staffAdmin.cloudflarePages.status, 'pilot-production-active');
 }
 
 function validateWorkflow() {

@@ -37,7 +37,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 ## Durable Architecture Facts
 
 - Frontend apps must not call Roller directly in the real production architecture.
-- Public pilot hosts are `checkin.jumpyard.se` and `staff-checkin.jumpyard.se`; DNS/TLS are active. Guest passed Love's 2026-08-17 iPhone/Apple Pay test. #264 approves both on Park API; staff promotion is pending. [Contract](config/production-domains.json).
+- Public pilot hosts `checkin.jumpyard.se` and `staff-checkin.jumpyard.se` are live on protected Park release `fc8e1c4`; guest/staff, Cognito, and Apple association checks passed. iPhone payment and credentialed admin checks remain. [Contract](config/production-domains.json).
 - Roller remains the source of truth for bookings, products, payments, and ticket redemption.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, session status, idempotency, audit events, and guest messaging state.
 - The production booking index uses an approved initial backfill, scheduled morning seed, idempotent webhook updates/reconciliation, and live REST confirmation. Roller remains authoritative; Aurora is the operational cache.

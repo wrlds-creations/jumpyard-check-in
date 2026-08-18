@@ -85,8 +85,8 @@ function validateContract(contract) {
   add(contract?.environment === 'nacka-pilot-production', 'environment must be Nacka pilot production');
   add(contract?.technicalBackendEnvironment === 'park-test', 'technical backend environment must remain park-test');
   add(
-    contract?.state === 'pilot-production-approved-guest-live-staff-pending-protected-rollout',
-    'state must record the approved pilot-production rollout posture',
+    contract?.state === 'pilot-production-live-manual-and-rollback-evidence-pending',
+    'state must record the live pilot-production rollout posture',
   );
   add(contract?.zone === 'jumpyard.se', 'zone must be jumpyard.se');
   add(sameValues(contract?.productionWebOrigins, EXPECTED_ORIGINS), 'productionWebOrigins must contain exactly the approved guest and staff origins');
@@ -109,27 +109,19 @@ function validateContract(contract) {
     add(pages?.projectName === expected.projectName, `surfaces.${key}.cloudflarePages.projectName is invalid`);
     add(pages?.pagesDevOrigin === expected.pagesDevOrigin, `surfaces.${key}.cloudflarePages.pagesDevOrigin is invalid`);
     add(pages?.gitProviderConnected === false, `surfaces.${key}.cloudflarePages must not connect a Git provider`);
-    if (key === 'guest') {
-      add(pages?.applicationDeployments === 2, 'surfaces.guest.cloudflarePages must record the initial protected deployment and re-promotion');
-      add(
-        pages?.status === 'pilot-production-guest-active',
-        'surfaces.guest.cloudflarePages.status must record the active pilot-production guest origin',
-      );
-      add(
-        pages?.deploymentPolicy === 'selected-immutable-park-pilot-artifact-only',
-        'surfaces.guest.cloudflarePages.deploymentPolicy is invalid',
-      );
-    } else {
-      add(pages?.applicationDeployments === 0, `surfaces.${key}.cloudflarePages must remain empty`);
-      add(
-        pages?.status === 'pilot-production-approved-pending-deployment',
-        `surfaces.${key}.cloudflarePages.status must record the pending protected deployment`,
-      );
-      add(
-        pages?.deploymentPolicy === 'selected-immutable-park-pilot-artifact-only',
-        `surfaces.${key}.cloudflarePages.deploymentPolicy is invalid`,
-      );
-    }
+    const minimumDeployments = key === 'guest' ? 3 : 1;
+    add(
+      Number.isInteger(pages?.applicationDeployments) && pages.applicationDeployments >= minimumDeployments,
+      `surfaces.${key}.cloudflarePages must record the protected #264 promotion`,
+    );
+    add(
+      pages?.status === 'pilot-production-active',
+      `surfaces.${key}.cloudflarePages.status must record the active pilot-production origin`,
+    );
+    add(
+      pages?.deploymentPolicy === 'selected-immutable-park-pilot-artifact-only',
+      `surfaces.${key}.cloudflarePages.deploymentPolicy is invalid`,
+    );
     add(
       pages?.createdBy === 'T0199-issue-206-explicit-scope-extension',
       `surfaces.${key}.cloudflarePages.createdBy is invalid`,
@@ -293,8 +285,8 @@ function runNegativeCases(validContract) {
   expectInvalid('duplicate origin', candidate, 'exactly the approved guest and staff origins');
 
   candidate = clone(validContract);
-  candidate.surfaces.guest.cloudflarePages.applicationDeployments = 0;
-  expectInvalid('application deployment evidence', candidate, 'must record the initial protected deployment and re-promotion');
+  candidate.surfaces.guest.cloudflarePages.applicationDeployments = 2;
+  expectInvalid('application deployment evidence', candidate, 'must record the protected #264 promotion');
 
   candidate = clone(validContract);
   candidate.surfaces.guest.cloudflarePages.customDomainAssociation.present = false;
