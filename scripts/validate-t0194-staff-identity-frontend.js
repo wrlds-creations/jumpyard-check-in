@@ -221,11 +221,12 @@ function validateQueueRequestStability(page) {
 
   const refresh = section(
     page,
-    'const refreshSessions = useCallback(async () => {',
+    'const refreshSessions = useCallback(async ({ showLoading = true }: { showLoading?: boolean } = {}) => {',
     'const openHandoffPayload',
     'staff queue refresh',
   );
   assert.match(refresh, /const requestedAuth = authRef\.current/);
+  assert.match(refresh, /if \(showLoading\) setState\("loading"\)/);
   assert.match(
     refresh,
     /queueLastRequestedKeyRef\.current = queueRequestKey\(requestedAuth, queueQueryVersionRef\.current\)/,

@@ -87,4 +87,3 @@ The Park verification origins and kiosk CORS origin stay present. The generated 
 - rollback and re-promotion run IDs for both target groups;
 - Cloudflare Git-source disablement readback;
 - exact IDs and deletion readback for the two retired dev Pages projects.
-
