@@ -716,8 +716,8 @@ async function enrichWebhookEvent(intake, correlationId) {
       throw error;
     }
 
-    await upsertWebhookBooking(booking, config.env, scope.venueId);
-    await deleteMissingWebhookChildren(booking);
+    const bookingItemKeys = await upsertWebhookBooking(booking, config.env, scope.venueId);
+    await deleteMissingWebhookChildren(booking, bookingItemKeys);
     const guestProfile = await upsertWebhookGuestProfile(booking);
     await reconcilePrepaymentDraftFromPaidBooking(booking, 'roller_webhook_enrichment');
     await updateWebhookEventStatus(intake.eventId, 'processed', null, true);
@@ -1468,7 +1468,7 @@ function splitPersonName(value) {
 }
 
 async function upsertWebhookBooking(booking, rollerEnv, venueId) {
-  if (!booking.rollerUniqueId || !booking.bookingReference) return;
+  if (!booking.rollerUniqueId || !booking.bookingReference) return [];
 
   const bookingDates = booking.items.map((item) => item.bookingDate).filter(Boolean);
   const startTimes = booking.items.map((item) => item.startTime).filter(Boolean);
@@ -1572,21 +1572,27 @@ async function upsertWebhookBooking(booking, rollerEnv, venueId) {
     ],
   );
 
+  const bookingItemKeys = [];
   for (const item of booking.items) {
     const bookingItemKey = await upsertWebhookBookingItem(booking.rollerUniqueId, item);
+    bookingItemKeys.push(bookingItemKey);
 
     for (const ticket of item.tickets ?? []) {
       await upsertWebhookTicket(booking.rollerUniqueId, bookingItemKey, item, ticket);
     }
   }
+
+  return bookingItemKeys;
 }
 
-async function deleteMissingWebhookChildren(booking) {
+async function deleteMissingWebhookChildren(booking, retainedBookingItemKeys = null) {
   const ticketIds = booking.items
     .flatMap((item) => item.tickets ?? [])
     .map((ticket) => stringOrNull(ticket.ticketId))
     .filter(Boolean);
-  const bookingItemKeys = booking.items.map((item) => localBookingItemKey(booking.rollerUniqueId, item));
+  const bookingItemKeys = Array.isArray(retainedBookingItemKeys)
+    ? retainedBookingItemKeys
+    : booking.items.map((item) => localBookingItemKey(booking.rollerUniqueId, item));
 
   await deleteMissingWebhookRows(
     'roller_booking_tickets',
@@ -1653,8 +1659,36 @@ async function markCancelledBookingNotFound(intake, rollerEnvironment) {
 
 async function upsertWebhookBookingItem(rollerUniqueId, item) {
   const bookingItemKey = localBookingItemKey(rollerUniqueId, item);
+  const hasBookingItemId = Boolean(stringOrNull(item.bookingItemId));
+  const conflictClause = hasBookingItemId
+    ? `ON CONFLICT (booking_item_id) WHERE booking_item_id IS NOT NULL DO UPDATE SET
+      roller_unique_id = EXCLUDED.roller_unique_id,
+      product_id = EXCLUDED.product_id,
+      parent_product_id = EXCLUDED.parent_product_id,
+      product_name = COALESCE(EXCLUDED.product_name, jumpyard.roller_booking_items.product_name),
+      parent_product_name = COALESCE(EXCLUDED.parent_product_name, jumpyard.roller_booking_items.parent_product_name),
+      quantity = EXCLUDED.quantity,
+      booking_date = EXCLUDED.booking_date,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      item_summary = EXCLUDED.item_summary,
+      updated_at = now()
+    WHERE jumpyard.roller_booking_items.roller_unique_id = EXCLUDED.roller_unique_id`
+    : `ON CONFLICT (booking_item_key) DO UPDATE SET
+      roller_unique_id = EXCLUDED.roller_unique_id,
+      booking_item_id = EXCLUDED.booking_item_id,
+      product_id = EXCLUDED.product_id,
+      parent_product_id = EXCLUDED.parent_product_id,
+      product_name = COALESCE(EXCLUDED.product_name, jumpyard.roller_booking_items.product_name),
+      parent_product_name = COALESCE(EXCLUDED.parent_product_name, jumpyard.roller_booking_items.parent_product_name),
+      quantity = EXCLUDED.quantity,
+      booking_date = EXCLUDED.booking_date,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      item_summary = EXCLUDED.item_summary,
+      updated_at = now()`;
 
-  await executeStatement(
+  const result = await executeStatement(
     `INSERT INTO jumpyard.roller_booking_items (
       booking_item_key,
       roller_unique_id,
@@ -1683,19 +1717,8 @@ async function upsertWebhookBookingItem(rollerUniqueId, item) {
       CAST(:endTime AS time),
       CAST(:itemSummary AS jsonb)
     )
-    ON CONFLICT (booking_item_key) DO UPDATE SET
-      roller_unique_id = EXCLUDED.roller_unique_id,
-      booking_item_id = EXCLUDED.booking_item_id,
-      product_id = EXCLUDED.product_id,
-      parent_product_id = EXCLUDED.parent_product_id,
-      product_name = COALESCE(EXCLUDED.product_name, jumpyard.roller_booking_items.product_name),
-      parent_product_name = COALESCE(EXCLUDED.parent_product_name, jumpyard.roller_booking_items.parent_product_name),
-      quantity = EXCLUDED.quantity,
-      booking_date = EXCLUDED.booking_date,
-      start_time = EXCLUDED.start_time,
-      end_time = EXCLUDED.end_time,
-      item_summary = EXCLUDED.item_summary,
-      updated_at = now()`,
+    ${conflictClause}
+    RETURNING booking_item_key`,
     [
       stringParameter('bookingItemKey', bookingItemKey),
       stringParameter('rollerUniqueId', rollerUniqueId),
@@ -1718,7 +1741,14 @@ async function upsertWebhookBookingItem(rollerUniqueId, item) {
     ],
   );
 
-  return bookingItemKey;
+  const persistedBookingItemKey = result.records?.[0]?.[0]?.stringValue ?? null;
+  if (!persistedBookingItemKey) {
+    const error = new Error('Roller booking item id is already owned by another booking.');
+    error.code = 'webhook_booking_item_identity_conflict';
+    throw error;
+  }
+
+  return persistedBookingItemKey;
 }
 
 async function upsertWebhookTicket(rollerUniqueId, bookingItemKey, item, ticket) {
@@ -2362,6 +2392,7 @@ function jsonResponse(statusCode, correlationId, payload) {
 
 exports.__test = {
   applyWebhookBookingScope,
+  deleteMissingWebhookChildren,
   extractVenueId,
   getWebhookAuthToken,
   handleWebhookIntake,
@@ -2371,6 +2402,7 @@ exports.__test = {
   parseWebhookQueueMessage,
   processWebhookEventById,
   requestRoller,
+  upsertWebhookBookingItem,
   reset() {
     cachedWebhookToken = null;
     cachedWebhookTokenExpiresAt = 0;
