@@ -1,5 +1,7 @@
 # T0191 Park-Test Pre-Production Contract
 
+> Superseded for the Nacka pilot on 2026-08-18 by D0189 and [issue #264](https://github.com/wrlds-creations/jumpyard-check-in/issues/264). The existing technical environment name, resources, tags, data, and safeguards remain `park-test`, but its approved business role is now Nacka pilot production. No separate AWS backend will be created for this single-park pilot. The original T0191 contract below is retained as historical decision evidence; see [the current #264 contract](gh-264-nacka-pilot-production.md).
+
 Date: 2026-07-10
 
 Ticket: `T0191`
@@ -89,7 +91,7 @@ The current park-test identity remains:
 | Managed by | `cdk` |
 | Data classification | `confidential` |
 | Exportable | `true` |
-| Cost center | `unassigned` |
+| Cost center | `JumpYard` (updated by issue #233) |
 
 Before T0205 creates anything, production must receive its own confirmed account, region, environment name, prefix, owner, repository, tags, data classification, exportability, cost center, secrets, domain, rollback, and budget approvals. Park-test values are not automatic production approval.
 

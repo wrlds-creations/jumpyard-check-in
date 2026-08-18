@@ -36,6 +36,7 @@ const EXPECTED_PARK_TEST_ORIGINS = [
   'https://jumpyard-checkin-admin-park-test.pages.dev',
   'https://jumpyard-check-in-kiosk.pages.dev',
   'https://checkin.jumpyard.se',
+  'https://staff-checkin.jumpyard.se',
 ];
 
 function readJson(relativePath) {
@@ -79,12 +80,13 @@ function validateContract(contract) {
     if (!condition) errors.push(message);
   };
 
-  add(contract?.schemaVersion === 2, 'schemaVersion must be 2');
+  add(contract?.schemaVersion === 3, 'schemaVersion must be 3');
   add(contract?.contract === 'jumpyard-check-in-production-web-domains', 'contract name is invalid');
-  add(contract?.environment === 'production', 'environment must be production');
+  add(contract?.environment === 'nacka-pilot-production', 'environment must be Nacka pilot production');
+  add(contract?.technicalBackendEnvironment === 'park-test', 'technical backend environment must remain park-test');
   add(
-    contract?.state === 'guest-controlled-park-test-alias-active-apple-pay-passed',
-    'state must record the active controlled guest alias with Love\'s Apple Pay result passed',
+    contract?.state === 'pilot-production-approved-guest-live-staff-pending-protected-rollout',
+    'state must record the approved pilot-production rollout posture',
   );
   add(contract?.zone === 'jumpyard.se', 'zone must be jumpyard.se');
   add(sameValues(contract?.productionWebOrigins, EXPECTED_ORIGINS), 'productionWebOrigins must contain exactly the approved guest and staff origins');
@@ -110,16 +112,23 @@ function validateContract(contract) {
     if (key === 'guest') {
       add(pages?.applicationDeployments === 2, 'surfaces.guest.cloudflarePages must record the initial protected deployment and re-promotion');
       add(
-        pages?.status === 'controlled-park-test-alias-active',
-        'surfaces.guest.cloudflarePages.status must record the active controlled alias',
+        pages?.status === 'pilot-production-guest-active',
+        'surfaces.guest.cloudflarePages.status must record the active pilot-production guest origin',
       );
       add(
-        pages?.deploymentPolicy === 'selected-immutable-park-test-phone-artifact-only',
+        pages?.deploymentPolicy === 'selected-immutable-park-pilot-artifact-only',
         'surfaces.guest.cloudflarePages.deploymentPolicy is invalid',
       );
     } else {
       add(pages?.applicationDeployments === 0, `surfaces.${key}.cloudflarePages must remain empty`);
-      add(pages?.status === 'created-empty', `surfaces.${key}.cloudflarePages.status must be created-empty`);
+      add(
+        pages?.status === 'pilot-production-approved-pending-deployment',
+        `surfaces.${key}.cloudflarePages.status must record the pending protected deployment`,
+      );
+      add(
+        pages?.deploymentPolicy === 'selected-immutable-park-pilot-artifact-only',
+        `surfaces.${key}.cloudflarePages.deploymentPolicy is invalid`,
+      );
     }
     add(
       pages?.createdBy === 'T0199-issue-206-explicit-scope-extension',
@@ -169,10 +178,13 @@ function validateContract(contract) {
 
   add(contract?.api?.customHostname === null, 'no API custom hostname is approved');
   add(contract?.api?.customHostnameApproved === false, 'API custom hostname approval must stay false');
-  add(contract?.api?.browserBaseUrl === null, 'production API base URL must stay unset until production creation');
   add(
-    contract?.api?.browserBaseUrlSource === 'production-api-created-by-separately-approved-issue',
-    'production API base URL source is invalid',
+    contract?.api?.browserBaseUrl === 'https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com',
+    'pilot-production API base URL must be the existing Park API',
+  );
+  add(
+    contract?.api?.browserBaseUrlSource === 'existing-park-backend-approved-as-nacka-pilot-production-by-issue-264',
+    'pilot-production API base URL source is invalid',
   );
   add(sameValues(contract?.api?.corsAllowedOrigins, EXPECTED_ORIGINS), 'production CORS origins must match the two approved web origins exactly');
   add(
@@ -189,11 +201,20 @@ function validateContract(contract) {
   add(contract?.dns?.publicReadbackVerified === true, 'public DNS readback must be verified');
   add(contract?.dns?.ttlSeconds === 3600, 'DNS TTL must match public readback');
   add(contract?.dns?.verifiedAt === '2026-07-16T17:09:40+02:00', 'DNS verification time is invalid');
-  add(contract?.cutover?.authorized === false, 'production cutover is not authorized');
-  add(contract?.cutover?.owner === 'T0205-or-separately-approved-production-issue', 'cutover owner is invalid');
+  add(contract?.cutover?.authorized === true, 'Nacka pilot-production cutover must be authorized');
+  add(contract?.cutover?.owner === 'issue-264', 'cutover owner is invalid');
+  add(contract?.pilotProduction?.approved === true, 'pilot production must be approved');
+  add(contract?.pilotProduction?.approvedByIssue === 264, 'pilot production issue owner is invalid');
+  add(contract?.pilotProduction?.technicalEnvironment === 'park-test', 'pilot technical environment is invalid');
+  add(contract?.pilotProduction?.createsNewBackend === false, 'pilot production must not create a new backend');
+  add(contract?.pilotProduction?.renamesExistingResources === false, 'pilot production must not rename resources');
+  add(
+    sameValues(contract?.pilotProduction?.publicOrigins, EXPECTED_ORIGINS),
+    'pilot production origins must match the approved public origins',
+  );
   add(contract?.parkTestBaseline?.mustRemainUnchanged === false, 'park-test must record the approved CORS-only change');
   add(
-    contract?.parkTestBaseline?.approvedChange === 'add-checkin.jumpyard.se-cors-origin-only',
+    contract?.parkTestBaseline?.approvedChange === 'nacka-pilot-production-public-origins-and-staff-cognito',
     'park-test approved change is invalid',
   );
   add(sameValues(contract?.parkTestBaseline?.allowedCorsOrigins, EXPECTED_PARK_TEST_ORIGINS), 'park-test baseline origins are invalid');
@@ -305,16 +326,18 @@ function validateParkTestBaseline(contract) {
   assert.equal(parkTest.guestEmail.checkinBaseUrl, `${EXPECTED_PARK_TEST_ORIGINS[0]}/`);
   assert.deepStrictEqual(parkTest.staffIdentity.callbackUrls, [
     `${EXPECTED_PARK_TEST_ORIGINS[1]}/auth/callback`,
+    `${EXPECTED_ORIGINS[1]}/auth/callback`,
   ]);
   assert.deepStrictEqual(parkTest.staffIdentity.logoutUrls, [
     `${EXPECTED_PARK_TEST_ORIGINS[1]}/admin`,
+    `${EXPECTED_ORIGINS[1]}/admin`,
   ]);
   assert.deepStrictEqual(contract.parkTestBaseline.allowedCorsOrigins, parkTest.api.allowedCorsOrigins);
 
   const contractText = fs.readFileSync(path.join(root, CONTRACT_PATH), 'utf8');
   const parkTestText = fs.readFileSync(path.join(root, 'infra/config/park-test.json'), 'utf8');
   assert.ok(parkTestText.includes(EXPECTED_ORIGINS[0]), 'park-test config must include the approved controlled guest origin');
-  assert.ok(!parkTestText.includes(EXPECTED_ORIGINS[1]), 'park-test config must not include the undeployed staff/admin origin');
+  assert.ok(parkTestText.includes(EXPECTED_ORIGINS[1]), 'park-test config must include the approved staff/admin origin');
   for (const blocked of ['api-checkin.jumpyard.se']) {
     assert.ok(!contractText.includes(blocked), `production domain contract must not expand into ${blocked}`);
   }
@@ -332,7 +355,7 @@ function main() {
   assert.deepStrictEqual(errors, [], `production domain contract is invalid:\n- ${errors.join('\n- ')}`);
   runNegativeCases(contract);
   validateParkTestBaseline(contract);
-  console.log('[pass] T0199 production web-domain contract plus issue #220 controlled guest-alias exception');
+  console.log('[pass] T0199 domains plus issue #264 Nacka pilot-production decision and issue #220 evidence');
 }
 
 main();

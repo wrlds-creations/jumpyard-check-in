@@ -1,5 +1,7 @@
 # T0192 Park-Test Foundation Qualification
 
+> Current-role update, 2026-08-18: D0189/[issue #264](https://github.com/wrlds-creations/jumpyard-check-in/issues/264) keeps this qualified technical `park-test` foundation unchanged but approves it as Nacka's sharp pilot-production backend. References below to a later separate production backend are historical and are superseded for the single-park pilot. See [the current contract](gh-264-nacka-pilot-production.md).
+
 ## Plain-Language Outcome
 
 The existing park-test environment is now qualified as the sole Live-backed pre-production foundation for the remaining Sprint 3 work. T0192 repaired the missing request-item date protection, deployed T0190's corrected master-stop and venue model as one coherent change, disabled an inapplicable Playground-only schedule, reconciled the repository with the already deployed CORS interface, and proved the resulting stack through live inventory, diff, deploy, readback, negative testing, rollback review, and drift detection.

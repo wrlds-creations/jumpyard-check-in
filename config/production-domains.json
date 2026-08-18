@@ -1,8 +1,9 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "contract": "jumpyard-check-in-production-web-domains",
-  "environment": "production",
-  "state": "guest-controlled-park-test-alias-active-apple-pay-passed",
+  "environment": "nacka-pilot-production",
+  "technicalBackendEnvironment": "park-test",
+  "state": "pilot-production-approved-guest-live-staff-pending-protected-rollout",
   "zone": "jumpyard.se",
   "productionWebOrigins": [
     "https://checkin.jumpyard.se",
@@ -20,8 +21,8 @@
         "pagesDevOrigin": "https://jumpyard-check-in-production.pages.dev",
         "gitProviderConnected": false,
         "applicationDeployments": 2,
-        "status": "controlled-park-test-alias-active",
-        "deploymentPolicy": "selected-immutable-park-test-phone-artifact-only",
+        "status": "pilot-production-guest-active",
+        "deploymentPolicy": "selected-immutable-park-pilot-artifact-only",
         "createdBy": "T0199-issue-206-explicit-scope-extension",
         "customDomainAssociation": {
           "hostname": "checkin.jumpyard.se",
@@ -54,7 +55,8 @@
         "pagesDevOrigin": "https://jumpyard-checkin-admin-production.pages.dev",
         "gitProviderConnected": false,
         "applicationDeployments": 0,
-        "status": "created-empty",
+        "status": "pilot-production-approved-pending-deployment",
+        "deploymentPolicy": "selected-immutable-park-pilot-artifact-only",
         "createdBy": "T0199-issue-206-explicit-scope-extension",
         "customDomainAssociation": {
           "hostname": "staff-checkin.jumpyard.se",
@@ -88,8 +90,8 @@
   "api": {
     "customHostname": null,
     "customHostnameApproved": false,
-    "browserBaseUrl": null,
-    "browserBaseUrlSource": "production-api-created-by-separately-approved-issue",
+    "browserBaseUrl": "https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com",
+    "browserBaseUrlSource": "existing-park-backend-approved-as-nacka-pilot-production-by-issue-264",
     "corsAllowedOrigins": [
       "https://checkin.jumpyard.se",
       "https://staff-checkin.jumpyard.se"
@@ -107,15 +109,39 @@
     "verifiedAt": "2026-07-16T17:09:40+02:00"
   },
   "cutover": {
-    "authorized": false,
-    "owner": "T0205-or-separately-approved-production-issue",
+    "authorized": true,
+    "owner": "issue-264",
     "requires": [
-      "T0204-GO",
-      "approved-production-resources-and-delivery",
-      "created-and-verified-cloudflare-pages-targets",
-      "reviewed-exact-dns-records",
-      "approved-production-api-and-cors"
+      "successful-main-release-artifact",
+      "protected-park-backend-promotion-with-public-cors-and-cognito-origins",
+      "verified-park-test-frontends",
+      "protected-public-phone-and-admin-promotion",
+      "exact-cloudflare-domain-and-commit-readback",
+      "no-rebuild-rollback-proof"
     ]
+  },
+  "pilotProduction": {
+    "approved": true,
+    "approvedByIssue": 264,
+    "approvedAt": "2026-08-18",
+    "businessRole": "nacka-pilot-production",
+    "technicalEnvironment": "park-test",
+    "awsAccount": "376129878018",
+    "awsRegion": "eu-north-1",
+    "apiOrigin": "https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com",
+    "rollerEnvironment": "live",
+    "rollerVenueId": "50871",
+    "createsNewBackend": false,
+    "renamesExistingResources": false,
+    "futureMultiParkArchitectureDeferred": true,
+    "publicOrigins": [
+      "https://checkin.jumpyard.se",
+      "https://staff-checkin.jumpyard.se"
+    ],
+    "promotionPolicy": "build-on-main-promote-selected-artifact-through-protected-approval",
+    "guestStatus": "active-on-selected-park-artifact",
+    "staffAdminStatus": "pending-first-protected-deployment",
+    "guestMessagingOpened": false
   },
   "controlledParkTestAlias": {
     "approved": true,
@@ -157,7 +183,7 @@
   },
   "parkTestBaseline": {
     "mustRemainUnchanged": false,
-    "approvedChange": "add-checkin.jumpyard.se-cors-origin-only",
+    "approvedChange": "nacka-pilot-production-public-origins-and-staff-cognito",
     "apiOrigin": "https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com",
     "phoneOrigin": "https://jumpyard-check-in-park-test.pages.dev",
     "staffAdminOrigin": "https://jumpyard-checkin-admin-park-test.pages.dev",
@@ -165,7 +191,8 @@
       "https://jumpyard-check-in-park-test.pages.dev",
       "https://jumpyard-checkin-admin-park-test.pages.dev",
       "https://jumpyard-check-in-kiosk.pages.dev",
-      "https://checkin.jumpyard.se"
+      "https://checkin.jumpyard.se",
+      "https://staff-checkin.jumpyard.se"
     ]
   }
 }

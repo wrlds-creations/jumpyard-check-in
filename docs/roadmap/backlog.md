@@ -20,7 +20,7 @@ The latest supplied cross-project roadmap is [jumpyard-next-sprint-roadmap.pdf](
 - The production path remains `check-in app -> JumpYard Cloud/server API -> Roller API`; frontends do not call Roller directly.
 - Roller remains authoritative. Aurora is an operational cache for lookup, scheduling, handoff, audit, and recovery.
 - The complete Sprint 3 production target includes approved initial booking backfill, scheduled morning seed, Roller webhook processing/reconciliation, normalized Aurora state, and one automatic transactional email link 30 minutes before selected booking time. SMS is deferred and does not block Sprint 3.
-- Dev/Playground stays available unless an approved Issue explicitly changes it. Existing park-test is the sole Live-backed pre-production environment; production is separate and follows a successful complete rehearsal and GO decision.
+- Dev/Playground stays available unless an approved Issue explicitly changes it. For the single-park Nacka pilot, the existing technically named `park-test` environment is the sharp pilot-production backend under D0189/#264. Future multi-park production topology remains a separate decision and approval.
 - The current Nacka park-test window remains open until Love explicitly approves closing it. Documentation closeout alone is not a close-window deployment.
 - AWS resource changes, Roller Live reads/writes, webhook registration/processing, payment, redeem, guest messaging, production domains, deployment, and cutover each require explicit approved scope.
 - Refund/cancel after an internal Live payment remains manual outside the app unless a later approved Issue explicitly adds it.

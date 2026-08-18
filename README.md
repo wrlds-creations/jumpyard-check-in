@@ -8,7 +8,7 @@ JumpYard Check-in contains three Next.js apps for the JumpYard Next check-in flo
 
 The current Sprint 3 workstream covers the phone app, the admin app, and their required JumpYard Cloud backend. Operational planning lives in the private [JumpYard Check-in GitHub Project](https://github.com/orgs/wrlds-creations/projects/5). The kiosk folder is maintained as a separate implementation workstream. JumpyBoard/AirHive and activity-data implementation belongs to a separate Connected Experience project/folder.
 
-The complete Sprint 3 target also covers the background production chain: approved initial booking backfill, scheduled morning seed, Roller webhook updates and reconciliation, minimal normalized booking state in Aurora, and automatic SMS plus email with a secure check-in link 30 minutes before the selected booking time. These production capabilities are planned, not currently enabled by the park-test posture.
+The complete Sprint 3 target also covers the background pilot-production chain: approved initial booking backfill, scheduled morning seed, Roller webhook updates and reconciliation, minimal normalized booking state in Aurora, and a separately gated transactional email with a secure check-in link 30 minutes before the selected booking time. The existing technically named `park-test` backend is Nacka's approved pilot production; general guest messaging remains closed.
 
 ## WRLDS Workflow
 
@@ -26,7 +26,7 @@ Project draft issue -> approved repository issue -> branch -> PR -> main
 - Repository Markdown owns durable project facts, decisions, external gates, guardrails, and useful legacy history.
 - Use `AWS_RESOURCES.md` and `skills/aws-project-infrastructure/` before AWS work.
 - Use `references/github-collaboration-workflow.md` and `skills/github-collaboration/` for Project, issue, branch, PR, migration, or integration work.
-- Local development stays local, but routine park-test deployment is GitHub-native: reviewed `main` commits create immutable artifacts, a read-only plan precedes protected approval, and the selected artifact is deployed or rolled back without rebuilding.
+- Local development stays local. Reviewed `main` commits automatically create immutable Park artifacts but deploy nothing. A read-only plan and protected approval precede Park verification and the separate public Nacka phone/admin promotion; rollback never rebuilds.
 
 New work does not receive a manual `T####` ID. Existing T/FU/TBD/Gate IDs remain legacy references in the migration record and history.
 
@@ -83,9 +83,9 @@ The `infra/` CDK app has deployed `dev` and `park-test` environments. `infra/con
 - `jumpyard-checkin-phone` is configured for static export with unoptimized images.
 - `jumpyard-checkin-admin` is configured for static export and Cloudflare Pages.
 - `jumpyard-checkin-kiosk` currently uses the default Next.js config.
-- Dev and park-test Cloudflare Pages targets exist for phone/admin. T0199 also created two empty production Pages projects for `checkin.jumpyard.se` and `staff-checkin.jumpyard.se`; their exact CNAME records and SSL are active, while application deployments, the production API, and traffic remain absent. See [the T0199 runbook](docs/t0199-production-domains.md).
+- Dev and Park-test Cloudflare Pages targets exist for phone/admin. T0199 created the public Pages projects for `checkin.jumpyard.se` and `staff-checkin.jumpyard.se`; DNS/TLS are active, the guest origin serves an earlier selected Park artifact, and the first staff artifact is pending. Both public origins use the existing Park API under issue #264. See [the Nacka pilot-production contract](docs/gh-264-nacka-pilot-production.md).
 - Kiosk deployment is owned by the separate kiosk workstream.
-- Park-test release and rollback instructions are in `docs/t0198-controlled-cicd.md`. Production is deliberately absent from those workflows.
+- Park verification release and rollback instructions are in `docs/t0198-controlled-cicd.md`; the same immutable outputs have a separate protected public phone/admin promotion. New multi-park infrastructure is deliberately absent.
 
 ## Project Documentation
 
@@ -96,6 +96,6 @@ The `infra/` CDK app has deployed `dev` and `park-test` environments. `infra/con
 - `FOLLOWUPS.md`: policy and durable external-gate pointer; operational follow-ups are Project drafts.
 - `TEST_PLAN.md`: manual and automated test plan.
 - `AWS_RESOURCES.md`: AWS inventory and required WRLDS metadata.
-- `config/production-domains.json`: canonical DNS-ready but application-unrouted production web-domain contract.
+- `config/production-domains.json`: canonical Nacka pilot-production web-domain and Park-backend contract.
 - `docs/roadmap/backlog.md`: linked Project policy, durable guardrails, external gates, and migration pointer.
 - `docs/history/`: completed legacy tickets, validation evidence, resolved follow-ups, and the one-time Project migration record.

@@ -30,7 +30,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 ## Current Product Baseline
 
 - The production architecture remains `check-in app -> JumpYard Cloud/server API -> Roller API`; Roller is authoritative and Aurora is an operational cache.
-- Existing park-test is the sole Live-backed pre-production environment. Production remains a separate future environment requiring complete rehearsal, GO, and explicit resource/cutover approval.
+- Issue #264 records the existing technically named `park-test` environment as Nacka's sharp pilot-production backend. Its AWS/resources/data stay unchanged; Park-test Pages URLs remain verification targets, and the two public origins require separate protected frontend promotion. Future multi-park architecture remains a separate decision.
 - The park-test full-flow posture remains scoped to Nacka `50871` and dates `2026-06-29` through `2026-09-30`. It permits the already approved lookup, booking/payment, add-on, staff-auth, redeem, morning index, and durable booking-webhook paths. The T0201 controlled messaging runtime is deployed, but its single-booking control is disarmed and the general guest-send gate remains closed.
 - The full-flow window remains open until Love explicitly approves closing it; documentation closeout is not a deployment instruction.
 - T0192's fail-closed venue/date/request-item model and T0193's explicit API protection are deployed. Shared-IP-safe route buckets were modeled for 120 guests in 20 minutes and a 40-device two-second burst.
@@ -79,5 +79,5 @@ Issue #212's first promotion applied `0017` and the retry alarm but exposed API 
 
 - Project drafts remain unapproved planning material, not implementation authorization.
 - External provider/approval dependencies remain under [External Gates](docs/roadmap/backlog.md#external-gates) and do not become Issues until actionable scope is approved.
-- Production stays separate. No production resource, DNS, sender, webhook, data copy, or cutover is authorized by this workflow migration.
+- No new AWS production stack, backend rename, data copy, kiosk change, or multi-park cutover is authorized. Issue #264 authorizes only the reviewed Nacka pilot-production role and its protected phone/admin public-origin rollout; live deployment evidence is still required.
 - T0195 source migration, stack rollout, regression, and lifecycle dry-run are complete. Lifecycle apply, a post-provisioning full restore rehearsal, and eventual snapshot-retention/deletion decision remain separately gated; no temporary restore compute/network cost remains.

@@ -2,9 +2,9 @@
 
 ## Outcome
 
-Park-test uses GitHub as the routine release control plane. A reviewed commit is built once, stored as one hashed artifact, planned against the current AWS target with a read-only identity, approved through the protected `park-test` environment, and deployed to AWS plus both Cloudflare Pages projects without rebuilding.
+The technically named Park environment uses GitHub as the routine release control plane. A reviewed commit is built once, stored as one hashed artifact, planned against the current AWS target with a read-only identity, approved through the protected `park-test` environment, and deployed to AWS plus both Park verification Pages projects without rebuilding.
 
-Production is not represented in these workflows. The existing Nacka `50871` full-flow profile and operating dates through `2026-09-30` are the only deployable application posture.
+D0189/issue #264 later approved this same environment as Nacka pilot production without renaming it. The existing Nacka `50871` profile and dates through `2026-09-30` remain the only deployable backend posture. `.github/workflows/deploy-checkin-domain-test.yml` separately promotes the same phone/admin outputs to the two public pilot Pages projects after Park verification; new multi-park infrastructure is not represented.
 
 ## Control Flow
 
@@ -21,7 +21,13 @@ Issue -> PR CI -> merge to main -> immutable release artifact
                    migrations (explicit) -> CDK -> Pages
                                       |
                                       v
-                          exact post-deploy checks
+                          exact Park post-deploy checks
+                                      |
+                                      v
+                       protected public phone/admin plan
+                                      |
+                                      v
+                         exact public-domain checks
 ```
 
 Rollback is the same lower half of the flow with an earlier successful artifact. It is not a fresh build of an old branch.
@@ -39,6 +45,8 @@ Rollback is the same lower half of the flow with an earlier successful artifact.
 | API | `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com` |
 | Phone Pages project | `jumpyard-check-in-park-test` |
 | Admin Pages project | `jumpyard-checkin-admin-park-test` |
+| Public phone Pages project | `jumpyard-check-in-production` |
+| Public admin Pages project | `jumpyard-checkin-admin-production` |
 | Cloudflare account | `dc0a3855bc8a0b1db8fc27ee62bf7d40` |
 
 The manifest validator fails closed if any value, approved gate, Nacka venue, or full-flow end date differs. The artifact contains the CDK cloud assembly and Lambda assets, phone/admin static outputs, exact migration runner/config/SQL, `manifest.json`, and a checksum for every file. Hidden output such as the Apple Pay association directory is included. GitHub retains the artifact for 90 days.
@@ -53,7 +61,7 @@ The manifest validator fails closed if any value, approved gate, Nacka venue, or
 
 `.github/workflows/release.yml` runs on eligible `main` commits. A manual historical build is allowed only for a full commit reachable from `main`, which makes a pre-T0198 baseline available for the first rollback rehearsal. Trusted tooling is checked out separately from the exact source so historical commits use the current artifact contract without altering their source.
 
-The release workflow validates the source, synthesizes the full-flow CDK assembly, builds phone/admin with exact public configuration, creates checksums, validates the bundle, and uploads `park-test-release-<full SHA>`. It performs no AWS, Roller, Aurora, Cloudflare, messaging, or production write.
+The release workflow validates the source, synthesizes the full-flow CDK assembly, builds phone/admin with exact Park configuration, creates checksums, validates the bundle, and uploads `park-test-release-<full SHA>`. It performs no AWS, Roller, Aurora, Cloudflare, messaging, or traffic write.
 
 ### Plan, Approval, Deploy
 
@@ -69,7 +77,11 @@ The plan job verifies the GitHub run, downloads the named artifact, validates ev
 
 The approved job downloads and validates the same artifact again. Its environment-scoped OIDC role may assume only the account's eu-north-1 CDK bootstrap roles plus the exact migration and readback permissions. It cannot be assumed from an arbitrary branch or non-environment job.
 
-Cloudflare receives only the two artifact outputs, fixed project names, `main` production branch, and exact release commit hash. `CLOUDFLARE_API_TOKEN` is a protected environment secret scoped to Account / Cloudflare Pages / Edit; the account ID is non-secret and fixed in the workflow.
+Cloudflare receives only the two artifact outputs, fixed project names, `main` production branch, and exact release commit hash. Both Park verification projects must have no Git source, preventing merges from bypassing protected promotion. `CLOUDFLARE_API_TOKEN` is a protected environment secret scoped to Account / Cloudflare Pages / Edit; the account ID is non-secret and fixed in the workflow.
+
+### Public Nacka Promotion
+
+`.github/workflows/deploy-checkin-domain-test.yml` is the protected frontend-only pilot-production path retained at its historical filename. It accepts the same release run ID, full SHA, and promote/rollback/re-promote intent, requires `I_APPROVE_NACKA_PILOT_PRODUCTION_<full SHA>`, verifies that both public Pages projects are Git-disconnected and own the exact custom domains, requires live CORS and Cognito callback readiness, and deploys `release/phone/out` plus `release/admin/out` without rebuilding. It performs no AWS mutation.
 
 ## Migrations
 
@@ -84,7 +96,7 @@ The protected job requires:
 - completed `IN_SYNC` drift detection;
 - zero park-test alarms in `ALARM`;
 - empty visible/in-flight park-test queues;
-- latest successful production Pages deployment for each fixed project carrying the selected commit SHA;
+- latest successful Pages deployment for each fixed Park verification project carrying the selected commit SHA;
 - HTTP `200` plus exact park-test API configuration on phone, staff, admin, and Apple Pay association routes; and
 - no pending migration from the selected bundle.
 
@@ -118,7 +130,7 @@ Local park-test CDK or Wrangler deployment is not a convenience fallback. It is 
 
 ## Cost And Boundary
 
-The IAM roles and GitHub environment have no AWS runtime charge. Expected incremental usage is GitHub Actions/artifact storage and normal deployment API requests. T0198 creates no production identity, application runtime service, Roller write, guest send, lifecycle apply, venue/date expansion, or staff-account change.
+The IAM roles and GitHub environment have no AWS runtime charge. Expected incremental usage is GitHub Actions/artifact storage and normal deployment API requests. T0198 creates no additional backend identity, application runtime service, Roller write, guest send, lifecycle apply, venue/date expansion, or staff-account change.
 
 ## Rollout Evidence
 

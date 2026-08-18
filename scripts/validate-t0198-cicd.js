@@ -95,7 +95,7 @@ function main() {
     'synth:park-test-full-flow-rehearsal',
   ]);
   const release = validateWorkflow('.github/workflows/release.yml', [
-    'Build park-test release',
+    'Build Park pilot release',
     'refs/heads/main',
     'merge-base --is-ancestor',
     'build-park-test-release.js',
@@ -123,6 +123,7 @@ function main() {
     '--commit-hash',
     'jumpyard-check-in-park-test',
     'jumpyard-checkin-admin-park-test',
+    '.result.source == null',
   ]);
   assert.match(ci, /pull_request:/);
   assert.match(release, /workflow_dispatch:/);

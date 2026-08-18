@@ -52,7 +52,7 @@ Before AWS work, also read `AWS_RESOURCES.md` and use the `aws-project-infrastru
 - Do not touch files outside the issue's allowed scope unless Love explicitly approves it.
 - Do not push directly to `main`.
 - Do not commit unless explicitly asked.
-- Local development and validation are normal. Routine park-test deployment is not: after T0198 it must promote an immutable GitHub release artifact through the protected `park-test` environment.
+- Local development and validation are normal. A merge to `main` builds an immutable Park release but does not deploy it. Park verification and Nacka public pilot-production promotion must use that selected artifact through the protected `park-test` environment.
 - Do not rebuild during deploy or rollback. Select the successful release workflow run and exact commit SHA, review the plan, then promote that same artifact.
 - Local CDK or Wrangler deployment to park-test is break-glass only. It requires an approved Issue that explicitly authorizes the exception, the exact target and reason, and a follow-up record in GitHub.
 
@@ -92,7 +92,7 @@ For routine park-test releases after T0198:
 3. Review the read-only plan before approving the protected `park-test` job.
 4. Use the same workflow and an earlier successful release artifact for rollback; never rebuild the old source during rollback.
 
-Production deployment remains disabled and requires a separate approved Issue.
+New multi-park production infrastructure remains disabled and requires a separate approved Issue. Issue #264 approves the existing technically named `park-test` backend as Nacka pilot production and separately gates promotion of its phone/admin artifacts to the two public origins.
 
 ## Completion Summary
 

@@ -10,8 +10,13 @@ const EXPECTED = Object.freeze({
   cloudflareAccountId: 'dc0a3855bc8a0b1db8fc27ee62bf7d40',
   configPath: 'infra/config/park-test-full-flow-rehearsal.json',
   environment: 'park-test',
+  businessRole: 'nacka-pilot-production',
   phoneProject: 'jumpyard-check-in-park-test',
   phoneUrl: 'https://jumpyard-check-in-park-test.pages.dev',
+  publicAdminProject: 'jumpyard-checkin-admin-production',
+  publicAdminUrl: 'https://staff-checkin.jumpyard.se',
+  publicPhoneProject: 'jumpyard-check-in-production',
+  publicPhoneUrl: 'https://checkin.jumpyard.se',
   region: 'eu-north-1',
   repository: 'wrlds-creations/jumpyard-check-in',
   stackName: 'jumpyard-check-in-park-test-stack',
@@ -88,6 +93,7 @@ function main() {
   assertEqual(manifest.source?.repository, EXPECTED.repository, 'Repository');
   assertEqual(manifest.source?.sha, expectedSha, 'Source SHA');
   assertEqual(manifest.target?.environment, EXPECTED.environment, 'Environment');
+  assertEqual(manifest.target?.businessRole, EXPECTED.businessRole, 'Business role');
   assertEqual(manifest.target?.aws?.accountId, EXPECTED.accountId, 'AWS account');
   assertEqual(manifest.target?.aws?.region, EXPECTED.region, 'AWS region');
   assertEqual(manifest.target?.aws?.stackName, EXPECTED.stackName, 'AWS stack');
@@ -96,6 +102,10 @@ function main() {
   assertEqual(manifest.target?.cloudflare?.phoneUrl, EXPECTED.phoneUrl, 'Phone URL');
   assertEqual(manifest.target?.cloudflare?.adminProject, EXPECTED.adminProject, 'Admin project');
   assertEqual(manifest.target?.cloudflare?.adminUrl, EXPECTED.adminUrl, 'Admin URL');
+  assertEqual(manifest.target?.cloudflare?.publicPhoneProject, EXPECTED.publicPhoneProject, 'Public phone project');
+  assertEqual(manifest.target?.cloudflare?.publicPhoneUrl, EXPECTED.publicPhoneUrl, 'Public phone URL');
+  assertEqual(manifest.target?.cloudflare?.publicAdminProject, EXPECTED.publicAdminProject, 'Public admin project');
+  assertEqual(manifest.target?.cloudflare?.publicAdminUrl, EXPECTED.publicAdminUrl, 'Public admin URL');
   assertEqual(manifest.target?.apiBaseUrl, EXPECTED.apiBaseUrl, 'API target');
   assertEqual(manifest.target?.configPath, EXPECTED.configPath, 'Config path');
   assertEqual(manifest.target?.fullFlow?.venueId, '50871', 'Full-flow venue');

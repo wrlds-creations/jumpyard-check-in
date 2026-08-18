@@ -1,4 +1,4 @@
-name: Build park-test release
+name: Build Park pilot release
 
 on:
   push:
@@ -124,11 +124,12 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## Immutable park-test release"
+            echo "## Immutable Park pilot release"
             echo
             echo "- Source: \`${{ steps.source.outputs.sha }}\`"
             echo "- Artifact: \`park-test-release-${{ steps.source.outputs.sha }}\`"
             echo "- Artifact digest: \`${{ steps.artifact.outputs.artifact-digest }}\`"
             echo "- Retention: 90 days"
-            echo "- Target: park-test only"
+            echo "- Backend target: technically named \`park-test\`, approved as Nacka pilot production"
+            echo "- Frontend targets: Park-test verification first, then protected public phone/admin promotion"
           } >> "$GITHUB_STEP_SUMMARY"

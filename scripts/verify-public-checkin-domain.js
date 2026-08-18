@@ -3,6 +3,10 @@ const crypto = require('crypto');
 const EXPECTED_API = 'https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com';
 const EXPECTED_ASSOCIATION_SHA256 = '8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6';
 const CHECKIN_URL = 'https://checkin.jumpyard.se';
+const STAFF_URL = 'https://staff-checkin.jumpyard.se';
+const EXPECTED_COGNITO_CLIENT_ID = '4cm36dkcrptlpq9j163q45ae56';
+const EXPECTED_COGNITO_DOMAIN =
+  'https://jumpyard-check-in-park-test-admin-376129878018.auth.eu-north-1.amazoncognito.com';
 
 function positiveInteger(name, fallback) {
   const value = process.env[name] ?? String(fallback);
@@ -61,6 +65,26 @@ async function verifyPublicDomain() {
 
   console.log(`Guest domain: HTTP 200 with exact park-test API target (${assets.length} assets checked).`);
   console.log(`Apple Pay association: HTTP 200 and SHA256 ${associationSha}.`);
+
+  const adminBodies = [];
+  for (const route of ['/', '/admin', '/auth/callback']) {
+    const routeResponse = await fetchOk(`${STAFF_URL}${route}`);
+    const routeHtml = await routeResponse.text();
+    adminBodies.push(routeHtml);
+    for (const asset of assetUrls(STAFF_URL, routeHtml).slice(0, 100)) {
+      adminBodies.push(await (await fetchOk(asset)).text());
+    }
+  }
+  for (const [label, expected] of [
+    ['Park API', EXPECTED_API],
+    ['Cognito client', EXPECTED_COGNITO_CLIENT_ID],
+    ['Cognito domain', EXPECTED_COGNITO_DOMAIN],
+  ]) {
+    if (!adminBodies.some((body) => body.includes(expected))) {
+      throw new Error(`Staff domain does not expose the exact ${label} target.`);
+    }
+  }
+  console.log('Staff domain: routes return HTTP 200 with exact Park API and Cognito targets.');
 }
 
 async function main() {

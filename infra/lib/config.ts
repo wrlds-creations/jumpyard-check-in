@@ -45,10 +45,14 @@ export const PARK_TEST_FULL_FLOW_REHEARSAL_APPROVAL =
   'T0176_FULL_FLOW_REHEARSAL_APPROVED';
 export const PARK_TEST_LIVE_DATA_SYNC_APPROVAL = 'T0196_LIVE_BOOKING_INDEX_APPROVED';
 export const PARK_TEST_LIVE_WEBHOOK_PROCESSING_APPROVAL = 'T0197_LIVE_WEBHOOK_PROCESSING_APPROVED';
-export const PARK_TEST_ADMIN_IDENTITY_CALLBACK_URL =
-  'https://jumpyard-checkin-admin-park-test.pages.dev/auth/callback';
-export const PARK_TEST_ADMIN_IDENTITY_LOGOUT_URL =
-  'https://jumpyard-checkin-admin-park-test.pages.dev/admin';
+export const PARK_TEST_ADMIN_IDENTITY_CALLBACK_URLS = [
+  'https://jumpyard-checkin-admin-park-test.pages.dev/auth/callback',
+  'https://staff-checkin.jumpyard.se/auth/callback',
+] as const;
+export const PARK_TEST_ADMIN_IDENTITY_LOGOUT_URLS = [
+  'https://jumpyard-checkin-admin-park-test.pages.dev/admin',
+  'https://staff-checkin.jumpyard.se/admin',
+] as const;
 export const PARK_TEST_ADMIN_IDENTITY_DOMAIN_PREFIX = 'jumpyard-check-in-park-test-admin-376129878018';
 export const PARK_TEST_STAFF_IDENTITY_VENUE_ID = '50871';
 
@@ -405,18 +409,16 @@ function validateEnvironmentContract(input: EnvironmentContractInput): void {
     throw new Error('park-test staffIdentity.mode must be pin for PIN-only staff identity.');
   }
 
-  if (
-    input.staffIdentity.callbackUrls.length !== 1 ||
-    input.staffIdentity.callbackUrls[0] !== PARK_TEST_ADMIN_IDENTITY_CALLBACK_URL
-  ) {
-    throw new Error(`park-test staffIdentity.callbackUrls must be exactly ${PARK_TEST_ADMIN_IDENTITY_CALLBACK_URL}.`);
+  if (JSON.stringify(input.staffIdentity.callbackUrls) !== JSON.stringify(PARK_TEST_ADMIN_IDENTITY_CALLBACK_URLS)) {
+    throw new Error(
+      `park-test staffIdentity.callbackUrls must be exactly ${PARK_TEST_ADMIN_IDENTITY_CALLBACK_URLS.join(', ')}.`,
+    );
   }
 
-  if (
-    input.staffIdentity.logoutUrls.length !== 1 ||
-    input.staffIdentity.logoutUrls[0] !== PARK_TEST_ADMIN_IDENTITY_LOGOUT_URL
-  ) {
-    throw new Error(`park-test staffIdentity.logoutUrls must be exactly ${PARK_TEST_ADMIN_IDENTITY_LOGOUT_URL}.`);
+  if (JSON.stringify(input.staffIdentity.logoutUrls) !== JSON.stringify(PARK_TEST_ADMIN_IDENTITY_LOGOUT_URLS)) {
+    throw new Error(
+      `park-test staffIdentity.logoutUrls must be exactly ${PARK_TEST_ADMIN_IDENTITY_LOGOUT_URLS.join(', ')}.`,
+    );
   }
 
   if (input.staffIdentity.domainPrefix !== PARK_TEST_ADMIN_IDENTITY_DOMAIN_PREFIX) {
