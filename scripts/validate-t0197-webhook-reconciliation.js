@@ -440,6 +440,9 @@ async function testAuthoritativeIdempotentProcessing() {
         writtenBookingStatuses.push(parameter('bookingStatus'));
         writtenAmountOwingCents.push(parameterEntry('amountOwingCents')?.value?.longValue);
       }
+      if (/INSERT INTO jumpyard\.roller_booking_items/.test(sql)) {
+        return { records: [[{ stringValue: parameter('bookingItemKey') }]] };
+      }
       if (/DELETE FROM jumpyard\.roller_booking_(tickets|items)/.test(sql)) deleteCalls += 1;
       return { records: [] };
     },
