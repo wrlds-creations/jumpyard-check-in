@@ -56,6 +56,9 @@ function loadBooking(environment) {
       if (moduleId === './kiosk-terminal-contract') {
         return require(path.join(ROOT, 'infra/lambda/booking/kiosk-terminal-contract.js'));
       }
+      if (moduleId === './phone-product-catalog') {
+        return require(path.join(ROOT, 'infra/lambda/booking/phone-product-catalog.js'));
+      }
       throw new Error(`Unexpected require(${JSON.stringify(moduleId)}) in booking handler.`);
     },
     setTimeout,

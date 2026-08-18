@@ -596,6 +596,7 @@ Availability rules:
 
 - Use Roller `GET /product-availability` server-side.
 - Query parent product ids for the relevant phone jump-entry products and return only the normalized product/time/capacity fields needed by the phone flow.
+- For the Live Nacka combo offer, JumpYard Cloud must first read the public Roller checkout catalog server-side. `COMBO60` is eligible only while its mapped parent is present in that public catalog; a Venue-Manager-only product is omitted even if authenticated availability still returns sessions. A catalog request/shape failure is an explicit retryable provider error, while a successful catalog response without the combo removes only that offer. The phone app never calls or scrapes Roller.
 - T0113 also returns mapped stock add-ons such as socks, padlock, and coffee as `type='addon'` rows with product ids and `unitPrice` derived from `jumpyard.product_catalog_cache`.
 - Capacity-gated add-ons such as SkyRider still derive availability and price from Roller `GET /product-availability`.
 - Capacity must be checked again before quote and before draft creation because availability can change between screen steps.

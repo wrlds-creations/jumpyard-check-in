@@ -97,6 +97,9 @@ module.exports.__t0193ServiceAuth = {
       if (relativePath === 'infra/lambda/booking/index.js' && moduleId === './kiosk-terminal-contract') {
         return require(path.join(path.dirname(absolutePath), 'kiosk-terminal-contract.js'));
       }
+      if (relativePath === 'infra/lambda/booking/index.js' && moduleId === './phone-product-catalog') {
+        return require(path.join(path.dirname(absolutePath), 'phone-product-catalog.js'));
+      }
       throw new Error(`Unexpected require(${JSON.stringify(moduleId)}) in ${relativePath}.`);
     },
     setTimeout,

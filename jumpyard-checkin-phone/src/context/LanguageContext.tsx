@@ -1,5 +1,6 @@
 'use client';
 import { createContext, useContext, useState } from 'react';
+import { weekdayComboCopy } from './weekdayComboCopy';
 
 type Language = 'sv' | 'en';
 
@@ -79,11 +80,11 @@ const sv = {
     selectJumpTime: 'Välj hopptid',
     sectionEntry: 'Entré',
     sectionFamily: 'Familj',
-    sectionCombo: 'ComboDeal',
+    sectionCombo: weekdayComboCopy.sv.name,
     comboPeople: '2 personer',
     comboDuration: '60 min',
     comboPizza: '1 pizza',
-    comboSeason: 'Alla dagar',
+    comboSeason: weekdayComboCopy.sv.availability,
     comboPackageNote: '2 personer',
     entry60: '60 min entré',
     entry90: '90 min entré',
@@ -487,11 +488,11 @@ const en: typeof sv = {
     selectJumpTime: 'Choose jump time',
     sectionEntry: 'Entry',
     sectionFamily: 'Family',
-    sectionCombo: 'ComboDeal',
+    sectionCombo: weekdayComboCopy.en.name,
     comboPeople: '2 people',
     comboDuration: '60 min',
     comboPizza: '1 pizza',
-    comboSeason: 'All days',
+    comboSeason: weekdayComboCopy.en.availability,
     comboPackageNote: '2 people',
     entry60: '60 min entry',
     entry90: '90 min entry',
