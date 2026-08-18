@@ -75,6 +75,17 @@ Rollback is a reviewed deploy of `infra/config/park-test.json`, which closes web
 - Initial protected run `30763549295` completed all write stages but exposed API Gateway access-log ARN normalization in final drift verification. PR #214 synthesized the canonical ARN, and immutable release `30765157585` re-promoted successfully as run `30765356271`.
 - The approved re-promotion plan added and removed no resources and changed only `DefaultStage`. Final readback returned `UPDATE_COMPLETE`, drift `IN_SYNC`, zero alarms in `ALARM`, empty queues, migrations through `0017`, exact Cloudflare commit readback, and public phone/admin/Apple Pay HTTP 200 checks. No rollback was needed.
 
+### Issue #257 Provisional-Item Repair And Recovery Evidence
+
+- A kiosk can create a provisional Handoff item before Roller publishes the booking. Authoritative webhook enrichment now conflicts on the provider `booking_item_id`, updates only when the existing row belongs to the same `roller_unique_id`, returns the actual persisted `booking_item_key` for ticket and cleanup work, and fails closed on a cross-booking identity collision.
+- Immutable release `67e6ffa` was built once by run `32133478654`; its release artifact digest is `sha256:d11ed60c87868fa3ba5afd47b259fc692ef011dd47b988cb1d179200ca7822e0`. The change required no migration or new AWS resource.
+- The guarded T0197 replay operator verified account `376129878018`, region `eu-north-1`, Nacka `50871`, active serialized worker, and exact Roller webhook `1465` before queueing the two known failed events. Event-id hashes `d43621e636252d5b` and `c2b32b22a419f561` both reached `processed` with cleared errors.
+- Readback preserved each existing `jybi_*` primary key and its ticket relationship while replacing provisional metadata with the Roller snapshot: product `Biljetter (200 kr)`, parent product `Entré 60 min`, product type `sessionpass`, and quantity `1`.
+- The two DLQ messages were inspected and matched exactly to those two already processed event ids before guarded 2/2 redrive. No unknown message existed; the source queue, main queue, and DLQ ended empty.
+- The first protected promotion completed AWS and Cloudflare writes but its immediate verifier still observed the pre-recovery operational state. After bounded recovery and CloudWatch convergence, protected re-promotion run `32136044606` used an exact 202-to-202 no-change plan (artifact `9324009792`, digest `sha256:93e2b2f5387b98e1c4935f621226901af2401d0f881c6f4d9cfd0ebbb26b9a3f`) and passed every stage.
+- Final readback returned `UPDATE_COMPLETE`, drift `IN_SYNC`, zero alarms in `ALARM`, empty Roller operations and webhook queues/DLQs, migrations through `0020`, exact phone/admin Cloudflare commit readback, and public phone/admin/admin-route/Apple Pay HTTP 200 checks.
+- No Roller business write, new booking, payment, guest message, migration, resource creation/removal, queue purge, secret output, lifecycle apply, or production action occurred.
+
 ## Non-Goals Preserved
 
 No Roller draft, booking, payment, add-on, redemption, refund, cancellation, registration, or deletion write was performed. Guest messaging stayed off. No production, DNS, Cloudflare, frontend, lifecycle apply, secret mutation, or broader venue/date work occurred.

@@ -1090,11 +1090,11 @@ The same review found a narrow reset/login race: an old PIN could finish slow ve
 
 ## Aurora Schema Inventory
 
-T0007 created schema `jumpyard` in database `jumpyard_cloud`. Park-test is applied through migration `0016`; T0195 migrations `0010_data_lifecycle.sql`, `0011_runtime_database_roles.sql`, and `0012_staff_pin_pepper_version.sql`, T0196 migrations `0013_t0196_data_sync_conflict_keys.sql` and `0014_t0196_signed_payment_amounts.sql`, and T0197 migrations `0015_t0197_webhook_reconciliation.sql` and `0016_t0197_event_log_conflict_key.sql` were applied during the approved 2026-07-14 and 2026-07-15 rollouts.
+T0007 created schema `jumpyard` in database `jumpyard_cloud`. Park-test is applied through migration `0020`; the T0195-T0197 migrations remain the schema foundation, and migrations `0017`-`0020` add signed/refund-safe webhook state plus kiosk payment, reconciliation, and provisional-handoff state.
 
 | Table | Purpose |
 |---|---|
-| `schema_migrations` | Tracks applied SQL migrations and checksums. Retained for database integrity; park-test is applied through `0018 kiosk terminal payment attempts`. |
+| `schema_migrations` | Tracks applied SQL migrations and checksums. Retained for database integrity; park-test is applied through `0020 provisional kiosk handoff`. |
 | `roller_bookings` | Latest normalized Roller booking snapshot from seed, webhook enrichment, or live refresh. T0016 and T0017 can upsert refreshed booking rows. |
 | `roller_booking_items` | Normalized booking item/product rows. T0016 and T0017 can upsert refreshed item rows. |
 | `roller_booking_tickets` | Ticket ids and redeem readiness context from `/data/tickets`, lookup live refresh, or webhook enrichment. |
@@ -1152,7 +1152,7 @@ T0146 defined the separate `park-test` environment contract, and T0150 deployed 
 | Secrets/SSM | Dedicated `/jumpyard-check-in-park-test/...` names |
 | Frontend | Same phone/admin source, separate deployment/API target |
 | Raw payload bucket | Synthesizes as `jumpyard-check-in-park-test-raw-376129878018-eu-north-1` to satisfy S3 length limits |
-| Status | T0150 foundation deployed; issue #224 now has migrations through `0018` and 202 stack resources. Live webhook `1465` feeds the dedicated FIFO worker/recovery path, and the repaired queue/DLQ state is empty. The Nacka/date full-flow window remains open through `2026-09-30`; broader venue scope remains closed. Current API has 27 routes, T0196 freshness is `OK`, drift is `IN_SYNC`, and the deployed template matches the selected release. The kiosk terminal alias is absent and fail-closed. Administrator TOTP and local-PIN staff flows remain validated. T0201 delivered exactly one automatic controlled email and was disarmed; the general guest-send gate remains false. Lifecycle apply, broad guest delivery, physical terminal proof, and production remain closed. |
+| Status | T0150 foundation deployed with migrations through `0020` and 202 stack resources. Live webhook `1465` feeds the dedicated FIFO worker/recovery path; issue #257 deployed the provisional-item reconciliation repair without a migration or resource change, recovered both classified failed events, and left the main queue and DLQ empty. The Nacka/date full-flow window remains open through `2026-09-30`; broader venue scope remains closed. Current API has 27 routes, T0196 freshness is `OK`, all alarms are `OK`, drift is `IN_SYNC`, and the deployed template matches immutable release `67e6ffa`. Administrator TOTP and local-PIN staff flows remain validated. T0201 delivered exactly one automatic controlled email and was disarmed; the general guest-send gate remains false. Lifecycle apply, broad guest delivery, and production remain closed. |
 
 ## Governance Notes
 
