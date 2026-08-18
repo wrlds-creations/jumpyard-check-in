@@ -300,6 +300,17 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     throw new Error('WRLDS:ManagedBy must be cdk for this infrastructure app.');
   }
 
+  const isDevExamplePlaceholder =
+    path.basename(absoluteConfigPath) === 'dev.example.json' &&
+    tags['WRLDS:CostCenter'] === 'TBD-before-deploy';
+  if (
+    tags['WRLDS:Client'] === 'JumpYard' &&
+    tags['WRLDS:CostCenter'] !== 'JumpYard' &&
+    !isDevExamplePlaceholder
+  ) {
+    throw new Error('JumpYard infrastructure must use WRLDS:CostCenter=JumpYard.');
+  }
+
   validateEnvironmentContract({
     awsAccount,
     awsRegion,

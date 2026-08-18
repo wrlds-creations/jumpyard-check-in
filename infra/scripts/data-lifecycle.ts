@@ -50,7 +50,7 @@ const REQUIRED_COMMON_TAGS: Readonly<Record<string, string>> = {
   "WRLDS:ManagedBy": "cdk",
   "WRLDS:DataClassification": "confidential",
   "WRLDS:Exportable": "true",
-  "WRLDS:CostCenter": "unassigned",
+  "WRLDS:CostCenter": "JumpYard",
   "WRLDS:CreatedBy": "love",
 };
 const LIFECYCLE_TABLES = [

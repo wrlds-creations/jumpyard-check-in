@@ -14,7 +14,7 @@ Every AWS resource managed by a WRLDS project must include required WRLDS tags w
 | `WRLDS:ManagedBy` | Yes | `cdk` |
 | `WRLDS:DataClassification` | Yes | `confidential` |
 | `WRLDS:Exportable` | Yes | `true` |
-| `WRLDS:CostCenter` | Yes | `JumpYard-2026` |
+| `WRLDS:CostCenter` | Yes | `JumpYard` |
 | `WRLDS:CreatedBy` | Yes | `github-actions` |
 
 ## Cost Allocation Tags

@@ -59,10 +59,11 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 ## Durable Workflow Facts
 
-- Private GitHub Project #5 owns status, priority, type, track, and owner. Unapproved work stays a draft until Love approves conversion to an Issue.
-- Approved branches use `codex/gh-<issue-number>-<short-slug>` and pull requests close their Issue. Work reaches `main` through review/merge, never by direct push.
-- Routine park-test releases are GitHub-native: CI validates pull requests, `main` builds one immutable hashed artifact, a read-only AWS plan precedes protected `park-test` approval, and deploy/rollback promote the selected artifact without rebuilding. AWS uses repository/environment-scoped OIDC roles rather than stored access keys; Cloudflare uses a scoped protected-environment token.
-- Production deployment is not enabled by the park-test workflow. Local park-test CDK/Wrangler deployment is break-glass only under a separately explicit approved Issue and follow-up record.
+- Private GitHub Project #5 owns operational fields; drafts require Love's approval before conversion to an Issue.
+- AWS billing uses the exact JumpYard pair `WRLDS:Client=JumpYard` and `WRLDS:CostCenter=JumpYard`. Client, Project, Environment, and CostCenter are management-account cost allocation keys; active check-in configs fail closed if the JumpYard cost center differs.
+- Approved branches use `codex/gh-<issue-number>-<short-slug>`; reviewed PRs are the only route to `main`.
+- Routine park-test releases promote one immutable hashed `main` artifact after CI, read-only AWS plan, and protected approval; rollback never rebuilds. AWS uses repository/environment-scoped OIDC, and Cloudflare uses a protected scoped token.
+- Production deployment remains disabled. Local park-test CDK/Wrangler is break-glass only under an explicit approved Issue and follow-up.
 - `CODEX_TASK.md` is a static resolver, not a mutable ticket ledger. `FOLLOWUPS.md` is policy only; completed legacy followups and the one-time mapping remain historical evidence.
 - Legacy ticket IDs are preserved for traceability. GitHub issue `#192` and legacy ticket `T0192` are unrelated and must retain their prefixes.
 

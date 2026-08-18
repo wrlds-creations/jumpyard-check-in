@@ -159,6 +159,9 @@ const devWithWebhookRecoverySchedule = cloneConfig(devConfig);
 if (!devWithWebhookRecoverySchedule.webhookProcessing) throw new Error('Expected dev webhook processing config.');
 devWithWebhookRecoverySchedule.webhookProcessing.recoveryScheduleEnabled = true;
 
+const devWrongCostCenter = cloneConfig(devConfig);
+devWrongCostCenter.tags['WRLDS:CostCenter'] = 'unassigned';
+
 const parkTestConfig = readConfig('config/park-test.json');
 const parkTestWithAutoPause = cloneConfig(parkTestConfig);
 parkTestWithAutoPause.auroraServerless = {
@@ -475,6 +478,11 @@ expectFail(
   'dev webhook-recovery schedule fails closed',
   devWithWebhookRecoverySchedule,
   /webhookProcessing.recoveryScheduleEnabled/,
+);
+expectFail(
+  'JumpYard config with an unassigned cost center fails closed',
+  devWrongCostCenter,
+  /WRLDS:CostCenter=JumpYard/,
 );
 expectPass('reviewed park-test Live config passes', parkTestConfig, 'park-test');
 expectFail('park-test auto-pause config fails closed', parkTestWithAutoPause, /must remain continuously available/);
