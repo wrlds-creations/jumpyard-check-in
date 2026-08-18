@@ -49,16 +49,21 @@ export interface StaffBookingItem {
   bookingDate: string | null;
   bookingItemId: string | null;
   bookingItemKey: string | null;
+  durationMinutes?: number | null;
   endTime: string | null;
-  fulfillmentSource?: "original" | "linked_add_on" | string | null;
+  fulfillmentSource?: "original" | "linked_add_on" | "provisional" | string | null;
   linkedBookingReference?: string | null;
   linkedRollerUniqueId?: string | null;
   parentProductId: string | null;
   parentProductName: string | null;
+  parentType?: string | null;
   productId: string | null;
   productName: string | null;
+  productSubType?: string | null;
+  productType?: string | null;
   quantity: number;
   startTime: string | null;
+  summary?: Record<string, unknown>;
 }
 
 export interface StaffBookingTicket {

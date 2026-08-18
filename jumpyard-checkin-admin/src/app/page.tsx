@@ -150,12 +150,20 @@ function normalizeProductText(value: string) {
 
 function getItemProductText(item: StaffBookingItem) {
   return normalizeProductText(
-    [item.parentProductName, item.productName, item.productId, item.parentProductId].filter(Boolean).join(" ")
+    [
+      item.parentProductName,
+      item.productName,
+      item.productId,
+      item.parentProductId,
+      item.parentType,
+      item.productSubType,
+      item.productType,
+    ].filter(Boolean).join(" ")
   );
 }
 
 function getItemDisplayName(item: StaffBookingItem) {
-  return item.parentProductName ?? item.productName ?? "Produkt";
+  return item.parentProductName ?? item.productName ?? (item.productId ? `Produkt ${item.productId}` : "Produkt utan namn");
 }
 
 function getDurationLabelFromText(value: string) {
@@ -176,6 +184,7 @@ function getDurationLabelFromTimes(startTime?: string | null, endTime?: string |
 
 function getItemDurationLabel(item: StaffBookingItem) {
   return (
+    (item.durationMinutes && item.durationMinutes > 0 ? `${item.durationMinutes} min` : null) ??
     getDurationLabelFromText(`${item.parentProductName ?? ""} ${item.productName ?? ""}`) ??
     getDurationLabelFromTimes(item.startTime, item.endTime)
   );
@@ -239,12 +248,15 @@ const HANDOUT_SECTIONS: Record<HandoutSectionKey, { note: string; order: number;
   other: {
     note: "Kontrollera vid behov innan utlämning.",
     order: 3,
-    title: "Övrigt i bokningen",
+    title: "Kontrollera produkt",
   },
 };
 
 function getHandoutCategory(item: StaffBookingItem): HandoutCategoryDefinition {
   const text = getItemProductText(item);
+  const structuredProductType = normalizeProductText(
+    [item.parentType, item.productSubType, item.productType].filter(Boolean).join(" ")
+  );
 
   if (text.includes("skyrider") || text.includes("sky rider")) {
     return { icon: "zipline", key: "skyrider", label: "SkyRider-pass", order: 40, section: "checkin" };
@@ -283,7 +295,10 @@ function getHandoutCategory(item: StaffBookingItem): HandoutCategoryDefinition {
     text.includes("family") ||
     text.includes("grupp") ||
     text.includes("barn") ||
-    text.includes("jump")
+    text.includes("jump") ||
+    ["admission", "combo", "entry", "family", "jump", "pass", "ticket"].some((type) =>
+      structuredProductType.includes(type)
+    )
   ) {
     const durationLabel = getItemDurationLabel(item);
     return {
@@ -296,7 +311,13 @@ function getHandoutCategory(item: StaffBookingItem): HandoutCategoryDefinition {
     };
   }
 
-  return { icon: getItemIconName(item), key: "other", label: "Övrigt", order: 90, section: "other" };
+  return {
+    icon: getItemIconName(item),
+    key: `product-${item.productId ?? item.bookingItemKey ?? "unknown"}`,
+    label: getItemDisplayName(item),
+    order: 90,
+    section: "other",
+  };
 }
 
 function getDisplayCode(session: StaffSessionSummary) {
@@ -381,6 +402,18 @@ function statusLabel(value?: string | null) {
   return labels[value] ?? value.replace(/_/g, " ");
 }
 
+function bookingSyncLabel(value?: string | null) {
+  if (value === "confirmed") return "ROLLER bekräftad";
+  if (value === "needs_staff") return "Behöver personal";
+  return "Bokning synkas";
+}
+
+function bookingSyncClass(value?: string | null) {
+  if (value === "confirmed") return "bg-success/10 text-success";
+  if (value === "needs_staff") return "bg-danger/10 text-danger";
+  return "bg-primary/10 text-primary";
+}
+
 function staffRoleLabel(value?: string | null) {
   if (value === "staff_operator") return "Check-in-personal";
   if (value === "staff_reader") return "Läsbehörighet";
@@ -441,9 +474,9 @@ function SessionRow({
           </div>
         </div>
         <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
-          session.bookingSyncStatus === "confirmed" ? "bg-success/10 text-success" : "bg-primary/10 text-primary"
+          bookingSyncClass(session.bookingSyncStatus)
         }`}>
-          {session.bookingSyncStatus === "confirmed" ? statusLabel(session.handoffStatus) : "Bokning synkas"}
+          {session.bookingSyncStatus === "confirmed" ? statusLabel(session.handoffStatus) : bookingSyncLabel(session.bookingSyncStatus)}
         </span>
       </div>
 
@@ -834,9 +867,17 @@ function DetailPanel({
         data-testid="staff-redeem-panel"
         className="border-t border-border bg-white p-4"
       >
-        {detail.bookingSyncStatus !== "confirmed" && (
-          <div className="mb-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-semibold text-foreground">
-            Betalningen är godkänd. ROLLER-bokningen och biljetterna synkas fortfarande; check-in kan slutföras när synken är klar.
+        {detail.bookingSyncStatus === "pending" && (
+          <div className="mb-3 flex items-start gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-semibold text-foreground">
+            <Loader2 className="mt-0.5 shrink-0 animate-spin text-primary" size={18} />
+            <span>
+              Betalningen är godkänd. ROLLER-bokningen och biljetterna synkas fortfarande. Den här vyn uppdateras automatiskt var femte sekund.
+            </span>
+          </div>
+        )}
+        {detail.bookingSyncStatus === "needs_staff" && (
+          <div className="mb-3 rounded-2xl border border-danger/25 bg-danger/5 px-4 py-3 text-sm font-semibold text-danger">
+            ROLLER-bokningen kunde inte bekräftas automatiskt. Starta inte en ny betalning; kontrollera bokningen manuellt.
           </div>
         )}
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -907,12 +948,14 @@ export default function Home() {
   const [scannerMessage, setScannerMessage] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerState, setScannerState] = useState<ScannerState>("idle");
-  const [detailRequestId, setDetailRequestId] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<StaffSessionSummary[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const authRef = useRef<StaffAuthSession | null>(null);
   const activityWriteAtRef = useRef(0);
+  const detailRef = useRef<StaffSessionDetail | null>(null);
+  const detailRefreshInFlightRef = useRef(false);
+  const detailRefreshPendingRef = useRef(false);
   const heartbeatInFlightRef = useRef(false);
   const lifecycleGenerationRef = useRef(0);
   const logoutChannelRef = useRef<StaffLogoutChannel | null>(null);
@@ -931,6 +974,11 @@ export default function Home() {
   const setCurrentAuth = useCallback((nextAuth: StaffAuthSession | null) => {
     authRef.current = nextAuth;
     setAuth(nextAuth);
+  }, []);
+
+  const setCurrentDetail = useCallback((nextDetail: StaffSessionDetail | null) => {
+    detailRef.current = nextDetail;
+    setDetail(nextDetail);
   }, []);
 
   const setCurrentQuery = useCallback((nextQuery: string) => {
@@ -954,7 +1002,7 @@ export default function Home() {
     setAuthError("");
     setAuthPin("");
     setAuthState("idle");
-    setDetail(null);
+    setCurrentDetail(null);
     setDetailState("idle");
     setError("");
     setCurrentQuery("");
@@ -967,7 +1015,7 @@ export default function Home() {
     setCurrentSelectedId(null);
     setSessions([]);
     setState("idle");
-  }, [setCurrentAuth, setCurrentQuery, setCurrentSelectedId]);
+  }, [setCurrentAuth, setCurrentDetail, setCurrentQuery, setCurrentSelectedId]);
 
   const terminateStaffSession = useCallback(async () => {
     if (logoutInProgressRef.current) return;
@@ -1027,21 +1075,21 @@ export default function Home() {
     setRedeemMessage("");
     setRedeemState("idle");
     setCurrentSelectedId(checkinSessionId);
-    setDetailRequestId((current) => current + 1);
+    setCurrentDetail(null);
     setDetailState("loading");
-  }, [setCurrentSelectedId]);
+  }, [setCurrentDetail, setCurrentSelectedId]);
 
   const closeSelectedSession = useCallback(() => {
-    setDetail(null);
+    setCurrentDetail(null);
     setDetailState("idle");
     setRedeemConfirmation(null);
     setRedeemMessage("");
     setRedeemState("idle");
     setCurrentSelectedId(null);
-  }, [setCurrentSelectedId]);
+  }, [setCurrentDetail, setCurrentSelectedId]);
 
   const returnToQueueAfterRedeem = useCallback(() => {
-    setDetail(null);
+    setCurrentDetail(null);
     setDetailState("idle");
     setCurrentQuery("");
     setRedeemConfirmation(null);
@@ -1049,7 +1097,7 @@ export default function Home() {
     setRedeemState("idle");
     setScannerMessage("");
     setCurrentSelectedId(null);
-  }, [setCurrentQuery, setCurrentSelectedId]);
+  }, [setCurrentDetail, setCurrentQuery, setCurrentSelectedId]);
 
   const scanNextAfterRedeem = useCallback(() => {
     returnToQueueAfterRedeem();
@@ -1108,7 +1156,7 @@ export default function Home() {
           setCurrentSelectedId(nextSelectedId);
           if (!nextSelectedId) {
             setDetailState("idle");
-            setDetail(null);
+            setCurrentDetail(null);
           }
           setState("ready");
         } catch (loadError) {
@@ -1131,7 +1179,63 @@ export default function Home() {
     } finally {
       queueRefreshInFlightRef.current = false;
     }
-  }, [getUsableAuth, handleProtectedAuthFailure, setCurrentSelectedId]);
+  }, [getUsableAuth, handleProtectedAuthFailure, setCurrentDetail, setCurrentSelectedId]);
+
+  const refreshSelectedDetail = useCallback(async ({ showLoading = false }: { showLoading?: boolean } = {}) => {
+    if (!selectedIdRef.current || !authRef.current) return;
+    if (detailRefreshInFlightRef.current) {
+      detailRefreshPendingRef.current = true;
+      return;
+    }
+
+    detailRefreshInFlightRef.current = true;
+    try {
+      do {
+        detailRefreshPendingRef.current = false;
+        const requestedSelectedId: string | null = selectedIdRef.current;
+        if (!requestedSelectedId || !authRef.current) return;
+        if (showLoading && !detailRef.current) setDetailState("loading");
+
+        let requestAuth: StaffAuthSession | null = null;
+        try {
+          requestAuth = await getUsableAuth();
+          const nextDetail = await getStaffSession(requestedSelectedId, requestAuth.auth.token);
+          if (
+            requestedSelectedId !== selectedIdRef.current ||
+            !isSameStaffSession(authRef.current, requestAuth)
+          ) {
+            continue;
+          }
+
+          const previousDetail = detailRef.current;
+          setCurrentDetail(nextDetail);
+          setDetailState("ready");
+          if (
+            previousDetail?.checkinSessionId === nextDetail.checkinSessionId &&
+            previousDetail.bookingSyncStatus === "pending" &&
+            nextDetail.bookingSyncStatus !== "pending"
+          ) {
+            void refreshSessions();
+          }
+        } catch (detailError) {
+          if (
+            requestedSelectedId !== selectedIdRef.current ||
+            (requestAuth && !isSameStaffSession(authRef.current, requestAuth))
+          ) {
+            continue;
+          }
+          if (handleProtectedAuthFailure(detailError)) return;
+          if (!detailRef.current) {
+            setCurrentDetail(null);
+            setDetailState("error");
+            setError(detailError instanceof Error ? detailError.message : "Kunde inte hämta handoff-detaljen.");
+          }
+        }
+      } while (detailRefreshPendingRef.current);
+    } finally {
+      detailRefreshInFlightRef.current = false;
+    }
+  }, [getUsableAuth, handleProtectedAuthFailure, refreshSessions, setCurrentDetail]);
 
   const openHandoffPayload = useCallback(
     (value: string) => {
@@ -1366,32 +1470,39 @@ export default function Home() {
 
   useEffect(() => {
     if (!selectedId || !authSessionKey) return;
+    void refreshSelectedDetail({ showLoading: true });
+  }, [authSessionKey, refreshSelectedDetail, selectedId]);
 
-    let cancelled = false;
-    let requestAuth: StaffAuthSession | null = null;
+  useEffect(() => {
+    if (!selectedId || !authSessionKey || detail?.bookingSyncStatus !== "pending") return;
 
-    void getUsableAuth()
-      .then((activeAuth) => {
-        requestAuth = activeAuth;
-        return getStaffSession(selectedId, activeAuth.auth.token);
-      })
-      .then((nextDetail) => {
-        if (cancelled || !requestAuth || !isSameStaffSession(authRef.current, requestAuth)) return;
-        setDetail(nextDetail);
-        setDetailState("ready");
-      })
-      .catch((detailError) => {
-        if (cancelled || !requestAuth || !isSameStaffSession(authRef.current, requestAuth)) return;
-        if (handleProtectedAuthFailure(detailError)) return;
-        setDetail(null);
-        setDetailState("error");
-        setError(detailError instanceof Error ? detailError.message : "Kunde inte hämta handoff-detaljen.");
-      });
-
-    return () => {
-      cancelled = true;
+    let stopped = false;
+    let timeoutId: number | null = null;
+    const clearScheduledRefresh = () => {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      timeoutId = null;
     };
-  }, [authSessionKey, detailRequestId, getUsableAuth, handleProtectedAuthFailure, selectedId]);
+    const scheduleRefresh = () => {
+      clearScheduledRefresh();
+      if (stopped || document.visibilityState !== "visible") return;
+      timeoutId = window.setTimeout(() => {
+        void refreshSelectedDetail().finally(scheduleRefresh);
+      }, 5_000);
+    };
+    const handleVisibility = () => {
+      clearScheduledRefresh();
+      if (document.visibilityState !== "visible") return;
+      void refreshSelectedDetail().finally(scheduleRefresh);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    scheduleRefresh();
+    return () => {
+      stopped = true;
+      clearScheduledRefresh();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [authSessionKey, detail?.bookingSyncStatus, refreshSelectedDetail, selectedId]);
 
   const handleRedeem = useCallback(
     async () => {
@@ -1612,7 +1723,10 @@ export default function Home() {
           <div className="flex shrink-0 items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => void refreshSessions()}
+              onClick={() => {
+                void refreshSessions();
+                void refreshSelectedDetail();
+              }}
               disabled={state === "loading"}
               aria-label="Uppdatera"
               className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-white text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"

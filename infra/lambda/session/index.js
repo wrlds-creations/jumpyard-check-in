@@ -2746,7 +2746,12 @@ async function findStaffSessionDetail(checkinSessionId, staffVenueId = null) {
   const session = mapStaffSessionSummaryRow(firstMappedRow(result));
   if (!session) return null;
 
-  const items = await findStaffBookingItems(session.rollerUniqueId, staffVenueId);
+  const authoritativeItems = await findStaffBookingItems(session.rollerUniqueId, staffVenueId);
+  const items = authoritativeItems.length > 0
+    ? authoritativeItems
+    : session.bookingSyncStatus === 'pending'
+      ? await findProvisionalStaffBookingItems(session.rollerUniqueId, staffVenueId)
+      : [];
   const tickets = await findStaffBookingTickets(session.rollerUniqueId, session.selectedTicketIds, staffVenueId);
 
   return {
@@ -2774,19 +2779,41 @@ async function findStaffBookingItems(rollerUniqueId, staffVenueId = null) {
          item.booking_item_key,
          item.booking_item_id,
          item.product_id,
-         item.parent_product_id,
-         item.product_name,
-         item.parent_product_name,
+         COALESCE(
+           item.parent_product_id,
+           NULLIF(item.item_summary ->> 'parentProductId', ''),
+           NULLIF(product.summary ->> 'parentProductId', '')
+         ) AS parent_product_id,
+         COALESCE(
+           item.product_name,
+           NULLIF(item.item_summary ->> 'productName', ''),
+           NULLIF(product.summary ->> 'name', '')
+         ) AS product_name,
+         COALESCE(
+           item.parent_product_name,
+           NULLIF(item.item_summary ->> 'parentProductName', ''),
+           NULLIF(product.summary ->> 'parentProductName', '')
+         ) AS parent_product_name,
          item.quantity,
          item.booking_date::text AS booking_date,
          item.start_time::text AS start_time,
          item.end_time::text AS end_time,
-         item.item_summary::text AS item_summary,
+         (COALESCE(product.summary, '{}'::jsonb) || COALESCE(item.item_summary, '{}'::jsonb))::text AS item_summary,
          NULL::text AS linked_booking_reference,
          NULL::text AS linked_roller_unique_id,
          'original'::text AS fulfillment_source,
          0 AS source_order
        FROM jumpyard.roller_booking_items AS item
+       LEFT JOIN LATERAL (
+         SELECT pc.summary
+         FROM jumpyard.product_catalog_cache AS pc
+         INNER JOIN jumpyard.roller_bookings AS catalog_booking
+           ON catalog_booking.roller_unique_id = item.roller_unique_id
+         WHERE pc.roller_env = catalog_booking.roller_env
+           AND pc.summary ->> 'id' = item.product_id
+         ORDER BY pc.fetched_at DESC
+         LIMIT 1
+       ) AS product ON true
        WHERE item.roller_unique_id = :rollerUniqueId
          ${sourceVenueClause}
        UNION ALL
@@ -2794,14 +2821,26 @@ async function findStaffBookingItems(rollerUniqueId, staffVenueId = null) {
          item.booking_item_key,
          item.booking_item_id,
          item.product_id,
-         item.parent_product_id,
-         item.product_name,
-         item.parent_product_name,
+         COALESCE(
+           item.parent_product_id,
+           NULLIF(item.item_summary ->> 'parentProductId', ''),
+           NULLIF(product.summary ->> 'parentProductId', '')
+         ) AS parent_product_id,
+         COALESCE(
+           item.product_name,
+           NULLIF(item.item_summary ->> 'productName', ''),
+           NULLIF(product.summary ->> 'name', '')
+         ) AS product_name,
+         COALESCE(
+           item.parent_product_name,
+           NULLIF(item.item_summary ->> 'parentProductName', ''),
+           NULLIF(product.summary ->> 'parentProductName', '')
+         ) AS parent_product_name,
          item.quantity,
          item.booking_date::text AS booking_date,
          item.start_time::text AS start_time,
          item.end_time::text AS end_time,
-         item.item_summary::text AS item_summary,
+         (COALESCE(product.summary, '{}'::jsonb) || COALESCE(item.item_summary, '{}'::jsonb))::text AS item_summary,
          link.linked_booking_reference,
          link.linked_roller_unique_id,
          'linked_add_on'::text AS fulfillment_source,
@@ -2809,6 +2848,16 @@ async function findStaffBookingItems(rollerUniqueId, staffVenueId = null) {
        FROM jumpyard.booking_links AS link
        INNER JOIN jumpyard.roller_booking_items AS item
          ON item.roller_unique_id = link.linked_roller_unique_id
+       LEFT JOIN LATERAL (
+         SELECT pc.summary
+         FROM jumpyard.product_catalog_cache AS pc
+         INNER JOIN jumpyard.roller_bookings AS catalog_booking
+           ON catalog_booking.roller_unique_id = item.roller_unique_id
+         WHERE pc.roller_env = catalog_booking.roller_env
+           AND pc.summary ->> 'id' = item.product_id
+         ORDER BY pc.fetched_at DESC
+         LIMIT 1
+       ) AS product ON true
        LEFT JOIN jumpyard.roller_bookings AS linked_booking
          ON linked_booking.roller_unique_id = link.linked_roller_unique_id
        LEFT JOIN jumpyard.prepayment_booking_drafts AS linked_draft
@@ -2845,22 +2894,67 @@ async function findStaffBookingItems(rollerUniqueId, staffVenueId = null) {
     ],
   );
 
-  return mappedRows(result).map((row) => ({
-    bookingDate: stringOrNull(row.booking_date),
+  return mappedRows(result).map((row) => mapStaffBookingItem({
+    ...row,
+    fulfillment_source: stringOrNull(row.fulfillment_source) || 'original',
+  }));
+}
+
+async function findProvisionalStaffBookingItems(rollerUniqueId, staffVenueId = null) {
+  if (!rollerUniqueId) return [];
+  const staffVenueClause = staffVenueId ? 'AND booking.venue_id = :staffVenueId' : '';
+  const result = await executeStatement(
+    `SELECT draft.items_summary::text AS items_summary
+     FROM jumpyard.prepayment_booking_drafts AS draft
+     INNER JOIN jumpyard.roller_bookings AS booking
+       ON booking.roller_unique_id = draft.roller_draft_unique_id
+     WHERE draft.roller_draft_unique_id = :rollerUniqueId
+       ${staffVenueClause}
+     LIMIT 1`,
+    [
+      stringParameter('rollerUniqueId', rollerUniqueId),
+      ...(staffVenueId ? [stringParameter('staffVenueId', staffVenueId)] : []),
+    ],
+  );
+
+  return parseJsonArray(firstMappedRow(result)?.items_summary).map((item, index) => mapStaffBookingItem({
+    booking_date: item.bookingDate,
+    booking_item_key: `provisional:${index}:${stringOrNull(item.productId) || 'product'}`,
+    duration_minutes: item.durationMinutes,
+    end_time: item.endTime,
+    fulfillment_source: 'provisional',
+    item_summary: JSON.stringify(item),
+    parent_product_id: item.parentProductId,
+    parent_product_name: item.parentProductName,
+    product_id: item.productId,
+    product_name: item.productName,
+    quantity: item.quantity,
+    start_time: item.startTime,
+  }));
+}
+
+function mapStaffBookingItem(row) {
+  const summary = parseJsonObject(row.item_summary);
+  return {
+    bookingDate: stringOrNull(row.booking_date ?? summary.bookingDate),
     bookingItemId: stringOrNull(row.booking_item_id),
     bookingItemKey: stringOrNull(row.booking_item_key),
-    endTime: stringOrNull(row.end_time),
+    durationMinutes: numberOrNull(row.duration_minutes ?? summary.durationMinutes),
+    endTime: stringOrNull(row.end_time ?? summary.endTime),
     fulfillmentSource: stringOrNull(row.fulfillment_source) || 'original',
     linkedBookingReference: stringOrNull(row.linked_booking_reference),
     linkedRollerUniqueId: stringOrNull(row.linked_roller_unique_id),
-    parentProductId: stringOrNull(row.parent_product_id),
-    parentProductName: stringOrNull(row.parent_product_name),
-    productId: stringOrNull(row.product_id),
-    productName: stringOrNull(row.product_name),
-    quantity: numberOrNull(row.quantity) ?? 0,
-    startTime: stringOrNull(row.start_time),
-    summary: parseJsonObject(row.item_summary),
-  }));
+    parentProductId: stringOrNull(row.parent_product_id ?? summary.parentProductId),
+    parentProductName: stringOrNull(row.parent_product_name ?? summary.parentProductName),
+    parentType: stringOrNull(summary.parentType),
+    productId: stringOrNull(row.product_id ?? summary.productId),
+    productName: stringOrNull(row.product_name ?? summary.productName ?? summary.name),
+    productSubType: stringOrNull(summary.productSubType),
+    productType: stringOrNull(summary.productType),
+    quantity: numberOrNull(row.quantity ?? summary.quantity) ?? 0,
+    startTime: stringOrNull(row.start_time ?? summary.startTime),
+    summary,
+  };
 }
 
 async function findStaffBookingTickets(rollerUniqueId, selectedTicketIds, staffVenueId = null) {

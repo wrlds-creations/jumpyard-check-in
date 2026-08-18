@@ -41,7 +41,16 @@ const provisionalStatus = publicKioskPaymentStatus({
   customer_last_name: 'Wrlds',
   guest_access_expires_at: '2026-08-18T12:00:00.000Z',
   handoff_status: 'not_ready',
-  items_summary: JSON.stringify([{ bookingDate: '2026-08-18', productId: '101', quantity: 1, startTime: '10:00' }]),
+  items_summary: JSON.stringify([{
+    bookingDate: '2026-08-18',
+    durationMinutes: 60,
+    endTime: '11:00',
+    productId: '101',
+    productName: 'Entré 60 min',
+    productType: 'entry',
+    quantity: 1,
+    startTime: '10:00',
+  }]),
   payment_attempt_id: 'jytp_123456789012345678',
   payment_attempt_status: 'approved',
   roller_draft_unique_id: 'draft-a',
@@ -54,6 +63,21 @@ assert.equal(provisionalStatus.status, 'pending');
 assert.equal(provisionalStatus.provisionalHandoff.booking.paymentStatus, 'paid');
 assert.equal(provisionalStatus.provisionalHandoff.guestAccess.token, 'jytp_123456789012345678');
 assert.equal(provisionalStatus.provisionalHandoff.session.bookingSyncStatus, 'pending');
+assert.deepEqual(provisionalStatus.provisionalHandoff.booking.items[0], {
+  bookingDate: '2026-08-18',
+  durationMinutes: 60,
+  endTime: '11:00',
+  parentProductId: null,
+  parentProductName: null,
+  parentType: null,
+  productId: '101',
+  productName: 'Entré 60 min',
+  productSubType: null,
+  productType: 'entry',
+  quantity: 1,
+  startTime: '10:00',
+  tickets: [],
+});
 assert.deepEqual(
   publicKioskPaymentStatus({
     booking_confirmation_status: 'confirmed',

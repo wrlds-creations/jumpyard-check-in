@@ -174,7 +174,7 @@ function validateStorageAndCleanup(page, identity, adminIdentity, adminPage, cal
   for (const required of [
     /setCurrentAuth\(null\)/,
     /setAuthPin\(""\)/,
-    /setDetail\(null\)/,
+    /set(?:Current)?Detail\(null\)/,
     /setCurrentQuery\(""\)/,
     /setRedeemConfirmation\(null\)/,
     /setScannerOpen\(false\)/,
@@ -263,7 +263,10 @@ function validateQueueRequestStability(page) {
   assert.match(loadFailure, /requestedQuery !== queueQueryRef\.current/);
   assert.match(loadFailure, /queueRefreshPendingRef\.current/);
   assert.match(refresh, /\} while \(queueRefreshPendingRef\.current\)/);
-  assert.match(refresh, /\}, \[getUsableAuth, handleProtectedAuthFailure, setCurrentSelectedId\]\)/);
+  assert.match(
+    refresh,
+    /\}, \[getUsableAuth, handleProtectedAuthFailure, setCurrentDetail, setCurrentSelectedId\]\)/,
+  );
   assert.doesNotMatch(refresh, /\[getUsableAuth, handleProtectedAuthFailure, query, selectedId\]/);
 
   const automaticRefresh = section(
