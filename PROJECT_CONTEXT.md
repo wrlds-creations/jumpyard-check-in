@@ -37,7 +37,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 ## Durable Architecture Facts
 
 - Frontend apps must not call Roller directly in the real production architecture.
-- Public pilot hosts `checkin.jumpyard.se` and `staff-checkin.jumpyard.se` run Park release `3993019`; purchase and PIN redemption are verified. Redeem resolves an omitted booking venue from authenticated ROLLER context, and non-authentication failures retain the PIN session. [Contract](config/production-domains.json).
+- `checkin.jumpyard.se` and `staff-checkin.jumpyard.se` run Park `96022c8`; purchase and PIN redemption are verified. Redeem resolves missing venue context, retains PIN sessions for non-auth failures, and keeps mobile success visible until staff acts; physical retest is pending. [Contract](config/production-domains.json).
 - Roller remains the source of truth for bookings, products, payments, and ticket redemption.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, session status, idempotency, audit events, and guest messaging state.
 - The production booking index uses an approved initial backfill, scheduled morning seed, idempotent webhook updates/reconciliation, and live REST confirmation. Roller remains authoritative; Aurora is the operational cache.
