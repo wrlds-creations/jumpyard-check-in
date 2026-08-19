@@ -1055,13 +1055,7 @@ export default function Home() {
 
   const handleProtectedAuthFailure = useCallback(
     (requestError: unknown) => {
-      if (
-        requestError instanceof StaffApiError &&
-        (requestError.isAuthenticationFailure ||
-          requestError.code === "emergency_stop_active" ||
-          requestError.code === "staff_auth_disabled" ||
-          requestError.code === "staff_identity_mode_disabled")
-      ) {
+      if (requestError instanceof StaffApiError && requestError.isAuthenticationFailure) {
         void terminateStaffSession();
         return true;
       }
