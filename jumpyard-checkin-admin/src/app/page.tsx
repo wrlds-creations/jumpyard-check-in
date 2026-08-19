@@ -1771,7 +1771,7 @@ export default function Home() {
         </div>
       </header>
 
-      {selectedId && (
+      {(selectedId || (redeemState === "success" && Boolean(redeemConfirmation))) && (
         <div className="mx-auto max-w-3xl px-3 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:hidden">
           <DetailPanel
             auth={auth}
