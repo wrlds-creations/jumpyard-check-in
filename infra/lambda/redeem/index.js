@@ -49,8 +49,10 @@ const STAFF_SESSION_ABSOLUTE_HOURS = 8;
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
 const PLAYGROUND_URL_MARKER = /(^|[.\-_/])(play|playground)([.\-_/]|$)/i;
 const ROLLER_LIVE_BASE_URL = 'https://api.roller.app';
+const NACKA_PILOT_VENUE_ID = '50871';
 const PRODUCT_CACHE_TTL_MS = 15 * 60 * 1000;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
+const ROLLER_VENUE_IDENTITY_DELAY_MS = 1000;
 const SHARED_TOKEN_CACHE_MS = 60 * 1000;
 
 const rdsClient = new RDSDataClient({});
@@ -2012,7 +2014,8 @@ async function refreshRedeemContextFromRoller(config, token, existingContext, re
     };
   }
 
-  if (staffVenueId && booking.venueId !== staffVenueId) {
+  const verifiedVenue = await resolveVerifiedRedeemVenue(config, token, booking.venueId, staffVenueId);
+  if (!verifiedVenue.ok) {
     return {
       ok: false,
       statusCode: 403,
@@ -2020,6 +2023,7 @@ async function refreshRedeemContextFromRoller(config, token, existingContext, re
       message: 'The refreshed booking does not belong to the staff member\'s approved venue.',
     };
   }
+  booking.venueId = verifiedVenue.venueId;
 
   await upsertLiveBooking(booking, config.env);
   const refreshedContext = await getRedeemContext(booking.rollerUniqueId, staffVenueId);
@@ -2037,6 +2041,75 @@ async function refreshRedeemContextFromRoller(config, token, existingContext, re
     ok: true,
     context: refreshedContext,
   };
+}
+
+async function resolveVerifiedRedeemVenue(config, token, bookingVenueId, staffVenueId) {
+  const normalizedBookingVenueId = stringOrNull(bookingVenueId);
+  const normalizedStaffVenueId = stringOrNull(staffVenueId);
+  if (!normalizedStaffVenueId) return { ok: true, venueId: normalizedBookingVenueId };
+
+  // Explicit booking venue remains authoritative and must match the authorized staff venue.
+  if (normalizedBookingVenueId) {
+    return {
+      ok: normalizedBookingVenueId === normalizedStaffVenueId,
+      venueId: normalizedBookingVenueId,
+    };
+  }
+
+  // Reuse the D0179 Live fallback only for the exact, internally consistent Nacka pilot scope.
+  const configuredStaffVenueId = stringOrNull(process.env.STAFF_IDENTITY_VENUE_ID);
+  const configuredFullFlowVenueId = stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID);
+  if (
+    normalizedStaffVenueId !== NACKA_PILOT_VENUE_ID ||
+    configuredStaffVenueId !== NACKA_PILOT_VENUE_ID ||
+    configuredFullFlowVenueId !== NACKA_PILOT_VENUE_ID
+  ) {
+    return { ok: false, venueId: null };
+  }
+
+  const verifiedVenueId = await getVerifiedRollerVenueId(
+    config,
+    token,
+    NACKA_PILOT_VENUE_ID,
+  );
+  return {
+    ok: verifiedVenueId === normalizedStaffVenueId,
+    venueId: verifiedVenueId,
+  };
+}
+
+async function getVerifiedRollerVenueId(config, token, expectedVenueId) {
+  if (String(config?.env).toLowerCase() !== 'live' || !stringOrNull(expectedVenueId)) return null;
+
+  // Keep the venue-identity request outside the preceding Roller request window.
+  await new Promise((resolve) => setTimeout(resolve, ROLLER_VENUE_IDENTITY_DELAY_MS));
+  try {
+    const response = await fetch(buildRollerUrl(config.baseUrl, '/venues/me'), {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
+      },
+    });
+    emitRollerApiMetric({ method: 'GET', operation: 'get_venue_identity', status: response.status, ok: response.ok });
+    if (!response.ok) return null;
+
+    const text = await response.text();
+    const body = parseJsonOrNull(text);
+    const venueId = extractRollerVenueIdentity(body);
+    return venueId === stringOrNull(expectedVenueId) ? venueId : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractRollerVenueIdentity(body) {
+  for (const candidate of [body?.venue, body?.data, body]) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+    const venueId = stringOrNull(candidate.id ?? candidate.venueId ?? candidate.venueID);
+    if (venueId) return venueId;
+  }
+  return null;
 }
 
 async function reserveIdempotencyKey(idempotencyKey, requestHash) {

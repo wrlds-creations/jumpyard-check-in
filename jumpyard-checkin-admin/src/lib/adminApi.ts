@@ -181,6 +181,28 @@ export interface AdminSessionActionResult {
   status: "admin_session_active" | "admin_session_logged_out" | "admin_session_started";
 }
 
+const STAFF_AUTHENTICATION_FAILURE_CODES = new Set<string>([
+  "staff_auth_session_absolute_expired",
+  "staff_auth_session_idle_expired",
+  "staff_auth_session_invalid",
+  "staff_auth_session_required",
+  "staff_auth_session_revoked",
+  "staff_auth_token_expired",
+  "staff_auth_token_invalid",
+  "staff_auth_token_required",
+  "staff_auth_token_revoked",
+  "staff_identity_audience_invalid",
+  "staff_identity_claims_invalid",
+  "staff_identity_claims_required",
+  "staff_identity_not_authorized",
+  "staff_legacy_token_disabled",
+  "staff_pin_reenrollment_required",
+]);
+
+export function isStaffAuthenticationFailure(code: string | null) {
+  return Boolean(code && STAFF_AUTHENTICATION_FAILURE_CODES.has(code));
+}
+
 export class StaffApiError extends Error {
   readonly code: string | null;
   readonly status: number;
@@ -193,7 +215,7 @@ export class StaffApiError extends Error {
   }
 
   get isAuthenticationFailure() {
-    return this.status === 401 || this.status === 403;
+    return isStaffAuthenticationFailure(this.code);
   }
 }
 
