@@ -2582,7 +2582,26 @@ async function findReadyStaffSessions(request, staffVenueId = null) {
                   OR lower(replace(COALESCE(linked_booking.payment_status, linked_booking.booking_status, ''), ' ', '')) IN ('paid', 'paidinfull', 'nopaymentrequired')
                 )
             )
-       )::int AS item_count,
+       )::int
+       + COALESCE((
+         SELECT SUM(jsonb_array_length(linked_draft.items_summary))
+         FROM jumpyard.booking_links AS link
+         INNER JOIN jumpyard.prepayment_booking_drafts AS linked_draft
+           ON linked_draft.roller_draft_unique_id = link.linked_roller_unique_id
+          AND linked_draft.original_roller_unique_id = link.original_roller_unique_id
+          AND linked_draft.add_on_group_id = link.add_on_group_id
+         WHERE link.original_roller_unique_id = session_rows.roller_unique_id
+           AND link.link_type = 'add_product_draft'
+           AND linked_draft.flow_type = 'add_product'
+           AND linked_draft.payment_channel = 'card_present'
+           AND linked_draft.payment_attempt_status IN ('approved', 'reconciled')
+           AND linked_draft.booking_confirmation_status IN ('pending', 'needs_staff')
+           AND NOT EXISTS (
+             SELECT 1
+             FROM jumpyard.roller_booking_items AS authoritative_item
+             WHERE authoritative_item.roller_unique_id = link.linked_roller_unique_id
+           )
+       ), 0)::int AS item_count,
        (
          SELECT COUNT(*)
          FROM jumpyard.roller_booking_tickets AS ticket
@@ -2654,7 +2673,26 @@ async function findStaffSessionDetail(checkinSessionId, staffVenueId = null) {
                   OR lower(replace(COALESCE(linked_booking.payment_status, linked_booking.booking_status, ''), ' ', '')) IN ('paid', 'paidinfull', 'nopaymentrequired')
                 )
             )
-       )::int AS item_count,
+       )::int
+       + COALESCE((
+         SELECT SUM(jsonb_array_length(linked_draft.items_summary))
+         FROM jumpyard.booking_links AS link
+         INNER JOIN jumpyard.prepayment_booking_drafts AS linked_draft
+           ON linked_draft.roller_draft_unique_id = link.linked_roller_unique_id
+          AND linked_draft.original_roller_unique_id = link.original_roller_unique_id
+          AND linked_draft.add_on_group_id = link.add_on_group_id
+         WHERE link.original_roller_unique_id = cs.roller_unique_id
+           AND link.link_type = 'add_product_draft'
+           AND linked_draft.flow_type = 'add_product'
+           AND linked_draft.payment_channel = 'card_present'
+           AND linked_draft.payment_attempt_status IN ('approved', 'reconciled')
+           AND linked_draft.booking_confirmation_status IN ('pending', 'needs_staff')
+           AND NOT EXISTS (
+             SELECT 1
+             FROM jumpyard.roller_booking_items AS authoritative_item
+             WHERE authoritative_item.roller_unique_id = link.linked_roller_unique_id
+           )
+       ), 0)::int AS item_count,
        (
          SELECT COUNT(*)
          FROM jumpyard.roller_booking_tickets AS ticket
@@ -2747,11 +2785,15 @@ async function findStaffSessionDetail(checkinSessionId, staffVenueId = null) {
   if (!session) return null;
 
   const authoritativeItems = await findStaffBookingItems(session.rollerUniqueId, staffVenueId);
-  const items = authoritativeItems.length > 0
+  const baseItems = authoritativeItems.length > 0
     ? authoritativeItems
     : session.bookingSyncStatus === 'pending'
       ? await findProvisionalStaffBookingItems(session.rollerUniqueId, staffVenueId)
       : [];
+  const provisionalLinkedAddOns = session.bookingSyncStatus === 'pending' || session.bookingSyncStatus === 'needs_staff'
+    ? await findProvisionalLinkedAddOnStaffItems(session.rollerUniqueId, staffVenueId)
+    : [];
+  const items = [...baseItems, ...provisionalLinkedAddOns];
   const tickets = await findStaffBookingTickets(session.rollerUniqueId, session.selectedTicketIds, staffVenueId);
 
   return {
@@ -2931,6 +2973,63 @@ async function findProvisionalStaffBookingItems(rollerUniqueId, staffVenueId = n
     quantity: item.quantity,
     start_time: item.startTime,
   }));
+}
+
+async function findProvisionalLinkedAddOnStaffItems(rollerUniqueId, staffVenueId = null) {
+  if (!rollerUniqueId) return [];
+  const staffVenueClause = staffVenueId ? 'AND original_booking.venue_id = :staffVenueId' : '';
+  const result = await executeStatement(
+    `SELECT
+       draft.add_on_group_id,
+       link.linked_roller_unique_id,
+       draft.items_summary::text AS items_summary
+     FROM jumpyard.booking_links AS link
+     INNER JOIN jumpyard.prepayment_booking_drafts AS draft
+       ON draft.roller_draft_unique_id = link.linked_roller_unique_id
+      AND draft.original_roller_unique_id = link.original_roller_unique_id
+      AND draft.add_on_group_id = link.add_on_group_id
+     INNER JOIN jumpyard.roller_bookings AS original_booking
+       ON original_booking.roller_unique_id = link.original_roller_unique_id
+     WHERE link.original_roller_unique_id = :rollerUniqueId
+       AND link.link_type = 'add_product_draft'
+       AND draft.flow_type = 'add_product'
+       AND draft.payment_channel = 'card_present'
+       AND draft.payment_attempt_status IN ('approved', 'reconciled')
+       AND draft.booking_confirmation_status IN ('pending', 'needs_staff')
+       ${staffVenueClause}
+       AND NOT EXISTS (
+         SELECT 1
+         FROM jumpyard.roller_booking_items AS authoritative_item
+         WHERE authoritative_item.roller_unique_id = link.linked_roller_unique_id
+       )
+     ORDER BY draft.created_at ASC`,
+    [
+      stringParameter('rollerUniqueId', rollerUniqueId),
+      ...(staffVenueId ? [stringParameter('staffVenueId', staffVenueId)] : []),
+    ],
+  );
+
+  return mappedRows(result).flatMap((row) => {
+    const groupKey = hashString(
+      `${stringOrNull(row.add_on_group_id) || ''}:${stringOrNull(row.linked_roller_unique_id) || ''}`,
+    ).slice(0, 16);
+    return parseJsonArray(row.items_summary).map((item, index) => mapStaffBookingItem({
+      booking_date: item.bookingDate,
+      booking_item_key: `linked-provisional:${groupKey}:${index}:${stringOrNull(item.productId) || 'product'}`,
+      duration_minutes: item.durationMinutes,
+      end_time: item.endTime,
+      fulfillment_source: 'linked_add_on',
+      item_summary: JSON.stringify(item),
+      linked_booking_reference: null,
+      linked_roller_unique_id: null,
+      parent_product_id: item.parentProductId,
+      parent_product_name: item.parentProductName,
+      product_id: item.productId,
+      product_name: item.productName,
+      quantity: item.quantity,
+      start_time: item.startTime,
+    }));
+  });
 }
 
 function mapStaffBookingItem(row) {
