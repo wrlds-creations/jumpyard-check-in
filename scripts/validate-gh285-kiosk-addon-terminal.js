@@ -139,6 +139,27 @@ assert.match(bookingSource, /draft\.flow_type IN \('new_booking', 'add_product'\
 assert.match(bookingSource, /if \(prepayment\.flow_type === 'new_booking'\) \{[\s\S]*ensureProvisionalKioskHandoff/);
 assert.match(bookingSource, /confirmKioskAddProductReconciliation\(request, readback\)/);
 assert.match(bookingSource, /INSERT INTO jumpyard\.booking_links/);
+const persistLinkStart = bookingSource.indexOf('async function persistAddOnBookingLink');
+const persistLinkEnd = bookingSource.indexOf('function centsFromAmount', persistLinkStart);
+const persistLinkSource = bookingSource.slice(persistLinkStart, persistLinkEnd);
+assert.ok(persistLinkStart >= 0 && persistLinkEnd > persistLinkStart);
+assert.doesNotMatch(
+  persistLinkSource,
+  /\bRETURNING\b/i,
+  'booking_links persistence must not require SELECT privilege through INSERT ... RETURNING',
+);
+assert.doesNotMatch(
+  persistLinkSource,
+  /\bSELECT\b/i,
+  'the least-privilege booking role must not read booking_links',
+);
+assert.match(persistLinkSource, /createdAt: null/);
+assert.match(bookingSource, /emitSafeBookingOperationFailure\(\{ correlationId, error, routeKey \}\)/);
+const safeFailureStart = bookingSource.indexOf('function emitSafeBookingOperationFailure');
+const safeFailureEnd = bookingSource.indexOf('function rollerOperationFromEndpointPath', safeFailureStart);
+const safeFailureSource = bookingSource.slice(safeFailureStart, safeFailureEnd);
+assert.match(safeFailureSource, /booking\.operation_failed/);
+assert.doesNotMatch(safeFailureSource, /error\?\.message|error\.message|error\?\.stack|error\.stack/);
 assert.match(bookingSource, /requireTickets: existing\.flow_type !== 'add_product'/);
 const addProductHandlerStart = bookingSource.indexOf('async function handleAddProductDraft');
 const addProductHandlerEnd = bookingSource.indexOf('function normalizeQuoteRequest', addProductHandlerStart);

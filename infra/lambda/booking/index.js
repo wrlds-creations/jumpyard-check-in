@@ -207,9 +207,10 @@ let cachedVenuePaymentConfigExpiresAt = 0;
 
 exports.handler = async (event) => {
   let correlationId = normalizeCorrelationId(getHeader(event, 'x-correlation-id')) || createCorrelationId();
+  let routeKey = 'unknown';
 
   try {
-    const routeKey = event?.routeKey || `${event?.requestContext?.http?.method ?? ''} ${event?.rawPath ?? ''}`.trim();
+    routeKey = event?.routeKey || `${event?.requestContext?.http?.method ?? ''} ${event?.rawPath ?? ''}`.trim();
 
     const body = parseBody(event);
     correlationId = normalizeCorrelationId(body.correlationId) || correlationId;
@@ -265,6 +266,7 @@ exports.handler = async (event) => {
     });
   } catch (error) {
     const safeError = classifyError(error);
+    emitSafeBookingOperationFailure({ correlationId, error, routeKey });
     return jsonResponse(safeError.statusCode, correlationId, {
       status: safeError.status,
       error: {
@@ -4583,7 +4585,9 @@ async function persistPrepaymentDraft({
 
 async function persistAddOnBookingLink({ addOnGroupId, draft, original, prepaymentDraft }) {
   const linkId = `jyl_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`;
-  const result = await executeStatement(
+  const linkedRollerUniqueId = draft.uniqueId || prepaymentDraft.rollerDraftUniqueId;
+  const linkedBookingReference = draft.bookingReference ?? null;
+  await executeStatement(
     `INSERT INTO jumpyard.booking_links (
        link_id,
        link_type,
@@ -4603,38 +4607,27 @@ async function persistAddOnBookingLink({ addOnGroupId, draft, original, prepayme
        :linkedBookingReference,
        :addOnGroupId,
        'payment_pending'
-     )
-     RETURNING
-       link_id,
-       link_type,
-       original_roller_unique_id,
-       original_booking_reference,
-       linked_roller_unique_id,
-       linked_booking_reference,
-       add_on_group_id,
-       status,
-       created_at::text AS created_at`,
+     )`,
     [
       stringParameter('linkId', linkId),
       stringParameter('originalRollerUniqueId', original.rollerUniqueId),
       stringParameter('originalBookingReference', original.bookingReference),
-      stringParameter('linkedRollerUniqueId', draft.uniqueId || prepaymentDraft.rollerDraftUniqueId),
-      stringParameter('linkedBookingReference', draft.bookingReference),
+      stringParameter('linkedRollerUniqueId', linkedRollerUniqueId),
+      stringParameter('linkedBookingReference', linkedBookingReference),
       stringParameter('addOnGroupId', addOnGroupId),
     ],
   );
-  const row = firstMappedRow(result);
 
   return {
-    addOnGroupId: stringOrNull(row?.add_on_group_id),
-    createdAt: stringOrNull(row?.created_at),
-    linkId: stringOrNull(row?.link_id),
-    linkType: stringOrNull(row?.link_type),
-    linkedBookingReference: stringOrNull(row?.linked_booking_reference),
-    linkedRollerUniqueId: stringOrNull(row?.linked_roller_unique_id),
-    originalBookingReference: stringOrNull(row?.original_booking_reference),
-    originalRollerUniqueId: stringOrNull(row?.original_roller_unique_id),
-    status: stringOrNull(row?.status),
+    addOnGroupId,
+    createdAt: null,
+    linkId,
+    linkType: 'add_product_draft',
+    linkedBookingReference,
+    linkedRollerUniqueId,
+    originalBookingReference: original.bookingReference,
+    originalRollerUniqueId: original.rollerUniqueId,
+    status: 'payment_pending',
   };
 }
 
@@ -5102,6 +5095,34 @@ function emitKioskPublishMetric(statusCode, result) {
       ...values,
     }),
   );
+}
+
+function emitSafeBookingOperationFailure({ correlationId, error, routeKey }) {
+  const operation = routeKey === 'POST /v1/bookings/{bookingReference}/add-products'
+    ? 'add_product_draft'
+    : routeKey === 'POST /v1/bookings/{bookingReference}/add-products/quote'
+      ? 'add_product_quote'
+      : routeKey === 'POST /v1/bookings/draft/finalize'
+        ? 'draft_finalize'
+        : 'other';
+  const allowedFailureClasses = new Set([
+    'BadRequestException',
+    'DatabaseError',
+    'Error',
+    'ServiceException',
+    'TimeoutError',
+    'TypeError',
+    'ValidationException',
+  ]);
+  const candidate = stringOrNull(error?.name);
+  const failureClass = candidate && allowedFailureClasses.has(candidate) ? candidate : 'unknown';
+
+  console.error(JSON.stringify({
+    correlationId,
+    eventType: 'booking.operation_failed',
+    failureClass,
+    operation,
+  }));
 }
 
 function rollerOperationFromEndpointPath(endpointPath, method) {

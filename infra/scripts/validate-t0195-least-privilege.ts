@@ -186,8 +186,10 @@ function validateHandlerSqlAgainstGrants(
     }
   }
 
-  for (const match of source.matchAll(/\bINSERT\s+INTO\s+jumpyard\.([a-z_]+)[\s\S]{0,1800}?\bON\s+CONFLICT\b[\s\S]{0,800}?\bDO\s+UPDATE\b/gi)) {
-    assertPermission(grants, role, match[1], 'UPDATE', `ON CONFLICT in ${handler}`);
+  for (const match of source.matchAll(/\bINSERT\s+INTO\s+jumpyard\.([a-z_]+)([^`]*)`/gi)) {
+    if (/\bON\s+CONFLICT\b[\s\S]*?\bDO\s+UPDATE\b/i.test(match[2])) {
+      assertPermission(grants, role, match[1], 'UPDATE', `ON CONFLICT in ${handler}`);
+    }
   }
 }
 
