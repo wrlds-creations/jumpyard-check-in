@@ -706,7 +706,9 @@ Draft rules:
 
 Records a sanitized ROLLER terminal result for one server-owned kiosk payment attempt. `approved` calls ROLLER draft publish and then reads the booking back; only a settled authoritative booking returns `booking_confirmed`. `failed`, `cancelled`, and `unknown` update only monotonic safe attempt state.
 
-Required fields are `prepaymentDraftId`, `paymentAttemptId`, `rollerDraftUniqueId`, `outcome`, and an idempotency key. All identifiers must match one `card_present` new-booking row. The endpoint accepts no card data, receipt data, processor reference, terminal id, or raw payment JWT. A late non-approved result cannot downgrade an approved or reconciled attempt.
+Required fields are `prepaymentDraftId`, `paymentAttemptId`, `rollerDraftUniqueId`, `outcome`, and an idempotency key. All identifiers must match one `card_present` row with `flow_type='new_booking'` or `flow_type='add_product'`. The endpoint accepts no card data, receipt data, processor reference, terminal id, or raw payment JWT. A late non-approved result cannot downgrade an approved or reconciled attempt.
+
+For `new_booking`, an authoritative paid booking can create or repair the one provisional check-in/Handoff session. For `add_product`, confirmation instead publishes the prepayment row and returns the linked add-on booking reference; it must not create a second check-in or Handoff session. The add-on link was already stored before the terminal identity was returned, and the existing lookup/webhook reconciliation owns publication of its `booking_links` status. Stock-only add-on readback may have booking items without tickets, while the new-booking path keeps its ticket-bearing readback requirement.
 
 T0030 discovery result:
 
@@ -880,6 +882,10 @@ Rules:
 - T0034 stores that link in `jumpyard.booking_links` with `link_type='add_product_draft'` and stores add-product draft metadata in `jumpyard.prepayment_booking_drafts` with `flow_type='add_product'`.
 - `confirmDraft=true`, customer fields, and an idempotency key are required because the route creates a Roller Playground draft booking.
 - Raw `paymentJwt` values remain response-only and are not persisted in Aurora.
+- The existing-booking kiosk card-present path adds `channel: "kiosk"` and `paymentTerminalAlias: "primary"`. JumpYard Cloud resolves the alias from the server-owned ROLLER secret, re-quotes the basket without terminal data, sends the resolved terminal only when creating the draft, and verifies exact amount plus SEK evidence before returning a terminal-bound JWT.
+- The kiosk response returns a safe fresh payment-attempt id and terminal payment API metadata, never the terminal reference. An explicit retry creates a new draft and attempt instead of reusing ambiguous payment authority.
+- The kiosk sends only the sanitized terminal outcome to `POST /v1/bookings/draft/finalize`. A confirmed add-product payment publishes its prepayment state, while the existing lookup/webhook reconciliation publishes the already stored linked-booking row. The kiosk then resumes the original booking flow; it must not create a second check-in or Handoff session for the add-on draft.
+- The phone path continues to omit kiosk terminal fields and use the Roller ecommerce payment package unchanged.
 - Keep the guest inside the JumpYard PWA/check-in flow as much as possible by using the new booking/payment path instead of same-booking hosted payment link.
 - Do not use same-booking `PUT /bookings/{uniqueId}` plus payment link as the primary pilot path.
 - Same-booking update remains a future option only if Roller confirms a reliable return path and JumpYard explicitly chooses that UX.
@@ -1004,7 +1010,8 @@ Near-term sequence:
 
 ## Open Contract Questions
 
-- How should published add-on bookings update `jumpyard.booking_links.linked_booking_reference` after payment/publish completes?
+Published add-on bookings update `jumpyard.booking_links.linked_booking_reference` through the existing settled-booking lookup/webhook reconciliation path.
+
 - Should add-on product ids come from a server-owned add-on catalog endpoint before production/multi-venue rollout?
 - Which tenders work in the new add-on booking checkout flow: gift card, membership code, multi-visit value?
 - Will Roller/Adyen enable the `scheme` card method for Playground custom checkout so the Adyen Visa test card ending `1142` can be tested on `https://jumpyard-check-in.pages.dev`?

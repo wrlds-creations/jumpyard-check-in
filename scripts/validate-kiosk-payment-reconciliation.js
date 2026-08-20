@@ -136,7 +136,7 @@ assert.match(bookingSource, /selected_ticket_ids = CAST\(:selectedTicketIds AS j
 assert.match(bookingSource, /bookingSyncStatus: 'needs_staff'/);
 assert.match(provisionalMigrationSource, /jumpyard\.checkin_sessions/);
 assert.match(provisionalMigrationSource, /jumpyard_booking_runtime/);
-assert.match(bookingSource, /if \(publishResult\.ok\) \{[\s\S]*normalizeBookingReadback\(publishResult\.body\)/);
+assert.match(bookingSource, /if \(publishResult\.ok\) \{[\s\S]*normalizeBookingReadback\(publishResult\.body(?:,\s*\{[\s\S]*?\})?\)/);
 assert.match(bookingSource, /candidate\?\.rollerUniqueId[\s\S]*readbackIdentifiers\.push\(candidate\.rollerUniqueId\)/);
 assert.match(bookingSource, /for \(const identifier of readbackIdentifiers\)/);
 assert.ok(

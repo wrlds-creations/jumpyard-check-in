@@ -214,7 +214,7 @@ function parseJsonArray(value) {
   }
 }
 
-function normalizeBookingReadback(body) {
+function normalizeBookingReadback(body, options = {}) {
   const booking = body?.booking && typeof body.booking === 'object' ? body.booking : body;
   const costs = booking?.costs && typeof booking.costs === 'object' ? booking.costs : booking;
   const amountOwing = finiteNumber(costs?.amountOwing ?? booking?.amountOwing ?? booking?.remainder);
@@ -224,6 +224,7 @@ function normalizeBookingReadback(body) {
   const ticketIds = items.flatMap((item) => item.tickets.map((ticket) => ticket.ticketId)).filter(Boolean);
   const bookingReference = stringOrNull(booking?.bookingReference ?? booking?.reference ?? booking?.bookingId);
   const rollerUniqueId = stringOrNull(booking?.uniqueId ?? booking?.id ?? booking?.bookingUniqueId);
+  const requiredContentPresent = options.requireTickets === false ? items.length > 0 : ticketIds.length > 0;
   return {
     bookingReference,
     confirmed:
@@ -231,7 +232,7 @@ function normalizeBookingReadback(body) {
       amountOwing <= 0 &&
       !unsafeStatus &&
       Boolean(bookingReference && rollerUniqueId) &&
-      ticketIds.length > 0,
+      requiredContentPresent,
     items,
     paymentStatus,
     rollerUniqueId,
