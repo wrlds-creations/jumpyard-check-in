@@ -1,6 +1,7 @@
 const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client-secrets-manager');
 const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
+const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
 
 const DATABASE_NAME = 'jumpyard_cloud';
@@ -20,6 +21,7 @@ const T0201_CONTROLLED_VENUE_ID = '50871';
 const ROLLER_VENUE_IDENTITY_DELAY_MS = 1000;
 
 const rdsClient = new RDSDataClient({});
+const lambdaClient = new LambdaClient({});
 const secretsClient = new SecretsManagerClient({});
 const ssmClient = new SSMClient({});
 
@@ -80,7 +82,7 @@ exports.handler = async (event) => {
 
       const scopedBooking = scopeBookingForLookupDate(localResult.booking, parkTestScope.lookupDate);
 
-      await reconcilePrepaymentDraftFromPaidBooking(scopedBooking, 'aurora_local_lookup');
+      await reconcilePrepaymentDraftFromPaidBooking(scopedBooking, 'aurora_local_lookup', correlationId);
       const eligibility = evaluateEligibility(scopedBooking, request);
       const guestAccess = await createGuestAccessToken(scopedBooking.rollerUniqueId);
 
@@ -222,7 +224,7 @@ exports.handler = async (event) => {
     const scopedBooking = scopeBookingForLookupDate(booking, parkTestScope.lookupDate);
 
     await upsertLiveBooking(scopedBooking, config.env, parkTestScope.venueId ?? request.venueId);
-    await reconcilePrepaymentDraftFromPaidBooking(scopedBooking, 'roller_live_lookup');
+    await reconcilePrepaymentDraftFromPaidBooking(scopedBooking, 'roller_live_lookup', correlationId);
     const eligibility = evaluateEligibility(scopedBooking, request);
     const guestAccess = await createGuestAccessToken(scopedBooking.rollerUniqueId);
 
@@ -516,6 +518,7 @@ async function findLocalBookingRow(identifier) {
        ) AS booking_name,
        b.normalized_summary ->> 'customerFirstName' AS customer_first_name,
        b.normalized_summary ->> 'customerLastName' AS customer_last_name,
+       b.normalized_summary ->> 'externalId' AS external_id,
        b.freshness_status,
        b.is_tombstoned,
        b.last_seen_from_roller_at::text AS last_seen_from_roller_at,
@@ -551,6 +554,7 @@ async function findLocalBookingRow(identifier) {
     customerFirstName: stringOrNull(row.customer_first_name),
     customerLastName: stringOrNull(row.customer_last_name),
     endTime: stringOrNull(row.end_time),
+    externalId: stringOrNull(row.external_id),
     freshnessStatus: stringOrNull(row.freshness_status) || 'stale',
     isTombstoned: Boolean(row.is_tombstoned),
     lastSeenFromRollerAt: stringOrNull(row.last_seen_from_roller_at),
@@ -642,7 +646,7 @@ function normalizeLocalBooking(bookingRow, items) {
     bookingName: bookingRow.bookingName,
     bookingReference: bookingRow.bookingReference,
     rollerUniqueId: bookingRow.rollerUniqueId,
-    externalId: null,
+    externalId: bookingRow.externalId,
     status: bookingRow.bookingStatus,
     paymentStatus: bookingRow.paymentStatus ?? bookingRow.bookingStatus,
     venueId: bookingRow.venueId,
@@ -1831,7 +1835,7 @@ async function upsertLiveTicket(rollerUniqueId, bookingItemKey, item, ticket) {
   );
 }
 
-async function reconcilePrepaymentDraftFromPaidBooking(booking, source) {
+async function reconcilePrepaymentDraftFromPaidBooking(booking, source, correlationId) {
   if (!booking?.rollerUniqueId || !booking.bookingReference || !isPaymentSettled(booking)) return [];
 
   const result = await executeStatement(
@@ -1878,12 +1882,72 @@ async function reconcilePrepaymentDraftFromPaidBooking(booking, source) {
     await recordPrepaymentDraftPublishedEvent(booking, draft, source);
   }
 
+  await requestKioskAuthoritativeConfirmation(booking, source, correlationId);
+
   const updatedLinks = await reconcileLinkedAddOnBookingLinks(booking, source);
   for (const link of updatedLinks) {
     await recordBookingLinkPublishedEvent(booking, link, source);
   }
 
   return updatedDrafts;
+}
+
+async function requestKioskAuthoritativeConfirmation(booking, source, correlationId) {
+  const externalId = stringOrNull(booking?.externalId);
+  if (!externalId) return null;
+
+  const result = await executeStatement(
+    `SELECT prepayment_draft_id, payment_attempt_id
+     FROM jumpyard.prepayment_booking_drafts
+     WHERE external_id = :externalId
+       AND payment_channel = 'card_present'
+       AND flow_type = 'new_booking'
+       AND payment_attempt_status IN ('approved', 'reconciled')
+       AND status IN ('payment_pending', 'payment_blocked', 'published')
+     ORDER BY created_at DESC
+     LIMIT 2`,
+    [stringParameter('externalId', externalId)],
+  );
+  const candidates = mappedRows(result);
+  if (candidates.length === 0) return null;
+  if (candidates.length !== 1) {
+    const error = new Error('The authoritative kiosk confirmation candidate was ambiguous.');
+    error.code = 'kiosk_confirmation_ambiguous';
+    throw error;
+  }
+
+  const functionName = stringOrNull(process.env.KIOSK_AUTHORITATIVE_CONFIRMATION_FUNCTION_NAME);
+  if (!functionName) {
+    const error = new Error('The internal kiosk confirmation function is not configured.');
+    error.code = 'kiosk_confirmation_configuration_error';
+    throw error;
+  }
+  const candidate = candidates[0];
+  const response = await lambdaClient.send(new InvokeCommand({
+    FunctionName: functionName,
+    InvocationType: 'RequestResponse',
+    Payload: Buffer.from(JSON.stringify({
+      source: 'jumpyard.kiosk-authoritative-confirmation',
+      detail: {
+        bookingReference: booking.bookingReference,
+        correlationId,
+        externalId,
+        paymentAttemptId: candidate.payment_attempt_id,
+        prepaymentDraftId: candidate.prepayment_draft_id,
+        rollerUniqueId: booking.rollerUniqueId,
+        trigger: source,
+      },
+    })),
+  }));
+  const payload = response.Payload
+    ? JSON.parse(Buffer.from(response.Payload).toString('utf8'))
+    : null;
+  if (response.FunctionError || payload?.status !== 'confirmed') {
+    const error = new Error('The authoritative kiosk Handoff attachment did not complete.');
+    error.code = 'kiosk_confirmation_failed';
+    throw error;
+  }
+  return payload;
 }
 
 async function reconcileLinkedAddOnBookingLinks(booking, source) {
