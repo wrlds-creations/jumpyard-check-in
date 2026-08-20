@@ -947,6 +947,11 @@ exports.handler = async (event) => {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'booking')),
       timeout: Duration.minutes(2),
     });
+    lookupHandler.addEnvironment(
+      'KIOSK_AUTHORITATIVE_CONFIRMATION_FUNCTION_NAME',
+      bookingHandler.functionName,
+    );
+    bookingHandler.grantInvoke(lookupHandler);
     bookingHandler.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['lambda:InvokeFunction'],
@@ -982,6 +987,7 @@ exports.handler = async (event) => {
     const webhookProcessorHandler = this.createHandler('WebhookProcessorHandler', 'webhook', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'webhook')),
       environment: {
+        KIOSK_AUTHORITATIVE_CONFIRMATION_FUNCTION_NAME: bookingHandler.functionName,
         WEBHOOK_RUNTIME_MODE: 'processor',
       },
       functionNameSuffix: 'webhook-processor',
@@ -991,6 +997,7 @@ exports.handler = async (event) => {
     });
     webhookQueue.grantSendMessages(webhookHandler);
     webhookQueue.grantConsumeMessages(webhookProcessorHandler);
+    bookingHandler.grantInvoke(webhookProcessorHandler);
     webhookProcessorHandler.addEventSource(
       new SqsEventSource(webhookQueue, {
         batchSize: 1,

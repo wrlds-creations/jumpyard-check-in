@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client-secrets-manager');
 const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
+const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const { SendMessageCommand, SQSClient } = require('@aws-sdk/client-sqs');
 
 const DATABASE_NAME = 'jumpyard_cloud';
@@ -31,6 +32,7 @@ const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 const SHARED_TOKEN_CACHE_MS = 60 * 1000;
 
 const rdsClient = new RDSDataClient({});
+const lambdaClient = new LambdaClient({});
 const secretsClient = new SecretsManagerClient({});
 const ssmClient = new SSMClient({});
 const sqsClient = new SQSClient({});
@@ -45,6 +47,7 @@ let cachedVerifiedVenue = null;
 let hooks = {
   executeStatement: (command) => rdsClient.send(command),
   fetch: (...args) => fetch(...args),
+  invokeLambda: (command) => lambdaClient.send(command),
   now: () => Date.now(),
   readParameter: (name) => readParameter(name),
   readSecret: (secretId) => readSecret(secretId),
@@ -719,7 +722,7 @@ async function enrichWebhookEvent(intake, correlationId) {
     const bookingItemKeys = await upsertWebhookBooking(booking, config.env, scope.venueId);
     await deleteMissingWebhookChildren(booking, bookingItemKeys);
     const guestProfile = await upsertWebhookGuestProfile(booking);
-    await reconcilePrepaymentDraftFromPaidBooking(booking, 'roller_webhook_enrichment');
+    await reconcilePrepaymentDraftFromPaidBooking(booking, 'roller_webhook_enrichment', correlationId);
     await updateWebhookEventStatus(intake.eventId, 'processed', null, true);
     await persistEnrichmentEventLog(intake, correlationId, booking, products.status, guestProfile);
 
@@ -1882,7 +1885,7 @@ async function upsertWebhookGuestProfile(booking) {
   };
 }
 
-async function reconcilePrepaymentDraftFromPaidBooking(booking, source) {
+async function reconcilePrepaymentDraftFromPaidBooking(booking, source, correlationId) {
   if (!booking?.rollerUniqueId || !booking.bookingReference || !isPaymentSettled(booking)) return [];
 
   const result = await executeStatement(
@@ -1929,12 +1932,72 @@ async function reconcilePrepaymentDraftFromPaidBooking(booking, source) {
     await recordPrepaymentDraftPublishedEvent(booking, draft, source);
   }
 
+  await requestKioskAuthoritativeConfirmation(booking, source, correlationId);
+
   const updatedLinks = await reconcileLinkedAddOnBookingLinks(booking, source);
   for (const link of updatedLinks) {
     await recordBookingLinkPublishedEvent(booking, link, source);
   }
 
   return updatedDrafts;
+}
+
+async function requestKioskAuthoritativeConfirmation(booking, source, correlationId) {
+  const externalId = stringOrNull(booking?.externalId);
+  if (!externalId) return null;
+
+  const result = await executeStatement(
+    `SELECT prepayment_draft_id, payment_attempt_id
+     FROM jumpyard.prepayment_booking_drafts
+     WHERE external_id = :externalId
+       AND payment_channel = 'card_present'
+       AND flow_type = 'new_booking'
+       AND payment_attempt_status IN ('approved', 'reconciled')
+       AND status IN ('payment_pending', 'payment_blocked', 'published')
+     ORDER BY created_at DESC
+     LIMIT 2`,
+    [stringParameter('externalId', externalId)],
+  );
+  const candidates = mappedRows(result);
+  if (candidates.length === 0) return null;
+  if (candidates.length !== 1) {
+    const error = new Error('The authoritative kiosk confirmation candidate was ambiguous.');
+    error.code = 'kiosk_confirmation_ambiguous';
+    throw error;
+  }
+
+  const functionName = stringOrNull(process.env.KIOSK_AUTHORITATIVE_CONFIRMATION_FUNCTION_NAME);
+  if (!functionName) {
+    const error = new Error('The internal kiosk confirmation function is not configured.');
+    error.code = 'kiosk_confirmation_configuration_error';
+    throw error;
+  }
+  const candidate = candidates[0];
+  const response = await hooks.invokeLambda(new InvokeCommand({
+    FunctionName: functionName,
+    InvocationType: 'RequestResponse',
+    Payload: Buffer.from(JSON.stringify({
+      source: 'jumpyard.kiosk-authoritative-confirmation',
+      detail: {
+        bookingReference: booking.bookingReference,
+        correlationId,
+        externalId,
+        paymentAttemptId: candidate.payment_attempt_id,
+        prepaymentDraftId: candidate.prepayment_draft_id,
+        rollerUniqueId: booking.rollerUniqueId,
+        trigger: source,
+      },
+    })),
+  }));
+  const payload = response.Payload
+    ? JSON.parse(Buffer.from(response.Payload).toString('utf8'))
+    : null;
+  if (response.FunctionError || payload?.status !== 'confirmed') {
+    const error = new Error('The authoritative kiosk Handoff attachment did not complete.');
+    error.code = 'kiosk_confirmation_failed';
+    throw error;
+  }
+  return payload;
 }
 
 async function reconcileLinkedAddOnBookingLinks(booking, source) {
@@ -2402,6 +2465,7 @@ exports.__test = {
   parseWebhookQueueMessage,
   processWebhookEventById,
   requestRoller,
+  requestKioskAuthoritativeConfirmation,
   upsertWebhookBookingItem,
   reset() {
     cachedWebhookToken = null;
@@ -2414,6 +2478,7 @@ exports.__test = {
     hooks = {
       executeStatement: (command) => rdsClient.send(command),
       fetch: (...args) => fetch(...args),
+      invokeLambda: (command) => lambdaClient.send(command),
       now: () => Date.now(),
       readParameter: (name) => readParameter(name),
       readSecret: (secretId) => readSecret(secretId),

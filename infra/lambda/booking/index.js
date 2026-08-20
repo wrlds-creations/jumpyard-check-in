@@ -35,6 +35,7 @@ const GUEST_ACCESS_LINK_WINDOW_MINUTES = 60;
 const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 const KIOSK_RECONCILIATION_SOURCE = 'jumpyard.kiosk-payment-reconciliation';
+const KIOSK_AUTHORITATIVE_CONFIRMATION_SOURCE = 'jumpyard.kiosk-authoritative-confirmation';
 const KIOSK_PUBLISH_SETTLEMENT_DELAY_MS = 10_000;
 const KIOSK_PUBLISH_RETRY_OFFSETS_MS = [
   10_000,
@@ -216,6 +217,11 @@ exports.handler = async (event) => {
     if (isKioskReconciliationEvent(event)) {
       correlationId = normalizeCorrelationId(event?.detail?.correlationId) || correlationId;
       return await handleKioskPaymentReconciliation(event.detail, correlationId);
+    }
+
+    if (isKioskAuthoritativeConfirmationEvent(event)) {
+      correlationId = normalizeCorrelationId(event?.detail?.correlationId) || correlationId;
+      return await handleKioskAuthoritativeConfirmation(event.detail, correlationId);
     }
 
     if (isDraftFinalizeRoute(routeKey, event)) {
@@ -936,10 +942,13 @@ async function findKioskPrepaymentAttempt(request) {
        draft.publish_http_status,
        session.checkin_session_id,
        session.roller_unique_id AS confirmed_roller_unique_id,
+       session.booking_reference AS confirmed_booking_reference,
        session.status AS session_status,
        session.safety_status,
        session.handoff_code,
        session.handoff_status,
+       session.selected_ticket_ids::text AS selected_ticket_ids,
+       session.session_summary ->> 'bookingSyncStatus' AS session_booking_sync_status,
        session.expires_at::text AS session_expires_at,
        session.expires_at::text AS guest_access_expires_at
      FROM jumpyard.prepayment_booking_drafts AS draft
@@ -1207,11 +1216,15 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
   }
 
   const existing = await findKioskPrepaymentAttempt(request);
-  if (!existing || existing.payment_attempt_status !== 'approved') {
+  if (!existing || !['approved', 'reconciled'].includes(existing.payment_attempt_status)) {
     return { status: publicKioskPaymentStatus(existing).status };
   }
   if (existing.booking_confirmation_status === 'confirmed' || existing.status === 'published') {
-    return { status: 'confirmed' };
+    if (isKioskHandoffAuthoritativelyAttached(existing)) return { status: 'confirmed' };
+    return repairKioskHandoffFromAuthoritativeStorage(request, correlationId, 'reconciliation_worker_resume');
+  }
+  if (existing.payment_attempt_status !== 'approved') {
+    return { status: publicKioskPaymentStatus(existing).status };
   }
   if (isEmergencyStopEnabled() || !isNewBookingDraftWriteEnabled()) {
     await markKioskReconciliationNeedsStaff(
@@ -1249,7 +1262,8 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
 
     const current = await findKioskPrepaymentAttempt(request);
     if (current?.booking_confirmation_status === 'confirmed' || current?.status === 'published') {
-      return { status: 'confirmed' };
+      if (isKioskHandoffAuthoritativelyAttached(current)) return { status: 'confirmed' };
+      return repairKioskHandoffFromAuthoritativeStorage(request, correlationId, 'reconciliation_worker_race');
     }
     if (current?.payment_attempt_status !== 'approved') {
       return { status: publicKioskPaymentStatus(current).status };
@@ -1314,6 +1328,11 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
     if (readback) {
       await persistKioskReconciliationBookingSnapshot(existing, readback);
       const confirmed = await confirmKioskReconciliation(request, readback);
+      if (!confirmed || Number(confirmed.attached_session_count) !== 1 || Number(confirmed.attached_token_count) !== 1) {
+        await markKioskReconciliationNeedsStaff(request, 'authoritative_handoff_attachment_missing');
+        emitKioskReconciliationMetric('needs_staff', index + 1, Date.now() - startedAt);
+        return { status: 'needs_staff' };
+      }
       await writeBookingEventLog({
         correlationId,
         eventType: 'booking.kiosk_terminal_reconciled',
@@ -1353,6 +1372,203 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
     Date.now() - startedAt,
   );
   return { status: 'needs_staff' };
+}
+
+async function handleKioskAuthoritativeConfirmation(detail, correlationId) {
+  const request = {
+    bookingReference: stringOrNull(detail?.bookingReference),
+    externalId: stringOrNull(detail?.externalId),
+    paymentAttemptId: stringOrNull(detail?.paymentAttemptId),
+    prepaymentDraftId: stringOrNull(detail?.prepaymentDraftId),
+    rollerUniqueId: stringOrNull(detail?.rollerUniqueId),
+  };
+  if (
+    !/^jypd_[a-f0-9]{18}$/.test(request.prepaymentDraftId ?? '') ||
+    !/^jytp_[a-f0-9]{18}$/.test(request.paymentAttemptId ?? '') ||
+    !request.externalId ||
+    request.externalId.length > 64 ||
+    !request.rollerUniqueId ||
+    request.rollerUniqueId.length > 128 ||
+    !request.bookingReference ||
+    request.bookingReference.length > 128
+  ) {
+    return { status: 'invalid_authoritative_confirmation_request' };
+  }
+
+  return repairKioskHandoffFromAuthoritativeStorage(
+    request,
+    correlationId,
+    stringOrNull(detail?.trigger) || 'authoritative_confirmation',
+  );
+}
+
+async function repairKioskHandoffFromAuthoritativeStorage(request, correlationId, trigger) {
+  const candidates = await findKioskAuthoritativeConfirmationCandidates(request);
+  const reason = validateKioskAuthoritativeConfirmationCandidates(candidates, request);
+  if (reason) {
+    await markKioskReconciliationNeedsStaff(request, reason);
+    emitKioskReconciliationMetric('needs_staff', 0, 0);
+    return { status: 'needs_staff', reason };
+  }
+
+  const candidate = candidates[0];
+  const readback = {
+    bookingReference: candidate.booking_reference,
+    rollerUniqueId: candidate.roller_unique_id,
+    ticketIds: parseJsonOrNull(candidate.ticket_ids) ?? [],
+  };
+  const confirmed = await confirmKioskReconciliation(request, readback);
+  if (!confirmed || Number(confirmed.attached_session_count) !== 1 || Number(confirmed.attached_token_count) !== 1) {
+    await markKioskReconciliationNeedsStaff(request, 'authoritative_handoff_attachment_missing');
+    emitKioskReconciliationMetric('needs_staff', 0, 0);
+    return { status: 'needs_staff', reason: 'authoritative_handoff_attachment_missing' };
+  }
+
+  await writeBookingEventLog({
+    correlationId,
+    eventType: 'booking.kiosk_handoff_authoritatively_attached',
+    payload: {
+      paymentChannel: 'card_present',
+      trigger: String(trigger ?? 'authoritative_confirmation').slice(0, 64),
+    },
+    subjectRef: request.prepaymentDraftId,
+    summary: 'A paid ROLLER booking was authoritatively attached to its existing kiosk Handoff session.',
+  });
+  emitKioskReconciliationMetric('confirmed', Number(confirmed.reconciliation_attempt_count ?? 0), 0);
+  return { status: 'confirmed' };
+}
+
+async function findKioskAuthoritativeConfirmationCandidates(request) {
+  const result = await executeStatement(
+    `SELECT
+       draft.prepayment_draft_id,
+       draft.payment_attempt_id,
+       draft.payment_attempt_status,
+       draft.external_id,
+       draft.roller_env AS draft_roller_env,
+       draft.booking_date::text AS draft_booking_date,
+       draft.total_cents AS draft_total_cents,
+       draft.currency AS draft_currency,
+       booking.roller_unique_id,
+       booking.booking_reference,
+       booking.roller_env AS booking_roller_env,
+       booking.venue_id,
+       booking.booking_status,
+       booking.payment_status,
+       booking.amount_owing_cents,
+       booking.total_cents AS booking_total_cents,
+       booking.currency AS booking_currency,
+       booking.booking_date::text AS booking_date,
+       booking.source_last_updated_by,
+       booking.last_seen_from_roller_at::text AS last_seen_from_roller_at,
+       booking.freshness_status,
+       booking.is_tombstoned,
+       booking.normalized_summary ->> 'externalId' AS booking_external_id,
+       COALESCE((
+         SELECT jsonb_agg(ticket.ticket_id ORDER BY ticket.ticket_id)
+         FROM jumpyard.roller_booking_tickets AS ticket
+         WHERE ticket.roller_unique_id = booking.roller_unique_id
+       ), '[]'::jsonb)::text AS ticket_ids
+     FROM jumpyard.prepayment_booking_drafts AS draft
+     JOIN jumpyard.roller_bookings AS booking
+       ON booking.roller_env = draft.roller_env
+      AND booking.normalized_summary ->> 'externalId' = draft.external_id
+     WHERE draft.prepayment_draft_id = :prepaymentDraftId
+       AND draft.payment_attempt_id = :paymentAttemptId
+       AND draft.payment_channel = 'card_present'
+       AND draft.flow_type = 'new_booking'
+       AND draft.payment_attempt_status IN ('approved', 'reconciled')
+     ORDER BY booking.last_seen_from_roller_at DESC NULLS LAST
+     LIMIT 2`,
+    [
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+    ],
+  );
+  return mappedRows(result);
+}
+
+function validateKioskAuthoritativeConfirmationCandidates(candidates, request) {
+  if (candidates.length === 0) return 'authoritative_booking_not_found';
+  if (candidates.length !== 1) return 'authoritative_booking_ambiguous';
+
+  const candidate = candidates[0];
+  const ticketIds = parseJsonOrNull(candidate.ticket_ids);
+  const expectedVenueId =
+    stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID) ||
+    stringOrNull(process.env.ROLLER_DATA_SYNC_VENUE_ID) ||
+    stringOrNull(process.env.STAFF_IDENTITY_VENUE_ID);
+  const paymentStatus = stringOrNull(candidate.payment_status);
+  const bookingStatus = stringOrNull(candidate.booking_status);
+  const unsafeStatus = /pending|unpaid|partial|cancel|fail|draft/i.test(`${paymentStatus ?? ''} ${bookingStatus ?? ''}`);
+
+  if (request.externalId && candidate.external_id !== request.externalId) return 'authoritative_external_id_mismatch';
+  if (request.rollerUniqueId && candidate.roller_unique_id !== request.rollerUniqueId) {
+    return 'authoritative_booking_id_mismatch';
+  }
+  if (request.bookingReference && candidate.booking_reference !== request.bookingReference) {
+    return 'authoritative_booking_reference_mismatch';
+  }
+  if (!candidate.external_id || candidate.booking_external_id !== candidate.external_id) {
+    return 'authoritative_external_id_mismatch';
+  }
+  if (candidate.booking_roller_env !== candidate.draft_roller_env) return 'authoritative_environment_mismatch';
+  if (!expectedVenueId) return 'authoritative_venue_configuration_missing';
+  if (candidate.venue_id !== expectedVenueId) return 'authoritative_venue_mismatch';
+  if (
+    !candidate.booking_date ||
+    !candidate.draft_booking_date ||
+    candidate.booking_date !== candidate.draft_booking_date
+  ) {
+    return 'authoritative_booking_date_mismatch';
+  }
+  if (
+    candidate.booking_total_cents === null ||
+    candidate.booking_total_cents === undefined ||
+    candidate.draft_total_cents === null ||
+    candidate.draft_total_cents === undefined ||
+    Number(candidate.booking_total_cents) !== Number(candidate.draft_total_cents)
+  ) {
+    return 'authoritative_total_mismatch';
+  }
+  if (
+    candidate.booking_currency &&
+    candidate.draft_currency &&
+    candidate.booking_currency !== candidate.draft_currency
+  ) {
+    return 'authoritative_currency_mismatch';
+  }
+  if (
+    candidate.amount_owing_cents === null ||
+    candidate.amount_owing_cents === undefined ||
+    Number(candidate.amount_owing_cents) !== 0 ||
+    !paymentStatus ||
+    unsafeStatus
+  ) {
+    return 'authoritative_payment_not_settled';
+  }
+  if (candidate.is_tombstoned || candidate.freshness_status !== 'fresh' || !candidate.last_seen_from_roller_at) {
+    return 'authoritative_booking_not_fresh';
+  }
+  if (!['roller_live_lookup', 'roller_webhook_enrichment'].includes(candidate.source_last_updated_by)) {
+    return 'authoritative_source_invalid';
+  }
+  if (!Array.isArray(ticketIds) || ticketIds.length === 0 || ticketIds.some((ticketId) => !stringOrNull(ticketId))) {
+    return 'authoritative_tickets_missing';
+  }
+  return null;
+}
+
+function isKioskHandoffAuthoritativelyAttached(row) {
+  const ticketIds = parseJsonOrNull(row?.selected_ticket_ids);
+  return Boolean(
+    stringOrNull(row?.checkin_session_id) &&
+    stringOrNull(row?.confirmed_roller_unique_id) &&
+    stringOrNull(row?.confirmed_booking_reference) &&
+    stringOrNull(row?.session_booking_sync_status) === 'confirmed' &&
+    Array.isArray(ticketIds) &&
+    ticketIds.length > 0
+  );
 }
 
 async function claimKioskReconciliation(request) {
@@ -1435,7 +1651,26 @@ async function recordKioskReconciliationAttempt(request, resultCode) {
 
 async function confirmKioskReconciliation(request, readback) {
   const result = await executeStatement(
-    `WITH confirmed AS (
+    `WITH eligible AS (
+       SELECT draft.reconciliation_attempt_count
+       FROM jumpyard.prepayment_booking_drafts AS draft
+       WHERE draft.prepayment_draft_id = :prepaymentDraftId
+         AND draft.payment_attempt_id = :paymentAttemptId
+         AND draft.payment_channel = 'card_present'
+         AND draft.flow_type = 'new_booking'
+         AND draft.payment_attempt_status IN ('approved', 'reconciled')
+         AND (
+           SELECT count(*)
+           FROM jumpyard.checkin_sessions AS session
+           WHERE session.source_lookup_ref = draft.prepayment_draft_id
+             AND session.session_summary ->> 'paymentAttemptId' = draft.payment_attempt_id
+         ) = 1
+         AND (
+           SELECT count(*)
+           FROM jumpyard.checkin_tokens AS token
+           WHERE token.token_hash = :guestAccessTokenHash
+         ) = 1
+     ), confirmed AS (
        UPDATE jumpyard.prepayment_booking_drafts
        SET status = 'published',
            payment_attempt_status = 'reconciled',
@@ -1448,6 +1683,7 @@ async function confirmKioskReconciliation(request, readback) {
        WHERE prepayment_draft_id = :prepaymentDraftId
          AND payment_attempt_id = :paymentAttemptId
          AND payment_attempt_status IN ('approved', 'reconciled')
+         AND EXISTS (SELECT 1 FROM eligible)
        RETURNING reconciliation_attempt_count
      ), attached_session AS (
        UPDATE jumpyard.checkin_sessions
@@ -1456,16 +1692,22 @@ async function confirmKioskReconciliation(request, readback) {
            selected_ticket_ids = CAST(:selectedTicketIds AS jsonb),
            updated_at = now(),
            session_summary = session_summary || CAST(:sessionSummary AS jsonb)
-       WHERE source_lookup_ref = :prepaymentDraftId
-         AND session_summary ->> 'paymentAttemptId' = :paymentAttemptId
-       RETURNING checkin_session_id
+        WHERE source_lookup_ref = :prepaymentDraftId
+          AND session_summary ->> 'paymentAttemptId' = :paymentAttemptId
+          AND EXISTS (SELECT 1 FROM confirmed)
+        RETURNING checkin_session_id
      ), attached_guest_access AS (
        UPDATE jumpyard.checkin_tokens
-       SET roller_unique_id = :rollerUniqueId
-       WHERE token_hash = :guestAccessTokenHash
-       RETURNING token_hash
+        SET roller_unique_id = :rollerUniqueId
+        WHERE token_hash = :guestAccessTokenHash
+          AND EXISTS (SELECT 1 FROM confirmed)
+        RETURNING token_hash
      )
-     SELECT reconciliation_attempt_count FROM confirmed`,
+     SELECT
+       reconciliation_attempt_count,
+       (SELECT count(*) FROM attached_session) AS attached_session_count,
+       (SELECT count(*) FROM attached_guest_access) AS attached_token_count
+     FROM confirmed`,
     [
       stringParameter('bookingReference', readback.bookingReference),
       stringParameter('rollerUniqueId', readback.rollerUniqueId),
@@ -4751,6 +4993,10 @@ function isDraftFinalizeRoute(routeKey, event) {
 
 function isKioskReconciliationEvent(event) {
   return event?.source === KIOSK_RECONCILIATION_SOURCE && event?.detail?.trigger !== 'http';
+}
+
+function isKioskAuthoritativeConfirmationEvent(event) {
+  return event?.source === KIOSK_AUTHORITATIVE_CONFIRMATION_SOURCE && event?.detail?.trigger !== 'http';
 }
 
 function isAvailabilityRoute(routeKey, event) {

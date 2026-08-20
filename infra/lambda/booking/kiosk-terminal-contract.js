@@ -110,19 +110,30 @@ function publicKioskPaymentStatus(row) {
   const paymentStatus = stringOrNull(row?.payment_attempt_status);
   const storedConfirmationStatus = stringOrNull(row?.booking_confirmation_status);
   const bookingReference = stringOrNull(row?.roller_booking_reference);
-  const confirmed =
+  const bookingConfirmed =
     storedConfirmationStatus === 'confirmed' ||
     paymentStatus === 'reconciled' ||
     row?.status === 'published';
+  const hasProvisionalHandoff = Boolean(stringOrNull(row?.checkin_session_id));
+  const handoffConfirmed =
+    !hasProvisionalHandoff ||
+    (
+      stringOrNull(row?.session_booking_sync_status) === 'confirmed' &&
+      Boolean(stringOrNull(row?.confirmed_roller_unique_id)) &&
+      parseJsonArray(row?.selected_ticket_ids).length > 0
+    );
+  const confirmed = bookingConfirmed && handoffConfirmed;
   const confirmationStatus = confirmed
     ? 'confirmed'
-    : storedConfirmationStatus === 'needs_staff' || paymentStatus === 'unknown'
+    : storedConfirmationStatus === 'needs_staff' ||
+        stringOrNull(row?.session_booking_sync_status) === 'needs_staff' ||
+        paymentStatus === 'unknown'
       ? 'needs_staff'
       : storedConfirmationStatus === 'failed' || ['failed', 'cancelled'].includes(paymentStatus)
         ? 'failed'
         : 'pending';
 
-  const provisionalHandoff = stringOrNull(row?.checkin_session_id)
+  const provisionalHandoff = hasProvisionalHandoff
     ? {
         booking: {
           amountOwing: 0,
@@ -143,7 +154,11 @@ function publicKioskPaymentStatus(row) {
           token: stringOrNull(row?.payment_attempt_id),
         },
         session: {
-          bookingSyncStatus: confirmed ? 'confirmed' : 'pending',
+          bookingSyncStatus: confirmed
+            ? 'confirmed'
+            : stringOrNull(row?.session_booking_sync_status) === 'needs_staff'
+              ? 'needs_staff'
+              : 'pending',
           checkinSessionId: stringOrNull(row?.checkin_session_id),
           expiresAt: stringOrNull(row?.session_expires_at),
           handoffCode: stringOrNull(row?.handoff_code),
