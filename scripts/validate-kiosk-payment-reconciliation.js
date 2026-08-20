@@ -133,7 +133,7 @@ assert.match(bookingSource, /payload: \{ failureClass \}/);
 assert.match(bookingSource, /request\.action === 'status'/);
 assert.match(bookingSource, /ensureProvisionalKioskHandoff\(request\)/);
 assert.match(bookingSource, /selected_ticket_ids = CAST\(:selectedTicketIds AS jsonb\)/);
-assert.match(bookingSource, /bookingSyncStatus: 'needs_staff'/);
+assert.match(bookingSource, /(?:bookingSyncStatus:|'bookingSyncStatus',) 'needs_staff'/);
 assert.match(provisionalMigrationSource, /jumpyard\.checkin_sessions/);
 assert.match(provisionalMigrationSource, /jumpyard_booking_runtime/);
 assert.match(bookingSource, /if \(publishResult\.ok\) \{[\s\S]*normalizeBookingReadback\(publishResult\.body(?:,\s*\{[\s\S]*?\})?\)/);

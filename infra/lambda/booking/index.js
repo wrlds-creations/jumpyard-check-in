@@ -1124,6 +1124,45 @@ async function ensureProvisionalKioskHandoff(request) {
   return checkinSessionId;
 }
 
+function linkedAddOnEffectiveSyncCte(sourceCte) {
+  if (sourceCte !== 'updated_draft' && sourceCte !== 'confirmed_draft') {
+    throw new Error('Unsupported linked add-on sync source.');
+  }
+  return `effective_sync AS (
+    SELECT
+      target.original_roller_unique_id,
+      target.booking_date,
+      CASE
+        WHEN target.booking_confirmation_status = 'pending' OR EXISTS (
+          SELECT 1
+          FROM jumpyard.prepayment_booking_drafts AS candidate
+          WHERE candidate.prepayment_draft_id <> target.prepayment_draft_id
+            AND candidate.original_roller_unique_id = target.original_roller_unique_id
+            AND candidate.booking_date IS NOT DISTINCT FROM target.booking_date
+            AND candidate.flow_type = 'add_product'
+            AND candidate.payment_channel = 'card_present'
+            AND candidate.payment_attempt_status IN ('approved', 'reconciled')
+            AND candidate.booking_confirmation_status = 'pending'
+        ) THEN 'pending'
+        WHEN target.booking_confirmation_status = 'needs_staff' OR EXISTS (
+          SELECT 1
+          FROM jumpyard.prepayment_booking_drafts AS candidate
+          WHERE candidate.prepayment_draft_id <> target.prepayment_draft_id
+            AND candidate.original_roller_unique_id = target.original_roller_unique_id
+            AND candidate.booking_date IS NOT DISTINCT FROM target.booking_date
+            AND candidate.flow_type = 'add_product'
+            AND candidate.payment_channel = 'card_present'
+            AND candidate.payment_attempt_status IN ('approved', 'reconciled')
+            AND candidate.booking_confirmation_status = 'needs_staff'
+        ) THEN 'needs_staff'
+        ELSE 'confirmed'
+      END AS booking_sync_status
+    FROM ${sourceCte} AS target
+    WHERE target.flow_type = 'add_product'
+      AND target.payment_attempt_status IN ('approved', 'reconciled')
+  )`;
+}
+
 async function recordKioskTerminalOutcome(request, outcome) {
   const status = outcome === 'failed' ? 'failed' : outcome === 'cancelled' ? 'cancelled' : 'payment_pending';
   const confirmationStatus = outcome === 'approved'
@@ -1132,38 +1171,58 @@ async function recordKioskTerminalOutcome(request, outcome) {
       ? 'needs_staff'
       : 'failed';
   const result = await executeStatement(
-    `UPDATE jumpyard.prepayment_booking_drafts
-     SET
-       payment_attempt_status = CASE
-         WHEN payment_attempt_status = 'reconciled' THEN payment_attempt_status
-         WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved' THEN payment_attempt_status
-         ELSE :outcome
-       END,
-       status = CASE
-         WHEN status = 'published' THEN status
-         WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved' THEN status
-         ELSE :status
-       END,
-       booking_confirmation_status = CASE
-         WHEN status = 'published' OR payment_attempt_status = 'reconciled' THEN 'confirmed'
-         WHEN payment_attempt_status = 'approved' THEN booking_confirmation_status
-         ELSE :confirmationStatus
-       END,
-       payment_approved_at = CASE
-         WHEN :outcome = 'approved' THEN COALESCE(payment_approved_at, now())
-         ELSE payment_approved_at
-       END,
-       updated_at = now()
-     WHERE prepayment_draft_id = :prepaymentDraftId
-       AND payment_attempt_id = :paymentAttemptId
-     RETURNING
-       prepayment_draft_id,
-       roller_draft_unique_id,
-       payment_attempt_id,
-       payment_attempt_status,
-       status,
-       booking_confirmation_status,
-       roller_booking_reference`,
+    `WITH updated_draft AS (
+       UPDATE jumpyard.prepayment_booking_drafts
+       SET payment_attempt_status = CASE
+             WHEN payment_attempt_status = 'reconciled' THEN payment_attempt_status
+             WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved' THEN payment_attempt_status
+             ELSE :outcome
+           END,
+           status = CASE
+             WHEN status = 'published' THEN status
+             WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved' THEN status
+             ELSE :status
+           END,
+           booking_confirmation_status = CASE
+             WHEN status = 'published' OR payment_attempt_status = 'reconciled' THEN 'confirmed'
+             WHEN payment_attempt_status = 'approved' THEN booking_confirmation_status
+             ELSE :confirmationStatus
+           END,
+           payment_approved_at = CASE
+             WHEN :outcome = 'approved' THEN COALESCE(payment_approved_at, now())
+             ELSE payment_approved_at
+           END,
+           updated_at = now()
+       WHERE prepayment_draft_id = :prepaymentDraftId
+         AND payment_attempt_id = :paymentAttemptId
+       RETURNING
+         prepayment_draft_id,
+         roller_draft_unique_id,
+         flow_type,
+         original_roller_unique_id,
+         booking_date,
+         payment_attempt_id,
+         payment_attempt_status,
+         status,
+         booking_confirmation_status,
+         roller_booking_reference
+     ), ${linkedAddOnEffectiveSyncCte('updated_draft')}, updated_session AS (
+       UPDATE jumpyard.checkin_sessions AS session
+       SET updated_at = now(),
+           session_summary = session.session_summary || jsonb_build_object(
+             'bookingSyncStatus', sync.booking_sync_status,
+             'linkedAddOnSyncSource', 'kiosk_terminal_add_product'
+           )
+       FROM effective_sync AS sync
+       WHERE session.roller_unique_id = sync.original_roller_unique_id
+         AND session.visit_date IS NOT DISTINCT FROM sync.booking_date
+         AND session.status IN ('guest_in_progress', 'ready_for_staff', 'staff_in_progress')
+       RETURNING session.checkin_session_id
+     )
+     SELECT
+       updated_draft.*,
+       (SELECT count(*) FROM updated_session)::int AS linked_add_on_session_count
+     FROM updated_draft`,
     [
       stringParameter('outcome', outcome),
       stringParameter('status', status),
@@ -1762,25 +1821,49 @@ async function confirmKioskReconciliation(request, readback) {
 
 async function confirmKioskAddProductReconciliation(request, readback) {
   const result = await executeStatement(
-    `UPDATE jumpyard.prepayment_booking_drafts AS draft
-     SET status = 'published',
-         payment_attempt_status = 'reconciled',
-         booking_confirmation_status = 'confirmed',
-         roller_booking_reference = :bookingReference,
-         amount_owing_cents = 0,
-         reconciliation_completed_at = COALESCE(draft.reconciliation_completed_at, now()),
-         reconciliation_last_result = 'confirmed',
-         updated_at = now()
-     WHERE draft.prepayment_draft_id = :prepaymentDraftId
-       AND draft.payment_attempt_id = :paymentAttemptId
-       AND draft.payment_channel = 'card_present'
-       AND draft.flow_type = 'add_product'
-       AND draft.add_on_group_id IS NOT NULL
-       AND draft.payment_attempt_status IN ('approved', 'reconciled')
-     RETURNING
-       draft.reconciliation_attempt_count,
-       draft.add_on_group_id,
-       draft.roller_draft_unique_id`,
+    `WITH confirmed_draft AS (
+       UPDATE jumpyard.prepayment_booking_drafts AS draft
+       SET status = 'published',
+           payment_attempt_status = 'reconciled',
+           booking_confirmation_status = 'confirmed',
+           roller_booking_reference = :bookingReference,
+           amount_owing_cents = 0,
+           reconciliation_completed_at = COALESCE(draft.reconciliation_completed_at, now()),
+           reconciliation_last_result = 'confirmed',
+           updated_at = now()
+       WHERE draft.prepayment_draft_id = :prepaymentDraftId
+         AND draft.payment_attempt_id = :paymentAttemptId
+         AND draft.payment_channel = 'card_present'
+         AND draft.flow_type = 'add_product'
+         AND draft.add_on_group_id IS NOT NULL
+         AND draft.payment_attempt_status IN ('approved', 'reconciled')
+       RETURNING
+         draft.prepayment_draft_id,
+         draft.reconciliation_attempt_count,
+         draft.add_on_group_id,
+         draft.roller_draft_unique_id,
+         draft.flow_type,
+         draft.original_roller_unique_id,
+         draft.booking_date,
+         draft.payment_attempt_status,
+         draft.booking_confirmation_status
+     ), ${linkedAddOnEffectiveSyncCte('confirmed_draft')}, updated_session AS (
+       UPDATE jumpyard.checkin_sessions AS session
+       SET updated_at = now(),
+           session_summary = session.session_summary || jsonb_build_object(
+             'bookingSyncStatus', sync.booking_sync_status,
+             'linkedAddOnSyncSource', 'kiosk_terminal_add_product'
+           )
+       FROM effective_sync AS sync
+       WHERE session.roller_unique_id = sync.original_roller_unique_id
+         AND session.visit_date IS NOT DISTINCT FROM sync.booking_date
+         AND session.status IN ('guest_in_progress', 'ready_for_staff', 'staff_in_progress')
+       RETURNING session.checkin_session_id
+     )
+     SELECT
+       confirmed_draft.*,
+       (SELECT count(*) FROM updated_session)::int AS linked_add_on_session_count
+     FROM confirmed_draft`,
     [
       stringParameter('bookingReference', readback.bookingReference),
       stringParameter('prepaymentDraftId', request.prepaymentDraftId),
@@ -1959,38 +2042,63 @@ async function persistKioskReconciliationBookingSnapshot(existing, readback) {
 
 async function markKioskReconciliationNeedsStaff(request, reason) {
   const result = await executeStatement(
-    `UPDATE jumpyard.prepayment_booking_drafts
-     SET booking_confirmation_status = CASE
-           WHEN booking_confirmation_status = 'confirmed' THEN booking_confirmation_status
-           ELSE 'needs_staff'
-         END,
-         reconciliation_last_result = CASE
-           WHEN booking_confirmation_status = 'confirmed' THEN reconciliation_last_result
-           ELSE :reason
-         END,
-         updated_at = now()
-     WHERE prepayment_draft_id = :prepaymentDraftId
-       AND payment_attempt_id = :paymentAttemptId
-     RETURNING
-       payment_attempt_status,
-       status,
-       booking_confirmation_status,
-       roller_booking_reference`,
+    `WITH updated_draft AS (
+       UPDATE jumpyard.prepayment_booking_drafts
+       SET booking_confirmation_status = CASE
+             WHEN booking_confirmation_status = 'confirmed' THEN booking_confirmation_status
+             ELSE 'needs_staff'
+           END,
+           reconciliation_last_result = CASE
+             WHEN booking_confirmation_status = 'confirmed' THEN reconciliation_last_result
+             ELSE :reason
+           END,
+           updated_at = now()
+       WHERE prepayment_draft_id = :prepaymentDraftId
+         AND payment_attempt_id = :paymentAttemptId
+       RETURNING
+         prepayment_draft_id,
+         payment_attempt_id,
+         flow_type,
+         original_roller_unique_id,
+         booking_date,
+         payment_attempt_status,
+         status,
+         booking_confirmation_status,
+         roller_booking_reference
+     ), ${linkedAddOnEffectiveSyncCte('updated_draft')}, updated_provisional_session AS (
+       UPDATE jumpyard.checkin_sessions AS session
+       SET updated_at = now(),
+           session_summary = session.session_summary || jsonb_build_object(
+             'bookingSyncStatus', 'needs_staff',
+             'reconciliationReason', :reason
+           )
+       FROM updated_draft AS draft
+       WHERE session.source_lookup_ref = draft.prepayment_draft_id
+         AND session.session_summary ->> 'paymentAttemptId' = draft.payment_attempt_id
+         AND draft.booking_confirmation_status <> 'confirmed'
+         AND COALESCE(session.session_summary ->> 'bookingSyncStatus', '') <> 'confirmed'
+       RETURNING session.checkin_session_id
+     ), updated_linked_session AS (
+       UPDATE jumpyard.checkin_sessions AS session
+       SET updated_at = now(),
+           session_summary = session.session_summary || jsonb_build_object(
+             'bookingSyncStatus', sync.booking_sync_status,
+             'linkedAddOnSyncSource', 'kiosk_terminal_add_product',
+             'reconciliationReason', :reason
+           )
+       FROM effective_sync AS sync
+       WHERE session.roller_unique_id = sync.original_roller_unique_id
+         AND session.visit_date IS NOT DISTINCT FROM sync.booking_date
+         AND session.status IN ('guest_in_progress', 'ready_for_staff', 'staff_in_progress')
+       RETURNING session.checkin_session_id
+     )
+     SELECT
+       updated_draft.*,
+       (SELECT count(*) FROM updated_provisional_session)::int AS provisional_session_count,
+       (SELECT count(*) FROM updated_linked_session)::int AS linked_add_on_session_count
+     FROM updated_draft`,
     [
       stringParameter('reason', reason),
-      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
-      stringParameter('paymentAttemptId', request.paymentAttemptId),
-    ],
-  );
-  await executeStatement(
-    `UPDATE jumpyard.checkin_sessions
-     SET updated_at = now(),
-         session_summary = session_summary || CAST(:sessionSummary AS jsonb)
-     WHERE source_lookup_ref = :prepaymentDraftId
-       AND session_summary ->> 'paymentAttemptId' = :paymentAttemptId
-       AND COALESCE(session_summary ->> 'bookingSyncStatus', '') <> 'confirmed'`,
-    [
-      stringParameter('sessionSummary', JSON.stringify({ bookingSyncStatus: 'needs_staff', reconciliationReason: reason })),
       stringParameter('prepaymentDraftId', request.prepaymentDraftId),
       stringParameter('paymentAttemptId', request.paymentAttemptId),
     ],
