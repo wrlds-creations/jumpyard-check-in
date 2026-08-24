@@ -42,6 +42,7 @@ let lastRollerRequestStartedAt = null;
 let nowProvider = () => Date.now();
 let sleepProvider = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 let fetchProvider = (...args) => fetch(...args);
+let rdsSendProvider = (command) => rdsClient.send(command);
 
 exports.handler = async (event = {}) => {
   const startedAt = new Date().toISOString();
@@ -50,6 +51,12 @@ exports.handler = async (event = {}) => {
   let runId = `scheduled-data-api:unresolved:${Date.now()}`;
   let sourceWindow = null;
   let transactionId = null;
+  const productCache = {
+    committed: false,
+    sourceCount: 0,
+    status: event.skipProducts ? 'skipped' : 'pending',
+    upserts: 0,
+  };
 
   try {
     const config = await getRollerConfig();
@@ -93,19 +100,26 @@ exports.handler = async (event = {}) => {
       retentionCutoff,
     });
     const products = event.skipProducts ? [] : flattenProducts(productRecords, config.env, venueId);
+    productCache.sourceCount = products.length;
 
-    const begin = await rdsClient.send(
-      new BeginTransactionCommand({
-        database: DATABASE_NAME,
-        resourceArn: context.clusterArn,
-        secretArn: context.secretArn,
-      }),
-    );
-    transactionId = begin.transactionId;
-
-    if (!transactionId) {
-      throw new Error('Could not start Aurora Data API transaction.');
+    if (!event.skipProducts && products.length > 0) {
+      productCache.upserts = await persistProductCatalog(context, products, config.env, venueId);
+      productCache.committed = true;
+      productCache.status = 'committed';
+      console.info(
+        JSON.stringify({
+          correlationId,
+          event: 'product_cache_refresh_committed',
+          runId,
+          sourceCount: productCache.sourceCount,
+          upserts: productCache.upserts,
+        }),
+      );
+    } else if (!event.skipProducts) {
+      productCache.status = 'empty';
     }
+
+    transactionId = await beginTransaction(context);
 
     const upserts = {
       bookingItems: 0,
@@ -137,21 +151,13 @@ exports.handler = async (event = {}) => {
       upserts.customers += await upsertCustomer(context, customer, transactionId);
     }
 
-    for (const product of products) {
-      upserts.products += await upsertProduct(context, product, config.env, venueId, transactionId);
-    }
+    upserts.products = productCache.upserts;
 
     if (products.length > 0) {
       upserts.productEnrichments = await enrichBookingItems(context, config.env, venueId, transactionId);
     }
 
-    await rdsClient.send(
-      new CommitTransactionCommand({
-        resourceArn: context.clusterArn,
-        secretArn: context.secretArn,
-        transactionId,
-      }),
-    );
+    await commitTransaction(context, transactionId);
     transactionId = null;
 
     const sourceCounts = {
@@ -186,6 +192,7 @@ exports.handler = async (event = {}) => {
       sourceWindow,
       status: 'succeeded',
       sourceCounts,
+      productCache,
       upserts,
     };
 
@@ -194,21 +201,16 @@ exports.handler = async (event = {}) => {
     return summary;
   } catch (error) {
     if (transactionId) {
-      await rdsClient.send(
-        new RollbackTransactionCommand({
-          resourceArn: context.clusterArn,
-          secretArn: context.secretArn,
-          transactionId,
-        }),
-      );
+      await rollbackTransaction(context, transactionId);
     }
 
-    await safeFinishFailedRun(context, runId, error);
+    await safeFinishFailedRun(context, runId, error, productCache);
     emitBookingIndexRunMetric(false, 0);
     console.error(
       JSON.stringify({
         correlationId,
         error: safeErrorMessage(error),
+        productCache,
         runId,
         sourceWindow,
         status: 'failed',
@@ -778,18 +780,77 @@ async function finishRun(context, runId, status, sourceCounts, upsertCounts, err
   );
 }
 
-async function safeFinishFailedRun(context, runId, error) {
+async function safeFinishFailedRun(context, runId, error, productCache = {}) {
   try {
     await finishRun(
       context,
       runId,
       'failed',
-      { source: DATA_SYNC_SOURCE },
-      {},
+      {
+        productCacheCommitted: productCache.committed === true,
+        productCacheSourceCount: Math.max(0, Number(productCache.sourceCount) || 0),
+        source: DATA_SYNC_SOURCE,
+      },
+      {
+        products: Math.max(0, Number(productCache.upserts) || 0),
+      },
       safeErrorMessage(error).slice(0, 500),
     );
   } catch {
     // The original Lambda failure is more useful than a secondary health-write failure.
+  }
+}
+
+async function beginTransaction(context) {
+  const begin = await rdsSendProvider(
+    new BeginTransactionCommand({
+      database: DATABASE_NAME,
+      resourceArn: context.clusterArn,
+      secretArn: context.secretArn,
+    }),
+  );
+
+  if (!begin.transactionId) {
+    throw new Error('Could not start Aurora Data API transaction.');
+  }
+
+  return begin.transactionId;
+}
+
+async function commitTransaction(context, transactionId) {
+  await rdsSendProvider(
+    new CommitTransactionCommand({
+      resourceArn: context.clusterArn,
+      secretArn: context.secretArn,
+      transactionId,
+    }),
+  );
+}
+
+async function rollbackTransaction(context, transactionId) {
+  await rdsSendProvider(
+    new RollbackTransactionCommand({
+      resourceArn: context.clusterArn,
+      secretArn: context.secretArn,
+      transactionId,
+    }),
+  );
+}
+
+async function persistProductCatalog(context, products, rollerEnv, venueId) {
+  let transactionId = await beginTransaction(context);
+
+  try {
+    let upserts = 0;
+    for (const product of products) {
+      upserts += await upsertProduct(context, product, rollerEnv, venueId, transactionId);
+    }
+    await commitTransaction(context, transactionId);
+    transactionId = null;
+    return upserts;
+  } catch (error) {
+    if (transactionId) await rollbackTransaction(context, transactionId);
+    throw error;
   }
 }
 
@@ -889,6 +950,29 @@ async function upsertBooking(context, booking, rollerEnv, venueId, transactionId
 }
 
 async function upsertBookingItem(context, item, transactionId) {
+  const hasBookingItemId = Boolean(stringOrNull(item.bookingItemId));
+  const conflictClause = hasBookingItemId
+    ? `ON CONFLICT (booking_item_id) WHERE booking_item_id IS NOT NULL DO UPDATE SET
+      roller_unique_id = EXCLUDED.roller_unique_id,
+      product_id = EXCLUDED.product_id,
+      quantity = EXCLUDED.quantity,
+      booking_date = EXCLUDED.booking_date,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      item_summary = EXCLUDED.item_summary,
+      updated_at = now()
+    WHERE jumpyard.roller_booking_items.roller_unique_id = EXCLUDED.roller_unique_id`
+    : `ON CONFLICT (booking_item_key) DO UPDATE SET
+      roller_unique_id = EXCLUDED.roller_unique_id,
+      booking_item_id = EXCLUDED.booking_item_id,
+      product_id = EXCLUDED.product_id,
+      quantity = EXCLUDED.quantity,
+      booking_date = EXCLUDED.booking_date,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      item_summary = EXCLUDED.item_summary,
+      updated_at = now()`;
+
   const result = await executeStatement(
     context,
     `INSERT INTO jumpyard.roller_booking_items (
@@ -913,16 +997,8 @@ async function upsertBookingItem(context, item, transactionId) {
       CAST(:endTime AS time),
       CAST(:itemSummary AS jsonb)
     )
-    ON CONFLICT (booking_item_key) DO UPDATE SET
-      roller_unique_id = EXCLUDED.roller_unique_id,
-      booking_item_id = EXCLUDED.booking_item_id,
-      product_id = EXCLUDED.product_id,
-      quantity = EXCLUDED.quantity,
-      booking_date = EXCLUDED.booking_date,
-      start_time = EXCLUDED.start_time,
-      end_time = EXCLUDED.end_time,
-      item_summary = EXCLUDED.item_summary,
-      updated_at = now()`,
+    ${conflictClause}
+    RETURNING booking_item_key`,
     [
       stringParameter('bookingItemKey', item.bookingItemKey),
       stringParameter('rollerUniqueId', item.rollerUniqueId),
@@ -937,7 +1013,11 @@ async function upsertBookingItem(context, item, transactionId) {
     transactionId,
   );
 
-  return result.updated;
+  if (result.records.length === 0) {
+    throw new Error('Roller booking item id is already owned by another booking.');
+  }
+
+  return Math.max(result.updated, result.records.length);
 }
 
 async function upsertTicket(context, ticket, transactionId) {
@@ -1464,7 +1544,7 @@ function sanitizeMetricValue(value) {
 }
 
 async function executeStatement(context, sql, parameters = [], transactionId = undefined) {
-  const response = await rdsClient.send(
+  const response = await rdsSendProvider(
     new ExecuteStatementCommand({
       database: DATABASE_NAME,
       parameters,
@@ -1694,13 +1774,18 @@ function safeErrorMessage(error) {
 
 exports.__test = {
   addDays,
+  beginTransaction,
   buildDailyWindows,
+  commitTransaction,
   dateDifferenceDays,
   normalizeBookingItems,
   normalizeRelated,
+  persistProductCatalog,
   requestRoller,
+  rollbackTransaction,
   resolveControls,
   retryAfterMilliseconds,
+  upsertBookingItem,
   validateDateWindow,
   validateRollerConfig,
   reset() {
@@ -1711,10 +1796,12 @@ exports.__test = {
     nowProvider = () => Date.now();
     sleepProvider = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
     fetchProvider = (...args) => fetch(...args);
+    rdsSendProvider = (command) => rdsClient.send(command);
   },
   setHooks(hooks = {}) {
     if (typeof hooks.now === 'function') nowProvider = hooks.now;
     if (typeof hooks.sleep === 'function') sleepProvider = hooks.sleep;
     if (typeof hooks.fetch === 'function') fetchProvider = hooks.fetch;
+    if (typeof hooks.rdsSend === 'function') rdsSendProvider = hooks.rdsSend;
   },
 };
