@@ -297,8 +297,17 @@ async function validateStaffSessionRoutes() {
     if (expectedCode) assert.equal(parsedBody(accepted).error?.code, expectedCode);
   }
 
-  assert.equal(loaded.state.awsCalls.length, 2, 'Valid staff list/detail credentials must reach only stubbed reads.');
+  assert.equal(
+    loaded.state.awsCalls.length,
+    4,
+    'Valid staff list/detail credentials must reach only the bounded linked-sync refresh and requested read.',
+  );
   assert.equal(loaded.state.awsCalls.every((call) => call.client === 'RDSDataClient'), true);
+  assert.equal(
+    loaded.state.awsCalls.filter((call) => /UPDATE jumpyard\.checkin_sessions AS session/.test(call.input?.sql ?? '')).length,
+    2,
+    'Each accepted staff list/detail route must refresh linked synchronization state once.',
+  );
   assert.deepEqual(loaded.state.networkCalls, [], 'Staff list/detail validation must not reach Roller.');
 }
 
