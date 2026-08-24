@@ -176,19 +176,36 @@ function testCachedAddonPriceAndFailClosedFallback() {
   const cached = bookingTest.mapPhoneAddonProducts(
     [
       {
-        id: '1765445',
-        name: 'JumpSocks',
+        id: '970338',
+        name: 'Antal',
         parent_product_id: '970337',
         parent_product_name: 'JumpSocks',
         price_cents: '4900',
+      },
+      {
+        id: '970334',
+        name: 'Hänglås',
+        parent_product_id: '970333',
+        parent_product_name: 'Hänglås',
+        price_cents: '4500',
+      },
+      {
+        id: '970352',
+        name: 'Bryggkaffe',
+        parent_product_id: '970346',
+        parent_product_name: 'Coffee and Tea (Sweden)',
+        price_cents: '3500',
       },
     ],
     'live',
   );
   const socks = cached.find((product) => product.key === 'socks');
   assert.ok(socks);
+  assert.equal(socks.productId, '970338');
   assert.equal(socks.unitPriceCents, 4900);
   assert.equal(socks.unitPrice, 49);
+  assert.equal(cached.find((product) => product.key === 'lock')?.unitPriceCents, 4500);
+  assert.equal(cached.find((product) => product.key === 'coffee')?.unitPriceCents, 3500);
 
   const expiredOrMissing = bookingTest.mapPhoneAddonProducts([], 'live');
   assert.equal(expiredOrMissing.some((product) => product.key === 'socks'), false);
@@ -198,7 +215,7 @@ function testCachedAddonPriceAndFailClosedFallback() {
     ),
     false,
   );
-  console.log('[pass] the add-on list uses SEK 49 from cache and never invents the removed SEK 45 fallback');
+  console.log('[pass] the add-on list resolves current Live product ids, uses SEK 49 from cache, and never invents the removed SEK 45 fallback');
 }
 
 function bookingItem(overrides) {
