@@ -386,6 +386,7 @@ Request:
   "correlationId": "jy_...",
   "bookingReference": "5001370",
   "rollerUniqueId": "dbba266d-0951-4706-9adf-6c9d05edffbf",
+  "includeBooking": true,
   "sourceLookupId": "optional-lookup-attempt-id",
   "idempotencyKey": "client-or-server-generated-key"
 }
@@ -410,6 +411,8 @@ Session rules:
 
 - Create or resume one active operational session for the booking and visit date.
 - The phone app may call this endpoint immediately after a paid lookup to resume an existing active session before showing the booking summary.
+- When `includeBooking=true`, return the existing guest-safe booking shape with original items plus approved linked add-ons. While the separate ROLLER add-on booking is still synchronizing, use only definitively approved/reconciled provisional draft items; replace them with authoritative linked items without duplication after readback.
+- Never include unapproved, failed, cancelled, refused, unknown, or timed-out linked drafts, and never expose linked booking/draft/payment identifiers in the guest response.
 - If no resumable final state is returned, the phone app keeps the booking summary and continues the normal guest-side check-in flow.
 - Read booking/ticket context from Aurora only.
 - Store only server-owned state needed for the flow.

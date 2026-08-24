@@ -3801,7 +3801,11 @@ function buildSessionPlan(context, decision) {
 }
 
 async function buildPhoneSessionBookingResponse(context) {
-  const items = await findPhoneBookingItems(context.booking.rollerUniqueId);
+  const [baseItems, linkedAddOnItems] = await Promise.all([
+    findPhoneBookingItems(context.booking.rollerUniqueId),
+    findGuestLinkedAddOnPhoneItems(context.booking.rollerUniqueId, context.booking.venueId),
+  ]);
+  const items = [...baseItems, ...linkedAddOnItems];
   const fallbackItem = fallbackPhoneBookingItem(context);
 
   return {
@@ -3820,6 +3824,36 @@ async function buildPhoneSessionBookingResponse(context) {
       refreshedFromRoller: false,
       system: 'jumpyard_cloud',
     },
+  };
+}
+
+async function findGuestLinkedAddOnPhoneItems(rollerUniqueId, venueId = null) {
+  if (!rollerUniqueId) return [];
+
+  const [authoritativeItems, provisionalItems] = await Promise.all([
+    findStaffBookingItems(rollerUniqueId, venueId),
+    findProvisionalLinkedAddOnStaffItems(rollerUniqueId, venueId),
+  ]);
+
+  return [
+    ...authoritativeItems.filter((item) => item.fulfillmentSource === 'linked_add_on'),
+    ...provisionalItems,
+  ].map(toGuestLinkedAddOnPhoneItem);
+}
+
+function toGuestLinkedAddOnPhoneItem(item) {
+  return {
+    bookingDate: item.bookingDate,
+    bookingItemId: null,
+    endTime: item.endTime,
+    parentProductId: item.parentProductId,
+    parentProductName: item.parentProductName,
+    productId: item.productId,
+    productName: item.productName,
+    productType: item.productType,
+    quantity: item.quantity,
+    startTime: item.startTime,
+    tickets: [],
   };
 }
 
