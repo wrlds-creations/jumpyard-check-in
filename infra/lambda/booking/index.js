@@ -166,7 +166,6 @@ const LIVE_PHONE_ADDON_PRODUCTS = [
     parentProductName: 'JumpSocks',
     productId: '970338',
     productName: 'Antal',
-    priceCents: 4500,
   },
   {
     key: 'water_bottle',
@@ -174,7 +173,6 @@ const LIVE_PHONE_ADDON_PRODUCTS = [
     parentProductName: 'Merchandise',
     productId: '1324123',
     productName: 'Jumpy Vattenflaska',
-    priceCents: 4900,
   },
   {
     key: 'lock',
@@ -182,7 +180,6 @@ const LIVE_PHONE_ADDON_PRODUCTS = [
     parentProductName: 'Lock',
     productId: '970334',
     productName: 'Lock',
-    priceCents: 4500,
   },
   {
     key: 'coffee',
@@ -190,7 +187,6 @@ const LIVE_PHONE_ADDON_PRODUCTS = [
     parentProductName: 'Coffee',
     productId: '970352',
     productName: 'Coffee',
-    priceCents: 3500,
   },
 ];
 
@@ -3957,6 +3953,10 @@ async function loadPhoneAddonProducts(rollerEnv) {
     parameters,
   );
   const rows = mappedRows(result);
+  return mapPhoneAddonProducts(rows, rollerEnv);
+}
+
+function mapPhoneAddonProducts(rows, rollerEnv) {
   const liveAddonFallbacks = getLivePhoneAddonFallbacks(rollerEnv);
   const fallbackRows = liveAddonFallbacks.length > 0
     ? liveAddonFallbacks
@@ -5535,3 +5535,7 @@ function jsonResponse(statusCode, correlationId, payload) {
     }),
   };
 }
+
+exports.__test = {
+  mapPhoneAddonProducts,
+};
