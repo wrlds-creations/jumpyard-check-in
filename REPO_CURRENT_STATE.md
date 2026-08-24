@@ -4,12 +4,12 @@ Use this file as the short snapshot of what actually exists. Operational work st
 
 ## Snapshot
 
-- Date: 2026-08-20
-- Latest merged product baseline: `c16cd32`; PR #290 makes payment-approved linked add-ons immediately visible beside original booking items in the existing Handoff session while authoritative ROLLER synchronization completes.
-- Latest deployed baseline: release `32388022682` and protected Park run `32388576328` deployed backend `c16cd32` and its public outputs. CloudFormation is `UPDATE_COMPLETE`; the combined verifier stopped after deployment in its drift/alarm section without identifying the failed assertion, with the independently pre-existing booking-index-stale alarm the leading explanation.
+- Date: 2026-08-24
+- Latest merged product baseline: `dbbec16`; PR #292 repairs a stale pending Handoff flag once the settled, venue-matched linked booking and authoritative items exist.
+- Latest deployed baseline: release `32705582319` and protected Park run `32706052571` deployed `dbbec16` and public outputs. CloudFormation and Pages deployment succeeded; the silent combined verifier later failed without identifying its assertion. Stable phone/admin/staff origins return HTTP 200.
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
-- Product/runtime state: Park has 202 resources, migrations through `0020`, and 27 routes. Backend/public outputs `c16cd32` expose the existing-booking kiosk terminal add-on contract and approved provisional Handoff items; supervised physical payment and Handoff proof remains open. Purchase, PIN redemption, persistent success, kiosk-created booking redemption, and late kiosk Handoff attachment are Motorola-verified. Phone/Park expose Weekday Combo `1242135`/`1242136`. Handoff refreshes every five seconds and remains fail-closed until authoritative tickets. T-30 and general sends are off.
+- Product/runtime state: Park has 202 resources, migrations through `0020`, and 27 routes. Motorola verified original plus terminal-paid linked add-on visibility, pending redemption blocking, automatic authoritative confirmation, no duplicate item/payment/session, and enabled completion afterward. Purchase, PIN redemption, persistent success, kiosk-created booking redemption, and late kiosk Handoff attachment are also device-verified. Phone/Park expose Weekday Combo `1242135`/`1242136`. T-30 and general sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
 - Product approval and implementation status are read from GitHub Issues and the Project rather than copied into this merged-mainline snapshot.
 
