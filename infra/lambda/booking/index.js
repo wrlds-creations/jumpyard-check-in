@@ -3937,6 +3937,12 @@ async function loadPhoneAddonProducts(rollerEnv) {
     }
   });
 
+  getLivePhoneAddonFallbacks(rollerEnv).forEach((product, index) => {
+    if (!product.productId) return;
+    clauses.push(`summary ->> 'id' = :liveAddonProductId${index}`);
+    parameters.push(stringParameter(`liveAddonProductId${index}`, product.productId));
+  });
+
   if (clauses.length === 0) return [];
 
   const result = await executeStatement(
@@ -3973,10 +3979,12 @@ function mapPhoneAddonProducts(rows, rollerEnv) {
   const candidateRows = [...rows, ...fallbackRows];
 
   return PHONE_ADDON_PRODUCTS.map((product) => {
+    const liveFallback = liveAddonFallbacks.find((candidate) => candidate.key === product.key);
     const row = candidateRows.find(
       (candidate) =>
         (product.productId && candidate.id === product.productId) ||
         (product.parentName && (candidate.parent_product_name === product.parentName || candidate.name === product.parentName)) ||
+        (liveFallback?.productId && candidate.id === liveFallback.productId) ||
         candidate.smoke_key === product.key,
     );
     const productId = stringOrNull(row?.id) || stringOrNull(product.productId);
