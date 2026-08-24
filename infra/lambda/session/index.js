@@ -302,6 +302,9 @@ async function handleStartSession(event, body, correlationId, options = {}) {
   await expireOldSessions(context.booking.rollerUniqueId, decision.visitDate);
   const existingSession = await findActiveSession(context.booking.rollerUniqueId, decision.visitDate);
   if (existingSession) {
+    const resumedSession = request.guestResumeStep
+      ? await markGuestResumeStep(existingSession.checkinSessionId, request.guestResumeStep)
+      : existingSession;
     const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
     if (options.auditResume !== false) {
       await writeEventLog({
@@ -309,8 +312,9 @@ async function handleStartSession(event, body, correlationId, options = {}) {
         correlationId,
         eventType: 'checkin.session_resumed',
         payload: {
-          checkinSessionId: existingSession.checkinSessionId,
-          ticketCount: existingSession.selectedTicketIds.length,
+          checkinSessionId: resumedSession.checkinSessionId,
+          guestResumeStep: resumedSession.guestResumeStep,
+          ticketCount: resumedSession.selectedTicketIds.length,
         },
         summary: 'Check-in session resumed.',
       });
@@ -319,7 +323,7 @@ async function handleStartSession(event, body, correlationId, options = {}) {
 
     return jsonResponse(200, correlationId, {
       status: 'session_resumed',
-      session: existingSession,
+      session: resumedSession,
       ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
       ...(bookingResponse ? bookingResponse : {}),
     });
@@ -327,6 +331,7 @@ async function handleStartSession(event, body, correlationId, options = {}) {
 
   const session = await createSession({
     booking: context.booking,
+    guestResumeStep: request.guestResumeStep,
     idempotencyKey: request.idempotencyKey,
     selectedTicketIds: decision.selectedTicketIds,
     sourceLookupRef: request.sourceLookupRef,
@@ -1621,6 +1626,8 @@ function normalizeStartRequest(event, body) {
     idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
     identifier,
     includeBooking: body.includeBooking === true,
+    guestResumeStep: normalizeGuestResumeStep(body.guestResumeStep),
+    guestResumeStepProvided: Object.prototype.hasOwnProperty.call(body, 'guestResumeStep'),
     rollerUniqueId,
     sourceLookupRef: stringOrNull(body.sourceLookupId) || stringOrNull(body.sourceLookupRef),
     ticketIds: rawTicketIds,
@@ -1943,6 +1950,13 @@ function validateStartRequest(request) {
     return {
       code: 'idempotency_key_required',
       message: 'idempotencyKey or x-idempotency-key is required.',
+    };
+  }
+
+  if (request.guestResumeStepProvided && !request.guestResumeStep) {
+    return {
+      code: 'guest_resume_step_invalid',
+      message: 'guestResumeStep must be safety when provided.',
     };
   }
 
@@ -3946,6 +3960,7 @@ async function findActiveSession(rollerUniqueId, visitDate) {
        visit_date::text AS visit_date,
        status,
        safety_status,
+       session_summary ->> 'guestResumeStep' AS guest_resume_step,
        handoff_code,
        handoff_status,
        selected_ticket_ids::text AS selected_ticket_ids,
@@ -3976,6 +3991,7 @@ async function findSessionById(checkinSessionId) {
        visit_date::text AS visit_date,
        status,
        safety_status,
+       session_summary ->> 'guestResumeStep' AS guest_resume_step,
        handoff_code,
        handoff_status,
        selected_ticket_ids::text AS selected_ticket_ids,
@@ -4045,12 +4061,13 @@ function mapStaffGuestIdentity(row) {
   return guest.emailMasked || guest.name || guest.phoneMasked ? guest : null;
 }
 
-async function createSession({ booking, idempotencyKey, selectedTicketIds, sourceLookupRef, visitDate }) {
+async function createSession({ booking, guestResumeStep, idempotencyKey, selectedTicketIds, sourceLookupRef, visitDate }) {
   const checkinSessionId = createSessionId();
   const expiresAt = new Date(Date.now() + DEFAULT_SESSION_TTL_MS).toISOString();
   const sessionSummary = {
     source: 'checkin_session_api',
     ticketCount: selectedTicketIds.length,
+    ...(guestResumeStep ? { guestResumeStep } : {}),
   };
 
   const result = await executeStatement(
@@ -4089,6 +4106,7 @@ async function createSession({ booking, idempotencyKey, selectedTicketIds, sourc
        visit_date::text AS visit_date,
        status,
        safety_status,
+       session_summary ->> 'guestResumeStep' AS guest_resume_step,
        handoff_code,
        handoff_status,
        selected_ticket_ids::text AS selected_ticket_ids,
@@ -4111,6 +4129,39 @@ async function createSession({ booking, idempotencyKey, selectedTicketIds, sourc
   );
 
   return mapSessionRow(firstMappedRow(result));
+}
+
+async function markGuestResumeStep(checkinSessionId, guestResumeStep) {
+  const result = await executeStatement(
+    `UPDATE jumpyard.checkin_sessions
+     SET session_summary = session_summary || jsonb_build_object('guestResumeStep', :guestResumeStep),
+         updated_at = now()
+     WHERE checkin_session_id = :checkinSessionId
+       AND status = 'guest_in_progress'
+       AND expires_at > now()
+     RETURNING
+       checkin_session_id,
+       roller_unique_id,
+       booking_reference,
+       visit_date::text AS visit_date,
+       status,
+       safety_status,
+       session_summary ->> 'guestResumeStep' AS guest_resume_step,
+       handoff_code,
+       handoff_status,
+       selected_ticket_ids::text AS selected_ticket_ids,
+       expires_at::text AS expires_at,
+       ready_for_staff_at::text AS ready_for_staff_at,
+       completed_at::text AS completed_at,
+       created_at::text AS created_at,
+       updated_at::text AS updated_at`,
+    [
+      stringParameter('checkinSessionId', checkinSessionId),
+      stringParameter('guestResumeStep', guestResumeStep),
+    ],
+  );
+
+  return mapSessionRow(firstMappedRow(result)) || findSessionById(checkinSessionId);
 }
 
 async function markSessionReadyForStaff(checkinSessionId, { handoffCode, safetyStatus }) {
@@ -4288,6 +4339,7 @@ function mapSessionRow(row) {
     completedAt: stringOrNull(row.completed_at),
     createdAt: stringOrNull(row.created_at),
     expiresAt: stringOrNull(row.expires_at),
+    guestResumeStep: normalizeGuestResumeStep(row.guest_resume_step),
     handoffCode: stringOrNull(row.handoff_code),
     handoffStatus: stringOrNull(row.handoff_status),
     readyForStaffAt: stringOrNull(row.ready_for_staff_at),
@@ -4298,6 +4350,10 @@ function mapSessionRow(row) {
     updatedAt: stringOrNull(row.updated_at),
     visitDate: stringOrNull(row.visit_date),
   };
+}
+
+function normalizeGuestResumeStep(value) {
+  return stringOrNull(value) === 'safety' ? 'safety' : null;
 }
 
 function mapDueMessagingBookingRow(row) {

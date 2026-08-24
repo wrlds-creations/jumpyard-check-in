@@ -48,6 +48,7 @@ export interface LookupSource {
 export interface CheckInSession {
   checkinSessionId: string;
   status: string;
+  guestResumeStep?: 'safety' | null;
   guestAccessToken?: string;
   guestAccessExpiresAt?: string | null;
   handoffStatus?: string | null;
