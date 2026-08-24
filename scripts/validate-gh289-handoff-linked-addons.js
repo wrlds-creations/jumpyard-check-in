@@ -296,10 +296,48 @@ async function validateStaffDetailComposition() {
   ]);
 }
 
+function validateAuthoritativeReadbackOverridesStalePending() {
+  const calls = [];
+  const sessionInternals = loadInternals(
+    sessionPath,
+    sessionSource,
+    ['refreshLinkedAddOnEffectiveSyncState'],
+    async (input) => {
+      calls.push(input);
+      return rdsResult([{ updated_session_count: 1 }]);
+    },
+  );
+
+  return sessionInternals.refreshLinkedAddOnEffectiveSyncState('synthetic-session', 'synthetic-venue')
+    .then((updatedCount) => {
+      assert.equal(updatedCount, 1);
+      assert.equal(calls.length, 1);
+      const sql = calls[0].sql;
+      assert.match(sql, /WITH linked_state AS/);
+      assert.match(sql, /draft\.payment_attempt_status IN \('approved', 'reconciled'\)/);
+      assert.match(sql, /NOT state\.authoritative[\s\S]*state\.booking_confirmation_status = 'pending'[\s\S]*THEN 'pending'/);
+      assert.match(sql, /WHEN COUNT\(\*\) FILTER \(WHERE NOT state\.authoritative\) > 0 THEN 'needs_staff'/);
+      assert.match(sql, /ELSE 'confirmed'/);
+      assert.match(sql, /linked_booking\.venue_id = original_booking\.venue_id/);
+      assert.match(sql, /linked_booking\.amount_owing_cents = 0/);
+      assert.match(sql, /jumpyard\.roller_booking_items AS authoritative_item/);
+      assert.match(sql, /authoritative_item\.roller_unique_id = link\.linked_roller_unique_id/);
+      assert.match(sql, /UPDATE jumpyard\.checkin_sessions AS session/);
+      assert.match(sql, /IS DISTINCT FROM sync\.booking_sync_status/);
+      assert.match(sql, /'linkedAddOnSyncSource', 'authoritative_linked_add_on_readback'/);
+      assert.match(sql, /session\.checkin_session_id = :checkinSessionId/);
+      assert.match(sql, /original_booking\.venue_id = :staffVenueId/);
+      assert.doesNotMatch(sql, /payment_attempt_status IN \([^)]*created/);
+      assert.match(redeemSource, /COALESCE\(cs\.session_summary ->> 'bookingSyncStatus', 'confirmed'\)/);
+      assert.doesNotMatch(redeemSource, /jumpyard\.booking_links/);
+    });
+}
+
 async function main() {
   await validateBookingStatePropagation();
   await validateProvisionalLinkedItems();
   await validateStaffDetailComposition();
+  await validateAuthoritativeReadbackOverridesStalePending();
 
   assert.match(
     bookingSource,

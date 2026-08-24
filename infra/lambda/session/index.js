@@ -2407,7 +2407,85 @@ async function sendDueMessageChannel(event, { candidate, channel, correlationId,
   );
 }
 
+async function refreshLinkedAddOnEffectiveSyncState(checkinSessionId = null, staffVenueId = null) {
+  const sessionClause = checkinSessionId ? 'AND session.checkin_session_id = :checkinSessionId' : '';
+  const venueClause = staffVenueId ? 'AND original_booking.venue_id = :staffVenueId' : '';
+  const result = await executeStatement(
+    `WITH linked_state AS (
+       SELECT
+         session.checkin_session_id,
+         draft.booking_confirmation_status,
+         COALESCE(
+           original_booking.venue_id IS NOT NULL
+           AND linked_booking.venue_id = original_booking.venue_id
+           AND (
+             linked_booking.amount_owing_cents = 0
+             OR lower(replace(COALESCE(linked_booking.payment_status, linked_booking.booking_status, ''), ' ', ''))
+               IN ('paid', 'paidinfull', 'nopaymentrequired')
+           )
+           AND EXISTS (
+             SELECT 1
+             FROM jumpyard.roller_booking_items AS authoritative_item
+             WHERE authoritative_item.roller_unique_id = link.linked_roller_unique_id
+           ),
+           false
+         ) AS authoritative
+       FROM jumpyard.checkin_sessions AS session
+       INNER JOIN jumpyard.roller_bookings AS original_booking
+         ON original_booking.roller_unique_id = session.roller_unique_id
+       INNER JOIN jumpyard.booking_links AS link
+         ON link.original_roller_unique_id = session.roller_unique_id
+        AND link.link_type = 'add_product_draft'
+       INNER JOIN jumpyard.prepayment_booking_drafts AS draft
+         ON draft.roller_draft_unique_id = link.linked_roller_unique_id
+        AND draft.original_roller_unique_id = link.original_roller_unique_id
+        AND draft.add_on_group_id = link.add_on_group_id
+       LEFT JOIN jumpyard.roller_bookings AS linked_booking
+         ON linked_booking.roller_unique_id = link.linked_roller_unique_id
+       WHERE session.status IN ('guest_in_progress', 'ready_for_staff', 'staff_in_progress')
+         AND draft.flow_type = 'add_product'
+         AND draft.payment_channel = 'card_present'
+         AND draft.payment_attempt_status IN ('approved', 'reconciled')
+         ${sessionClause}
+         ${venueClause}
+     ), effective_sync AS (
+       SELECT
+         state.checkin_session_id,
+         CASE
+           WHEN COUNT(*) FILTER (
+             WHERE NOT state.authoritative
+               AND state.booking_confirmation_status = 'pending'
+           ) > 0 THEN 'pending'
+           WHEN COUNT(*) FILTER (WHERE NOT state.authoritative) > 0 THEN 'needs_staff'
+           ELSE 'confirmed'
+         END AS booking_sync_status
+       FROM linked_state AS state
+       GROUP BY state.checkin_session_id
+     ), updated_session AS (
+       UPDATE jumpyard.checkin_sessions AS session
+       SET updated_at = now(),
+           session_summary = session.session_summary || jsonb_build_object(
+             'bookingSyncStatus', sync.booking_sync_status,
+             'linkedAddOnSyncSource', 'authoritative_linked_add_on_readback'
+           )
+       FROM effective_sync AS sync
+       WHERE session.checkin_session_id = sync.checkin_session_id
+         AND COALESCE(session.session_summary ->> 'bookingSyncStatus', 'confirmed')
+           IS DISTINCT FROM sync.booking_sync_status
+       RETURNING session.checkin_session_id
+     )
+     SELECT count(*)::int AS updated_session_count
+     FROM updated_session`,
+    [
+      ...(checkinSessionId ? [stringParameter('checkinSessionId', checkinSessionId)] : []),
+      ...(staffVenueId ? [stringParameter('staffVenueId', staffVenueId)] : []),
+    ],
+  );
+  return Number(firstMappedRow(result)?.updated_session_count ?? 0);
+}
+
 async function findReadyStaffSessions(request, staffVenueId = null) {
+  await refreshLinkedAddOnEffectiveSyncState(null, staffVenueId);
   const expiryClause = request.includeExpired ? '' : 'AND cs.expires_at > now()';
   const staffVenueClause = staffVenueId ? 'AND b.venue_id = :staffVenueId' : '';
   const linkedVenueClause = staffVenueId ? 'AND linked_booking.venue_id = :staffVenueId' : '';
@@ -2619,6 +2697,7 @@ async function findReadyStaffSessions(request, staffVenueId = null) {
 }
 
 async function findStaffSessionDetail(checkinSessionId, staffVenueId = null) {
+  await refreshLinkedAddOnEffectiveSyncState(checkinSessionId, staffVenueId);
   const staffVenueClause = staffVenueId ? 'AND b.venue_id = :staffVenueId' : '';
   const linkedVenueClause = staffVenueId ? 'AND linked_booking.venue_id = :staffVenueId' : '';
   const result = await executeStatement(
