@@ -320,6 +320,7 @@ function CheckInFlow() {
     const [buyRecoverySnapshot, setBuyRecoverySnapshot] = useState<BuyFlowRecoverySnapshot | null>(null);
     const [buyRecoveryStatus, setBuyRecoveryStatus] = useState<BuyRecoveryStatus | null>(null);
     const addonsAvailabilityPrefetchRef = useRef<AddonsAvailabilityPrefetch | null>(null);
+    const guestResumeStepWriteRef = useRef<string | null>(null);
     const [addonsAvailabilityPrefetch, setAddonsAvailabilityPrefetch] = useState<AddonsAvailabilityPrefetch | null>(null);
 
     useEffect(() => startBuyFlowRecoveryCleanup(), []);
@@ -492,7 +493,7 @@ function CheckInFlow() {
         }
 
         try {
-            const checkinSession = await startCheckInSession(booking);
+            const checkinSession = await startCheckInSession(booking, 'safety');
             const resumeState = getResumeState(checkinSession);
             const nextCtx = { ...ctx, ...bookingPatch, checkinSession };
             const targetState =
@@ -619,6 +620,31 @@ function CheckInFlow() {
     useEffect(() => {
         writeSafetyRecovery(state, ctx);
     }, [ctx, state]);
+
+    useEffect(() => {
+        if (
+            state !== 'APP_SAFETY_VIDEO' ||
+            !ctx.booking ||
+            !ctx.checkinSession ||
+            ctx.checkinSession.guestResumeStep === 'safety'
+        ) return;
+
+        const checkinSessionId = ctx.checkinSession.checkinSessionId;
+        if (guestResumeStepWriteRef.current === checkinSessionId) return;
+        guestResumeStepWriteRef.current = checkinSessionId;
+
+        startCheckInSession(ctx.booking, 'safety')
+            .then((checkinSession) => {
+                setCtx((current) => current.checkinSession?.checkinSessionId === checkinSessionId
+                    ? { ...current, checkinSession }
+                    : current);
+            })
+            .catch(() => {
+                if (guestResumeStepWriteRef.current === checkinSessionId) {
+                    guestResumeStepWriteRef.current = null;
+                }
+            });
+    }, [ctx.booking, ctx.checkinSession, state]);
 
     useEffect(() => {
         if (state !== 'APP_ADDONS') setAddonsStep('SELECT');
@@ -865,6 +891,7 @@ function CheckInFlow() {
 function getResumeState(session: CheckInSession): FlowState | null {
     if (isCompletedSession(session)) return 'APP_PRESENT';
     if (isReadyForStaffSession(session)) return 'APP_CONFIRM';
+    if (session.guestResumeStep === 'safety') return 'APP_SAFETY_VIDEO';
     return null;
 }
 

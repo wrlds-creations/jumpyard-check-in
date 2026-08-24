@@ -387,6 +387,7 @@ Request:
   "bookingReference": "5001370",
   "rollerUniqueId": "dbba266d-0951-4706-9adf-6c9d05edffbf",
   "includeBooking": true,
+  "guestResumeStep": "safety",
   "sourceLookupId": "optional-lookup-attempt-id",
   "idempotencyKey": "client-or-server-generated-key"
 }
@@ -401,6 +402,7 @@ Response:
   "session": {
     "checkinSessionId": "jy_session_...",
     "status": "guest_in_progress",
+    "guestResumeStep": "safety",
     "handoffStatus": "not_ready",
     "expiresAt": "2026-05-21T12:15:00Z"
   }
@@ -410,6 +412,9 @@ Response:
 Session rules:
 
 - Create or resume one active operational session for the booking and visit date.
+- `guestResumeStep` is an optional bounded guest-flow hint. The only accepted value is `safety`; arbitrary client routes are rejected and never persisted.
+- A paid client records `guestResumeStep=safety` when it reaches the safety walkthrough. A later device may use the returned marker to resume at safety without marking safety complete or making the session ready for staff.
+- Ready-for-staff, completed, redeemed, expired, and blocked server state remains authoritative over the resume hint.
 - The phone app may call this endpoint immediately after a paid lookup to resume an existing active session before showing the booking summary.
 - When `includeBooking=true`, return the existing guest-safe booking shape with original items plus approved linked add-ons. While the separate ROLLER add-on booking is still synchronizing, use only definitively approved/reconciled provisional draft items; replace them with authoritative linked items without duplication after readback.
 - Never include unapproved, failed, cancelled, refused, unknown, or timed-out linked drafts, and never expose linked booking/draft/payment identifiers in the guest response.

@@ -106,6 +106,7 @@ interface CloudGuestAccess {
 interface CloudSession {
   checkinSessionId: string;
   status: string;
+  guestResumeStep?: string | null;
   handoffStatus?: string | null;
   handoffCode?: string | null;
   safetyStatus?: string | null;
@@ -479,7 +480,10 @@ export async function resolveCheckInSessionLink(token: string): Promise<CheckInS
   };
 }
 
-export async function startCheckInSession(booking: Booking): Promise<CheckInSession> {
+export async function startCheckInSession(
+  booking: Booking,
+  guestResumeStep?: 'safety',
+): Promise<CheckInSession> {
   const identifier = booking.rollerUniqueId ?? booking.id;
   if (!identifier) {
     throw new CloudSessionError('session_failed', 'Booking reference is required before starting a session.');
@@ -502,6 +506,7 @@ export async function startCheckInSession(booking: Booking): Promise<CheckInSess
       },
       body: JSON.stringify({
         bookingReference: booking.id,
+        ...(guestResumeStep ? { guestResumeStep } : {}),
         rollerUniqueId: booking.rollerUniqueId ?? undefined,
         identifier,
         expectedDate: booking.date ?? getExpectedDate(),
@@ -1038,6 +1043,7 @@ function toCheckInSession(session: CloudSession, guestAccess?: CloudGuestAccess)
   return {
     checkinSessionId: session.checkinSessionId,
     status: session.status,
+    guestResumeStep: session.guestResumeStep === 'safety' ? 'safety' : null,
     guestAccessToken: normalizeOptionalString(guestAccess?.token) ?? undefined,
     guestAccessExpiresAt: guestAccess?.expiresAt ?? null,
     handoffCode: session.handoffCode ?? null,
