@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, ArrowLeft, Check, ChevronDown, Minus, Plus, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, ChevronDown, Minus, Plus, RefreshCw, X } from 'lucide-react';
 import {
   CloudBookingError,
   createDraftBooking,
@@ -44,11 +44,14 @@ import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 
 interface BuyTicketsProps {
   recoverySnapshot?: BuyFlowRecoverySnapshot | null;
+  inlineExitVisible?: boolean;
   onBack: () => void;
   onBookingReady: (booking: Booking) => void;
+  onRequestExit?: () => void;
+  onStepChange?: (step: BuyTicketsStep) => void;
 }
 
-type Step = BuyFlowRecoveryBuyStep | 'PAYMENT' | 'PENDING';
+export type BuyTicketsStep = BuyFlowRecoveryBuyStep | 'PAYMENT' | 'PENDING';
 
 const BUY_PROGRESS_ICONS: JumpyardIconName[] = [
   'admission-ticket',
@@ -217,7 +220,7 @@ function getDraftAmountOwing(draft: NewBookingDraftResult | null) {
   return draft?.prepayment?.amountOwing ?? draft?.draft.costs.amountOwing ?? null;
 }
 
-function getDraftRecoveryStep(step: Step, paymentApprovedForSync: boolean): BuyFlowRecoveryStep {
+function getDraftRecoveryStep(step: BuyTicketsStep, paymentApprovedForSync: boolean): BuyFlowRecoveryStep {
   if (step === 'PENDING') return 'PENDING';
   if (paymentApprovedForSync) return 'PAYMENT';
   return 'PAYMENT';
@@ -578,13 +581,13 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function getBuyProgressIndex(step: Step) {
+function getBuyProgressIndex(step: BuyTicketsStep) {
   if (step === 'ADDONS' || step === 'SKYRIDER_ATTEST') return 1;
   if (step === 'CONTACT' || step === 'REVIEW' || step === 'PAYMENT' || step === 'PENDING') return 2;
   return 0;
 }
 
-function isBuyStep(step: Step): step is BuyFlowRecoveryBuyStep {
+function isBuyStep(step: BuyTicketsStep): step is BuyFlowRecoveryBuyStep {
   return step !== 'PAYMENT' && step !== 'PENDING';
 }
 
@@ -622,7 +625,7 @@ function AvailabilityLoadingCard({ selectedTime }: { selectedTime: string | null
   );
 }
 
-function BuyEntryProgress({ step }: { step: Step }) {
+function BuyEntryProgress({ step }: { step: BuyTicketsStep }) {
   const { t } = useTranslation();
   const labels = [
     t.buyProgress.entry,
@@ -672,7 +675,14 @@ function BuyEntryProgress({ step }: { step: Step }) {
   );
 }
 
-export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: BuyTicketsProps) => {
+export const BuyTickets = ({
+  recoverySnapshot = null,
+  inlineExitVisible = false,
+  onBack,
+  onBookingReady,
+  onRequestExit,
+  onStepChange,
+}: BuyTicketsProps) => {
   const { lang, t } = useTranslation();
   const slots = useMemo(() => generateSlots(), []);
   const restoringPrePaymentRef = useRef(false);
@@ -682,7 +692,7 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
     [lang, t.buy.selectTimeToday]
   );
 
-  const [step, setStep] = useState<Step>('TIMESLOT');
+  const [step, setStep] = useState<BuyTicketsStep>('TIMESLOT');
   const [availability, setAvailability] = useState<NewBookingAvailability | null>(null);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
@@ -710,6 +720,14 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
   const [paymentSyncing, setPaymentSyncing] = useState(false);
   const [paymentSyncError, setPaymentSyncError] = useState<string | null>(null);
   const [paymentApprovedForSync, setPaymentApprovedForSync] = useState(false);
+
+  useEffect(() => {
+    onStepChange?.(step);
+  }, [onStepChange, step]);
+
+  useEffect(() => () => {
+    onStepChange?.('TIMESLOT');
+  }, [onStepChange]);
 
   const selectedSlot = availability?.slots.find((slot) => slot.startTime === selectedTime) ?? null;
   const visibleProductSections = getVisibleBookingProductSections(selectedSlot);
@@ -1470,12 +1488,24 @@ export const BuyTickets = ({ recoverySnapshot = null, onBack, onBookingReady }: 
     >
       <BuyEntryProgress step={step} />
 
-      <button
-        onClick={backFromStep}
-        className="mb-4 flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
-      >
-        <ArrowLeft size={14} /> {t.common.back}
-      </button>
+      <div className="mb-4 flex items-center justify-between">
+        <button
+          onClick={backFromStep}
+          className="flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
+        >
+          <ArrowLeft size={14} /> {t.common.back}
+        </button>
+        {inlineExitVisible && onRequestExit && (
+          <button
+            className="ml-auto flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
+            data-testid="buy-exit-flow-open"
+            onClick={onRequestExit}
+            type="button"
+          >
+            {t.common.exit} <X size={14} />
+          </button>
+        )}
+      </div>
 
       {step === 'TIMESLOT' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
