@@ -809,7 +809,33 @@ async function handleDraftFinalize(event, body, correlationId) {
   }
 
   if (request.action === 'status') {
-    return jsonResponse(200, correlationId, publicKioskPaymentStatus(prepayment));
+    if (
+      prepayment.flow_type === 'new_booking' &&
+      prepayment.payment_attempt_status === 'approved'
+    ) {
+      try {
+        await ensureProvisionalKioskHandoff(request);
+        return jsonResponse(
+          200,
+          correlationId,
+          publicKioskPaymentStatus(await findKioskPrepaymentAttempt(request)),
+        );
+      } catch (error) {
+        await writeBookingEventLog({
+          correlationId,
+          eventType: 'booking.kiosk_provisional_handoff_failed',
+          payload: { failureClass: error?.name || 'unknown' },
+          subjectRef: request.prepaymentDraftId,
+          summary: 'Approved kiosk payment could not recover its provisional handoff session.',
+        });
+      }
+    }
+    await markExistingProvisionalKioskSafetyResume(prepayment);
+    return jsonResponse(
+      200,
+      correlationId,
+      publicKioskPaymentStatus(await findKioskPrepaymentAttempt(request)),
+    );
   }
 
   if (prepayment.roller_draft_unique_id !== request.rollerDraftUniqueId) {
@@ -834,6 +860,8 @@ async function handleDraftFinalize(event, body, correlationId) {
   const recorded = await recordKioskTerminalOutcome(request, 'approved');
   emitKioskTerminalOutcomeMetric('approved');
   if (recorded?.booking_confirmation_status === 'confirmed' || recorded?.status === 'published') {
+    const confirmed = await findKioskPrepaymentAttempt(request);
+    await markExistingProvisionalKioskSafetyResume(confirmed);
     return jsonResponse(200, correlationId, publicKioskPaymentStatus(await findKioskPrepaymentAttempt(request)));
   }
 
@@ -954,6 +982,7 @@ async function findKioskPrepaymentAttempt(request) {
        session.handoff_status,
        session.selected_ticket_ids::text AS selected_ticket_ids,
        session.session_summary ->> 'bookingSyncStatus' AS session_booking_sync_status,
+       session.session_summary ->> 'guestResumeStep' AS session_guest_resume_step,
        session.expires_at::text AS session_expires_at,
        session.expires_at::text AS guest_access_expires_at
       FROM jumpyard.prepayment_booking_drafts AS draft
@@ -990,6 +1019,7 @@ async function ensureProvisionalKioskHandoff(request) {
     stringOrNull(process.env.STAFF_IDENTITY_VENUE_ID);
   const sessionSummary = {
     bookingSyncStatus: 'pending',
+    guestResumeStep: 'safety',
     paymentAttemptId: request.paymentAttemptId,
     paymentStatus: 'approved',
     prepaymentDraftId: request.prepaymentDraftId,
@@ -1118,6 +1148,25 @@ async function ensureProvisionalKioskHandoff(request) {
   );
 
   return checkinSessionId;
+}
+
+async function markExistingProvisionalKioskSafetyResume(draft) {
+  if (
+    draft?.flow_type !== 'new_booking' ||
+    !draft?.checkin_session_id ||
+    !['approved', 'reconciled'].includes(draft?.payment_attempt_status) ||
+    draft?.session_guest_resume_step === 'safety'
+  ) {
+    return;
+  }
+
+  await executeStatement(
+    `UPDATE jumpyard.checkin_sessions
+        SET session_summary = session_summary || jsonb_build_object('guestResumeStep', 'safety'),
+            updated_at = now()
+      WHERE checkin_session_id = :checkinSessionId`,
+    [stringParameter('checkinSessionId', draft.checkin_session_id)],
+  );
 }
 
 function linkedAddOnEffectiveSyncCte(sourceCte) {

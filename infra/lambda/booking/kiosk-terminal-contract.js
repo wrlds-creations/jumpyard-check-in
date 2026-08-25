@@ -161,6 +161,9 @@ function publicKioskPaymentStatus(row) {
               : 'pending',
           checkinSessionId: stringOrNull(row?.checkin_session_id),
           expiresAt: stringOrNull(row?.session_expires_at),
+          ...(stringOrNull(row?.session_guest_resume_step) === 'safety'
+            ? { guestResumeStep: 'safety' }
+            : {}),
           handoffCode: stringOrNull(row?.handoff_code),
           handoffStatus: stringOrNull(row?.handoff_status),
           safetyStatus: stringOrNull(row?.safety_status),
