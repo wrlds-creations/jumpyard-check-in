@@ -22,6 +22,13 @@ const sv = {
     stillThere: 'Är du kvar?',
     stillThereDesc: 'Tryck var som helst för att fortsätta, annars börjar vi om.',
     imHere: 'Jag är kvar',
+    exit: 'Avsluta',
+  },
+  exitFlow: {
+    title: 'Vill du avsluta?',
+    description: 'Dina val på den här enheten tas bort. En bokning eller betalning som redan är klar påverkas inte.',
+    confirm: 'Avsluta och gå till start',
+    stay: 'Fortsätt här',
   },
   progress: {
     booking: 'Bokning',
@@ -430,6 +437,13 @@ const en: typeof sv = {
     stillThere: 'Are you still there?',
     stillThereDesc: 'Tap anywhere to continue, otherwise we restart.',
     imHere: "I'm here",
+    exit: 'Exit',
+  },
+  exitFlow: {
+    title: 'Do you want to exit?',
+    description: 'Your choices on this device are removed. A booking or payment that is already complete is not affected.',
+    confirm: 'Exit and go to start',
+    stay: 'Stay here',
   },
   progress: {
     booking: 'Booking',

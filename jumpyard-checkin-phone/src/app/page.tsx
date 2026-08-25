@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, ArrowLeft, RefreshCw, RotateCcw } from 'lucide-react';
+import { AlertCircle, ArrowLeft, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { BookingSummary } from '@/components/BookingSummary';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { SafetyAttest } from '@/components/SafetyAttest';
@@ -38,8 +38,10 @@ import {
 } from '@/flow/buyFlowRecovery';
 import { ParkChoice } from '@/components/ParkChoice';
 import { BookingLookup } from '@/components/BookingLookup';
-import { BuyTickets } from '@/components/BuyTickets';
+import { BuyTickets, type BuyTicketsStep } from '@/components/BuyTickets';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
+import { ExitFlowDialog } from '@/components/ExitFlowDialog';
+import { getExitFlowMode, hasReachedSafety } from '@/flow/exitFlowPolicy';
 
 // Visual progress bar groups safety-video + safety-attest into one step,
 // and collapses connected/skyrider into the extras column.
@@ -317,6 +319,9 @@ function CheckInFlow() {
     const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
     const [addonsStep, setAddonsStep] = useState<AddonsOfferStep>('SELECT');
     const [addonsBackRequest, setAddonsBackRequest] = useState(0);
+    const [buyStep, setBuyStep] = useState<BuyTicketsStep>('TIMESLOT');
+    const [exitDialogOpen, setExitDialogOpen] = useState(false);
+    const [safetyExitLocked, setSafetyExitLocked] = useState(false);
     const [buyRecoverySnapshot, setBuyRecoverySnapshot] = useState<BuyFlowRecoverySnapshot | null>(null);
     const [buyRecoveryStatus, setBuyRecoveryStatus] = useState<BuyRecoveryStatus | null>(null);
     const addonsAvailabilityPrefetchRef = useRef<AddonsAvailabilityPrefetch | null>(null);
@@ -536,17 +541,29 @@ function CheckInFlow() {
         }
     };
 
-    const restartAfterBuyRecovery = () => {
+    const resetToStart = () => {
         clearBuyFlowRecovery();
         setBuyRecoverySnapshot(null);
         setBuyRecoveryStatus(null);
         setAlreadyCheckedIn(false);
         setSessionStartError(null);
         setReadyForStaffError(null);
-        setCtx({ ...initialContext(effectiveChannel), token });
+        setIsStartingSession(false);
+        setIsMarkingReadyForStaff(false);
+        setAddonsStep('SELECT');
+        setAddonsBackRequest(0);
+        setBuyStep('TIMESLOT');
+        setExitDialogOpen(false);
+        setSafetyExitLocked(false);
+        addonsAvailabilityPrefetchRef.current = null;
+        setAddonsAvailabilityPrefetch(null);
+        guestResumeStepWriteRef.current = null;
+        setCtx({ ...initialContext(effectiveChannel), token: null });
         setState('KIOSK_CHOICE');
         scrollToTop();
     };
+
+    const restartAfterBuyRecovery = resetToStart;
 
     const startExistingBookingCheckIn = async () => {
         if (!ctx.booking || isStartingSession) return;
@@ -651,6 +668,14 @@ function CheckInFlow() {
     }, [state]);
 
     useEffect(() => {
+        if (state !== 'KIOSK_BUY') setBuyStep('TIMESLOT');
+    }, [state]);
+
+    useEffect(() => {
+        if (hasReachedSafety(state, ctx.checkinSession)) setSafetyExitLocked(true);
+    }, [ctx.checkinSession, state]);
+
+    useEffect(() => {
         if (state !== 'APP_MOBILE') return;
         let alive = true;
         if (!linkToken) {
@@ -688,6 +713,13 @@ function CheckInFlow() {
     const backState = getBackState(state, ctx);
     const addonsHandlesBack = state === 'APP_ADDONS' && addonsStep !== 'SELECT' && addonsStep !== 'APPROVED';
     const matchingAddonsPrefetch = getMatchingAddonsPrefetch(ctx.booking);
+    const exitFlowMode = getExitFlowMode({
+        addonsStep,
+        buyStep,
+        safetyLocked: safetyExitLocked,
+        session: ctx.checkinSession,
+        state,
+    });
 
     return (
         <div
@@ -701,7 +733,7 @@ function CheckInFlow() {
         >
             <ProgressBar state={state} buyEntryFlow={ctx.buyEntryFlow} />
 
-            <div className="w-full max-w-md min-w-0 px-4 h-8 flex items-center">
+            <div className={`w-full max-w-md min-w-0 px-4 h-8 items-center justify-between ${state === 'KIOSK_BUY' ? 'hidden' : 'flex'}`}>
                 {(backState || addonsHandlesBack) && (
                     <button
                         onClick={() => {
@@ -718,7 +750,23 @@ function CheckInFlow() {
                         <ArrowLeft size={14} /> {t.common.back}
                     </button>
                 )}
+                {exitFlowMode === 'confirm' && (
+                    <button
+                        className="ml-auto flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
+                        data-testid="exit-flow-open"
+                        onClick={() => setExitDialogOpen(true)}
+                        type="button"
+                    >
+                        {t.common.exit} <X size={14} />
+                    </button>
+                )}
             </div>
+
+            <ExitFlowDialog
+                open={exitDialogOpen && exitFlowMode === 'confirm'}
+                onClose={() => setExitDialogOpen(false)}
+                onConfirm={resetToStart}
+            />
 
             <div className="w-full max-w-full min-w-0 flex items-center justify-center relative">
                 <AnimatePresence mode="wait">
@@ -772,11 +820,11 @@ function CheckInFlow() {
                                 isPrePaymentBuyFlowRecovery(buyRecoverySnapshot) ? buyRecoverySnapshot : null
                             }
                             onBack={() => {
-                                clearBuyFlowRecovery();
-                                setBuyRecoverySnapshot(null);
-                                setState('KIOSK_CHOICE');
-                                scrollToTop();
+                                resetToStart();
                             }}
+                            inlineExitVisible={exitFlowMode === 'confirm'}
+                            onRequestExit={() => setExitDialogOpen(true)}
+                            onStepChange={setBuyStep}
                             onBookingReady={booking => {
                                 void handlePaidNewBookingReady(booking);
                             }}
@@ -832,7 +880,7 @@ function CheckInFlow() {
                             }
                             onPendingDone={() => {
                                 setAlreadyCheckedIn(false);
-                                setCtx({ ...initialContext(effectiveChannel), token });
+                                setCtx({ ...initialContext(effectiveChannel), token: null });
                                 setState('KIOSK_CHOICE');
                                 scrollToTop();
                             }}
@@ -879,7 +927,7 @@ function CheckInFlow() {
                             selectedAddons={ctx.selectedAddons}
                             channel={ctx.channel}
                             alreadyCheckedIn={alreadyCheckedIn}
-                            onStartOver={ctx.channel === 'park-qr' ? restartAfterBuyRecovery : undefined}
+                            onStartOver={ctx.channel === 'park-qr' ? resetToStart : undefined}
                         />
                     )}
                 </AnimatePresence>
