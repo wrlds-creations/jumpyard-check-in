@@ -716,6 +716,7 @@ function CheckInFlow() {
     const exitFlowMode = getExitFlowMode({
         addonsStep,
         buyStep,
+        paymentCompleted: ctx.paymentCompleted,
         safetyLocked: safetyExitLocked,
         session: ctx.checkinSession,
         state,
