@@ -56,6 +56,7 @@ const provisionalStatus = publicKioskPaymentStatus({
   roller_draft_unique_id: 'draft-a',
   safety_status: 'not_started',
   session_expires_at: '2026-08-18T12:00:00.000Z',
+  session_guest_resume_step: 'safety',
   session_status: 'guest_in_progress',
   status: 'payment_pending',
 });
@@ -63,6 +64,7 @@ assert.equal(provisionalStatus.status, 'pending');
 assert.equal(provisionalStatus.provisionalHandoff.booking.paymentStatus, 'paid');
 assert.equal(provisionalStatus.provisionalHandoff.guestAccess.token, 'jytp_123456789012345678');
 assert.equal(provisionalStatus.provisionalHandoff.session.bookingSyncStatus, 'pending');
+assert.equal(provisionalStatus.provisionalHandoff.session.guestResumeStep, 'safety');
 assert.deepEqual(provisionalStatus.provisionalHandoff.booking.items[0], {
   bookingDate: '2026-08-18',
   durationMinutes: 60,
@@ -132,6 +134,10 @@ assert.match(bookingSource, /KioskReconciliationDispatchFailureCount/);
 assert.match(bookingSource, /payload: \{ failureClass \}/);
 assert.match(bookingSource, /request\.action === 'status'/);
 assert.match(bookingSource, /ensureProvisionalKioskHandoff\(request\)/);
+assert.match(bookingSource, /session\.session_summary ->> 'guestResumeStep' AS session_guest_resume_step/);
+assert.match(bookingSource, /bookingSyncStatus: 'pending',[\s\S]*guestResumeStep: 'safety'/);
+assert.match(bookingSource, /markExistingProvisionalKioskSafetyResume\(prepayment\)/);
+assert.match(bookingSource, /jsonb_build_object\('guestResumeStep', 'safety'\)/);
 assert.match(bookingSource, /selected_ticket_ids = CAST\(:selectedTicketIds AS jsonb\)/);
 assert.match(bookingSource, /(?:bookingSyncStatus:|'bookingSyncStatus',) 'needs_staff'/);
 assert.match(provisionalMigrationSource, /jumpyard\.checkin_sessions/);

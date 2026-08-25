@@ -712,11 +712,11 @@ Draft rules:
 
 ### `POST /v1/bookings/draft/finalize`
 
-Records a sanitized ROLLER terminal result for one server-owned kiosk payment attempt. `approved` calls ROLLER draft publish and then reads the booking back; only a settled authoritative booking returns `booking_confirmed`. `failed`, `cancelled`, and `unknown` update only monotonic safe attempt state.
+Records a sanitized ROLLER terminal result for one server-owned kiosk payment attempt. A definitively `approved` new-booking attempt immediately returns the one server-created provisional check-in session while ROLLER publication and readback continue in the background. `failed`, `cancelled`, and `unknown` update only monotonic safe attempt state.
 
 Required fields are `prepaymentDraftId`, `paymentAttemptId`, `rollerDraftUniqueId`, `outcome`, and an idempotency key. All identifiers must match one `card_present` row with `flow_type='new_booking'` or `flow_type='add_product'`. The endpoint accepts no card data, receipt data, processor reference, terminal id, or raw payment JWT. A late non-approved result cannot downgrade an approved or reconciled attempt.
 
-For `new_booking`, an authoritative paid booking can create or repair the one provisional check-in/Handoff session. For `add_product`, confirmation instead publishes the prepayment row and returns the linked add-on booking reference; it must not create a second check-in or Handoff session. The add-on link was already stored before the terminal identity was returned, and the existing lookup/webhook reconciliation owns publication of its `booking_links` status. Stock-only add-on readback may have booking items without tickets, while the new-booking path keeps its ticket-bearing readback requirement.
+For `new_booking`, the provisional session is created only after durable payment approval and includes `guestResumeStep=safety`. The kiosk uses that session immediately instead of waiting for the ROLLER booking. Repeated finalize and status requests return the same session and marker. Redemption remains blocked until `bookingSyncStatus=confirmed` and authoritative booking tickets are attached. For `add_product`, confirmation instead publishes the prepayment row and returns the linked add-on booking reference; it must not create a second check-in or Handoff session. The add-on link was already stored before the terminal identity was returned, and the existing lookup/webhook reconciliation owns publication of its `booking_links` status. Stock-only add-on readback may have booking items without tickets, while the new-booking path keeps its ticket-bearing readback requirement.
 
 T0030 discovery result:
 
