@@ -4,11 +4,11 @@ Use this file as the short snapshot of what actually exists. Operational work st
 
 ## Snapshot
 
-- Date: 2026-08-24
-- Latest merged/deployed backend: `a150767`; PR #306 adds the bounded cross-device `safety` hint. Release `32738019120`, Park run `32738465477`, and public run `32738931583` are green; only the existing Session Lambda changed.
+- Date: 2026-08-25
+- Latest merged/deployed Park backend: `ec60eaa`; PR #313 restores the immediate provisional kiosk safety contract. Release `32833988322` and protected Park run `32834381643` are green; only the existing Booking Lambda changed. The latest protected public phone promotion remains PR #306 at `a150767` through run `32738931583`.
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
-- Product/runtime state: Park has 202 resources, migrations through `0020`, and 27 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption, and late Handoff attachment are proven. Guest resume includes paid linked add-ons plus a bounded cross-device `safety` hint; physical proof remains in kiosk issue #57. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
+- Product/runtime state: Park has 202 resources, migrations through `0020`, and 27 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption, and late Handoff attachment are proven. A definitively approved kiosk payment now returns its provisional session with the bounded `safety` hint immediately instead of waiting for ROLLER readback; redemption remains blocked until authoritative synchronization. Physical proof remains in kiosk issue #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
 - Product approval and implementation status are read from GitHub Issues and the Project rather than copied into this merged-mainline snapshot.
 
