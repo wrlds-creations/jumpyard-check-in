@@ -4,8 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 import type { NewBookingDraftResult } from '@/flow/cloudClient';
+import {
+  isEcommercePaymentNavigationLocked,
+  type EcommercePaymentStatus,
+} from '@/flow/exitFlowPolicy';
 
-type PaymentStatus = 'bootstrapping' | 'ready' | 'received' | 'approved' | 'failed' | 'blocked';
+type PaymentStatus = EcommercePaymentStatus;
 
 export interface RollerPaymentResultSummary {
   message: string | null;
@@ -17,6 +21,7 @@ interface RollerPaymentDropInProps {
   amountLabel: string;
   onApproved: (result: RollerPaymentResultSummary) => void;
   onFailed: (result: RollerPaymentResultSummary) => void;
+  onNavigationLockChange?: (locked: boolean) => void;
   paymentSession: NewBookingDraftResult['paymentSession'];
 }
 
@@ -26,6 +31,7 @@ export const RollerPaymentDropIn = ({
   amountLabel,
   onApproved,
   onFailed,
+  onNavigationLockChange,
   paymentSession,
 }: RollerPaymentDropInProps) => {
   const { t } = useTranslation();
@@ -34,11 +40,17 @@ export const RollerPaymentDropIn = ({
   const startedRef = useRef(false);
   const onApprovedRef = useRef(onApproved);
   const onFailedRef = useRef(onFailed);
+  const onNavigationLockChangeRef = useRef(onNavigationLockChange);
 
   useEffect(() => {
     onApprovedRef.current = onApproved;
     onFailedRef.current = onFailed;
-  }, [onApproved, onFailed]);
+    onNavigationLockChangeRef.current = onNavigationLockChange;
+  }, [onApproved, onFailed, onNavigationLockChange]);
+
+  useEffect(() => {
+    onNavigationLockChangeRef.current?.(isEcommercePaymentNavigationLocked(status));
+  }, [status]);
 
   useEffect(() => {
     if (startedRef.current) return;

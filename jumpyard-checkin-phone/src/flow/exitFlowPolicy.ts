@@ -3,6 +3,11 @@ import type { BuyTicketsStep } from '@/components/BuyTickets';
 import type { CheckInSession, FlowState } from '@/flow/types';
 
 export type ExitFlowMode = 'hidden' | 'confirm';
+export type EcommercePaymentStatus = 'bootstrapping' | 'ready' | 'received' | 'approved' | 'failed' | 'blocked';
+
+export function isEcommercePaymentNavigationLocked(status: EcommercePaymentStatus) {
+  return status === 'received' || status === 'approved';
+}
 
 const SAFETY_LOCKED_STATES = new Set<FlowState>([
   'APP_SAFETY_VIDEO',
@@ -44,17 +49,21 @@ export function hasReachedSafety(
 export function getExitFlowMode({
   addonsStep,
   buyStep,
+  paymentCompleted = false,
   safetyLocked = false,
   session,
   state,
 }: {
   addonsStep: AddonsOfferStep;
   buyStep: BuyTicketsStep;
+  paymentCompleted?: boolean;
   safetyLocked?: boolean;
   session: CheckInSession | null;
   state: FlowState;
 }): ExitFlowMode {
-  if (START_STATES.has(state) || safetyLocked || hasReachedSafety(state, session)) return 'hidden';
+  if (START_STATES.has(state) || paymentCompleted || safetyLocked || hasReachedSafety(state, session)) {
+    return 'hidden';
+  }
 
   if (state === 'KIOSK_BUY' && (buyStep === 'PAYMENT' || buyStep === 'PENDING')) {
     return 'hidden';

@@ -720,6 +720,7 @@ export const BuyTickets = ({
   const [paymentSyncing, setPaymentSyncing] = useState(false);
   const [paymentSyncError, setPaymentSyncError] = useState<string | null>(null);
   const [paymentApprovedForSync, setPaymentApprovedForSync] = useState(false);
+  const [paymentNavigationLocked, setPaymentNavigationLocked] = useState(false);
 
   useEffect(() => {
     onStepChange?.(step);
@@ -810,6 +811,8 @@ export const BuyTickets = ({
   const draftAmountOwing = getDraftAmountOwing(draft);
   const noPaymentRequired = draftAmountOwing !== null && draftAmountOwing <= 0;
   const showPaymentSyncCard = paymentApprovedForSync || paymentSyncing || Boolean(paymentSyncError);
+  const backNavigationLocked =
+    step === 'PAYMENT' && (paymentNavigationLocked || paymentApprovedForSync || paymentSyncing);
   const checkoutAmount = draftAmountOwing ?? quote?.costs.amountOwing ?? basketEstimateTotal;
   const checkoutTotal = quote?.costs.total ?? basketEstimateTotal;
   const checkoutLocked = Boolean(draft) || showPaymentSyncCard;
@@ -817,6 +820,7 @@ export const BuyTickets = ({
   const clearPaymentSyncState = () => {
     setPaymentSyncError(null);
     setPaymentApprovedForSync(false);
+    setPaymentNavigationLocked(false);
   };
 
   useEffect(() => {
@@ -1345,6 +1349,7 @@ export const BuyTickets = ({
   };
 
   const backFromStep = () => {
+    if (backNavigationLocked) return;
     if (step === 'PAYMENT') {
       setStep('CONTACT');
       return;
@@ -1489,12 +1494,14 @@ export const BuyTickets = ({
       <BuyEntryProgress step={step} />
 
       <div className="mb-4 flex items-center justify-between">
-        <button
-          onClick={backFromStep}
-          className="flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
-        >
-          <ArrowLeft size={14} /> {t.common.back}
-        </button>
+        {!backNavigationLocked && (
+          <button
+            onClick={backFromStep}
+            className="flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
+          >
+            <ArrowLeft size={14} /> {t.common.back}
+          </button>
+        )}
         {inlineExitVisible && onRequestExit && (
           <button
             className="ml-auto flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
@@ -2260,6 +2267,7 @@ export const BuyTickets = ({
             ) : (
               <RollerPaymentDropIn
                 amountLabel={formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
+                onNavigationLockChange={setPaymentNavigationLocked}
                 paymentSession={draft.paymentSession}
                 onApproved={() => {
                   setPaymentApprovedForSync(true);
