@@ -143,4 +143,110 @@ republished only because the existing workflow promotes both frontend outputs.
 Production output must use the approved Cloud API and must not enable the local
 fixture server or preview banner. The prior public release above is the
 frontend-only rollback candidate; no rollback is being executed preemptively.
-Post-merge deployment and verification evidence will be recorded separately.
+Post-merge deployment and verification evidence is recorded below.
+
+## Final validation and merge
+
+Implementation [PR #319](https://github.com/wrlds-creations/jumpyard-check-in/pull/319)
+merged on 2026-08-27 as `d2283aaa59211a8425c98add95337ceae3c88c3e`.
+The implementing agent recorded its scoped review explicitly, without claiming
+an independent human review. All four required checks passed in
+[CI 33080820763](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33080820763):
+Repository, Infrastructure, Phone and Admin. Main protection was not bypassed.
+The final compact revision also passed the full local `npm run validate`, phone
+lint, TypeScript and diff check. CI rebuilt the exact final production phone
+and admin source, superseding the earlier local-build timing note above.
+
+The dependent evidence branch starts from that merged mainline commit. No
+additional runtime or infrastructure change is included in its documentation.
+Rollback candidate build `32826760100` still has unexpired artifact `9555336280`,
+digest `sha256:2b73c7ec43f0b088ebdc8f017bb296bbb5f8db43b0209da1f93a355b0b96172d`.
+Only its frontend outputs are a rollback candidate; rolling the backend back
+past the deployed #312/#315 fixes is outside this issue.
+
+## Immutable release and protected plan
+
+[Release build 33081106676](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33081106676)
+passed for exact source `d2283aaa59211a8425c98add95337ceae3c88c3e`, as did
+post-merge [CI 33081106542](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33081106542).
+The immutable artifact is `9650194100` (`park-test-release-d2283aaa59211a8425c98add95337ceae3c88c3e`),
+digest `sha256:a9d6820b929dfa79792eab0a7e2bae277da5c13ede04fdb1ddfbff6a0cd860f9`.
+Local artifact validation independently verified all 493 files and manifest hash
+`c8f8a1002d72fd8d250a6180d5710a38f30b48cf6160089bb97035eeeca91f7f`, plus the
+public domain/API/Cognito/Apple Pay target contract.
+
+The production JavaScript contains the new shared UI and approved copy, with the
+exact Park API. It contains no fixture identifiers/token, LAN configuration or
+localhost preview address, and the export has no preview route/server. An initial
+overly strict string check rejected the retained preview CSS class in JavaScript;
+inspection confirmed it remains behind the sole strict `NEXT_PUBLIC_PHONE_ADDON_PREVIEW`
+opt-in check, with no assignment enabling it and the normal empty browser process
+environment. The corrected check passed before any deployment approval. Presence
+of guarded copy is not evidence that fixture mode is active.
+
+Protected [Park plan 33081517580](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33081517580)
+showed 202 resources before and after, zero additions/changes/removals and no
+parameter/output/rule/condition/mapping changes. Current and release template
+hashes both equal `b227888a573552adb362baebbf0cd866c5e0eeec9ffab06e13e908ad191ecf07`.
+The target remains JumpYard account `376129878018`, `eu-north-1`, technical
+`park-test`, owner/creator `love`, managed by CDK, confidential/exportable,
+repository `wrlds-creations/jumpyard-check-in`, Client/CostCenter `JumpYard`.
+No new resource, tag, route, secret, catalog, schema or gate is introduced.
+Migrations are explicitly disabled. The visible plan and exact artifact were
+approved through the existing protected environment under Love's delegated
+publication request, with that provenance recorded in the approval comment.
+
+## Park verification
+
+Park run `33081517580` completed successfully. CDK explicitly reported
+`no changes`. Post-deploy assertions passed exact template equality,
+`UPDATE_COMPLETE`, `IN_SYNC` drift, zero Park alarms, empty related queues,
+exact-SHA Cloudflare deployments and migrations applied through `0020`, with
+none requested or applied by this run. Stable phone/admin routes returned
+HTTP 200 with the expected API/Cognito targets and Apple Pay association.
+
+Immutable Park outputs:
+
+- Phone: https://ee296048.jumpyard-check-in-park-test.pages.dev
+- Unchanged admin: https://5d81f017.jumpyard-checkin-admin-park-test.pages.dev
+
+No real booking, payment, refund, redemption, guest message or ROLLER catalog
+write was performed by this deployment or its verification.
+
+## Protected public publication and readback
+
+[Public run 33081923334](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33081923334)
+completed successfully on 2026-08-27 at approximately 16:24 Europe/Stockholm.
+Its visible plan revalidated the same release/manifest, exact public projects
+and existing Nacka backend target. Protected approval followed the successful
+Park run and recorded Love's delegated approval, exact source and rollback
+boundary. No gate was bypassed. The workflow rebuilt nothing and made no AWS
+mutation. The existing API/CORS, Cognito callback, custom-domain and exact-SHA
+Cloudflare checks passed. Guest/staff roots, admin/callback routes and the
+unchanged Apple Pay association returned HTTP 200 with the correct targets.
+
+Published surfaces:
+
+- Guest: https://checkin.jumpyard.se
+- Guest immutable output: https://44924b9b.jumpyard-check-in-production.pages.dev
+- Unchanged staff/admin: https://staff-checkin.jumpyard.se
+- Staff/admin immutable output: https://33d2aa20.jumpyard-checkin-admin-production.pages.dev
+
+An independent read-only check downloaded the root-referenced JavaScript/CSS
+from both the stable Park phone and public guest origins. All 11 assets per
+origin byte-matched the selected immutable release, including the shared add-on
+component, and the transparent warning icon matched too. No application flow
+was executed by this readback and no booking/payment/redemption was created.
+
+No rollback was needed or performed. The previously successful public artifact
+`9555336280` remains available for the same protected **frontend-only** rollback
+path; the current #312/#315 backend must remain intact. This records rollback
+readiness, not a fresh live rollback rehearsal or the unrelated #264 pilot gate.
+
+The dependent evidence PR updates only this document, `REPO_CURRENT_STATE.md`,
+`PROJECT_CONTEXT.md` and `AWS_RESOURCES.md`. It corrects stale release pointers
+without rewriting earlier issue histories. The issue is complete for the
+approved mobile UI and publication scope. Supervised real purchase/payment
+acceptance remains separate from the synthetic/visual and deployment checks.
+The unrelated stored-language hydration draft remains unapproved; no new
+English-flow, time-extension, kiosk or keyboard work was added.

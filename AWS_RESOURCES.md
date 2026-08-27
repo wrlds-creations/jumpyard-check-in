@@ -4,6 +4,12 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #318 Mobile Add-On Choices (Published; No AWS Resource Change)
+
+[PR #319](https://github.com/wrlds-creations/jumpyard-check-in/pull/319) merged the scoped phone/Park UI as `d2283aaa59211a8425c98add95337ceae3c88c3e`. Immutable [release 33081106676](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33081106676) produced artifact `9650194100`, digest `sha256:a9d6820b929dfa79792eab0a7e2bae277da5c13ede04fdb1ddfbff6a0cd860f9`. Protected [Park run 33081517580](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33081517580) reviewed identical current/release templates, 202 resources and zero resource or section changes. CDK reported `no changes`; migrations remained complete through `0020` with apply disabled. Post-deploy exact-template, `UPDATE_COMPLETE`, `IN_SYNC`, zero-alarm, empty-queue and exact-SHA frontend checks passed. Account, region, WRLDS tags, runtime gates, routes, IAM, secrets, schema and the deployed #312/#315 backend remain unchanged.
+
+The same immutable frontend outputs passed protected [public run 33081923334](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33081923334) and are live at `https://checkin.jumpyard.se` and `https://staff-checkin.jumpyard.se`; admin source was unchanged. The public workflow performs no AWS mutation. Domain/CORS/Cognito/Apple Pay checks passed, and an independent readback byte-matched 11 app assets plus the warning icon on both Park and public phone against the release. No real booking, payment, refund, redemption, guest message or ROLLER catalog write was performed. The existing frontend-only rollback artifact remains available; no rollback was needed or executed. [Detailed evidence](docs/gh-318-phone-addon-choices.md).
+
 ### Issue #315 Exact Live Water Offer (Deployed)
 
 [PR #316](https://github.com/wrlds-creations/jumpyard-check-in/pull/316) merged the approved water replacement as `ebc7598cbebe70e52fc7724b65617fde73c5e9e9`. Immutable release [33073309846](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33073309846) produced artifact `9646859303`, digest `sha256:189f65bda5f42d2eb32992c41a0fb9c120616a46da5f6ced939791fe97663c65`. Protected deployment [33073712214](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33073712214) succeeded on 2026-08-27 after the visible read-only plan and delegated approval for Love's scoped rollout request.

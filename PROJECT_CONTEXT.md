@@ -37,7 +37,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 ## Durable Architecture Facts
 
 - Frontend apps must not call Roller directly in the real production architecture.
-- Public frontends remain on `96022c8` against Park backend `9631bf3`. Purchase, PIN, and kiosk redemption are Motorola-verified; Redeem handles missing venue, preserves staff state, and reconciles kiosk items without replacing keys. [Contract](config/production-domains.json).
+- [Releases](REPO_CURRENT_STATE.md); [contract](config/production-domains.json). Motorola-proven purchase/PIN/redemption preserve venue checks, staff state and item keys.
 - Roller remains the source of truth for bookings, products, payments, and ticket redemption.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, session status, idempotency, audit events, and guest messaging state.
 - The production booking index uses an approved initial backfill, scheduled morning seed, idempotent webhook updates/reconciliation, and live REST confirmation. Roller remains authoritative; Aurora is the operational cache.
@@ -73,6 +73,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Safety completion produces a server-owned staff handoff. Staff uses personal PINs, transactional session replacement, credential-free audit, and coalesced queue refreshes.
 - Buy-entry/add-ons use server-owned Roller paths and approved Nacka products plus Live availability. `COMBO60` maps to Weekday Combo `1242135`/`1242136` and requires its parent in Roller's public catalog; catalog failures retry and frontends never call Roller.
 - Live water: `970411`/`970363` (D0195).
+- D0196: shared mobile add-ons preserve purchases, recommend socks and validate on Continue.
 - PWA drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; new-booking delivery is proven.
 
 ## Data And Integration Facts
