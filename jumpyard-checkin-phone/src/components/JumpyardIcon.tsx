@@ -40,6 +40,7 @@ export type JumpyardIconName =
     | 'visit-calendar'
     | 'visitor-wristband'
     | 'warning'
+    | 'warning-transparent'
     | 'water-bottle'
     | 'zipline';
 

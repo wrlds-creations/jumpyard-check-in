@@ -41,6 +41,7 @@ import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
+import { AddonChoices, type AddonChoicesHandle } from '@/components/AddonChoices';
 
 interface BuyTicketsProps {
   recoverySnapshot?: BuyFlowRecoverySnapshot | null;
@@ -118,16 +119,6 @@ function formatMoney(value: number | null | undefined) {
 
 function formatBasketLineLabel(label: string) {
   return label.replace(/\s*\u00C2?\u00B7\s*/g, ' ');
-}
-
-function formatAddonPriceLabel(
-  value: number | null | undefined,
-  unit: string,
-  eachUnit: string,
-  eachLongUnit: string
-) {
-  const unitLabel = unit === eachUnit ? eachLongUnit : unit;
-  return `${formatMoney(value)} ${unitLabel}`;
 }
 
 function buildGiftCardInputs(value: string): NewBookingGiftCardInput[] {
@@ -713,6 +704,7 @@ export const BuyTickets = ({
   const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
   const [alreadyHasApprovedSocks, setAlreadyHasApprovedSocks] = useState(false);
   const [alreadyHasWaterBottle, setAlreadyHasWaterBottle] = useState(false);
+  const addonChoicesRef = useRef<AddonChoicesHandle>(null);
   const [quote, setQuote] = useState<NewBookingQuote | null>(null);
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -744,17 +736,6 @@ export const BuyTickets = ({
   const addonAvailabilityById = useMemo(() => getAddonAvailabilityById(selectedSlot), [selectedSlot]);
   const getBuyAddonMax = (addon: BuyAddonEntry, nextJumperCount = jumperCount) =>
     getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null, nextJumperCount);
-  const visibleBuyAddons = buyAddons.filter((addon) => getBuyAddonMax(addon) > 0 && isPricedAddon(addon));
-  const socksAddon = visibleBuyAddons.find((addon) => addon.id === 'socks') ?? null;
-  const waterBottleAddon = visibleBuyAddons.find((addon) => addon.id === 'water_bottle') ?? null;
-  const otherBuyAddons = visibleBuyAddons.filter((addon) => addon.id !== 'socks' && addon.id !== 'water_bottle');
-  const socksQty = addonQty.socks;
-  const waterBottleQty = addonQty.water_bottle;
-  const socksRecommendedVisibleCount = Math.min(Math.max(0, jumperCount), 5);
-  const showSocksConfirmation = Boolean(socksAddon);
-  const socksRequirementMet = !socksAddon || socksQty > 0 || alreadyHasApprovedSocks;
-  const showWaterBottleConfirmation = Boolean(waterBottleAddon);
-  const waterBottleRequirementMet = !waterBottleAddon || waterBottleQty > 0 || alreadyHasWaterBottle;
   const selectedAddons: Addon[] = buyAddons.flatMap((addon) => {
     if (addonQty[addon.id] <= 0 || getBuyAddonMax(addon) <= 0 || !isPricedAddon(addon)) return [];
 
@@ -922,9 +903,9 @@ export const BuyTickets = ({
         const recoveredSkyRiderSelected = recoveredSelectedAddons.some((addon) => addon.id === 'skyrider');
         const recoveredSkyRiderConsent = recoveredSkyRiderSelected && recoverySnapshot.skyriderConsentConfirmed === true;
         const recoveredAlreadyHasSocks =
-          recoveredAddonQty.socks === 0 && recoverySnapshot.alreadyHasApprovedSocks === true;
+          recoverySnapshot.alreadyHasApprovedSocks === true;
         const recoveredAlreadyHasWaterBottle =
-          recoveredAddonQty.water_bottle === 0 && recoverySnapshot.alreadyHasWaterBottle === true;
+          recoverySnapshot.alreadyHasWaterBottle === true;
         const recoveredCustomerValid = isValidRecoveredCustomer(savedContact);
         const needsRecoveredSkyRiderConsent = recoveredSkyRiderSelected && !recoveredSkyRiderConsent;
 
@@ -1030,8 +1011,8 @@ export const BuyTickets = ({
 
     writeBuyFlowRecovery({
       addonQty: toRecoveryAddonQty(addonQty),
-      alreadyHasApprovedSocks: showSocksConfirmation && alreadyHasApprovedSocks,
-      alreadyHasWaterBottle: showWaterBottleConfirmation && alreadyHasWaterBottle,
+      alreadyHasApprovedSocks,
+      alreadyHasWaterBottle,
       bookingReference: null,
       contact: {
         email,
@@ -1063,8 +1044,6 @@ export const BuyTickets = ({
     quantity,
     selectedProduct,
     selectedTime,
-    showSocksConfirmation,
-    showWaterBottleConfirmation,
     skyriderConsentConfirmed,
     step,
   ]);
@@ -1200,7 +1179,6 @@ export const BuyTickets = ({
     const addon = buyAddons.find((entry) => entry.id === id);
     const max = addon ? getBuyAddonMax(addon) : 0;
     if (id === 'skyrider') setSkyriderConsentConfirmed(false);
-    if (id === 'water_bottle' && nextQty > 0) setAlreadyHasWaterBottle(false);
     setAddonQty((current) => ({ ...current, [id]: Math.max(0, Math.min(max, nextQty)) }));
   };
 
@@ -1210,9 +1188,6 @@ export const BuyTickets = ({
     setQuote(null);
     setDraft(null);
     clearPaymentSyncState();
-    if (checked) {
-      setAddonQty((current) => ({ ...current, socks: 0 }));
-    }
   };
 
   const setWaterBottleConfirmation = (checked: boolean) => {
@@ -1221,15 +1196,12 @@ export const BuyTickets = ({
     setQuote(null);
     setDraft(null);
     clearPaymentSyncState();
-    if (checked) {
-      setAddonQty((current) => ({ ...current, water_bottle: 0 }));
-    }
   };
 
   const needsSkyRiderConsent = () => skyriderSelected && !skyriderConsentConfirmed;
 
   const continueFromAddons = () => {
-    if (!socksRequirementMet || !waterBottleRequirementMet) return;
+    if (!addonChoicesRef.current?.validate()) return;
     if (needsSkyRiderConsent()) {
       setStep('SKYRIDER_ATTEST');
       return;
@@ -1453,31 +1425,6 @@ export const BuyTickets = ({
           {formatMoney(product.unitPrice)}
         </p>
       </button>
-    );
-  };
-
-  const renderAddonStepper = (addon: BuyAddonEntry, disabled = false) => {
-    const value = addonQty[addon.id];
-    const max = getBuyAddonMax(addon);
-
-    return (
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setOneAddon(addon.id, value - 1)}
-          disabled={disabled || value <= 0}
-          className="w-9 h-9 rounded-full bg-surface-strong border border-border flex items-center justify-center text-foreground disabled:opacity-30"
-        >
-          <Minus size={16} />
-        </button>
-        <span className="text-xl font-black italic text-foreground w-7 text-center">{value}</span>
-        <button
-          onClick={() => setOneAddon(addon.id, Math.min(max, value + 1))}
-          disabled={disabled || value >= max}
-          className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center disabled:opacity-30"
-        >
-          <Plus size={16} />
-        </button>
-      </div>
     );
   };
 
@@ -1719,153 +1666,35 @@ export const BuyTickets = ({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="w-full flex flex-col"
-          style={{ minHeight: 'calc(100dvh - 160px)' }}
+          className="addon-shop-screen w-full flex flex-col"
         >
           <div className="text-center mb-3">
             <h2 className="text-xl font-black italic text-foreground uppercase mb-1">{t.addons.title}</h2>
           </div>
 
-          <div className="flex-1 flex flex-col gap-2 mb-4">
-            {socksAddon && (
-              <section className="bg-white border border-border rounded-xl p-3">
-                <div className="flex items-start gap-3">
-                  <JumpyardIcon name={socksAddon.icon} className="w-9 h-9 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-black italic text-foreground uppercase">
-                      {t.addons.socksSectionTitle}
-                    </h3>
-                    <p className="mt-1 text-[11px] text-foreground">{t.addons.socksHelp}</p>
-                  </div>
-                </div>
-
-                {!alreadyHasApprovedSocks && (
-                  <div className="mt-2 rounded-lg border border-primary/20 bg-white px-2.5 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-black italic uppercase tracking-wider text-foreground">
-                        {t.addons.socksRecommendedCount}
-                      </span>
-                      <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-black italic text-white shadow-sm">
-                        {jumperCount}
-                      </span>
-                    </div>
-                    <div className="mt-1.5 flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 flex-wrap items-center gap-0.5">
-                        {Array.from({ length: socksRecommendedVisibleCount }).map((_, index) => (
-                          <JumpyardIcon key={index} name="grip-socks" className="h-4 w-4" />
-                        ))}
-                        {jumperCount > socksRecommendedVisibleCount && (
-                          <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-black italic text-foreground shadow-sm">
-                            +{jumperCount - socksRecommendedVisibleCount}
-                          </span>
-                        )}
-                      </div>
-                      <span className="shrink-0 text-[10px] font-black italic text-foreground">
-                        {t.addons.socksSelectedCount} {socksQty}/{jumperCount}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {!alreadyHasApprovedSocks && (
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-foreground">
-                        {formatAddonPriceLabel(socksAddon.price, socksAddon.unit, t.addons.each, t.addons.eachLong)}
-                      </p>
-                    </div>
-                    {renderAddonStepper(socksAddon)}
-                  </div>
-                )}
-
-                {showSocksConfirmation && (
-                  <label className="mt-3 flex items-start gap-2 rounded-xl border border-primary/20 bg-white px-3 py-3 text-left shadow-sm">
-                    <input
-                      type="checkbox"
-                      checked={alreadyHasApprovedSocks}
-                      onChange={(event) => setSocksConfirmation(event.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                    />
-                    <span className="text-xs font-bold italic text-foreground">
-                      {t.addons.socksAlreadyHave}
-                    </span>
-                  </label>
-                )}
-              </section>
-            )}
-
-            {waterBottleAddon && (
-              <section className="bg-white border border-border rounded-xl p-3">
-                <div className="flex items-start gap-3">
-                  <JumpyardIcon name={waterBottleAddon.icon} className="w-9 h-9 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-black italic text-foreground uppercase">
-                      {t.addons.waterBottleSectionTitle}
-                    </h3>
-                    <p className="mt-1 text-[11px] text-foreground">{t.addons.waterBottleHelp}</p>
-                  </div>
-                </div>
-
-                {!alreadyHasWaterBottle && (
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-foreground">
-                        {formatAddonPriceLabel(waterBottleAddon.price, waterBottleAddon.unit, t.addons.each, t.addons.eachLong)}
-                      </p>
-                    </div>
-                    {renderAddonStepper(waterBottleAddon)}
-                  </div>
-                )}
-
-                {showWaterBottleConfirmation && (
-                  <label className="mt-3 flex items-start gap-2 rounded-xl border border-border bg-white px-3 py-3 text-left shadow-sm">
-                    <input
-                      type="checkbox"
-                      checked={alreadyHasWaterBottle}
-                      onChange={(event) => setWaterBottleConfirmation(event.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                    />
-                    <span className="text-xs font-bold italic text-foreground">
-                      {t.addons.waterBottleAlreadyHave}
-                    </span>
-                  </label>
-                )}
-              </section>
-            )}
-
-            {otherBuyAddons.map((addon) => {
-              return (
-                <div
-                  key={addon.id}
-                  className="min-w-0 bg-white border border-border rounded-xl p-3 flex items-center justify-between gap-3"
-                >
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <JumpyardIcon name={addon.icon} className="w-9 h-9 flex-shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-black italic text-foreground uppercase truncate">{addon.label}</p>
-                      <p className="text-[11px] text-foreground">
-                        {formatAddonPriceLabel(addon.price, addon.unit, t.addons.each, t.addons.eachLong)}
-                      </p>
-                    </div>
-                  </div>
-                  {renderAddonStepper(addon)}
-                </div>
-              );
-            })}
+          <div className="addon-shop-scroll">
+            <AddonChoices ref={addonChoicesRef}
+              entries={buyAddons.filter((addon) => addon.id === 'socks' || addon.id === 'water_bottle' || (isPricedAddon(addon) && getBuyAddonMax(addon) > 0))
+                .map((addon) => ({ ...addon, description: '', quantity: addonQty[addon.id], included: 0,
+                  max: getBuyAddonMax(addon), available: isPricedAddon(addon) && getBuyAddonMax(addon) > 0 }))}
+              guestCount={jumperCount} ownSocks={alreadyHasApprovedSocks} ownBottle={alreadyHasWaterBottle}
+              onQuantity={setOneAddon} onOwnSocks={setSocksConfirmation} onOwnBottle={setWaterBottleConfirmation} />
           </div>
 
-          <div className="bg-white border border-border p-4 rounded-2xl mb-4 flex justify-between items-center px-5">
-            <span className="text-foreground text-sm font-black italic uppercase">{t.buy.total}</span>
-            <span className="text-xl font-black italic text-primary">{formatMoney(basketEstimateTotal)}</span>
-          </div>
+          <div className="addon-shop-footer">
+            <div className="bg-white border border-border p-4 rounded-2xl mb-4 flex justify-between items-center px-5">
+              <span className="text-foreground text-sm font-black italic uppercase">{t.buy.total}</span>
+              <span className="text-xl font-black italic text-primary">{formatMoney(basketEstimateTotal)}</span>
+            </div>
 
-          <button
-            onClick={continueFromAddons}
-            disabled={!socksRequirementMet || !waterBottleRequirementMet}
-            className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center active:scale-[0.98]"
-          >
-            {t.common.continue}
-          </button>
+            <button
+              data-testid="buy-addons-continue"
+              onClick={continueFromAddons}
+              className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center active:scale-[0.98]"
+            >
+              {t.common.continue}
+            </button>
+          </div>
         </motion.div>
       )}
 
