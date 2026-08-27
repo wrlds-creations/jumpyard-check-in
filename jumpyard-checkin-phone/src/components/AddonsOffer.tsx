@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, Check, CreditCard, Minus, Plus } from 'lucide-react';
+import { AlertCircle, Check, CreditCard } from 'lucide-react';
 import {
     CloudBookingError,
     createAddProductDraft,
@@ -24,6 +24,7 @@ import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
+import { AddonChoices, type AddonChoicesHandle } from '@/components/AddonChoices';
 
 interface AddonsOfferProps {
     backRequest?: number;
@@ -65,44 +66,6 @@ interface CatalogEntry {
 export type AddonsOfferStep = 'SELECT' | 'SKYRIDER_ATTEST' | 'REVIEW' | 'PAYMENT' | 'APPROVED' | 'PENDING';
 
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
-
-function Counter({
-    disabled = false,
-    max,
-    min = 0,
-    onChange,
-    testId,
-    value,
-}: {
-    disabled?: boolean;
-    max: number;
-    min?: number;
-    onChange: (n: number) => void;
-    testId?: string;
-    value: number;
-}) {
-    return (
-        <div className="flex items-center gap-2">
-            <button
-                data-testid={testId ? `${testId}-decrement` : undefined}
-                onClick={() => onChange(Math.max(min, value - 1))}
-                className="w-9 h-9 rounded-full bg-surface hover:bg-border border border-border text-foreground flex items-center justify-center disabled:opacity-30 disabled:bg-surface-strong"
-                disabled={disabled || value <= min}
-            >
-                <Minus size={16} />
-            </button>
-            <span className="text-xl font-black italic text-foreground w-7 text-center">{value}</span>
-            <button
-                data-testid={testId ? `${testId}-increment` : undefined}
-                onClick={() => onChange(Math.min(max, value + 1))}
-                className="w-9 h-9 rounded-full bg-primary hover:bg-surface border border-transparent hover:border-primary hover:text-primary text-white flex items-center justify-center disabled:opacity-30 disabled:hover:bg-primary disabled:hover:text-white"
-                disabled={disabled || value >= max}
-            >
-                <Plus size={16} />
-            </button>
-        </div>
-    );
-}
 
 function formatMoney(value: number | null | undefined) {
     if (value === null || value === undefined) return '-';
@@ -315,6 +278,7 @@ export const AddonsOffer = ({
     const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
     const [alreadyHasApprovedSocks, setAlreadyHasApprovedSocks] = useState(false);
     const [alreadyHasWaterBottle, setAlreadyHasWaterBottle] = useState(false);
+    const addonChoicesRef = useRef<AddonChoicesHandle>(null);
     const handledBackRequest = useRef(backRequest);
 
     const returnToSelect = useCallback(() => {
@@ -360,8 +324,6 @@ export const AddonsOffer = ({
         setQuote(null);
         setDraft(null);
         if (id === 'skyrider') setSkyriderConsentConfirmed(false);
-        if (id === 'socks' && nextQty > minQty.socks) setAlreadyHasApprovedSocks(false);
-        if (id === 'water_bottle' && nextQty > minQty.water_bottle) setAlreadyHasWaterBottle(false);
         setQty((current) => ({ ...current, [id]: Math.max(minQty[id], nextQty) }));
     };
 
@@ -370,9 +332,6 @@ export const AddonsOffer = ({
         setSubmitError(null);
         setQuote(null);
         setDraft(null);
-        if (checked) {
-            setQty((current) => ({ ...current, socks: minQty.socks }));
-        }
     };
 
     const setWaterBottleConfirmation = (checked: boolean) => {
@@ -380,9 +339,6 @@ export const AddonsOffer = ({
         setSubmitError(null);
         setQuote(null);
         setDraft(null);
-        if (checked) {
-            setQty((current) => ({ ...current, water_bottle: minQty.water_bottle }));
-        }
     };
 
     const selectedAddons: Addon[] = useMemo(
@@ -423,17 +379,6 @@ export const AddonsOffer = ({
         () => addedAddons.reduce((sum, addon) => sum + addon.price * addon.qty, 0),
         [addedAddons]
     );
-    const socksEntry = catalogById.get('socks') ?? null;
-    const waterBottleEntry = catalogById.get('water_bottle') ?? null;
-    const otherCatalogEntries = catalog.filter((entry) => entry.id !== 'socks' && entry.id !== 'water_bottle');
-    const socksQty = qty.socks;
-    const waterBottleQty = qty.water_bottle;
-    const socksRecommendedVisibleCount = Math.min(Math.max(0, guestCount), 5);
-    const showSocksConfirmation = minQty.socks === 0;
-    const showWaterBottleConfirmation = minQty.water_bottle === 0;
-    const socksRequirementMet = !socksEntry || socksQty > minQty.socks || minQty.socks > 0 || alreadyHasApprovedSocks;
-    const waterBottleRequirementMet =
-        !waterBottleEntry || waterBottleQty > minQty.water_bottle || minQty.water_bottle > 0 || alreadyHasWaterBottle;
     const addedSkyrider = addedAddons.some((addon) => addon.id === 'skyrider');
     const needsSkyRiderConsent = (confirmed = skyriderConsentConfirmed) =>
         addedSkyrider && !confirmed;
@@ -473,7 +418,7 @@ export const AddonsOffer = ({
             return;
         }
 
-        if (!socksRequirementMet || !waterBottleRequirementMet) return;
+        if (!addonChoicesRef.current?.validate()) return;
 
         if (addedAddons.length === 0) {
             completeAddons(false);
@@ -586,7 +531,6 @@ export const AddonsOffer = ({
                 <>
                     <div className="text-center">
                         <h1 className="text-xl font-black italic uppercase text-foreground">{t.addons.title}</h1>
-                        <p className="text-foreground text-xs mt-0.5">{t.addons.description}</p>
                     </div>
 
                     {(submitError || catalogError) && (
@@ -596,200 +540,19 @@ export const AddonsOffer = ({
                         </div>
                     )}
 
-                    <div className="flex-1 overflow-y-auto -mx-1 px-1">
+                    <div className="addon-shop-scroll">
                         {catalogLoading ? (
                             <AddonsLoadingCard label={t.addons.loading} />
                         ) : (
-                        <div className="w-full max-w-full min-w-0 flex flex-col gap-1.5">
-                            {socksEntry && (
-                                <section className={`bg-white border border-border rounded-xl p-3 ${!isPricedCatalogEntry(socksEntry) ? 'opacity-60' : ''}`}>
-                                    <div className="flex items-start gap-3">
-                                        <JumpyardIcon name={socksEntry.icon} className="w-9 h-9 flex-shrink-0" />
-                                        <div className="min-w-0">
-                                            <h3 className="text-sm font-black italic text-foreground uppercase">
-                                                {t.addons.socksSectionTitle}
-                                            </h3>
-                                            <p className="mt-1 text-[11px] text-foreground">{t.addons.socksHelp}</p>
-                                            {!isPricedCatalogEntry(socksEntry) && (
-                                                <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full bg-white border border-border text-foreground text-[9px] font-bold italic uppercase tracking-wide">{t.addons.unsupported}</span>
-                                            )}
-                                            {minQty.socks > 0 && (
-                                                <span className="mt-1 block text-[10px] text-success font-bold italic">
-                                                    {t.addons.alreadyInBooking} ({minQty.socks})
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {!alreadyHasApprovedSocks && (
-                                        <div className="mt-2 rounded-lg border border-primary/20 bg-white px-2.5 py-2">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[10px] font-black italic uppercase tracking-wider text-foreground">
-                                                    {t.addons.socksRecommendedCount}
-                                                </span>
-                                                <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-black italic text-white shadow-sm">
-                                                    {guestCount}
-                                                </span>
-                                            </div>
-                                            <div className="mt-1.5 flex items-center justify-between gap-2">
-                                                <div className="flex min-w-0 flex-wrap items-center gap-0.5">
-                                                    {Array.from({ length: socksRecommendedVisibleCount }).map((_, index) => (
-                                                        <JumpyardIcon key={index} name="grip-socks" className="h-4 w-4" />
-                                                    ))}
-                                                    {guestCount > socksRecommendedVisibleCount && (
-                                                            <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-black italic text-foreground shadow-sm">
-                                                                +{guestCount - socksRecommendedVisibleCount}
-                                                            </span>
-                                                        )}
-                                                </div>
-                                                <span className="shrink-0 text-[10px] font-black italic text-foreground">
-                                                    {t.addons.socksSelectedCount} {socksQty}/{guestCount}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {!alreadyHasApprovedSocks && (
-                                        <div className="mt-3 flex items-center justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <p className="text-[11px] text-foreground">
-                                                    {formatAddonPriceLabel(socksEntry.price, socksEntry.unit, t.addons.each, t.addons.eachLong)}
-                                                </p>
-                                            </div>
-                                            <Counter
-                                                value={socksQty}
-                                                onChange={(nextQty) => setOne('socks', nextQty)}
-                                                max={Math.max(1, guestCount * socksEntry.maxPerGuest)}
-                                                min={minQty.socks}
-                                                disabled={!isPricedCatalogEntry(socksEntry)}
-                                                testId="addon-option-socks"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {showSocksConfirmation && (
-                                        <label className="mt-3 flex min-w-0 items-start gap-2 rounded-lg border border-border bg-white px-3 py-2 text-left">
-                                            <input
-                                                type="checkbox"
-                                                checked={alreadyHasApprovedSocks}
-                                                onChange={(event) => setSocksConfirmation(event.target.checked)}
-                                                className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                                            />
-                                            <span className="min-w-0 break-words text-xs font-bold italic text-foreground">
-                                                {t.addons.socksAlreadyHave}
-                                            </span>
-                                        </label>
-                                    )}
-                                </section>
-                            )}
-
-                            {waterBottleEntry && (
-                                <section className={`bg-white border border-border rounded-xl p-3 ${!isPricedCatalogEntry(waterBottleEntry) ? 'opacity-60' : ''}`}>
-                                    <div className="flex items-start gap-3">
-                                        <JumpyardIcon name={waterBottleEntry.icon} className="w-9 h-9 flex-shrink-0" />
-                                        <div className="min-w-0">
-                                            <h3 className="text-sm font-black italic text-foreground uppercase">
-                                                {t.addons.waterBottleSectionTitle}
-                                            </h3>
-                                            <p className="mt-1 text-[11px] text-foreground">{t.addons.waterBottleHelp}</p>
-                                            {!isPricedCatalogEntry(waterBottleEntry) && (
-                                                <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full bg-white border border-border text-foreground text-[9px] font-bold italic uppercase tracking-wide">{t.addons.unsupported}</span>
-                                            )}
-                                            {minQty.water_bottle > 0 && (
-                                                <span className="mt-1 block text-[10px] text-success font-bold italic">
-                                                    {t.addons.alreadyInBooking} ({minQty.water_bottle})
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {!alreadyHasWaterBottle && (
-                                        <div className="mt-3 flex items-center justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <p className="text-[11px] text-foreground">
-                                                    {formatAddonPriceLabel(waterBottleEntry.price, waterBottleEntry.unit, t.addons.each, t.addons.eachLong)}
-                                                </p>
-                                            </div>
-                                            <Counter
-                                                value={waterBottleQty}
-                                                onChange={(nextQty) => setOne('water_bottle', nextQty)}
-                                                max={Math.max(1, guestCount * waterBottleEntry.maxPerGuest)}
-                                                min={minQty.water_bottle}
-                                                disabled={!isPricedCatalogEntry(waterBottleEntry)}
-                                                testId="addon-option-water-bottle"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {showWaterBottleConfirmation && (
-                                        <label className="mt-3 flex min-w-0 items-start gap-2 rounded-lg border border-border bg-white px-3 py-2 text-left">
-                                            <input
-                                                type="checkbox"
-                                                checked={alreadyHasWaterBottle}
-                                                onChange={(event) => setWaterBottleConfirmation(event.target.checked)}
-                                                className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                                            />
-                                            <span className="min-w-0 break-words text-xs font-bold italic text-foreground">
-                                                {t.addons.waterBottleAlreadyHave}
-                                            </span>
-                                        </label>
-                                    )}
-                                </section>
-                            )}
-
-                            {otherCatalogEntries.map((entry) => {
-                                const value = qty[entry.id];
-                                const max = Math.max(1, guestCount * entry.maxPerGuest);
-                                const locked = minQty[entry.id];
-                                const isHighlighted = entry.id === 'connected';
-                                const isEnabled = isPricedCatalogEntry(entry) && !catalogLoading;
-
-                                return (
-                                    <div
-                                        key={entry.id}
-                                        data-testid={`addon-option-${entry.id}`}
-                                        className={`w-full border rounded-xl p-2.5 shadow-sm ${
-                                            isHighlighted
-                                                ? 'bg-primary/5 border-primary/30'
-                                                : 'bg-white border-border'
-                                        } ${!isEnabled ? 'opacity-60' : ''}`}
-                                    >
-                                        <div className="flex min-w-0 items-center justify-between gap-3">
-                                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                                                <JumpyardIcon name={entry.icon} className="w-8 h-8 flex-shrink-0" />
-                                                <div className="min-w-0">
-                                                    <p className="truncate text-foreground font-bold italic text-sm">{entry.label}</p>
-                                                    <p className="text-foreground text-[11px]">
-                                                        {formatAddonPriceLabel(entry.price, entry.unit, t.addons.each, t.addons.eachLong)}
-                                                    </p>
-                                                    {!isEnabled && (
-                                                        <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded-full bg-white border border-border text-foreground text-[9px] font-bold italic uppercase tracking-wide">{t.addons.unsupported}</span>
-                                                    )}
-                                                    {entry.id === 'connected' && isEnabled && (
-                                                        <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] font-bold italic uppercase tracking-wide">{t.addons.connectedValueProp}</span>
-                                                    )}
-                                                    {locked > 0 && (
-                                                        <span className="text-[10px] text-success font-bold italic">{t.addons.alreadyInBooking} ({locked})</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <Counter
-                                                value={value}
-                                                onChange={(nextQty) => setOne(entry.id, nextQty)}
-                                                max={max}
-                                                min={locked}
-                                                disabled={!isEnabled}
-                                                testId={`addon-option-${entry.id}`}
-                                            />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                            <AddonChoices ref={addonChoicesRef}
+                                entries={catalog.map((entry) => ({ ...entry, quantity: qty[entry.id], included: minQty[entry.id],
+                                    max: Math.max(minQty[entry.id], 1, guestCount * entry.maxPerGuest), available: isPricedCatalogEntry(entry) }))}
+                                guestCount={guestCount} ownSocks={alreadyHasApprovedSocks} ownBottle={alreadyHasWaterBottle}
+                                onQuantity={setOne} onOwnSocks={setSocksConfirmation} onOwnBottle={setWaterBottleConfirmation} />
                         )}
                     </div>
 
-                    <div className="pt-3 border-t border-border mt-3">
+                    <div className="addon-shop-footer">
                         <div className="w-full flex items-center justify-between bg-white border border-border rounded-xl px-4 py-2.5 mb-3">
                             <p className="text-foreground uppercase text-xs font-bold italic tracking-wider">{t.addons.total}</p>
                             <p className="text-2xl font-black italic text-primary">{addonsTotal} {t.common.currency}</p>
@@ -798,7 +561,7 @@ export const AddonsOffer = ({
                         <button
                             data-testid="addons-select-continue"
                             onClick={handleSelectContinue}
-                            disabled={submitting || catalogLoading || !socksRequirementMet || !waterBottleRequirementMet}
+                            disabled={submitting || catalogLoading}
                             className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm disabled:opacity-40 disabled:hover:bg-primary disabled:hover:text-white disabled:hover:border-transparent"
                         >
                             {catalogLoading ? t.buy.loadingAvailabilityTitle : submitting ? t.buy.quoting : t.common.continue}

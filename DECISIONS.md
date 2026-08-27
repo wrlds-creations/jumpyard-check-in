@@ -196,6 +196,8 @@ This file is the source of truth for meaningful project decisions. Add entries w
 
 | `D0195` | 2026-08-27 | Offer only the exact approved JumpYard Vatten Live variation for new water purchases. | Love selected the lower-priced water product after kiosk testing. ROLLER Live identifies JumpYard Vatten as `970411` under Cold Drinks `970363`, currently 20 SEK; the legacy name match could otherwise keep selecting the 49 SEK merchandise bottle. | Issue #315 replaces D0141's active Live SKU with `970411`/`970363`, requires its fresh cached price, and removes old-name and sibling fallback for Live water. New purchases of retired `1324123` are rejected in park-test, while stored drafts, paid items and historical cache rows retain their original identities and totals. The central 24-hour cache and ROLLER quote authority are unchanged. | Revisit if JumpYard approves another exact SKU, changes the cache contract, or introduces managed product mappings. |
 
+| `D0196` | 2026-08-27 | Phone and Park share the approved kiosk add-on choice model, with mobile-sized controls. | Love approved parity with kiosk #69 so required decisions are understandable and ownership confirmation cannot silently remove purchases. | Issue #318 uses one phone component for new and existing bookings: explicit own-item choices only when none are selected/included, jumper-based sock recommendations without a mandatory per-person minimum, and focused inline warnings only after Continue. Paid quantities, ROLLER prices, the 24-hour cache, payment and safety contracts remain unchanged. | Revisit if JumpYard changes sock/bottle policy or approves a different choice interaction. |
+
 ## Active Constraints
 
 | Constraint | Source | Impact | Revisit Trigger |
