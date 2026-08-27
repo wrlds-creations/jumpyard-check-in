@@ -169,10 +169,10 @@ const LIVE_PHONE_ADDON_PRODUCTS = [
   },
   {
     key: 'water_bottle',
-    parentProductId: '970508',
-    parentProductName: 'Merchandise',
-    productId: '1324123',
-    productName: 'Jumpy Vattenflaska',
+    parentProductId: '970363',
+    parentProductName: 'Cold Drinks',
+    productId: '970411',
+    productName: 'JumpYard Vatten',
   },
   {
     key: 'lock',
@@ -3241,6 +3241,15 @@ function validateItems(items) {
       };
     }
 
+    // Only new purchase requests use this validator. Stored drafts and paid
+    // bookings must retain their original SKU during reconciliation/readback.
+    if (isParkTestEnvironment() && item.productId === 1324123) {
+      return {
+        code: 'product_no_longer_available',
+        message: 'The product selection has changed. Refresh the add-on list before continuing.',
+      };
+    }
+
     if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
       return {
         code: 'quantity_invalid',
@@ -3974,6 +3983,9 @@ async function loadPhoneAddonProducts(rollerEnv) {
   const parameters = [stringParameter('rollerEnv', rollerEnv)];
 
   PHONE_ADDON_PRODUCTS.forEach((product, index) => {
+    // Live water uses its exact approved variation, never the legacy name.
+    if (rollerEnv === 'live' && product.key === 'water_bottle') return;
+
     if (product.productId) {
       clauses.push(`summary ->> 'id' = :addonProductId${index}`);
       parameters.push(stringParameter(`addonProductId${index}`, product.productId));
@@ -4029,13 +4041,17 @@ function mapPhoneAddonProducts(rows, rollerEnv) {
 
   return PHONE_ADDON_PRODUCTS.map((product) => {
     const liveFallback = liveAddonFallbacks.find((candidate) => candidate.key === product.key);
-    const row = candidateRows.find(
-      (candidate) =>
-        (product.productId && candidate.id === product.productId) ||
-        (product.parentName && (candidate.parent_product_name === product.parentName || candidate.name === product.parentName)) ||
-        (liveFallback?.productId && candidate.id === liveFallback.productId) ||
-        candidate.smoke_key === product.key,
-    );
+    const row = liveFallback && product.key === 'water_bottle'
+      ? rows.find(
+          (candidate) => candidate.id === liveFallback.productId && candidate.parent_product_id === liveFallback.parentProductId,
+        )
+      : candidateRows.find(
+          (candidate) =>
+            (product.productId && candidate.id === product.productId) ||
+            (product.parentName && (candidate.parent_product_name === product.parentName || candidate.name === product.parentName)) ||
+            (liveFallback?.productId && candidate.id === liveFallback.productId) ||
+            candidate.smoke_key === product.key,
+        );
     const productId = stringOrNull(row?.id) || stringOrNull(product.productId);
     const parentProductId = stringOrNull(row?.parent_product_id) || stringOrNull(row?.id);
     const unitPriceCents = numberOrNull(row?.price_cents);
