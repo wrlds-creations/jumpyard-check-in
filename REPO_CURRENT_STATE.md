@@ -5,7 +5,7 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-08-27
-- Latest deployed Park backend: `ebc7598`; PR #316 replaces the new-purchase water offer with JumpYard Vatten `970411`/`970363`, verified at 20 SEK. Release `33073309846` and protected Park run `33073712214` are green; only the existing Booking Lambda changed. Earlier provisional safety, paid history and in-flight payment recovery remain intact. The latest protected public phone promotion remains PR #306 at `a150767` through run `32738931583`; this Cloud-only SKU replacement also serves existing phone and kiosk clients.
+- Latest deployed Park backend: `ebc7598` (PR #316), offering JumpYard Vatten `970411`/`970363` at 20 SEK to both phone and kiosk. Release `33073309846` and protected run `33073712214` passed; only Booking Lambda changed. Latest public phone promotion remains `a150767` through run `32738931583`.
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
 - Product/runtime state: Park has 202 resources, migrations through `0020`, and 27 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption, and late Handoff attachment are proven. A definitively approved kiosk payment now returns its provisional session with the bounded `safety` hint immediately instead of waiting for ROLLER readback; redemption remains blocked until authoritative synchronization. Physical proof remains in kiosk issue #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
@@ -29,7 +29,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 ## Current Product Baseline
 
 - The production architecture remains `check-in app -> JumpYard Cloud/server API -> Roller API`; Roller is authoritative and Aurora is an operational cache.
-- New Live water purchases use only `970411` under `970363` with the fresh 24-hour provider price; retired `1324123` is not offered or accepted for a new quote/draft. Already-started drafts and historical paid items retain their original SKU and totals. [#315 evidence](docs/gh-315-water-product.md) records a 20 SEK offer, 40 SEK two-unit quote and safe retired-SKU rejection without real transactions.
+- Water selection, unchanged 24-hour cache and historical-payment compatibility: [#315 evidence](docs/gh-315-water-product.md).
 - Issue #264 makes technical `park-test` Nacka's sharp pilot backend without changing its AWS/data identity; issue #276's protected public run `32242663090` most recently promoted both public origins. Multi-park remains separate.
 - The park-test full-flow posture remains scoped to Nacka `50871` and dates `2026-06-29` through `2026-09-30`. It permits the already approved lookup, booking/payment, add-on, staff-auth, redeem, morning index, and durable booking-webhook paths. The T0201 controlled messaging runtime is deployed, but its single-booking control is disarmed and the general guest-send gate remains closed.
 - The full-flow window remains open until Love explicitly approves closing it; documentation closeout is not a deployment instruction.
