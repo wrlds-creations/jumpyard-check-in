@@ -4,6 +4,16 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #315 Exact Live Water Offer (Deployed)
+
+[PR #316](https://github.com/wrlds-creations/jumpyard-check-in/pull/316) merged the approved water replacement as `ebc7598cbebe70e52fc7724b65617fde73c5e9e9`. Immutable release [33073309846](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33073309846) produced artifact `9646859303`, digest `sha256:189f65bda5f42d2eb32992c41a0fb9c120616a46da5f6ced939791fe97663c65`. Protected deployment [33073712214](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33073712214) succeeded on 2026-08-27 after the visible read-only plan and delegated approval for Love's scoped rollout request.
+
+Target identity and WRLDS tags were confirmed: account `376129878018`, `eu-north-1`, `jumpyard-check-in-park-test-stack`, Client/CostCenter `JumpYard`, Project `jumpyard-check-in`, Environment `park-test`, Owner/CreatedBy `love`, Repository `wrlds-creations/jumpyard-check-in`, ManagedBy `cdk`, DataClassification `confidential`, Exportable `true`. The 202-to-202-resource plan changed only `BookingHandler5D1461BB`; no resources or template sections were added/removed. No schema, IAM, route, secret, schedule, runtime gate or venue/date change was made. Migrations remained complete through `0020` with apply disabled.
+
+Post-deploy verification passed exact template equality, `UPDATE_COMPLETE`, `IN_SYNC` drift, zero Park alarms, empty related queues, exact same-SHA Park verification phone/admin outputs and HTTP/config checks. Public phone/admin and kiosk frontend releases were not promoted. Their existing clients consume the shared new water mapping. A bounded Live availability read returned only JumpYard Vatten `970411`/`970363` at 20 SEK, a read-only two-unit quote returned 40 SEK, and a retired-SKU quote returned HTTP 400 before provider work. The existing fresh 24-hour cache was retained. No real booking, payment, refund, redemption, guest message or ROLLER catalog edit was performed.
+
+The previously successful compatible release `32833988322` (`ec60eaa`, artifact `9557991482`) remains available for the same protected rollback path. No rollback was needed or performed for #315. [Detailed evidence](docs/gh-315-water-product.md); physical terminal/Handoff verification remains in kiosk #69.
+
 ### Issue #312 Provisional Kiosk Safety Marker (Deployed; Supervised P400 Proof Pending)
 
 Love approved [issue #312](https://github.com/wrlds-creations/jumpyard-check-in/issues/312) after a paid kiosk purchase incorrectly fell back to ordinary booking lookup and displayed a disabled booking summary while ROLLER synchronization was still pending. Implementation PR [#313](https://github.com/wrlds-creations/jumpyard-check-in/pull/313) merged as `ec60eaae0bef0d7ed973e797de67578dcefa088e`. A definitively approved new-booking terminal payment now returns the one provisional JumpYard Cloud session immediately with `guestResumeStep=safety`; repeated status recovery repairs and returns that same bounded marker. The kiosk does not wait for the 51-to-70-second ROLLER readback, while redemption remains blocked until authoritative booking synchronization and tickets are confirmed.

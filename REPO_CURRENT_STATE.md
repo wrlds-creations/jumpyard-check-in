@@ -4,8 +4,8 @@ Use this file as the short snapshot of what actually exists. Operational work st
 
 ## Snapshot
 
-- Date: 2026-08-25
-- Latest merged/deployed Park backend: `ec60eaa`; PR #313 restores the immediate provisional kiosk safety contract. Release `32833988322` and protected Park run `32834381643` are green; only the existing Booking Lambda changed. The latest protected public phone promotion remains PR #306 at `a150767` through run `32738931583`.
+- Date: 2026-08-27
+- Latest deployed Park backend: `ebc7598` (PR #316), offering JumpYard Vatten `970411`/`970363` at 20 SEK to both phone and kiosk. Release `33073309846` and protected run `33073712214` passed; only Booking Lambda changed. Latest public phone promotion remains `a150767` through run `32738931583`.
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
 - Product/runtime state: Park has 202 resources, migrations through `0020`, and 27 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption, and late Handoff attachment are proven. A definitively approved kiosk payment now returns its provisional session with the bounded `safety` hint immediately instead of waiting for ROLLER readback; redemption remains blocked until authoritative synchronization. Physical proof remains in kiosk issue #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
@@ -29,6 +29,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 ## Current Product Baseline
 
 - The production architecture remains `check-in app -> JumpYard Cloud/server API -> Roller API`; Roller is authoritative and Aurora is an operational cache.
+- Water selection, unchanged 24-hour cache and historical-payment compatibility: [#315 evidence](docs/gh-315-water-product.md).
 - Issue #264 makes technical `park-test` Nacka's sharp pilot backend without changing its AWS/data identity; issue #276's protected public run `32242663090` most recently promoted both public origins. Multi-park remains separate.
 - The park-test full-flow posture remains scoped to Nacka `50871` and dates `2026-06-29` through `2026-09-30`. It permits the already approved lookup, booking/payment, add-on, staff-auth, redeem, morning index, and durable booking-webhook paths. The T0201 controlled messaging runtime is deployed, but its single-booking control is disarmed and the general guest-send gate remains closed.
 - The full-flow window remains open until Love explicitly approves closing it; documentation closeout is not a deployment instruction.
@@ -36,7 +37,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 - Guest actions use short-lived booking-bound proof stored hash-only server-side and in phone memory client-side; token query parameters are removed immediately.
 - T0194 gives ordinary staff PIN-only login and administrators a separate Cognito/TOTP flow. The deployed backend uses keyed PIN lookup, scrypt verification, hash-only opaque sessions, transactional replacement, named audit, individual invalidation, venue boundaries, and failed-login brakes that do not throttle guest traffic or existing sessions.
 - Staff/admin Pages are mobile safe and use the phone font, black copy/icons, and red actions. Queue requests are coalesced by stable session/query so user activity cannot amplify traffic.
-- Backend `a150767` is live. Park run `32738465477` passed template equality, `IN_SYNC` drift, alarms, queues, and migrations through `0020`; public run `32738931583` promoted the same phone output.
+- The earlier `a150767` resume rollout passed template equality, `IN_SYNC` drift, alarms, queues and migrations through `0020` in Park run `32738465477`; public run `32738931583` promoted that phone output. The current backend release is recorded in the snapshot above.
 - GitHub-native release `32372219796` and Park run `32372746116` deployed the existing-booking kiosk terminal add-on contract. Kiosk drafts resolve the terminal alias server-side, return a fresh card-present attempt identity, and finalize/status the add-product operation without a second guest check-in or Handoff session. Phone/Park keep ecommerce behavior. A safe negative public probe reached the new route contract and failed before provider mutation as expected; supervised physical payment proof remains open on issue #285.
 - T0200/T0201 provide verified DKIM, SES suppression/telemetry, six alarms, and restricted application sending. Three direct proofs plus one automatic proof delivered with zero provider failures; the general gate is false and the T0201 control is disarmed.
 - T0196 completed all 53 unique modified-date windows through `2026-07-15`. Aurora contains 6,174 Live/Nacka bookings, 8,921 items, 6,662 tickets, 6,127 payments, and 983 guest profiles; zero bookings are older than 30 days, 92 are for the current date, 120 are future, and future visits extend through `2026-12-30`. Roller remains authoritative and critical writes still refresh/confirm against Roller.
