@@ -1430,7 +1430,7 @@ export const BuyTickets = ({
 
   return (
     <motion.div
-      className="w-full max-w-md min-w-0 mx-auto px-4"
+      className="phone-buy-flow w-full max-w-md min-w-0 mx-auto px-4"
       data-prepayment-status={draft?.prepayment?.status ?? ''}
       data-prepayment-draft-id={draft?.prepayment?.prepaymentDraftId ?? ''}
       data-payment-syncing={String(paymentSyncing)}
@@ -1677,7 +1677,7 @@ export const BuyTickets = ({
               entries={buyAddons.filter((addon) => addon.id === 'socks' || addon.id === 'water_bottle' || (isPricedAddon(addon) && getBuyAddonMax(addon) > 0))
                 .map((addon) => ({ ...addon, description: '', quantity: addonQty[addon.id], included: 0,
                   max: getBuyAddonMax(addon), available: isPricedAddon(addon) && getBuyAddonMax(addon) > 0 }))}
-              guestCount={jumperCount} ownSocks={alreadyHasApprovedSocks} ownBottle={alreadyHasWaterBottle}
+              ownSocks={alreadyHasApprovedSocks} ownBottle={alreadyHasWaterBottle}
               onQuantity={setOneAddon} onOwnSocks={setSocksConfirmation} onOwnBottle={setWaterBottleConfirmation} />
           </div>
 

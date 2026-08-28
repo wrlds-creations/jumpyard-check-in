@@ -20,8 +20,3 @@ export function getMissingAddonChoices(
     return !own[id] && !hasAddonPurchase(entry);
   });
 }
-
-// This is a recommendation, not a new per-person purchase requirement.
-export function getRecommendedSocksToAdd(guests: number, quantity: number, max: number): number {
-  return Math.max(0, Math.min(Math.floor(guests), Math.floor(max)) - Math.floor(quantity));
-}

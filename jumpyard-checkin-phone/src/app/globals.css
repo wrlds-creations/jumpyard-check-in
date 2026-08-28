@@ -67,9 +67,36 @@ input {
 }
 
 /* #318: shared phone/Park choices, sized for touch without kiosk-only rules. */
+/* #321: only add-on selection fills the available viewport. Let the real
+   progress/header height determine list space instead of subtracting a guess. */
+.phone-flow-shell:has(.addon-shop-screen) {
+  height: 100dvh;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+}
+
+.phone-flow-shell:has(.addon-shop-screen) > .phone-flow,
+.phone-flow:has(.addon-shop-screen) > .phone-flow-content {
+  flex: 1;
+  min-height: 0;
+}
+
+.phone-flow-content:has(.addon-shop-screen) { align-items: stretch; }
+
+.phone-buy-flow:has(.addon-shop-screen) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.phone-flow:has(.addon-shop-screen) > :not(.phone-flow-content),
+.phone-buy-flow:has(.addon-shop-screen) > :not(.addon-shop-screen),
+.addon-shop-screen > :not(.addon-shop-scroll) {
+  flex-shrink: 0;
+}
+
 .addon-shop-screen {
-  height: calc(100dvh - 160px);
-  min-height: 300px;
+  flex: 1;
+  min-height: 0;
 }
 
 .addon-shop-scroll {
@@ -140,33 +167,23 @@ input {
 }
 
 .addon-shop-price { margin-top: 2px; font-weight: 700; }
-.addon-shop-environment { margin-top: 2px; }
 .addon-shop-note { font-size: 13px; }
 
-.addon-shop-recommendation {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-weight: 700;
-}
-
-.addon-shop-socks { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
-.addon-shop-sock-icon { width: 16px; height: 16px; }
-
 .addon-shop-purchase {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   margin-top: 6px;
 }
 
-.addon-shop-purchase-copy { flex: 1 1 90px; min-width: 0; }
-.addon-shop-recommendation + .addon-shop-add { margin-top: 4px; }
-.addon-shop-purchase > .addon-shop-stepper { margin-left: auto; }
+.addon-shop-selling-copy {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
 
-.addon-shop-add,
 .addon-shop-own {
   display: flex;
   align-items: center;
@@ -182,16 +199,9 @@ input {
   touch-action: manipulation;
 }
 
-.addon-shop-add {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
-}
-
 .addon-shop-own { background: #fff; margin-top: 6px; }
 .addon-shop-own[data-checked="true"] { border-color: var(--primary); }
 .addon-shop-own input { width: 22px; height: 22px; flex-shrink: 0; accent-color: var(--primary); }
-.addon-shop-add svg,
 .addon-shop-stepper svg { width: 20px; height: 20px; flex-shrink: 0; }
 
 .addon-shop-stepper { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -208,8 +218,7 @@ input {
   touch-action: manipulation;
 }
 
-.addon-shop-stepper button:active:not(:disabled),
-.addon-shop-add:active:not(:disabled) { background: var(--primary); color: #fff; transform: scale(0.96); }
+.addon-shop-stepper button:active:not(:disabled) { background: var(--primary); color: #fff; transform: scale(0.96); }
 .addon-shop button:disabled { opacity: 0.3; cursor: default; }
 .addon-shop-stepper output { width: 28px; text-align: center; font-size: 22px; font-weight: 900; }
 
@@ -221,11 +230,7 @@ input {
 .addon-shop-warning-icon { width: 30px; height: 30px; flex-shrink: 0; }
 .addon-shop-unavailable { margin-top: 8px; }
 
-.addon-shop-optional { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 8px; }
-.addon-shop-optional .addon-shop-card-heading { margin-bottom: 0; }
-.addon-shop-optional > p { grid-column: 1 / -1; }
-.addon-shop-optional .addon-shop-note { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; }
-.addon-shop-optional > .addon-shop-stepper { margin-left: auto; }
+.addon-shop-optional .addon-shop-note { margin-top: 6px; }
 .addon-shop-recommended {
   display: inline-flex;
   padding: 4px 7px;
@@ -242,17 +247,3 @@ input {
 .addon-shop-footer > div { margin-bottom: 8px; padding: 10px 12px; }
 .addon-shop-footer > button { min-height: 48px; padding-block: 12px; }
 .addon-shop-preview { padding: 4px 8px; border: 1px solid var(--primary); border-radius: 8px; font-size: 12px; }
-
-/* Keep long product names intact on the smallest phones, not squeezed
-   between an icon and the quantity controls. */
-@media (max-width: 360px) {
-  .addon-shop-optional { grid-template-columns: 28px minmax(0, 1fr) auto; }
-  .addon-shop-optional .addon-shop-card-heading,
-  .addon-shop-optional .addon-shop-card-heading > div { display: contents; }
-  .addon-shop-optional .addon-shop-icon { grid-column: 1; grid-row: 1; }
-  .addon-shop-optional h3 { grid-column: 2 / -1; grid-row: 1; }
-  .addon-shop-optional .addon-shop-description { grid-row: 2; }
-  .addon-shop-optional .addon-shop-price { grid-column: 1 / 3; grid-row: 3; }
-  .addon-shop-optional > .addon-shop-stepper { grid-column: 3; grid-row: 3; }
-  .addon-shop-optional .addon-shop-note { grid-row: 4; }
-}

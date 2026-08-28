@@ -492,11 +492,11 @@ export const AddonsOffer = ({
 
     return (
         <motion.div
-            className="w-full max-w-md min-w-0 mx-auto flex flex-col px-4 py-3"
+            className={`w-full max-w-md min-w-0 mx-auto flex flex-col px-4 ${step === 'SELECT' ? 'addon-shop-screen pt-3' : 'py-3'}`}
             data-add-product-status={draft?.prepayment?.status ?? ''}
             data-add-product-draft-id={draft?.prepayment?.prepaymentDraftId ?? ''}
             data-add-product-flow-type={draft?.prepayment?.flowType ?? ''}
-            style={{ maxHeight: 'calc(100dvh - 120px)' }}
+            style={step === 'SELECT' ? undefined : { maxHeight: 'calc(100dvh - 120px)' }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
@@ -547,7 +547,7 @@ export const AddonsOffer = ({
                             <AddonChoices ref={addonChoicesRef}
                                 entries={catalog.map((entry) => ({ ...entry, quantity: qty[entry.id], included: minQty[entry.id],
                                     max: Math.max(minQty[entry.id], 1, guestCount * entry.maxPerGuest), available: isPricedCatalogEntry(entry) }))}
-                                guestCount={guestCount} ownSocks={alreadyHasApprovedSocks} ownBottle={alreadyHasWaterBottle}
+                                ownSocks={alreadyHasApprovedSocks} ownBottle={alreadyHasWaterBottle}
                                 onQuantity={setOne} onOwnSocks={setSocksConfirmation} onOwnBottle={setWaterBottleConfirmation} />
                         )}
                     </div>

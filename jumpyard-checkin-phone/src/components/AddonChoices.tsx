@@ -7,7 +7,6 @@ import { useTranslation } from '@/context/LanguageContext';
 import type { AddonId } from '@/flow/types';
 import {
   getMissingAddonChoices,
-  getRecommendedSocksToAdd,
   hasAddonPurchase,
   type RequiredAddon,
 } from '@/flow/addonChoices';
@@ -32,7 +31,6 @@ export interface AddonChoicesHandle {
 interface Props {
   ref?: Ref<AddonChoicesHandle>;
   entries: AddonChoice[];
-  guestCount: number;
   ownSocks: boolean;
   ownBottle: boolean;
   onQuantity: (id: AddonId, quantity: number) => void;
@@ -40,7 +38,7 @@ interface Props {
   onOwnBottle: (checked: boolean) => void;
 }
 
-export function AddonChoices({ ref, entries, guestCount, ownSocks, ownBottle, onQuantity, onOwnSocks, onOwnBottle }: Props) {
+export function AddonChoices({ ref, entries, ownSocks, ownBottle, onQuantity, onOwnSocks, onOwnBottle }: Props) {
   const { t, lang } = useTranslation();
   const copy = t.addons.choices;
   const [attempted, setAttempted] = useState(false);
@@ -48,7 +46,6 @@ export function AddonChoices({ ref, entries, guestCount, ownSocks, ownBottle, on
   const missing = getMissingAddonChoices(entries, { socks: ownSocks, water_bottle: ownBottle });
   const money = (value: number) => `${new Intl.NumberFormat(lang === 'sv' ? 'sv-SE' : 'en-GB', { maximumFractionDigits: 2 }).format(value)} ${t.common.currency}`;
   const countText = (text: string, count: number) => text.replace('{count}', String(count));
-  const visibleSocks = Math.min(Math.max(0, guestCount), 5);
 
   useImperativeHandle(ref, () => ({
     validate() {
@@ -96,7 +93,6 @@ export function AddonChoices({ ref, entries, guestCount, ownSocks, ownBottle, on
         const confirm = socks ? onOwnSocks : onOwnBottle;
         const hasError = attempted && missing.includes(id);
         const resolved = !missing.includes(id);
-        const recommended = socks ? getRecommendedSocksToAdd(guestCount, entry.quantity, entry.max) : 0;
         const errorId = `addon-choice-${id}-error`;
         return (
           <section key={id} ref={(node) => { cards.current[id] = node; }} tabIndex={-1}
@@ -110,31 +106,14 @@ export function AddonChoices({ ref, entries, guestCount, ownSocks, ownBottle, on
                 {entry.price !== null && entry.available && <p className="addon-shop-price">{money(entry.price)} {socks ? copy.perPair : t.addons.eachLong}</p>}
               </div>
             </header>
-            <p className="addon-shop-description">{socks ? copy.socksBenefit : copy.bottleBenefit}</p>
-            {!socks && <p className="addon-shop-environment">{copy.bottleEnvironment}</p>}
-            {included(entry)}
-            {!entry.available && <p className="addon-shop-unavailable">{copy.unavailableRequired}</p>}
             <div className="addon-shop-purchase">
-              <div className="addon-shop-purchase-copy">
-                {socks && <div className="addon-shop-recommendation">
-                  <span className="addon-shop-socks" aria-hidden="true">
-                    {Array.from({ length: visibleSocks }, (_, index) => (
-                      <JumpyardIcon key={index} name="grip-socks" className="addon-shop-sock-icon" />
-                    ))}
-                    {guestCount > visibleSocks && <span>+{guestCount - visibleSocks}</span>}
-                  </span>
-                  <p>{guestCount === 1 ? copy.socksRecommendationOne : countText(copy.socksRecommendation, guestCount)}</p>
-                </div>}
-                {entry.available && ((socks && recommended > 0) || (!socks && entry.quantity === entry.included)) && (
-                  <button type="button" className="addon-shop-add" data-testid={`addon-choice-${id}-recommend`}
-                    disabled={entry.quantity >= entry.max}
-                    onClick={() => onQuantity(id, Math.min(entry.max, entry.quantity + (socks ? recommended : 1)))}>
-                    <Plus aria-hidden="true" />{socks ? (recommended === 1 ? copy.addSocksOne : countText(copy.addSocks, recommended)) : copy.addBottle}
-                  </button>
-                )}
+              <div className="addon-shop-selling-copy">
+                <p className="addon-shop-description">{socks ? copy.socksBenefit : copy.bottleEnvironment}</p>
               </div>
               {stepper(entry)}
             </div>
+            {included(entry)}
+            {!entry.available && <p className="addon-shop-unavailable">{copy.unavailableRequired}</p>}
             {!hasAddonPurchase(entry) && <label className="addon-shop-own" data-checked={own}>
               <input type="checkbox" checked={own} onChange={(event) => confirm(event.target.checked)} />
               <span>{socks ? copy.ownSocks : copy.ownBottle}</span>
@@ -153,8 +132,12 @@ export function AddonChoices({ ref, entries, guestCount, ownSocks, ownBottle, on
               <p className="addon-shop-price">{entry.available && entry.price !== null ? `${money(entry.price)} ${entry.unit === t.addons.each ? t.addons.eachLong : entry.unit}` : t.addons.unsupported}</p>
             </div>
           </header>
-          {stepper(entry)}
-          <p className="addon-shop-description">{entry.id === 'lock' ? copy.lockBenefit : entry.id === 'coffee' ? copy.coffeeBenefit : entry.id === 'skyrider' ? copy.skyRiderBenefit : entry.description}</p>
+          <div className="addon-shop-purchase">
+            <div className="addon-shop-selling-copy">
+              <p className="addon-shop-description">{entry.id === 'lock' ? copy.lockBenefit : entry.id === 'coffee' ? copy.coffeeBenefit : entry.id === 'skyrider' ? copy.skyRiderBenefit : entry.description}</p>
+            </div>
+            {stepper(entry)}
+          </div>
           {entry.id === 'skyrider' && entry.available && <p className="addon-shop-note">
             <span className="addon-shop-recommended">{copy.recommended}</span>
           </p>}
