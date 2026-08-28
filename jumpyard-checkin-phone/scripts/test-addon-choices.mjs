@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
-import { getMissingAddonChoices, getRecommendedSocksToAdd, hasAddonPurchase } from '../src/flow/addonChoices.ts';
+import { getMissingAddonChoices, hasAddonPurchase } from '../src/flow/addonChoices.ts';
 import { previewHosts, previewResponse } from './preview-phone-addons.mjs';
 
 const noOwn = { socks: false, water_bottle: false };
@@ -40,10 +40,12 @@ test('own-item choice hides on purchase and returns when the last new item is re
   assert.match(source('components/AddonChoices.tsx'), /!hasAddonPurchase\(entry\) && <label/);
 });
 
-test('recommendations subtract paid and selected quantities and respect the maximum', () => {
-  for (const [guests, quantity, max, expected] of [[2,0,8,2],[2,1,8,1],[2,2,8,0],[2,3,8,0],[4,1,2,1],[2,0,0,0],[0,0,8,0]]) {
-    assert.equal(getRecommendedSocksToAdd(guests, quantity, max), expected);
-  }
+test('plus and minus are the only purchase buttons and adjust one item at a time', () => {
+  const code = source('components/AddonChoices.tsx');
+  assert.equal((code.match(/<button\b/g) || []).length, 2);
+  assert.match(code, /Math.min\(entry.max, entry.quantity \+ 1\)/);
+  assert.match(code, /Math.max\(entry.included, entry.quantity - 1\)/);
+  assert.doesNotMatch(code, /guestCount|getRecommendedSocksToAdd|copy\.addSocks|copy\.addBottle/);
 });
 
 test('both entry paths use the same validator and ownership cannot mutate quantities', () => {
@@ -104,7 +106,7 @@ test('component does not fetch prices, use kiosk dimensions or expose purchase-r
   const css = source('app/globals.css');
   assert.match(css, /--shop-control: 44px/);
   assert.match(css, /\.addon-shop-scroll \{[\s\S]*?min-height: 0;[\s\S]*?overflow-y: auto;/);
-  assert.match(css, /\.addon-shop-purchase \{[\s\S]*?flex-wrap: wrap;/);
+  assert.match(css, /\.addon-shop-purchase \{\s+display: grid;\s+grid-template-columns: minmax\(0, 1fr\) auto;/);
   assert.match(css, /\.addon-shop-footer \{ flex-shrink: 0;/);
 });
 
@@ -143,14 +145,50 @@ test('compact cards keep readable copy and full touch targets while sharing rows
   const code = source('components/AddonChoices.tsx');
   const css = source('app/globals.css');
   const copy = source('context/LanguageContext.tsx');
-  assert.match(code, /className="addon-shop-purchase-copy"/);
-  assert.match(code, /guestCount === 1 \? copy.socksRecommendationOne/);
+  assert.match(code, /className="addon-shop-purchase"/);
+  assert.doesNotMatch(code, /addon-shop-purchase-copy/);
   assert.match(css, /--shop-control: 44px/);
   assert.match(css, /font-size: 14px/);
-  assert.match(css, /\.addon-shop-optional > p \{ grid-column: 1 \/ -1; \}/);
-  assert.match(copy, /socksRecommendationOne: 'Tip: 1 pair'/);
-  assert.match(copy, /bottleBenefit: 'Refill your bottle at the water station\.'/);
+  assert.match(css, /\.addon-shop-selling-copy \{\s+min-width: 0;\s+font-size: 13px;\s+line-height: 1.35;\s+overflow-wrap: anywhere;/);
+  assert.doesNotMatch(copy, /bottleBenefit|Fyll på din flaska vid vattenstationen|Refill your bottle at the water station/);
+  assert.match(copy, /bottleEnvironment: 'Inga engångsmuggar av miljöskäl\.'/);
   assert.doesNotMatch(css, /line-clamp|text-overflow:\s*ellipsis/);
+});
+
+test('every card keeps selling copy beside the full-size quantity controls', () => {
+  const code = source('components/AddonChoices.tsx');
+  const rows = code.match(/<div className="addon-shop-purchase">\s*<div className="addon-shop-selling-copy">[\s\S]*?<\/div>\s*\{stepper\(entry\)\}\s*<\/div>/g) || [];
+  assert.equal(rows.length, 2, 'required and optional products must share the same side-by-side row');
+  assert.match(rows[0], /copy\.socksBenefit[\s\S]*copy\.bottleEnvironment/);
+  assert.match(rows[1], /copy\.lockBenefit[\s\S]*copy\.coffeeBenefit[\s\S]*copy\.skyRiderBenefit/);
+  const css = source('app/globals.css');
+  assert.match(css, /--shop-control: 44px/);
+  assert.doesNotMatch(css, /\.addon-shop-optional > \.addon-shop-stepper|grid-row:/);
+});
+
+test('phone omits the Tips row, miniature socks and separate add buttons', () => {
+  const code = source('components/AddonChoices.tsx');
+  assert.doesNotMatch(code, /socksRecommendation|visibleSocks|addon-shop-sock-icon|addon-shop-recommendation/);
+  assert.doesNotMatch(source('context/LanguageContext.tsx'), /socksRecommendation|addSocks|addBottle/);
+  assert.doesNotMatch(source('app/globals.css'), /addon-shop-recommendation|addon-shop-sock-icon|addon-shop-add/);
+  assert.match(code, /<JumpyardIcon name=\{entry.icon\} className="addon-shop-icon"/);
+  assert.doesNotMatch(code, /addon-shop-add|addon-shop-purchase-copy/);
+});
+
+test('both add-on paths share the remaining viewport without fixed header-height deductions', () => {
+  const css = source('app/globals.css');
+  const page = source('app/page.tsx');
+  const buy = source('components/BuyTickets.tsx');
+  const existing = source('components/AddonsOffer.tsx');
+  assert.match(css, /\.phone-flow-shell:has\(\.addon-shop-screen\) \{\s+height: 100dvh;\s+padding-bottom: max\(12px, env\(safe-area-inset-bottom, 0px\)\);/);
+  assert.match(css, /\.addon-shop-screen \{\s+flex: 1;\s+min-height: 0;\s+\}/);
+  for (const name of ['phone-flow-shell', 'phone-flow', 'phone-flow-content']) {
+    assert.match(page, new RegExp('className="' + name + ' '));
+  }
+  assert.match(buy, /className="phone-buy-flow /);
+  assert.match(buy, /step === 'ADDONS'[\s\S]*?className="addon-shop-screen /);
+  assert.match(existing, /step === 'SELECT' \? 'addon-shop-screen pt-3' : 'py-3'/);
+  assert.match(existing, /style=\{step === 'SELECT' \? undefined : \{ maxHeight:/);
 });
 
 test('coffee is labelled as brewed coffee and the removed Sky Rider sentence stays out of the list', () => {
@@ -162,4 +200,17 @@ test('coffee is labelled as brewed coffee and the removed Sky Rider sentence sta
   // Only the repeated shop copy is removed, not the existing safety step.
   assert.match(source('components/BuyTickets.tsx'), /<SkyRiderAttest/);
   assert.match(source('components/AddonsOffer.tsx'), /<SkyRiderAttest/);
+});
+
+test('both entry paths retain native scrolling without the discarded more-add-ons control', () => {
+  for (const file of ['BuyTickets', 'AddonsOffer']) {
+    const code = source('components/' + file + '.tsx');
+    assert.match(code, /<div className="addon-shop-scroll">[\s\S]*?<AddonChoices[\s\S]*?<\/div>\s*<div className="addon-shop-footer">/);
+    assert.doesNotMatch(code, /AddonShopScroll|hasMoreAddons|nextAddonScrollTop|addon-shop-more/);
+  }
+  assert.match(source('app/globals.css'), /\.addon-shop-scroll \{[\s\S]*?overflow-y: auto/);
+  assert.doesNotMatch(source('app/globals.css'), /addon-shop-more/);
+  assert.doesNotMatch(source('context/LanguageContext.tsx'), /moreAddons:|Fler tillägg/);
+  assert.equal(existsSync(new URL('../src/components/AddonShopScroll.tsx', import.meta.url)), false);
+  assert.equal(existsSync(new URL('../src/flow/addonScroll.ts', import.meta.url)), false);
 });

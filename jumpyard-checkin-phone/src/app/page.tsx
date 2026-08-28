@@ -724,7 +724,7 @@ function CheckInFlow() {
 
     return (
         <div
-            className="z-10 w-full max-w-lg min-w-0 flex flex-col items-center"
+            className="phone-flow z-10 w-full max-w-lg min-w-0 flex flex-col items-center"
             data-flow-state={state}
             data-checkin-session-id={ctx.checkinSession?.checkinSessionId ?? ''}
             data-checkin-session-status={ctx.checkinSession?.status ?? ''}
@@ -769,7 +769,7 @@ function CheckInFlow() {
                 onConfirm={resetToStart}
             />
 
-            <div className="w-full max-w-full min-w-0 flex items-center justify-center relative">
+            <div className="phone-flow-content w-full max-w-full min-w-0 flex items-center justify-center relative">
                 <AnimatePresence mode="wait">
                     {state === 'APP_MOBILE' && (
                         <motion.div
@@ -961,7 +961,7 @@ function isCompletedSession(session: CheckInSession) {
 export default function Home() {
     return (
         <LanguageProvider>
-            <main className="flex min-h-dvh w-full max-w-full min-w-0 flex-col items-center justify-start overflow-x-hidden p-3 pt-3 relative text-foreground bg-background selection:bg-primary selection:text-white">
+            <main className="phone-flow-shell flex min-h-dvh w-full max-w-full min-w-0 flex-col items-center justify-start overflow-x-hidden p-3 pt-3 relative text-foreground bg-background selection:bg-primary selection:text-white">
                 <Suspense
                     fallback={
                         <div className="text-foreground z-10 flex flex-col justify-center items-center h-full w-full">
