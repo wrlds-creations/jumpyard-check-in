@@ -4,8 +4,8 @@ Use this file as the short snapshot of what actually exists. Operational work st
 
 ## Snapshot
 
-- Date: 2026-08-27
-- Public phone/Park UI: `d2283aa` (PR #319). Release `33081106676`, Park `33081517580` and public `33081923334` passed. Backend remains `ebc7598`: water `970411`/`970363` at 20 SEK, zero resource changes. Admin source is unchanged. [Release/rollback evidence](docs/gh-318-phone-addon-choices.md).
+- Date: 2026-08-28
+- Public phone/Park UI: `b614208` (PR #322). Release `33144446818`, Park `33144666359`, public `33144851459` passed. Backend `ebc7598` and admin unchanged; zero AWS changes. [Release/rollback evidence](docs/gh-321-compact-phone-addons.md).
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
 - Product/runtime state: Park has 202 resources, migrations through `0020`, and 27 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption, and late Handoff attachment are proven. A definitively approved kiosk payment now returns its provisional session with the bounded `safety` hint immediately instead of waiting for ROLLER readback; redemption remains blocked until authoritative synchronization. Physical proof remains in kiosk issue #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
@@ -30,7 +30,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 
 - The production architecture remains `check-in app -> JumpYard Cloud/server API -> Roller API`; Roller is authoritative and Aurora is an operational cache.
 - Water selection, unchanged 24-hour cache and historical-payment compatibility: [#315 evidence](docs/gh-315-water-product.md).
-- Shared mobile add-ons preserve purchases/paid quantities, recommend sock counts and explain missing choices on Continue. D0196 and [#318 evidence](docs/gh-318-phone-addon-choices.md).
+- Mobile add-ons retain paid minima and Continue validation, using compact cards and native scroll. D0196/D0197; [#321](docs/gh-321-compact-phone-addons.md).
 - Issue #264 makes technical `park-test` Nacka's sharp pilot backend without changing its AWS/data identity. The latest protected public promotion is recorded in the snapshot above. Multi-park remains separate.
 - The park-test full-flow posture remains scoped to Nacka `50871` and dates `2026-06-29` through `2026-09-30`. It permits the already approved lookup, booking/payment, add-on, staff-auth, redeem, morning index, and durable booking-webhook paths. The T0201 controlled messaging runtime is deployed, but its single-booking control is disarmed and the general guest-send gate remains closed.
 - The full-flow window remains open until Love explicitly approves closing it; documentation closeout is not a deployment instruction.

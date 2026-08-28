@@ -185,3 +185,108 @@ The latest successful public deployment remains run `33081923334`, selecting
 Rollback candidate artifact `9650194100` is unexpired through 2026-11-25 and has
 digest `sha256:a9d6820b929dfa79792eab0a7e2bae277da5c13ede04fdb1ddfbff6a0cd860f9`.
 It is a frontend-only rollback candidate; no rollback is performed preemptively.
+
+## Final validation and merged implementation
+
+[PR #322](https://github.com/wrlds-creations/jumpyard-check-in/pull/322) merged
+on 2026-08-28 as `b6142086e7b5d6be8222848a5be59e816b74d64f`. All four required
+checks (Repository, Infrastructure, Phone, Admin) passed in
+[CI 33144271166](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33144271166).
+The Phone and Admin jobs built the exact final production source; no branch
+protection was bypassed. Full local `npm run validate` and `npm run infra:check`
+also passed after installing the unchanged locked dependencies. The final add-on
+suite has 20 tests; the intermediate 24-test scroll-hint suite above is historical.
+
+The dependent `codex/gh-321-publication-evidence` branch starts from that merged
+commit and changes documentation only. D0197 records the final compact/native
+scroll presentation while preserving D0196's ownership/validation behavior.
+Repository context records merged behavior without treating pending publication
+as deployed. The previous public release was downloaded independently and all
+493 files passed its manifest/checksum validation; manifest SHA256 is
+`c8f8a1002d72fd8d250a6180d5710a38f30b48cf6160089bb97035eeeca91f7f`.
+
+## Immutable release and protected Park plan
+
+[Release 33144446818](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33144446818)
+successfully built exact merged source `b6142086e7b5d6be8222848a5be59e816b74d64f`.
+Artifact `9675268479` has digest
+`sha256:c139a0617d980600ea7ec0bb3091bad996b69aa30215254fed77c67b0edafe09`.
+Independent local validation verified all 493 files, manifest SHA256
+`492bfc40358b57a63b5713bb852b2a1f2bf69497036181fa653947ad395a30c3`, and the exact
+public domain/API/Cognito target contract. The 124-file phone export contains
+the compact card CSS and approved API target, and excludes the discarded scroll
+hint, sock recommendation keys, refill sentence, synthetic fixture identifiers,
+LAN address and preview route. Nothing is rebuilt during promotion.
+
+Protected [Park plan 33144666359](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33144666359)
+reported 202 current/release resources with zero additions, changes or removals
+and no parameter/output/rule/condition/mapping changes. Current and selected
+template hashes are identical:
+`b227888a573552adb362baebbf0cd866c5e0eeec9ffab06e13e908ad191ecf07`.
+The target remains account `376129878018`, `eu-north-1`, technical `park-test`,
+Client/CostCenter `JumpYard`, Project `jumpyard-check-in`, Owner/CreatedBy `love`,
+Repository `wrlds-creations/jumpyard-check-in`, ManagedBy `cdk`, confidential
+and exportable. No new resource, gate, secret, role, route, schema or venue is
+introduced, and migrations are explicitly disabled.
+
+The protected environment permitted the configured reviewer to approve. Codex
+recorded Love's explicit delegated publication request, exact source/artifact,
+reviewed zero-change plan and frontend-only rollback boundary in the approval
+comment before the deployment job started. No environment protection was bypassed.
+
+## Successful Park verification
+
+Park run `33144666359` completed successfully. CDK explicitly reported
+`no changes`; no migration was requested or applied. Existing migrations remain
+complete through `0020`. The workflow passed exact template equality, successful
+stack status, `IN_SYNC` drift, zero alarms in ALARM, empty related queues,
+exact-SHA Pages checks and public API/config/Apple Pay checks.
+
+- Phone immutable output: https://d5e6ed65.jumpyard-check-in-park-test.pages.dev
+- Unchanged admin output: https://e0982190.jumpyard-checkin-admin-park-test.pages.dev
+
+Independent read-only verification of the stable Park phone root returned HTTP
+200 and byte-matched all 11 root-referenced JavaScript/CSS assets plus the
+transparent warning icon against the selected immutable output. No guest flow,
+booking, payment, refund, redemption or message was triggered. Post-merge
+[CI 33144446845](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33144446845)
+also passed for the exact release source.
+
+## Successful protected public publication
+
+[Public run 33144851459](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33144851459)
+completed successfully on 2026-08-28 at 07:29:52 Europe/Stockholm. Its completed
+plan revalidated all 493 files, the same source/manifest and exact two public
+projects. The plan job log was read through the GitHub jobs API before approval
+because the CLI's whole-run log view was unavailable while approval was pending.
+Protected approval recorded Love's delegated request, successful Park run,
+independent asset verification and the exact frontend-only target/rollback scope.
+No gate was bypassed, no output was rebuilt, and the public workflow changed no
+AWS resource. Exact-SHA Cloudflare, public routes, CORS and Cognito checks passed.
+The existing Apple Pay association remained HTTP 200 with its expected hash.
+
+- Guest site: https://checkin.jumpyard.se
+- Guest immutable output: https://a692e1e0.jumpyard-check-in-production.pages.dev
+- Unchanged staff/admin site: https://staff-checkin.jumpyard.se
+- Staff/admin immutable output: https://25950672.jumpyard-checkin-admin-production.pages.dev
+
+Independent read-only verification of the guest root returned HTTP 200 and
+byte-matched all 11 root-referenced JavaScript/CSS assets plus the transparent
+warning icon against the exact selected release. The verified output contains
+the compact cards and native scrolling and excludes `Fler tillägg`, the refill
+sentence, the removed recommendation UI and fixture identifiers/routes. This is
+deployment/asset verification, not a new physical Safari or real-payment test.
+
+No rollback was needed or executed. The downloaded and hash-verified prior
+artifact `9650194100` (source `d2283aa`, build `33081106676`) remains the compatible
+frontend-only rollback candidate. No live rollback rehearsal, purchase, payment,
+refund, redemption, guest message or ROLLER business write was authorized or run.
+
+The dependent evidence PR updates only this document, `REPO_CURRENT_STATE.md`,
+`PROJECT_CONTEXT.md`, `DECISIONS.md` and `AWS_RESOURCES.md`. It records D0197 and
+the confirmed merged/deployed state without modifying runtime code or rewriting
+earlier release histories. The scroll-discovery draft remains archived as a
+superseded local experiment; no new Project draft was created. Existing security,
+QR-dependency and stored-language hydration items remain separate. Physical
+phone review after a page reload is the remaining recommended user check, not
+an uncompleted deployment step.
