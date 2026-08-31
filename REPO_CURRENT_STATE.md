@@ -5,7 +5,7 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-08-31
-- Public phone/Park UI: `b614208` (PR #322). Release `33144446818`, Park `33144666359`, public `33144851459` passed. Backend `ebc7598` and admin unchanged; zero AWS changes. [Release/rollback evidence](docs/gh-321-compact-phone-addons.md).
+- Public phone/Park UI: `9dafe028` (PR #325). Release `33379287364`, Park `33379950137`, public `33380307052` passed. Backend `ebc7598` unchanged; no migration applied. [Payment confirmation evidence](docs/gh-324-phone-payment-confirmation.md).
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
 - Product/runtime state: Park has 202 resources, migrations through `0020`, and 27 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption, and late Handoff attachment are proven. A definitively approved kiosk payment now returns its provisional session with the bounded `safety` hint immediately instead of waiting for ROLLER readback; redemption remains blocked until authoritative synchronization. Physical proof remains in kiosk issue #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
