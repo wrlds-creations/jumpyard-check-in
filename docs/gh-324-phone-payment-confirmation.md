@@ -68,10 +68,21 @@ Results on 2026-08-31:
 - ESLint: zero errors, four existing bitmap `<img>` warnings;
 - optimized production build: passed.
 
-Physical phone validation remains required after protected promotion. Test one
-new entry and one add-on purchase, confirm that the approved screen remains until
-the button is pressed, verify the receipt email, and verify safety/resume without
-another payment.
+## Merge and protected rollout evidence
 
-Release, Park promotion and public `https://checkin.jumpyard.se` run evidence is
-added after the immutable main artifact has passed the protected rollout.
+- Implementation PR: [#325](https://github.com/wrlds-creations/jumpyard-check-in/pull/325)
+- Merged source: `9dafe028bf93a25cd60f41b2c49a10e8836501d1`
+- Immutable release: [run 33379287364](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33379287364)
+- Artifact: `park-test-release-9dafe028bf93a25cd60f41b2c49a10e8836501d1`
+- Artifact digest: `c2903f41b4fc570098c2d66559c63526337c8dc28b5873c5046e17657c474ef2`
+- Protected Park promotion and verification: [run 33379950137](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33379950137)
+- Protected public promotion and verification: [run 33380307052](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33380307052)
+- Public target: [https://checkin.jumpyard.se](https://checkin.jumpyard.se), independently returned HTTP 200 after promotion.
+
+The same immutable artifact passed release validation, Park deployment and
+public promotion. No migration was applied. The protected workflows verified
+the exact Cloudflare commit, public prerequisites, domains and live HTTP target.
+
+Physical phone validation remains required. Test one new entry and one add-on
+purchase, confirm that the approved screen remains until the button is pressed,
+verify the receipt email, and verify safety/resume without another payment.
