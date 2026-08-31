@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, Check, CreditCard } from 'lucide-react';
+import { AlertCircle, CreditCard } from 'lucide-react';
 import {
     CloudBookingError,
     createAddProductDraft,
@@ -25,6 +25,16 @@ import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { AddonChoices, type AddonChoicesHandle } from '@/components/AddonChoices';
+import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
+
+export interface AddonsOfferResult {
+    selectedAddons: Addon[];
+    addonsTotal: number;
+    skyriderSelected: boolean;
+    skyriderHeightConfirmed?: boolean;
+    connectedSelected: boolean;
+    paymentHandled?: boolean;
+}
 
 interface AddonsOfferProps {
     backRequest?: number;
@@ -33,14 +43,8 @@ interface AddonsOfferProps {
     existingAddons: Addon[];
     prefetchedAvailability?: AddonsAvailabilityPrefetch | null;
     onStepChange?: (step: AddonsOfferStep) => void;
-    onContinue: (result: {
-        selectedAddons: Addon[];
-        addonsTotal: number;
-        skyriderSelected: boolean;
-        skyriderHeightConfirmed?: boolean;
-        connectedSelected: boolean;
-        paymentHandled?: boolean;
-    }) => void;
+    onContinue: (result: AddonsOfferResult) => void;
+    onPaymentApproved?: (result: AddonsOfferResult) => void;
     onPendingDone: () => void;
 }
 
@@ -182,10 +186,11 @@ export const AddonsOffer = ({
     existingAddons,
     prefetchedAvailability = null,
     onContinue,
+    onPaymentApproved,
     onPendingDone,
     onStepChange,
 }: AddonsOfferProps) => {
-    const { t } = useTranslation();
+    const { lang, t } = useTranslation();
     const bookingDate = booking.date ?? getVenueToday();
     const bookingStartTime = normalizeStartTime(booking.time) ?? '09:00';
     const prefetchKey = getAvailabilityPrefetchKey(bookingDate, bookingStartTime);
@@ -280,6 +285,7 @@ export const AddonsOffer = ({
     const [alreadyHasWaterBottle, setAlreadyHasWaterBottle] = useState(false);
     const addonChoicesRef = useRef<AddonChoicesHandle>(null);
     const handledBackRequest = useRef(backRequest);
+    const paymentApprovedRef = useRef(false);
 
     const returnToSelect = useCallback(() => {
         setSubmitError(null);
@@ -400,8 +406,7 @@ export const AddonsOffer = ({
 
     const requireAvailability = addedAddons.some((addon) => addon.requiresAvailability === true);
 
-    const completeAddons = (paymentHandled = false) => {
-        onContinue({
+    const getCompletionResult = (paymentHandled = false): AddonsOfferResult => ({
             selectedAddons,
             addonsTotal,
             skyriderSelected: addedSkyrider,
@@ -409,6 +414,16 @@ export const AddonsOffer = ({
             connectedSelected: qty.connected > 0,
             paymentHandled,
         });
+
+    const completeAddons = (paymentHandled = false) => {
+        onContinue(getCompletionResult(paymentHandled));
+    };
+
+    const handlePaymentApproved = () => {
+        if (paymentApprovedRef.current) return;
+        paymentApprovedRef.current = true;
+        setStep('APPROVED');
+        onPaymentApproved?.(getCompletionResult(true));
     };
 
     const handleSelectContinue = () => {
@@ -481,6 +496,7 @@ export const AddonsOffer = ({
                 `phone-add-product:${booking.id}:${itemKey}:${Date.now().toString(36)}`,
                 requireAvailability
             );
+            paymentApprovedRef.current = false;
             setDraft(result);
             setStep(canStartPayment(result) ? 'PAYMENT' : 'PENDING');
         } catch (error) {
@@ -517,10 +533,7 @@ export const AddonsOffer = ({
                         <RollerPaymentDropIn
                             amountLabel={formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
                             paymentSession={draft.paymentSession}
-                            onApproved={() => {
-                                setStep('APPROVED');
-                                window.setTimeout(() => completeAddons(true), 1200);
-                            }}
+                            onApproved={handlePaymentApproved}
                             onFailed={() => undefined}
                         />
                     </div>
@@ -629,13 +642,11 @@ export const AddonsOffer = ({
                     className="w-full flex items-center justify-center"
                     style={{ minHeight: 'calc(100dvh - 160px)' }}
                 >
-                    <div className="w-full bg-white border border-border p-5 rounded-2xl text-center">
-                        <div className="w-14 h-14 rounded-full bg-success/10 border border-success/25 mx-auto mb-4 flex items-center justify-center">
-                            <Check size={30} className="text-success" />
-                        </div>
-                        <h2 className="text-xl font-black italic text-foreground uppercase mb-2">{t.addons.paymentApprovedTitle}</h2>
-                        <p className="text-foreground text-sm">{t.addons.paymentApprovedDesc}</p>
-                    </div>
+                    <PhonePaymentConfirmation
+                        language={lang}
+                        amountLabel={formatMoney(draft?.prepayment?.amountOwing ?? draft?.draft.costs.amountOwing)}
+                        onContinueToSafety={() => completeAddons(true)}
+                    />
                 </motion.div>
             )}
 

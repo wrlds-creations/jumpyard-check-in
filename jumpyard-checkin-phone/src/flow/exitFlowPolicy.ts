@@ -65,7 +65,7 @@ export function getExitFlowMode({
     return 'hidden';
   }
 
-  if (state === 'KIOSK_BUY' && (buyStep === 'PAYMENT' || buyStep === 'PENDING')) {
+  if (state === 'KIOSK_BUY' && (buyStep === 'PAYMENT' || buyStep === 'APPROVED' || buyStep === 'PENDING')) {
     return 'hidden';
   }
 

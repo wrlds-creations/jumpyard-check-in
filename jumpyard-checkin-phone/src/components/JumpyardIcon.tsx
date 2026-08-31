@@ -31,6 +31,7 @@ export type JumpyardIconName =
     | 'phone'
     | 'points-star'
     | 'presentkort'
+    | 'receipt'
     | 'safe-tricks'
     | 'safety-check'
     | 'scan-frame'

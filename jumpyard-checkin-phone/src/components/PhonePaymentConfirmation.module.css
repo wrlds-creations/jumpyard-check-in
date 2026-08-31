@@ -1,0 +1,56 @@
+.confirmation {
+  width: 100%;
+  max-width: 430px;
+  margin-inline: auto;
+  padding-block: 20px;
+  color: var(--foreground);
+  text-align: center;
+}
+
+.message { display: flex; flex-direction: column; align-items: center; }
+.icon { width: 80px; height: 80px; margin-bottom: 28px; }
+.title { margin: 0; font-size: clamp(26px, 7vw, 30px); font-weight: 900; font-style: italic; text-transform: uppercase; line-height: 1.12; text-wrap: balance; }
+.amount { margin: 22px 0 0; color: #147b51; font-size: 48px; font-weight: 900; font-style: italic; line-height: 1.2; }
+.receipt { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 12px 0 0; font-size: 16px; line-height: 1.4; text-wrap: balance; }
+.receiptIcon { flex: none; width: 34px; height: 34px; }
+.continueButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 60px;
+  margin-top: 32px;
+  border: 2px solid var(--primary);
+  border-radius: 16px;
+  padding: 16px 12px;
+  background: var(--primary);
+  color: white;
+  font-size: clamp(16px, 4.4vw, 18px);
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  line-height: 1.2;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.continueButton:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+.continueButton:active { transform: scale(.98); }
+.continueButton:disabled { opacity: .68; cursor: wait; }
+.continueButton:focus-visible { outline: 3px solid var(--foreground); outline-offset: 4px; }
+
+@media (max-height: 650px) {
+  .confirmation { padding-block: 12px; }
+  .icon { width: 64px; height: 64px; margin-bottom: 20px; }
+  .amount { margin-top: 16px; font-size: 42px; }
+  .continueButton { margin-top: 24px; }
+}
+
+@media (max-height: 600px) {
+  .confirmation { padding-block: 8px; }
+  .icon { width: 56px; height: 56px; margin-bottom: 16px; }
+  .continueButton { margin-top: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .continueButton:active { transform: none; }
+}

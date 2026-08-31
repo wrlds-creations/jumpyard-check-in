@@ -42,17 +42,18 @@ import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { AddonChoices, type AddonChoicesHandle } from '@/components/AddonChoices';
+import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 
 interface BuyTicketsProps {
   recoverySnapshot?: BuyFlowRecoverySnapshot | null;
   inlineExitVisible?: boolean;
   onBack: () => void;
-  onBookingReady: (booking: Booking) => void;
+  onBookingReady: (booking: Booking) => Promise<() => void>;
   onRequestExit?: () => void;
   onStepChange?: (step: BuyTicketsStep) => void;
 }
 
-export type BuyTicketsStep = BuyFlowRecoveryBuyStep | 'PAYMENT' | 'PENDING';
+export type BuyTicketsStep = BuyFlowRecoveryBuyStep | 'PAYMENT' | 'APPROVED' | 'PENDING';
 
 const BUY_PROGRESS_ICONS: JumpyardIconName[] = [
   'admission-ticket',
@@ -574,12 +575,12 @@ function wait(ms: number) {
 
 function getBuyProgressIndex(step: BuyTicketsStep) {
   if (step === 'ADDONS' || step === 'SKYRIDER_ATTEST') return 1;
-  if (step === 'CONTACT' || step === 'REVIEW' || step === 'PAYMENT' || step === 'PENDING') return 2;
+  if (step === 'CONTACT' || step === 'REVIEW' || step === 'PAYMENT' || step === 'APPROVED' || step === 'PENDING') return 2;
   return 0;
 }
 
 function isBuyStep(step: BuyTicketsStep): step is BuyFlowRecoveryBuyStep {
-  return step !== 'PAYMENT' && step !== 'PENDING';
+  return step !== 'PAYMENT' && step !== 'APPROVED' && step !== 'PENDING';
 }
 
 function toRecoveryAddonQty(addonQty: AddonQuantityMap): BuyFlowRecoveryAddonQty {
@@ -713,6 +714,10 @@ export const BuyTickets = ({
   const [paymentSyncError, setPaymentSyncError] = useState<string | null>(null);
   const [paymentApprovedForSync, setPaymentApprovedForSync] = useState(false);
   const [paymentNavigationLocked, setPaymentNavigationLocked] = useState(false);
+  const [paymentContinuePending, setPaymentContinuePending] = useState(false);
+  const paymentResolutionStartedRef = useRef(false);
+  const paymentContinuationRef = useRef<(() => void) | null>(null);
+  const paymentContinueRequestedRef = useRef(false);
 
   useEffect(() => {
     onStepChange?.(step);
@@ -793,7 +798,8 @@ export const BuyTickets = ({
   const noPaymentRequired = draftAmountOwing !== null && draftAmountOwing <= 0;
   const showPaymentSyncCard = paymentApprovedForSync || paymentSyncing || Boolean(paymentSyncError);
   const backNavigationLocked =
-    step === 'PAYMENT' && (paymentNavigationLocked || paymentApprovedForSync || paymentSyncing);
+    step === 'APPROVED' ||
+    (step === 'PAYMENT' && (paymentNavigationLocked || paymentApprovedForSync || paymentSyncing));
   const checkoutAmount = draftAmountOwing ?? quote?.costs.amountOwing ?? basketEstimateTotal;
   const checkoutTotal = quote?.costs.total ?? basketEstimateTotal;
   const checkoutLocked = Boolean(draft) || showPaymentSyncCard;
@@ -802,6 +808,10 @@ export const BuyTickets = ({
     setPaymentSyncError(null);
     setPaymentApprovedForSync(false);
     setPaymentNavigationLocked(false);
+    setPaymentContinuePending(false);
+    paymentResolutionStartedRef.current = false;
+    paymentContinuationRef.current = null;
+    paymentContinueRequestedRef.current = false;
   };
 
   useEffect(() => {
@@ -1295,29 +1305,69 @@ export const BuyTickets = ({
     }
   };
 
-  const resolvePaidDraftBooking = async (draftOverride?: NewBookingDraftResult) => {
+  const resolvePaidDraftBooking = async (
+    draftOverride?: NewBookingDraftResult,
+    waitForGuestConfirmation = false
+  ) => {
     const activeDraft = draftOverride ?? draft;
     const identifier = activeDraft?.draft.uniqueId ?? activeDraft?.draft.bookingReference;
-    if (!identifier || paymentSyncing) return;
+    if (!identifier || paymentResolutionStartedRef.current) return;
 
+    paymentResolutionStartedRef.current = true;
     setPaymentSyncing(true);
     setPaymentSyncError(null);
     try {
+      let resolvedBooking: Booking | null = null;
       for (let attempt = 0; attempt < 8; attempt += 1) {
         try {
-          const booking = await lookupBooking(identifier);
-          writeDraftRecovery('APP_SAFETY_VIDEO', activeDraft, selectedProduct, selectedTime, jumperCount, true);
-          onBookingReady(booking);
-          return;
+          resolvedBooking = await lookupBooking(identifier);
+          break;
         } catch {
           await wait(2000);
         }
       }
 
+      if (!resolvedBooking) {
+        paymentResolutionStartedRef.current = false;
+        paymentContinueRequestedRef.current = false;
+        setPaymentContinuePending(false);
+        setPaymentSyncError(t.buy.paymentSyncFailed);
+        return;
+      }
+
+      writeDraftRecovery('APP_SAFETY_VIDEO', activeDraft, selectedProduct, selectedTime, jumperCount, true);
+      const continueToSafety = await onBookingReady(resolvedBooking);
+      if (!waitForGuestConfirmation) {
+        continueToSafety();
+        return;
+      }
+
+      paymentContinuationRef.current = continueToSafety;
+      if (paymentContinueRequestedRef.current) {
+        paymentContinuationRef.current = null;
+        continueToSafety();
+      }
+    } catch {
+      paymentResolutionStartedRef.current = false;
+      paymentContinueRequestedRef.current = false;
+      setPaymentContinuePending(false);
       setPaymentSyncError(t.buy.paymentSyncFailed);
     } finally {
       setPaymentSyncing(false);
     }
+  };
+
+  const continueAfterApprovedPayment = () => {
+    const continueToSafety = paymentContinuationRef.current;
+    if (continueToSafety) {
+      paymentContinuationRef.current = null;
+      continueToSafety();
+      return;
+    }
+
+    paymentContinueRequestedRef.current = true;
+    setPaymentContinuePending(true);
+    void resolvePaidDraftBooking(undefined, true);
   };
 
   const backFromStep = () => {
@@ -2100,10 +2150,32 @@ export const BuyTickets = ({
                 paymentSession={draft.paymentSession}
                 onApproved={() => {
                   setPaymentApprovedForSync(true);
-                  void resolvePaidDraftBooking();
+                  setStep('APPROVED');
+                  void resolvePaidDraftBooking(undefined, true);
                 }}
                 onFailed={() => undefined}
               />
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {step === 'APPROVED' && draft && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="w-full flex items-center justify-center"
+          style={{ minHeight: 'calc(100dvh - 160px)' }}
+        >
+          <div className="w-full px-2 py-5">
+            <PhonePaymentConfirmation
+              language={lang}
+              amountLabel={formatMoney(draftAmountOwing)}
+              isContinuing={paymentContinuePending}
+              onContinueToSafety={continueAfterApprovedPayment}
+            />
+            {paymentSyncError && (
+              <p className="mt-3 text-center text-sm font-bold text-danger">{paymentSyncError}</p>
             )}
           </div>
         </motion.div>

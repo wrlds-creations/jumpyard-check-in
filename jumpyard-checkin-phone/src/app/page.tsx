@@ -7,7 +7,12 @@ import { AlertCircle, ArrowLeft, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { BookingSummary } from '@/components/BookingSummary';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { SafetyAttest } from '@/components/SafetyAttest';
-import { AddonsOffer, type AddonsAvailabilityPrefetch, type AddonsOfferStep } from '@/components/AddonsOffer';
+import {
+    AddonsOffer,
+    type AddonsAvailabilityPrefetch,
+    type AddonsOfferResult,
+    type AddonsOfferStep,
+} from '@/components/AddonsOffer';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { ConnectedProfiles } from '@/components/ConnectedProfiles';
 import { PaymentView } from '@/components/PaymentView';
@@ -469,7 +474,10 @@ function CheckInFlow() {
         }
     };
 
-    const handlePaidNewBookingReady = async (booking: Booking, recoveryTargetState: FlowState | null = null) => {
+    const preparePaidNewBooking = async (
+        booking: Booking,
+        recoveryTargetState: FlowState | null = null
+    ): Promise<() => void> => {
         const bookingAddons = booking.existingAddons ?? [];
         const bookingPatch: Partial<FlowContext> = {
             booking,
@@ -493,8 +501,11 @@ function CheckInFlow() {
         setSessionStartError(null);
 
         if (!booking.paid) {
-            advance(bookingPatch);
-            return;
+            setCtx({ ...ctx, ...bookingPatch });
+            return () => {
+                setState('APP_BOOKING');
+                scrollToTop();
+            };
         }
 
         try {
@@ -506,18 +517,69 @@ function CheckInFlow() {
 
             setAlreadyCheckedIn(isCompletedSession(checkinSession));
             setCtx(nextCtx);
-            setState(resumeState ?? targetState);
             setBuyRecoveryStatus(null);
-            scrollToTop();
+            return () => {
+                setState(resumeState ?? targetState);
+                scrollToTop();
+            };
         } catch (error) {
             if (error instanceof CloudSessionError && error.reason === 'already_redeemed') {
-                routeAlreadyCheckedIn(bookingPatch);
-                return;
+                setAlreadyCheckedIn(true);
+                setCtx({ ...ctx, ...bookingPatch, checkinSession: null });
+                return () => {
+                    setState('APP_PRESENT');
+                    scrollToTop();
+                };
             }
 
             setSessionStartError(error instanceof CloudSessionError ? error.reason : 'session_failed');
-            advance({ ...bookingPatch, buyEntryFlow: false });
+            setCtx({ ...ctx, ...bookingPatch, buyEntryFlow: false });
+            return () => {
+                setState('APP_BOOKING');
+                scrollToTop();
+            };
         }
+    };
+
+    const handlePaidNewBookingReady = async (booking: Booking, recoveryTargetState: FlowState | null = null) => {
+        const continueToPreparedState = await preparePaidNewBooking(booking, recoveryTargetState);
+        continueToPreparedState();
+    };
+
+    const getAddonsFlowPatch = (result: AddonsOfferResult): Partial<FlowContext> => ({
+        selectedAddons: result.selectedAddons,
+        addonsTotal: result.addonsTotal,
+        skyriderSelected: result.skyriderSelected,
+        skyriderHeightConfirmed: result.skyriderHeightConfirmed ?? false,
+        connectedSelected: result.connectedSelected,
+        paymentCompleted: result.paymentHandled ? true : ctx.paymentCompleted,
+        paymentTotal: result.paymentHandled ? 0 : (ctx.baseTotal || 0) + result.addonsTotal,
+    });
+
+    const preparePaidAddonsForSafety = (result: AddonsOfferResult) => {
+        const booking = ctx.booking;
+        if (!booking) return;
+
+        const patch = getAddonsFlowPatch(result);
+        setCtx((current) => ({ ...current, ...patch }));
+        setSafetyExitLocked(true);
+
+        if (ctx.checkinSession?.guestResumeStep === 'safety') return;
+        const checkinSessionId = ctx.checkinSession?.checkinSessionId ?? `booking:${booking.id}`;
+        if (guestResumeStepWriteRef.current === checkinSessionId) return;
+        guestResumeStepWriteRef.current = checkinSessionId;
+
+        startCheckInSession(booking, 'safety')
+            .then((checkinSession) => {
+                setCtx((current) => current.booking?.id === booking.id
+                    ? { ...current, checkinSession }
+                    : current);
+            })
+            .catch(() => {
+                if (guestResumeStepWriteRef.current === checkinSessionId) {
+                    guestResumeStepWriteRef.current = null;
+                }
+            });
     };
 
     const resumeBuyFlowRecovery = async (snapshot: BuyFlowRecoverySnapshot | null = buyRecoverySnapshot) => {
@@ -827,7 +889,7 @@ function CheckInFlow() {
                             onRequestExit={() => setExitDialogOpen(true)}
                             onStepChange={setBuyStep}
                             onBookingReady={booking => {
-                                void handlePaidNewBookingReady(booking);
+                                return preparePaidNewBooking(booking);
                             }}
                         />
                     )}
@@ -869,16 +931,8 @@ function CheckInFlow() {
                             existingAddons={ctx.existingAddons}
                             prefetchedAvailability={matchingAddonsPrefetch}
                             onStepChange={setAddonsStep}
-                            onContinue={({ selectedAddons, addonsTotal, skyriderSelected, skyriderHeightConfirmed, connectedSelected, paymentHandled }) =>
-                                advance({
-                                    selectedAddons,
-                                    addonsTotal,
-                                    skyriderSelected,
-                                    skyriderHeightConfirmed: skyriderHeightConfirmed ?? false,
-                                    connectedSelected,
-                                    paymentTotal: paymentHandled ? 0 : (ctx.baseTotal || 0) + addonsTotal,
-                                })
-                            }
+                            onPaymentApproved={preparePaidAddonsForSafety}
+                            onContinue={(result) => advance(getAddonsFlowPatch(result))}
                             onPendingDone={() => {
                                 setAlreadyCheckedIn(false);
                                 setCtx({ ...initialContext(effectiveChannel), token: null });
