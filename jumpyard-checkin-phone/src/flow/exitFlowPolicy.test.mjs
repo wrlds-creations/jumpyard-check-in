@@ -28,6 +28,7 @@ test('shows exit after the public first page and hides it on public start', () =
 
 test('keeps ecommerce payment and post-payment synchronization fail closed', () => {
   assert.equal(getExitFlowMode({ ...base, buyStep: 'PAYMENT', state: 'KIOSK_BUY' }), 'hidden');
+  assert.equal(getExitFlowMode({ ...base, buyStep: 'APPROVED', state: 'KIOSK_BUY' }), 'hidden');
   assert.equal(getExitFlowMode({ ...base, buyStep: 'PENDING', state: 'KIOSK_BUY' }), 'hidden');
   assert.equal(getExitFlowMode({ ...base, addonsStep: 'PAYMENT', state: 'APP_ADDONS' }), 'hidden');
   assert.equal(getExitFlowMode({ ...base, addonsStep: 'APPROVED', state: 'APP_ADDONS' }), 'hidden');

@@ -4,7 +4,7 @@ Use this file as the short snapshot of what actually exists. Operational work st
 
 ## Snapshot
 
-- Date: 2026-08-28
+- Date: 2026-08-31
 - Public phone/Park UI: `b614208` (PR #322). Release `33144446818`, Park `33144666359`, public `33144851459` passed. Backend `ebc7598` and admin unchanged; zero AWS changes. [Release/rollback evidence](docs/gh-321-compact-phone-addons.md).
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
@@ -30,7 +30,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 
 - The production architecture remains `check-in app -> JumpYard Cloud/server API -> Roller API`; Roller is authoritative and Aurora is an operational cache.
 - Water selection, unchanged 24-hour cache and historical-payment compatibility: [#315 evidence](docs/gh-315-water-product.md).
-- Mobile add-ons retain paid minima and Continue validation, using compact cards and native scroll. D0196/D0197; [#321](docs/gh-321-compact-phone-addons.md).
+- Phone add-ons use compact cards; approved ecommerce prepares recovery immediately and waits for Continue. D0196-D0198; [#321](docs/gh-321-compact-phone-addons.md), [#324](docs/gh-324-phone-payment-confirmation.md).
 - Issue #264 makes technical `park-test` Nacka's sharp pilot backend without changing its AWS/data identity. The latest protected public promotion is recorded in the snapshot above. Multi-park remains separate.
 - The park-test full-flow posture remains scoped to Nacka `50871` and dates `2026-06-29` through `2026-09-30`. It permits the already approved lookup, booking/payment, add-on, staff-auth, redeem, morning index, and durable booking-webhook paths. The T0201 controlled messaging runtime is deployed, but its single-booking control is disarmed and the general guest-send gate remains closed.
 - The full-flow window remains open until Love explicitly approves closing it; documentation closeout is not a deployment instruction.
