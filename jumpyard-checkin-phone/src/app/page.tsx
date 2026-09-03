@@ -47,12 +47,12 @@ import { BuyTickets, type BuyTicketsStep } from '@/components/BuyTickets';
 import { RollerPaymentDropIn, type RollerPaymentResultSummary } from '@/components/RollerPaymentDropIn';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 import {
-    clearPaymentRecovery,
+    approvePaymentRecovery,
+    clearPaymentRecoveryAfterCompletion,
     consumePaymentRedirect,
     getPaymentRedirect,
     hasPaymentRedirect,
     readPaymentRecovery,
-    setPaymentRecoveryOutcome,
     type PaymentRecoveryRecord,
 } from '@/flow/paymentRecovery';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
@@ -558,13 +558,15 @@ function CheckInFlow() {
         } = {}
     ): Promise<() => void> => {
         if (!isCurrent()) return () => undefined;
-        const continuePreparedPurchase = (next: FlowState) => () => {
+        const continuePreparedPurchase = (next: FlowState) => async () => {
             if (!isCurrent()) return;
+            const run = recoveryRunRef.current;
             const payment = readPaymentRecovery();
             if (payment?.kind === 'new_booking' && payment.outcome === 'approved'
                 && (payment.bookingIdentifier === booking.rollerUniqueId || payment.bookingIdentifier === booking.id)) {
-                clearPaymentRecovery(payment.attemptId);
+                if (!await clearPaymentRecoveryAfterCompletion(payment.attemptId)) return;
             }
+            if (run !== recoveryRunRef.current) return;
             setBuyRecoveryStatus(null);
             setState(next);
             scrollToTop();
@@ -808,7 +810,11 @@ function CheckInFlow() {
                 setBuyRecoveryStatus('payment-unknown');
                 return;
             }
-            if (record && !setPaymentRecoveryOutcome(record.attemptId, 'approved')) return;
+            if (record && !await approvePaymentRecovery(record.attemptId)) {
+                if (run === recoveryRunRef.current) setBuyRecoveryStatus('payment-unknown');
+                return;
+            }
+            if (run !== recoveryRunRef.current || !recoveryStillCurrent(record, snapshot)) return;
             showApprovedRecovery(record ? readPaymentRecovery() : null, snapshot, booking);
         } catch {
             if (run === recoveryRunRef.current) setBuyRecoveryStatus('payment-unknown');
@@ -817,7 +823,7 @@ function CheckInFlow() {
         }
     };
 
-    const retryFailedPayment = () => {
+    const retryFailedPayment = async () => {
         const record = readPaymentRecovery();
         const snapshot = readBuyFlowRecovery();
         if (hasPaymentRedirect() || !record || record.outcome !== 'failed' || !snapshot || !recoveryMatchesDraft(record, snapshot)
@@ -833,10 +839,12 @@ function CheckInFlow() {
             draftState: null,
         };
         // Availability/price is refreshed by BuyTickets; no draft is created by this action.
-        writeBuyFlowRecovery(retry);
-        const saved = readBuyFlowRecovery();
-        if (!saved || !isPrePaymentBuyFlowRecovery(saved)) return;
-        if (!clearPaymentRecovery(record.attemptId)) return;
+        let saved: BuyFlowRecoverySnapshot | null = null;
+        if (!await clearPaymentRecoveryAfterCompletion(record.attemptId, () => {
+            writeBuyFlowRecovery(retry);
+            saved = readBuyFlowRecovery();
+            return Boolean(saved && isPrePaymentBuyFlowRecovery(saved));
+        })) return;
         recoveryRunRef.current += 1;
         recoveryContinuationRef.current = null;
         setRecoveryReturnRecord(null);
@@ -891,7 +899,7 @@ function CheckInFlow() {
         }
     };
 
-    const resetToStart = () => {
+    const resetToStart = async () => {
         const payment = readPaymentRecovery();
         const savedPurchase = readBuyFlowRecovery();
         const savedIdentifier = getBuyFlowRecoveryIdentifier(savedPurchase);
@@ -917,7 +925,7 @@ function CheckInFlow() {
             || !recoveryMatchesDraft(payment, savedPurchase)
             || (recoveryReturnRecord && (payment.attemptId !== recoveryReturnRecord.attemptId
                 || payment.createdAt !== recoveryReturnRecord.createdAt)))) return;
-        if (payment && !clearPaymentRecovery(payment.attemptId)) return;
+        if (payment && !await clearPaymentRecoveryAfterCompletion(payment.attemptId, clearBuyFlowRecovery)) return;
         recoveryRunRef.current += 1;
         recoveryPreparingRef.current = false;
         recoveryContinuationRef.current = null;
@@ -926,7 +934,7 @@ function CheckInFlow() {
         setActiveReturnAttempt(null);
         setRecoveryContinuePending(false);
         setRecoverySyncFailed(false);
-        clearBuyFlowRecovery();
+        if (!payment) clearBuyFlowRecovery();
         setBuyRecoverySnapshot(null);
         setBuyRecoveryStatus(null);
         setAlreadyCheckedIn(false);
@@ -1124,8 +1132,16 @@ function CheckInFlow() {
         // This purchase has already crossed into its saved safety flow. Its approved
         // payment marker must not block a later, separately purchased add-on.
         if (record?.outcome === 'approved' && savedSafety && recoveryMatchesBooking(record, snapshot)) {
-            clearPaymentRecovery(record.attemptId);
-            setRecoveryReturnRecord(null);
+            const run = ++recoveryRunRef.current;
+            setRecoveryReturnRecord(record);
+            setBuyRecoveryStatus('payment-checking');
+            void clearPaymentRecoveryAfterCompletion(record.attemptId).then(cleared => {
+                if (run !== recoveryRunRef.current) return;
+                if (!cleared) { setBuyRecoveryStatus('payment-unknown'); return; }
+                setRecoveryReturnRecord(null);
+                setBuyRecoveryStatus(null);
+            });
+            return;
         } else if (record || returned) {
             setState('KIOSK_CHOICE');
             setRecoveryReturnRecord(record);
@@ -1259,6 +1275,9 @@ function CheckInFlow() {
     const backState = getBackState(state, ctx);
     const addonsHandlesBack = state === 'APP_ADDONS' && addonsStep !== 'SELECT' && addonsStep !== 'APPROVED';
     const matchingAddonsPrefetch = getMatchingAddonsPrefetch(ctx.booking);
+    const showingBuyPaymentRecovery = state === 'KIOSK_CHOICE'
+        && Boolean(buyRecoverySnapshot && buyRecoveryStatus?.startsWith('payment-')
+            && (!recoveryReturnRecord || recoveryMatchesDraft(recoveryReturnRecord, buyRecoverySnapshot)));
     const exitFlowMode = getExitFlowMode({
         addonsStep,
         buyStep,
@@ -1278,7 +1297,10 @@ function CheckInFlow() {
             data-handoff-code={ctx.checkinSession?.handoffCode ?? ''}
             data-already-checked-in={String(alreadyCheckedIn)}
         >
-            <ProgressBar state={state} buyEntryFlow={ctx.buyEntryFlow} />
+            <ProgressBar
+                state={showingBuyPaymentRecovery ? 'APP_PAYMENT' : state}
+                buyEntryFlow={ctx.buyEntryFlow || showingBuyPaymentRecovery}
+            />
 
             <div className={`w-full max-w-md min-w-0 px-4 h-8 items-center justify-between ${state === 'KIOSK_BUY' ? 'hidden' : 'flex'}`}>
                 {(backState || addonsHandlesBack) && (

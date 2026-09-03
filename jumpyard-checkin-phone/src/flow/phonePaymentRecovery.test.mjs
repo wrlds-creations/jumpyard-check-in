@@ -47,7 +47,23 @@ function find(tree, predicate) {
 
 // Execute the real component and installed SDK. Only React's rendering host,
 // Adyen's UI and HTTP are replaced; no provider or cloud call can leave this VM.
-function createHarness(t, { url = 'https://phone.invalid/?lang=sv#booking', redirectResult, bootstrapGate, checkoutGate, sessionGate } = {}) {
+function createOfflineLockManager() {
+  const held = new Set();
+  return {
+    async request(name, options, callback) {
+      if (held.has(name)) {
+        assert.equal(options.ifAvailable, true, 'Payment ownership must not wait behind another checkout');
+        return callback(null);
+      }
+      held.add(name);
+      try { return await callback({ name, mode: 'exclusive' }); }
+      finally { held.delete(name); }
+    },
+  };
+}
+
+function createHarness(t, { url = 'https://phone.invalid/?lang=sv#booking', redirectResult, bootstrapGate, checkoutGate, sessionGate,
+  lockManager = createOfflineLockManager(), localStorage: sharedLocalStorage, initialNow = Date.now() } = {}) {
   const modules = new Map();
   const records = {
     requests: [],
@@ -65,7 +81,8 @@ function createHarness(t, { url = 'https://phone.invalid/?lang=sv#booking', redi
   const timers = new Map();
   const eventListeners = new Map();
   const views = new Set();
-  let now = Date.now();
+  const pendingDigests = new Set();
+  let now = initialNow;
   let nextTimerId = 0;
   let rendering = null;
 
@@ -86,7 +103,7 @@ function createHarness(t, { url = 'https://phone.invalid/?lang=sv#booking', redi
 
   const win = {
     location: new URL(url),
-    localStorage: storage('local'),
+    localStorage: sharedLocalStorage ?? storage('local'),
     sessionStorage: storage('session'),
     screen: { colorDepth: 24, height: 800, width: 400 },
     history: {
@@ -119,6 +136,7 @@ function createHarness(t, { url = 'https://phone.invalid/?lang=sv#booking', redi
   win.clearTimeout = clearTimer;
 
   const response = body => ({ ok: true, status: 200, text: async () => JSON.stringify(body) });
+  const navigator = { language: 'sv-SE', userAgent: 'offline-phone-payment-regression', locks: lockManager };
   const context = vm.createContext({
     URL,
     URLSearchParams,
@@ -128,8 +146,17 @@ function createHarness(t, { url = 'https://phone.invalid/?lang=sv#booking', redi
     TextEncoder,
     TextDecoder,
     window: win,
-    navigator: { language: 'sv-SE', userAgent: 'offline-phone-payment-regression' },
-    crypto: webcrypto,
+    navigator,
+    crypto: {
+      randomUUID: () => webcrypto.randomUUID(),
+      getRandomValues: value => webcrypto.getRandomValues(value),
+      subtle: { digest(...args) {
+        const result = webcrypto.subtle.digest(...args);
+        pendingDigests.add(result);
+        void result.finally(() => pendingDigests.delete(result));
+        return result;
+      } },
+    },
     atob: value => Buffer.from(value, 'base64').toString('utf8'),
     CustomEvent: class { constructor(type, options = {}) { this.type = type; this.detail = options.detail; } },
     Date: class extends Date { static now() { return now; } },
@@ -301,6 +328,8 @@ function createHarness(t, { url = 'https://phone.invalid/?lang=sv#booking', redi
   async function settle() {
     for (let pass = 0; pass < 12; pass++) {
       await new Promise(resolve => setImmediate(resolve));
+      // Real SHA runs on Node's worker pool and may outlast a fixed number of event-loop passes.
+      await Promise.allSettled([...pendingDigests]);
       for (const view of views) if (view.dirty) view.render();
     }
     assert.ok([...views].every(view => !view.dirty), 'Hook updates must settle');
@@ -317,6 +346,7 @@ function createHarness(t, { url = 'https://phone.invalid/?lang=sv#booking', redi
     settle,
     records,
     window: win,
+    navigator,
     complete(index, resultCode, extra = {}) {
       const checkout = records.checkouts[index];
       assert.ok(checkout, 'A provider checkout must exist before a callback is delivered');
@@ -542,7 +572,7 @@ for (const [providerResult, expected] of [
   ['Authorised', 'approved'],
   ['Cancelled', 'failed'],
   ['Refused', 'failed'],
-  ['Error', 'unknown'],
+  ['Error', 'failed'],
   ['PresentToShopper', 'unknown'],
 ]) {
   test(`${providerResult} is classified as ${expected} without opening another payment`, async t => {
@@ -592,7 +622,7 @@ test('cancelled return then an explicit new 10:00 purchase mounts its own paymen
   await harness.settle();
   assert.equal(recovery.readPaymentRecovery().outcome, 'failed');
   previous.unmount();
-  assert.equal(recovery.clearPaymentRecovery(props.attemptId), true);
+  assert.equal(await recovery.clearPaymentRecoveryAfterCompletion(props.attemptId), true);
   const nextSession = paymentSession('new-10:00-same-basket');
   const current = harness.mount({ identity: 'new-10:00-same-basket', paymentSession: nextSession });
   await harness.settle();

@@ -40,9 +40,9 @@ import {
   type BuyFlowRecoveryStep,
 } from '@/flow/buyFlowRecovery';
 import {
-  clearPaymentRecovery,
+  approvePaymentRecovery,
+  clearPaymentRecoveryAfterCompletion,
   readPaymentRecovery,
-  setPaymentRecoveryOutcome,
 } from '@/flow/paymentRecovery';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
@@ -1398,21 +1398,19 @@ export const BuyTickets = ({
     void resolvePaidDraftBooking(undefined, true);
   };
 
-  const clearConfirmedFailedPayment = (beforeClear?: () => void) => {
+  const clearConfirmedFailedPayment = async (beforeClear?: () => void) => {
     const attemptId = getDraftPaymentAttemptId(draft);
     if (paymentFailure !== 'failed' || !attemptId) return false;
     const recovery = readPaymentRecovery();
-    if (recovery && (recovery.attemptId !== attemptId || recovery.outcome !== 'failed')) {
+    if (!recovery || recovery.attemptId !== attemptId || recovery.outcome !== 'failed') {
       setPaymentFailure('unknown');
       return false;
     }
-    beforeClear?.();
-    if (recovery && !clearPaymentRecovery(attemptId)) return false;
-    return true;
+    return clearPaymentRecoveryAfterCompletion(attemptId, beforeClear);
   };
 
-  const retryFailedPayment = () => {
-    if (!clearConfirmedFailedPayment(() => {
+  const retryFailedPayment = async () => {
+    if (!await clearConfirmedFailedPayment(() => {
       const snapshot = readBuyFlowRecovery();
       if (!snapshot) return;
       writeBuyFlowRecovery({
@@ -1430,9 +1428,8 @@ export const BuyTickets = ({
     setStep('CONTACT');
   };
 
-  const restartFailedPayment = () => {
-    if (!clearConfirmedFailedPayment()) return;
-    clearBuyFlowRecovery();
+  const restartFailedPayment = async () => {
+    if (!await clearConfirmedFailedPayment(clearBuyFlowRecovery)) return;
     onBack();
   };
 
@@ -1450,7 +1447,10 @@ export const BuyTickets = ({
       const recovery = readPaymentRecovery();
       if (recovery && recovery.attemptId !== attemptId) return;
 
-      setPaymentRecoveryOutcome(attemptId, 'approved');
+      if (recovery && !await approvePaymentRecovery(attemptId)) return;
+      if (activePaymentAttemptRef.current !== attemptId || paymentResolutionStartedRef.current) return;
+      const latest = readPaymentRecovery();
+      if (recovery && (!latest || latest.attemptId !== attemptId || latest.createdAt !== recovery.createdAt)) return;
       setPaymentFailure(null);
       setPaymentApprovedForSync(true);
       setStep('APPROVED');
