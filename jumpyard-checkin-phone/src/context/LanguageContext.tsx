@@ -1,8 +1,8 @@
 'use client';
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { weekdayComboCopy } from './weekdayComboCopy';
 
-type Language = 'sv' | 'en';
+export type Language = 'sv' | 'en';
 
 const sv = {
   common: {
@@ -23,6 +23,7 @@ const sv = {
     stillThereDesc: 'Tryck var som helst för att fortsätta, annars börjar vi om.',
     imHere: 'Jag är kvar',
     exit: 'Avsluta',
+    language: 'Språk',
   },
   exitFlow: {
     title: 'Vill du avsluta?',
@@ -470,6 +471,7 @@ const en: typeof sv = {
     stillThereDesc: 'Tap anywhere to continue, otherwise we restart.',
     imHere: "I'm here",
     exit: 'Exit',
+    language: 'Language',
   },
   exitFlow: {
     title: 'Do you want to exit?',
@@ -934,6 +936,11 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
   const toggleLang = () => setLang(lang === 'sv' ? 'en' : 'sv');
+
+  // #350: the document language follows the guest's choice for assistive technology.
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
 
   return (
     <LanguageContext.Provider value={{ lang, t: translations[lang], toggleLang, setLang }}>

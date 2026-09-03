@@ -57,6 +57,7 @@ import {
 } from '@/flow/paymentRecovery';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { ExitFlowDialog } from '@/components/ExitFlowDialog';
+import { LanguageToggle } from '@/components/LanguageToggle';
 import { getExitFlowMode, hasReachedSafety } from '@/flow/exitFlowPolicy';
 import {
     getApprovedPurchaseIdentifier,
@@ -304,9 +305,15 @@ function BuyRecoveryCard({
     );
 }
 
+// #350: the language control shares the top line with the progress bar; states
+// without a progress bar keep the navigation row clear of it instead.
+function hasProgressBar(state: FlowState) {
+    return state !== 'APP_MOBILE' && state !== 'KIOSK_CHOICE' && state !== 'KIOSK_LOOKUP' && state !== 'KIOSK_BUY';
+}
+
 function ProgressBar({ state, buyEntryFlow }: { state: FlowState; buyEntryFlow: boolean }) {
     const { t } = useTranslation();
-    if (state === 'APP_MOBILE' || state === 'KIOSK_CHOICE' || state === 'KIOSK_LOOKUP' || state === 'KIOSK_BUY') return null;
+    if (!hasProgressBar(state)) return null;
 
     const labels = buyEntryFlow
         ? [
@@ -1278,6 +1285,7 @@ function CheckInFlow() {
     const showingBuyPaymentRecovery = state === 'KIOSK_CHOICE'
         && Boolean(buyRecoverySnapshot && buyRecoveryStatus?.startsWith('payment-')
             && (!recoveryReturnRecord || recoveryMatchesDraft(recoveryReturnRecord, buyRecoverySnapshot)));
+    const progressState: FlowState = showingBuyPaymentRecovery ? 'APP_PAYMENT' : state;
     const exitFlowMode = getExitFlowMode({
         addonsStep,
         buyStep,
@@ -1298,11 +1306,11 @@ function CheckInFlow() {
             data-already-checked-in={String(alreadyCheckedIn)}
         >
             <ProgressBar
-                state={showingBuyPaymentRecovery ? 'APP_PAYMENT' : state}
+                state={progressState}
                 buyEntryFlow={ctx.buyEntryFlow || showingBuyPaymentRecovery}
             />
 
-            <div className={`w-full max-w-md min-w-0 px-4 h-8 items-center justify-between ${state === 'KIOSK_BUY' ? 'hidden' : 'flex'}`}>
+            <div className={`w-full max-w-md min-w-0 px-4 h-8 items-center justify-between ${state === 'KIOSK_BUY' ? 'hidden' : 'flex'} ${hasProgressBar(progressState) ? '' : 'pr-16'}`}>
                 {(backState || addonsHandlesBack) && (
                     <button
                         onClick={() => {
@@ -1581,6 +1589,7 @@ export default function Home() {
     return (
         <LanguageProvider>
             <main className="phone-flow-shell flex min-h-dvh w-full max-w-full min-w-0 flex-col items-center justify-start overflow-x-hidden p-3 pt-3 relative text-foreground bg-background selection:bg-primary selection:text-white">
+                <LanguageToggle className="absolute top-2 right-2 z-20" />
                 <Suspense
                     fallback={
                         <div className="text-foreground z-10 flex flex-col justify-center items-center h-full w-full">
