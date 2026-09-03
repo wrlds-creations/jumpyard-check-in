@@ -2,20 +2,28 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import {
   PAYMENT_RECOVERY_MAX_AGE_MS,
+  acquirePaymentRecoveryOwnership,
   beginPaymentRecovery,
   bindPaymentRecoverySession,
   claimPaymentRedirect,
   classifyPaymentResult,
   clearPaymentRecovery,
+  clearPaymentRecoveryAfterCompletion,
   consumePaymentRedirect,
   getPaymentRedirect,
   hasPaymentRedirect,
   matchesPaymentRedirect,
+  initializePaymentRecoverySubmission,
+  markPaymentRecoverySubmitted,
+  failUnsubmittedPaymentRecovery,
+  purgeExpiredPaymentRecovery,
   readPaymentRecovery,
   setPaymentRecoveryOutcome,
 } from './paymentRecovery.ts';
 
 const KEY = 'jumpyard.paymentRecovery.v1';
+const PROOF_KEY = 'jumpyard.paymentSubmission.v1';
+const OBSERVATION_KEY = 'jumpyard.paymentObservation.v1';
 const originalNow = Date.now;
 const originalWindow = globalThis.window;
 const config = {
@@ -144,7 +152,7 @@ test('a matched return is claimed once and remains unknown if processing is inte
   assert.doesNotMatch(values.get(KEY), /opaque-return/);
 });
 
-test('the twelve-hour lifetime is fixed despite reads and outcome changes, then expired data is removed', () => {
+test('the twelve-hour lifetime is fixed; expired reads reject immediately and leased cleanup removes data', async () => {
   const first = beginPaymentRecovery(input());
   now = first.expiresAt - 1;
   assert.equal(readPaymentRecovery().expiresAt, first.expiresAt);
@@ -152,6 +160,7 @@ test('the twelve-hour lifetime is fixed despite reads and outcome changes, then 
   assert.equal(readPaymentRecovery().expiresAt, first.expiresAt);
   now = first.expiresAt;
   assert.equal(readPaymentRecovery(), null);
+  await purgeExpiredPaymentRecovery();
   assert.equal(values.has(KEY), false);
 });
 
@@ -161,10 +170,11 @@ test('detected clock rollback fails closed for reading and beginning until obser
   const latest = readPaymentRecovery();
   now -= 500;
   assert.equal(readPaymentRecovery(), null);
-  assert.equal(values.has(KEY), false);
+  assert.equal(values.has(KEY), true, 'Clock observation must not remove the purchase during a read');
   assert.equal(beginPaymentRecovery(input('draft-2')), null);
   now = latest.lastObservedAt;
-  assert.equal(beginPaymentRecovery(input('draft-2')).attemptId, 'draft-2');
+  assert.equal(readPaymentRecovery().attemptId, 'draft-1');
+  assert.equal(beginPaymentRecovery(input('draft-2')), null, 'Restoring the clock does not prove the old payment failed');
 });
 
 test('invalid record shape, tampered retention and unsafe configuration are rejected', () => {
@@ -188,12 +198,15 @@ test('invalid record shape, tampered retention and unsafe configuration are reje
   assert.equal(beginPaymentRecovery(input('draft-2', { attemptId: 'a'.repeat(257) })), null);
 });
 
-test('legacy optional consumed flag defaults false and unknown fields are removed on read', () => {
+test('legacy optional consumed flag defaults false and returned fields are whitelisted without rewriting stored identity', () => {
   const record = beginPaymentRecovery(input());
   delete record.returnConsumed;
   values.set(KEY, JSON.stringify({ ...record, jwt: 'DO_NOT_STORE', config: { ...config, rawPayload: 'DO_NOT_STORE' } }));
-  assert.equal(readPaymentRecovery().returnConsumed, false);
-  assert.doesNotMatch(values.get(KEY), /DO_NOT_STORE|rawPayload|jwt/);
+  const raw = values.get(KEY);
+  const recovered = readPaymentRecovery();
+  assert.equal(recovered.returnConsumed, false);
+  assert.doesNotMatch(JSON.stringify(recovered), /DO_NOT_STORE|rawPayload|jwt/);
+  assert.equal(values.get(KEY), raw);
 });
 
 test('unavailable storage or a failed observation write never opens a replacement attempt', () => {
@@ -246,4 +259,90 @@ test('only authoritative approval and explicit refusal/cancellation are terminal
   for (const value of [null, undefined, {}, { result: 1 }, { result: 2 }, { result: 2, message: 'Error' }, { result: 1, message: 'Pending' }]) {
     assert.equal(classifyPaymentResult(value, sdk), 'unknown');
   }
+});
+
+async function protectedOwnership() {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const held = new Set();
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks: {
+    async request(name, _options, callback) {
+      if (held.has(name)) return callback(null);
+      held.add(name);
+      try { return await callback({ name }); } finally { held.delete(name); }
+    },
+  } } });
+  const ownership = await acquirePaymentRecoveryOwnership();
+  assert.equal(ownership.protected, true);
+  return { ownership, restore() {
+    ownership.release();
+    if (descriptor) Object.defineProperty(globalThis, 'navigator', descriptor);
+    else delete globalThis.navigator;
+  } };
+}
+
+test('durable submitted proof precedes release and prevents pre-submit retirement despite stale base data', async () => {
+  const lease = await protectedOwnership();
+  try {
+    const record = beginPaymentRecovery(input());
+    assert.equal(initializePaymentRecoverySubmission(record, lease.ownership), true);
+    await bindPaymentRecoverySession(record.attemptId, 'session-1');
+    const preparedBase = values.get(KEY);
+    assert.equal(markPaymentRecoverySubmitted(record, lease.ownership), true);
+    assert.equal(JSON.parse(values.get(PROOF_KEY)).phase, 'submitted');
+    values.set(KEY, preparedBase);
+    assert.equal(readPaymentRecovery().submission.phase, 'submitted');
+    assert.equal(failUnsubmittedPaymentRecovery(record, lease.ownership), false);
+    assert.equal(setPaymentRecoveryOutcome(record.attemptId, 'unknown'), true);
+    assert.equal(failUnsubmittedPaymentRecovery(record, lease.ownership), false);
+  } finally { lease.restore(); }
+});
+
+test('retiring a proven fresh failure is terminal and terminal clearing removes its exact bounded metadata', async () => {
+  const lease = await protectedOwnership();
+  try {
+    const record = beginPaymentRecovery(input());
+    assert.equal(initializePaymentRecoverySubmission(record, lease.ownership), true);
+    await bindPaymentRecoverySession(record.attemptId, 'session-1');
+    assert.equal(failUnsubmittedPaymentRecovery(record, lease.ownership), true);
+    let preparedRetry = false;
+    assert.equal(await clearPaymentRecoveryAfterCompletion(record.attemptId, () => {
+      preparedRetry = true;
+      assert.equal(readPaymentRecovery().outcome, 'failed');
+    }), true);
+    assert.equal(preparedRetry, true);
+    for (const key of [KEY, PROOF_KEY, OBSERVATION_KEY]) assert.equal(values.has(key), false, key);
+  } finally { lease.restore(); }
+});
+
+test('unexpired orphan submission proof blocks replacement and expires under the same bounded cleanup', async () => {
+  const lease = await protectedOwnership();
+  try {
+    const record = beginPaymentRecovery(input());
+    initializePaymentRecoverySubmission(record, lease.ownership);
+    await bindPaymentRecoverySession(record.attemptId, 'session-1');
+    markPaymentRecoverySubmitted(record, lease.ownership);
+    values.delete(KEY);
+    assert.equal(beginPaymentRecovery(input('draft-2')), null);
+    now = record.expiresAt;
+    await purgeExpiredPaymentRecovery();
+    for (const key of [KEY, PROOF_KEY, OBSERVATION_KEY]) assert.equal(values.has(key), false, key);
+    assert.equal(beginPaymentRecovery(input('draft-2')).attemptId, 'draft-2');
+  } finally { lease.restore(); }
+});
+
+test('a delayed cleanup reads current keys under ownership and preserves an unexpired replacement', async () => {
+  const lease = await protectedOwnership();
+  try {
+    const old = beginPaymentRecovery(input());
+    setPaymentRecoveryOutcome(old.attemptId, 'failed');
+    now = old.expiresAt - 1;
+    const replacement = beginPaymentRecovery(input('draft-2'));
+    initializePaymentRecoverySubmission(replacement, lease.ownership);
+    await bindPaymentRecoverySession(replacement.attemptId, 'session-2');
+    now = old.expiresAt;
+    await purgeExpiredPaymentRecovery();
+    assert.equal(readPaymentRecovery().attemptId, replacement.attemptId);
+    assert.equal(readPaymentRecovery().submission.phase, 'prepared');
+    assert.equal(await clearPaymentRecoveryAfterCompletion(old.attemptId, () => assert.fail('Stale retry callback ran')), false);
+  } finally { lease.restore(); }
 });

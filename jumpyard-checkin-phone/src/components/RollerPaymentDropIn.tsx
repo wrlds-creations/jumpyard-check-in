@@ -6,10 +6,11 @@ import { useTranslation } from '@/context/LanguageContext';
 import type { NewBookingDraftResult } from '@/flow/cloudClient';
 import { isEcommercePaymentNavigationLocked, type EcommercePaymentStatus } from '@/flow/exitFlowPolicy';
 import {
-  beginPaymentRecovery, bindPaymentRecoverySession, claimPaymentRedirect, clearPaymentRecovery,
+  acquirePaymentRecoveryOwnership, beginPaymentRecovery, bindPaymentRecoverySession, claimPaymentRedirect, clearPaymentRecovery,
   classifyPaymentResult, consumePaymentRedirect, getPaymentRedirect, hasPaymentRedirect,
+  failUnsubmittedPaymentRecovery, initializePaymentRecoverySubmission, markPaymentRecoverySubmitted,
   matchesPaymentRedirect, readPaymentRecovery, setPaymentRecoveryOutcome,
-  type PaymentRecoveryRecord,
+  type PaymentRecoveryOwnership, type PaymentRecoveryRecord,
 } from '@/flow/paymentRecovery';
 
 type PaymentStatus = EcommercePaymentStatus | 'unknown';
@@ -73,10 +74,17 @@ export const RollerPaymentDropIn = ({
     let uncertain = false;
     let submissionStarted = Boolean(returnId);
     let documentLeaving = false;
+    let ownership: PaymentRecoveryOwnership | null = null;
+    let ownedAttempt: PaymentRecoveryRecord | null = null;
     let unsubmittedRecordCreatedAt: number | null = null;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const abort = new AbortController();
-    const current = () => !cancelled && !terminal && readPaymentRecovery()?.attemptId === attemptId;
+    const ownsCurrentRecord = () => {
+      const record = readPaymentRecovery();
+      return Boolean(ownedAttempt && record?.attemptId === attemptId && record.createdAt === ownedAttempt.createdAt
+        && record.bookingIdentifier === bookingIdentifier && record.kind === kind);
+    };
+    const current = () => !cancelled && !terminal && ownership !== null && ownsCurrentRecord();
     const canInitialize = () => !uncertain && current();
     const stopTimer = () => { if (timeout) clearTimeout(timeout); };
     const lockNavigation = (locked: boolean) => callbacks.current.onNavigationLockChange?.(locked);
@@ -84,7 +92,7 @@ export const RollerPaymentDropIn = ({
       if (cancelled || terminal || uncertain) return;
       uncertain = true;
       stopTimer();
-      setPaymentRecoveryOutcome(attemptId, 'unknown');
+      if (ownership && ownsCurrentRecord()) setPaymentRecoveryOutcome(attemptId, 'unknown');
       lockNavigation(true);
       setStatus('unknown');
       setMessage(null);
@@ -94,9 +102,16 @@ export const RollerPaymentDropIn = ({
       stopTimer();
       timeout = setTimeout(unknown, RESULT_WAIT_MS);
     };
+    // A restored document can still report its outstanding wallet error, but its old
+    // submit promise must never start payment after browser navigation.
     const leavingDocument = () => { documentLeaving = true; };
+    const returningDocument = () => {
+      if (documentLeaving && !cancelled && !terminal && !ownsCurrentRecord()) unknown();
+    };
     window.addEventListener('pagehide', leavingDocument);
     window.addEventListener('beforeunload', leavingDocument);
+    window.addEventListener('pageshow', returningDocument);
+    window.addEventListener('popstate', leavingDocument);
 
     async function setupPayment() {
       if (!config?.available || !config.apiUrl || !config.configurationId || !config.integrationId) {
@@ -114,8 +129,14 @@ export const RollerPaymentDropIn = ({
         setMessage(labels.current.paymentMissingJwt);
         return;
       }
+      ownership = await acquirePaymentRecoveryOwnership();
+      if (cancelled) { ownership?.release(); ownership = null; return; }
+      if (!ownership) { unknown(); return; }
       const previous = readPaymentRecovery();
       if (!returnId && previous && previous.outcome !== 'failed') {
+        if (previous.attemptId === attemptId && previous.bookingIdentifier === bookingIdentifier && previous.kind === kind) {
+          ownedAttempt = previous;
+        }
         unknown();
         return;
       }
@@ -130,8 +151,10 @@ export const RollerPaymentDropIn = ({
         unknown();
         return;
       }
+      ownedAttempt = record;
       if (!returnId && (!previous || previous.outcome === 'failed')) {
         unsubmittedRecordCreatedAt = record.createdAt;
+        if (!initializePaymentRecoverySubmission(record, ownership)) { unknown(); return; }
       }
       setStatus('bootstrapping');
       setMessage(null);
@@ -150,7 +173,8 @@ export const RollerPaymentDropIn = ({
           },
           onBeforeSubmit: (): Promise<void> => {
             submissionStarted = true;
-            if (!canInitialize()) {
+            if (!canInitialize() || documentLeaving || !ownedAttempt || !ownership
+              || !markPaymentRecoverySubmitted(ownedAttempt, ownership) || !canInitialize()) {
               unknown();
               // SDK 1.0.217 resolves Adyen's action even after a rejected hook.
               // A disposed/uncertain attempt must never release that action.
@@ -164,6 +188,7 @@ export const RollerPaymentDropIn = ({
           onPaymentReceived: () => {
             if (current()) {
               submissionStarted = true;
+              setPaymentRecoveryOutcome(attemptId, 'unknown');
               lockNavigation(true);
               if (!uncertain) { setStatus('received'); waitForResult(); }
             }
@@ -176,10 +201,19 @@ export const RollerPaymentDropIn = ({
             if (returnId || summary.status !== 'approved') {
               summary.status = classifyPaymentResult(result, PaymentResult);
             }
+            if (summary.status === 'unknown' && !returnId && !submissionStarted && !uncertain
+              && ownedAttempt && ownership && isExplicitPaymentError(result, PaymentResult.failed)
+              && failUnsubmittedPaymentRecovery(ownedAttempt, ownership)) {
+              summary.status = 'failed';
+            }
             if (summary.status === 'unknown') { unknown(); return; }
             if (!setPaymentRecoveryOutcome(attemptId, summary.status)) return;
             terminal = true;
             stopTimer();
+            // Retire this instance before exposing retry; delayed wallet promises
+            // and SDK callbacks can no longer release or update this attempt.
+            ownership?.release();
+            ownership = null;
             lockNavigation(summary.status === 'approved');
             setStatus(summary.status);
             setMessage(null);
@@ -249,6 +283,8 @@ export const RollerPaymentDropIn = ({
       abort.abort();
       window.removeEventListener('pagehide', leavingDocument);
       window.removeEventListener('beforeunload', leavingDocument);
+      window.removeEventListener('pageshow', returningDocument);
+      window.removeEventListener('popstate', leavingDocument);
       const record = readPaymentRecovery();
       // Only a clean in-app exit before submission may discard a fresh attempt.
       // A browser/provider departure or any uncertainty retains its recovery.
@@ -257,6 +293,8 @@ export const RollerPaymentDropIn = ({
         && record.createdAt === unsubmittedRecordCreatedAt && record.outcome === 'pending' && !record.returnConsumed) {
         clearPaymentRecovery(attemptId);
       }
+      ownership?.release();
+      ownership = null;
     };
   }, [attemptId, bookingIdentifier, kind, returnId, configAvailable, configApiUrl,
     configConfigurationId, configIntegrationId, paymentSession.jwt, paymentSession.jwtPresent]);
@@ -277,6 +315,12 @@ export const RollerPaymentDropIn = ({
     </div>
   );
 };
+
+function isExplicitPaymentError(result: unknown, failed: number): boolean {
+  if (!result || typeof result !== 'object') return false;
+  const value = result as { result?: unknown; rawResult?: { resultCode?: unknown } };
+  return value.result === failed && value.rawResult?.resultCode === 'Error';
+}
 
 async function paymentGet(url: string, params?: Record<string, unknown>, options?: PaymentHttpOptions) {
   const target = new URL(url);
