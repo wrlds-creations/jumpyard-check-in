@@ -7,6 +7,7 @@ import {
     CloudBookingError,
     createAddProductDraft,
     getNewBookingAvailability,
+    lookupBooking,
     quoteAddProducts,
     type AddProductDraftResult,
     type NewBookingAvailability,
@@ -26,6 +27,7 @@ import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { AddonChoices, type AddonChoicesHandle } from '@/components/AddonChoices';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
+import { clearPaymentRecovery, readPaymentRecovery, setPaymentRecoveryOutcome } from '@/flow/paymentRecovery';
 
 export interface AddonsOfferResult {
     selectedAddons: Addon[];
@@ -280,19 +282,34 @@ export const AddonsOffer = ({
     const [draft, setDraft] = useState<AddProductDraftResult | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [paymentFailure, setPaymentFailure] = useState<'failed' | 'unknown' | null>(null);
+    const [paymentChecking, setPaymentChecking] = useState(false);
     const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
     const [alreadyHasApprovedSocks, setAlreadyHasApprovedSocks] = useState(false);
     const [alreadyHasWaterBottle, setAlreadyHasWaterBottle] = useState(false);
     const addonChoicesRef = useRef<AddonChoicesHandle>(null);
     const handledBackRequest = useRef(backRequest);
     const paymentApprovedRef = useRef(false);
+    const paymentNavigationLockedRef = useRef(false);
+    const paymentCheckInFlightRef = useRef(false);
+    const paymentAttemptId = draft?.prepayment?.prepaymentDraftId ?? draft?.draft.uniqueId ?? draft?.draft.bookingReference ?? '';
+    const activePaymentAttemptRef = useRef(paymentAttemptId);
+    useEffect(() => {
+        activePaymentAttemptRef.current = paymentAttemptId;
+        return () => { activePaymentAttemptRef.current = ''; };
+    }, [paymentAttemptId]);
 
     const returnToSelect = useCallback(() => {
+        if (paymentNavigationLockedRef.current || paymentFailure === 'unknown') return;
+        const recovery = readPaymentRecovery();
+        if (recovery?.attemptId === paymentAttemptId && (recovery.outcome === 'unknown' || recovery.outcome === 'approved')) return;
+        if (recovery?.attemptId === paymentAttemptId && recovery.outcome === 'failed') clearPaymentRecovery(paymentAttemptId);
         setSubmitError(null);
         setQuote(null);
         setDraft(null);
+        setPaymentFailure(null);
         setStep('SELECT');
-    }, []);
+    }, [paymentAttemptId, paymentFailure]);
 
     useEffect(() => {
         onStepChange?.(step);
@@ -416,6 +433,10 @@ export const AddonsOffer = ({
         });
 
     const completeAddons = (paymentHandled = false) => {
+        const recovery = readPaymentRecovery();
+        if (recovery?.attemptId === paymentAttemptId && recovery.outcome === 'approved' && paymentHandled) {
+            clearPaymentRecovery(paymentAttemptId);
+        }
         onContinue(getCompletionResult(paymentHandled));
     };
 
@@ -424,6 +445,27 @@ export const AddonsOffer = ({
         paymentApprovedRef.current = true;
         setStep('APPROVED');
         onPaymentApproved?.(getCompletionResult(true));
+    };
+
+    const checkPaymentStatus = async () => {
+        const identifier = draft?.draft.uniqueId ?? draft?.draft.bookingReference;
+        if (paymentFailure !== 'unknown' || !identifier || !paymentAttemptId || paymentCheckInFlightRef.current) return;
+        paymentCheckInFlightRef.current = true;
+        setPaymentChecking(true);
+        try {
+            const checkedBooking = await lookupBooking(identifier);
+            if (checkedBooking.paid !== true || (checkedBooking.rollerUniqueId !== identifier && checkedBooking.id !== identifier)
+                || activePaymentAttemptRef.current !== paymentAttemptId || paymentApprovedRef.current) return;
+            const recovery = readPaymentRecovery();
+            if (recovery && recovery.attemptId !== paymentAttemptId) return;
+            setPaymentRecoveryOutcome(paymentAttemptId, 'approved');
+            handlePaymentApproved();
+        } catch {
+            // An unavailable lookup cannot authorize another payment or a success screen.
+        } finally {
+            paymentCheckInFlightRef.current = false;
+            setPaymentChecking(false);
+        }
     };
 
     const handleSelectContinue = () => {
@@ -497,6 +539,8 @@ export const AddonsOffer = ({
                 requireAvailability
             );
             paymentApprovedRef.current = false;
+            paymentNavigationLockedRef.current = false;
+            setPaymentFailure(null);
             setDraft(result);
             setStep(canStartPayment(result) ? 'PAYMENT' : 'PENDING');
         } catch (error) {
@@ -532,10 +576,24 @@ export const AddonsOffer = ({
 
                         <RollerPaymentDropIn
                             amountLabel={formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
+                            attemptId={paymentAttemptId}
+                            bookingIdentifier={draft.draft.uniqueId ?? draft.draft.bookingReference ?? ''}
+                            kind="add_product"
                             paymentSession={draft.paymentSession}
                             onApproved={handlePaymentApproved}
-                            onFailed={() => undefined}
+                            onFailed={(result) => setPaymentFailure(result.status === 'failed' ? 'failed' : 'unknown')}
+                            onNavigationLockChange={(locked) => { paymentNavigationLockedRef.current = locked; }}
                         />
+                        {paymentFailure === 'failed' && (
+                            <button type="button" onClick={returnToSelect} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 font-black italic text-white">
+                                {t.buy.paymentRetryMethod}
+                            </button>
+                        )}
+                        {paymentFailure === 'unknown' && (
+                            <button type="button" disabled={paymentChecking} onClick={() => void checkPaymentStatus()} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 font-black italic text-white disabled:opacity-50">
+                                {paymentChecking ? t.buy.paymentChecking : t.buy.paymentCheckStatus}
+                            </button>
+                        )}
                     </div>
                 </motion.div>
             )}

@@ -30,6 +30,7 @@ import {
 import {
   clearBuyFlowRecovery,
   isPrePaymentBuyFlowRecovery,
+  readBuyFlowRecovery,
   writeBuyFlowRecovery,
   type BuyFlowRecoveryAddonQty,
   type BuyFlowRecoveryBuyStep,
@@ -38,6 +39,11 @@ import {
   type BuyFlowRecoverySnapshot,
   type BuyFlowRecoveryStep,
 } from '@/flow/buyFlowRecovery';
+import {
+  clearPaymentRecovery,
+  readPaymentRecovery,
+  setPaymentRecoveryOutcome,
+} from '@/flow/paymentRecovery';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
@@ -213,6 +219,10 @@ function getDraftAmountOwing(draft: NewBookingDraftResult | null) {
   return draft?.prepayment?.amountOwing ?? draft?.draft.costs.amountOwing ?? null;
 }
 
+function getDraftPaymentAttemptId(draft: NewBookingDraftResult | null) {
+  return draft?.prepayment?.prepaymentDraftId ?? draft?.draft.uniqueId ?? draft?.draft.bookingReference ?? '';
+}
+
 function getDraftRecoveryStep(step: BuyTicketsStep, paymentApprovedForSync: boolean): BuyFlowRecoveryStep {
   if (step === 'PENDING') return 'PENDING';
   if (paymentApprovedForSync) return 'PAYMENT';
@@ -232,9 +242,14 @@ function writeDraftRecovery(
   const amountOwing = getDraftAmountOwing(draft);
   const bookingReference = draft.draft.bookingReference ?? null;
   const uniqueId = draft.draft.uniqueId ?? null;
+  const previous = readBuyFlowRecovery();
 
   writeBuyFlowRecovery({
+    addonQty: previous?.addonQty,
+    alreadyHasApprovedSocks: previous?.alreadyHasApprovedSocks,
+    alreadyHasWaterBottle: previous?.alreadyHasWaterBottle,
     bookingReference,
+    contact: previous?.contact,
     currentFlowStep,
     draftState: {
       amountOwing,
@@ -247,6 +262,8 @@ function writeDraftRecovery(
     },
     draftUniqueId: uniqueId,
     jumperCount,
+    paymentOptionsHadValues: previous?.paymentOptionsHadValues,
+    quantity: previous?.quantity,
     selectedProduct: {
       durationMinutes: selectedProduct.durationMinutes,
       key: selectedProduct.key,
@@ -257,6 +274,7 @@ function writeDraftRecovery(
       unitPrice: selectedProduct.unitPrice,
     },
     selectedStartTime: selectedTime,
+    skyriderConsentConfirmed: previous?.skyriderConsentConfirmed,
   });
 }
 
@@ -716,9 +734,20 @@ export const BuyTickets = ({
   const [paymentApprovedForSync, setPaymentApprovedForSync] = useState(false);
   const [paymentNavigationLocked, setPaymentNavigationLocked] = useState(false);
   const [paymentContinuePending, setPaymentContinuePending] = useState(false);
+  const [paymentFailure, setPaymentFailure] = useState<'failed' | 'unknown' | null>(null);
+  const [paymentStatusChecking, setPaymentStatusChecking] = useState(false);
+  const paymentStatusCheckingRef = useRef(false);
+  const activePaymentAttemptRef = useRef<string | null>(null);
   const paymentResolutionStartedRef = useRef(false);
   const paymentContinuationRef = useRef<(() => void) | null>(null);
   const paymentContinueRequestedRef = useRef(false);
+
+  useEffect(() => {
+    activePaymentAttemptRef.current = getDraftPaymentAttemptId(draft);
+    return () => {
+      activePaymentAttemptRef.current = null;
+    };
+  }, [draft]);
 
   useEffect(() => {
     onStepChange?.(step);
@@ -800,7 +829,7 @@ export const BuyTickets = ({
   const showPaymentSyncCard = paymentApprovedForSync || paymentSyncing || Boolean(paymentSyncError);
   const backNavigationLocked =
     step === 'APPROVED' ||
-    (step === 'PAYMENT' && (paymentNavigationLocked || paymentApprovedForSync || paymentSyncing));
+    (step === 'PAYMENT' && (paymentNavigationLocked || paymentApprovedForSync || paymentSyncing || paymentFailure === 'unknown'));
   const checkoutAmount = draftAmountOwing ?? quote?.costs.amountOwing ?? basketEstimateTotal;
   const checkoutTotal = quote?.costs.total ?? basketEstimateTotal;
   const checkoutLocked = Boolean(draft) || showPaymentSyncCard;
@@ -810,6 +839,7 @@ export const BuyTickets = ({
     setPaymentApprovedForSync(false);
     setPaymentNavigationLocked(false);
     setPaymentContinuePending(false);
+    setPaymentFailure(null);
     paymentResolutionStartedRef.current = false;
     paymentContinuationRef.current = null;
     paymentContinueRequestedRef.current = false;
@@ -1290,7 +1320,6 @@ export const BuyTickets = ({
         giftCardInputs,
         discountCodeInputs
       );
-      clearBuyFlowRecovery();
       setDraft(result);
       clearPaymentSyncState();
       if (getDraftAmountOwing(result) !== null && getDraftAmountOwing(result)! <= 0) {
@@ -1308,7 +1337,8 @@ export const BuyTickets = ({
 
   const resolvePaidDraftBooking = async (
     draftOverride?: NewBookingDraftResult,
-    waitForGuestConfirmation = false
+    waitForGuestConfirmation = false,
+    confirmedBooking?: Booking
   ) => {
     const activeDraft = draftOverride ?? draft;
     const identifier = activeDraft?.draft.uniqueId ?? activeDraft?.draft.bookingReference;
@@ -1321,7 +1351,9 @@ export const BuyTickets = ({
       // #331: one bounded lookup. An approved payment that ROLLER has not confirmed yet is
       // "awaiting", not a failure: the guest continues into safety and the paid state is
       // confirmed again before the staff handoff, so this step never polls ROLLER.
-      const confirmation = await resolvePaidConfirmation(lookupBooking, identifier, { wait });
+      const confirmation = confirmedBooking?.paid === true
+        ? { status: 'paid' as const, booking: confirmedBooking }
+        : await resolvePaidConfirmation(lookupBooking, identifier, { wait });
 
       if (confirmation.status === 'unavailable') {
         paymentResolutionStartedRef.current = false;
@@ -1366,9 +1398,78 @@ export const BuyTickets = ({
     void resolvePaidDraftBooking(undefined, true);
   };
 
+  const clearConfirmedFailedPayment = (beforeClear?: () => void) => {
+    const attemptId = getDraftPaymentAttemptId(draft);
+    if (paymentFailure !== 'failed' || !attemptId) return false;
+    const recovery = readPaymentRecovery();
+    if (recovery && (recovery.attemptId !== attemptId || recovery.outcome !== 'failed')) {
+      setPaymentFailure('unknown');
+      return false;
+    }
+    beforeClear?.();
+    if (recovery && !clearPaymentRecovery(attemptId)) return false;
+    return true;
+  };
+
+  const retryFailedPayment = () => {
+    if (!clearConfirmedFailedPayment(() => {
+      const snapshot = readBuyFlowRecovery();
+      if (!snapshot) return;
+      writeBuyFlowRecovery({
+        ...snapshot,
+        bookingReference: null,
+        currentFlowStep: 'CONTACT',
+        draftState: null,
+        draftUniqueId: null,
+      });
+    })) return;
+    setDraft(null);
+    setQuote(null);
+    setSubmitError(null);
+    clearPaymentSyncState();
+    setStep('CONTACT');
+  };
+
+  const restartFailedPayment = () => {
+    if (!clearConfirmedFailedPayment()) return;
+    clearBuyFlowRecovery();
+    onBack();
+  };
+
+  const checkPaymentStatus = async () => {
+    const attemptId = getDraftPaymentAttemptId(draft);
+    const identifier = draft?.draft.uniqueId ?? draft?.draft.bookingReference;
+    if (paymentFailure !== 'unknown' || !identifier || !attemptId || paymentStatusCheckingRef.current) return;
+
+    paymentStatusCheckingRef.current = true;
+    setPaymentStatusChecking(true);
+    try {
+      const booking = await lookupBooking(identifier);
+      if (booking.paid !== true || (booking.rollerUniqueId !== identifier && booking.id !== identifier)
+        || activePaymentAttemptRef.current !== attemptId || paymentResolutionStartedRef.current) return;
+      const recovery = readPaymentRecovery();
+      if (recovery && recovery.attemptId !== attemptId) return;
+
+      setPaymentRecoveryOutcome(attemptId, 'approved');
+      setPaymentFailure(null);
+      setPaymentApprovedForSync(true);
+      setStep('APPROVED');
+      await resolvePaidDraftBooking(undefined, true, booking);
+    } catch {
+      // An unavailable lookup leaves the original purchase unresolved and recoverable.
+    } finally {
+      paymentStatusCheckingRef.current = false;
+      setPaymentStatusChecking(false);
+    }
+  };
+
   const backFromStep = () => {
     if (backNavigationLocked) return;
     if (step === 'PAYMENT') {
+      if (paymentFailure === 'failed') {
+        retryFailedPayment();
+        return;
+      }
       setStep('CONTACT');
       return;
     }
@@ -2140,17 +2241,59 @@ export const BuyTickets = ({
                 )}
               </div>
             ) : (
-              <RollerPaymentDropIn
-                amountLabel={formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
-                onNavigationLockChange={setPaymentNavigationLocked}
-                paymentSession={draft.paymentSession}
-                onApproved={() => {
-                  setPaymentApprovedForSync(true);
-                  setStep('APPROVED');
-                  void resolvePaidDraftBooking(undefined, true);
-                }}
-                onFailed={() => undefined}
-              />
+              <>
+                <div className={paymentFailure === 'unknown' ? 'hidden' : undefined}>
+                  <RollerPaymentDropIn
+                    key={getDraftPaymentAttemptId(draft)}
+                    amountLabel={formatMoney(draft.prepayment?.amountOwing ?? draft.draft.costs.amountOwing)}
+                    attemptId={getDraftPaymentAttemptId(draft)}
+                    bookingIdentifier={draft.draft.uniqueId ?? draft.draft.bookingReference ?? ''}
+                    kind="new_booking"
+                    onNavigationLockChange={setPaymentNavigationLocked}
+                    paymentSession={draft.paymentSession}
+                    onApproved={() => {
+                      setPaymentFailure(null);
+                      setPaymentApprovedForSync(true);
+                      setStep('APPROVED');
+                      void resolvePaidDraftBooking(undefined, true);
+                    }}
+                    onFailed={(result) => setPaymentFailure(result.status === 'failed' ? 'failed' : 'unknown')}
+                  />
+                </div>
+                {paymentFailure === 'unknown' && (
+                  <div className="rounded-xl border border-border bg-white p-5 text-center" data-payment-recovery="unknown">
+                    <p className="font-black italic text-foreground">{t.buy.paymentRecoveryTitle}</p>
+                    <p className="mt-3 text-sm text-muted">{t.buy.paymentRecoveryDescription}</p>
+                    <button
+                      type="button"
+                      onClick={() => void checkPaymentStatus()}
+                      disabled={paymentStatusChecking}
+                      className="mt-4 w-full rounded-xl bg-primary py-3 text-sm font-black italic uppercase text-white disabled:opacity-40"
+                    >
+                      {paymentStatusChecking ? t.buy.paymentChecking : t.buy.paymentCheckStatus}
+                    </button>
+                  </div>
+                )}
+                {paymentFailure === 'failed' && (
+                  <div className="mt-4 rounded-xl border border-border bg-white p-4 text-center" data-payment-recovery="failed">
+                    <p className="text-sm font-bold text-foreground">{t.buy.paymentFailedTitle}</p>
+                    <button
+                      type="button"
+                      onClick={retryFailedPayment}
+                      className="mt-3 w-full rounded-xl bg-primary py-3 text-sm font-black italic uppercase text-white"
+                    >
+                      {t.buy.paymentRetryMethod}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={restartFailedPayment}
+                      className="mt-3 w-full rounded-xl border border-border py-3 text-sm font-bold text-muted"
+                    >
+                      {t.buyRecovery.startOver}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </motion.div>

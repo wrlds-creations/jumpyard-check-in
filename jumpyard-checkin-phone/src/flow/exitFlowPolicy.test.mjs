@@ -43,7 +43,7 @@ test('hides and guards the internal back action as soon as ecommerce payment is 
   assert.equal(isEcommercePaymentNavigationLocked('failed'), false);
   assert.equal(isEcommercePaymentNavigationLocked('blocked'), false);
 
-  assert.match(paymentSource, /onNavigationLockChangeRef\.current\?\.\(isEcommercePaymentNavigationLocked\(status\)\)/);
+  assert.match(paymentSource, /callbacks\.current\.onNavigationLockChange\?\.\([\s\S]*isEcommercePaymentNavigationLocked\(status === 'unknown' \? 'received' : status\)/);
   assert.match(buySource, /if \(backNavigationLocked\) return/);
   assert.match(buySource, /\{!backNavigationLocked && \(/);
 });
