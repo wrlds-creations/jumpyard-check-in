@@ -425,6 +425,7 @@ function isSameStaffSession(current: StaffAuthSession | null, expected: StaffAut
   if (expected.identityMode === "pin") {
     return (
       current.identityMode === "pin" &&
+      current.auth.token === expected.auth.token &&
       current.session?.sessionId === expected.session?.sessionId &&
       current.staff.actorId === expected.staff.actorId
     );
@@ -1312,11 +1313,13 @@ export default function Home() {
       void (storedAuth.identityMode === "pin" ? heartbeatStaffAuth(storedAuth) : Promise.resolve(storedAuth))
         .then((activeAuth) => {
           if (cancelled || lifecycleGeneration !== lifecycleGenerationRef.current) return;
+          if (!isSameStaffSession(readStoredStaffAuth(), storedAuth)) return;
           setCurrentAuth(activeAuth);
           setAuthState("ready");
         })
         .catch(() => {
           if (cancelled || lifecycleGeneration !== lifecycleGenerationRef.current) return;
+          if (!isSameStaffSession(readStoredStaffAuth(), storedAuth)) return;
           clearStaffAuthStorage();
           clearSensitiveUi();
           void endStaffAuth(storedAuth);

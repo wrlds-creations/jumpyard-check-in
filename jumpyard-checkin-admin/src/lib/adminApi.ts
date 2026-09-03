@@ -102,6 +102,8 @@ export interface StaffAuthSession {
   identityMode: "pin" | "legacy";
   lastActivityAt?: string;
   lastHeartbeatAt?: string;
+  heartbeatRetryCount?: number;
+  heartbeatRetryAt?: string;
   refreshToken?: string;
   session?: StaffIdentitySession;
   staff: {
@@ -339,31 +341,61 @@ export async function manageStaffIdentitySession(
   action: StaffSessionAction,
   accessToken: string,
 ): Promise<StaffSessionActionResult> {
-  const response = await fetch(`${getApiBaseUrl()}/v1/staff/auth/session`, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      authorization: `Bearer ${accessToken}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ action }),
-  });
-  const body = await parseJson<StaffSessionActionResponse>(response);
-  const expectedStatus = {
-    heartbeat: "staff_session_active",
-    logout: "staff_session_logged_out",
-    start: "staff_session_started",
-  }[action];
+  // Bound both the request and response body. Only heartbeat is retried by the caller.
+  const controller = action === "heartbeat" ? new AbortController() : undefined;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), 15_000) : undefined;
+  let response: Response | undefined;
+  try {
+    response = await fetch(`${getApiBaseUrl()}/v1/staff/auth/session`, {
+      method: "POST",
+      signal: controller?.signal,
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ action }),
+    });
+    // An auth rejection is definitive even if its body is missing or unreadable.
+    if (response.status === 401 || response.status === 403) {
+      throw new StaffApiError("Personalsessionen är inte längre giltig.", response.status);
+    }
+    let text: string;
+    try {
+      text = await response.text();
+    } catch {
+      throw new StaffApiError("Kontakten med JumpYard Cloud avbröts.", response.ok ? 0 : response.status);
+    }
+    let body: StaffSessionActionResponse;
+    try {
+      body = JSON.parse(text) as StaffSessionActionResponse;
+      if (!body || typeof body !== "object") throw new Error("Invalid response");
+    } catch {
+      // Preserve 429/5xx even when a gateway returns HTML or an empty body.
+      throw new StaffApiError("JumpYard Cloud returnerade ett ogiltigt svar.", response.status);
+    }
+    const expectedStatus = {
+      heartbeat: "staff_session_active",
+      logout: "staff_session_logged_out",
+      start: "staff_session_started",
+    }[action];
 
-  if (!response.ok || body.status !== expectedStatus || !body.session || (action !== "logout" && !body.principal)) {
-    throw staffApiError(response, body, "JumpYard Cloud kunde inte hantera personalsessionen.");
+    if (!response.ok || body.status !== expectedStatus || !body.session || (action !== "logout" && !body.principal)) {
+      throw staffApiError(response, body, "JumpYard Cloud kunde inte hantera personalsessionen.");
+    }
+
+    return {
+      principal: body.principal,
+      session: body.session,
+      status: body.status,
+    } as StaffSessionActionResult;
+  } catch (error) {
+    if (error instanceof StaffApiError) throw error;
+    if (!response) throw new StaffApiError("Kontakten med JumpYard Cloud avbröts.", 0);
+    throw error;
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
-
-  return {
-    principal: body.principal,
-    session: body.session,
-    status: body.status,
-  } as StaffSessionActionResult;
 }
 
 export async function manageAdminIdentitySession(
