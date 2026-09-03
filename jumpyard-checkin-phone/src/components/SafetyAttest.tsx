@@ -9,6 +9,10 @@ interface SafetyAttestProps {
     buyEntryFlow?: boolean;
     isSubmitting?: boolean;
     submitError?: SessionIssue | null;
+    /** #331: notice shown while an approved purchase waits for ROLLER's paid confirmation. */
+    statusNotice?: string | null;
+    statusState?: 'idle' | 'checking' | 'waiting' | 'delayed';
+    retryAction?: { label: string; onClick: () => void } | null;
     onComplete: (attestedAt: string) => void;
 }
 
@@ -35,7 +39,15 @@ const SAFETY_RULE_ICONS: Record<SafetyRuleKey, JumpyardIconName> = {
 
 const AGE_BULLETS = ['adultInArea35', 'adultInVenue610', 'canJumpAlone11'] as const;
 
-export const SafetyAttest = ({ buyEntryFlow = false, isSubmitting = false, submitError = null, onComplete }: SafetyAttestProps) => {
+export const SafetyAttest = ({
+    buyEntryFlow = false,
+    isSubmitting = false,
+    submitError = null,
+    statusNotice = null,
+    statusState = 'idle',
+    retryAction = null,
+    onComplete,
+}: SafetyAttestProps) => {
     const { t } = useTranslation();
     const [checked, setChecked] = useState<Record<string, boolean>>({});
     const title = buyEntryFlow ? t.safetyAttest.buyTitle : t.safetyAttest.title;
@@ -128,6 +140,37 @@ export const SafetyAttest = ({ buyEntryFlow = false, isSubmitting = false, submi
                 <p className="text-foreground text-xs text-center mb-2">{t.safetyAttest.finalAttest}</p>
             )}
 
+            {statusNotice && (
+                <div
+                    className="w-full mb-3 rounded-xl border border-border bg-white px-3 py-3 text-left"
+                    data-testid="paid-confirmation-notice"
+                    data-paid-confirmation-state={statusState}
+                    role="status"
+                    aria-live="polite"
+                >
+                    <div className="flex items-start gap-2">
+                        {statusState !== 'delayed' && (
+                            <span
+                                className="mt-0.5 h-4 w-4 flex-shrink-0 animate-spin rounded-full border-2 border-primary/20 border-t-primary"
+                                aria-hidden="true"
+                            />
+                        )}
+                        <p className="text-xs font-bold text-foreground">{statusNotice}</p>
+                    </div>
+                    {retryAction && (
+                        <button
+                            type="button"
+                            onClick={retryAction.onClick}
+                            disabled={isSubmitting}
+                            data-testid="paid-confirmation-retry"
+                            className="mt-3 w-full rounded-xl border border-primary bg-white py-3 text-sm font-black italic uppercase text-primary transition-all disabled:opacity-40"
+                        >
+                            {retryAction.label}
+                        </button>
+                    )}
+                </div>
+            )}
+
             {submitError && (
                 <div
                     className="w-full mb-3 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2 text-left"
@@ -139,10 +182,12 @@ export const SafetyAttest = ({ buyEntryFlow = false, isSubmitting = false, submi
 
             <button
                 onClick={() => onComplete(new Date().toISOString())}
-                disabled={!allChecked || isSubmitting}
+                disabled={!allChecked || isSubmitting || retryAction !== null}
                 aria-busy={isSubmitting}
                 data-testid="ready-for-staff-submit"
-                data-ready-for-staff-state={isSubmitting ? 'submitting' : submitError ? submitError : 'idle'}
+                data-ready-for-staff-state={
+                    isSubmitting ? 'submitting' : submitError ? submitError : statusState === 'delayed' ? 'delayed' : 'idle'
+                }
                 className="w-full bg-primary hover:bg-surface hover:text-primary hover:border-primary border border-transparent text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all disabled:opacity-40 shadow-sm"
             >
                 {isSubmitting ? t.safetyAttest.readyForStaffProcessing : t.safetyAttest.cta}

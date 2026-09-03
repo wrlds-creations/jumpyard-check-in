@@ -272,6 +272,9 @@ const sv = {
     cta: 'Jag förstår, fortsätt',
     readyForStaffProcessing: 'G\u00f6r redo f\u00f6r personal...',
     readyForStaffFailed: 'Vi kunde inte g\u00f6ra incheckningen redo f\u00f6r personal. F\u00f6rs\u00f6k igen eller h\u00e4mta personal.',
+    paymentConfirmationWaiting: 'Betalningen \u00e4r genomf\u00f6rd. Vi v\u00e4ntar p\u00e5 att bokningssystemet bekr\u00e4ftar bokningen, det kan ta upp till n\u00e5gon minut.',
+    paymentConfirmationDelayed: 'Bokningen \u00e4r \u00e4nnu inte bekr\u00e4ftad. Betala inte igen. F\u00f6rs\u00f6k igen om en stund eller visa den h\u00e4r sk\u00e4rmen f\u00f6r personalen.',
+    paymentConfirmationRetry: 'Kontrollera igen',
   },
   addons: {
     title: 'Tillägg',
@@ -708,6 +711,9 @@ const en: typeof sv = {
     cta: 'I understand, continue',
     readyForStaffProcessing: 'Getting staff handoff ready...',
     readyForStaffFailed: 'We could not make this check-in ready for staff. Try again or call staff.',
+    paymentConfirmationWaiting: 'Your payment is complete. We are waiting for the booking system to confirm the booking, which can take up to a minute or so.',
+    paymentConfirmationDelayed: 'The booking is not confirmed yet. Do not pay again. Try again in a moment or show this screen to staff.',
+    paymentConfirmationRetry: 'Check again',
   },
   addons: {
     title: 'Add-ons',
