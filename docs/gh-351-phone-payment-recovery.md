@@ -57,7 +57,31 @@ Changed production files are `src/flow/paymentRecovery.ts`, `src/components/Roll
 
 Build environment note: the isolated checkout shares existing dependency directories through Windows junctions. Default Turbopack refuses a `node_modules` junction outside its filesystem root. `node node_modules/next/dist/bin/next build --webpack` successfully builds and statically exports the same phone sources without configuration/dependency changes.
 
-Repository validation note: template and static issue-resolver checks pass. `validate:history-archives` flags the unchanged `REPO_CURRENT_STATE.md` because Windows CRLF makes it 12,010 characters versus 11,926 with LF. A separate unapproved Project draft, **Make context-size validation consistent for Windows line endings** (`PVTI_lADOBXiXg84BdXuJzg5PU2I`), records this environment-dependent validator issue. No feature-branch progress is written to that mainline document.
+Repository validation note: template and static issue-resolver checks passed. At the initial implementation baseline, `validate:history-archives` flagged the unchanged `REPO_CURRENT_STATE.md` because Windows CRLF made it 12,010 characters versus 11,926 with LF. A separate unapproved Project draft, **Make context-size validation consistent for Windows line endings** (`PVTI_lADOBXiXg84BdXuJzg5PU2I`), records this environment-dependent validator issue. The subsequent rollout snapshot records only verified merged/deployed facts.
+
+## Protected rollout — 2026-09-03
+
+[Implementation PR #355](https://github.com/wrlds-creations/jumpyard-check-in/pull/355) passed all four required CI jobs and independent review, then merged as `9f262114f3a6e5ea31e6ccd3313472963c80a353`. The GitHub phone build and immutable release both passed the ordinary Turbopack build with isolated dependencies. The issue remains open for Love's manual acceptance; technical publication is complete.
+
+| Stage | Evidence |
+| --- | --- |
+| Implementation commit | `b7154c5666b088e8750bb36a5af5fdf04a08a9ed` |
+| PR CI | [33735750396](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33735750396): Repository, Infrastructure, Phone and Admin passed |
+| Immutable release | [33736067939](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33736067939): success, artifact `9885940293`, 505 checked files |
+| Artifact digest | `sha256:241c2ca14a30610d19c4527f80d7d2c287c864253b9fe1fd23105ce24a4890ee` |
+| Manifest SHA256 | `75963d696da6261d23a2cd207c10ed231058a41d76f88b880880348aeacbdb4c` |
+| Park promotion | [33736643450](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33736643450): reviewed plan and delegated protected approval, all ordinary verification passed |
+| Park Pages | Phone `9ef437c4`, admin `ab39745b` |
+| Public promotion | [33737047547](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33737047547): same artifact, reviewed plan and delegated protected approval; success at 09:08 UTC |
+| Public Pages | Phone `c3a967b2` at `https://checkin.jumpyard.se`; unchanged admin `03a6c7d5` at `https://staff-checkin.jumpyard.se` |
+| Rollback candidate | Available [release 33731059247](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33731059247), `bee28edcdb89a0dfc2ac5a52d95c3364a393d552`, artifact `9884020961`; preserves #331/#334 |
+| Rollback / re-promotion | Not needed or performed |
+
+The Park plan compared identical template hash `b227888a573552adb362baebbf0cd866c5e0eeec9ffab06e13e908ad191ecf07`, with 202 resources and no additions, removals, property or template-section changes. CDK reported no changes. Migration apply was false, with all migrations through `0020` already applied. The ordinary exact-template, successful-stack, `IN_SYNC` drift, zero-alarm, empty-queue and exact-Pages-release gates passed. Public domain/CORS/Cognito/Apple Pay and API-target verification also passed. No gate was bypassed or reconfigured.
+
+Independent readback compared each served root's exact JS/CSS asset set and every referenced file byte-for-byte against the validated selected artifact. Park passed at 09:06:42–43 UTC; public passed at 09:08:45–46 UTC. Each stage checked 12 phone and 10 admin assets plus both root HTML files, all identical. Across both stages: 48 static GETs, four matching roots and 44 matching JS/CSS responses. No JavaScript, business API, authenticated flow, booking, payment or guest message was executed by this readback.
+
+AWS account `376129878018`, region `eu-north-1`, the ten WRLDS metadata values, backend `ebc7598`, schema, routes, IAM, secrets, venue/date scope and runtime gates are unchanged. `AWS_RESOURCES.md` and `REPO_CURRENT_STATE.md` record the verified deployment; the existing D0201/PROJECT_CONTEXT recovery policy needs no new decision. Klarna remains a separate investigation in #353. The next action is Love's phone/PWA test of the scenarios below; this rollout is not itself a successful live payment test.
 
 ## Manual handset verification still required
 
@@ -71,4 +95,4 @@ Use an explicitly approved test environment/payment fixture before promotion; lo
 6. Check the shared add-on flow and its separate purchase identity. An unknown add-on return must not check in its stock-only purchase as an admission booking.
 7. Check Swedish and English on a narrow phone viewport. Unresolved copy must remain understandable at home and must not promise a booking or staff response.
 
-At the implementation review checkpoint, no commit, PR, merge, release, deployment, rollback or re-promotion had occurred. The authorized next steps are a reviewed implementation PR, immutable mainline release, reviewed protected Park promotion, and promotion of that same artifact to the configured public origins. The existing public workflow also republishes the unchanged admin artifact. No new backend/resource change or migration is expected. Rollout results will be recorded after verification; Love performs the manual phone acceptance.
+Commit, push, reviewed merge and protected Park/public deployment are complete as recorded above. Love performs the manual phone acceptance. Any rollback must select the previous successful immutable artifact and use the same reviewed protected workflows; it must not rebuild or remove stored purchase recovery.
