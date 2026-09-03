@@ -24,6 +24,7 @@ const sv = {
     imHere: 'Jag är kvar',
     exit: 'Avsluta',
     language: 'Språk',
+    switchLanguage: 'Byt språk till',
   },
   exitFlow: {
     title: 'Vill du avsluta?',
@@ -472,6 +473,7 @@ const en: typeof sv = {
     imHere: "I'm here",
     exit: 'Exit',
     language: 'Language',
+    switchLanguage: 'Switch language to',
   },
   exitFlow: {
     title: 'Do you want to exit?',

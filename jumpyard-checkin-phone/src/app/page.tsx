@@ -58,7 +58,7 @@ import {
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { ExitFlowDialog } from '@/components/ExitFlowDialog';
 import { LanguageToggle } from '@/components/LanguageToggle';
-import { getExitFlowMode, hasReachedSafety } from '@/flow/exitFlowPolicy';
+import { getExitFlowMode, hasReachedSafety, isStartState } from '@/flow/exitFlowPolicy';
 import {
     getApprovedPurchaseIdentifier,
     getPaidConfirmationRetryDelay,
@@ -1305,12 +1305,13 @@ function CheckInFlow() {
             data-handoff-code={ctx.checkinSession?.handoffCode ?? ''}
             data-already-checked-in={String(alreadyCheckedIn)}
         >
+            <LanguageToggle compact={!isStartState(progressState)} className="absolute top-2 right-2 z-20" />
             <ProgressBar
                 state={progressState}
                 buyEntryFlow={ctx.buyEntryFlow || showingBuyPaymentRecovery}
             />
 
-            <div className={`w-full max-w-md min-w-0 px-4 h-8 items-center justify-between ${state === 'KIOSK_BUY' ? 'hidden' : 'flex'} ${hasProgressBar(progressState) ? '' : 'pr-16'}`}>
+            <div className={`w-full max-w-md min-w-0 px-4 h-8 items-center justify-between ${state === 'KIOSK_BUY' ? 'hidden' : 'flex'} ${hasProgressBar(progressState) ? '' : 'pr-10'}`}>
                 {(backState || addonsHandlesBack) && (
                     <button
                         onClick={() => {
@@ -1589,7 +1590,6 @@ export default function Home() {
     return (
         <LanguageProvider>
             <main className="phone-flow-shell flex min-h-dvh w-full max-w-full min-w-0 flex-col items-center justify-start overflow-x-hidden p-3 pt-3 relative text-foreground bg-background selection:bg-primary selection:text-white">
-                <LanguageToggle className="absolute top-2 right-2 z-20" />
                 <Suspense
                     fallback={
                         <div className="text-foreground z-10 flex flex-col justify-center items-center h-full w-full">

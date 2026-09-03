@@ -32,7 +32,7 @@ function load(name, overrides = {}) {
 
 // Renders the real provider and control with a fake stored preference, the way a
 // returning guest's browser would present it.
-function render(stored) {
+function render(stored, props = {}) {
   const storage = new Map(stored === undefined ? [] : [['jy.lang', stored]]);
   const localStorage = { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) };
   globalThis.window = { localStorage };
@@ -40,7 +40,7 @@ function render(stored) {
   try {
     const context = load('context/LanguageContext.tsx');
     const { LanguageToggle } = load('components/LanguageToggle.tsx', { '@/context/LanguageContext': context });
-    return renderToStaticMarkup(React.createElement(context.LanguageProvider, null, React.createElement(LanguageToggle)));
+    return renderToStaticMarkup(React.createElement(context.LanguageProvider, null, React.createElement(LanguageToggle, props)));
   } finally {
     delete globalThis.window;
     delete globalThis.localStorage;
@@ -88,10 +88,33 @@ test('each option sets its exact language and the document language follows the 
   assert.match(context, /document\.documentElement\.lang = lang;/);
 });
 
-test('the control sits once in the top-right corner of the phone shell, beside the progress bar', () => {
+test('inside the flow only the other language is offered, with an understandable name', () => {
+  const sv = render(undefined, { compact: true });
+  assert.doesNotMatch(sv, /role="group"/);
+  assert.doesNotMatch(sv, /language-option-sv/);
+  const en = option(sv, 'en');
+  assert.equal(en.text, 'EN');
+  assert.match(en.tag, /aria-label="Byt språk till English"/);
+  assert.doesNotMatch(en.tag, /aria-pressed/);
+
+  const stored = render('en', { compact: true });
+  assert.doesNotMatch(stored, /language-option-en/);
+  const back = option(stored, 'sv');
+  assert.equal(back.text, 'SV');
+  assert.match(back.tag, /aria-label="Switch language to Svenska"/);
+});
+
+test('the control sits once in the top-right corner of the flow, full on start screens and compact after them', () => {
   const page = source('app/page.tsx');
-  assert.match(page, /<main className="phone-flow-shell[^"]*"[^>]*>\s*<LanguageToggle className="absolute top-2 right-2 z-20" \/>/);
+  assert.match(page, /<LanguageToggle compact=\{!isStartState\(progressState\)\} className="absolute top-2 right-2 z-20" \/>\s*<ProgressBar/);
+  assert.equal((page.match(/<LanguageToggle\b/g) || []).length, 1);
   assert.match(page, /if \(!hasProgressBar\(state\)\) return null;/);
-  assert.match(page, /\$\{hasProgressBar\(progressState\) \? '' : 'pr-16'\}/);
+  assert.match(page, /\$\{hasProgressBar\(progressState\) \? '' : 'pr-10'\}/);
   assert.doesNotMatch(source('components/BuyTickets.tsx'), /LanguageToggle/);
+  const policy = load('flow/exitFlowPolicy.ts');
+  assert.equal(policy.isStartState('KIOSK_CHOICE'), true);
+  assert.equal(policy.isStartState('APP_MOBILE'), true);
+  assert.equal(policy.isStartState('KIOSK_LOOKUP'), false);
+  assert.equal(policy.isStartState('KIOSK_BUY'), false);
+  assert.equal(policy.isStartState('APP_BOOKING'), false);
 });

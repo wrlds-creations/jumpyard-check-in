@@ -25,6 +25,11 @@ const START_STATES = new Set<FlowState>([
   'KIOSK_CHOICE',
 ]);
 
+// #350: start screens offer both languages; inside the flow only the other one is shown.
+export function isStartState(state: FlowState) {
+  return START_STATES.has(state);
+}
+
 export function hasReachedSafety(
   state: FlowState,
   session: CheckInSession | null

@@ -14,23 +14,31 @@ extend page carried a copy of the kiosk's single-code toggle.
 
 Changed files under `jumpyard-checkin-phone/`:
 
-- `src/components/LanguageToggle.tsx` (new): `SV / EN` as a `role="group"` named
-  `Språk` / `Language`. Each option is a native `<button type="button">` with
-  `aria-pressed`, its own `lang` attribute and its own-language accessible name
-  (`Svenska`, `English`), so a code or flag is never the only cue. Bold italic
-  uppercase 9px in the heading style; the active language is black and the other
-  muted. Buttons are 24px high for touch and show the primary-colored
-  `focus-visible` outline.
-- `src/app/page.tsx`: renders the control once, absolutely positioned in the
-  top-right corner of the phone shell (`top-2 right-2 z-20`, below the `z-50`
-  exit dialog). A `hasProgressBar` helper is shared by `ProgressBar` and the
-  navigation row: states without a progress bar (`APP_MOBILE`, `KIOSK_CHOICE`,
-  `KIOSK_LOOKUP`, `KIOSK_BUY`) give the row `pr-16` so `Avsluta` never sits under
-  the control. `BuyTickets` is untouched because the shell-level control also
-  covers the new-booking screens.
+- `src/components/LanguageToggle.tsx` (new). On start screens: `SV / EN` as a
+  `role="group"` named `Språk` / `Language`, where each option is a native
+  `<button type="button">` with `aria-pressed`, its own `lang` attribute and its
+  own-language accessible name (`Svenska`, `English`), so a code or flag is never
+  the only cue. Inside the flow: a compact variant with one muted button showing
+  only the language the guest can switch to (`EN` while Swedish is active), named
+  `Byt språk till English` / `Switch language to Svenska`. Both variants use bold
+  italic uppercase 9px in the heading style, 24px-high buttons for touch and the
+  primary-colored `focus-visible` outline.
+- `src/app/page.tsx`: renders the control once as the first child of the flow
+  root, absolutely positioned in the top-right corner of the phone shell
+  (`top-2 right-2 z-20`, below the `z-50` exit dialog), with
+  `compact={!isStartState(progressState)}`. A `hasProgressBar` helper is shared
+  by `ProgressBar` and the navigation row: states without a progress bar
+  (`APP_MOBILE`, `KIOSK_CHOICE`, `KIOSK_LOOKUP`, `KIOSK_BUY`) give the row `pr-10`
+  so `Avsluta` never sits under the control. `BuyTickets` is untouched because the
+  shell-level control also covers the new-booking screens.
+- `src/flow/exitFlowPolicy.ts`: exports `isStartState`, the existing start-state
+  set (`IDLE`, `APP_START`, `APP_MOBILE`, `KIOSK_ENTRY`, `KIOSK_CHOICE`) that
+  already hides `Avsluta`; the same set decides which screens show both languages.
 - `src/context/LanguageContext.tsx`: exports the `Language` type, adds
-  `common.language` (`Språk` / `Language`) and keeps `document.documentElement.lang`
-  in step with the choice, since the layout hardcodes `en`.
+  `common.language` (`Språk` / `Language`) and `common.switchLanguage`
+  (`Byt språk till` / `Switch language to`), and keeps
+  `document.documentElement.lang` in step with the choice, since the layout
+  hardcodes `en`.
 - `src/flow/languageToggle.test.mjs` and the `test:language-toggle` script.
 - Repository: `DECISIONS.md` gains D0205.
 
@@ -38,8 +46,10 @@ Design iterations with Love on 2026-09-03: the first version was a filled
 black/white pill inside the navigation row and the new-booking header. Love's
 reaction was "SJUKT fult". It was replaced by a text-only control, and Love then
 asked for absolute placement at the very top, super small, to the right of the
-progress bar, in the bold italic style used by other headings. The final version
-follows that instruction.
+progress bar, in the bold italic style used by other headings. After seeing it in
+the mobile view, Love asked that only the start screen ("Vad vill du göra?") show
+both languages and that every later screen show just the language to switch to.
+The final version follows those instructions.
 
 Language lives in the provider outside flow state, so switching only re-renders
 labels. The Roller drop-in reads its labels through refs and its mount effect does
@@ -51,11 +61,14 @@ translation was rewritten beyond the one new label.
 
 Local checks on 2026-09-03 (Windows, Node 22.16):
 
-- `npm run test:language-toggle`: 5/5. The test renders the real provider and
+- `npm run test:language-toggle`: 6/6. The test renders the real provider and
   control through `react-dom/server`, with a fake stored preference, and asserts
   the group name, pressed state, own-language names, `lang` attributes, the
-  English and unknown stored values, exact `setLang` wiring, the document-language
-  sync, the single shell placement and that `BuyTickets` stays untouched.
+  English and unknown stored values, the compact variant (only the other language,
+  named `Byt språk till English` / `Switch language to Svenska`, no group or
+  pressed state), exact `setLang` wiring, the document-language sync, the single
+  placement with `compact={!isStartState(progressState)}`, the `isStartState`
+  classification and that `BuyTickets` stays untouched.
 - Existing phone suites: `test:exit-flow` 5/5, `test:payment-recovery` 95/95,
   `test:paid-confirmation` 9/9, `test:payment-confirmation` 18/18,
   `test:product-visibility` 5/5.
@@ -69,14 +82,16 @@ Performed in the desktop app's Browser pane against `npm run dev` at 375x812 and
 session and were not exercised; the control is shell-level, so its placement is
 identical there.
 
-- Start screen (`KIOSK_CHOICE`): control at x 331–367, y 8–32 on 375px; no
-  horizontal overflow.
-- New booking (`KIOSK_BUY`, time slot step): the last progress icon ends at x 331
-  and the control starts at 331, so they are adjacent on 375px. On 320px the
-  control (276–312) overlaps the icon's upper-right edge (icon 250–282) by 6px;
-  the `Klar` label is unaffected and nothing overflows.
-- Lookup (`KIOSK_LOOKUP`): `Tillbaka` at 28–80, `Avsluta` ends at 299, control
-  starts at 331, so the row keeps a 32px gap.
+- Start screen (`KIOSK_CHOICE`): full `SV / EN` control at x 331–367, y 8–32 on
+  375px; no horizontal overflow.
+- Inside the flow the compact control is 15px wide (x 352–367 on 375px). On the
+  new-booking time slot step the last progress icon ends at x 331 on 375px and at
+  x 282 on 320px, leaving 21px and 15px of clearance (the 320px figure combines
+  the measured icon position with the measured control width). Before the compact
+  variant, the full control was adjacent to the icon on 375px and overlapped its
+  corner by 6px on 320px, which is why start screens are the only place it appears.
+- Lookup (`KIOSK_LOOKUP`): `Tillbaka` at 28–80, `Avsluta` / `Exit` ends at 323
+  with the row's `pr-10`, compact control starts at 352, a 29px gap.
 - Switching on the start screen to `EN`: heading becomes "What would you like to
   do?", `<html lang>` becomes `en`, `jy.lang` stores `en`, the flow state is
   unchanged. On the lookup screen with `ABC123` typed, switching to `EN` and back
