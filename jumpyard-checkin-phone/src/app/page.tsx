@@ -895,7 +895,9 @@ function CheckInFlow() {
         const payment = readPaymentRecovery();
         const savedPurchase = readBuyFlowRecovery();
         const savedIdentifier = getBuyFlowRecoveryIdentifier(savedPurchase);
-        const completedOwnPurchase = state === 'APP_PRESENT' && ctx.paymentCompleted && ctx.booking
+        const purchaseAtConfirmation = state === 'APP_PRESENT'
+            || (state === 'APP_CONFIRM' && ctx.checkinSession && isReadyForStaffSession(ctx.checkinSession));
+        const completedOwnPurchase = purchaseAtConfirmation && ctx.paymentCompleted && ctx.booking
             && (ctx.booking.id === savedIdentifier || ctx.booking.rollerUniqueId === savedIdentifier);
         const approvedPurchaseUnfinished = savedPurchase?.draftState?.paymentApproved === true
             && !completedOwnPurchase;

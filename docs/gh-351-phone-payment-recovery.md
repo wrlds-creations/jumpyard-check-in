@@ -83,6 +83,18 @@ Independent readback compared each served root's exact JS/CSS asset set and ever
 
 AWS account `376129878018`, region `eu-north-1`, the ten WRLDS metadata values, backend `ebc7598`, schema, routes, IAM, secrets, venue/date scope and runtime gates are unchanged. `AWS_RESOURCES.md` and `REPO_CURRENT_STATE.md` record the verified deployment; the existing D0201/PROJECT_CONTEXT recovery policy needs no new decision. Klarna remains a separate investigation in #353. The next action is Love's phone/PWA test of the scenarios below; this rollout is not itself a successful live payment test.
 
+## Acceptance regression: new booking from the final QR screen
+
+After the first rollout, Love confirmed that failed Klarna recovery offers another payment method. He then reported that **Gör en ny bokning** on the successful final QR screen showed the unknown-payment notice; **Kontrollera betalningen** returned to the same QR screen. This blocks acceptance of the first release.
+
+The final screen renders in both `APP_CONFIRM` and `APP_PRESENT`. Normal safety completion and `ready_for_staff` handoff stop at `APP_CONFIRM`, but the reset guard recognized only `APP_PRESENT` as a completed own purchase. It therefore classified the saved approved snapshot as unfinished. The previous regression test seeded only `APP_PRESENT`, missing the actual visible button path.
+
+The correction also recognizes `APP_CONFIRM` with a ready-for-staff session, while retaining payment completion and the saved booking identity match. Pending/unknown payment records, active return evidence, unresolved recovery status, a different saved purchase and unfinished safety/handoff still prevent reset. No provider, backend, schema, dependency or infrastructure behavior changes.
+
+The extended test harness uses the actual flow machine, recovery helpers and page handlers with batched state updates. It reproduced the failure before the correction, then passed the normal safety-to-QR transition, explicit reset, subsequent persistence/startup effects and entry into a new booking. Additional cases preserve unrelated pending/unknown attempts, pre-handoff approval and an `APP_CONFIRM` state without a ready session. This is offline handler/state-machine evidence, not a browser scheduler or live provider test.
+
+Local correction validation: **103/103** combined recovery, confirmation, paid-confirmation and exit tests pass, including 19 page tests. Phone lint passes with four existing image warnings. The webpack production build, TypeScript validation and static export pass. The production correction is limited to `src/app/page.tsx`; its regression coverage is in `src/flow/pagePaymentRecovery.test.mjs`. This document records the acceptance finding. Existing D0201 policy is unchanged.
+
 ## Manual handset verification still required
 
 Love now tests the selected published version at `https://checkin.jumpyard.se`. The scenarios below are the acceptance plan; the agent has performed static verification only and has not initiated a live purchase.
@@ -92,6 +104,7 @@ Love now tests the selected published version at `https://checkin.jumpyard.se`. 
 3. Go back before payment submission, then return with unchanged and changed selections. Verify methods remain usable. Once submitted, verify back/restart cannot abandon an unresolved purchase.
 4. Simulate a delayed result, network interruption, reload and repeated return. Verify only the original purchase can be checked; a late definitive result for it is accepted, while an old result cannot change a new purchase.
 5. Complete a controlled card payment. Verify a persistent receipt confirmation, explicit Continue, safety steps and the #331 paid check before handoff. Reload during delayed booking synchronization; verify no new payment is offered.
+   From the ready-for-entry QR screen, choose **Gör en ny bokning**. Verify the start page appears without a payment warning and a new booking can begin. Reload at the start page and verify the old purchase does not reopen.
 6. Check the shared add-on flow and its separate purchase identity. An unknown add-on return must not check in its stock-only purchase as an admission booking.
 7. Check Swedish and English on a narrow phone viewport. Unresolved copy must remain understandable at home and must not promise a booking or staff response.
 
