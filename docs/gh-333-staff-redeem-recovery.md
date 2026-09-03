@@ -93,14 +93,51 @@ Results on 2026-09-03:
 - `npm run infra:check` (CDK build, synth and infra validators): passed;
 - admin ESLint, TypeScript and production build: passed.
 
-## Manual verification still required
+## Manual verification
 
-A normal staff check-in on Park after the protected promotion (green result, session
-leaves the queue). The failure path is exercised only by the validator; no Roller
-redemption is provoked twice on purpose.
+Love ran two ordinary staff check-ins on `https://staff-checkin.jumpyard.se` after the
+public promotion, for two separate bookings (10:00 and 12:00 sessions). Read-only Aurora
+readback with the redeem runtime role: idempotency keys
+`staff-redeem:jycs_mtlc5a9u_f33b4b2e` and `staff-redeem:jycs_mtldd8a7_9d068f9f` are
+`succeeded` with `result_ref` `redeemed:174064124` and `redeemed:174057721`; both
+sessions are `redeemed` / `completed`, and each `completed_at` equals its key's
+`updated_at` (11:19:51 and 11:19:58 UTC), which is the atomic receipt. The redeem Lambda
+log since the rollout holds exactly those two invocations, 4.6 s cold (410 ms init) and
+2.1 s warm, with no error, warning or `checkin.redeem_bookkeeping_failed` entry. The
+failure paths stay covered by the validator only; no Roller redemption was provoked twice
+on purpose.
 
 ## Merge and protected rollout evidence
 
-Pending. Record the PR, merged SHA, release run, artifact digest, protected Park promotion
-(the CDK plan changes only the existing `RedeemHandler`) and the admin promotion here after
-the protected workflows have run.
+- Implementation PR: [#357](https://github.com/wrlds-creations/jumpyard-check-in/pull/357),
+  squash-merged as `77faea776e7c9a3504a9f8a1e421923939d31caa` after merging `origin/main`
+  (PR #355/#356, #351) into the branch. CI: Repository, Infrastructure, Phone, Admin green.
+- Immutable release: [run 33740994168](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33740994168),
+  artifact `park-test-release-77faea776e7c9a3504a9f8a1e421923939d31caa` (ID 9887870049),
+  digest `sha256:71cf8dc857fb8265ebd0d5904e7c15cd6ef0291694c25653a49d3a109855bf49`.
+- Protected Park promotion: [run 33741484703](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33741484703),
+  `intent=promote`, `apply_migrations=false`, approved in GitHub as LoveWRLDS after Love's
+  chat consent. Plan: current template `b227888a…` to release template `0791f5bb…`, 202
+  resources, added none, removed none, changed `RedeemHandler3A94EE00` only; parameters,
+  outputs, rules, conditions and mappings unchanged. CloudFormation reported
+  `UPDATE_COMPLETE` for `RedeemHandler` at 09:58:12 UTC (30 s deployment). Pages: phone
+  `11e6209e` on `jumpyard-check-in-park-test`, admin `bf7951e8` on
+  `jumpyard-checkin-admin-park-test`. The workflow's post-deploy checks (template equality,
+  `IN_SYNC` drift, zero alarms, empty queues, exact Cloudflare readback) passed.
+- Live Lambda readback after the promotion: `jumpyard-check-in-park-test-stack-redeem`
+  timeout 25 s, `LastModified` 2026-09-03T09:58:06Z, `CodeSha256`
+  `ADTHfo51qvQGF8eqcIFeTpwB8Er1X2C9wBSSPGjYZB8=`, state `Active`, last update
+  `Successful`.
+- Protected public promotion: [run 33741950790](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33741950790),
+  same artifact digest verified. Pages: phone `28928844` on `jumpyard-check-in-production`,
+  admin `1074a639` on `jumpyard-checkin-admin-production`. Independent check: the admin
+  chunk served by `https://staff-checkin.jumpyard.se` contained the stable key, the
+  recovered message and the `redeem_in_progress` handling; `https://checkin.jumpyard.se`
+  byte-matched the Park and production deployments of the same artifact.
+
+Minutes later PR #358 (#351 correction) merged as `409aa58` and was promoted through Park
+[run 33742197982](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33742197982)
+and public [run 33742546868](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33742546868).
+That build retains this change unchanged: the redeem Lambda code and timeout are the same,
+and the staff domain still served the #333 admin chunk after that promotion. See
+[docs/gh-351-phone-payment-recovery.md](gh-351-phone-payment-recovery.md).
