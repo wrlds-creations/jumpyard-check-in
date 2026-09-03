@@ -1,4 +1,4 @@
-import type { Addon, AddonId, Booking, CheckInSession, LookupSource } from '@/flow/types';
+import type { Addon, AddonId, Booking, BookingPaymentState, CheckInSession, LookupSource } from '@/flow/types';
 
 const DEFAULT_CLOUD_API_BASE_URL = 'https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com';
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
@@ -67,6 +67,7 @@ interface CloudLookupResponse {
     canCheckIn: boolean;
     reason: 'ready' | 'payment_required' | 'wrong_date' | 'no_redeemable_tickets';
     amountOwing?: number;
+    paymentState?: string;
   };
   guestAccess?: CloudGuestAccess;
   error?: {
@@ -407,7 +408,7 @@ export async function lookupBooking(code: string): Promise<Booking> {
   }
 
   if (body.eligibility.reason === 'payment_required') {
-    return toBooking(body.booking, body.eligibility.reason, body.source, body.guestAccess);
+    return toBooking(body.booking, body.eligibility.reason, body.source, body.guestAccess, body.eligibility.paymentState);
   }
 
   if (!body.eligibility.canCheckIn || body.eligibility.reason !== 'ready') {
@@ -415,7 +416,7 @@ export async function lookupBooking(code: string): Promise<Booking> {
     throw new CloudLookupError(reason, 'Booking is not ready for check-in.', response.status);
   }
 
-  return toBooking(body.booking, body.eligibility.reason, body.source, body.guestAccess);
+  return toBooking(body.booking, body.eligibility.reason, body.source, body.guestAccess, body.eligibility.paymentState);
 }
 
 export async function resolveCheckInSessionLink(token: string): Promise<CheckInSessionLinkResult> {
@@ -971,8 +972,10 @@ function toBooking(
   booking: CloudBooking,
   reason: string,
   source?: CloudLookupSource,
-  guestAccess?: CloudGuestAccess
+  guestAccess?: CloudGuestAccess,
+  paymentState?: string
 ): Booking {
+  const normalizedPaymentState = normalizePaymentState(paymentState);
   const primaryItems = getPrimaryItems(booking.items);
   const sessionItem = primaryItems[0] ?? booking.items[0] ?? null;
   const existingAddons = getExistingAddons(booking.items);
@@ -989,7 +992,11 @@ function toBooking(
     durationMinutes: getDurationMinutes(sessionItem?.startTime, sessionItem?.endTime),
     date: sessionItem?.bookingDate ?? undefined,
     products: booking.items.length,
-    paid: isPaidBooking(reason, booking),
+    // GH-338: an unsettled state reported by JumpYard Cloud always wins over local heuristics.
+    paid: normalizedPaymentState !== null && normalizedPaymentState !== 'paid' && normalizedPaymentState !== 'unknown'
+      ? false
+      : isPaidBooking(reason, booking),
+    paymentState: normalizedPaymentState ?? undefined,
     paymentStatus: booking.paymentStatus ?? booking.status,
     amountOwing: booking.amountOwing,
     guestName: guestName.firstName ?? undefined,
@@ -1052,6 +1059,12 @@ function toCheckInSession(session: CloudSession, guestAccess?: CloudGuestAccess)
     completedAt: session.completedAt ?? null,
     expiresAt: session.expiresAt ?? null,
   };
+}
+
+function normalizePaymentState(value: unknown): BookingPaymentState | null {
+  return value === 'paid' || value === 'partially_paid' || value === 'pending' || value === 'unpaid' || value === 'unknown'
+    ? value
+    : null;
 }
 
 function isPaidBooking(reason: string, booking: CloudBooking) {

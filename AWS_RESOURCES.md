@@ -4,6 +4,10 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #338 Exact Payment Status (Implemented; Protected Rollout Pending)
+
+Love approved [issue #338](https://github.com/wrlds-creations/jumpyard-check-in/issues/338) on 2026-09-03. The lookup, session and redeem handlers now share one identical exact payment-state rule: only `Paid`, `PaidInFull` and `NoPaymentRequired` count as paid, `PartiallyPaid`, `PendingPayment` and `Unpaid` never match as paid by substring, and a missing amount owing is not evidence of payment. The lookup adds `eligibility.paymentState`; a partially paid booking keeps `payment_required`, the phone shows "checkas in i kassan" and the kiosk keeps its existing staff message. Read-only Aurora readback on 2026-09-03 found 21 `PartiallyPaid` and 6 `PendingPayment` rows without an amount owing, none due today or later. The change is Lambda code only: no new AWS resource, database grant, migration, IAM, secret, route, gate, venue/date, payment authority, messaging, or multi-park boundary changed. [Implementation evidence](docs/gh-338-exact-payment-status.md).
+
 ### Issue #351 Final QR New-Booking Correction (Published; No AWS Resource Change)
 
 [PR #358](https://github.com/wrlds-creations/jumpyard-check-in/pull/358) merged `409aa58d4cfeab9d1e120b576724649a5d651280`. After the separate #333 Park/public rollout completed, immutable [release 33741393453](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33741393453), artifact `9888027527`, passed protected [Park 33742197982](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33742197982) and [public 33742546868](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33742546868). Both plans and the exact artifact were reviewed before delegated approval under Love's #351 deployment instruction. The correction fixes explicit new-booking navigation from the successful QR screen and retains the deployed #333 RedeemHandler/admin behavior.

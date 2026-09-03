@@ -357,12 +357,22 @@ Response:
   "eligibility": {
     "canCheckIn": false,
     "reason": "payment_required",
-    "requiresStaff": true
+    "requiresStaff": true,
+    "paymentState": "partially_paid"
   }
 }
 ```
 
 Lookup rules:
+
+- Payment state is interpreted exactly (GH-338). `eligibility.paymentState` is one of `paid`,
+  `partially_paid`, `pending`, `unpaid` or `unknown`. Only the explicit Roller statuses
+  `Paid`, `PaidInFull` and `NoPaymentRequired` count as paid; `PartiallyPaid`, `PendingPayment`
+  and `Unpaid` are never matched as paid by substring, and a missing amount owing is not evidence
+  of payment. `partially_paid`, `pending` and `unpaid` return `reason: "payment_required"`; the
+  phone shows a partially paid booking as "checkas in i kassan" and the kiosk keeps its staff message.
+  The same rule guards `POST /v1/check-in/sessions` and the staff redeem, where an unsettled or
+  unknown state without an explicit zero amount owing is `payment_required`.
 
 - Try Aurora first by booking reference, Roller unique id, or known ticket id.
 - If Aurora has a fresh, usable record, return that normalized snapshot for display.
@@ -910,7 +920,7 @@ Rules:
 |---|---|---|
 | `booking_not_found` | Roller could not find a matching booking. | Show staff handoff. |
 | `wrong_date_or_time` | Booking does not match expected session. | Show staff handoff. |
-| `payment_required` | Booking exists but amount remains owing. | Route to payment or staff depending flow. |
+| `payment_required` | Booking is not settled: amount remains owing, or the exact payment state is `partially_paid`, `pending` or `unpaid` (see `eligibility.paymentState`). | Route to payment or staff depending flow; `partially_paid` is checked in at the register. |
 | `already_redeemed` | Tickets are already used or invalid. | Show staff handoff. |
 | `partial_group_not_supported` | Guest selected a partial group in v1. | Show staff handoff. |
 | `redeem_confirmation_required` | Guest-side session is ready but final redeem requires staff/server confirmation. | Show staff handoff or staff-ready state. |

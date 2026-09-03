@@ -4895,14 +4895,44 @@ function isInactiveBookingStatus(status) {
   return normalized === 'cancelled' || normalized === 'deleted' || normalized === 'draft';
 }
 
+// GH-338 payment-state classification (begin). Keep this block identical in lookup, session and redeem.
+const PAID_STATUS_TOKENS = new Set(['paid', 'paidinfull', 'fullypaid', 'nopaymentrequired']);
+const PARTIALLY_PAID_STATUS_TOKENS = new Set(['partiallypaid', 'partialpayment', 'partial']);
+const PENDING_PAYMENT_STATUS_TOKENS = new Set(['pendingpayment', 'pending', 'awaitingpayment', 'paymentpending']);
+const UNPAID_STATUS_TOKENS = new Set(['unpaid', 'notpaid', 'overdue']);
+
+function normalizePaymentStatusToken(value) {
+  return String(value ?? '').toLowerCase().replace(/[^a-z]/g, '');
+}
+
+// Exact token matching only: "PartiallyPaid" and "Unpaid" must never count as paid, and a
+// missing amount owing is not evidence of payment. Roller stays authoritative for the final
+// redemption; this only decides what JumpYard Cloud lets through before that.
+function classifyPaymentState({ amountOwing, bookingStatus, paymentStatus }) {
+  const tokens = [paymentStatus, bookingStatus].map(normalizePaymentStatusToken).filter(Boolean);
+  const owing = typeof amountOwing === 'number' && Number.isFinite(amountOwing) ? amountOwing : null;
+  if (tokens.some((token) => PARTIALLY_PAID_STATUS_TOKENS.has(token))) return { state: 'partially_paid', evidence: 'status' };
+  if (tokens.some((token) => PENDING_PAYMENT_STATUS_TOKENS.has(token))) return { state: 'pending', evidence: 'status' };
+  if (tokens.some((token) => UNPAID_STATUS_TOKENS.has(token))) return { state: 'unpaid', evidence: 'status' };
+  if (owing !== null && owing > 0) return { state: 'unpaid', evidence: 'amount' };
+  if (tokens.some((token) => PAID_STATUS_TOKENS.has(token))) return { state: 'paid', evidence: 'status' };
+  if (owing === 0) return { state: 'paid', evidence: 'amount' };
+  return { state: 'unknown', evidence: 'none' };
+}
+
+function isUnsettledPaymentState(state) {
+  return state === 'partially_paid' || state === 'pending' || state === 'unpaid';
+}
+// GH-338 payment-state classification (end).
+
 function isPaymentComplete(booking) {
-  if (booking.amountOwingCents !== null && booking.amountOwingCents > 0) return false;
-
-  const status = `${booking.paymentStatus ?? ''} ${booking.bookingStatus ?? ''}`.toLowerCase();
-  if (status.includes('pending') || status.includes('draft')) return false;
-  if (status.includes('paid') || status.includes('nopaymentrequired')) return true;
-
-  return booking.amountOwingCents === 0;
+  const amountOwingCents =
+    booking.amountOwingCents === null || booking.amountOwingCents === undefined ? null : Number(booking.amountOwingCents);
+  return classifyPaymentState({
+    amountOwing: amountOwingCents,
+    bookingStatus: booking.bookingStatus,
+    paymentStatus: booking.paymentStatus,
+  }).state === 'paid';
 }
 
 function bookingMatchesExpectedDate(booking, tickets, expectedDate) {
