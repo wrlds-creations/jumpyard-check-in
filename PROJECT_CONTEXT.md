@@ -75,6 +75,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Live water: `970411`/`970363` (D0195).
 - D0196/D0197: compact mobile add-ons use plus/minus, native scroll and Continue validation.
 - PWA drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; new-booking delivery is proven.
+- D0199/#331: an approved phone purchase continues into safety while Roller confirms payment; the rules step reconfirms the paid state once (then 15/30/60 s, then manual) before creating the session and handoff, and approved purchases never land on the unpaid booking summary.
 
 ## Data And Integration Facts
 

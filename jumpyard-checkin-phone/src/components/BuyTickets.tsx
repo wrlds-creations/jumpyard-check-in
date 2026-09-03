@@ -20,6 +20,7 @@ import {
 } from '@/flow/cloudClient';
 import type { Addon, AddonId, Booking } from '@/flow/types';
 import { ADDON_CATALOG_CONFIG, BUY_ENTRY_ADDON_IDS } from '@/flow/addonCatalog';
+import { resolvePaidConfirmation } from '@/flow/paidBookingConfirmation';
 import {
   findRecoveredBookingProduct,
   getMaxBookingProductQuantity,
@@ -1317,17 +1318,12 @@ export const BuyTickets = ({
     setPaymentSyncing(true);
     setPaymentSyncError(null);
     try {
-      let resolvedBooking: Booking | null = null;
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        try {
-          resolvedBooking = await lookupBooking(identifier);
-          break;
-        } catch {
-          await wait(2000);
-        }
-      }
+      // #331: one bounded lookup. An approved payment that ROLLER has not confirmed yet is
+      // "awaiting", not a failure: the guest continues into safety and the paid state is
+      // confirmed again before the staff handoff, so this step never polls ROLLER.
+      const confirmation = await resolvePaidConfirmation(lookupBooking, identifier, { wait });
 
-      if (!resolvedBooking) {
+      if (confirmation.status === 'unavailable') {
         paymentResolutionStartedRef.current = false;
         paymentContinueRequestedRef.current = false;
         setPaymentContinuePending(false);
@@ -1336,7 +1332,7 @@ export const BuyTickets = ({
       }
 
       writeDraftRecovery('APP_SAFETY_VIDEO', activeDraft, selectedProduct, selectedTime, jumperCount, true);
-      const continueToSafety = await onBookingReady(resolvedBooking);
+      const continueToSafety = await onBookingReady(confirmation.booking);
       if (!waitForGuestConfirmation) {
         continueToSafety();
         return;

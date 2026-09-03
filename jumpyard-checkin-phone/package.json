@@ -9,6 +9,7 @@
     "test:product-visibility": "node --experimental-default-type=module --experimental-strip-types --test src/flow/productVisibility.test.mjs",
     "test:exit-flow": "node --no-warnings --experimental-strip-types --test src/flow/exitFlowPolicy.test.mjs",
     "test:payment-confirmation": "node --no-warnings --test src/flow/phonePaymentConfirmation.test.mjs src/app/preview/payment/PhonePaymentPreview.test.mjs",
+    "test:paid-confirmation": "node --no-warnings --experimental-strip-types --test src/flow/paidBookingConfirmation.test.mjs",
     "start": "next start",
     "lint": "eslint"
   },

@@ -47,6 +47,13 @@ import { BuyTickets, type BuyTicketsStep } from '@/components/BuyTickets';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { ExitFlowDialog } from '@/components/ExitFlowDialog';
 import { getExitFlowMode, hasReachedSafety } from '@/flow/exitFlowPolicy';
+import {
+    getApprovedPurchaseIdentifier,
+    getPaidConfirmationRetryDelay,
+    isApprovedPurchaseAwaitingConfirmation,
+    resolvePaidConfirmation,
+    type PaidConfirmationUiState,
+} from '@/flow/paidBookingConfirmation';
 
 // Visual progress bar groups safety-video + safety-attest into one step,
 // and collapses connected/skyrider into the extras column.
@@ -321,6 +328,9 @@ function CheckInFlow() {
     const [sessionStartError, setSessionStartError] = useState<SessionIssue | null>(null);
     const [isMarkingReadyForStaff, setIsMarkingReadyForStaff] = useState(false);
     const [readyForStaffError, setReadyForStaffError] = useState<SessionIssue | null>(null);
+    const [paidConfirmationState, setPaidConfirmationState] = useState<PaidConfirmationUiState>('idle');
+    const paidConfirmationRunRef = useRef(0);
+    const pendingSafetyAttestedAtRef = useRef<string | null>(null);
     const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
     const [addonsStep, setAddonsStep] = useState<AddonsOfferStep>('SELECT');
     const [addonsBackRequest, setAddonsBackRequest] = useState(0);
@@ -352,6 +362,9 @@ function CheckInFlow() {
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
     };
+
+    const delay = (milliseconds: number) =>
+        new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
 
     const advance = (patch: Partial<FlowContext> = {}, branch: Branch = null) => {
         const newCtx = { ...ctx, ...patch };
@@ -476,7 +489,8 @@ function CheckInFlow() {
 
     const preparePaidNewBooking = async (
         booking: Booking,
-        recoveryTargetState: FlowState | null = null
+        recoveryTargetState: FlowState | null = null,
+        { paymentApproved = false }: { paymentApproved?: boolean } = {}
     ): Promise<() => void> => {
         const bookingAddons = booking.existingAddons ?? [];
         const bookingPatch: Partial<FlowContext> = {
@@ -500,7 +514,23 @@ function CheckInFlow() {
         setAlreadyCheckedIn(false);
         setSessionStartError(null);
 
+        const targetState =
+            recoveryTargetState === 'APP_SAFETY_ATTEST' ? 'APP_SAFETY_ATTEST' : 'APP_SAFETY_VIDEO';
+        // #331: ROLLER can confirm an approved payment a little later than the card approval.
+        // An approved purchase then continues into safety without a session; the paid state
+        // is confirmed once more before the staff handoff instead of polling ROLLER here.
+        const continueIntoSafetyAwaitingConfirmation = () => {
+            setCtx({ ...ctx, ...bookingPatch, checkinSession: null });
+            setBuyRecoveryStatus(null);
+            return () => {
+                setState(targetState);
+                scrollToTop();
+            };
+        };
+
         if (!booking.paid) {
+            if (paymentApproved) return continueIntoSafetyAwaitingConfirmation();
+
             setCtx({ ...ctx, ...bookingPatch });
             return () => {
                 setState('APP_BOOKING');
@@ -512,8 +542,6 @@ function CheckInFlow() {
             const checkinSession = await startCheckInSession(booking, 'safety');
             const resumeState = getResumeState(checkinSession);
             const nextCtx = { ...ctx, ...bookingPatch, checkinSession };
-            const targetState =
-                recoveryTargetState === 'APP_SAFETY_ATTEST' ? 'APP_SAFETY_ATTEST' : 'APP_SAFETY_VIDEO';
 
             setAlreadyCheckedIn(isCompletedSession(checkinSession));
             setCtx(nextCtx);
@@ -532,6 +560,9 @@ function CheckInFlow() {
                 };
             }
 
+            // An approved purchase keeps its safety path; the session is retried before the handoff.
+            if (paymentApproved) return continueIntoSafetyAwaitingConfirmation();
+
             setSessionStartError(error instanceof CloudSessionError ? error.reason : 'session_failed');
             setCtx({ ...ctx, ...bookingPatch, buyEntryFlow: false });
             return () => {
@@ -541,8 +572,12 @@ function CheckInFlow() {
         }
     };
 
-    const handlePaidNewBookingReady = async (booking: Booking, recoveryTargetState: FlowState | null = null) => {
-        const continueToPreparedState = await preparePaidNewBooking(booking, recoveryTargetState);
+    const handlePaidNewBookingReady = async (
+        booking: Booking,
+        recoveryTargetState: FlowState | null = null,
+        paymentApproved = false
+    ) => {
+        const continueToPreparedState = await preparePaidNewBooking(booking, recoveryTargetState, { paymentApproved });
         continueToPreparedState();
     };
 
@@ -596,7 +631,11 @@ function CheckInFlow() {
         setSessionStartError(null);
         try {
             const booking = await lookupBooking(identifier);
-            await handlePaidNewBookingReady(booking, getBuyFlowRecoveryTargetState(snapshot));
+            await handlePaidNewBookingReady(
+                booking,
+                getBuyFlowRecoveryTargetState(snapshot),
+                snapshot.draftState?.paymentApproved === true
+            );
         } catch {
             setBuyRecoveryStatus('failed');
             scrollToTop();
@@ -612,6 +651,9 @@ function CheckInFlow() {
         setReadyForStaffError(null);
         setIsStartingSession(false);
         setIsMarkingReadyForStaff(false);
+        paidConfirmationRunRef.current += 1;
+        pendingSafetyAttestedAtRef.current = null;
+        setPaidConfirmationState('idle');
         setAddonsStep('SELECT');
         setAddonsBackRequest(0);
         setBuyStep('TIMESLOT');
@@ -655,9 +697,95 @@ function CheckInFlow() {
         }
     };
 
+    const confirmApprovedPurchaseAndReadyForStaff = async (
+        attestedAt: string,
+        { manualRetry = false }: { manualRetry?: boolean } = {}
+    ) => {
+        const booking = ctx.booking;
+        const identifier = getApprovedPurchaseIdentifier(booking);
+        if (!booking || !identifier) {
+            setReadyForStaffError('session_failed');
+            return;
+        }
+
+        const run = paidConfirmationRunRef.current + 1;
+        paidConfirmationRunRef.current = run;
+        const isCurrentRun = () => paidConfirmationRunRef.current === run;
+
+        pendingSafetyAttestedAtRef.current = attestedAt;
+        setIsMarkingReadyForStaff(true);
+        setReadyForStaffError(null);
+        setPaidConfirmationState('checking');
+        try {
+            for (let retryIndex = 0; ; retryIndex += 1) {
+                const confirmation = await resolvePaidConfirmation(lookupBooking, identifier, { wait: delay });
+                if (!isCurrentRun()) return;
+
+                if (confirmation.status === 'unavailable') {
+                    setPaidConfirmationState('idle');
+                    setReadyForStaffError('network_error');
+                    scrollToTop();
+                    return;
+                }
+
+                if (confirmation.status === 'paid') {
+                    const checkinSession = await startCheckInSession(confirmation.booking, 'safety');
+                    const readySession = await markSessionReadyForStaff(checkinSession, 'completed');
+                    if (!isCurrentRun()) return;
+                    pendingSafetyAttestedAtRef.current = null;
+                    setPaidConfirmationState('idle');
+                    const confirmedAddons = confirmation.booking.existingAddons ?? [];
+                    advance({
+                        booking: confirmation.booking,
+                        checkinSession: readySession,
+                        existingAddons: confirmedAddons,
+                        selectedAddons: confirmedAddons,
+                        safetyAttestedAt: attestedAt,
+                    });
+                    return;
+                }
+
+                // Still unpaid in ROLLER: sparse, bounded waits instead of polling. A manual retry
+                // is a single check so the guest cannot restart a burst of lookups.
+                const retryDelay = manualRetry ? null : getPaidConfirmationRetryDelay(retryIndex);
+                if (retryDelay === null) {
+                    setPaidConfirmationState('delayed');
+                    return;
+                }
+                setPaidConfirmationState('waiting');
+                await delay(retryDelay);
+                if (!isCurrentRun()) return;
+            }
+        } catch (error) {
+            if (!isCurrentRun()) return;
+            if (error instanceof CloudSessionError && error.reason === 'already_redeemed') {
+                pendingSafetyAttestedAtRef.current = null;
+                setPaidConfirmationState('idle');
+                routeAlreadyCheckedIn();
+                return;
+            }
+
+            setPaidConfirmationState('idle');
+            setReadyForStaffError(error instanceof CloudSessionError ? error.reason : 'session_failed');
+            scrollToTop();
+        } finally {
+            if (isCurrentRun()) setIsMarkingReadyForStaff(false);
+        }
+    };
+
+    const retryApprovedPurchaseConfirmation = () => {
+        if (isMarkingReadyForStaff) return;
+        const attestedAt = pendingSafetyAttestedAtRef.current ?? new Date().toISOString();
+        void confirmApprovedPurchaseAndReadyForStaff(attestedAt, { manualRetry: true });
+    };
+
     const completeSafetyAndReadyForStaff = async (attestedAt: string) => {
         if (isMarkingReadyForStaff) return;
         if (!ctx.checkinSession) {
+            if (isApprovedPurchaseAwaitingConfirmation(ctx)) {
+                await confirmApprovedPurchaseAndReadyForStaff(attestedAt);
+                return;
+            }
             setReadyForStaffError('session_failed');
             return;
         }
@@ -731,6 +859,16 @@ function CheckInFlow() {
 
     useEffect(() => {
         if (state !== 'KIOSK_BUY') setBuyStep('TIMESLOT');
+    }, [state]);
+
+    useEffect(() => {
+        // Leaving the safety attestation cancels any pending paid confirmation so a stale
+        // check cannot advance the flow later.
+        if (state === 'APP_SAFETY_ATTEST') return;
+        paidConfirmationRunRef.current += 1;
+        pendingSafetyAttestedAtRef.current = null;
+        setPaidConfirmationState('idle');
+        setIsMarkingReadyForStaff(false);
     }, [state]);
 
     useEffect(() => {
@@ -889,7 +1027,7 @@ function CheckInFlow() {
                             onRequestExit={() => setExitDialogOpen(true)}
                             onStepChange={setBuyStep}
                             onBookingReady={booking => {
-                                return preparePaidNewBooking(booking);
+                                return preparePaidNewBooking(booking, null, { paymentApproved: true });
                             }}
                         />
                     )}
@@ -918,6 +1056,22 @@ function CheckInFlow() {
                             buyEntryFlow={ctx.buyEntryFlow}
                             isSubmitting={isMarkingReadyForStaff}
                             submitError={readyForStaffError}
+                            statusNotice={
+                                paidConfirmationState === 'checking' || paidConfirmationState === 'waiting'
+                                    ? t.safetyAttest.paymentConfirmationWaiting
+                                    : paidConfirmationState === 'delayed'
+                                        ? t.safetyAttest.paymentConfirmationDelayed
+                                        : null
+                            }
+                            statusState={paidConfirmationState}
+                            retryAction={
+                                paidConfirmationState === 'delayed'
+                                    ? {
+                                        label: t.safetyAttest.paymentConfirmationRetry,
+                                        onClick: retryApprovedPurchaseConfirmation,
+                                    }
+                                    : null
+                            }
                             onComplete={completeSafetyAndReadyForStaff}
                         />
                     )}
