@@ -4,12 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 import type { NewBookingDraftResult } from '@/flow/cloudClient';
+import { isEcommercePaymentNavigationLocked, type EcommercePaymentStatus } from '@/flow/exitFlowPolicy';
 import {
-  isEcommercePaymentNavigationLocked,
-  type EcommercePaymentStatus,
-} from '@/flow/exitFlowPolicy';
+  beginPaymentRecovery, bindPaymentRecoverySession, claimPaymentRedirect, clearPaymentRecovery,
+  classifyPaymentResult, consumePaymentRedirect, getPaymentRedirect, hasPaymentRedirect,
+  matchesPaymentRedirect, readPaymentRecovery, setPaymentRecoveryOutcome,
+  type PaymentRecoveryRecord,
+} from '@/flow/paymentRecovery';
 
-type PaymentStatus = EcommercePaymentStatus;
+type PaymentStatus = EcommercePaymentStatus | 'unknown';
 
 export interface RollerPaymentResultSummary {
   message: string | null;
@@ -19,6 +22,10 @@ export interface RollerPaymentResultSummary {
 
 interface RollerPaymentDropInProps {
   amountLabel: string;
+  attemptId: string;
+  bookingIdentifier: string;
+  kind?: 'new_booking' | 'add_product';
+  returnAttempt?: PaymentRecoveryRecord;
   onApproved: (result: RollerPaymentResultSummary) => void;
   onFailed: (result: RollerPaymentResultSummary) => void;
   onNavigationLockChange?: (locked: boolean) => void;
@@ -26,168 +33,247 @@ interface RollerPaymentDropInProps {
 }
 
 const PAYMENT_CONTAINER_ID = 'roller-payment-container';
+const RESULT_WAIT_MS = 30_000;
 
 export const RollerPaymentDropIn = ({
-  amountLabel,
-  onApproved,
-  onFailed,
-  onNavigationLockChange,
-  paymentSession,
+  amountLabel, attemptId, bookingIdentifier, kind = 'new_booking', returnAttempt,
+  onApproved, onFailed, onNavigationLockChange, paymentSession,
 }: RollerPaymentDropInProps) => {
   const { t } = useTranslation();
   const [status, setStatus] = useState<PaymentStatus>('bootstrapping');
   const [message, setMessage] = useState<string | null>(null);
-  const startedRef = useRef(false);
-  const onApprovedRef = useRef(onApproved);
-  const onFailedRef = useRef(onFailed);
-  const onNavigationLockChangeRef = useRef(onNavigationLockChange);
+  const callbacks = useRef({ onApproved, onFailed, onNavigationLockChange });
+  const labels = useRef(t.buy);
 
   useEffect(() => {
-    onApprovedRef.current = onApproved;
-    onFailedRef.current = onFailed;
-    onNavigationLockChangeRef.current = onNavigationLockChange;
-  }, [onApproved, onFailed, onNavigationLockChange]);
+    callbacks.current = { onApproved, onFailed, onNavigationLockChange };
+    labels.current = t.buy;
+  }, [onApproved, onFailed, onNavigationLockChange, t.buy]);
 
   useEffect(() => {
-    onNavigationLockChangeRef.current?.(isEcommercePaymentNavigationLocked(status));
+    callbacks.current.onNavigationLockChange?.(
+      isEcommercePaymentNavigationLocked(status === 'unknown' ? 'received' : status)
+    );
   }, [status]);
 
+  const configAvailable = paymentSession.config?.available;
+  const configApiUrl = paymentSession.config?.apiUrl;
+  const configConfigurationId = paymentSession.config?.configurationId;
+  const configIntegrationId = paymentSession.config?.integrationId;
+  const returnId = returnAttempt?.attemptId;
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-
+    const config = {
+      available: configAvailable,
+      apiUrl: configApiUrl,
+      configurationId: configConfigurationId,
+      integrationId: configIntegrationId,
+    };
     let cancelled = false;
+    let terminal = false;
+    let uncertain = false;
+    let submissionStarted = Boolean(returnId);
+    let documentLeaving = false;
+    let unsubmittedRecordCreatedAt: number | null = null;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const abort = new AbortController();
+    const current = () => !cancelled && !terminal && readPaymentRecovery()?.attemptId === attemptId;
+    const canInitialize = () => !uncertain && current();
+    const stopTimer = () => { if (timeout) clearTimeout(timeout); };
+    const lockNavigation = (locked: boolean) => callbacks.current.onNavigationLockChange?.(locked);
+    const unknown = () => {
+      if (cancelled || terminal || uncertain) return;
+      uncertain = true;
+      stopTimer();
+      setPaymentRecoveryOutcome(attemptId, 'unknown');
+      lockNavigation(true);
+      setStatus('unknown');
+      setMessage(null);
+      callbacks.current.onFailed({ status: 'unknown', message: null, provider: null });
+    };
+    const waitForResult = () => {
+      stopTimer();
+      timeout = setTimeout(unknown, RESULT_WAIT_MS);
+    };
+    const leavingDocument = () => { documentLeaving = true; };
+    window.addEventListener('pagehide', leavingDocument);
+    window.addEventListener('beforeunload', leavingDocument);
 
     async function setupPayment() {
-      const jwt = paymentSession.jwt?.trim();
-      const config = paymentSession.config;
-
-      if (!jwt || !paymentSession.jwtPresent) {
-        setStatus('blocked');
-        setMessage(t.buy.paymentMissingJwt);
-        return;
-      }
-
       if (!config?.available || !config.apiUrl || !config.configurationId || !config.integrationId) {
         setStatus('blocked');
-        setMessage(t.buy.paymentMissingConfig);
+        setMessage(labels.current.paymentMissingConfig);
         return;
       }
-
+      // A fresh checkout never consumes an old return on behalf of its new draft.
+      if (!returnId && hasPaymentRedirect()) {
+        unknown();
+        return;
+      }
+      if (!returnId && (!paymentSession.jwtPresent || !paymentSession.jwt?.trim())) {
+        setStatus('blocked');
+        setMessage(labels.current.paymentMissingJwt);
+        return;
+      }
+      const previous = readPaymentRecovery();
+      if (!returnId && previous && previous.outcome !== 'failed') {
+        unknown();
+        return;
+      }
+      const record = returnId ? previous : beginPaymentRecovery({
+        attemptId, bookingIdentifier, kind, config,
+      });
+      if (!record || record.attemptId !== attemptId || (returnId && returnId !== attemptId)) {
+        unknown();
+        return;
+      }
+      if (record.outcome === 'approved' || record.outcome === 'failed') {
+        unknown();
+        return;
+      }
+      if (!returnId && (!previous || previous.outcome === 'failed')) {
+        unsubmittedRecordCreatedAt = record.createdAt;
+      }
+      setStatus('bootstrapping');
+      setMessage(null);
+      waitForResult();
       try {
         const { EcomPaymentService, PaymentResult } = await import('@roller/ecom-payments');
-        if (cancelled) return;
-
-        const paymentService = new EcomPaymentService();
+        if (!canInitialize()) return;
+        const service = new EcomPaymentService();
         const handlers = {
           onReady: () => {
-            if (!cancelled) setStatus('ready');
+            if (canInitialize() && !submissionStarted) {
+              stopTimer();
+              lockNavigation(false);
+              setStatus('ready');
+            }
+          },
+          onBeforeSubmit: (): Promise<void> => {
+            submissionStarted = true;
+            if (!canInitialize()) {
+              unknown();
+              // SDK 1.0.217 resolves Adyen's action even after a rejected hook.
+              // A disposed/uncertain attempt must never release that action.
+              return new Promise<void>(() => undefined);
+            }
+            lockNavigation(true);
+            setStatus('received');
+            waitForResult();
+            return Promise.resolve();
           },
           onPaymentReceived: () => {
-            if (!cancelled) setStatus('received');
+            if (current()) {
+              submissionStarted = true;
+              lockNavigation(true);
+              if (!uncertain) { setStatus('received'); waitForResult(); }
+            }
           },
           onPaymentCompleted: (result: unknown) => {
+            if (!current()) return;
             const summary = normalizePaymentResult(result, PaymentResult);
-            if (summary.status === 'approved') {
-              setStatus('approved');
-              setMessage(summary.message);
-              onApprovedRef.current(summary);
-              return;
+            // Require definitive evidence for returns and failure recovery. #329 owns
+            // the normal checkout's broader Pending/Received classification.
+            if (returnId || summary.status !== 'approved') {
+              summary.status = classifyPaymentResult(result, PaymentResult);
             }
-
-            setStatus(summary.status === 'failed' ? 'failed' : 'received');
-            setMessage(summary.message ?? t.buy.paymentUnknownResult);
-            onFailedRef.current(summary);
+            if (summary.status === 'unknown') { unknown(); return; }
+            if (!setPaymentRecoveryOutcome(attemptId, summary.status)) return;
+            terminal = true;
+            stopTimer();
+            lockNavigation(summary.status === 'approved');
+            setStatus(summary.status);
+            setMessage(null);
+            if (summary.status === 'approved') callbacks.current.onApproved(summary);
+            else callbacks.current.onFailed({ ...summary, message: null });
           },
         };
-
-        const paymentConfiguration = await paymentService.bootstrap(
-          {
-            apiUrl: config.apiUrl,
-            configurationId: config.configurationId,
-            integrationId: config.integrationId,
+        const bootstrapConfig = {
+          apiUrl: config!.apiUrl!, configurationId: config!.configurationId!, integrationId: config!.integrationId!,
+        };
+        const paymentConfiguration = await service.bootstrap(bootstrapConfig, {
+          http: {
+            get: (url: string, params?: Record<string, unknown>, options?: PaymentHttpOptions) =>
+              paymentGet(url, params, { ...options, signal: abort.signal }),
+            post: async (url: string, data?: unknown, options?: PaymentHttpOptions) => {
+              const createsSession = new URL(url).pathname.endsWith('/payment/session');
+              if (!current() || (createsSession && !canInitialize())) throw new Error('Payment attempt no longer active');
+              const response = await paymentPost(url, data, { ...options, signal: abort.signal });
+              if (createsSession && !canInitialize()) throw new Error('Payment attempt no longer active');
+              if (createsSession && response?.session?.id) {
+                if (!await bindPaymentRecoverySession(attemptId, String(response.session.id))) {
+                  throw new Error('Payment recovery unavailable');
+                }
+              }
+              return response;
+            },
           },
-          {
-            http: {
-              get: paymentGet,
-              post: paymentPost,
-            },
-            log: {
-              error: () => undefined,
-              info: () => undefined,
-              warn: () => undefined,
-            },
-            translate: (key: string) => key,
+          log: { error: () => undefined, info: () => undefined, warn: () => undefined },
+          translate: (key: string) => key,
+        });
+        if (!canInitialize()) return;
+        if (!paymentConfiguration) { unknown(); return; }
+
+        if (returnId) {
+          const redirect = getPaymentRedirect();
+          const latest = readPaymentRecovery();
+          if (!redirect || !latest || !await matchesPaymentRedirect(latest, redirect) || !canInitialize()) {
+            unknown();
+            return;
           }
-        );
-
-        if (cancelled) return;
-
-        if (!paymentConfiguration) {
-          setStatus('blocked');
-          setMessage(t.buy.paymentBlockedDesc);
-          return;
-        }
-
-        if (paymentService.hasRedirectResult()) {
+          if (!claimPaymentRedirect(attemptId)) { unknown(); return; }
+          lockNavigation(true);
           setStatus('received');
-          await paymentService.handleRedirect(handlers);
+          // SDK 1.0.217 captures URL fields synchronously, before its first await.
+          // Reload retains only bounded identity/status, never the return payload.
+          const handling = service.handleRedirect(handlers);
+          consumePaymentRedirect();
+          await handling;
           return;
         }
-
-        const setupResult = await paymentService.setup({
+        const result = await service.setup({
           hasRecurringBilling: false,
-          jwt,
+          jwt: paymentSession.jwt!.trim(),
           paymentContainerDivId: PAYMENT_CONTAINER_ID,
-          redirectUrl: `${window.location.origin}${window.location.pathname}`,
+          redirectUrl: window.location.origin + window.location.pathname,
           handlers,
         });
-
-        if (!cancelled && typeof setupResult === 'string' && setupResult.trim()) {
-          setStatus('failed');
-          setMessage(setupResult);
-        }
-      } catch (error) {
-        if (cancelled) return;
-        setStatus('failed');
-        setMessage(error instanceof Error ? error.message : t.buy.paymentFailedDesc);
+        if (current() && typeof result === 'string' && result.trim()) unknown();
+      } catch {
+        if (!cancelled) unknown();
       }
     }
-
     void setupPayment();
-
     return () => {
       cancelled = true;
+      stopTimer();
+      abort.abort();
+      window.removeEventListener('pagehide', leavingDocument);
+      window.removeEventListener('beforeunload', leavingDocument);
+      const record = readPaymentRecovery();
+      // Only a clean in-app exit before submission may discard a fresh attempt.
+      // A browser/provider departure or any uncertainty retains its recovery.
+      if (!returnId && !documentLeaving && !submissionStarted && !uncertain && !hasPaymentRedirect()
+        && unsubmittedRecordCreatedAt !== null && record?.attemptId === attemptId
+        && record.createdAt === unsubmittedRecordCreatedAt && record.outcome === 'pending' && !record.returnConsumed) {
+        clearPaymentRecovery(attemptId);
+      }
     };
-  }, [
-    paymentSession.config,
-    paymentSession.jwt,
-    paymentSession.jwtPresent,
-    t.buy.paymentFailedDesc,
-    t.buy.paymentBlockedDesc,
-    t.buy.paymentMissingConfig,
-    t.buy.paymentMissingJwt,
-    t.buy.paymentUnknownResult,
-  ]);
+  }, [attemptId, bookingIdentifier, kind, returnId, configAvailable, configApiUrl,
+    configConfigurationId, configIntegrationId, paymentSession.jwt, paymentSession.jwtPresent]);
 
+  const description = status === 'unknown' ? t.buy.paymentRecoveryDescription
+    : status === 'failed' ? t.buy.paymentFailedDesc
+    : getStatusDescription(status, amountLabel, message, t.buy);
   return (
     <div className="bg-white border border-border rounded-xl p-4 text-left" data-roller-payment-status={status}>
-      <p
-        className={`mb-4 text-sm font-bold italic ${
-          status === 'failed' || status === 'blocked' ? 'text-danger' : 'text-foreground'
-        }`}
-      >
-        {getStatusDescription(status, amountLabel, message, t.buy)}
-      </p>
-
+      <p className="mb-4 text-sm font-bold italic text-foreground" role="status">{description}</p>
       {(status === 'bootstrapping' || status === 'received') && (
         <div className="flex items-center gap-2 text-xs font-bold italic uppercase text-muted">
           <Loader2 size={14} className="animate-spin" />
           {status === 'received' ? t.buy.paymentReceived : t.buy.paymentStarting}
         </div>
       )}
-
-      <div id={PAYMENT_CONTAINER_ID} className="min-h-16" />
+      <div id={PAYMENT_CONTAINER_ID} className="min-h-16" hidden={status === 'failed' || status === 'unknown'} />
     </div>
   );
 };
@@ -213,6 +299,7 @@ async function paymentFetch(url: string, method: 'GET' | 'POST', data?: unknown,
   const response = await fetch(url, {
     body: method === 'POST' ? JSON.stringify(data ?? {}) : undefined,
     headers,
+    signal: options?.signal,
     method,
   });
   const text = await response.text();
@@ -236,6 +323,7 @@ function parsePaymentResponse(text: string) {
 }
 
 interface PaymentHttpOptions {
+  signal?: AbortSignal;
   headers?: Record<string, string | string[]>;
 }
 

@@ -74,7 +74,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Buy-entry/add-ons use server-owned Roller paths and approved Nacka products plus Live availability. `COMBO60` maps to Weekday Combo `1242135`/`1242136` and requires its parent in Roller's public catalog; catalog failures retry and frontends never call Roller.
 - Live water: `970411`/`970363` (D0195).
 - D0196/D0197: compact mobile add-ons use plus/minus, native scroll and Continue validation.
-- PWA drafts request Roller-native confirmation/receipt email with `sendConfirmations=true`; new-booking delivery is proven.
+- PWA drafts request Roller confirmation/receipt email (`sendConfirmations=true`), proven for new bookings; recovery follows D0201/#351.
 
 ## Data And Integration Facts
 
