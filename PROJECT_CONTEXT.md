@@ -13,7 +13,7 @@ This file holds confirmed durable facts. The private [GitHub Project](https://gi
 
 The Nacka path is `dev/Playground -> Park verification -> protected public promotion`, using the existing technical `park-test` Live backend. Multi-park topology needs a separate decision; no duplicate pilot backend is planned.
 
-The [2026-06-11 roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf) covers phone, admin, and required cloud work in Sprint 3. Kiosk/print/terminal and JumpyBoard/AirHive are separate.
+The [2026-06-11 roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf) covers phone, admin, and required cloud work in Sprint 3.
 
 The check-in app suite connects to Roller Playground and park-test Live through a server-side layer. The target production architecture remains:
 
@@ -32,7 +32,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 - History: [completed tickets](docs/history/completed-tickets.md), [validation evidence](docs/history/validation-log.md), [Sprint 1 narrative](docs/history/sprint-1-ticket-history.md), and [done followups](docs/history/followups-done.md).
 - Planning migration: [Project policy/gates](docs/roadmap/backlog.md) and [legacy-to-Project mapping](docs/history/github-project-migration-2026-07-14.md).
-- Current evidence: [roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf), `docs/t0191-*` through `docs/t0199-*`, and [email sender readiness](docs/t0200-email-sender-readiness.md).
+- Current evidence: `docs/t0191-*` through `docs/t0199-*`, and [email sender readiness](docs/t0200-email-sender-readiness.md).
 
 ## Durable Architecture Facts
 
@@ -73,7 +73,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Safety completion produces a server-owned staff handoff; an approved phone purchase enters safety before Roller confirms payment and is reconfirmed at the handoff (D0199/#331). Staff PINs: atomic session replacement, credential-free audit, coalesced queues, bounded heartbeat retry (#334).
 - Buy-entry/add-ons use server-owned Roller paths and approved Nacka products plus Live availability. `COMBO60` maps to Weekday Combo `1242135`/`1242136` and requires its parent in Roller's public catalog; catalog failures retry and frontends never call Roller.
 - Live water: `970411`/`970363` (D0195).
-- D0196/D0197: compact mobile add-ons use plus/minus, native scroll and Continue validation.
+- D0196/D0197: compact add-ons use plus/minus, native scroll and Continue validation. D0205/#350: tiny top-right SV/EN control; both languages only on start screens.
 - PWA drafts use `sendConfirmations=true`, proven for new bookings; payment recovery follows D0201/#351 and D0203/#361.
 
 ## Data And Integration Facts
