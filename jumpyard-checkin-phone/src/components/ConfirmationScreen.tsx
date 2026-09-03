@@ -175,7 +175,7 @@ export const ConfirmationScreen = ({
 
             </div>
 
-            {!completed && onStartOver && (
+            {onStartOver && (
                 <button
                     type="button"
                     onClick={onStartOver}

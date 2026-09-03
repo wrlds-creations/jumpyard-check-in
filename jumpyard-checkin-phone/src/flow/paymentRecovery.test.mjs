@@ -19,6 +19,7 @@ import {
   purgeExpiredPaymentRecovery,
   readPaymentRecovery,
   setPaymentRecoveryOutcome,
+  withNoActivePaymentRecovery,
 } from './paymentRecovery.ts';
 
 const KEY = 'jumpyard.paymentRecovery.v1';
@@ -345,4 +346,237 @@ test('a delayed cleanup reads current keys under ownership and preserves an unex
     assert.equal(readPaymentRecovery().submission.phase, 'prepared');
     assert.equal(await clearPaymentRecoveryAfterCompletion(old.attemptId, () => assert.fail('Stale retry callback ran')), false);
   } finally { lease.restore(); }
+});
+
+function installExclusiveLockManager(t) {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const held = new Set();
+  const manager = {
+    async request(name, options, callback) {
+      assert.equal(options.mode, 'exclusive');
+      assert.equal(options.ifAvailable, true);
+      if (held.has(name)) return callback(null);
+      held.add(name);
+      try { return await callback({ name }); } finally { held.delete(name); }
+    },
+  };
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks: manager } });
+  t.after(() => {
+    if (descriptor) Object.defineProperty(globalThis, 'navigator', descriptor);
+    else delete globalThis.navigator;
+  });
+  return { held, manager };
+}
+
+test('empty payment storage permits one synchronous completed-state action under an exclusive lease', async (t) => {
+  const { held } = installExclusiveLockManager(t);
+  const otherTab = await import('./paymentRecovery.ts?empty-guard-other-tab');
+  let competingOwnership;
+  let calls = 0;
+  assert.equal(await withNoActivePaymentRecovery(() => {
+    calls += 1;
+    assert.equal(held.size, 1);
+    assert.equal(values.size, 0);
+    competingOwnership = otherTab.acquirePaymentRecoveryOwnership();
+  }), true);
+  assert.equal(calls, 1);
+  assert.equal(await competingOwnership, null, 'A second tab cannot start checkout inside completed-state cleanup');
+  assert.equal(values.size, 0, 'The guard must not create payment metadata');
+  const nextOwner = await acquirePaymentRecoveryOwnership();
+  assert.equal(nextOwner.protected, true, 'The guard releases its lease after the synchronous action');
+  nextOwner.release();
+});
+
+test('completed-state cleanup never borrows an active local or foreign checkout lease', async (t) => {
+  installExclusiveLockManager(t);
+  let calls = 0;
+  const localOwner = await acquirePaymentRecoveryOwnership();
+  try {
+    assert.equal(await withNoActivePaymentRecovery(() => { calls += 1; }), false);
+  } finally { localOwner.release(); }
+  const otherTab = await import('./paymentRecovery.ts?empty-guard-foreign-owner');
+  const foreignOwner = await otherTab.acquirePaymentRecoveryOwnership();
+  try {
+    assert.equal(await withNoActivePaymentRecovery(() => { calls += 1; }), false);
+    const newAttempt = otherTab.beginPaymentRecovery(input('new-owner-attempt'));
+    assert.equal(otherTab.initializePaymentRecoverySubmission(newAttempt, foreignOwner), true);
+  } finally { foreignOwner.release(); }
+  const stored = [...values];
+  assert.equal(await withNoActivePaymentRecovery(() => { calls += 1; }), false,
+    'A stale completed UI action must reread the new attempt after its owner releases');
+  assert.equal(calls, 0);
+  assert.deepEqual([...values], stored);
+  assert.equal(readPaymentRecovery().attemptId, 'new-owner-attempt');
+});
+
+test('an attempt created while completed-state cleanup awaits ownership is reread and protected', async (t) => {
+  const { held, manager } = installExclusiveLockManager(t);
+  const otherTab = await import('./paymentRecovery.ts?empty-guard-creation-race');
+  const originalRequest = manager.request.bind(manager);
+  let signalRequested;
+  let resumeRequest;
+  const requested = new Promise(resolve => { signalRequested = resolve; });
+  const resume = new Promise(resolve => { resumeRequest = resolve; });
+  let pauseNextRequest = true;
+  manager.request = async (...args) => {
+    if (pauseNextRequest) {
+      pauseNextRequest = false;
+      signalRequested();
+      await resume;
+    }
+    return originalRequest(...args);
+  };
+  const cleanup = withNoActivePaymentRecovery(() => assert.fail('An attempt created during acquisition was ignored'));
+  await requested;
+  const owner = await otherTab.acquirePaymentRecoveryOwnership();
+  try {
+    const attempt = otherTab.beginPaymentRecovery(input('created-during-acquisition'));
+    assert.equal(otherTab.initializePaymentRecoverySubmission(attempt, owner), true);
+    assert.equal(await otherTab.bindPaymentRecoverySession(attempt.attemptId, 'session-created-during-acquisition'), true);
+    assert.equal(otherTab.markPaymentRecoverySubmitted(attempt, owner), true);
+  } finally { owner.release(); }
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(held.size, 0, 'The competing creation finished before the cleanup acquires its own lease');
+  const stored = [...values];
+  resumeRequest();
+  assert.equal(await cleanup, false);
+  assert.deepEqual([...values], stored);
+  const current = readPaymentRecovery();
+  assert.equal(current.attemptId, 'created-during-acquisition');
+  assert.equal(current.outcome, 'pending');
+  assert.equal(current.submission.phase, 'submitted');
+  assert.match(current.sessionHash, /^[a-f0-9]{64}$/);
+});
+
+test('every existing raw payment key blocks completed-state cleanup without interpreting or purging it', async (t) => {
+  installExclusiveLockManager(t);
+  const expired = JSON.stringify({ version: 1, createdAt: now - PAYMENT_RECOVERY_MAX_AGE_MS,
+    expiresAt: now, phase: 'submitted' });
+  for (const key of [KEY, PROOF_KEY, OBSERVATION_KEY]) {
+    for (const raw of ['', 'null', '{invalid', expired, JSON.stringify({ phase: 'approved', expiresAt: now + 1000 }),
+      JSON.stringify({ phase: 'failed', expiresAt: now + 1000 })]) {
+      values.clear();
+      values.set(key, raw);
+      assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Existing evidence was ignored')), false, `${key}: ${raw}`);
+      assert.deepEqual([...values], [[key, raw]], 'The guard must not remove or normalize raw evidence');
+    }
+  }
+});
+
+test('unavailable or unreadable storage cannot be mistaken for an empty payment store', async (t) => {
+  installExclusiveLockManager(t);
+  const realStorage = window.localStorage;
+  for (const failedKey of [KEY, PROOF_KEY, OBSERVATION_KEY]) {
+    window.localStorage = { ...realStorage, getItem(key) {
+      if (key === failedKey) throw new Error('blocked read');
+      return realStorage.getItem(key);
+    } };
+    assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Unreadable storage allowed cleanup')), false);
+  }
+  Object.defineProperty(window, 'localStorage', { configurable: true, get() { throw new Error('unavailable'); } });
+  assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Unavailable storage allowed cleanup')), false);
+});
+
+test('provider return fragments and unreadable URLs block empty-store cleanup inside the lease', async (t) => {
+  const { held } = installExclusiveLockManager(t);
+  for (const query of ['sessionId=s', 'redirectResult=', 'redirectResult=return',
+    'sessionId=s&redirectResult=return', 'sessionId=s&sessionId=t&redirectResult=return']) {
+    window.location.href = `https://phone.example.test/?${query}`;
+    assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Provider return was ignored')), false, query);
+  }
+  window.location.href = 'not a URL';
+  assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Malformed URL allowed cleanup')), false);
+  Object.defineProperty(window.location, 'href', { get() {
+    assert.equal(held.size, 1, 'URL evidence must be checked while the writer lease is held');
+    throw new Error('unreadable URL');
+  } });
+  assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Unreadable URL allowed cleanup')), false);
+});
+
+test('a detected clock rollback blocks completed-state cleanup even after raw keys are absent', async (t) => {
+  installExclusiveLockManager(t);
+  beginPaymentRecovery(input());
+  now += 1000;
+  readPaymentRecovery();
+  now -= 500;
+  assert.equal(readPaymentRecovery(), null);
+  values.clear();
+  assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Clock rollback was ignored')), false);
+  now += 500;
+  assert.equal(await withNoActivePaymentRecovery(() => true), true);
+});
+
+test('unsupported or rejected Web Locks preserve the conservative completed-state guard', async (t) => {
+  installExclusiveLockManager(t);
+  for (const locks of [undefined, { request() { return Promise.reject(new Error('denied')); } }]) {
+    globalThis.navigator.locks = locks;
+    assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Unprotected cleanup ran')), false);
+  }
+});
+
+test('missing Web Locks permit empty-store cleanup only through explicit legacy ownership', async (t) => {
+  installExclusiveLockManager(t);
+  globalThis.navigator.locks = undefined;
+  let calls = 0;
+  assert.equal(await withNoActivePaymentRecovery(() => { calls += 1; }), false);
+  assert.equal(await withNoActivePaymentRecovery(() => { calls += 1; }, { allowLegacyOwnership: false }), false);
+  assert.equal(await withNoActivePaymentRecovery(() => { calls += 1; }, { allowLegacyOwnership: true }), true);
+  assert.equal(calls, 1);
+  assert.equal(values.size, 0);
+  const liveOwner = await acquirePaymentRecoveryOwnership();
+  assert.equal(liveOwner.protected, false);
+  try {
+    assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Existing legacy checkout lease was borrowed'),
+      { allowLegacyOwnership: true }), false);
+  } finally { liveOwner.release(); }
+});
+
+test('legacy ownership keeps every raw payment key and incomplete provider return protected', async (t) => {
+  installExclusiveLockManager(t);
+  globalThis.navigator.locks = undefined;
+  const options = { allowLegacyOwnership: true };
+  for (const key of [KEY, PROOF_KEY, OBSERVATION_KEY]) {
+    for (const raw of ['', '{malformed', JSON.stringify({ phase: 'submitted', expiresAt: now + 1000 }),
+      JSON.stringify({ phase: 'approved', expiresAt: now - 1 })]) {
+      values.clear();
+      values.set(key, raw);
+      assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Legacy ownership ignored raw payment evidence'), options), false);
+      assert.deepEqual([...values], [[key, raw]]);
+    }
+  }
+  values.clear();
+  for (const query of ['sessionId=s', 'redirectResult=', 'redirectResult=return', 'sessionId=s&redirectResult=return']) {
+    window.location.href = `https://phone.example.test/?${query}`;
+    assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Legacy ownership ignored a provider return'), options), false, query);
+  }
+});
+
+test('legacy opt-in never falls back after an available Web Lock is rejected, denied or contended', async (t) => {
+  const { manager } = installExclusiveLockManager(t);
+  const options = { allowLegacyOwnership: true };
+  for (const request of [
+    () => Promise.reject(new Error('denied')),
+    () => { throw new Error('unavailable by policy'); },
+    async (_name, _options, callback) => callback(null),
+  ]) {
+    globalThis.navigator.locks = { request };
+    assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Failed lock acquisition fell back to legacy'), options), false);
+  }
+  globalThis.navigator.locks = manager;
+  const otherTab = await import('./paymentRecovery.ts?legacy-guard-foreign-owner');
+  const foreignOwner = await otherTab.acquirePaymentRecoveryOwnership();
+  try {
+    assert.equal(await withNoActivePaymentRecovery(() => assert.fail('Foreign checkout lease was bypassed'), options), false);
+  } finally { foreignOwner.release(); }
+});
+
+test('a veto, exception or asynchronous callback cannot report completed-state cleanup success', async (t) => {
+  installExclusiveLockManager(t);
+  assert.equal(await withNoActivePaymentRecovery(() => false), false);
+  assert.equal(await withNoActivePaymentRecovery(() => { throw new Error('snapshot changed'); }), false);
+  let asyncCalled = false;
+  assert.equal(await withNoActivePaymentRecovery(async () => { asyncCalled = true; }), false);
+  assert.equal(asyncCalled, false);
+  assert.equal(await withNoActivePaymentRecovery(() => ({ then() { assert.fail('Guard awaited a thenable'); } })), false);
+  assert.equal(await withNoActivePaymentRecovery(() => true), true, 'All failure paths release their own lease');
 });

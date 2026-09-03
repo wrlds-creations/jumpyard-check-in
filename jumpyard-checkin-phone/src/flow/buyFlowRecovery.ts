@@ -47,6 +47,11 @@ export interface BuyFlowRecoveryContact {
   phone: string;
 }
 
+export interface BuyFlowRecoveryCompletion {
+  bookingIdentifier: string;
+  status: 'ready_for_staff' | 'completed';
+}
+
 export interface BuyFlowRecoverySnapshot {
   version: 1;
   updatedAt: string;
@@ -66,6 +71,8 @@ export interface BuyFlowRecoverySnapshot {
   contact?: BuyFlowRecoveryContact | null;
   paymentOptionsHadValues?: boolean;
   draftState: BuyFlowRecoveryDraftState | null;
+  /** Local evidence of the completed guest flow; current payment guards still take precedence. */
+  completion?: BuyFlowRecoveryCompletion | null;
 }
 
 const STORAGE_KEY = 'jumpyard.buyFlowRecovery.v1';
@@ -201,6 +208,46 @@ function storedObservationTime(value: unknown): number | null {
   return validTimes.length > 0 ? Math.max(...validTimes) : null;
 }
 
+function completionBookingIdentifier(value: unknown): string | null {
+  if (!isObject(value) || Array.isArray(value) || !isObject(value.draftState) || Array.isArray(value.draftState)
+    || value.draftState.paymentApproved !== true || value.draftState.paymentRequired !== false) return null;
+  const draft = value.draftState;
+  const identifiers = [value.bookingReference, draft.bookingReference, value.draftUniqueId, draft.uniqueId];
+  if (identifiers.some(id => id !== null && id !== undefined
+    && (typeof id !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,255}$/.test(id)))) return null;
+  if (value.bookingReference != null && draft.bookingReference != null && value.bookingReference !== draft.bookingReference) return null;
+  if (value.draftUniqueId != null && draft.uniqueId != null && value.draftUniqueId !== draft.uniqueId) return null;
+  return identifiers.find(id => typeof id === 'string') as string | undefined ?? null;
+}
+
+/** Completion can offer an explicit new purchase, but never proves an unresolved payment was cancelled. */
+export function hasCompletedBuyFlowRecovery(snapshot: unknown): boolean {
+  const identifier = completionBookingIdentifier(snapshot);
+  if (!identifier || !isObject(snapshot)) return false;
+  if (!Object.prototype.hasOwnProperty.call(snapshot, 'completion')) {
+    // The legacy safety writer reached APP_PRESENT only after completion or already-redeemed recovery.
+    return snapshot.currentFlowStep === 'APP_PRESENT' && isObject(snapshot.draftState)
+      && snapshot.draftState.prepaymentDraftId == null;
+  }
+  const completion = snapshot.completion;
+  if (!isObject(completion) || Array.isArray(completion) || completion.bookingIdentifier !== identifier) return false;
+  return (snapshot.currentFlowStep === 'APP_CONFIRM' && completion.status === 'ready_for_staff')
+    || (snapshot.currentFlowStep === 'APP_PRESENT' && completion.status === 'completed');
+}
+
+function readCompletion(value: unknown): Pick<BuyFlowRecoverySnapshot, 'completion'> {
+  if (!isObject(value)) return { completion: null };
+  if (!Object.prototype.hasOwnProperty.call(value, 'completion')) {
+    // Do not let normalization of malformed legacy flags/ids manufacture completion evidence.
+    return value.currentFlowStep === 'APP_PRESENT' && !hasCompletedBuyFlowRecovery(value) ? { completion: null } : {};
+  }
+  if (!hasCompletedBuyFlowRecovery(value) || !isObject(value.completion)) return { completion: null };
+  return { completion: {
+    bookingIdentifier: value.completion.bookingIdentifier as string,
+    status: value.completion.status as BuyFlowRecoveryCompletion['status'],
+  } };
+}
+
 function normalizeSnapshot(value: unknown): BuyFlowRecoverySnapshot | null {
   if (!isObject(value) || value.version !== 1 || !isRecoveryStep(value.currentFlowStep)) return null;
 
@@ -233,6 +280,7 @@ function normalizeSnapshot(value: unknown): BuyFlowRecoverySnapshot | null {
     : suppliedLastObservedTime;
 
   return {
+    ...readCompletion(value),
     addonQty: readAddonQty(value.addonQty),
     alreadyHasApprovedSocks: value.alreadyHasApprovedSocks === true,
     alreadyHasWaterBottle: value.alreadyHasWaterBottle === true,
@@ -333,6 +381,7 @@ export function writeBuyFlowRecovery(
 
   const next: BuyFlowRecoverySnapshot = {
     ...snapshot,
+    ...readCompletion(snapshot),
     expiresAt: new Date(now + BUY_FLOW_RECOVERY_MAX_AGE_MS).toISOString(),
     lastObservedAt: updatedAt,
     updatedAt,

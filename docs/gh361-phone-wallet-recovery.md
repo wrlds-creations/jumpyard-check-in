@@ -1,5 +1,32 @@
 # Phone wallet failure recovery — #361
 
+## Completed-booking recovery follow-up
+
+Love reported that the iPhone still showed the unknown-payment card after opening the clean `https://checkin.jumpyard.se/` URL and suspected an old booking. The iPhone's actual stored attempt has not been inspected. This report does not establish its payment method, outcome or booking identity.
+
+An offline reproduction found that a failed lookup of a saved completed purchase was classified as an unknown payment. The app's lookup requests today's visit date, so an old booking can fail restoration without becoming unpaid. The completed/already-checked-in view also hid its supplied **Gör en ny bokning** action.
+
+The follow-up correction, based on `208a06fe272e74f2aa7dce1d217d31013bed81b1`, preserves #350/#338/#361/#351 and changes only phone recovery and its tests:
+
+- Save a minimal `completion` marker containing the booking identifier and ready/completed status only after confirmed-paid context and the server handoff/completion path. It has the existing snapshot's 12-hour retention, contains no session credentials, and cannot be inferred from ordinary `APP_CONFIRM`, payment approval text or elapsed time.
+- Recognize the legacy safety writer's `APP_PRESENT` only with consistent booking identities, explicit approved/not-required flags and no payment-draft identifier. Invalid or explicitly empty new metadata cannot fall back to this compatibility rule. This permits retiring completed UI state, never payment evidence.
+- Show a distinct previous-booking restoration error with **Försök igen** and **Gör en ny bokning**. A completed restore cannot silently fall back into unfinished safety when its session is unavailable. The progress indicator retains the completed stage.
+- Recheck the exact saved snapshot inside an exclusive payment ownership lease before the new fallback clears it. Raw payment, submission or observation data, return parameters, unreadable storage and clock rollback block the action. A previously observed unresolved attempt is not forgotten when storage expires. Pending lookups are invalidated before the snapshot is cleared.
+- Retain **Gör en ny bokning** on completed/already-checked-in confirmation views. Live confirmed completion uses the same raw-empty checks; browsers genuinely lacking Web Locks retain their former live-completion behavior without a claim of cross-tab exclusivity. The new metadata-only restoration fallback requires Web Locks. Ordinary pre-payment exits are unchanged.
+
+This correction does **not** establish a supported way to resume or cancel an unresolved submitted Klarna attempt. The Motorola browser-Back case and missing resume/termination contract remain open in #361 and #353. Google Pay/Klarna merchant readiness and any supported hiding decision remain #353. No payment evidence from Love's phones was cleared, and no new live purchase, provider setting or email send is part of this work.
+
+The original rollout below is historical evidence for the pre-submit correction. It is not evidence that this follow-up is published or that the iPhone is fixed. Follow-up validation and protected rollout are recorded separately before acceptance; #361 stays open for the remaining provider contract and combined handset acceptance.
+
+### Follow-up validation
+
+- `npm --prefix jumpyard-checkin-phone run test:payment-recovery`: 137/137 pass, including actual recovery-storage reads/writes, lease races, completed restore through the real page handlers, legacy/expiry/return/orphan protection and actual rendered confirmation/recovery components in Swedish and English. All business/provider responses are mocked; no live payment or booking request was made.
+- Existing exit-flow, payment-confirmation/preview, paid-confirmation and language-toggle suites: 38/38 pass.
+- Phone `npx tsc --noEmit`, `npm run lint` and local `npx next build --webpack` passed during implementation. Full lint retains four existing image warnings. Final reviewed source must also pass all four exact PR CI gates before merge; this local build is not a deployment artifact.
+- Template, static issue resolver and phone-local-contact retention validators pass; `git diff --check` passes.
+- Independent source/test review found and verified corrections for expired snapshots, foreign prepayment snapshots and completed existing-booking screens. No remaining implementation blocker was found.
+- No physical handset or live payment acceptance is claimed. The actual iPhone attempt and the submitted Klarna browser-Back contract remain unverified. No new dependency, AWS/backend/provider change or follow-up draft was introduced. PROJECT_CONTEXT.md and D0206 record the durable behavior; deployment facts are recorded only after protected promotion.
+
 ## Incident and boundary
 
 Love reported Google Pay `OR_BIBED_06` on an iPhone web checkout on 2026-09-03 around 13:43 CEST. Browser Back showed the payment-status recovery card; reload showed the same card without the booking progress indicator. The exact browser, handset callback and authorization status were not captured.

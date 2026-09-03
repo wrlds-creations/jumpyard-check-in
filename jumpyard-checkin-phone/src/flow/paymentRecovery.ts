@@ -486,6 +486,43 @@ export async function clearPaymentRecoveryAfterCompletion(
   finally { ownership?.release(); }
 }
 
+/** Clear completed UI state only under fresh ownership with readable, absent payment evidence. */
+export async function withNoActivePaymentRecovery(
+  action: () => boolean | void,
+  options: { allowLegacyOwnership?: boolean } = {},
+): Promise<boolean> {
+  // An existing checkout owner must finish its own work; never borrow its lifetime lease.
+  if (activeOwners.size > 0) return false;
+  let ownership: PaymentRecoveryOwnership | null = null;
+  try {
+    if (typeof action !== 'function' || Object.prototype.toString.call(action) === '[object AsyncFunction]') return false;
+    // Existing completed live flows may retain legacy browser support explicitly. This
+    // provides no cross-tab lease and never substitutes for a denied or contended lock.
+    const allowLegacyOwnership = options.allowLegacyOwnership === true
+      && (typeof navigator === 'undefined' || navigator.locks?.request == null);
+    ownership = await acquirePaymentRecoveryOwnership();
+    if (!ownership || (!ownership.protected && !allowLegacyOwnership)
+      || activeOwners.size !== 1 || !activeOwners.has(ownership.ownerId)) return false;
+    const target = storage();
+    if (!target || typeof window === 'undefined') return false;
+    // A normalized null can mean expired, malformed or unreadable, not just absent. Do not
+    // interpret or purge any payment evidence while deciding whether completed UI can reset.
+    for (const key of [STORAGE_KEY, SUBMISSION_KEY, OBSERVATION_KEY]) {
+      if (target.getItem(key) !== null) return false;
+    }
+    const url = new URL(window.location.href);
+    if ((url.protocol !== 'https:' && url.protocol !== 'http:')
+      || url.searchParams.has('sessionId') || url.searchParams.has('redirectResult')) return false;
+    const now = Date.now();
+    if (!Number.isSafeInteger(now) || now < 0 || now < rollbackWriteFloor) return false;
+    // The caller must recheck its exact completed snapshot and mutate it synchronously.
+    // Never await a returned value or let a thenable extend work beyond this lease.
+    const result: unknown = action();
+    return result === undefined || result === true;
+  } catch { return false; }
+  finally { ownership?.release(); }
+}
+
 export function hasPaymentRedirect(): boolean {
   if (typeof window === 'undefined') return false;
   try {
