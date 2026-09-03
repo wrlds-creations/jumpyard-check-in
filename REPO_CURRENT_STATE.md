@@ -5,12 +5,11 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-09-03
-- Public/Park phone/admin: `df69ecb` (#361/PR #362; #331/#333/#334/#351 retained). Release `33755593134`, Park `33756140550`, public `33756585589` passed; no migration. Redeem `77faea7` retained; handset acceptance pending. [Evidence](docs/gh361-phone-wallet-recovery.md).
+- Public/Park phone/admin: `b99a41c` (#350/PR #365; #338/#361/#351 retained). Release `33763734057`, Park `33764307783`, public `33764870440` passed; no migration; rollback release `33758112334` (`9600165`). Redeem `77faea7` retained; #361 handset acceptance pending. [Evidence](docs/gh-350-phone-language-toggle.md).
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
-- Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
 - Product/runtime state: Park has 202 resources, migrations through `0020`, and 27 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption, and late Handoff attachment are proven. A definitively approved kiosk payment now returns its provisional session with the bounded `safety` hint immediately instead of waiting for ROLLER readback; redemption remains blocked until authoritative synchronization. Physical proof remains in kiosk issue #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
-- Product approval and implementation status are read from GitHub Issues and the Project rather than copied into this merged-mainline snapshot.
+- Product approval and implementation status live in GitHub Issues and the Project; current mutable state is read from GitHub rather than copied here.
 
 GitHub issue `#192` and legacy ticket `T0192` are unrelated; preserve both prefixes.
 
@@ -30,7 +29,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 
 - The production architecture remains `check-in app -> JumpYard Cloud/server API -> Roller API`; Roller is authoritative and Aurora is an operational cache.
 - Water selection, unchanged 24-hour cache and historical-payment compatibility: [#315 evidence](docs/gh-315-water-product.md).
-- Compact phone add-ons retain #324 Continue. Approved payment enters safety before Roller confirms, with a paid check at handoff (#331/D0199). Purchase-bound recovery (#351/D0201) adds proven pre-submit wallet retry (#361/D0203); [evidence](docs/gh361-phone-wallet-recovery.md).
+- Compact phone add-ons retain #324 Continue. Approved payment enters safety before Roller confirms, with a paid check at handoff (#331/D0199). Purchase-bound recovery (#351/D0201) adds proven pre-submit wallet retry (#361/D0203); [evidence](docs/gh361-phone-wallet-recovery.md). Tiny top-right SV/EN control, both languages only on start screens (#350/D0205).
 - Issue #264 makes technical `park-test` Nacka's sharp pilot backend without changing its AWS/data identity. The latest protected public promotion is recorded in the snapshot above. Multi-park remains separate.
 - The park-test full-flow posture remains scoped to Nacka `50871` and dates `2026-06-29` through `2026-09-30`. It permits the already approved lookup, booking/payment, add-on, staff-auth, redeem, morning index, and durable booking-webhook paths. The T0201 controlled messaging runtime is deployed, but its single-booking control is disarmed and the general guest-send gate remains closed.
 - The full-flow window remains open until Love explicitly approves closing it; documentation closeout is not a deployment instruction.

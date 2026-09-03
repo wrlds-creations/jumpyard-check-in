@@ -106,5 +106,41 @@ identical there.
 Still needed: Love's review on a physical phone, including Safari's address bar
 behavior at the top edge. The pre-existing stored-language hydration mismatch
 (the provider reads `localStorage` during the first render) is unchanged and
-tracked separately. Publication uses the existing protected release path when
-Love decides; this record does not claim any deployment.
+tracked separately.
+
+## Merge and protected rollout — 2026-09-03
+
+Love explicitly asked in chat on 2026-09-03 to merge and deploy this change to
+`checkin.jumpyard.se` and the paired origins, including anything already on
+`main`. `main` had no commits beyond the branch base and all four required checks
+were green, so [PR #365](https://github.com/wrlds-creations/jumpyard-check-in/pull/365)
+was squash-merged as `b99a41c192373e9a92491aa7c31fb5afef5939bb`; main CI
+[33763734079](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33763734079)
+passed.
+
+| Evidence | Exact identity / result |
+|---|---|
+| Immutable release | [33763734057](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33763734057), successful; SHA `b99a41c192373e9a92491aa7c31fb5afef5939bb` |
+| Artifact | `9896775164`; digest `sha256:bb2fa13b56d212dd4e13735b84d81b5f4f68d76b6aec5a796c75d3bf4b84481f`; manifest SHA-256 `89f99eb97d129859576b576faa1fa6ce3a15254a718ea1cb2a8924f34a30c4c2`; 505 files verified |
+| Park promotion | [33764307783](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33764307783), successful. Plan: current and release template `70b058da41cfb971574065376c3b7f562a2653907dea7a4ef1e6b81530b9b28c` identical, 202 resources, no additions, removals or changes, `apply_migrations=false`. CDK reported `no changes`; phone, admin and Apple Pay routes returned HTTP 200 with the park-test API target |
+| Nacka public promotion | [33764870440](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33764870440), successful, same artifact. Allowed origins `https://checkin.jumpyard.se` and `https://staff-checkin.jumpyard.se` only; guest domain HTTP 200 with the exact API target (10 assets), staff routes HTTP 200 with exact Park API and Cognito targets, Apple Pay association HTTP 200 |
+| Rollback candidate | Release `33758112334`, SHA `9600165ec0dbf81907c36da0b5c769cdfbe7a18e`, artifact `9894482103`, digest `sha256:c552ef276028c4b21a28ad2f47ed2d82153da37097156b78fc3f48750d34ff37`, unexpired until 2026-12-02 |
+
+Each plan job log was read through the GitHub jobs API (the CLI log view is empty
+while a run waits for approval) and checked against the expected artifact ID,
+digest, SHA and target set before the delegated protected `park-test` approval.
+Both approval comments record Love's request, the plan facts and the rollback
+candidate. Nothing was rebuilt and no environment protection was bypassed. No
+migration, AWS resource, secret, provider setting, live payment or guest message
+changed; the unchanged admin output was republished by the same workflow.
+
+Independent read-only readback after the public run: `https://checkin.jumpyard.se/`
+returned HTTP 200 and one of its ten referenced JavaScript chunks contains the
+language control (its `language-option` test ids), which none of the ten chunks
+served before the promotion contained; `https://staff-checkin.jumpyard.se/`
+returned HTTP 200. This is static readback, not a guest flow test.
+
+The earlier #338 rollout of `9600165` (Park `33759993254`, public `33760491190`,
+both successful the same day) is retained inside this release; its own evidence
+section in `docs/gh-338-exact-payment-status.md` still reads "Pending". Love's
+physical phone review of the language control remains the open user check.
