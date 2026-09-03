@@ -5,7 +5,7 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-09-03
-- Public/Park phone/admin: `9f26211` (PR #355; #331/#334 retained). Release `33736067939`, Park `33736643450`, public `33737047547` passed. Backend `ebc7598`; no migration. [Evidence](docs/gh-351-phone-payment-recovery.md).
+- Public/Park phone/admin: `409aa58` (PR #358; #331/#333/#334 retained). Release `33741393453`, Park `33742197982`, public `33742546868` passed. Redeem `77faea7`; no migration. [Evidence](docs/gh-351-phone-payment-recovery.md).
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Initial migration evidence: 29 unique drafts were migrated with complete Status, Priority, Work Type, Track, Owner, and exact-once canonical Legacy ID fields; current mutable state is read from GitHub rather than copied here.
 - Product/runtime state: Park has 202 resources, migrations through `0020`, and 27 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption, and late Handoff attachment are proven. A definitively approved kiosk payment now returns its provisional session with the bounded `safety` hint immediately instead of waiting for ROLLER readback; redemption remains blocked until authoritative synchronization. Physical proof remains in kiosk issue #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.

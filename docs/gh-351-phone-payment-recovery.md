@@ -95,6 +95,29 @@ The extended test harness uses the actual flow machine, recovery helpers and pag
 
 Local correction validation: **103/103** combined recovery, confirmation, paid-confirmation and exit tests pass, including 19 page tests. Phone lint passes with four existing image warnings. The webpack production build, TypeScript validation and static export pass. The production correction is limited to `src/app/page.tsx`; its regression coverage is in `src/flow/pagePaymentRecovery.test.mjs`. This document records the acceptance finding. Existing D0201 policy is unchanged.
 
+## Corrective protected rollout — 2026-09-03
+
+[Corrective PR #358](https://github.com/wrlds-creations/jumpyard-check-in/pull/358) merged as `409aa58d4cfeab9d1e120b576724649a5d651280`. Independent review and all four CI jobs passed at final head `6540d07dd75abd166e574f8c5f883a688a121b20` ([33741184034](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33741184034)); the initial reviewed head `bf32618` also passed CI `33740868166`.
+
+Main advanced during that CI with the independently approved #333 / PR #357 staff-redeem change. The corrective branch incorporated it without conflicts or changes to the reviewed phone diff. Its owner completed protected Park `33741484703` and public `33741950790` first, selecting release `33740994168` / `77faea776e7c9a3504a9f8a1e421923939d31caa`. Both recorded LoveWRLDS approvals explicitly naming #333. This correction therefore retains the already deployed staff behavior and 25-second RedeemHandler timeout; it does not deploy an unapproved backend change or overwrite that rollout.
+
+| Stage | Corrective release evidence |
+| --- | --- |
+| Immutable release | [33741393453](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33741393453), artifact `9888027527`, 505 verified files |
+| Source SHA | `409aa58d4cfeab9d1e120b576724649a5d651280` |
+| Artifact digest | `sha256:dc0b6e4878df5e1b7c70b1f4bb1ad18d4241422955bdd887aa32fd1ff419e43f` |
+| Manifest SHA256 | `30539f5a8d10aaedf86430314e364813a1f0be368d22c25b703651bc73e1ba91` |
+| Park promotion | [33742197982](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33742197982): reviewed plan, delegated protected approval, all normal checks passed |
+| Park Pages | Phone `e021e3a7`, admin `bb9ae8a4` |
+| Public promotion | [33742546868](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33742546868): same artifact, reviewed plan, delegated protected approval, success at 10:08 UTC |
+| Public Pages | Phone `3ae52d04` at `https://checkin.jumpyard.se`; admin `5cb43295` at `https://staff-checkin.jumpyard.se` |
+| Rollback candidate | Available previous release `33740994168` / `77faea7`, artifact `9887870049`; retains #333 but also the known QR-reset regression |
+| Rollback / re-promotion | Not needed or performed |
+
+The current/release template hash was identical: `0791f5bb04d17daa029e5cd8f9b50454c08f647a6041671b0c4fb8aff77c1a2a`. The plan retained 202 resources with no additions, removals, property or template-section changes. CDK reported no changes; migrations were disabled and remain applied through `0020`. Ordinary successful-stack, exact-template, `IN_SYNC` drift, zero-alarm, empty-queue and exact-version checks passed. Public domain/CORS/Cognito/Apple Pay and API-target checks passed without bypasses or reconfiguration.
+
+Independent static readback matched all four roots byte-for-byte and every referenced JS/CSS file: 12 phone and 10 admin assets per stage, 44 asset responses and four roots across 48 GETs. Park readback ran at 10:05:54 UTC, public at 10:08:56 UTC. No scripts, authenticated flow, business API, live payment, booking or guest message were executed by this verification. The corrected public artifact is ready for Love's QR-to-new-booking handset acceptance; #351 stays open. `AWS_RESOURCES.md` and `REPO_CURRENT_STATE.md` record the verified current release; D0201 and PROJECT_CONTEXT policy remain unchanged. No new follow-up draft was needed for this correction; #353 remains deferred.
+
 ## Manual handset verification still required
 
 Love now tests the selected published version at `https://checkin.jumpyard.se`. The scenarios below are the acceptance plan; the agent has performed static verification only and has not initiated a live purchase.
