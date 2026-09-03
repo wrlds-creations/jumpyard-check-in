@@ -75,6 +75,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Live water: `970411`/`970363` (D0195).
 - D0196/D0197: compact add-ons use plus/minus, native scroll and Continue validation. D0205/#350: tiny top-right SV/EN control; both languages only on start screens.
 - PWA drafts use `sendConfirmations=true`, proven for new bookings; payment recovery follows D0201/#351 and D0203/#361.
+- Completed phone purchases retain bounded booking-bound handoff evidence for recovery (D0206/#361). A failed reload can offer an explicit new booking only after completion and absence of payment recovery are checked; submitted or unidentified payments remain protected.
 
 ## Data And Integration Facts
 
