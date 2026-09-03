@@ -41,11 +41,11 @@ The action is **Kontrollera betalningen**. This is a fallback for unresolved evi
 - Manual status checks reuse `lookupBooking`. Its existing transport has no request timeout: an indefinitely unsettled request keeps the check busy until browser recovery/reload. No payment is created by that check.
 - A return from a payment begun before this fix may lack the new session binding. It follows the conservative original-purchase status check/help path rather than pretending that the outcome is known.
 
-## Local verification
+## Initial implementation verification
 
 The new suites exercise the recovery helper, real component callbacks with the actual installed SDK and mocked HTTP/Adyen, and actual BuyTickets/page handler declarations. They cover cancellation then restart with the same selection, preserved basket/contact, no-JWT returns, matching/mismatched/missing/expired evidence, duplicates and delayed callbacks, unknown checks, approved lookup failure, and safe back navigation. No provider or Cloud API was called by these tests.
 
-Final results on 2026-09-03:
+Initial implementation results on 2026-09-03 (before the QR-reset correction below):
 
 - `test:payment-recovery`: 67 passing tests (12 helper, 30 actual-SDK component, 10 BuyTickets and 15 page tests).
 - Existing `test:payment-confirmation`, `test:paid-confirmation` and `test:exit-flow`: 32 passing tests. The combined final Node test run passed **99/99**, with no skips or failures.
