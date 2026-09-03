@@ -2085,8 +2085,12 @@ function evaluateEligibility(booking, request) {
   const allItems = booking.items ?? [];
   const dates = [...new Set(allItems.map((item) => item.bookingDate).filter(Boolean))];
   const hasExpectedDateMismatch = Boolean(request.expectedDate) && !dates.includes(request.expectedDate);
-  const amountOwing = Number(booking.amountOwing ?? 0);
-  const status = String(booking.status ?? '').toLowerCase();
+  const amountOwing = numberOrNull(booking.amountOwing);
+  const payment = classifyPaymentState({
+    amountOwing,
+    bookingStatus: booking.status,
+    paymentStatus: booking.paymentStatus,
+  });
   const redeemableTicketCount = allItems.reduce((total, item) => total + (item.tickets?.length ?? 0), 0);
 
   if (hasExpectedDateMismatch) {
@@ -2100,13 +2104,14 @@ function evaluateEligibility(booking, request) {
     };
   }
 
-  if (amountOwing > 0 || status.includes('pending')) {
+  if (isUnsettledPaymentState(payment.state)) {
     return {
       canCheckIn: false,
       reason: 'payment_required',
       requiresStaff: true,
       redeemableTicketCount,
-      amountOwing,
+      amountOwing: amountOwing ?? 0,
+      paymentState: payment.state,
     };
   }
 
@@ -2124,6 +2129,7 @@ function evaluateEligibility(booking, request) {
     reason: 'ready',
     requiresStaff: false,
     redeemableTicketCount,
+    paymentState: payment.state,
   };
 }
 
@@ -2403,14 +2409,44 @@ function isTombstoned(status) {
   return normalized === 'cancelled' || normalized === 'deleted';
 }
 
+// GH-338 payment-state classification (begin). Keep this block identical in lookup, session and redeem.
+const PAID_STATUS_TOKENS = new Set(['paid', 'paidinfull', 'fullypaid', 'nopaymentrequired']);
+const PARTIALLY_PAID_STATUS_TOKENS = new Set(['partiallypaid', 'partialpayment', 'partial']);
+const PENDING_PAYMENT_STATUS_TOKENS = new Set(['pendingpayment', 'pending', 'awaitingpayment', 'paymentpending']);
+const UNPAID_STATUS_TOKENS = new Set(['unpaid', 'notpaid', 'overdue']);
+
+function normalizePaymentStatusToken(value) {
+  return String(value ?? '').toLowerCase().replace(/[^a-z]/g, '');
+}
+
+// Exact token matching only: "PartiallyPaid" and "Unpaid" must never count as paid, and a
+// missing amount owing is not evidence of payment. Roller stays authoritative for the final
+// redemption; this only decides what JumpYard Cloud lets through before that.
+function classifyPaymentState({ amountOwing, bookingStatus, paymentStatus }) {
+  const tokens = [paymentStatus, bookingStatus].map(normalizePaymentStatusToken).filter(Boolean);
+  const owing = typeof amountOwing === 'number' && Number.isFinite(amountOwing) ? amountOwing : null;
+  if (tokens.some((token) => PARTIALLY_PAID_STATUS_TOKENS.has(token))) return { state: 'partially_paid', evidence: 'status' };
+  if (tokens.some((token) => PENDING_PAYMENT_STATUS_TOKENS.has(token))) return { state: 'pending', evidence: 'status' };
+  if (tokens.some((token) => UNPAID_STATUS_TOKENS.has(token))) return { state: 'unpaid', evidence: 'status' };
+  if (owing !== null && owing > 0) return { state: 'unpaid', evidence: 'amount' };
+  if (tokens.some((token) => PAID_STATUS_TOKENS.has(token))) return { state: 'paid', evidence: 'status' };
+  if (owing === 0) return { state: 'paid', evidence: 'amount' };
+  return { state: 'unknown', evidence: 'none' };
+}
+
+function isUnsettledPaymentState(state) {
+  return state === 'partially_paid' || state === 'pending' || state === 'unpaid';
+}
+// GH-338 payment-state classification (end).
+
+// Settlement needs an explicit paid status; a zero or missing amount alone never settles a draft.
 function isPaymentSettled(booking) {
-  const status = String(booking.paymentStatus ?? booking.status ?? '').toLowerCase().replace(/\s+/g, '');
-  if (status.includes('pending') || status.includes('unpaid') || status.includes('partial')) return false;
-
-  const amountOwing = numberOrNull(booking.amountOwing);
-  if (amountOwing !== null && amountOwing > 0) return false;
-
-  return status === 'paid' || status === 'paidinfull' || status === 'nopaymentrequired';
+  const payment = classifyPaymentState({
+    amountOwing: numberOrNull(booking.amountOwing),
+    bookingStatus: booking.status,
+    paymentStatus: booking.paymentStatus,
+  });
+  return payment.state === 'paid' && payment.evidence === 'status';
 }
 
 function classifyError(error) {

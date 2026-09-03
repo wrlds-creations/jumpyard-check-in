@@ -4,6 +4,10 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #338 Exact Payment Status (Implemented; Protected Rollout Pending)
+
+Love approved [issue #338](https://github.com/wrlds-creations/jumpyard-check-in/issues/338) on 2026-09-03. The lookup, session and redeem handlers now share one identical exact payment-state rule: only `Paid`, `PaidInFull` and `NoPaymentRequired` count as paid, `PartiallyPaid`, `PendingPayment` and `Unpaid` never match as paid by substring, and a missing amount owing is not evidence of payment. The lookup adds `eligibility.paymentState`; a partially paid booking keeps `payment_required`, the phone shows "checkas in i kassan" and the kiosk keeps its existing staff message. Read-only Aurora readback on 2026-09-03 found 21 `PartiallyPaid` and 6 `PendingPayment` rows without an amount owing, none due today or later. The change is Lambda code only: no new AWS resource, database grant, migration, IAM, secret, route, gate, venue/date, payment authority, messaging, or multi-park boundary changed. [Implementation evidence](docs/gh-338-exact-payment-status.md).
+
 ### Issue #361 Wallet Pre-Submit Recovery (Published; No AWS Resource Change)
 
 [PR #362](https://github.com/wrlds-creations/jumpyard-check-in/pull/362) merged `df69ecbe387c2e870bcc62adbc3d3c00563f6ca0`. Immutable [release 33755593134](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33755593134), artifact `9893479442`, passed protected [Park 33756140550](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33756140550) and [public 33756585589](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33756585589) after review of each exact artifact/target plan and delegated approval under Love's #361 deployment instruction. The phone correction adds safe retry after a proven pre-submit wallet error; the #333 backend/admin, #334 heartbeat and accepted #351 recovery/QR behavior are retained.

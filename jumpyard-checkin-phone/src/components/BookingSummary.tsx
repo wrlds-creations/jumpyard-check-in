@@ -27,6 +27,8 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
 
     const existingAddons: Addon[] = booking?.existingAddons ?? [];
     const canStartCheckIn = Boolean(booking?.paid);
+    // GH-338: a partially paid booking is settled at the register, not through the phone.
+    const checkInAtRegister = booking?.paymentState === 'partially_paid';
     const productQuantity = Math.max(1, Number(booking?.jumpers || booking?.products || 1));
     const productLabel = getBookingProductLabel(booking, t.booking.product);
 
@@ -112,7 +114,9 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
                         <p className={`font-bold italic uppercase text-[11px] ${booking?.paid ? 'text-success' : 'text-amber-600'}`}>
                             {t.payment.title}
                         </p>
-                        <p className="text-foreground text-sm italic">{booking?.paid ? t.booking.paidInFull : t.booking.notPaid}</p>
+                        <p className="text-foreground text-sm italic">
+                            {booking?.paid ? t.booking.paidInFull : checkInAtRegister ? t.booking.partiallyPaid : t.booking.notPaid}
+                        </p>
                     </div>
                 </div>
 
@@ -133,7 +137,13 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
                 disabled={!canStartCheckIn || isStartingSession}
                 className="w-full bg-primary hover:bg-surface hover:text-primary border border-transparent hover:border-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all shadow-sm disabled:bg-surface-strong disabled:text-muted disabled:border-border disabled:cursor-not-allowed"
             >
-                {isStartingSession ? t.booking.startingSession : canStartCheckIn ? t.booking.cta : t.booking.paymentRequiredCta}
+                {isStartingSession
+                    ? t.booking.startingSession
+                    : canStartCheckIn
+                        ? t.booking.cta
+                        : checkInAtRegister
+                            ? t.booking.checkInAtRegisterCta
+                            : t.booking.paymentRequiredCta}
             </button>
             {sessionStartError && (
                 <p data-testid="booking-start-error" className="text-amber-700 text-[11px] text-center mt-2">
@@ -141,7 +151,9 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
                 </p>
             )}
             {!canStartCheckIn && (
-                <p className="text-foreground text-[11px] text-center mt-2">{t.booking.paymentRequiredHint}</p>
+                <p data-testid="booking-payment-hint" className="text-foreground text-[11px] text-center mt-2">
+                    {checkInAtRegister ? t.booking.checkInAtRegisterHint : t.booking.paymentRequiredHint}
+                </p>
             )}
         </motion.div>
     );

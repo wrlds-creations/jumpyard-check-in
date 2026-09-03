@@ -58,6 +58,9 @@ export interface CheckInSession {
   expiresAt?: string | null;
 }
 
+// GH-338: exact payment state reported by JumpYard Cloud lookup eligibility.
+export type BookingPaymentState = 'paid' | 'partially_paid' | 'pending' | 'unpaid' | 'unknown';
+
 export interface Booking {
   id: string;
   rollerUniqueId?: string | null;
@@ -70,6 +73,7 @@ export interface Booking {
   date?: string;
   products: number;
   paid: boolean;
+  paymentState?: BookingPaymentState;
   paymentStatus?: string | null;
   amountOwing?: number | null;
   guestName?: string;
