@@ -16,16 +16,41 @@ The follow-up correction, based on `208a06fe272e74f2aa7dce1d217d31013bed81b1`, p
 
 This correction does **not** establish a supported way to resume or cancel an unresolved submitted Klarna attempt. The Motorola browser-Back case and missing resume/termination contract remain open in #361 and #353. Google Pay/Klarna merchant readiness and any supported hiding decision remain #353. No payment evidence from Love's phones was cleared, and no new live purchase, provider setting or email send is part of this work.
 
-The original rollout below is historical evidence for the pre-submit correction. It is not evidence that this follow-up is published or that the iPhone is fixed. Follow-up validation and protected rollout are recorded separately before acceptance; #361 stays open for the remaining provider contract and combined handset acceptance.
+The original rollout below is historical evidence for the pre-submit correction. The completed-booking follow-up has separate validation and rollout evidence here; neither proves that the actual iPhone record is a completed booking. #361 stays open for the remaining provider contract and combined handset acceptance.
 
 ### Follow-up validation
 
 - `npm --prefix jumpyard-checkin-phone run test:payment-recovery`: 137/137 pass, including actual recovery-storage reads/writes, lease races, completed restore through the real page handlers, legacy/expiry/return/orphan protection and actual rendered confirmation/recovery components in Swedish and English. All business/provider responses are mocked; no live payment or booking request was made.
 - Existing exit-flow, payment-confirmation/preview, paid-confirmation and language-toggle suites: 38/38 pass.
-- Phone `npx tsc --noEmit`, `npm run lint` and local `npx next build --webpack` passed during implementation. Full lint retains four existing image warnings. Final reviewed source must also pass all four exact PR CI gates before merge; this local build is not a deployment artifact.
+- Phone `npx tsc --noEmit`, `npm run lint` and local `npx next build --webpack` passed during implementation. Full lint retains four existing image warnings. All four exact PR CI gates subsequently passed before merge; the local build is not a deployment artifact.
 - Template, static issue resolver and phone-local-contact retention validators pass; `git diff --check` passes.
 - Independent source/test review found and verified corrections for expired snapshots, foreign prepayment snapshots and completed existing-booking screens. No remaining implementation blocker was found.
 - No physical handset or live payment acceptance is claimed. The actual iPhone attempt and the submitted Klarna browser-Back contract remain unverified. No new dependency, AWS/backend/provider change or follow-up draft was introduced. PROJECT_CONTEXT.md and D0206 record the durable behavior; deployment facts are recorded only after protected promotion.
+
+### Completed-booking protected rollout — 2026-09-03
+
+Reviewed [PR #368](https://github.com/wrlds-creations/jumpyard-check-in/pull/368) merged as `7d5ca45e003bb2ec9030572059be439bfbeba0e2`, preserving #350 language selection, #338 exact paid-state checks, #333 redeem recovery/25-second timeout, #334 heartbeat and the prior #351/#361 corrections. All four required jobs passed in [PR CI 33773815357](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33773815357). No push-triggered main CI/release run was observed for this merge, so the existing `release.yml` was dispatched with that exact source SHA. Its full source/infrastructure/frontend validation passed; no separate main CI pass or cause for the absent automatic run is claimed.
+
+| Evidence | Exact identity / result |
+|---|---|
+| Immutable release | [33774429052](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33774429052), successful; SHA `7d5ca45e003bb2ec9030572059be439bfbeba0e2` |
+| Artifact | `9901144866`; digest `sha256:f1822e3200f03819c0afb986496736fcafb120c517fe419df51be2cdb57f2b48`; expires `2026-12-02T15:44:36Z` |
+| Manifest validation | 505 files verified; SHA-256 `7847f5e1ae23265d949ab26611836268f5c994a3a0c2ab7a9084731bd3f6da01` |
+| Park promotion | [33775277602](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33775277602), successful |
+| Nacka public promotion | [33775819505](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33775819505), successful; same selected artifact |
+| Rollback candidate | Previously deployed successful release `33763734057`, SHA `b99a41c192373e9a92491aa7c31fb5afef5939bb`, artifact `9896775164`; verified unexpired through `2026-12-02T13:54:10Z` |
+
+Both exact artifact/target plans were read before normal delegated protected `park-test` approvals under Love's existing #361 publication instruction. Park's current/release template hash was identical: `70b058da41cfb971574065376c3b7f562a2653907dea7a4ef1e6b81530b9b28c`, with 202 resources and no resource or template-section changes. CDK reported no changes. `apply_migrations=false`; migrations `0001` through `0020` were already applied. Template equality, successful stack state, `IN_SYNC` drift, zero active alarms, empty related queues, exact Cloudflare release versions and ordinary endpoint checks passed.
+
+Account `376129878018`, region `eu-north-1`, stack `jumpyard-check-in-park-test-stack`, API `https://ij4rnaui2b.execute-api.eu-north-1.amazonaws.com` and the existing Nacka `50871`/through-2026-09-30 scope are retained. Confirmed WRLDS metadata: Client/CostCenter `JumpYard`, Project `jumpyard-check-in`, Environment `park-test`, Owner/CreatedBy `love`, Repository `wrlds-creations/jumpyard-check-in`, ManagedBy `cdk`, DataClassification `confidential`, Exportable `true`. No schema, resource, IAM, secret, route, gate, provider setting, live business write or guest message changed. The public workflow promotes the same phone/admin files and performs no AWS mutation. No rollback or re-promotion was needed or performed; the recorded prior artifact must be selected through the same protected path without rebuilding.
+
+Public promotion passed domain, CORS, Cognito, Apple Pay and exact Cloudflare release checks. Wrangler initially could not ascertain the phone upload's final status; the subsequent required exact-SHA/status verification and independent byte comparison both passed without redeployment. Immutable public outputs are `https://3fe72f0e.jumpyard-check-in-production.pages.dev` and `https://0daaeffe.jumpyard-checkin-admin-production.pages.dev`.
+
+Independent static readback passed for Park at 15:58:14–15:58:15 UTC and the public origins at 16:02:33–16:02:35 UTC. All four root HTML files and 44 referenced JS/CSS responses matched the selected artifact byte for byte (48 static GETs, no mismatch or retry). These checks execute no app scripts or business API calls and do not prove a payment.
+
+Implementation files: `src/app/page.tsx`, `src/flow/buyFlowRecovery.ts`, `src/flow/paymentRecovery.ts`, `src/components/ConfirmationScreen.tsx`, `src/context/LanguageContext.tsx`, four recovery/view test files and the phone test command, all under `jumpyard-checkin-phone`; PROJECT_CONTEXT.md, D0206 in DECISIONS.md and this evidence document record the durable behavior. The dependent rollout evidence also updates AWS_RESOURCES.md and REPO_CURRENT_STATE.md. No new Project draft was created; #353 retains the provider question.
+
+Next handset check: reload the clean public URL on the affected iPhone. A recognized completed booking that cannot be restored should show **Vi kan inte visa din tidigare bokning**, with retry and **Gör en ny bokning**; confirmed ready/completed screens should also retain the new-booking action. If the unknown-payment card remains, do not clear its payment evidence or infer that no charge happened: the actual stored attempt still needs diagnosis. The full submitted Klarna Back-recovery contract, provider readiness and combined final-artifact payment/QR acceptance remain open in #361/#353.
 
 ## Incident and boundary
 
@@ -80,8 +105,8 @@ Each exact artifact/target plan was reviewed before delegated protected `park-te
 
 Independent static readback passed for Park at 12:40:07 UTC and the public origins at 12:43:13 UTC. All four phone/admin roots and all 44 referenced JS/CSS responses matched the selected artifact byte for byte: 48 static GETs, with no failure or retry. Static readback executes no app scripts or business APIs and does not prove a payment. The #333 redeem backend/admin, including its 25-second timeout, #334 heartbeat and accepted #351 recovery/QR behavior are retained. No schema, IAM, secret, route, runtime gate, venue/date scope, provider setting, live payment or guest message changed. No rollback or re-promotion was performed; rollback must select the recorded earlier immutable artifact through the same protected path without rebuilding.
 
-## Manual acceptance and remaining gate
+## Original pre-submit acceptance — historical rollout
 
-#361 remains open for Love's handset acceptance against release `33755593134` / `df69ecb`: pre-submit failure to another method, browser Back/reload, successful purchase/QR and **Gör en ny bokning**. No new handset result is claimed. Do not use or clear the legacy unresolved attempt for acceptance without provider reconciliation.
+The original `33755593134` / `df69ecb` rollout requested handset acceptance for pre-submit failure to another method, browser Back/reload, successful purchase/QR and **Gör en ny bokning**. Love later confirmed the fresh Google Pay retry on Motorola; the subsequent Klarna Back case remained unresolved until its manual provider Close. Current test instructions and the remaining combined acceptance belong to the completed-booking follow-up above and #361. Do not use or clear the legacy unresolved attempt for acceptance without provider reconciliation.
 
 Love will send the Pabel draft himself. #353 remains open/Blocked, and pilot readiness requires a decision to fix or seek supported phone-only suppression of Klarna/Google Pay if the provider has not resolved them. The pilot date is not yet confirmed; the existing pilot GO/no-go item owns that gate.
