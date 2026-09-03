@@ -1,5 +1,26 @@
 export type PaymentRecoveryOutcome = 'pending' | 'approved' | 'failed' | 'unknown';
 
+export interface PaymentRecoverySubmission {
+  version: 1;
+  ownerId: string;
+  phase: 'prepared' | 'submitted' | 'unresolved' | 'failed' | 'approved';
+  protected: boolean;
+  sessionHash: string | null;
+}
+
+export interface PaymentRecoveryOwnership {
+  ownerId: string;
+  protected: boolean;
+  release: () => void;
+}
+
+interface SubmissionProof extends PaymentRecoverySubmission {
+  attemptId: string;
+  bookingIdentifier: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
 export interface PaymentRecoveryConfig {
   available: true;
   apiUrl: string;
@@ -19,6 +40,8 @@ export interface PaymentRecoveryRecord {
   createdAt: number;
   expiresAt: number;
   lastObservedAt: number;
+  /** Separate monotonic evidence; legacy records have no submission proof. */
+  submission?: PaymentRecoverySubmission | null;
 }
 
 export interface PaymentRedirect {
@@ -28,8 +51,17 @@ export interface PaymentRedirect {
 
 export const PAYMENT_RECOVERY_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const STORAGE_KEY = 'jumpyard.paymentRecovery.v1';
+const SUBMISSION_KEY = 'jumpyard.paymentSubmission.v1';
+const OBSERVATION_KEY = 'jumpyard.paymentObservation.v1';
+const OWNERSHIP_LOCK = 'jumpyard.paymentSubmission.owner.v1';
+const activeOwners = new Set<string>();
+const protectedOwners = new Set<string>();
+let pendingOwnershipRelease: Promise<unknown> | null = null;
 let rollbackWriteFloor = 0;
 let lastReadFailed = false;
+let cleanupTimer: number | undefined;
+let cleanupAt = Number.POSITIVE_INFINITY;
+let cleanupQueued = false;
 
 function storage() {
   try {
@@ -100,11 +132,186 @@ function persist(record: PaymentRecoveryRecord): boolean {
   const target = storage();
   if (!target) return false;
   try {
-    target.setItem(STORAGE_KEY, JSON.stringify(record));
+    // Observation writes must never overwrite submission evidence from another tab.
+    const base = { ...record };
+    delete base.submission;
+    target.setItem(STORAGE_KEY, JSON.stringify(base));
+    scheduleCleanup(record.expiresAt);
     return true;
   } catch {
     return false;
   }
+}
+
+function scheduleCleanup(expiresAt: number) {
+  if (typeof window === 'undefined' || !window.setTimeout || expiresAt >= cleanupAt) return;
+  if (cleanupTimer !== undefined) window.clearTimeout(cleanupTimer);
+  cleanupAt = expiresAt;
+  cleanupTimer = window.setTimeout(() => {
+    cleanupAt = Number.POSITIVE_INFINITY;
+    cleanupTimer = undefined;
+    void purgeExpiredPaymentRecovery();
+  }, Math.max(0, expiresAt - Date.now()));
+}
+
+function queueCleanup() {
+  if (cleanupQueued) return;
+  cleanupQueued = true;
+  void Promise.resolve().then(purgeExpiredPaymentRecovery).finally(() => { cleanupQueued = false; });
+}
+
+/** Cleanup uses the same lease as checkout writers, so a stale read cannot delete a replacement. */
+export async function purgeExpiredPaymentRecovery(): Promise<void> {
+  const ownership = activeOwners.size ? null : await acquirePaymentRecoveryOwnership();
+  if (!activeOwners.size && !ownership) { scheduleCleanup(Date.now() + 60_000); return; }
+  try {
+    const target = storage();
+    if (!target) return;
+    for (const key of [STORAGE_KEY, SUBMISSION_KEY, OBSERVATION_KEY]) {
+      const raw = target.getItem(key);
+      if (!raw) continue;
+      let value: unknown;
+      try { value = JSON.parse(raw); } catch { target.removeItem(key); continue; }
+      if (!object(value) || typeof value.createdAt !== 'number' || !Number.isSafeInteger(value.createdAt)
+        || typeof value.expiresAt !== 'number' || !Number.isSafeInteger(value.expiresAt)
+        || value.expiresAt !== value.createdAt + PAYMENT_RECOVERY_MAX_AGE_MS || Date.now() >= value.expiresAt) {
+        target.removeItem(key);
+      } else scheduleCleanup(value.expiresAt);
+    }
+  } catch { /* Expired data is never returned, even when browser storage is unavailable. */ }
+  finally { ownership?.release(); }
+}
+
+function observe(record: PaymentRecoveryRecord, now: number): boolean {
+  const target = storage();
+  if (!target) return false;
+  try {
+    const previous: unknown = JSON.parse(target.getItem(OBSERVATION_KEY) ?? 'null');
+    if (object(previous) && previous.attemptId === record.attemptId && previous.createdAt === record.createdAt
+      && previous.expiresAt === record.expiresAt && typeof previous.lastObservedAt === 'number'
+      && Number.isSafeInteger(previous.lastObservedAt) && previous.lastObservedAt >= record.createdAt
+      && previous.lastObservedAt < record.expiresAt && previous.lastObservedAt > now) {
+      rollbackWriteFloor = Math.max(rollbackWriteFloor, previous.lastObservedAt);
+      return false;
+    }
+    if (now < rollbackWriteFloor) return false;
+    // This is expiry/clock metadata only: an old observer cannot rewrite payment identity or evidence.
+    target.setItem(OBSERVATION_KEY, JSON.stringify({ version: 1, attemptId: record.attemptId,
+      createdAt: record.createdAt, expiresAt: record.expiresAt, lastObservedAt: now }));
+    scheduleCleanup(record.expiresAt);
+    return true;
+  } catch { return false; }
+}
+
+function readSubmission(record: PaymentRecoveryRecord): SubmissionProof | null {
+  try {
+    const value: unknown = JSON.parse(storage()?.getItem(SUBMISSION_KEY) ?? 'null');
+    if (!object(value) || value.version !== 1 || value.attemptId !== record.attemptId
+      || value.bookingIdentifier !== record.bookingIdentifier || value.createdAt !== record.createdAt
+      || value.expiresAt !== record.expiresAt || !identifier(value.ownerId) || typeof value.protected !== 'boolean'
+      || !['prepared', 'submitted', 'unresolved', 'failed', 'approved'].includes(String(value.phase))
+      || (value.sessionHash !== null && (typeof value.sessionHash !== 'string' || !/^[a-f0-9]{64}$/.test(value.sessionHash)))) return null;
+    return { version: 1, ownerId: value.ownerId, protected: value.protected,
+      phase: value.phase as SubmissionProof['phase'], sessionHash: value.sessionHash as string | null,
+      attemptId: record.attemptId, bookingIdentifier: record.bookingIdentifier,
+      createdAt: record.createdAt, expiresAt: record.expiresAt };
+  } catch {
+    return null;
+  }
+}
+
+function persistSubmission(proof: SubmissionProof): boolean {
+  if (proof.protected && protectedOwners.size === 0) return false;
+  try {
+    const target = storage();
+    if (!target) return false;
+    const serialized = JSON.stringify(proof);
+    target.setItem(SUBMISSION_KEY, serialized);
+    scheduleCleanup(proof.expiresAt);
+    return target.getItem(SUBMISSION_KEY) === serialized;
+  } catch {
+    return false;
+  }
+}
+
+function ownedRecord(record: PaymentRecoveryRecord, ownership: PaymentRecoveryOwnership) {
+  if (!activeOwners.has(ownership.ownerId)) return null;
+  const current = readPaymentRecovery();
+  return current && current.attemptId === record.attemptId && current.createdAt === record.createdAt
+    && current.bookingIdentifier === record.bookingIdentifier && current.kind === record.kind ? current : null;
+}
+
+/** Hold one current-version checkout owner across tabs; unsupported browsers retain legacy recovery. */
+export async function acquirePaymentRecoveryOwnership(): Promise<PaymentRecoveryOwnership | null> {
+  if (pendingOwnershipRelease) await pendingOwnershipRelease.catch(() => undefined);
+  const ownerId = globalThis.crypto?.randomUUID?.() ?? (globalThis.crypto?.getRandomValues
+    ? Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('') : null);
+  if (!ownerId) return null;
+  const manager = typeof navigator === 'undefined' ? undefined : navigator.locks;
+  if (!manager?.request) {
+    activeOwners.add(ownerId);
+    return { ownerId, protected: false, release: () => { activeOwners.delete(ownerId); } };
+  }
+  return new Promise((resolve) => {
+    const request = manager.request(OWNERSHIP_LOCK, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
+      if (!lock) { resolve(null); return; }
+      activeOwners.add(ownerId);
+      protectedOwners.add(ownerId);
+      let releaseLock: () => void = () => undefined;
+      const held = new Promise<void>((release) => { releaseLock = release; });
+      resolve({ ownerId, protected: true, release: () => {
+        activeOwners.delete(ownerId); protectedOwners.delete(ownerId); releaseLock();
+        pendingOwnershipRelease = request;
+      } });
+      await held;
+    }).catch(() => resolve(null));
+    void request.finally(() => { if (pendingOwnershipRelease === request) pendingOwnershipRelease = null; });
+  });
+}
+
+export function initializePaymentRecoverySubmission(record: PaymentRecoveryRecord, ownership: PaymentRecoveryOwnership): boolean {
+  const current = ownedRecord(record, ownership);
+  if (!current || current.outcome !== 'pending' || current.returnConsumed || current.submission) return false;
+  if (!ownership.protected) return true;
+  return persistSubmission({ version: 1, ownerId: ownership.ownerId, protected: true, phase: 'prepared',
+    attemptId: current.attemptId, bookingIdentifier: current.bookingIdentifier, createdAt: current.createdAt,
+    expiresAt: current.expiresAt, sessionHash: current.sessionHash });
+}
+
+export function markPaymentRecoverySubmitted(record: PaymentRecoveryRecord, ownership: PaymentRecoveryOwnership): boolean {
+  const current = ownedRecord(record, ownership);
+  if (!current || current.outcome !== 'pending' || current.returnConsumed || !current.sessionHash) return false;
+  const proof = readSubmission(current);
+  if (ownership.protected && (!proof || proof.ownerId !== ownership.ownerId || proof.phase !== 'prepared'
+    || proof.sessionHash !== current.sessionHash)) return false;
+  if (proof && (proof.ownerId !== ownership.ownerId || proof.phase !== 'prepared')) return false;
+  const next: SubmissionProof = { version: 1, ownerId: ownership.ownerId, protected: ownership.protected,
+    phase: 'submitted', attemptId: current.attemptId, bookingIdentifier: current.bookingIdentifier,
+    createdAt: current.createdAt, expiresAt: current.expiresAt, sessionHash: current.sessionHash };
+  return persistSubmission(next) && ownedRecord(record, ownership)?.submission?.phase === 'submitted';
+}
+
+export function failUnsubmittedPaymentRecovery(record: PaymentRecoveryRecord, ownership: PaymentRecoveryOwnership): boolean {
+  const current = ownedRecord(record, ownership);
+  const proof = current && readSubmission(current);
+  if (!ownership.protected || !current || current.outcome !== 'pending' || current.returnConsumed
+    || !proof?.protected || proof.ownerId !== ownership.ownerId || proof.phase !== 'prepared'
+    || !proof.sessionHash || proof.sessionHash !== current.sessionHash) return false;
+  return persistSubmission({ ...proof, phase: 'failed' }) && setPaymentRecoveryOutcome(current.attemptId, 'failed');
+}
+
+/** A paid lookup in another tab may approve only while the checkout owner has released its lease. */
+export async function approvePaymentRecovery(attemptId: string): Promise<boolean> {
+  const before = readPaymentRecovery();
+  if (!before || before.attemptId !== attemptId) return false;
+  if (activeOwners.size > 0) return setPaymentRecoveryOutcome(attemptId, 'approved');
+  const ownership = await acquirePaymentRecoveryOwnership();
+  if (!ownership) return false;
+  try {
+    const current = readPaymentRecovery();
+    return current?.attemptId === attemptId && current.createdAt === before.createdAt
+      && setPaymentRecoveryOutcome(attemptId, 'approved');
+  } finally { ownership.release(); }
 }
 
 export function readPaymentRecovery(): PaymentRecoveryRecord | null {
@@ -113,25 +320,36 @@ export function readPaymentRecovery(): PaymentRecoveryRecord | null {
   if (!target) return null;
   try {
     const raw = target.getItem(STORAGE_KEY);
-    if (!raw) return null;
+    if (!raw) {
+      if (target.getItem(SUBMISSION_KEY) || target.getItem(OBSERVATION_KEY)) queueCleanup();
+      return null;
+    }
     const value: unknown = JSON.parse(raw);
     const now = Date.now();
     if (object(value) && typeof value.lastObservedAt === 'number' && Number.isSafeInteger(value.lastObservedAt)
       && value.lastObservedAt > now) rollbackWriteFloor = Math.max(rollbackWriteFloor, value.lastObservedAt);
     const record = normalize(value, now);
     if (!record) {
-      target.removeItem(STORAGE_KEY);
+      queueCleanup();
       return null;
     }
-    // Persist the observation before allowing reuse; expiry never moves forward.
-    if (!persist(record)) {
+    // Reading never mutates/removes the base purchase: another tab may have replaced it.
+    if (!observe(record, now)) {
       lastReadFailed = true;
       return null;
     }
+    const proof = readSubmission(record);
+    if (proof) {
+      record.submission = proof;
+      if (proof.sessionHash) record.sessionHash = proof.sessionHash;
+      if (proof.phase === 'approved') record.outcome = 'approved';
+      else if (proof.phase === 'failed' && record.outcome !== 'approved') record.outcome = 'failed';
+      else if (proof.phase === 'unresolved' && record.outcome === 'pending') record.outcome = 'unknown';
+    } else record.submission = null;
     return record;
   } catch {
     lastReadFailed = true;
-    try { target.removeItem(STORAGE_KEY); } catch { /* Storage may disappear while the page is suspended. */ }
+    queueCleanup();
     return null;
   }
 }
@@ -152,6 +370,14 @@ export function beginPaymentRecovery(input: {
       && JSON.stringify(current.config) === JSON.stringify(config) ? current : null;
   }
   if (current && current.outcome !== 'failed') return null;
+  if (!current) {
+    // Losing the base record does not erase an unexpired proof that payment may still be in flight.
+    try {
+      const proof: unknown = JSON.parse(storage()?.getItem(SUBMISSION_KEY) ?? 'null');
+      if (object(proof) && typeof proof.expiresAt === 'number' && now < proof.expiresAt
+        && proof.phase !== 'failed' && proof.phase !== 'approved') return null;
+    } catch { return null; }
+  }
   const record: PaymentRecoveryRecord = {
     version: 1,
     attemptId: input.attemptId,
@@ -185,7 +411,11 @@ export async function bindPaymentRecoverySession(attemptId: string, sessionId: s
   const current = readPaymentRecovery();
   if (!hash || !current || current.attemptId !== attemptId || current.createdAt !== before.createdAt
     || current.returnConsumed || current.outcome !== 'pending' || (current.sessionHash && current.sessionHash !== hash)) return false;
-  return persist({ ...current, sessionHash: hash });
+  const proof = readSubmission(current);
+  if (proof && (!activeOwners.has(proof.ownerId) || proof.phase !== 'prepared')) return false;
+  if (!persist({ ...current, sessionHash: hash })) return false;
+  return !proof || (activeOwners.has(proof.ownerId) && proof.phase === 'prepared'
+    && persistSubmission({ ...proof, sessionHash: hash }));
 }
 
 export function setPaymentRecoveryOutcome(attemptId: string, nextOutcome: PaymentRecoveryOutcome): boolean {
@@ -194,6 +424,13 @@ export function setPaymentRecoveryOutcome(attemptId: string, nextOutcome: Paymen
   if (current.outcome === 'approved' && nextOutcome !== 'approved') return false;
   if (current.outcome === 'failed' && nextOutcome !== 'failed' && nextOutcome !== 'approved') return false;
   if (nextOutcome === 'pending' && current.outcome !== 'pending') return false;
+  const proof = readSubmission(current);
+  if (proof) {
+    if (proof.protected && protectedOwners.size === 0) return false;
+    const phase = nextOutcome === 'approved' ? 'approved' : nextOutcome === 'failed' ? 'failed'
+      : nextOutcome === 'unknown' && proof.phase === 'prepared' ? 'unresolved' : proof.phase;
+    if (phase !== proof.phase && !persistSubmission({ ...proof, phase })) return false;
+  }
   return persist({ ...current, outcome: nextOutcome });
 }
 
@@ -201,19 +438,52 @@ export function claimPaymentRedirect(attemptId: string): boolean {
   const current = readPaymentRecovery();
   if (!current || current.attemptId !== attemptId || !current.sessionHash || current.returnConsumed
     || current.outcome === 'approved' || current.outcome === 'failed') return false;
+  const proof = readSubmission(current);
+  if (proof?.protected && protectedOwners.size === 0) return false;
+  if (proof && !persistSubmission({ ...proof, phase: 'unresolved' })) return false;
   return persist({ ...current, returnConsumed: true, outcome: 'unknown' });
 }
 
 export function clearPaymentRecovery(attemptId?: string): boolean {
   const target = storage();
-  if (!target) return false;
+  if (!target || activeOwners.size === 0) return false;
   try {
-    if (attemptId !== undefined && readPaymentRecovery()?.attemptId !== attemptId) return false;
+    const current = readPaymentRecovery();
+    if (attemptId !== undefined && current?.attemptId !== attemptId) return false;
+    if (!current || current.outcome === 'unknown') return false;
+    const proof = current && readSubmission(current);
+    if (proof?.protected && protectedOwners.size === 0) return false;
+    if (current.outcome === 'pending' && proof && (proof.phase !== 'prepared' || !activeOwners.has(proof.ownerId))) return false;
+    // All shared-key deletion is serialized with checkout creation, including terminal UI cleanup.
+    if (proof) target.removeItem(SUBMISSION_KEY);
+    const observation: unknown = JSON.parse(target.getItem(OBSERVATION_KEY) ?? 'null');
+    if (object(observation) && observation.attemptId === current.attemptId
+      && observation.createdAt === current.createdAt) target.removeItem(OBSERVATION_KEY);
     target.removeItem(STORAGE_KEY);
     return true;
   } catch {
     return false;
   }
+}
+
+/** A terminal UI action may clear only the exact generation it observed, while holding the writer lease. */
+export async function clearPaymentRecoveryAfterCompletion(
+  attemptId: string,
+  beforeClear?: () => boolean | void,
+): Promise<boolean> {
+  const before = readPaymentRecovery();
+  if (!before || before.attemptId !== attemptId || (before.outcome !== 'approved' && before.outcome !== 'failed')) return false;
+  const ownership = activeOwners.size ? null : await acquirePaymentRecoveryOwnership();
+  if (!activeOwners.size && !ownership) return false;
+  try {
+    const current = readPaymentRecovery();
+    if (!current || current.attemptId !== attemptId || current.createdAt !== before.createdAt
+      || current.bookingIdentifier !== before.bookingIdentifier || current.kind !== before.kind
+      || current.outcome !== before.outcome) return false;
+    if (beforeClear?.() === false) return false;
+    return clearPaymentRecovery(attemptId);
+  } catch { return false; }
+  finally { ownership?.release(); }
 }
 
 export function hasPaymentRedirect(): boolean {

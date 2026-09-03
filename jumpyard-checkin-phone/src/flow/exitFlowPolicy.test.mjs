@@ -61,7 +61,7 @@ test('server safety state keeps exit hidden after internal back navigation', () 
 });
 
 test('reset removes local recovery and the private token before returning to start', () => {
-  const resetStart = pageSource.indexOf('const resetToStart = () =>');
+  const resetStart = pageSource.indexOf('const resetToStart = async () =>');
   const resetEnd = pageSource.indexOf('const restartAfterBuyRecovery =', resetStart);
   const resetSource = pageSource.slice(resetStart, resetEnd);
 

@@ -76,10 +76,13 @@ function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () 
     ctx: flowMachine.initialContext('park-qr'), isMarkingReadyForStaff: false,
     readPaymentRecovery: () => record,
     readBuyFlowRecovery: () => saved,
-    clearPaymentRecovery: id => { events.push(['clear-payment', id]); record = null; return true; },
+    clearPaymentRecoveryAfterCompletion: async (id, beforeClear) => {
+      if (beforeClear?.() === false) return false;
+      events.push(['clear-payment', id]); record = null; return true;
+    },
     clearBuyFlowRecovery: () => { events.push(['clear-basket']); saved = null; },
     writeBuyFlowRecovery: value => { saved = JSON.parse(JSON.stringify(value)); events.push(['write-basket', saved]); },
-    setPaymentRecoveryOutcome: (id, next) => { events.push(['outcome', id, next]); record = { ...record, outcome: next }; return true; },
+    approvePaymentRecovery: async id => { events.push(['outcome', id, 'approved']); record = { ...record, outcome: 'approved' }; return true; },
     getBuyFlowRecoveryIdentifier: recoveryHelpers.getBuyFlowRecoveryIdentifier,
     getBuyFlowRecoveryTargetState: recoveryHelpers.getBuyFlowRecoveryTargetState,
     isPrePaymentBuyFlowRecovery: recoveryHelpers.isPrePaymentBuyFlowRecovery,
@@ -145,16 +148,33 @@ function paidSafetyHarness() {
   return host;
 }
 
+test('continuing a paid purchase still opens safety after retiring its own recovery record', async () => {
+  let record = { attemptId: 'attempt-original', kind: 'new_booking', outcome: 'approved', bookingIdentifier: 'booking-original' };
+  const events = [];
+  const host = load(['continuePreparedPurchase'], {
+    booking: { rollerUniqueId: 'booking-original' },
+    isCurrent: () => record !== null,
+    recoveryRunRef: { current: 1 },
+    readPaymentRecovery: () => record,
+    clearPaymentRecoveryAfterCompletion: async () => { record = null; return true; },
+    setBuyRecoveryStatus: status => events.push(['recovery', status]),
+    setState: state => events.push(['state', state]),
+    scrollToTop: () => events.push(['scroll']),
+  });
+  await host.continuePreparedPurchase('APP_SAFETY_VIDEO')();
+  assert.deepEqual(events, [['recovery', null], ['state', 'APP_SAFETY_VIDEO'], ['scroll']]);
+});
+
 function runRecoveryEffects(host) {
   host.initialRecoveryGate();
   host.persistSafetyRecovery();
   host.flushRender();
 }
 
-test('pending, unknown and unresolved URL recovery cannot clear the purchase or expose a new checkout', () => {
+test('pending, unknown and unresolved URL recovery cannot clear the purchase or expose a new checkout', async () => {
   for (const outcome of ['pending', 'unknown']) {
     const host = harness({ outcome });
-    host.resetToStart();
+    await host.resetToStart();
     assert.equal(host.readRecord().outcome, outcome);
     assert.ok(host.readSaved());
     assert.ok(host.events.some(event => event[0] === 'setBuyRecoveryStatus' && event[1] === 'payment-unknown'));
@@ -163,23 +183,23 @@ test('pending, unknown and unresolved URL recovery cannot clear the purchase or 
   const missing = harness({ recordMissing: true });
   missing.state.buyRecoveryStatus = 'failed';
   missing.state.hasPaymentRedirect = () => true;
-  missing.resetToStart();
+  await missing.resetToStart();
   assert.ok(missing.readSaved());
   assert.ok(!missing.events.some(event => event[0].startsWith('clear-')));
 });
 
-test('approved payment markers cannot be discarded by Start over', () => {
+test('approved payment markers cannot be discarded by Start over', async () => {
   const host = harness({ outcome: 'approved' });
   host.state.buyRecoveryStatus = 'payment-approved';
-  host.resetToStart();
+  await host.resetToStart();
   assert.equal(host.readRecord().outcome, 'approved');
   assert.ok(host.readSaved());
   assert.deepEqual(host.events, []);
 });
 
-test('failed return retry durably restores CONTACT before releasing the failed attempt', () => {
+test('failed return retry durably restores CONTACT before releasing the failed attempt', async () => {
   const host = harness({ outcome: 'failed' });
-  host.retryFailedPayment();
+  await host.retryFailedPayment();
   const saved = host.readSaved();
   assert.equal(saved.currentFlowStep, 'CONTACT');
   assert.equal(saved.draftState, null);
@@ -217,10 +237,29 @@ test('only a paid result matching the original booking can enter approved recove
   assert.ok(!mismatch.events.some(event => event[0] === 'show-approved'));
 });
 
+test('paid recovery remains checkable when another tab owns the payment', async () => {
+  const host = harness({ lookup: async () => ({ paid: true, rollerUniqueId: 'booking-original' }) });
+  host.state.approvePaymentRecovery = async () => false;
+  await host.checkRecoveryPayment();
+  assert.equal(host.state.buyRecoveryStatus, 'payment-unknown');
+  assert.equal(host.state.recoveryCheckingRef.current, false);
+  assert.ok(!host.events.some(event => event[0] === 'show-approved'));
+});
+
+test('a replaced recovery run cannot reveal an old paid result after saving approval', async () => {
+  const host = harness({ lookup: async () => ({ paid: true, rollerUniqueId: 'booking-original' }) });
+  host.state.approvePaymentRecovery = async () => {
+    host.state.recoveryRunRef.current += 1;
+    return true;
+  };
+  await host.checkRecoveryPayment();
+  assert.ok(!host.events.some(event => event[0] === 'show-approved'));
+});
+
 test('an add-on payment cannot be recovered as a new-entry booking or new-entry retry', async () => {
   const host = harness({ outcome: 'failed', kind: 'add_product', lookup: async () => ({ paid: true }) });
   await host.checkRecoveryPayment();
-  host.retryFailedPayment();
+  await host.retryFailedPayment();
   assert.equal(host.state.buyRecoveryStatus, 'payment-unknown');
   assert.equal(host.readRecord().kind, 'add_product');
   assert.ok(!host.events.some(event => ['lookup', 'show-approved', 'clear-payment', 'clear-basket'].includes(event[0])));
@@ -256,12 +295,12 @@ test('a saved approved safety purchase remains protected when its reload lookup 
   host.readSaved().draftState.paymentApproved = true;
   host.state.buyRecoveryStatus = null;
   await host.resumeBuyFlowRecovery(host.readSaved());
-  host.resetToStart();
+  await host.resetToStart();
   assert.ok(host.readSaved(), 'The approved purchase must survive a failed reload lookup and attempted restart');
   assert.ok(!host.events.some(event => event[0] === 'clear-basket'));
 });
 
-test('initial recovery routes valid unconsumed returns to their original attempt before opening checkout', () => {
+test('initial recovery routes valid unconsumed returns to their original attempt before opening checkout', async () => {
   const host = harness({ outcome: 'pending' });
   host.state.buyRecoveryStatus = null;
   host.state.hasPaymentRedirect = () => true;
@@ -270,7 +309,7 @@ test('initial recovery routes valid unconsumed returns to their original attempt
   assert.ok(!host.events.some(event => ['lookup', 'show-approved', 'consume-url', 'clear-payment'].includes(event[0])));
 });
 
-test('missing or add-on return context fails closed before normal or linked check-in', () => {
+test('missing or add-on return context fails closed before normal or linked check-in', async () => {
   for (const options of [{ recordMissing: true }, { kind: 'add_product' }]) {
     const host = harness(options);
     host.state.buyRecoveryStatus = null;
@@ -289,7 +328,7 @@ test('missing or add-on return context fails closed before normal or linked chec
   assert.deepEqual(notInspected.events, []);
 });
 
-test('a legacy unapproved PAYMENT snapshot offers only original-status recovery', () => {
+test('a legacy unapproved PAYMENT snapshot offers only original-status recovery', async () => {
   const host = harness({ recordMissing: true });
   host.state.buyRecoveryStatus = null;
   host.initialRecoveryGate();
@@ -297,26 +336,26 @@ test('a legacy unapproved PAYMENT snapshot offers only original-status recovery'
   assert.ok(!host.events.some(event => ['lookup', 'show-approved', 'clear-basket'].includes(event[0])));
 });
 
-test('finishing one purchase cannot erase another saved approved purchase', () => {
+test('finishing one purchase cannot erase another saved approved purchase', async () => {
   const host = harness({ recordMissing: true });
   host.readSaved().draftState.paymentApproved = true;
   host.readSaved().currentFlowStep = 'APP_SAFETY_VIDEO';
   host.state.state = 'APP_PRESENT';
   host.state.buyRecoveryStatus = null;
   host.state.ctx = { booking: { id: 'another-reference', rollerUniqueId: 'another-booking' }, paymentCompleted: true };
-  host.resetToStart();
+  await host.resetToStart();
   assert.ok(host.readSaved());
   assert.ok(!host.events.some(event => event[0] === 'clear-basket'));
 });
 
-test('explicit completion can reset its own finished purchase', () => {
+test('explicit completion can reset its own finished purchase', async () => {
   const host = harness({ recordMissing: true });
   host.readSaved().draftState.paymentApproved = true;
   host.readSaved().currentFlowStep = 'APP_PRESENT';
   host.state.state = 'APP_PRESENT';
   host.state.buyRecoveryStatus = null;
   host.state.ctx = { booking: { id: 'reference-original', rollerUniqueId: 'booking-original' }, paymentCompleted: true };
-  host.resetToStart();
+  await host.resetToStart();
   assert.equal(host.readSaved(), null);
   assert.ok(host.events.some(event => event[0] === 'clear-basket'));
 });
@@ -333,7 +372,7 @@ test('the normal paid safety-to-QR route can start a new booking without reopeni
   assert.equal(host.readSaved().currentFlowStep, 'APP_CONFIRM');
   assert.equal(recoveryHelpers.getBuyFlowRecoveryIdentifier(host.readSaved()), host.state.ctx.booking.id);
 
-  host.resetToStart();
+  await host.resetToStart();
   host.flushRender();
   runRecoveryEffects(host);
   assert.equal(host.state.buyRecoveryStatus, null, 'New booking must not reopen the completed purchase as unknown');
@@ -351,7 +390,7 @@ test('the normal paid safety-to-QR route can start a new booking without reopeni
   assert.equal(host.readSaved(), null);
 });
 
-test('a ready QR cannot discard another pending or unknown payment when starting over', () => {
+test('a ready QR cannot discard another pending or unknown payment when starting over', async () => {
   for (const outcome of ['pending', 'unknown']) {
     const host = harness({ outcome, renderState: true });
     host.state.ctx = {
@@ -364,7 +403,7 @@ test('a ready QR cannot discard another pending or unknown payment when starting
     host.state.recoveryGateReady = true;
     const purchaseBefore = JSON.stringify(host.readSaved());
     const paymentBefore = JSON.stringify(host.readRecord());
-    host.resetToStart();
+    await host.resetToStart();
     host.flushRender();
     runRecoveryEffects(host);
     assert.equal(host.state.buyRecoveryStatus, 'payment-unknown');
@@ -374,7 +413,7 @@ test('a ready QR cannot discard another pending or unknown payment when starting
   }
 });
 
-test('an approved purchase before the QR handoff remains protected by recovery', () => {
+test('an approved purchase before the QR handoff remains protected by recovery', async () => {
   for (const step of ['APP_SAFETY_VIDEO', 'APP_SAFETY_ATTEST']) {
     const host = paidSafetyHarness();
     host.state.state = step;
@@ -382,7 +421,7 @@ test('an approved purchase before the QR handoff remains protected by recovery',
     runRecoveryEffects(host);
     assert.equal(host.readSaved().draftState.paymentApproved, true);
     const purchaseBefore = JSON.stringify(host.readSaved());
-    host.resetToStart();
+    await host.resetToStart();
     host.flushRender();
     runRecoveryEffects(host);
     assert.equal(host.state.buyRecoveryStatus, 'payment-unknown');
@@ -391,14 +430,14 @@ test('an approved purchase before the QR handoff remains protected by recovery',
   }
 });
 
-test('APP_CONFIRM alone cannot retire a purchase without a ready-for-staff session', () => {
+test('APP_CONFIRM alone cannot retire a purchase without a ready-for-staff session', async () => {
   for (const session of [null, { checkinSessionId: 'session-original', status: 'active', handoffStatus: 'pending' }]) {
     const host = paidSafetyHarness();
     host.state.state = 'APP_CONFIRM';
     host.state.ctx.checkinSession = session;
     runRecoveryEffects(host);
     const purchaseBefore = JSON.stringify(host.readSaved());
-    host.resetToStart();
+    await host.resetToStart();
     host.flushRender();
     runRecoveryEffects(host);
     assert.equal(host.state.buyRecoveryStatus, 'payment-unknown');

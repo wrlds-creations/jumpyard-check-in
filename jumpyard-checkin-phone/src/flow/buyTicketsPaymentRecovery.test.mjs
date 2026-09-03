@@ -54,9 +54,13 @@ function recoveryHarness({ failure = 'unknown', outcome = failure, lookup = asyn
       contact: { firstName: 'Test', lastName: 'Guest', email: 'test@example.invalid', phone: 'synthetic' },
     }),
     writeBuyFlowRecovery: value => events.push(['retry-recovery', value]),
-    clearPaymentRecovery: id => { events.push(['clear-payment', id]); return true; },
+    clearPaymentRecoveryAfterCompletion: async (id, beforeClear) => {
+      if (beforeClear?.() === false) return false;
+      events.push(['clear-payment', id]);
+      return true;
+    },
     clearBuyFlowRecovery: () => events.push(['clear-basket']),
-    setPaymentRecoveryOutcome: (id, result) => events.push(['outcome', id, result]),
+    approvePaymentRecovery: async id => { events.push(['outcome', id, 'approved']); return true; },
     setPaymentFailure: value => { state.paymentFailure = value; events.push(['failure', value]); },
     setPaymentStatusChecking: value => events.push(['checking', value]),
     setPaymentApprovedForSync: value => events.push(['approved', value]),
@@ -76,7 +80,7 @@ function recoveryHarness({ failure = 'unknown', outcome = failure, lookup = asyn
   return { ...handlers, state, events };
 }
 
-test('payment snapshots retain quantities, add-ons and contact without payment secrets', () => {
+test('payment snapshots retain quantities, add-ons and contact without payment secrets', async () => {
   const previous = {
     quantity: 3,
     addonQty: { socks: 2, water_bottle: 1 },
@@ -107,9 +111,9 @@ test('payment snapshots retain quantities, add-ons and contact without payment s
   assert.doesNotMatch(JSON.stringify(saved), /must-not-copy|redirectResult|giftCardNumber|jwt/);
 });
 
-test('another method after confirmed failure restores CONTACT without creating a draft or clearing the basket', () => {
+test('another method after confirmed failure restores CONTACT without creating a draft or clearing the basket', async () => {
   const harness = recoveryHarness({ failure: 'failed' });
-  harness.retryFailedPayment();
+  await harness.retryFailedPayment();
   const savedBeforeClearing = harness.events[0];
   assert.equal(savedBeforeClearing[0], 'retry-recovery');
   assert.equal(savedBeforeClearing[1].currentFlowStep, 'CONTACT');
@@ -125,16 +129,16 @@ test('another method after confirmed failure restores CONTACT without creating a
   ]);
 });
 
-test('explicit start-over only clears the confirmed failed attempt and basket', () => {
+test('explicit start-over only clears the confirmed failed attempt and basket', async () => {
   const harness = recoveryHarness({ failure: 'failed' });
-  harness.restartFailedPayment();
-  assert.deepEqual(harness.events, [['clear-payment', 'attempt-original'], ['clear-basket'], ['back']]);
+  await harness.restartFailedPayment();
+  assert.deepEqual(harness.events, [['clear-basket'], ['clear-payment', 'attempt-original'], ['back']]);
 });
 
-test('unknown, upgraded or mismatched attempts cannot become a new purchase', () => {
+test('unknown, upgraded or mismatched attempts cannot become a new purchase', async () => {
   const unknown = recoveryHarness();
-  unknown.retryFailedPayment();
-  unknown.restartFailedPayment();
+  await unknown.retryFailedPayment();
+  await unknown.restartFailedPayment();
   assert.deepEqual(unknown.events, []);
 
   for (const record of [
@@ -143,7 +147,7 @@ test('unknown, upgraded or mismatched attempts cannot become a new purchase', ()
   ]) {
     const harness = recoveryHarness({ failure: 'failed' });
     harness.state.readPaymentRecovery = () => record;
-    harness.retryFailedPayment();
+    await harness.retryFailedPayment();
     assert.deepEqual(harness.events, [['failure', 'unknown']]);
   }
 });
@@ -164,6 +168,24 @@ test('authoritative paid lookup reuses the same result for the existing approved
     ['failure', null], ['approved', true], ['step', 'APPROVED'],
     ['resolve-paid', undefined, true, booking], ['checking', false],
   ]);
+});
+
+test('a paid lookup cannot bypass failed ownership or persistence', async () => {
+  const host = recoveryHarness({ lookup: async () => ({ paid: true, rollerUniqueId: 'booking-original' }) });
+  host.state.approvePaymentRecovery = async () => false;
+  await host.checkPaymentStatus();
+  assert.equal(host.state.paymentFailure, 'unknown');
+  assert.ok(!host.events.some(event => ['approved', 'step', 'resolve-paid'].includes(event[0])));
+});
+
+test('an attempt replaced while approval is being saved ignores the old lookup', async () => {
+  const host = recoveryHarness({ lookup: async () => ({ paid: true, rollerUniqueId: 'booking-original' }) });
+  host.state.approvePaymentRecovery = async () => {
+    host.state.activePaymentAttemptRef.current = 'replacement-attempt';
+    return true;
+  };
+  await host.checkPaymentStatus();
+  assert.ok(!host.events.some(event => ['approved', 'step', 'resolve-paid'].includes(event[0])));
 });
 
 test('a paid response for another booking cannot approve the current purchase', async () => {

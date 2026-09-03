@@ -27,7 +27,7 @@ import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { AddonChoices, type AddonChoicesHandle } from '@/components/AddonChoices';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
-import { clearPaymentRecovery, readPaymentRecovery, setPaymentRecoveryOutcome } from '@/flow/paymentRecovery';
+import { approvePaymentRecovery, clearPaymentRecoveryAfterCompletion, readPaymentRecovery } from '@/flow/paymentRecovery';
 
 export interface AddonsOfferResult {
     selectedAddons: Addon[];
@@ -299,11 +299,13 @@ export const AddonsOffer = ({
         return () => { activePaymentAttemptRef.current = ''; };
     }, [paymentAttemptId]);
 
-    const returnToSelect = useCallback(() => {
+    const returnToSelect = useCallback(async () => {
         if (paymentNavigationLockedRef.current || paymentFailure === 'unknown') return;
         const recovery = readPaymentRecovery();
         if (recovery?.attemptId === paymentAttemptId && (recovery.outcome === 'unknown' || recovery.outcome === 'approved')) return;
-        if (recovery?.attemptId === paymentAttemptId && recovery.outcome === 'failed') clearPaymentRecovery(paymentAttemptId);
+        if (recovery?.attemptId === paymentAttemptId && recovery.outcome === 'failed'
+            && !await clearPaymentRecoveryAfterCompletion(paymentAttemptId)) return;
+        if (activePaymentAttemptRef.current !== paymentAttemptId) return;
         setSubmitError(null);
         setQuote(null);
         setDraft(null);
@@ -432,11 +434,12 @@ export const AddonsOffer = ({
             paymentHandled,
         });
 
-    const completeAddons = (paymentHandled = false) => {
+    const completeAddons = async (paymentHandled = false) => {
         const recovery = readPaymentRecovery();
         if (recovery?.attemptId === paymentAttemptId && recovery.outcome === 'approved' && paymentHandled) {
-            clearPaymentRecovery(paymentAttemptId);
+            if (!await clearPaymentRecoveryAfterCompletion(paymentAttemptId)) return;
         }
+        if (activePaymentAttemptRef.current !== paymentAttemptId) return;
         onContinue(getCompletionResult(paymentHandled));
     };
 
@@ -458,7 +461,10 @@ export const AddonsOffer = ({
                 || activePaymentAttemptRef.current !== paymentAttemptId || paymentApprovedRef.current) return;
             const recovery = readPaymentRecovery();
             if (recovery && recovery.attemptId !== paymentAttemptId) return;
-            setPaymentRecoveryOutcome(paymentAttemptId, 'approved');
+            if (recovery && !await approvePaymentRecovery(paymentAttemptId)) return;
+            if (activePaymentAttemptRef.current !== paymentAttemptId || paymentApprovedRef.current) return;
+            const latest = readPaymentRecovery();
+            if (recovery && (!latest || latest.attemptId !== paymentAttemptId || latest.createdAt !== recovery.createdAt)) return;
             handlePaymentApproved();
         } catch {
             // An unavailable lookup cannot authorize another payment or a success screen.
