@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #361 Wallet Pre-Submit Recovery (Published; No AWS Resource Change)
+
+[PR #362](https://github.com/wrlds-creations/jumpyard-check-in/pull/362) merged `df69ecbe387c2e870bcc62adbc3d3c00563f6ca0`. Immutable [release 33755593134](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33755593134), artifact `9893479442`, passed protected [Park 33756140550](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33756140550) and [public 33756585589](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33756585589) after review of each exact artifact/target plan and delegated approval under Love's #361 deployment instruction. The phone correction adds safe retry after a proven pre-submit wallet error; the #333 backend/admin, #334 heartbeat and accepted #351 recovery/QR behavior are retained.
+
+The Park plan had identical current/release templates (`0791f5bb04d17daa029e5cd8f9b50454c08f647a6041671b0c4fb8aff77c1a2a`), 202 resources and zero changes; CDK reported no changes. Migration apply was disabled and `0001` through `0020` were already applied. Ordinary template, stack, drift, alarm, queue, domain/CORS/Cognito/Apple Pay and exact-version checks passed. Independent Park/public readback matched all four frontend roots and 44 JS/CSS responses to the selected artifact. Account `376129878018`, region `eu-north-1`, WRLDS tags, schema, IAM, secrets, routes and runtime gates are unchanged. No live payment, provider setting or guest message changed.
+
+The verified unexpired rollback candidate is release `33741393453` / `409aa58d4cfeab9d1e120b576724649a5d651280`, artifact `9888027527`, preserving #333 and the accepted #351 QR correction. No rollback or re-promotion occurred. #361 remains open for Love's handset acceptance; the older unresolved payment cannot be cleared by this change. [Artifact hashes, validation and acceptance boundary](docs/gh361-phone-wallet-recovery.md).
+
 ### Issue #351 Final QR New-Booking Correction (Published; No AWS Resource Change)
 
 [PR #358](https://github.com/wrlds-creations/jumpyard-check-in/pull/358) merged `409aa58d4cfeab9d1e120b576724649a5d651280`. After the separate #333 Park/public rollout completed, immutable [release 33741393453](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33741393453), artifact `9888027527`, passed protected [Park 33742197982](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33742197982) and [public 33742546868](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33742546868). Both plans and the exact artifact were reviewed before delegated approval under Love's #351 deployment instruction. The correction fixes explicit new-booking navigation from the successful QR screen and retains the deployed #333 RedeemHandler/admin behavior.
