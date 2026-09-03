@@ -83,10 +83,14 @@ export interface StaffSessionDetail extends StaffSessionSummary {
   tickets: StaffBookingTicket[];
 }
 
+export type StaffRedeemRecovery = "local_receipt" | "roller_ticket_status";
+
 export interface StaffRedeemResult {
+  /** #333: set when JumpYard Cloud completed a redemption Roller had already accepted. */
+  recovered: StaffRedeemRecovery | null;
   redeemedTicketIds: string[];
   roller?: {
-    statusCode?: number;
+    statusCode?: number | null;
   };
   session: Partial<StaffSessionSummary> & {
     checkinSessionId: string;
@@ -241,9 +245,10 @@ interface StaffDetailResponse {
 
 interface StaffRedeemResponse {
   status: "redeemed" | "blocked" | "forbidden" | "not_found" | "invalid_request" | "internal_error" | "roller_error";
+  recovered?: string | null;
   redeemedTicketIds?: string[];
   roller?: {
-    statusCode?: number;
+    statusCode?: number | null;
   };
   session?: Partial<StaffSessionSummary> & {
     checkinSessionId: string;
@@ -568,6 +573,7 @@ export async function redeemStaffSession({
   }
 
   return {
+    recovered: body.recovered === "local_receipt" || body.recovered === "roller_ticket_status" ? body.recovered : null,
     redeemedTicketIds: body.redeemedTicketIds ?? [],
     roller: body.roller,
     session: body.session,
