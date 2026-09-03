@@ -54,6 +54,10 @@ const PRODUCT_CACHE_TTL_MS = 15 * 60 * 1000;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 const ROLLER_VENUE_IDENTITY_DELAY_MS = 1000;
 const SHARED_TOKEN_CACHE_MS = 60 * 1000;
+// #333: an in-progress redeem reservation older than this cannot belong to a live execution
+// (the handler timeout is shorter), so a retry may take it over and resume.
+const REDEEM_IN_PROGRESS_RESUME_AFTER_SECONDS = 30;
+const REDEEM_IN_PROGRESS_RETRY_AFTER_SECONDS = 5;
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
@@ -316,38 +320,59 @@ exports.handler = async (event) => {
 
     const idempotency = await reserveIdempotencyKey(request.idempotencyKey, requestHash);
     if (!idempotency.ok) {
-      return jsonResponse(409, correlationId, {
-        status: 'blocked',
-        error: {
-          code: 'idempotency_key_reused',
-          message: 'The supplied idempotency key has already been used for a redeem operation.',
-        },
-      });
+      return idempotencyConflictResponse(correlationId, idempotency);
+    }
+
+    const finalizeInput = {
+      actor: trustedStaffActor,
+      booking: refreshedContext.booking,
+      checkinSessionId: event?.__jumpyardTrustedStaffRedeem === true
+        ? stringOrNull(event.__jumpyardTrustedStaffSessionId)
+        : null,
+      correlationId,
+      idempotencyKey: request.idempotencyKey,
+      ticketIds: refreshedDecision.selectedTicketIds,
+    };
+
+    // #333: a replayed key means Roller already accepted exactly this redemption earlier and
+    // only the local bookkeeping may be missing. Finish it without touching Roller again.
+    if (idempotency.mode === 'replay') {
+      return finalizeRecoveredRedeem(finalizeInput, 'local_receipt', null);
+    }
+
+    // #333: Roller's per-ticket state is authoritative. When every selected ticket is already
+    // redeemed there (a previous attempt died after Roller's OK, or another channel redeemed
+    // them), complete the local check-in instead of asking Roller to redeem again.
+    const rollerTicketStates = getRollerTicketRedeemStates(
+      refreshResult.rollerBooking,
+      refreshedDecision.selectedTicketIds,
+    );
+    if (rollerTicketStates.allRedeemed) {
+      return finalizeRecoveredRedeem(finalizeInput, 'roller_ticket_status', null);
     }
 
     const rollerResult = await redeemRollerTickets(config, token, refreshedDecision.selectedTicketIds, request);
 
     if (rollerResult.ok) {
-      await persistCheckinAttempt({
-        booking: refreshedContext.booking,
-        correlationId,
-        errorCode: null,
-        idempotencyKey: request.idempotencyKey,
-        rollerResponseRef: `roller_redemptions:http_${rollerResult.status}`,
-        selectedTicketIds: refreshedDecision.selectedTicketIds,
-        status: 'redeemed',
+      // #333: the durable receipt (tickets, idempotency key and the staff session) is written in
+      // one statement right after Roller's OK and before any other bookkeeping, so a timeout or
+      // database error later can never leave a Roller-redeemed guest without a completed session.
+      const finalizedSession = await finalizeRedeemLocally({
+        ...finalizeInput,
+        resultRef: `redeemed:${refreshedContext.booking.bookingReference}`,
       });
-      await markTicketsRedeemed(refreshedDecision.selectedTicketIds);
-      await completeIdempotencyKey(request.idempotencyKey, 'succeeded', `redeemed:${refreshedContext.booking.bookingReference}`);
-      await writeEventLog({
+      await recordRedeemBookkeeping({
         booking: refreshedContext.booking,
         correlationId,
         eventType: 'checkin.redeem_succeeded',
+        idempotencyKey: request.idempotencyKey,
         payload: {
           ...(trustedStaffActor ? staffAuditPayload(trustedStaffActor) : {}),
           ticketCount: refreshedDecision.selectedTicketIds.length,
           refreshedFromRoller: true,
         },
+        rollerResponseRef: `roller_redemptions:http_${rollerResult.status}`,
+        selectedTicketIds: refreshedDecision.selectedTicketIds,
         summary: 'Redeem completed through Roller.',
       });
 
@@ -357,7 +382,23 @@ exports.handler = async (event) => {
         roller: {
           statusCode: rollerResult.status,
         },
+        ...(finalizedSession ? { session: buildStaffRedeemSessionResponse(finalizedSession) } : {}),
       });
+    }
+
+    if (rollerResult.status === 409) {
+      // #333: a 409 may mean "already redeemed", but only Roller's ticket state decides.
+      // Any other conflict stays rejected below.
+      const recheck = await getBookingDetail(config, token, refreshedContext.booking.rollerUniqueId);
+      const recheckStates = recheck.ok
+        ? getRollerTicketRedeemStates(
+          normalizeBooking(recheck.body, refreshResult.products),
+          refreshedDecision.selectedTicketIds,
+        )
+        : { allRedeemed: false, states: {} };
+      if (recheckStates.allRedeemed) {
+        return finalizeRecoveredRedeem(finalizeInput, 'roller_ticket_status', rollerResult.status);
+      }
     }
 
     await persistCheckinAttempt({
@@ -477,6 +518,42 @@ async function handleStaffSessionRedeem(event, correlationId) {
     });
   }
 
+  // #333: if Roller already accepted this session's redemption earlier (the previous attempt
+  // died before the local bookkeeping finished), complete it locally without another Roller call.
+  const receipt = await findSucceededRedeemReceipt({
+    idempotencyKey: request.idempotencyKey,
+    ticketIds: session.selectedTicketIds,
+  });
+  if (receipt) {
+    const recoveredSession = await finalizeRedeemLocally({
+      actor: auth.staff,
+      checkinSessionId: session.checkinSessionId,
+      idempotencyKey: request.idempotencyKey,
+      resultRef: `recovered:${receipt.source}:${session.bookingReference}`,
+      ticketIds: session.selectedTicketIds,
+    });
+    await writeEventLog({
+      booking: recoveredSession ?? session,
+      correlationId,
+      eventType: 'checkin.staff_redeem_recovered',
+      payload: {
+        checkinSessionId: session.checkinSessionId,
+        recovered: receipt.source,
+        ...staffAuditPayload(auth.staff),
+        ticketCount: session.selectedTicketIds.length,
+      },
+      summary: `Staff-confirmed check-in session completed from ${receipt.source}.`,
+    });
+
+    return jsonResponse(200, correlationId, {
+      status: 'redeemed',
+      recovered: receipt.source,
+      redeemedTicketIds: session.selectedTicketIds,
+      roller: { statusCode: null },
+      session: buildStaffRedeemSessionResponse(recoveredSession ?? session),
+    });
+  }
+
   const redeemEvent = {
     ...event,
     body: JSON.stringify({
@@ -492,6 +569,7 @@ async function handleStaffSessionRedeem(event, correlationId) {
     }),
     __jumpyardTrustedStaffActor: auth.staff,
     __jumpyardTrustedStaffRedeem: true,
+    __jumpyardTrustedStaffSessionId: session.checkinSessionId,
     pathParameters: {},
     rawPath: '/v1/check-in/redeem',
     routeKey: 'POST /v1/check-in/redeem',
@@ -501,17 +579,22 @@ async function handleStaffSessionRedeem(event, correlationId) {
   const redeemBody = parseJsonOrNull(redeemResponse.body) ?? {};
 
   if (redeemResponse.statusCode === 200 && redeemBody.status === 'redeemed') {
-    const completedSession = await markStaffSessionRedeemed({
-      actor: auth.staff,
-      checkinSessionId: session.checkinSessionId,
-      redeemedTicketIds: redeemBody.redeemedTicketIds ?? session.selectedTicketIds,
-    });
+    // #333: the inner handler normally completes the session inside its durable receipt; the
+    // idempotent fallback below only runs when that did not happen.
+    const completedSession = redeemBody.session?.status === 'redeemed'
+      ? { ...session, ...redeemBody.session }
+      : await markStaffSessionRedeemed({
+        actor: auth.staff,
+        checkinSessionId: session.checkinSessionId,
+        redeemedTicketIds: redeemBody.redeemedTicketIds ?? session.selectedTicketIds,
+      });
     await writeEventLog({
       booking: completedSession,
       correlationId,
       eventType: 'checkin.staff_redeem_completed',
       payload: {
         checkinSessionId: completedSession.checkinSessionId,
+        ...(redeemBody.recovered ? { recovered: redeemBody.recovered } : {}),
         ...staffAuditPayload(auth.staff),
         ticketCount: completedSession.selectedTicketIds.length,
       },
@@ -520,6 +603,7 @@ async function handleStaffSessionRedeem(event, correlationId) {
 
     return jsonResponse(200, correlationId, {
       status: 'redeemed',
+      ...(redeemBody.recovered ? { recovered: redeemBody.recovered } : {}),
       redeemedTicketIds: redeemBody.redeemedTicketIds ?? session.selectedTicketIds,
       roller: redeemBody.roller,
       session: buildStaffRedeemSessionResponse(completedSession),
@@ -2043,6 +2127,8 @@ async function refreshRedeemContextFromRoller(config, token, existingContext, re
   return {
     ok: true,
     context: refreshedContext,
+    products,
+    rollerBooking: booking,
   };
 }
 
@@ -2148,9 +2234,269 @@ async function reserveIdempotencyKey(idempotencyKey, requestHash) {
     ],
   );
 
-  return {
-    ok: Number(result.numberOfRecordsUpdated ?? 0) === 1,
-  };
+  if (Number(result.numberOfRecordsUpdated ?? 0) === 1) {
+    return { ok: true, mode: 'reserved' };
+  }
+
+  return claimExistingIdempotencyKey(idempotencyKey, requestHash);
+}
+
+/**
+ * #333: the same key with the same request is a retry of one redeem operation, never a new one.
+ * A succeeded record is replayed, a stale in-progress record (the earlier execution died) is
+ * resumed, a failed record may be retried, and a live in-progress record on another device is
+ * reported as busy. A different request behind the same key is still rejected.
+ */
+async function claimExistingIdempotencyKey(idempotencyKey, requestHash) {
+  const existing = firstMappedRow(await executeStatement(
+    `SELECT
+       status,
+       request_hash,
+       result_ref,
+       (updated_at < now() - make_interval(secs => :resumeAfterSeconds)) AS stale
+     FROM jumpyard.idempotency_records
+     WHERE idempotency_key = :idempotencyKey
+       AND operation = 'redeem'
+     LIMIT 1`,
+    [
+      stringParameter('idempotencyKey', idempotencyKey),
+      intParameter('resumeAfterSeconds', REDEEM_IN_PROGRESS_RESUME_AFTER_SECONDS),
+    ],
+  ));
+
+  if (!existing || stringOrNull(existing.request_hash) !== requestHash) {
+    return { ok: false, mode: 'conflict', reason: 'idempotency_key_reused' };
+  }
+
+  const status = stringOrNull(existing.status);
+  if (status === 'succeeded') {
+    return { ok: true, mode: 'replay', resultRef: stringOrNull(existing.result_ref) };
+  }
+
+  if (status === 'in_progress' && existing.stale !== true) {
+    return { ok: false, mode: 'in_progress', reason: 'redeem_in_progress' };
+  }
+
+  const claimed = await executeStatement(
+    `UPDATE jumpyard.idempotency_records
+     SET status = 'in_progress',
+         result_ref = NULL,
+         updated_at = now()
+     WHERE idempotency_key = :idempotencyKey
+       AND operation = 'redeem'
+       AND request_hash = :requestHash
+       AND (
+         status = 'failed'
+         OR (status = 'in_progress' AND updated_at < now() - make_interval(secs => :resumeAfterSeconds))
+       )`,
+    [
+      stringParameter('idempotencyKey', idempotencyKey),
+      stringParameter('requestHash', requestHash),
+      intParameter('resumeAfterSeconds', REDEEM_IN_PROGRESS_RESUME_AFTER_SECONDS),
+    ],
+  );
+
+  if (Number(claimed.numberOfRecordsUpdated ?? 0) !== 1) {
+    return { ok: false, mode: 'in_progress', reason: 'redeem_in_progress' };
+  }
+
+  return { ok: true, mode: status === 'failed' ? 'retry_after_failure' : 'resumed' };
+}
+
+function idempotencyConflictResponse(correlationId, idempotency) {
+  if (idempotency.reason === 'redeem_in_progress') {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: 'redeem_in_progress',
+        message: 'This check-in is already being completed. Wait a few seconds and try again.',
+      },
+      retryAfterSeconds: REDEEM_IN_PROGRESS_RETRY_AFTER_SECONDS,
+    });
+  }
+
+  return jsonResponse(409, correlationId, {
+    status: 'blocked',
+    error: {
+      code: 'idempotency_key_reused',
+      message: 'The supplied idempotency key has already been used for a redeem operation.',
+    },
+  });
+}
+
+/**
+ * #333: evidence that Roller already accepted this redemption: the same stable key completed
+ * earlier. Older random keys have no receipt and fall through to Roller's own ticket state.
+ * (The redeem runtime role may only insert into checkin_attempts, so attempts are not read.)
+ */
+async function findSucceededRedeemReceipt({ idempotencyKey, ticketIds }) {
+  const selected = (Array.isArray(ticketIds) ? ticketIds : []).filter(Boolean);
+  if (selected.length === 0 || !idempotencyKey) return null;
+
+  const keyRow = firstMappedRow(await executeStatement(
+    `SELECT status
+     FROM jumpyard.idempotency_records
+     WHERE idempotency_key = :idempotencyKey
+       AND operation = 'redeem'
+       AND status = 'succeeded'
+     LIMIT 1`,
+    [stringParameter('idempotencyKey', idempotencyKey)],
+  ));
+
+  return keyRow ? { source: 'local_receipt', via: 'idempotency_key' } : null;
+}
+
+/**
+ * #333: the durable receipt. Tickets, the idempotency key and (for staff redeem) the check-in
+ * session are completed in one statement, so they can never be left half-done.
+ */
+async function finalizeRedeemLocally({ actor, checkinSessionId, idempotencyKey, resultRef, ticketIds }) {
+  const selected = (Array.isArray(ticketIds) ? ticketIds : []).filter(Boolean);
+  const parameters = [
+    stringParameter('ticketIds', JSON.stringify(selected)),
+    stringParameter('idempotencyKey', idempotencyKey),
+    stringParameter('resultRef', resultRef),
+  ];
+  const ticketAndKeyCtes = `
+    WITH marked_tickets AS (
+      UPDATE jumpyard.roller_booking_tickets
+      SET redeem_status_last_seen = 'redeemed',
+          last_seen_from_roller_at = now(),
+          updated_at = now()
+      WHERE ticket_id IN (SELECT jsonb_array_elements_text(CAST(:ticketIds AS jsonb)))
+      RETURNING ticket_id
+    ),
+    completed_key AS (
+      UPDATE jumpyard.idempotency_records
+      SET status = 'succeeded',
+          result_ref = :resultRef,
+          updated_at = now()
+      WHERE idempotency_key = :idempotencyKey
+        AND operation = 'redeem'
+      RETURNING idempotency_key
+    )`;
+
+  if (!checkinSessionId) {
+    await executeStatement(
+      `${ticketAndKeyCtes}
+       SELECT
+         (SELECT count(*) FROM marked_tickets) AS marked_tickets,
+         (SELECT count(*) FROM completed_key) AS completed_keys`,
+      parameters,
+    );
+    return null;
+  }
+
+  const result = await executeStatement(
+    `${ticketAndKeyCtes}
+     UPDATE jumpyard.checkin_sessions
+     SET
+       status = 'redeemed',
+       handoff_status = 'completed',
+       completed_at = COALESCE(completed_at, now()),
+       updated_at = now(),
+       session_summary = jsonb_set(
+         jsonb_set(
+           CASE
+             WHEN session_summary ? 'staffActor' THEN session_summary
+             ELSE jsonb_set(session_summary, '{staffActor}', CAST(:staffActor AS jsonb), true)
+           END,
+           '{redeemedBy}',
+           COALESCE(session_summary -> 'redeemedBy', '"staff_session_redeem_api"'::jsonb),
+           true
+         ),
+         '{redeemedTicketCount}',
+         COALESCE(session_summary -> 'redeemedTicketCount', CAST(:redeemedTicketCount AS jsonb)),
+         true
+       )
+     WHERE checkin_session_id = :checkinSessionId
+     RETURNING
+       checkin_session_id,
+       roller_unique_id,
+       booking_reference,
+       visit_date::text AS visit_date,
+       status,
+       safety_status,
+       handoff_code,
+       handoff_status,
+       selected_ticket_ids::text AS selected_ticket_ids,
+       expires_at::text AS expires_at,
+       ready_for_staff_at::text AS ready_for_staff_at,
+       completed_at::text AS completed_at,
+       updated_at::text AS updated_at`,
+    [
+      ...parameters,
+      stringParameter('checkinSessionId', checkinSessionId),
+      stringParameter('staffActor', JSON.stringify(staffAuditPayload(actor))),
+      stringParameter('redeemedTicketCount', JSON.stringify(selected.length)),
+    ],
+  );
+
+  return mapStaffRedeemSessionRow(firstMappedRow(result));
+}
+
+/** #333: attempt/event bookkeeping after the receipt is durable; a failure here must not undo it. */
+async function recordRedeemBookkeeping({
+  booking,
+  correlationId,
+  eventType,
+  idempotencyKey,
+  payload,
+  rollerResponseRef,
+  selectedTicketIds,
+  summary,
+}) {
+  try {
+    await persistCheckinAttempt({
+      booking,
+      correlationId,
+      errorCode: null,
+      idempotencyKey,
+      rollerResponseRef,
+      selectedTicketIds,
+      status: 'redeemed',
+    });
+    await writeEventLog({ booking, correlationId, eventType, payload, summary });
+  } catch (error) {
+    console.warn(JSON.stringify({
+      correlationId,
+      eventType: 'checkin.redeem_bookkeeping_failed',
+      failureClass: error?.name || 'Error',
+      failureCode: stringOrNull(error?.code),
+    }));
+  }
+}
+
+async function finalizeRecoveredRedeem(input, recovered, rollerStatusCode) {
+  const finalizedSession = await finalizeRedeemLocally({
+    ...input,
+    resultRef: `recovered:${recovered}:${input.booking.bookingReference}`,
+  });
+  await recordRedeemBookkeeping({
+    booking: input.booking,
+    correlationId: input.correlationId,
+    eventType: 'checkin.redeem_recovered',
+    idempotencyKey: input.idempotencyKey,
+    payload: {
+      ...(input.actor ? staffAuditPayload(input.actor) : {}),
+      recovered,
+      rollerStatusCode,
+      ticketCount: input.ticketIds.length,
+    },
+    rollerResponseRef: rollerStatusCode === null ? `recovered:${recovered}` : `roller_redemptions:http_${rollerStatusCode}`,
+    selectedTicketIds: input.ticketIds,
+    summary: `Redeem completed locally from ${recovered}.`,
+  });
+
+  return jsonResponse(200, input.correlationId, {
+    status: 'redeemed',
+    recovered,
+    redeemedTicketIds: input.ticketIds,
+    roller: {
+      statusCode: rollerStatusCode,
+    },
+    ...(finalizedSession ? { session: buildStaffRedeemSessionResponse(finalizedSession) } : {}),
+  });
 }
 
 async function completeIdempotencyKey(idempotencyKey, status, resultRef) {
@@ -2576,8 +2922,30 @@ function normalizeBookingItem(item, productById) {
     startTime: stringOrNull(item?.startTime ?? item?.sessionStartTime),
     tickets: tickets.map((ticket) => ({
       locations: Array.isArray(ticket?.locations) ? ticket.locations : [],
+      // #333: Roller's own per-ticket redemption state, used only to recognise an already
+      // redeemed ticket set; it is never written back as local truth by the refresh itself.
+      redeemStatus: stringOrNull(ticket?.redeemStatus ?? ticket?.status),
       ticketId: stringOrNull(ticket?.ticketId ?? ticket?.id),
     })),
+  };
+}
+
+function getRollerTicketRedeemStates(rollerBooking, ticketIds) {
+  const states = {};
+  for (const item of rollerBooking?.items ?? []) {
+    for (const ticket of item?.tickets ?? []) {
+      if (ticket?.ticketId) states[ticket.ticketId] = stringOrNull(ticket.redeemStatus);
+    }
+  }
+
+  const selected = Array.isArray(ticketIds) ? ticketIds.filter(Boolean) : [];
+  const allRedeemed =
+    selected.length > 0 &&
+    selected.every((ticketId) => Object.prototype.hasOwnProperty.call(states, ticketId) && isUsedRedeemStatus(states[ticketId]));
+
+  return {
+    allRedeemed,
+    states: Object.fromEntries(selected.map((ticketId) => [ticketId, states[ticketId] ?? null])),
   };
 }
 
@@ -3192,6 +3560,12 @@ function jsonResponse(statusCode, correlationId, payload) {
 }
 
 exports.__test = {
+  claimExistingIdempotencyKey,
+  finalizeRedeemLocally,
+  findSucceededRedeemReceipt,
+  getRollerTicketRedeemStates,
+  normalizeBooking,
+  reserveIdempotencyKey,
   upsertLiveBooking,
   upsertLiveBookingItem,
   reset() {

@@ -1558,7 +1558,9 @@ export default function Home() {
         const result = await redeemStaffSession({
           checkinSessionId: detail.checkinSessionId,
           staffToken: activeAuth.auth.token,
-          idempotencyKey: `staff-redeem:${detail.checkinSessionId}:${crypto.randomUUID()}`,
+          // #333: one stable key per session, so a repeated press or a second device resumes the
+          // same redeem operation instead of starting a new one that collides with Roller.
+          idempotencyKey: `staff-redeem:${detail.checkinSessionId}`,
         });
         if (!isSameStaffSession(authRef.current, activeAuth)) return;
         const redeemedIds = new Set(result.redeemedTicketIds);
@@ -1586,11 +1588,20 @@ export default function Home() {
           handoffCode: getDisplayCode(detail),
           ticketCount: result.redeemedTicketIds.length,
         });
-        setRedeemMessage(`Incheckad: ${result.redeemedTicketIds.length} biljetter.`);
+        setRedeemMessage(
+          result.recovered
+            ? `Incheckad: ${result.redeemedTicketIds.length} biljetter (redan inlösta i ROLLER, sessionen slutförd).`
+            : `Incheckad: ${result.redeemedTicketIds.length} biljetter.`
+        );
         setRedeemState("success");
       } catch (redeemError) {
         if (!isSameStaffSession(authRef.current, auth)) return;
         if (handleProtectedAuthFailure(redeemError)) return;
+        if (redeemError instanceof StaffApiError && redeemError.code === "redeem_in_progress") {
+          setRedeemMessage("Incheckningen pågår redan, kanske från en annan enhet. Vänta några sekunder och tryck igen.");
+          setRedeemState("error");
+          return;
+        }
         setRedeemMessage(
           redeemError instanceof Error ? redeemError.message : "Kunde inte slutföra incheckningen."
         );
