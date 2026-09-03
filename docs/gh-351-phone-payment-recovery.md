@@ -2,7 +2,7 @@
 
 ## Scope and decision
 
-Love approved the recovery implementation on 2026-09-03. [#351](https://github.com/wrlds-creations/jumpyard-check-in/issues/351) owns the change; [#353](https://github.com/wrlds-creations/jumpyard-check-in/issues/353) separately owns the Klarna/BankID investigation and any method-visibility decision. D0201 records the recovery policy. There are no backend, vendor, dependency, infrastructure, live-payment or deployment changes.
+Love approved the recovery implementation on 2026-09-03. [#351](https://github.com/wrlds-creations/jumpyard-check-in/issues/351) owns the change; [#353](https://github.com/wrlds-creations/jumpyard-check-in/issues/353) separately owns the Klarna/BankID investigation and any method-visibility decision. D0201 records the recovery policy. There are no backend, vendor, dependency, infrastructure or deployment-configuration changes, and no agent-initiated live payment.
 
 Implementation branch: `codex/gh-351-phone-payment-recovery`, initially based on `414ffc5` and brought forward to `7c845de` before commit. The intervening mainline change only records #331 rollout evidence. Investigation references in the issue use `a42559b`; the relevant phone sources were unchanged between those bases. Work is isolated from the other local task.
 
@@ -85,7 +85,7 @@ AWS account `376129878018`, region `eu-north-1`, the ten WRLDS metadata values, 
 
 ## Manual handset verification still required
 
-Use an explicitly approved test environment/payment fixture before promotion; local implementation approval does not authorize live purchases.
+Love now tests the selected published version at `https://checkin.jumpyard.se`. The scenarios below are the acceptance plan; the agent has performed static verification only and has not initiated a live purchase.
 
 1. On the phone browser and installed PWA, start a purchase, leave for the provider authentication flow and return with a controlled cancellation/refusal. Verify readable failure, preserved time/quantity/add-ons/contact, and fresh methods after choosing another method.
 2. Choose explicit Start over after confirmed failure; select the same time and basket. Verify methods render and no stale `Cancelled` response is replayed.
