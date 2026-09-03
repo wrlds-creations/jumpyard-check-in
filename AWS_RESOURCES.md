@@ -4,6 +4,10 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #333 Resumable Staff Redeem (Implemented; Protected Rollout Pending)
+
+Love approved [issue #333](https://github.com/wrlds-creations/jumpyard-check-in/issues/333) on 2026-09-03. The Redeem handler now writes one atomic local receipt (tickets, idempotency key, session completion) immediately after Roller accepts a redemption, resumes a retry from that receipt or from Roller's per-ticket redemption state, and reports a live concurrent attempt as `redeem_in_progress`; the staff app uses one stable idempotency key per session. The only infrastructure change is the existing `RedeemHandler` timeout from the 10 s default to 25 s in `infra/lib/jumpyard-cloud-stack.ts`, below the API Gateway ceiling. No new AWS resource, database grant, migration, IAM, secret, route, gate, venue/date, payment authority, messaging, or multi-park boundary changed; the least-privilege validator confirms the redeem runtime role needs no additional grant. Release, protected Park promotion and admin promotion evidence will be recorded here after rollout. [Detailed evidence](docs/gh-333-staff-redeem-recovery.md).
+
 ### Issue #351 Phone Payment Recovery (Published; No AWS Resource Change)
 
 [PR #355](https://github.com/wrlds-creations/jumpyard-check-in/pull/355) merged `9f262114f3a6e5ea31e6ccd3313472963c80a353`, retaining #331 and #334. Immutable [release 33736067939](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33736067939) produced artifact `9885940293`, digest `sha256:241c2ca14a30610d19c4527f80d7d2c287c864253b9fe1fd23105ce24a4890ee`. Protected [Park 33736643450](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33736643450) and [public 33737047547](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33737047547) promoted that same artifact after review and delegated approval under Love's explicit deployment instruction. The plan retained 202 resources with identical templates and zero changes; CDK reported no changes and migration apply was disabled. Migrations remain complete through `0020`.

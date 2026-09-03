@@ -967,6 +967,10 @@ exports.handler = async (event) => {
     );
     const redeemHandler = this.createHandler('RedeemHandler', 'redeem', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'redeem')),
+      // #333: the final Roller refresh (token, booking, catalog, venue) plus the redemption call
+      // measured up to 7.7 s on cold starts against the 10 s default; keep headroom below the
+      // 30 s API Gateway ceiling so a slow refresh cannot cut off the durable receipt.
+      timeout: Duration.seconds(25),
     });
     const sessionHandler = this.createHandler('SessionHandler', 'session', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'session')),

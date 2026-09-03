@@ -501,9 +501,11 @@ Rules:
 - Requires completed safety status for the first implementation.
 - Performs the T0021 final live Roller refresh before write.
 - Re-runs eligibility against the refreshed data.
-- Uses idempotency to prevent duplicate redemption attempts.
+- Uses idempotency to prevent duplicate redemption attempts. The staff app sends one stable key per session (`staff-redeem:<checkinSessionId>`); the same key with the same request is a retry of the same operation (#333).
 - Calls Roller `POST /redemptions` only after all checks pass.
-- Updates `checkin_attempts`, ticket local state, handoff/session state, and event log.
+- Writes the durable receipt (ticket local state, idempotency key, and session completion) in one statement immediately after Roller accepts, then records `checkin_attempts` and the event log (#333).
+- A retry completes the check-in locally without a second Roller redemption when Roller already accepted it: from the stored receipt (`recovered: "local_receipt"`) or, after a Roller `409`, only when Roller's booking detail shows every selected ticket as redeemed (`recovered: "roller_ticket_status"`). Any other `409` remains `rejected` with `roller_redeem_rejected` (#333).
+- While the same key is being processed elsewhere, the response is `409` with `redeem_in_progress` and `retryAfterSeconds`; a different request behind the same key is `409` with `idempotency_key_reused`.
 - This replaces any direct phone call to the protected T0021 dev redeem path.
 - The lower-level direct redeem dev token remains only for controlled internal/dev testing outside the normal staff handoff UI.
 
