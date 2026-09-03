@@ -7,10 +7,23 @@ import ts from 'typescript';
 const source = fs.readFileSync(new URL('../app/page.tsx', import.meta.url), 'utf8');
 const sourceFile = ts.createSourceFile('page.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 
+function loadFlowModule(name) {
+  const input = fs.readFileSync(new URL(name, import.meta.url), 'utf8');
+  const context = vm.createContext({ exports: {} });
+  vm.runInContext(ts.transpileModule(input, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  }).outputText, context);
+  return context.exports;
+}
+
+const flowMachine = loadFlowModule('./machine.ts');
+const recoveryHelpers = loadFlowModule('./buyFlowRecovery.ts');
+
 function declaration(name) {
   let result;
   function visit(node) {
-    const effectMarker = name === 'initialRecoveryGate' ? 'setRecoveryGateReady(true)'
+    const effectMarker = name === 'persistSafetyRecovery' ? 'writeSafetyRecovery(state, ctx)'
+      : name === 'initialRecoveryGate' ? 'setRecoveryGateReady(true)'
       : name === 'initialLinkResolution' ? 'resolveCheckInSessionLink(linkToken)' : null;
     if (effectMarker && ts.isCallExpression(node) && node.expression.getText(sourceFile) === 'useEffect'
       && node.arguments[0]?.getText(sourceFile).includes(effectMarker)) {
@@ -45,10 +58,11 @@ function seedSnapshot() {
   };
 }
 
-function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () => ({ paid: false }), recordMissing = false } = {}) {
+function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () => ({ paid: false }), recordMissing = false, renderState = false } = {}) {
   let record = recordMissing ? null : { attemptId: 'attempt-original', bookingIdentifier: 'booking-original', kind, outcome, createdAt: 1 };
   let saved = seedSnapshot();
   const events = [];
+  const pendingState = new Map();
   const state = {
     recoveryReturnRecord: record,
     buyRecoverySnapshot: saved,
@@ -59,15 +73,16 @@ function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () 
     recoveryContinueRequestedRef: { current: false }, paidConfirmationRunRef: { current: 0 },
     pendingSafetyAttestedAtRef: { current: null }, addonsAvailabilityPrefetchRef: { current: null },
     guestResumeStepWriteRef: { current: null },
+    ctx: flowMachine.initialContext('park-qr'), isMarkingReadyForStaff: false,
     readPaymentRecovery: () => record,
     readBuyFlowRecovery: () => saved,
     clearPaymentRecovery: id => { events.push(['clear-payment', id]); record = null; return true; },
     clearBuyFlowRecovery: () => { events.push(['clear-basket']); saved = null; },
     writeBuyFlowRecovery: value => { saved = JSON.parse(JSON.stringify(value)); events.push(['write-basket', saved]); },
     setPaymentRecoveryOutcome: (id, next) => { events.push(['outcome', id, next]); record = { ...record, outcome: next }; return true; },
-    getBuyFlowRecoveryIdentifier: value => value?.bookingReference ?? value?.draftUniqueId ?? value?.draftState?.uniqueId ?? null,
-    getBuyFlowRecoveryTargetState: () => 'APP_SAFETY_VIDEO',
-    isPrePaymentBuyFlowRecovery: value => value?.currentFlowStep === 'CONTACT' && !value.draftState && !value.draftUniqueId && !value.bookingReference,
+    getBuyFlowRecoveryIdentifier: recoveryHelpers.getBuyFlowRecoveryIdentifier,
+    getBuyFlowRecoveryTargetState: recoveryHelpers.getBuyFlowRecoveryTargetState,
+    isPrePaymentBuyFlowRecovery: recoveryHelpers.isPrePaymentBuyFlowRecovery,
     hasPaymentRedirect: () => false,
     consumePaymentRedirect: () => events.push(['consume-url']),
     lookupBooking: async id => { events.push(['lookup', id]); return lookup(); },
@@ -76,7 +91,7 @@ function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () 
     resolvePaidConfirmation: async () => ({ status: 'unavailable' }),
     resolveCheckInSessionLink: async () => { events.push(['resolve-link']); return {}; },
     revealRecoveredPurchase: (...args) => events.push(['reveal', ...args]),
-    initialContext: () => ({}), effectiveChannel: 'park-qr',
+    initialContext: flowMachine.initialContext, nextState: flowMachine.nextState, effectiveChannel: 'park-qr',
     scrollToTop: () => events.push(['scroll']),
   };
   for (const name of [
@@ -87,14 +102,53 @@ function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () 
     'setBuyStep', 'setSafetyExitLocked', 'setAddonsAvailabilityPrefetch', 'setCtx',
   ]) state[name] = value => {
     events.push([name, value]);
-    if (name === 'setBuyRecoveryStatus') state.buyRecoveryStatus = value;
+    if (renderState) pendingState.set(name.charAt(3).toLowerCase() + name.slice(4), value);
+    else if (name === 'setBuyRecoveryStatus') state.buyRecoveryStatus = value;
   };
   const handlers = load([
     'recoveryMatchesBooking', 'recoveryMatchesDraft', 'recoveryStillCurrent',
     'resetToStart', 'retryFailedPayment', 'checkRecoveryPayment', 'prepareRecoveredPurchase', 'resumeBuyFlowRecovery',
     'isBuyEntryRecoveryState', 'initialRecoveryGate', 'initialLinkResolution',
+    'advance', 'completeSafetyAndReadyForStaff', 'writeSafetyRecovery', 'persistSafetyRecovery',
+    'isReadyForStaffSession', 'isCompletedSession', 'getResumeState',
   ], state);
-  return { ...handlers, state, events, readSaved: () => saved, readRecord: () => record };
+  const flushRender = () => {
+    for (const [key, update] of pendingState) state[key] = typeof update === 'function' ? update(state[key]) : update;
+    pendingState.clear();
+  };
+  return { ...handlers, state, events, flushRender, readSaved: () => saved, readRecord: () => record };
+}
+
+function paidSafetyHarness() {
+  const host = harness({ recordMissing: true, renderState: true });
+  const booking = {
+    id: 'reference-original', rollerUniqueId: 'booking-original', jumpers: 2,
+    time: '10:00', endTime: '11:00', date: '2026-09-03', durationMinutes: 60,
+    products: 2, paid: true, paymentStatus: 'paid', amountOwing: 0,
+    guestName: 'Test Guest', productLabel: '60 minutes', productType: 'entry', existingAddons: [],
+  };
+  const checkinSession = {
+    checkinSessionId: 'session-original', status: 'active', guestResumeStep: 'safety',
+    handoffStatus: 'pending', handoffCode: null, safetyStatus: 'pending',
+  };
+  host.state.ctx = {
+    ...flowMachine.initialContext('park-qr'), booking, checkinSession,
+    buyEntryFlow: true, paymentCompleted: true, safetyVideoSeenAt: '2026-09-03T09:29:00Z',
+  };
+  host.state.state = 'APP_SAFETY_ATTEST';
+  host.state.buyRecoveryStatus = null;
+  host.state.recoveryGateReady = true;
+  host.state.markSessionReadyForStaff = async (session, safetyStatus) => {
+    host.events.push(['mark-ready', session.checkinSessionId, safetyStatus]);
+    return { ...session, status: 'ready_for_staff', handoffStatus: 'ready_for_staff', handoffCode: 'synthetic-handoff', safetyStatus };
+  };
+  return host;
+}
+
+function runRecoveryEffects(host) {
+  host.initialRecoveryGate();
+  host.persistSafetyRecovery();
+  host.flushRender();
 }
 
 test('pending, unknown and unresolved URL recovery cannot clear the purchase or expose a new checkout', () => {
@@ -265,6 +319,92 @@ test('explicit completion can reset its own finished purchase', () => {
   host.resetToStart();
   assert.equal(host.readSaved(), null);
   assert.ok(host.events.some(event => event[0] === 'clear-basket'));
+});
+
+test('the normal paid safety-to-QR route can start a new booking without reopening recovery', async () => {
+  const host = paidSafetyHarness();
+  await host.completeSafetyAndReadyForStaff('2026-09-03T09:30:00Z');
+  host.flushRender();
+  assert.equal(host.state.state, 'APP_CONFIRM', 'The actual flow machine stops at the ready-for-entry QR view');
+  assert.equal(host.state.ctx.checkinSession.status, 'ready_for_staff');
+  assert.equal(host.state.ctx.checkinSession.safetyStatus, 'completed');
+  assert.equal(host.state.ctx.booking.paid, true);
+  runRecoveryEffects(host);
+  assert.equal(host.readSaved().currentFlowStep, 'APP_CONFIRM');
+  assert.equal(recoveryHelpers.getBuyFlowRecoveryIdentifier(host.readSaved()), host.state.ctx.booking.id);
+
+  host.resetToStart();
+  host.flushRender();
+  runRecoveryEffects(host);
+  assert.equal(host.state.buyRecoveryStatus, null, 'New booking must not reopen the completed purchase as unknown');
+  assert.equal(host.state.state, 'KIOSK_CHOICE');
+  assert.equal(host.state.ctx.booking, null);
+  assert.equal(host.readSaved(), null, 'The safety persistence effect must not recreate the retired purchase');
+  assert.equal(host.readRecord(), null);
+  assert.ok(!host.events.some(event => ['lookup', 'show-approved', 'prepare-paid'].includes(event[0])));
+
+  host.advance({}, 'buy');
+  host.flushRender();
+  runRecoveryEffects(host);
+  assert.equal(host.state.state, 'KIOSK_BUY');
+  assert.equal(host.state.buyRecoveryStatus, null);
+  assert.equal(host.readSaved(), null);
+});
+
+test('a ready QR cannot discard another pending or unknown payment when starting over', () => {
+  for (const outcome of ['pending', 'unknown']) {
+    const host = harness({ outcome, renderState: true });
+    host.state.ctx = {
+      ...flowMachine.initialContext('park-qr'), buyEntryFlow: true, paymentCompleted: true,
+      booking: { id: 'different-reference', rollerUniqueId: 'different-booking', paid: true },
+      checkinSession: { checkinSessionId: 'different-session', status: 'ready_for_staff', handoffStatus: 'ready_for_staff', safetyStatus: 'completed' },
+    };
+    host.state.state = 'APP_CONFIRM';
+    host.state.buyRecoveryStatus = null;
+    host.state.recoveryGateReady = true;
+    const purchaseBefore = JSON.stringify(host.readSaved());
+    const paymentBefore = JSON.stringify(host.readRecord());
+    host.resetToStart();
+    host.flushRender();
+    runRecoveryEffects(host);
+    assert.equal(host.state.buyRecoveryStatus, 'payment-unknown');
+    assert.equal(JSON.stringify(host.readSaved()), purchaseBefore);
+    assert.equal(JSON.stringify(host.readRecord()), paymentBefore);
+    assert.ok(!host.events.some(event => event[0].startsWith('clear-')));
+  }
+});
+
+test('an approved purchase before the QR handoff remains protected by recovery', () => {
+  for (const step of ['APP_SAFETY_VIDEO', 'APP_SAFETY_ATTEST']) {
+    const host = paidSafetyHarness();
+    host.state.state = step;
+    host.state.ctx.booking = { ...host.state.ctx.booking, paid: false, paymentStatus: 'pending', amountOwing: 200 };
+    runRecoveryEffects(host);
+    assert.equal(host.readSaved().draftState.paymentApproved, true);
+    const purchaseBefore = JSON.stringify(host.readSaved());
+    host.resetToStart();
+    host.flushRender();
+    runRecoveryEffects(host);
+    assert.equal(host.state.buyRecoveryStatus, 'payment-unknown');
+    assert.equal(JSON.stringify(host.readSaved()), purchaseBefore);
+    assert.ok(!host.events.some(event => event[0].startsWith('clear-')));
+  }
+});
+
+test('APP_CONFIRM alone cannot retire a purchase without a ready-for-staff session', () => {
+  for (const session of [null, { checkinSessionId: 'session-original', status: 'active', handoffStatus: 'pending' }]) {
+    const host = paidSafetyHarness();
+    host.state.state = 'APP_CONFIRM';
+    host.state.ctx.checkinSession = session;
+    runRecoveryEffects(host);
+    const purchaseBefore = JSON.stringify(host.readSaved());
+    host.resetToStart();
+    host.flushRender();
+    runRecoveryEffects(host);
+    assert.equal(host.state.buyRecoveryStatus, 'payment-unknown');
+    assert.equal(JSON.stringify(host.readSaved()), purchaseBefore);
+    assert.ok(!host.events.some(event => event[0].startsWith('clear-')));
+  }
 });
 
 test('saved safety recovery refuses a paid lookup for another booking', async () => {
