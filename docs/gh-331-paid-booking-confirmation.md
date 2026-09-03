@@ -121,15 +121,41 @@ Results on 2026-09-02:
 - repository `npm run validate` including the new
   `validate:gh331-paid-booking-confirmation`: passed.
 
-## Manual verification still required
+## Manual verification
 
-Physical phone validation on Park after promotion, with a separately approved
-purchase: one new entry where ROLLER confirms immediately, and one where the network
-is deliberately slow, confirming that the guest reaches the safety video without the
-unpaid summary, that the rules step waits with the notice instead of asking for a new
-payment, and that reload during the video or rules returns to the same step.
+Love completed one real phone purchase on `https://checkin.jumpyard.se` on
+2026-09-03 after the public promotion below and reported that it went through.
+Whether ROLLER was slow enough to show the waiting notice at the rules step is not
+known; the slow-network case was intentionally not exercised.
 
 ## Merge and protected rollout evidence
 
-Pending. Record the PR, merged SHA, release run, artifact digest, protected Park
-promotion and public promotion here after the protected workflows have run.
+- Implementation PR: [#348](https://github.com/wrlds-creations/jumpyard-check-in/pull/348)
+- Merged source: `a42559bacc6d848a227a898380de2e194d433dc7`
+- Immutable release: [run 33726425874](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33726425874)
+- Artifact: `park-test-release-a42559bacc6d848a227a898380de2e194d433dc7` (ID 9882266385)
+- Artifact digest: `sha256:ebe3e5d06a3eda172bea54a1d3e968846dde4decee710167da68cd23f896f4a7`
+- Protected Park promotion and verification: [run 33726874693](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33726874693).
+  Plan: identical CloudFormation template `b227888a…`, 202 resources, nothing added,
+  changed or removed; `apply_migrations=false` with no pending migration. Deployments:
+  phone `a41f61d2` on `jumpyard-check-in-park-test`, admin `fa2bee85` on
+  `jumpyard-checkin-admin-park-test`. Post-deploy checks: stack `IN_SYNC`, zero alarms
+  in ALARM, empty queues, exact Cloudflare commit readback.
+- Protected public promotion and verification: [run 33727273329](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33727273329).
+  Deployments: phone `86a4efa3` on `jumpyard-check-in-production`, admin `b1c7598d` on
+  `jumpyard-checkin-admin-production`. Checks: guest domain HTTP 200 with the exact Park
+  API target (10 assets), Apple Pay association HTTP 200, staff domain routes HTTP 200
+  with exact Park API and Cognito targets.
+- Independent live check after promotion: the #331 bundle marker was present on
+  `https://checkin.jumpyard.se`, `https://jumpyard-check-in-production.pages.dev` and
+  `https://jumpyard-check-in-park-test.pages.dev`; `https://staff-checkin.jumpyard.se`
+  returned HTTP 200.
+
+The same immutable artifact passed release validation, Park deployment and public
+promotion. No migration was applied and the backend stayed at `ebc7598`.
+
+Later the same day, PR #349 (#334, admin heartbeat) was promoted as `bee28ed` through
+Park [run 33732205303](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33732205303)
+and public [run 33732520551](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33732520551).
+That build includes this change unchanged; see
+[docs/gh-334-staff-heartbeat.md](gh-334-staff-heartbeat.md).
