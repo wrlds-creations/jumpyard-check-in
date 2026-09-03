@@ -395,6 +395,15 @@ function main() {
   validateQueueRequestStability(page);
   validateHeaders(headers);
 
+  const heartbeatTests = spawnSync(process.execPath, ['--test', path.join(ADMIN, 'src/lib/staffIdentity.test.mjs')], {
+    cwd: ADMIN,
+    encoding: 'utf8',
+    maxBuffer: 20 * 1024 * 1024,
+  });
+  if (heartbeatTests.error) throw heartbeatTests.error;
+  assert.equal(heartbeatTests.status, 0, `Staff heartbeat regression tests failed.\n${heartbeatTests.stdout || ''}${heartbeatTests.stderr || ''}`);
+  console.log('[pass] staff heartbeat retries, expiry, session replacement, timeout and parallel-tab regressions');
+
   runAdminBuild('pin');
   validateBuiltOutput('pin');
   runAdminBuild('legacy');

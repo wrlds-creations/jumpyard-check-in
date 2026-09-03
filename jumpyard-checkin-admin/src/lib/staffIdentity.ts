@@ -1,5 +1,6 @@
 import {
   manageStaffIdentitySession,
+  StaffApiError,
   type StaffAuthSession,
   type StaffPrincipal,
 } from "@/lib/adminApi";
@@ -18,6 +19,9 @@ const LOGOUT_CHANNEL_NAME = "jumpyard_staff_logout_v2";
 const LOGOUT_SIGNAL = Object.freeze({ type: "staff_logout", version: 2 });
 const LOCAL_INACTIVITY_MS = 15 * 60 * 1000;
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
+const HEARTBEAT_RETRY_BASE_MS = 30_000;
+const HEARTBEAT_RETRY_MAX_MS = 120_000;
+const heartbeatsInFlight = new Map<string, { auth: StaffAuthSession; promise: Promise<StaffAuthSession> }>();
 
 const STAFF_IDENTITY_MODE = process.env.NEXT_PUBLIC_JUMPYARD_STAFF_IDENTITY_MODE;
 
@@ -122,6 +126,7 @@ export function markStaffActivity(auth: StaffAuthSession, now = new Date()) {
 
 export function isStaffHeartbeatDue(auth: StaffAuthSession, now = Date.now()) {
   if (auth.identityMode !== "pin") return false;
+  if (auth.heartbeatRetryAt) return now >= parseTime(auth.heartbeatRetryAt);
   return now - parseTime(auth.lastHeartbeatAt) >= HEARTBEAT_INTERVAL_MS;
 }
 
@@ -145,16 +150,49 @@ export async function ensureFreshStaffAuth(auth: StaffAuthSession): Promise<Staf
   return auth;
 }
 
-export async function heartbeatStaffAuth(auth: StaffAuthSession): Promise<StaffAuthSession> {
+export function heartbeatStaffAuth(auth: StaffAuthSession): Promise<StaffAuthSession> {
+  const key = auth.session?.sessionId ?? "legacy";
+  const pending = heartbeatsInFlight.get(key);
+  if (pending && pending.auth.auth.token === auth.auth.token && pending.auth.staff.actorId === auth.staff.actorId) {
+    return pending.promise;
+  }
+  const promise = performStaffHeartbeat(auth).finally(() => {
+    if (heartbeatsInFlight.get(key)?.promise === promise) heartbeatsInFlight.delete(key);
+  });
+  heartbeatsInFlight.set(key, { auth, promise });
+  return promise;
+}
+
+async function performStaffHeartbeat(auth: StaffAuthSession): Promise<StaffAuthSession> {
   const fresh = await ensureFreshStaffAuth(auth);
   if (fresh.identityMode !== "pin") return fresh;
+  const beforeRequest = requireCurrentStaffSession(fresh);
+  // Resume and visibility changes must respect the same persisted retry deadline.
+  if (parseTime(beforeRequest.heartbeatRetryAt) > Date.now()) return beforeRequest;
 
-  const result = await manageStaffIdentitySession("heartbeat", fresh.auth.token);
+  let result;
+  try {
+    result = await manageStaffIdentitySession("heartbeat", fresh.auth.token);
+  } catch (error) {
+    const current = requireCurrentStaffSession(fresh);
+    if (!isTransientStaffHeartbeatError(error)) throw error;
+    const retryCount = Math.min(Math.max(0, current.heartbeatRetryCount ?? 0) + 1, 3);
+    const delay = Math.min(HEARTBEAT_RETRY_BASE_MS * 2 ** (retryCount - 1), HEARTBEAT_RETRY_MAX_MS);
+    const updated: StaffAuthSession = {
+      ...current,
+      heartbeatRetryCount: retryCount,
+      heartbeatRetryAt: new Date(Date.now() + delay + Math.floor(Math.random() * delay * 0.2)).toISOString(),
+    };
+    // Retain only the already-valid session: never extend idle/absolute expiry or activity.
+    storeStaffAuth(updated);
+    return updated;
+  }
   const principal = requirePrincipal(result.principal);
-  const current = readMatchingStoredPinSession(fresh);
+  const current = requireCurrentStaffSession(fresh);
   if (
-    !current ||
     principal.actorId !== current.staff.actorId ||
+    principal.venueId !== current.staff.venueId ||
+    principal.environment !== current.staff.environment ||
     result.session.sessionId !== current.session?.sessionId
   ) {
     throw new Error("Personalsessionen kunde inte verifieras.");
@@ -163,14 +201,30 @@ export async function heartbeatStaffAuth(auth: StaffAuthSession): Promise<StaffA
   const updated: StaffAuthSession = {
     ...current,
     lastHeartbeatAt: new Date().toISOString(),
+    heartbeatRetryAt: undefined,
+    heartbeatRetryCount: undefined,
     session: {
       ...result.session,
       absoluteExpiresAt: earliestIso(result.session.absoluteExpiresAt, current.session.absoluteExpiresAt),
     },
     staff: principal,
   };
+  if (getStaffSessionExpiryReason(updated)) throw new Error("Personalsessionen har gått ut.");
   storeStaffAuth(updated);
   return updated;
+}
+
+function isTransientStaffHeartbeatError(error: unknown) {
+  return error instanceof StaffApiError &&
+    !error.isAuthenticationFailure &&
+    (error.status === 0 || error.status === 408 || error.status === 429 || (error.status >= 500 && error.status <= 599));
+}
+
+function requireCurrentStaffSession(auth: StaffAuthSession) {
+  const current = readMatchingStoredPinSession(auth);
+  if (!current) throw new Error("Personalsessionen har avslutats.");
+  if (getStaffSessionExpiryReason(current)) throw new Error("Personalsessionen har gått ut.");
+  return current;
 }
 
 export async function endStaffAuth(
@@ -187,7 +241,9 @@ export async function endStaffAuth(
     }
   }
 
-  if (clearStorage) clearStaffAuthStorage();
+  // A delayed logout response must not erase a replacement login in this tab.
+  const current = readStoredStaffAuth();
+  if (clearStorage && (!current || current.auth.token === auth?.auth.token)) clearStaffAuthStorage();
 }
 
 function requirePrincipal(principal?: StaffPrincipal): StaffPrincipal {
@@ -235,6 +291,7 @@ function readMatchingStoredPinSession(auth: StaffAuthSession) {
   const current = readStoredStaffAuth();
   if (
     current?.identityMode !== "pin" ||
+    current.auth.token !== auth.auth.token ||
     current.session?.sessionId !== auth.session?.sessionId ||
     current.staff.actorId !== auth.staff.actorId
   ) {
