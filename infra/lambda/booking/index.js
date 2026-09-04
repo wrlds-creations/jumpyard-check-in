@@ -305,24 +305,15 @@ async function handleAvailability(body, correlationId) {
       payload: {
         endpoint: 'GET /api/checkout/boka/products',
         rollerStatus: publicCatalogResult.status,
+        catalogStatus: 'unavailable',
+        timedOut: publicCatalogResult.timedOut === true,
       },
       subjectRef: request.date,
-      summary: `Roller public checkout catalog failed with HTTP ${publicCatalogResult.status || 'network_error'}.`,
-    });
-
-    return jsonResponse(502, correlationId, {
-      status: 'roller_error',
-      error: {
-        code: 'roller_public_catalog_failed',
-        message: 'Roller public checkout catalog could not be verified. Try again.',
-      },
-      roller: {
-        statusCode: publicCatalogResult.status,
-      },
+      summary: 'Public checkout catalog unavailable; products requiring that catalog are omitted.',
     });
   }
 
-  if (!publicCatalogResult.skipped) {
+  if (publicCatalogResult.ok && !publicCatalogResult.skipped) {
     emitRollerApiMetric({
       method: 'GET',
       operation: 'get_public_checkout_products',
@@ -334,7 +325,8 @@ async function handleAvailability(body, correlationId) {
   const parentProducts = filterPhoneProductsByPublicCatalog(
     config.env,
     loadedParentProducts,
-    publicCatalogResult.body,
+    // A failed response can contain plausible product IDs. It proves no sale eligibility.
+    publicCatalogResult.ok ? publicCatalogResult.body : null,
   );
   const requiredProducts = getRequiredPhoneBookingProducts();
   const missingParents = requiredProducts.filter((product) => !parentProducts.some((parent) => parent.key === product.key));
@@ -409,6 +401,7 @@ async function handleAvailability(body, correlationId) {
     availability,
     source: {
       catalogEndpoint: publicCatalogResult.skipped ? null : 'GET /api/checkout/boka/products',
+      catalogStatus: publicCatalogResult.skipped ? 'not_required' : publicCatalogResult.ok ? 'verified' : 'unavailable',
       system: 'roller',
       environment: config.env,
       endpoint: 'GET /product-availability',
@@ -4021,7 +4014,19 @@ async function loadPhoneAddonProducts(rollerEnv) {
     parameters,
   );
   const rows = mappedRows(result);
-  return mapPhoneAddonProducts(rows, rollerEnv);
+  const products = mapPhoneAddonProducts(rows, rollerEnv);
+  const missingPriceKeys = PHONE_ADDON_PRODUCTS
+    .filter((product) => product.requiresAvailability !== true && !products.some((loaded) => loaded.key === product.key))
+    .map((product) => product.key);
+  if (missingPriceKeys.length > 0) {
+    // Only configured product keys are logged, never rows or guest/provider data.
+    console.warn(JSON.stringify({
+      eventType: 'booking.addon_catalog_incomplete',
+      cacheStatus: 'missing_expired_or_invalid_price',
+      omittedProductKeys: missingPriceKeys,
+    }));
+  }
+  return products;
 }
 
 function mapPhoneAddonProducts(rows, rollerEnv) {

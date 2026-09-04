@@ -37,6 +37,7 @@ Use this file to define active validation for the current project or milestone. 
 | `npm --prefix infra run validate:park-test-synth` | Synthesize dev and every park-test profile; prove one fail-closed SES domain/configuration-set/event destination, exact DKIM outputs, suppression/TLS/alarms, no park-test send IAM permission, exact Lambda email environment, unchanged dev identity, and all existing gate profiles. | Passes locally without AWS mutation. |
 | `npm run validate` | Run root workflow/current-ticket/followup/history/tag checks, T0193/T0194 regressions, all T0195 lifecycle/security/recovery validators, T0196 booking-index validation, T0197 webhook reconciliation validation, T0198 delivery controls, T0199 domains, and T0200 email sender readiness. | Passes locally without changing AWS, Roller, credentials, data, snapshots, DNS, Cloudflare, SMS, email, or production. |
 | `git diff --check` | Check the current working diff for whitespace errors. | Passes; CRLF conversion warnings are acceptable if the command exits 0. |
+| `npm run validate:gh339-catalog-resilience` | Prove independent product refresh, fresh-price omission diagnostics, optional catalog failure isolation, bounded response-body waits and unchanged authoritative time-slot availability. | 27 scenarios pass with synthetic AWS/HTTP responses; no live calls. |
 
 ## Application Validation
 
