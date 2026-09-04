@@ -7,6 +7,12 @@ package on 2026-09-04. Branch: `codex/gh-339-catalog-resilience`; approved base:
 `c5b58512af804d7eb1e5ded35250313c96a3b834`. Scope is Booking/DataSync source,
 focused regressions and validation wiring, and durable documentation.
 
+Love subsequently explicitly authorized commit, push, merge, deployment, testing
+where possible and then closure. Before PR publication, current main
+`5e163356cc7c30cd7b7d5b381db9472f42381172` was integrated, preserving #374's rollout
+evidence and #343's safety-video implementation. Documentation conflicts retained
+both decisions in order and the current flow facts; runtime files did not conflict.
+
 - [#339 approval](https://github.com/wrlds-creations/jumpyard-check-in/issues/339#issuecomment-5540336687)
 - [#341 approval](https://github.com/wrlds-creations/jumpyard-check-in/issues/341#issuecomment-5540336997)
 

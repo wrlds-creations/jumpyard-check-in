@@ -85,6 +85,8 @@ jobs:
           npm --prefix jumpyard-checkin-phone run test:payment-confirmation
           npm --prefix jumpyard-checkin-phone run test:paid-confirmation
           npm --prefix jumpyard-checkin-phone run test:payment-recovery
+      - name: Test safety video recovery
+        run: npm --prefix jumpyard-checkin-phone run test:safety-video
       - name: Lint
         run: npm --prefix jumpyard-checkin-phone run lint
       - name: Type-check
