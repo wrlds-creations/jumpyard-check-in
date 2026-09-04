@@ -4,6 +4,12 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #330 Add-On Payment Back (Rollout Verified 2026-09-04; No AWS Resource Change)
+
+[PR #372](https://github.com/wrlds-creations/jumpyard-check-in/pull/372) merged `668a476d21173a14c7bd449784ab7ef53247f502`. Immutable [release 33862373255](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33862373255), artifact `9933035732`, passed protected [Park 33863602024](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33863602024) and [public 33863606635](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33863606635). Each exact artifact/target plan was reviewed before delegated approval under Love's instruction to finish #330; public approval followed successful Park verification.
+
+During this rollout, the selected/deployed canonical template hash was `1886c2000490398221f1147d4f9366ef03c3ee4495b683aae56ece8cf7847cf3`: 202 resources, zero changes, and CDK `no changes`. The entire CDK assembly, migration runtime and deployment config matched the previous release. Migrations were complete through `0020`, with apply disabled. Stack/template/drift, zero-alarm, empty-queue, exact-version, HTTP, domain/CORS/Cognito and Apple association checks passed. Account `376129878018`, region `eu-north-1`, WRLDS metadata, backend, schema, IAM, secrets, routes, gates and Nacka venue/date scope were unchanged. No live guest transaction, message, rollback or re-promotion occurred. The prior deployed release `33847988150` / `4d3e68d` was verified unexpired and retained for rollback of #330. [Detailed rollout and owner acceptance](docs/gh-330-addon-payment-back.md#protected-rollout--2026-09-04).
+
 ### Issue #367 Verified Combo Contents (Published)
 
 Reviewed [PR #371](https://github.com/wrlds-creations/jumpyard-check-in/pull/371) merged `4d3e68d58ed69d48f7164a95e3977cc4af44857d`. Immutable [release 33847988150](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33847988150), artifact `9927575535`, adds response-only two-band/one-later-pizza contents for the verified Weekday Combo in phone and Handoff. The 202-resource plan changed only code and asset metadata for Booking, Lookup and Session; no resource, route, IAM, schema, secret, gate, venue/date or tag change was made. Account `376129878018`, `eu-north-1`, existing Nacka stack and WRLDS metadata remain intact.
