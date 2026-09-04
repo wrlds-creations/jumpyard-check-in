@@ -4,9 +4,13 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-### Issues #339/#341 Catalog Resilience (Implementation; Not Deployed)
+### Issues #339/#341 Catalog Resilience (Published 2026-09-04)
 
-The approved combined change updates only existing Booking/DataSync Lambda source: persist the single daily product refresh before unrelated source reads, diagnose unavailable prices, and isolate a bounded public-catalog failure to catalog-gated offers. Existing 24-hour prices, request pacing, resources, schema, IAM, schedules, gates and Nacka scope remain unchanged. Read-only inspection on 2026-09-04 confirmed account `376129878018`, `eu-north-1`, active DataSync (600 s timeout; no product TTL override) and enabled daily `cron(0 2 * * ? *)`. No AWS mutation or promotion has occurred. [Scope and validation](docs/gh-339-gh-341-catalog-resilience.md).
+Reviewed [PR #380](https://github.com/wrlds-creations/jumpyard-check-in/pull/380) merged `0e04fb4f3a86d11366687e4aa7b4cd232d1fc4ce`, retaining #343 and #374. Immutable [release 33875422657](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33875422657), artifact `9937812376`, passed protected [Park 33875994276](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33875994276) then [public 33876020299](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33876020299). Each exact plan was reviewed before delegated approval under Love's explicit publication instruction; public approval followed successful Park checks and independent artifact readback.
+
+The 202-resource plan changed only Booking/DataSync code and asset paths. The selected/deployed template hash is `cc997a77255d49c435b16e2d004bd52c8fb97cb79e9d1192a67fb5f88aa0cfb2`; no resource, IAM, configuration, schema or schedule was added or removed. Migrations remain applied through `0020`, with apply disabled. Exact template, `UPDATE_COMPLETE`, `IN_SYNC` drift, zero active alarms, empty queues, fixed Pages commits, HTTP/CORS/Cognito and Apple association checks passed. Independent readback matched 56 Park/public responses; a read-only Live availability request verified catalog status, ordinary/family/Combo offers, fresh stock prices and the unchanged 19:00 duration restriction.
+
+Account `376129878018`, `eu-north-1`, WRLDS metadata, Nacka scope, 24-hour prices, request pacing, DataSync's 600 s timeout and daily `cron(0 2 * * ? *)` remain unchanged. Prior deployed #343 release `33873617274` / `5e163356cc7c30cd7b7d5b381db9472f42381172`, artifact `9937052826`, is the verified unexpired rollback candidate. No rollback, re-promotion, forced sync/outage, real booking/payment or guest message occurred. [Scope, checksums, acceptance and test limits](docs/gh-339-gh-341-catalog-resilience.md#protected-rollout--2026-09-04).
 
 ### Issue #343 Phone Safety Video (Published; No AWS Resource Change)
 
