@@ -99,7 +99,7 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 ## Current Readiness Gates
 
 - The [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5) owns readiness. T0195-T0197 are deployed; gated actions remain. [AWS_RESOURCES.md](AWS_RESOURCES.md) holds evidence. #264 approves the pilot role; each promotion still needs protected plan/approval.
-- Remaining blockers include lifecycle recovery/apply, alarm routing, integrated rehearsal, messaging-window approval, #264 Park/public rollout evidence, and natural webhook observation.
+- Remaining blockers include lifecycle recovery/apply, monitoring confirmation (#335 delivery proven), integrated rehearsal, messaging-window approval, #264 Park/public rollout evidence, and natural webhook observation.
 - Payment must stay on Roller's approved package; method visibility is Roller/Adyen controlled.
 
 ## Current Open Questions

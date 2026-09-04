@@ -309,7 +309,7 @@ git diff --check
 
 ## Park-Test Alarm Notifications (#335)
 
-After the protected #335 rollout and delivery proof, the park backend will route selected CloudWatch alarms to `jumpyard-check-in-park-test-alarms`, which emails `aws-alarm@wrlds.com` and forwards to Love's `love@wrlds.com` inbox. The alias is the SNS endpoint; a separate mailbox is not required. Recipient changes must be reviewed in `infra/config`. Extra console subscriptions are unmanaged and are not guaranteed to disappear on a later deploy.
+This section applies to the Nacka pilot-production backend in account `376129878018`, region `eu-north-1`, technically named `park-test`; the earlier dev/Playground scope does not apply here. Since the protected rollout on 2026-09-04, 28 CloudWatch alarms route ALARM and OK to `jumpyard-check-in-park-test-alarms`, which emails `aws-alarm@wrlds.com` and forwards to Love's `love@wrlds.com` inbox. Authenticated subscription confirmation and actual ALARM/OK receipt are [verified](docs/gh-335-park-alarm-routing.md#protected-rollout-and-delivery-proof--2026-09-04). The alias is the SNS endpoint; a separate mailbox is not required. Recipient changes must be reviewed in `infra/config`. Extra console subscriptions are unmanaged and are not guaranteed to disappear on a later deploy.
 
 ### Recipient setup
 
