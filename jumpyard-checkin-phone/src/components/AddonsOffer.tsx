@@ -28,6 +28,7 @@ import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { AddonChoices, type AddonChoicesHandle } from '@/components/AddonChoices';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 import { approvePaymentRecovery, clearPaymentRecoveryAfterCompletion, readPaymentRecovery } from '@/flow/paymentRecovery';
+import { getAddonBackRule, type AddonBackRule } from '@/flow/addonPaymentNavigation';
 
 export interface AddonsOfferResult {
     selectedAddons: Addon[];
@@ -45,6 +46,7 @@ interface AddonsOfferProps {
     existingAddons: Addon[];
     prefetchedAvailability?: AddonsAvailabilityPrefetch | null;
     onStepChange?: (step: AddonsOfferStep) => void;
+    onBackRuleChange?: (rule: AddonBackRule) => void;
     onContinue: (result: AddonsOfferResult) => void;
     onPaymentApproved?: (result: AddonsOfferResult) => void;
     onPendingDone: () => void;
@@ -191,6 +193,7 @@ export const AddonsOffer = ({
     onPaymentApproved,
     onPendingDone,
     onStepChange,
+    onBackRuleChange,
 }: AddonsOfferProps) => {
     const { lang, t } = useTranslation();
     const bookingDate = booking.date ?? getVenueToday();
@@ -291,6 +294,7 @@ export const AddonsOffer = ({
     const handledBackRequest = useRef(backRequest);
     const paymentApprovedRef = useRef(false);
     const paymentNavigationLockedRef = useRef(false);
+    const [paymentNavigationLocked, setPaymentNavigationLocked] = useState(false);
     const paymentCheckInFlightRef = useRef(false);
     const paymentAttemptId = draft?.prepayment?.prepaymentDraftId ?? draft?.draft.uniqueId ?? draft?.draft.bookingReference ?? '';
     const activePaymentAttemptRef = useRef(paymentAttemptId);
@@ -299,8 +303,10 @@ export const AddonsOffer = ({
         return () => { activePaymentAttemptRef.current = ''; };
     }, [paymentAttemptId]);
 
+    // #330: Back is offered only while nothing is submitted; the same rule hides the shared action.
+    const backRule = getAddonBackRule({ step, paymentNavigationLocked, paymentFailure });
     const returnToSelect = useCallback(async () => {
-        if (paymentNavigationLockedRef.current || paymentFailure === 'unknown') return;
+        if (getAddonBackRule({ step, paymentNavigationLocked: paymentNavigationLockedRef.current, paymentFailure }) !== 'select') return;
         const recovery = readPaymentRecovery();
         if (recovery?.attemptId === paymentAttemptId && (recovery.outcome === 'unknown' || recovery.outcome === 'approved')) return;
         if (recovery?.attemptId === paymentAttemptId && recovery.outcome === 'failed'
@@ -310,23 +316,30 @@ export const AddonsOffer = ({
         setQuote(null);
         setDraft(null);
         setPaymentFailure(null);
+        paymentNavigationLockedRef.current = false;
+        setPaymentNavigationLocked(false);
         setStep('SELECT');
-    }, [paymentAttemptId, paymentFailure]);
+    }, [paymentAttemptId, paymentFailure, step]);
 
     useEffect(() => {
         onStepChange?.(step);
     }, [onStepChange, step]);
 
+    useEffect(() => {
+        onBackRuleChange?.(backRule);
+    }, [backRule, onBackRuleChange]);
+
     useEffect(() => () => {
         onStepChange?.('SELECT');
-    }, [onStepChange]);
+        onBackRuleChange?.('page');
+    }, [onBackRuleChange, onStepChange]);
 
     useEffect(() => {
         if (backRequest === handledBackRequest.current) return;
         handledBackRequest.current = backRequest;
-        if (step === 'SELECT' || step === 'APPROVED') return;
+        if (backRule !== 'select') return;
         returnToSelect();
-    }, [backRequest, returnToSelect, step]);
+    }, [backRequest, backRule, returnToSelect]);
 
     useEffect(() => {
         setQty((current) => {
@@ -546,6 +559,7 @@ export const AddonsOffer = ({
             );
             paymentApprovedRef.current = false;
             paymentNavigationLockedRef.current = false;
+            setPaymentNavigationLocked(false);
             setPaymentFailure(null);
             setDraft(result);
             setStep(canStartPayment(result) ? 'PAYMENT' : 'PENDING');
@@ -588,7 +602,7 @@ export const AddonsOffer = ({
                             paymentSession={draft.paymentSession}
                             onApproved={handlePaymentApproved}
                             onFailed={(result) => setPaymentFailure(result.status === 'failed' ? 'failed' : 'unknown')}
-                            onNavigationLockChange={(locked) => { paymentNavigationLockedRef.current = locked; }}
+                            onNavigationLockChange={(locked) => { paymentNavigationLockedRef.current = locked; setPaymentNavigationLocked(locked); }}
                         />
                         {paymentFailure === 'failed' && (
                             <button type="button" onClick={returnToSelect} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 font-black italic text-white">
