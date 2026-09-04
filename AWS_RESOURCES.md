@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #343 Phone Safety Video (Published; No AWS Resource Change)
+
+Reviewed [PR #378](https://github.com/wrlds-creations/jumpyard-check-in/pull/378) merged `5e163356cc7c30cd7b7d5b381db9472f42381172`. Immutable [release 33873617274](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33873617274), artifact `9937052826`, passed protected [Park 33874038259](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33874038259) then [public 33874318192](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33874318192), after review and delegated approval of each exact plan. This publishes phone video recovery and the smaller approved media.
+
+All 556 artifact checksums passed. Current/release templates were identical (`1886c2000490398221f1147d4f9366ef03c3ee4495b683aae56ece8cf7847cf3`), with 202 resources and zero resource/section changes; CDK reported no changes. The CDK assembly, migration runtime and deployment config matched #374. Migrations remained applied through `0020`, with apply disabled. Exact stack/template, `IN_SYNC` drift, zero active alarms, empty queues, domain/CORS/Cognito/Apple association and exact-version checks passed. Independent Park/public readback matched 33 responses each, including the video; hosted playback completed on both origins.
+
+Account `376129878018`, region `eu-north-1`, WRLDS metadata, backend, schema, IAM, routes, gates and Nacka scope are unchanged. No real transaction, provider change or guest message occurred. Verified unexpired #374 release `33864750849` / `4ed47e5`, artifact `9934011980`, is the rollback candidate; no rollback or re-promotion was needed. Physical handset/kiosk/Wi-Fi testing is not claimed. [Hashes, approvals and closeout evidence](docs/gh-343-safety-video-recovery.md#protected-rollout--2026-09-04).
+
 ### Issue #374 Phone Purchase Preparation (Published; No AWS Resource Change)
 
 Reviewed [PR #375](https://github.com/wrlds-creations/jumpyard-check-in/pull/375) merged `4ed47e5c1aab56f0417866e4ad10a2e5419a0a7f`, retaining #330 and #367. Immutable [release 33864750849](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33864750849), artifact `9934011980`, passed protected [Park 33866158981](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33866158981) then [public 33867049758](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33867049758), after each exact plan was reviewed and approved under Love's explicit publication instruction. The phone prepares the safety continuation before showing receipt confirmation; no backend behavior changed.
