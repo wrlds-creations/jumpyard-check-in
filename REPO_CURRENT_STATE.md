@@ -4,8 +4,8 @@ Use this file as the short snapshot of what actually exists. Operational work st
 
 ## Snapshot
 
-- Date: 2026-09-03
-- Public/Park phone/admin: `7d5ca45` (#361/PR #368). Release `33774429052`, Park `33775277602`, public `33775819505` passed; no migration. Rollback: `33763734057` (`b99a41c`). Handset acceptance/Klarna contract pending. Retained baseline and [evidence](docs/gh361-phone-wallet-recovery.md).
+- Date: 2026-09-04
+- Public/Park: `4d3e68d` (#367/PR #371), release `33847988150`, Park `33850212562`, public `33849552330` passed. No migration. Rollback: `33774429052` (`7d5ca45`). Handset/Klarna acceptance pending. [Evidence](docs/gh-367-combo-contents.md).
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Product/runtime state: Park has 202 resources, migrations through `0020`, and 27 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption, and late Handoff attachment are proven. A definitively approved kiosk payment now returns its provisional session with the bounded `safety` hint immediately instead of waiting for ROLLER readback; redemption remains blocked until authoritative synchronization. Physical proof remains in kiosk issue #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
