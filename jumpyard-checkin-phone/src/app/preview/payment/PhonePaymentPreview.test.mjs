@@ -175,7 +175,7 @@ test('simulated approval stays visible indefinitely and only the forward button 
   assert.doesNotMatch(guestMarkup(tree), /Kvittot|<button\b/);
 });
 
-for (const status of ['processing', 'declined', 'unknown']) {
+for (const status of ['processing', 'declined', 'unknown', 'preparing']) {
   test(`${status} never claims success, shows a receipt, or offers guest navigation`, () => {
     const harness = createHarness();
     select(harness.render(), 'Visa läge', status);
@@ -185,6 +185,20 @@ for (const status of ['processing', 'declined', 'unknown']) {
     if (status === 'unknown') assert.match(guestMarkup(tree), /Betala inte igen/);
   });
 }
+
+test('delayed preparation retries the same simulated purchase before showing the receipt', () => {
+  const harness = createHarness();
+  select(harness.render(), 'Visa läge', 'delayed');
+  const tree = harness.render();
+  assert.doesNotMatch(guestMarkup(tree), /receipt\.png|Kvittot|Betalningen är klar|Till säkerhetsgenomgången/);
+  assert.match(guestMarkup(tree), /Kontrollera igen|Betala inte igen/);
+  // The actual confirmation callback has no new checkout or draft side effect.
+  const confirmation = find(tree, node => typeof node.type === 'function' && 'preparationState' in node.props);
+  confirmation.props.onRetryPreparation();
+  assert.equal(state(harness.render()), 'preparing');
+  harness.advance(1800);
+  assert.equal(state(harness.render()), 'approved');
+});
 
 for (const change of ['path', 'state', 'language']) {
   test(`changing the ${change} fixture cancels an in-flight simulated approval`, () => {

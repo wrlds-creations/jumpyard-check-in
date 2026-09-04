@@ -47,6 +47,7 @@ import { BookingLookup } from '@/components/BookingLookup';
 import { BuyTickets, type BuyTicketsStep } from '@/components/BuyTickets';
 import { RollerPaymentDropIn, type RollerPaymentResultSummary } from '@/components/RollerPaymentDropIn';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
+import { resolvePurchasePreparation, runPurchasePreparationRequest } from '@/flow/purchasePreparation';
 import {
     approvePaymentRecovery,
     clearPaymentRecoveryAfterCompletion,
@@ -425,11 +426,19 @@ function CheckInFlow() {
     const [activeReturnAttempt, setActiveReturnAttempt] = useState<PaymentRecoveryRecord | null>(null);
     const [recoveryContinuePending, setRecoveryContinuePending] = useState(false);
     const [recoverySyncFailed, setRecoverySyncFailed] = useState(false);
+    const [recoveryReadyForSafety, setRecoveryReadyForSafety] = useState(false);
     const recoveryRunRef = useRef(0);
     const recoveryPreparingRef = useRef(false);
     const recoveryCheckingRef = useRef(false);
-    const recoveryContinuationRef = useRef<(() => void) | null>(null);
+    const recoveryContinuationRef = useRef<(() => void | Promise<void>) | null>(null);
     const recoveryContinueRequestedRef = useRef(false);
+    const recoveryPreparationAbortRef = useRef<AbortController | null>(null);
+    const recoveryApprovalRef = useRef<{ key: string; run: number } | null>(null);
+
+    useEffect(() => () => {
+        recoveryRunRef.current += 1;
+        recoveryPreparationAbortRef.current?.abort();
+    }, []);
     const addonsAvailabilityPrefetchRef = useRef<AddonsAvailabilityPrefetch | null>(null);
     const guestResumeStepWriteRef = useRef<string | null>(null);
     const [addonsAvailabilityPrefetch, setAddonsAvailabilityPrefetch] = useState<AddonsAvailabilityPrefetch | null>(null);
@@ -581,11 +590,12 @@ function CheckInFlow() {
     const preparePaidNewBooking = async (
         booking: Booking,
         recoveryTargetState: FlowState | null = null,
-        { paymentApproved = false, preserveRecoveryConfirmation = false, completedRecovery = false, isCurrent = () => true }: {
+        { paymentApproved = false, preserveRecoveryConfirmation = false, completedRecovery = false, isCurrent = () => true, signal }: {
             paymentApproved?: boolean;
             preserveRecoveryConfirmation?: boolean;
             completedRecovery?: boolean;
             isCurrent?: () => boolean;
+            signal?: AbortSignal;
         } = {}
     ): Promise<() => void> => {
         if (!isCurrent()) return () => undefined;
@@ -595,7 +605,7 @@ function CheckInFlow() {
             const payment = readPaymentRecovery();
             if (payment?.kind === 'new_booking' && payment.outcome === 'approved'
                 && (payment.bookingIdentifier === booking.rollerUniqueId || payment.bookingIdentifier === booking.id)) {
-                if (!await clearPaymentRecoveryAfterCompletion(payment.attemptId)) return;
+                if (!await clearPaymentRecoveryAfterCompletion(payment.attemptId)) throw new Error('Purchase recovery remains active');
             }
             if (run !== recoveryRunRef.current) return;
             setBuyRecoveryStatus(null);
@@ -647,7 +657,12 @@ function CheckInFlow() {
         }
 
         try {
-            const checkinSession = await startCheckInSession(booking, 'safety');
+            const checkinSession = paymentApproved
+                ? await runPurchasePreparationRequest(
+                    (requestSignal) => startCheckInSession(booking, 'safety', { signal: requestSignal }),
+                    { signal, isCurrent, timeoutMs: 35_000 },
+                )
+                : await startCheckInSession(booking, 'safety');
             if (!isCurrent()) return () => undefined;
             const resumeState = getResumeState(checkinSession);
             if (completedRecovery && resumeState !== 'APP_CONFIRM' && resumeState !== 'APP_PRESENT') {
@@ -726,19 +741,31 @@ function CheckInFlow() {
         return !current && Boolean(identifier && identifier === getBuyFlowRecoveryIdentifier(saved));
     };
 
-    const revealRecoveredPurchase = (
+    const revealRecoveredPurchase = async (
         record: PaymentRecoveryRecord | null,
         snapshot: BuyFlowRecoverySnapshot,
-        continuation: () => void,
+        continuation: () => void | Promise<void>,
     ) => {
         if (!recoveryStillCurrent(record, snapshot)) return;
+        const run = recoveryRunRef.current;
         // Preserve the safety recovery before the approved payment marker is released.
         writeBuyFlowRecovery({ ...snapshot, currentFlowStep: 'APP_SAFETY_VIDEO' });
-        recoveryContinuationRef.current = null;
-        recoveryContinueRequestedRef.current = false;
-        continuation();
-        setRecoveryReturnRecord(null);
-        setRecoveryContinuePending(false);
+        try {
+            await continuation();
+            if (run !== recoveryRunRef.current) return;
+            recoveryContinuationRef.current = null;
+            setRecoveryReturnRecord(null);
+        } catch {
+            if (run !== recoveryRunRef.current || !recoveryStillCurrent(record, snapshot)) return;
+            recoveryContinuationRef.current = null;
+            setRecoveryReadyForSafety(false);
+            setRecoverySyncFailed(true);
+        } finally {
+            if (run === recoveryRunRef.current) {
+                recoveryContinueRequestedRef.current = false;
+                setRecoveryContinuePending(false);
+            }
+        }
     };
 
     const prepareRecoveredPurchase = async (
@@ -750,13 +777,17 @@ function CheckInFlow() {
         const identifier = record?.bookingIdentifier ?? getBuyFlowRecoveryIdentifier(snapshot);
         if (!identifier) return;
         recoveryPreparingRef.current = true;
+        recoveryPreparationAbortRef.current?.abort();
+        const preparation = new AbortController();
+        recoveryPreparationAbortRef.current = preparation;
         const run = recoveryRunRef.current;
-        const current = () => run === recoveryRunRef.current && recoveryStillCurrent(record, snapshot);
+        const current = () => !preparation.signal.aborted && run === recoveryRunRef.current && recoveryStillCurrent(record, snapshot);
+        setRecoveryReadyForSafety(false);
         setRecoverySyncFailed(false);
         try {
             const confirmation = knownBooking
                 ? { status: 'paid' as const, booking: knownBooking }
-                : await resolvePaidConfirmation(lookupBooking, identifier);
+                : await resolvePurchasePreparation(lookupBooking, identifier, { signal: preparation.signal, isCurrent: current });
             if (!current()) return;
             if (confirmation.status === 'unavailable') throw new Error('Booking confirmation unavailable');
             const booking = confirmation.booking;
@@ -765,10 +796,11 @@ function CheckInFlow() {
                 paymentApproved: true,
                 preserveRecoveryConfirmation: true,
                 isCurrent: current,
+                signal: preparation.signal,
             });
             if (!current()) return;
             recoveryContinuationRef.current = continuation;
-            if (recoveryContinueRequestedRef.current) revealRecoveredPurchase(record, snapshot, continuation);
+            setRecoveryReadyForSafety(true);
         } catch {
             if (!current()) return;
             recoveryContinueRequestedRef.current = false;
@@ -785,6 +817,8 @@ function CheckInFlow() {
         knownBooking?: Booking,
     ) => {
         if (!snapshot.draftState || !recoveryStillCurrent(record, snapshot)) return;
+        const approvalKey = JSON.stringify([getBuyFlowRecoveryIdentifier(snapshot), record?.attemptId, record?.createdAt]);
+        if (recoveryApprovalRef.current?.key === approvalKey && recoveryApprovalRef.current.run === recoveryRunRef.current) return;
         const approved: BuyFlowRecoverySnapshot = {
             ...snapshot,
             currentFlowStep: 'PAYMENT',
@@ -794,12 +828,15 @@ function CheckInFlow() {
         const saved = readBuyFlowRecovery();
         if (!saved) { setBuyRecoveryStatus('payment-unknown'); return; }
         recoveryRunRef.current += 1;
+        recoveryApprovalRef.current = { key: approvalKey, run: recoveryRunRef.current };
+        recoveryPreparationAbortRef.current?.abort();
         recoveryPreparingRef.current = false;
         recoveryContinuationRef.current = null;
         recoveryContinueRequestedRef.current = false;
         setBuyRecoverySnapshot(saved);
         setRecoveryReturnRecord(record);
         setRecoveryContinuePending(false);
+        setRecoveryReadyForSafety(false);
         setBuyRecoveryStatus('payment-approved');
         void prepareRecoveredPurchase(record, saved, knownBooking);
     };
@@ -895,13 +932,10 @@ function CheckInFlow() {
         const snapshot = buyRecoverySnapshot;
         if (!snapshot || !recoveryStillCurrent(recoveryReturnRecord, snapshot)) return;
         const continuation = recoveryContinuationRef.current;
-        if (continuation) {
-            revealRecoveredPurchase(recoveryReturnRecord, snapshot, continuation);
-            return;
-        }
+        if (!continuation || recoveryContinueRequestedRef.current) return;
         recoveryContinueRequestedRef.current = true;
         setRecoveryContinuePending(true);
-        void prepareRecoveredPurchase(recoveryReturnRecord, snapshot);
+        void revealRecoveredPurchase(recoveryReturnRecord, snapshot, continuation);
     };
 
     const resumeBuyFlowRecovery = async (snapshot: BuyFlowRecoverySnapshot | null = buyRecoverySnapshot) => {
@@ -1000,12 +1034,15 @@ function CheckInFlow() {
             return;
         }
         recoveryPreparingRef.current = false;
+        recoveryPreparationAbortRef.current?.abort();
+        recoveryApprovalRef.current = null;
         recoveryContinuationRef.current = null;
         recoveryContinueRequestedRef.current = false;
         setRecoveryReturnRecord(null);
         setActiveReturnAttempt(null);
         setRecoveryContinuePending(false);
         setRecoverySyncFailed(false);
+        setRecoveryReadyForSafety(false);
         setBuyRecoverySnapshot(null);
         setBuyRecoveryStatus(null);
         setAlreadyCheckedIn(false);
@@ -1458,10 +1495,13 @@ function CheckInFlow() {
                             <PhonePaymentConfirmation
                                 language={lang}
                                 amountLabel={recoveryAmount(buyRecoverySnapshot, lang)}
+                                preparationState={recoverySyncFailed ? 'delayed' : recoveryReadyForSafety ? 'ready' : 'preparing'}
+                                onRetryPreparation={() => {
+                                    if (buyRecoverySnapshot) void prepareRecoveredPurchase(recoveryReturnRecord, buyRecoverySnapshot);
+                                }}
                                 isContinuing={recoveryContinuePending}
                                 onContinueToSafety={continueRecoveredPurchase}
                             />
-                            {recoverySyncFailed && <p className="mt-3 text-center text-sm font-bold text-danger" role="status">{t.buy.paymentSyncFailed}</p>}
                         </div>
                     )}
 
@@ -1515,8 +1555,8 @@ function CheckInFlow() {
                             inlineExitVisible={exitFlowMode === 'confirm'}
                             onRequestExit={() => setExitDialogOpen(true)}
                             onStepChange={setBuyStep}
-                            onBookingReady={booking => {
-                                return preparePaidNewBooking(booking, null, { paymentApproved: true });
+                            onBookingReady={(booking, preparation) => {
+                                return preparePaidNewBooking(booking, null, { ...preparation, paymentApproved: true });
                             }}
                         />
                     )}

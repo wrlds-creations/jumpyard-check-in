@@ -65,6 +65,10 @@ function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () 
   const events = [];
   const pendingState = new Map();
   const state = {
+    AbortController,
+    recoveryPreparationAbortRef: { current: null },
+    recoveryApprovalRef: { current: null },
+    runPurchasePreparationRequest: (request) => request(new AbortController().signal),
     recoveryReturnRecord: record,
     buyRecoverySnapshot: saved,
     buyRecoveryStatus: 'payment-unknown',
@@ -95,6 +99,7 @@ function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () 
     showApprovedRecovery: (...args) => events.push(['show-approved', ...args]),
     preparePaidNewBooking: async (...args) => { events.push(['prepare-paid', ...args]); return () => events.push(['continue']); },
     resolvePaidConfirmation: async () => ({ status: 'unavailable' }),
+    resolvePurchasePreparation: async () => ({ status: 'unavailable' }),
     resolveCheckInSessionLink: async () => { events.push(['resolve-link']); return {}; },
     revealRecoveredPurchase: (...args) => events.push(['reveal', ...args]),
     initialContext: flowMachine.initialContext, nextState: flowMachine.nextState, effectiveChannel: 'park-qr',
@@ -102,7 +107,7 @@ function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () 
   };
   for (const name of [
     'setActiveReturnAttempt', 'setRecoveryGateReady', 'setRecoveryReturnRecord', 'setBuyRecoveryStatus', 'setState', 'setExitDialogOpen',
-    'setRecoveryContinuePending', 'setRecoverySyncFailed', 'setBuyRecoverySnapshot',
+    'setRecoveryContinuePending', 'setRecoverySyncFailed', 'setRecoveryReadyForSafety', 'setBuyRecoverySnapshot',
     'setAlreadyCheckedIn', 'setSessionStartError', 'setReadyForStaffError', 'setIsStartingSession',
     'setIsMarkingReadyForStaff', 'setPaidConfirmationState', 'setAddonsStep', 'setAddonsBackRequest',
     'setBuyStep', 'setSafetyExitLocked', 'setAddonsAvailabilityPrefetch', 'setCtx',

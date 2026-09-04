@@ -80,6 +80,11 @@ jobs:
           cache-dependency-path: jumpyard-checkin-phone/package-lock.json
       - name: Install dependencies
         run: npm ci --prefix jumpyard-checkin-phone
+      - name: Test payment preparation and recovery
+        run: |
+          npm --prefix jumpyard-checkin-phone run test:payment-confirmation
+          npm --prefix jumpyard-checkin-phone run test:paid-confirmation
+          npm --prefix jumpyard-checkin-phone run test:payment-recovery
       - name: Lint
         run: npm --prefix jumpyard-checkin-phone run lint
       - name: Type-check
