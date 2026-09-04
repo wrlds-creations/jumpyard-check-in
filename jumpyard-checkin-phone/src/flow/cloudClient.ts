@@ -1,4 +1,5 @@
-import type { Addon, AddonId, Booking, BookingPaymentState, CheckInSession, LookupSource } from '@/flow/types';
+import type { Addon, AddonId, Booking, BookingPaymentState, CheckInSession, LookupSource, PackageContent } from '@/flow/types';
+import { getPackageAdmissionQuantity } from './packageContents';
 
 const DEFAULT_CLOUD_API_BASE_URL = 'https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com';
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
@@ -140,6 +141,7 @@ interface CloudBooking {
 }
 
 interface CloudBookingItem {
+  packageContents?: PackageContent[];
   productName: string | null;
   parentProductName: string | null;
   productType: string | null;
@@ -151,6 +153,8 @@ interface CloudBookingItem {
 }
 
 export interface NewBookingProduct {
+  // Per package unit; booking item contents already contain the purchased total.
+  packageContents?: PackageContent[];
   available: boolean;
   capacityRemaining: number | null;
   durationMinutes: number;
@@ -1003,7 +1007,15 @@ function toBooking(
     lastName: guestName.lastName ?? undefined,
     existingAddons,
     productLabel: getProductLabel(sessionItem),
-    productType: 'entry',
+    productType: sessionItem?.packageContents?.length ? 'combo' : 'entry',
+    admissionItems: primaryItems.some((item) => item.packageContents?.length)
+      ? primaryItems.map((item) => ({
+          label: getProductLabel(item),
+          quantity: getPackageAdmissionQuantity(item.packageContents) ?? Math.max(0, item.quantity ?? item.tickets.length),
+          durationMinutes: getDurationMinutes(item.startTime, item.endTime),
+          packageContents: item.packageContents,
+        }))
+      : undefined,
     lookupSource: normalizeLookupSource(source),
   };
 }
@@ -1096,7 +1108,7 @@ function getPrimaryItems(items: CloudBookingItem[]) {
 }
 
 function getJumperCount(primaryItems: CloudBookingItem[], allItems: CloudBookingItem[]) {
-  const quantity = primaryItems.reduce((total, item) => total + Math.max(0, item.quantity ?? 0), 0);
+  const quantity = primaryItems.reduce((total, item) => total + (getPackageAdmissionQuantity(item.packageContents) ?? Math.max(0, item.quantity ?? 0)), 0);
   if (quantity > 0) return quantity;
 
   const tickets = primaryItems.reduce((total, item) => total + item.tickets.length, 0);

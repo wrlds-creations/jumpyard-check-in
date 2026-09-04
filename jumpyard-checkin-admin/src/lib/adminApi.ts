@@ -45,6 +45,14 @@ export interface StaffSessionSummary {
   visitDate: string | null;
 }
 
+export interface StaffPackageContent {
+  kind: "admission" | "pizza";
+  /** Total contents for this booking item's purchased package quantity. */
+  quantity: number;
+  collection: "checkin" | "later";
+  durationMinutes?: number;
+}
+
 export interface StaffBookingItem {
   bookingDate: string | null;
   bookingItemId: string | null;
@@ -54,6 +62,7 @@ export interface StaffBookingItem {
   fulfillmentSource?: "original" | "linked_add_on" | "provisional" | string | null;
   linkedBookingReference?: string | null;
   linkedRollerUniqueId?: string | null;
+  packageContents?: StaffPackageContent[];
   parentProductId: string | null;
   parentProductName: string | null;
   parentType?: string | null;

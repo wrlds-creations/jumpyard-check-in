@@ -3,6 +3,7 @@ const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
+const { withPackageContents } = require('./package-contents');
 const {
   buildKioskQuotePayload,
   KIOSK_PAYMENT_CURRENCY,
@@ -4261,7 +4262,7 @@ function buildPhoneAvailability(request, parentProducts, rollerBody) {
       if (definition.requiresAvailability === false) {
         const unitPrice = numberOrNull(definition.unitPrice);
         const unitPriceCents = numberOrNull(definition.unitPriceCents);
-        const product = {
+        const product = withPackageContents({
           available: Boolean(definition.productId && unitPrice !== null),
           capacityRemaining: null,
           durationMinutes: definition.durationMinutes,
@@ -4278,7 +4279,7 @@ function buildPhoneAvailability(request, parentProducts, rollerBody) {
           type: definition.type,
           unitPrice,
           unitPriceCents: unitPriceCents ?? (unitPrice === null ? null : Math.round(unitPrice * 100)),
-        };
+        }, 1);
         products.push(product);
         return product;
       }
@@ -4294,7 +4295,7 @@ function buildPhoneAvailability(request, parentProducts, rollerBody) {
       const onlineSalesOpen = session?.onlineSalesOpen !== false;
       const available = isPhoneAvailabilityProductAvailable(session, selectedProduct, capacityRemaining);
       const unitPrice = numberOrNull(selectedProduct?.cost);
-      const product = {
+      const product = withPackageContents({
         available,
         capacityRemaining,
         durationMinutes: definition.durationMinutes,
@@ -4311,7 +4312,7 @@ function buildPhoneAvailability(request, parentProducts, rollerBody) {
         type: definition.type,
         unitPrice,
         unitPriceCents: unitPrice === null ? null : Math.round(unitPrice * 100),
-      };
+      }, 1);
       products.push(product);
       return product;
     }),

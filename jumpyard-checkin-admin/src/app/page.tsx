@@ -21,6 +21,7 @@ import {
   redeemStaffSession,
   StaffApiError,
   type StaffBookingItem,
+  type StaffPackageContent,
   type StaffAuthSession,
   type StaffSessionDetail,
   type StaffSessionSummary,
@@ -64,6 +65,7 @@ interface RedeemConfirmation {
 type StaffIconName =
   | "addons-bag"
   | "admission-ticket"
+  | "combo-pizza"
   | "drink-cup"
   | "grip-socks"
   | "group"
@@ -241,7 +243,7 @@ const HANDOUT_SECTIONS: Record<HandoutSectionKey, { note: string; order: number;
     title: "Lämna ut vid incheckning",
   },
   later: {
-    note: "Kaffe och annat som hämtas efter hoppet.",
+    note: "Pizza, kaffe och annat som hämtas efter hoppet.",
     order: 2,
     title: "Hämtas efter hoppet",
   },
@@ -305,7 +307,6 @@ function getHandoutCategory(item: StaffBookingItem): HandoutCategoryDefinition {
       icon: "visitor-wristband",
       key: durationLabel ? `wristband-${durationLabel.replace(/\s+/g, "-").toLowerCase()}` : "wristband",
       label: durationLabel ? `Besöksband ${durationLabel}` : "Besöksband",
-      note: getItemDisplayName(item),
       order: 10,
       section: "checkin",
     };
@@ -317,6 +318,28 @@ function getHandoutCategory(item: StaffBookingItem): HandoutCategoryDefinition {
     label: getItemDisplayName(item),
     order: 90,
     section: "other",
+  };
+}
+
+function getPackageContentCategory(item: StaffBookingItem, content: StaffPackageContent): HandoutCategoryDefinition {
+  if (content.kind === "pizza") {
+    return {
+      icon: "combo-pizza",
+      key: "pizza",
+      label: "Pizza att dela",
+      note: `Ingår i ${getItemDisplayName(item)}. Hämtas efter hoppet.`,
+      order: 20,
+      section: content.collection,
+    };
+  }
+
+  const durationLabel = content.durationMinutes ? `${content.durationMinutes} min` : null;
+  return {
+    icon: "visitor-wristband",
+    key: durationLabel ? `wristband-${durationLabel.replace(/\s+/g, "-").toLowerCase()}` : "wristband",
+    label: durationLabel ? `Besöksband ${durationLabel}` : "Besöksband",
+    order: 10,
+    section: content.collection,
   };
 }
 
@@ -527,24 +550,34 @@ function groupHandoutItems(items: StaffBookingItem[]) {
   const groups = new Map<string, HandoutGroup>();
 
   for (const item of items) {
-    const category = getHandoutCategory(item);
-    const groupKey = `${category.section}:${category.key}`;
-    const existing = groups.get(groupKey);
-    const quantity = Math.max(0, item.quantity ?? 0);
+    // Contents are server-owned totals. Keep the source item and Roller quantity
+    // intact; never also count the package itself or derive redemption tickets.
+    const contents = item.packageContents?.length
+      ? item.packageContents.map((content) => ({
+          category: getPackageContentCategory(item, content),
+          quantity: content.quantity,
+        }))
+      : [{ category: getHandoutCategory(item), quantity: item.quantity }];
 
-    if (existing) {
-      existing.items.push(item);
-      existing.quantity += quantity;
-      existing.hasLinkedAddOn = existing.hasLinkedAddOn || item.fulfillmentSource === "linked_add_on";
-      continue;
+    for (const { category, quantity: contentQuantity } of contents) {
+      const groupKey = `${category.section}:${category.key}`;
+      const existing = groups.get(groupKey);
+      const quantity = Math.max(0, contentQuantity ?? 0);
+
+      if (existing) {
+        existing.items.push(item);
+        existing.quantity += quantity;
+        existing.hasLinkedAddOn = existing.hasLinkedAddOn || item.fulfillmentSource === "linked_add_on";
+        continue;
+      }
+
+      groups.set(groupKey, {
+        ...category,
+        hasLinkedAddOn: item.fulfillmentSource === "linked_add_on",
+        items: [item],
+        quantity,
+      });
     }
-
-    groups.set(groupKey, {
-      ...category,
-      hasLinkedAddOn: item.fulfillmentSource === "linked_add_on",
-      items: [item],
-      quantity,
-    });
   }
 
   return Array.from(groups.values()).sort((left, right) => {
@@ -593,7 +626,7 @@ function HandoutSection({
                   </span>
                 ) : null}
               </div>
-              <p className="mt-0.5 truncate text-xs text-foreground">
+              <p className="mt-0.5 text-xs leading-snug text-foreground">
                 {group.note ?? formatHandoutItemNames(group.items)}
               </p>
             </div>
