@@ -5,7 +5,7 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-09-04
-- Public/Park: `5e16335` (#343/PR #378), verified. [Rollout, rollback and test limits](docs/gh-343-safety-video-recovery.md). #374 Apple Pay accepted; Klarna: #353/#361.
+- Public/Park: `0e04fb4` (#339/#341, PR #380), verified. [Rollout and tests](docs/gh-339-gh-341-catalog-resilience.md). #374 Apple Pay accepted; Klarna: #353/#361.
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Product/runtime state: Park has 202 resources, migrations through `0020`, and 27 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption, and late Handoff attachment are proven. A definitively approved kiosk payment now returns its provisional session with the bounded `safety` hint immediately instead of waiting for ROLLER readback; redemption remains blocked until authoritative synchronization. Physical proof remains in kiosk issue #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
@@ -28,6 +28,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 ## Current Product Baseline
 
 - Phone prepares safety before receipt (#374/D0209); #331 and #330/D0208 preserved. Video: #343/D0210.
+- Catalog refresh precedes booking reads; public failure omits Combo (#339/#341).
 - The production architecture remains `check-in app -> JumpYard Cloud/server API -> Roller API`; Roller is authoritative and Aurora is an operational cache.
 - Water selection, unchanged 24-hour cache and historical-payment compatibility: [#315 evidence](docs/gh-315-water-product.md).
 - Compact phone add-ons retain #324 Continue. Approved payment enters safety before Roller confirms, with a paid check at handoff (#331/D0199). Purchase-bound recovery (#351/D0201) adds proven pre-submit wallet retry and guarded completed-booking exits (#361/D0203/D0206); [evidence](docs/gh361-phone-wallet-recovery.md). Tiny top-right SV/EN control, both languages only on start screens (#350/D0205).

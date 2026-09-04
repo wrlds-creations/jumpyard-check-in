@@ -17,6 +17,8 @@ in order and current flow facts; runtime files did not conflict.
 
 - [#339 approval](https://github.com/wrlds-creations/jumpyard-check-in/issues/339#issuecomment-5540336687)
 - [#341 approval](https://github.com/wrlds-creations/jumpyard-check-in/issues/341#issuecomment-5540336997)
+- [#339 publication authorization](https://github.com/wrlds-creations/jumpyard-check-in/issues/339#issuecomment-5540685229)
+- [#341 publication authorization](https://github.com/wrlds-creations/jumpyard-check-in/issues/341#issuecomment-5540685617)
 
 No new dependency, service, AWS resource, migration, price lifetime, SKU,
 payment-result rule, kiosk source or live business operation is included.
@@ -105,8 +107,10 @@ root step were rerun successfully in the implementation worktree. No runtime
 code changed after the full run began. `git diff --check` passed.
 
 The Repository job in PR CI `33874831832` subsequently passed the complete root
-suite in one run. The final documentation-only main integration triggers the
-required checks again before merge.
+suite in one run. After the final documentation-only main integration, all four
+required jobs in [CI 33875086100](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33875086100)
+passed on reviewed head `8f62b79d3a9d1b32610a97faf7f49a2d14a44e8c`. [PR #380](https://github.com/wrlds-creations/jumpyard-check-in/pull/380)
+merged as `0e04fb4f3a86d11366687e4aa7b4cd232d1fc4ce` at 12:57:17 UTC.
 
 Local tests use synthetic AWS/HTTP responses and create no real booking or
 payment. No guest incident frequency or real-provider latency was measured.
@@ -121,13 +125,104 @@ payment. No guest incident frequency or real-provider latency was measured.
   `scripts/validate-gh315-water-product.js` accepts the new warning event.
 - Validation wiring: `package.json`, `TEST_PLAN.md`.
 - Durable documentation: `PROJECT_CONTEXT.md`, `DECISIONS.md` (D0211),
-  `AWS_RESOURCES.md`, this evidence file. `REPO_CURRENT_STATE.md` is unchanged
-  because no new merged/deployed state exists.
+  `AWS_RESOURCES.md`, this evidence file. The dependent rollout documentation also
+  updates `REPO_CURRENT_STATE.md` after the merged/deployed state is verified.
 
-## Remaining publication
+## Protected rollout — 2026-09-04
 
-Implementation is not published. PR, commit and protected immutable promotion
-remain pending. Select the then-current approved release and rollback candidate
-at publication; do not rebuild on deployment. A later public check should confirm
-ordinary entry, family/Combo offers and current add-on prices after promotion.
-No claim is made that these code-proven failure paths caused a guest incident.
+The final source review is recorded on [PR #380](https://github.com/wrlds-creations/jumpyard-check-in/pull/380)
+at head `8f62b79d3a9d1b32610a97faf7f49a2d14a44e8c`. The independent local runtime
+review preceded publication; both main integrations changed documentation only.
+The GitHub review record was submitted by the author account. All four required
+checks passed and normal branch/environment protections remained enforced.
+
+| Item | Verified identity |
+|---|---|
+| Merge/source | `0e04fb4f3a86d11366687e4aa7b4cd232d1fc4ce` |
+| Successful immutable release | [33875422657](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33875422657) |
+| Artifact | `9937812376`, `park-test-release-0e04fb4f3a86d11366687e4aa7b4cd232d1fc4ce` |
+| Artifact digest | `sha256:4e7fd8491991a5c558089c4e17a1979d183276463aa65e357abd4b5e2326a4ca` |
+| Manifest SHA256 | `9a20aa08bcc7ac740ff3ee8770620846da794bb07d088fe92040082832f39ecb` |
+| Park promotion | [33875994276](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33875994276), success |
+| Public promotion | [33876020299](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33876020299), success |
+
+The release passed its complete source, infrastructure and frontend checks.
+Local Park/public artifact validators and both protected plans verified all 556
+checksums, the exact SHA, existing account/region/stack, four fixed Pages targets,
+API and Nacka scope. Target configuration and migration runtime hashes match the
+prior successfully deployed #343 release. No deploy or rollback rebuild occurred.
+
+The reviewed Park plan contained 202 resources, no additions/removals or section
+changes, and only `BookingHandler5D1461BB` and `DataSyncHandler2BB2FACC` changed.
+Independent template comparison narrowed every change to `Properties.Code.S3Key`
+or `Metadata.aws:asset:path`. The previous canonical template hash was
+`1886c2000490398221f1147d4f9366ef03c3ee4495b683aae56ece8cf7847cf3`; the exact
+selected/deployed hash is
+`cc997a77255d49c435b16e2d004bd52c8fb97cb79e9d1192a67fb5f88aa0cfb2`.
+
+Delegated Park approval followed review of successful plan job `101032992361`
+and named the exact release, target, two-code-asset plan and rollback candidate.
+Migration apply stayed false. Park finished with exact template equality,
+`UPDATE_COMPLETE`, `IN_SYNC` drift, no active alarms, empty queues, migrations
+already applied through `0020`, exact Cloudflare commit readback and passing
+HTTP/configuration/Apple association checks.
+
+The public plan was prepared while Park ran. Its successful job `101033078971`
+was reviewed against the same manifest, source outputs, fixed public projects,
+`https://checkin.jumpyard.se` and `https://staff-checkin.jumpyard.se`. Public
+approval was submitted only after the complete Park run and independent Park
+readback passed. The public workflow verified active domains, allowed/blocked
+CORS, Cognito targets/callbacks, exact Cloudflare commit and the Apple association
+hash `8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6`.
+
+### Live verification and limits
+
+Independent HTTP readback compared actual response bytes with the selected
+artifact: 28 Park responses and 28 public responses matched, covering phone,
+staff/admin routes, referenced script/style files and Apple association.
+
+One read-only request to the deployed `/v1/bookings/availability` used 2026-09-04
+at 16:00 and 19:00. It returned HTTP 200, `catalogStatus: verified`, Roller Live
+authority and `wroteBooking: false`:
+
+- At 16:00, ordinary 60/90/120-minute entries, family products, the verified
+  Combo and all configured add-ons were available.
+- At 19:00, ordinary/family 60-minute products were available; 90/120-minute
+  products and Combo remained unavailable according to Roller.
+- Fresh stock offers included socks, exact water `970411`, lock and coffee.
+  This confirms the current stock-price path, without renewing any cache row.
+
+The single diagnostic request took 3,184 ms end to end. That is not a before/after
+latency measurement or throughput guarantee; the two-second bound applies only
+to the optional public-catalog read. The tests prove no mandatory delay or added
+normal-path request. No customer-incident rate is inferred from the code defect.
+
+No real booking, payment, check-in, forced catalog outage, manual sync, cache
+mutation, queue replay or guest message was performed. Early-import/catalog
+failures and late responses were tested with isolated synthetic dependencies.
+Physical handset/Wi-Fi and load testing were not performed. The next natural
+daily refresh was not awaited or claimed as observed after deployment.
+
+Evidence files are `%TEMP%/jumpyard-gh339-{park,public}-readback.json`,
+`jumpyard-gh339-{park,public}-{plan,deploy}.log` and
+`jumpyard-gh339-park-plan-33875994276/plan.json`.
+
+### Rollback and closeout
+
+The verified rollback candidate is the previously successful and deployed #343
+release `33873617274`, source `5e163356cc7c30cd7b7d5b381db9472f42381172`, artifact
+`9937052826`, digest
+`sha256:2aa7e5445bd0cb1fecd32a01ea8f7a3ba2d7a1d53331199c678a14cc86d20221`.
+It was rechecked as unexpired, retained until 2026-12-03T12:36:18Z; all 556 files
+validated locally and its template matched the pre-deploy stack. Rollback would
+promote that same artifact through the protected workflows. No rollback or
+re-promotion was needed.
+
+Love explicitly requested available testing followed by closure. #339 preserves
+#294's independent commit, detects unavailable prices/failed refreshes and keeps
+expired prices out of offers. #341 safely omits unverified Combo eligibility
+while retaining authoritative availability and prices. The 27 failure/success
+scenarios, full CI/release, protected rollout and live checks satisfy the approved
+scope. No new Project draft was created; the already linked operational and
+provider work remains separate. Recommended next step: use the normal public
+links; any future observed catalog incident has safe diagnostics for follow-up.
