@@ -115,14 +115,92 @@ installation had stalled on the registry audit request. The original checkout's
 dependencies remain intact; no dependency or lockfile change is part of #374.
 
 Durable docs updated: this evidence, D0209 in `DECISIONS.md`, and the implemented
-flow reference in `PROJECT_CONTEXT.md`. `REPO_CURRENT_STATE.md` and
-`AWS_RESOURCES.md` remain the existing merged/deployed baseline.
+flow reference in `PROJECT_CONTEXT.md`. After publication, `REPO_CURRENT_STATE.md`
+and `AWS_RESOURCES.md` record the verified deployed release.
 
 ## Delivery boundary
 
 Love subsequently authorized everything required for handset Apple Pay testing:
 commit, reviewed PR/merge, immutable release, exact plan review and protected Park
 then public promotion. Use the existing Nacka pilot and retain the current mainline
-corrections. Rollout evidence will record the selected SHA and runs after completion.
+corrections. The rollout evidence below records the selected SHA and completed runs.
 Love performs the physical Apple Pay transaction and acceptance. No new follow-up
 draft was created; #329 and the existing normal-404 alarm draft remain separate.
+
+## Protected rollout — 2026-09-04
+
+Reviewed [PR #375](https://github.com/wrlds-creations/jumpyard-check-in/pull/375)
+merged as `4ed47e5c1aab56f0417866e4ad10a2e5419a0a7f` after all four required checks
+passed in [CI 33863877905](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33863877905).
+The source/integration branches remain preserved. The separate #330 rollout
+completed before this release was promoted.
+
+Target metadata is unchanged: account `376129878018`, `eu-north-1`,
+`jumpyard-check-in-park-test-stack`; Client/CostCenter `JumpYard`, Project
+`jumpyard-check-in`, Environment `park-test`, Owner/CreatedBy `love`, Repository
+`wrlds-creations/jumpyard-check-in`, ManagedBy `cdk`, DataClassification
+`confidential`, Exportable `true`. Only the existing Nacka `50871` date window is
+used, with migration apply disabled. Public origins are `https://checkin.jumpyard.se`
+and `https://staff-checkin.jumpyard.se`.
+
+Main CI [33864750791](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33864750791)
+also passed all four checks. Before #374 promotion, #330 completed both protected
+[Park 33863602024](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33863602024)
+and [public 33863606635](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33863606635).
+Its immutable release `33862373255`, SHA `668a476d21173a14c7bd449784ab7ef53247f502`,
+artifact `9933035732` (digest
+`sha256:4d7f911de3d16e82c464c3310e47e3f3642c3e07cb8038b324ad7dabdf9b1764`,
+expires `2026-12-03T10:15:39Z`) is the verified compatible rollback candidate.
+
+Selected successful [release 33864750849](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33864750849)
+contains artifact `9934011980`, digest
+`sha256:b46f416c064ac043e60b0cd25e823ef3dff0e297610801b97d4f43ea6a378d0a`,
+expires `2026-12-03T10:45:42Z`. Local validation matched all 545 file checksums;
+manifest SHA256 is `7816e844826d6f4f95098d6216ac70d3efee50e607542d6f0d05f2a5c31d3cc4`.
+
+[Park run 33866158981](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33866158981)
+was dispatched with that run/SHA, intent `promote`, and migration apply disabled.
+The reviewed plan artifact `9934043454` has identical current/release template
+`1886c2000490398221f1147d4f9366ef03c3ee4495b683aae56ece8cf7847cf3`, 202 resources,
+and zero resource or section changes. Delegated approval under Love's instruction
+followed that exact plan review; protected deployment id `6262966681` targets the
+existing `park-test` environment `18183060938`.
+
+Park completed successfully. CDK reported no changes; the ordinary verifier passed
+the successful stack state, exact template, `IN_SYNC` drift, zero active alarms,
+empty related queues, migrations already applied through `0020`, and exact-SHA
+Cloudflare output checks. No migration was applied by this rollout. Independent
+readback at `2026-09-04T11:14:39.931Z` matched all 32 HTTP 200 responses: four HTML
+routes, 25 referenced JS/CSS files, the Apple association and two static images.
+Evidence: `%TEMP%/jumpyard-gh374-live-exact-assets-park.json`.
+
+Only after Park success, [public run 33867049758](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33867049758)
+was dispatched for the same release/SHA. Its completed plan job `101004172237`
+revalidated the 545 checksums, identical manifest hash, exact public Pages projects
+and origins, and the existing Park API target. The plan performs no AWS mutation.
+Delegated approval followed that review; protected deployment id `6263123898`.
+
+Public promotion completed successfully. Exact-SHA Pages readback, public domains,
+API/Cognito configuration, allowed/blocked CORS and Apple association checks passed.
+Independent public readback at `2026-09-04T11:21:22.203Z` matched all 32 HTTP 200
+responses: four HTML routes, 25 referenced JS/CSS files, the Apple association and
+two static images. The 9,094-byte Apple file retains SHA256
+`8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6`.
+Evidence: `%TEMP%/jumpyard-gh374-live-exact-assets-public.json`.
+
+Both public origins now serve `4ed47e5`. No rebuild, rollback, re-promotion, live
+payment, provider-setting change, guest message or new resource was performed.
+Issue #374 remains open for Love's physical Apple Pay acceptance. The publication
+evidence is recorded in this file, `AWS_RESOURCES.md`, `REPO_CURRENT_STATE.md` and
+the linked GitHub issue. The separate #329 and existing normal-404 alarm draft
+remain outside this correction; no new follow-up draft was created.
+
+### Handset acceptance
+
+After verified public promotion, open the public guest link afresh in Safari and
+perform the Apple Pay purchase personally. While preparation is needed, visible
+progress should precede the receipt. Once ready, one Continue action should open
+the safety video. An immediately ready booking may show the receipt promptly;
+there is no artificial minimum delay. If booking preparation takes longer, the
+delayed view must offer one same-purchase retry and instruct the guest not to pay
+again. A real payment or staff redemption is not part of automated rollout smoke.

@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #374 Phone Purchase Preparation (Published; No AWS Resource Change)
+
+Reviewed [PR #375](https://github.com/wrlds-creations/jumpyard-check-in/pull/375) merged `4ed47e5c1aab56f0417866e4ad10a2e5419a0a7f`, retaining #330 and #367. Immutable [release 33864750849](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33864750849), artifact `9934011980`, passed protected [Park 33866158981](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33866158981) then [public 33867049758](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33867049758), after each exact plan was reviewed and approved under Love's explicit publication instruction. The phone prepares the safety continuation before showing receipt confirmation; no backend behavior changed.
+
+Current/release templates were identical (`1886c2000490398221f1147d4f9366ef03c3ee4495b683aae56ece8cf7847cf3`), with 202 resources and zero resource/section changes. CDK reported no changes. Migrations remained applied through `0020`, with apply disabled. Exact template, successful stack state, `IN_SYNC` drift, zero active alarms, empty queues, domain/CORS/Cognito/Apple association and exact-SHA frontend checks passed. Independent Park and public readback matched 32 responses each to the selected artifact. Account `376129878018`, region `eu-north-1`, WRLDS tags, API, routes, IAM, schema, secrets, gates and Nacka venue/date scope are unchanged. No real payment, provider change or guest message was performed.
+
+The prior successfully deployed #330 release `33862373255` / `668a476d21173a14c7bd449784ab7ef53247f502`, artifact `9933035732`, remains the verified unexpired rollback candidate; no rollback or re-promotion was needed. Love's actual Apple Pay handset acceptance remains on #374. [Checksums, approvals, validation and acceptance evidence](docs/gh-374-purchase-preparation.md).
+
 ### Issue #367 Verified Combo Contents (Published)
 
 Reviewed [PR #371](https://github.com/wrlds-creations/jumpyard-check-in/pull/371) merged `4d3e68d58ed69d48f7164a95e3977cc4af44857d`. Immutable [release 33847988150](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33847988150), artifact `9927575535`, adds response-only two-band/one-later-pizza contents for the verified Weekday Combo in phone and Handoff. The 202-resource plan changed only code and asset metadata for Booking, Lookup and Session; no resource, route, IAM, schema, secret, gate, venue/date or tag change was made. Account `376129878018`, `eu-north-1`, existing Nacka stack and WRLDS metadata remain intact.
