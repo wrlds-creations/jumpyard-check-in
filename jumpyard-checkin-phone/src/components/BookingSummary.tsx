@@ -4,6 +4,7 @@ import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import type { SessionIssue } from '@/flow/cloudClient';
 import type { Addon, Booking } from '@/flow/types';
+import { getBookingContentRows, packageContentCopy } from '@/flow/packageContents';
 
 interface BookingSummaryProps {
     booking: Booking;
@@ -23,7 +24,7 @@ const ADDON_ICONS: Record<Addon['id'], JumpyardIconName> = {
 };
 
 export const BookingSummary = ({ booking, onContinue, isStartingSession = false, sessionStartError = null }: BookingSummaryProps) => {
-    const { t } = useTranslation();
+    const { t, lang } = useTranslation();
 
     const existingAddons: Addon[] = booking?.existingAddons ?? [];
     const canStartCheckIn = Boolean(booking?.paid);
@@ -31,6 +32,7 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
     const checkInAtRegister = booking?.paymentState === 'partially_paid';
     const productQuantity = Math.max(1, Number(booking?.jumpers || booking?.products || 1));
     const productLabel = getBookingProductLabel(booking, t.booking.product);
+    const contentRows = getBookingContentRows(booking, productLabel, productQuantity, lang);
 
     const timeDisplay = booking?.endTime
         ? `${booking.time}–${booking.endTime}`
@@ -76,13 +78,17 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
                 </div>
 
                 <div className="mb-3 overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
-                    <div className="flex min-w-0 items-center justify-between gap-3 border-b border-border px-3 py-3">
+                    {contentRows.map((item) => <div key={item.key} className="flex min-w-0 items-center justify-between gap-3 border-b border-border px-3 py-3" data-booking-content={item.kind}>
                         <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                            <JumpyardIcon name="admission-ticket" className="w-8 h-8 flex-shrink-0" />
-                            <span className="min-w-0 break-words text-sm font-bold italic text-foreground">{productLabel}</span>
+                            <JumpyardIcon name={item.kind === 'pizza' ? 'combo-pizza' : booking.admissionItems?.length ? 'visitor-wristband' : 'admission-ticket'} className="w-8 h-8 flex-shrink-0" />
+                            <span className="min-w-0 break-words text-sm font-bold italic text-foreground">
+                                {item.label}
+                                {item.detail && <span className="block text-[11px] uppercase text-primary">{item.detail}</span>}
+                                {item.collection === 'later' && <span className="block text-xs font-normal not-italic">{packageContentCopy[lang].later}</span>}
+                            </span>
                         </div>
-                        <span className="shrink-0 text-lg font-black italic text-primary">x{productQuantity}</span>
-                    </div>
+                        <span className="shrink-0 text-lg font-black italic text-primary">x{item.quantity}</span>
+                    </div>)}
                     {existingAddons.length > 0 ? (
                         existingAddons.map((addon) => (
                             <div key={addon.id} className="flex min-w-0 items-center justify-between gap-3 border-b border-border px-3 py-3 last:border-b-0">
@@ -93,7 +99,7 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
                                 <span className="shrink-0 text-lg font-black italic text-primary">x{addon.qty}</span>
                             </div>
                         ))
-                    ) : (
+                    ) : !booking.admissionItems?.length && (
                         <div className="flex min-w-0 items-center gap-2.5 px-3 py-3">
                             <JumpyardIcon name="addons-bag" className="w-8 h-8 flex-shrink-0" />
                             <span className="text-sm font-bold italic text-foreground">{t.booking.none}</span>

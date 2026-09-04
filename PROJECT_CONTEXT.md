@@ -71,7 +71,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 - Lookup is Aurora-first with Roller-authoritative refresh, Nacka/date scope, and nearest same-day selection. Ready bookings start/resume a server session; opaque booking-bound guest proof stays in phone memory and hash-only in Aurora.
 - Safety completion produces a server-owned staff handoff; an approved phone purchase enters safety before Roller confirms payment and is reconfirmed at the handoff (D0199/#331). Staff PINs: atomic session replacement, credential-free audit, coalesced queues, bounded heartbeat retry (#334).
-- Buy-entry/add-ons use server-owned Roller paths and approved Nacka products plus Live availability. `COMBO60` maps to Weekday Combo `1242135`/`1242136` and requires its parent in Roller's public catalog; catalog failures retry and frontends never call Roller.
+- Buy-entry/add-ons use server-owned Roller paths and approved Nacka products plus Live availability. `COMBO60` maps to Weekday Combo `1242135`/`1242136` and requires its parent in Roller's public catalog; catalog failures retry and frontends never call Roller. D0207: 2x60-min bands + 1 pizza later; no socks/drinks.
 - Live water: `970411`/`970363` (D0195).
 - D0196/D0197: compact add-ons use plus/minus, native scroll and Continue validation. D0205/#350: tiny top-right SV/EN control; both languages only on start screens.
 - New PWA bookings use `sendConfirmations=true`; phone recovery follows D0201/D0203/D0206.

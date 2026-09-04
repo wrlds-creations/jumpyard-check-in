@@ -4,6 +4,7 @@ import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { QrCode } from '@/components/QrCode';
 import type { Addon, Booking, Channel, CheckInSession } from '@/flow/types';
+import { getBookingContentRows, packageContentCopy } from '@/flow/packageContents';
 
 interface ConfirmationScreenProps {
     booking: Booking;
@@ -42,7 +43,7 @@ export const ConfirmationScreen = ({
     alreadyCheckedIn = false,
     onStartOver,
 }: ConfirmationScreenProps) => {
-    const { t } = useTranslation();
+    const { t, lang } = useTranslation();
     const completed = alreadyCheckedIn || isCompletedSession(checkinSession);
     const subtitle = channel === 'sms'
         ? t.confirm.smsSubtitle
@@ -53,14 +54,10 @@ export const ConfirmationScreen = ({
     const handoffQrValue = buildHandoffPayload(checkinSession, handoffCode);
     const entryTicketLabel = getEntryTicketLabel(booking, t.confirm.entryTicketFallback);
 
-    const handoutItems: { detail?: string; icon: JumpyardIconName; label: string; qty: number; testId?: string }[] = [
-        {
-            icon: 'visitor-wristband',
-            label: entryTicketLabel,
-            qty: jumperCount,
-            testId: 'ready-entry-ticket-type',
-        },
-    ];
+    const contentRows = getBookingContentRows(booking, entryTicketLabel, jumperCount, lang);
+    const handoutItems: { detail?: string; icon: JumpyardIconName; label: string; qty: number; testId?: string }[] = contentRows
+        .filter((item) => item.collection === 'checkin')
+        .map((item) => ({ icon: 'visitor-wristband', label: item.label, qty: item.quantity, detail: item.detail, testId: 'ready-entry-ticket-type' }));
     for (const addon of selectedAddons) {
         if (HANDOUT_IDS.has(addon.id)) {
             const label = addon.id === 'connected' ? t.confirm.connectedBands : addon.label;
@@ -68,7 +65,24 @@ export const ConfirmationScreen = ({
         }
     }
 
-    const experienceItems = selectedAddons.filter(a => EXPERIENCE_IDS.has(a.id));
+    const experienceGroups = [
+        {
+            title: packageContentCopy[lang].later,
+            key: 'later',
+            items: [
+                ...contentRows.filter((item) => item.collection === 'later').map((item) => ({
+                    id: item.key, label: item.label, qty: item.quantity, icon: 'combo-pizza' as JumpyardIconName, detail: item.detail,
+                })),
+                ...selectedAddons.filter((item) => item.id === 'coffee').map((item) => ({ ...item, icon: 'drink-cup' as JumpyardIconName, detail: undefined })),
+            ],
+        },
+        {
+            title: t.confirm.otherAddons,
+            key: 'other',
+            items: selectedAddons.filter((item) => EXPERIENCE_IDS.has(item.id) && item.id !== 'coffee')
+                .map((item) => ({ ...item, icon: EXPERIENCE_ICONS[item.id] ?? 'gift-card', detail: undefined })),
+        },
+    ].filter((group) => group.items.length > 0);
 
     return (
         <motion.div
@@ -138,11 +152,10 @@ export const ConfirmationScreen = ({
                                     <div className="flex min-w-0 flex-1 items-center gap-2">
                                         <JumpyardIcon name={item.icon} className="w-8 h-8 flex-shrink-0" />
                                         <span className="min-w-0 flex-1">
-                                            <span className="block truncate text-sm font-bold italic text-foreground">{item.label}</span>
+                                            <span className="block break-words text-sm font-bold italic text-foreground" data-testid={item.testId}>{item.label}</span>
                                             {item.detail && (
                                                 <span
-                                                    className="block truncate text-[11px] font-black uppercase tracking-wide text-primary"
-                                                    data-testid={item.testId}
+                                                    className="block break-words text-[11px] font-black uppercase tracking-wide text-primary"
                                                 >
                                                     {item.detail}
                                                 </span>
@@ -156,22 +169,26 @@ export const ConfirmationScreen = ({
                     </div>
                 )}
 
-                {!completed && experienceItems.length > 0 && (
-                    <div className="min-w-0 text-left mb-3">
+                {!completed && experienceGroups.map((group) => (
+                    <div key={group.key} className="min-w-0 text-left mb-3" data-testid={`confirmation-${group.key}`}>
                         <div className="flex items-center gap-2 mb-2">
                             <JumpyardIcon name="addons-bag" className="w-6 h-6" />
-                            <h2 className="text-xs font-bold italic uppercase text-foreground">{t.confirm.otherAddons}</h2>
+                            <h2 className="text-xs font-bold italic uppercase text-foreground">{group.title}</h2>
                         </div>
                         <div className="overflow-hidden rounded-2xl border border-border bg-white">
-                            {experienceItems.map(item => (
+                            {group.items.map(item => (
                                 <div key={item.id} className="flex min-w-0 justify-between items-center gap-2 border-b border-border px-3 py-2.5 last:border-b-0">
-                                    <JumpyardIcon name={EXPERIENCE_ICONS[item.id] ?? 'gift-card'} className="w-6 h-6 flex-shrink-0" />
-                                    <span className="min-w-0 flex-1 truncate text-foreground text-sm">{item.label} x{item.qty}</span>
+                                    <JumpyardIcon name={item.icon} className="w-8 h-8 flex-shrink-0" />
+                                    <span className="min-w-0 flex-1 break-words text-foreground text-sm font-bold italic">
+                                        {item.label}
+                                        {item.detail && <span className="block text-[11px] uppercase text-primary">{item.detail}</span>}
+                                    </span>
+                                    <span className="shrink-0 text-xl font-black text-primary">{item.qty}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
-                )}
+                ))}
 
             </div>
 

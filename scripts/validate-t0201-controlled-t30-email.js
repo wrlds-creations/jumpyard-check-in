@@ -54,6 +54,7 @@ function loadSessionInternals() {
     exports: module.exports,
     process: { env: environment },
     require(moduleId) {
+      if (moduleId === './package-contents') return require(path.join(path.dirname(absolutePath), 'package-contents.js'));
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule();
       if (moduleId === './email-template') {
@@ -103,6 +104,7 @@ function loadLookupInternals() {
     require(moduleId) {
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule();
+      if (moduleId === './package-contents') return require(path.join(path.dirname(absolutePath), 'package-contents.js'));
       throw new Error(`Unexpected require(${JSON.stringify(moduleId)}) during T0201 lookup validation.`);
     },
     setTimeout,

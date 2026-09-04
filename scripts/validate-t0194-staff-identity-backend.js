@@ -81,6 +81,7 @@ function loadLambda(relativePath, options = {}) {
     module,
     process: { env: { ...PIN_ENV, ...(options.env ?? {}) } },
     require(moduleId) {
+      if (moduleId === './package-contents') return require(path.join(path.dirname(absolutePath), 'package-contents.js'));
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule(moduleId, state);
       if (relativePath === 'infra/lambda/session/index.js' && moduleId === './email-template') {

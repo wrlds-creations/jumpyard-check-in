@@ -10,6 +10,7 @@ const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client
 const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
 const { buildCheckinEmailMessage, buildCheckinEmailPreview } = require('./email-template');
+const { withPackageContents } = require('./package-contents');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const ACTIVE_SESSION_STATUSES = ['guest_in_progress', 'ready_for_staff', 'staff_in_progress'];
@@ -3127,7 +3128,7 @@ async function findProvisionalLinkedAddOnStaffItems(rollerUniqueId, staffVenueId
 
 function mapStaffBookingItem(row) {
   const summary = parseJsonObject(row.item_summary);
-  return {
+  return withPackageContents({
     bookingDate: stringOrNull(row.booking_date ?? summary.bookingDate),
     bookingItemId: stringOrNull(row.booking_item_id),
     bookingItemKey: stringOrNull(row.booking_item_key),
@@ -3146,7 +3147,7 @@ function mapStaffBookingItem(row) {
     quantity: numberOrNull(row.quantity ?? summary.quantity) ?? 0,
     startTime: stringOrNull(row.start_time ?? summary.startTime),
     summary,
-  };
+  });
 }
 
 async function findStaffBookingTickets(rollerUniqueId, selectedTicketIds, staffVenueId = null) {
@@ -3856,7 +3857,7 @@ async function findGuestLinkedAddOnPhoneItems(rollerUniqueId, venueId = null) {
 }
 
 function toGuestLinkedAddOnPhoneItem(item) {
-  return {
+  return withPackageContents({
     bookingDate: item.bookingDate,
     bookingItemId: null,
     endTime: item.endTime,
@@ -3868,7 +3869,7 @@ function toGuestLinkedAddOnPhoneItem(item) {
     quantity: item.quantity,
     startTime: item.startTime,
     tickets: [],
-  };
+  });
 }
 
 async function findPhoneBookingItems(rollerUniqueId) {
@@ -3918,7 +3919,7 @@ async function findPhoneBookingItems(rollerUniqueId) {
     [stringParameter('rollerUniqueId', rollerUniqueId)],
   );
 
-  return mappedRows(result).map((row) => ({
+  return mappedRows(result).map((row) => withPackageContents({
     bookingDate: stringOrNull(row.booking_date),
     bookingItemId: stringOrNull(row.booking_item_id),
     endTime: stringOrNull(row.end_time),

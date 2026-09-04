@@ -37,6 +37,21 @@ export interface Addon {
   requiresAvailability?: boolean;
 }
 
+// Display-only package contents supplied by Cloud; never purchase or redeem items.
+export interface PackageContent {
+  kind: 'admission' | 'pizza';
+  quantity: number;
+  collection: 'checkin' | 'later';
+  durationMinutes?: number;
+}
+
+export interface BookingAdmissionItem {
+  label?: string;
+  quantity: number;
+  durationMinutes?: number;
+  packageContents?: PackageContent[];
+}
+
 export interface LookupSource {
   system: string;
   environment?: string | null;
@@ -81,6 +96,7 @@ export interface Booking {
   existingAddons?: Addon[];
   productLabel?: string;
   productType?: 'entry' | 'family' | 'combo';
+  admissionItems?: BookingAdmissionItem[];
   lookupSource?: LookupSource;
 }
 

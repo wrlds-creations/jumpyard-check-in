@@ -51,6 +51,19 @@ T0003 defines contracts for three target flows:
 | Internal audit events | JumpYard Cloud | Yes | Correlation id, operation, outcome, timestamps. |
 | Roller credentials | AWS Secrets Manager | Secret reference only | Never expose to frontend or logs. |
 
+## Package Contents For Display (#367)
+
+Lookup and guest/staff booking-item responses may include `packageContents` without changing the original `quantity`, item identity or `tickets`. For verified Weekday Combo child `1242136` (parent `1242135`, or missing parent), one purchased package has:
+
+```json
+[
+  { "kind": "admission", "quantity": 2, "collection": "checkin", "durationMinutes": 60 },
+  { "kind": "pizza", "quantity": 1, "collection": "later" }
+]
+```
+
+Booking-item quantities in this array are totals for the purchased packages. Availability-product arrays are **per unit** and are scaled by the chosen package quantity for presentation. Unknown or conflicting product identities and invalid quantities do not receive inferred contents. These response-only rows are not persisted provider items, purchase requests, add-ons or redeemable tickets. Existing ticket selection and redemption remain authoritative. Pizza collection follows Love's deferred-collection requirement; no drinks or socks are inferred. See [evidence and validation](docs/gh-367-combo-contents.md).
+
 ## Booking Data Ingestion Strategy
 
 Implementation-ready ingestion detail is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
