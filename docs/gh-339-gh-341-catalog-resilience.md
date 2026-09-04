@@ -8,10 +8,12 @@ package on 2026-09-04. Branch: `codex/gh-339-catalog-resilience`; approved base:
 focused regressions and validation wiring, and durable documentation.
 
 Love subsequently explicitly authorized commit, push, merge, deployment, testing
-where possible and then closure. Before PR publication, current main
+where possible and then closure. Before PR publication, main
 `5e163356cc7c30cd7b7d5b381db9472f42381172` was integrated, preserving #374's rollout
-evidence and #343's safety-video implementation. Documentation conflicts retained
-both decisions in order and the current flow facts; runtime files did not conflict.
+evidence and #343's safety-video implementation. Before final PR validation, main
+`7294cfea6d46af11dc9bc23994e72c43a8c8d1a4` added #343's rollout evidence and was
+also integrated. Documentation conflicts retained every rollout, both decisions
+in order and current flow facts; runtime files did not conflict.
 
 - [#339 approval](https://github.com/wrlds-creations/jumpyard-check-in/issues/339#issuecomment-5540336687)
 - [#341 approval](https://github.com/wrlds-creations/jumpyard-check-in/issues/341#issuecomment-5540336997)
@@ -101,6 +103,10 @@ then #315's older test console lacked the newly used `warn` method. Adding that
 method to the test stub preserved every assertion; #315 and every remaining
 root step were rerun successfully in the implementation worktree. No runtime
 code changed after the full run began. `git diff --check` passed.
+
+The Repository job in PR CI `33874831832` subsequently passed the complete root
+suite in one run. The final documentation-only main integration triggers the
+required checks again before merge.
 
 Local tests use synthetic AWS/HTTP responses and create no real booking or
 payment. No guest incident frequency or real-provider latency was measured.
