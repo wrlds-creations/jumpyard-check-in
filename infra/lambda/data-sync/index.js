@@ -76,11 +76,43 @@ exports.handler = async (event = {}) => {
     });
 
     const token = await getRollerAccessToken(config);
+    let products = [];
+    if (!event.skipProducts) {
+      // Commit the daily catalog before unrelated source reads can fail or time out.
+      let phase = 'fetch';
+      try {
+        const productRecords = await requestProducts(config, token, '/products');
+        products = flattenProducts(productRecords, config.env, venueId);
+        productCache.sourceCount = products.length;
+        if (products.length > 0) {
+          phase = 'persist';
+          productCache.upserts = await persistProductCatalog(context, products, config.env, venueId);
+          productCache.committed = true;
+          productCache.status = 'committed';
+          console.info(
+            JSON.stringify({
+              correlationId,
+              event: 'product_cache_refresh_committed',
+              runId,
+              sourceCount: productCache.sourceCount,
+              upserts: productCache.upserts,
+            }),
+          );
+        } else {
+          productCache.status = 'empty';
+          console.warn(JSON.stringify({ correlationId, event: 'product_cache_refresh_empty', runId, status: 'empty' }));
+        }
+      } catch (error) {
+        productCache.status = 'failed';
+        console.warn(JSON.stringify({ correlationId, event: 'product_cache_refresh_failed', phase, runId, status: 'failed' }));
+        throw error;
+      }
+    }
+
     const bookingItemRecords = await fetchDataApiRecords(config, token, '/data/bookingitems', controls);
     const ticketRecords = await fetchDataApiRecords(config, token, '/data/tickets', controls);
     const paymentRecords = await fetchDataApiRecords(config, token, '/data/bookingpayments', controls);
     const customerRecords = await fetchDataApiRecords(config, token, '/data/customers', controls);
-    const productRecords = event.skipProducts ? [] : await requestProducts(config, token, '/products');
 
     const scopedBookingItemRecords = bookingItemRecords.records.filter((record) => {
       const bookingDate = dateOrNull(record.bookingDate);
@@ -99,26 +131,6 @@ exports.handler = async (event = {}) => {
       approvedCustomerIds,
       retentionCutoff,
     });
-    const products = event.skipProducts ? [] : flattenProducts(productRecords, config.env, venueId);
-    productCache.sourceCount = products.length;
-
-    if (!event.skipProducts && products.length > 0) {
-      productCache.upserts = await persistProductCatalog(context, products, config.env, venueId);
-      productCache.committed = true;
-      productCache.status = 'committed';
-      console.info(
-        JSON.stringify({
-          correlationId,
-          event: 'product_cache_refresh_committed',
-          runId,
-          sourceCount: productCache.sourceCount,
-          upserts: productCache.upserts,
-        }),
-      );
-    } else if (!event.skipProducts) {
-      productCache.status = 'empty';
-    }
-
     transactionId = await beginTransaction(context);
 
     const upserts = {

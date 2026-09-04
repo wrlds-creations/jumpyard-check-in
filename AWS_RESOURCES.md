@@ -4,6 +4,10 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issues #339/#341 Catalog Resilience (Implementation; Not Deployed)
+
+The approved combined change updates only existing Booking/DataSync Lambda source: persist the single daily product refresh before unrelated source reads, diagnose unavailable prices, and isolate a bounded public-catalog failure to catalog-gated offers. Existing 24-hour prices, request pacing, resources, schema, IAM, schedules, gates and Nacka scope remain unchanged. Read-only inspection on 2026-09-04 confirmed account `376129878018`, `eu-north-1`, active DataSync (600 s timeout; no product TTL override) and enabled daily `cron(0 2 * * ? *)`. No AWS mutation or promotion has occurred. [Scope and validation](docs/gh-339-gh-341-catalog-resilience.md).
+
 ### Issue #343 Phone Safety Video (Published; No AWS Resource Change)
 
 Reviewed [PR #378](https://github.com/wrlds-creations/jumpyard-check-in/pull/378) merged `5e163356cc7c30cd7b7d5b381db9472f42381172`. Immutable [release 33873617274](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33873617274), artifact `9937052826`, passed protected [Park 33874038259](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33874038259) then [public 33874318192](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33874318192), after review and delegated approval of each exact plan. This publishes phone video recovery and the smaller approved media.

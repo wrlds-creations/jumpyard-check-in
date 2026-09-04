@@ -1,5 +1,8 @@
 'use strict';
 
+// This optional eligibility check must not consume the whole availability request.
+const PUBLIC_CHECKOUT_CATALOG_TIMEOUT_MS = 2000;
+
 const LIVE_PUBLIC_CHECKOUT_CATALOG = Object.freeze({
   baseUrl: 'https://api.roller.app',
   cellId: 'e',
@@ -30,29 +33,43 @@ async function fetchPublicCheckoutCatalog(rollerEnv, fetchImpl = globalThis.fetc
 
   const catalog = LIVE_PUBLIC_CHECKOUT_CATALOG;
   const url = new URL(`/api/checkout/${catalog.checkoutSlug}/products`, catalog.baseUrl);
+  const abort = new AbortController();
+  let timeout;
+  const deadline = new Promise((resolve) => {
+    timeout = setTimeout(() => {
+      abort.abort();
+      resolve({ body: null, ok: false, skipped: false, status: 0, timedOut: true });
+    }, PUBLIC_CHECKOUT_CATALOG_TIMEOUT_MS);
+  });
 
   try {
-    const response = await fetchImpl(url, {
-      method: 'GET',
-      headers: {
-        accept: 'application/json',
-        origin: catalog.checkoutOrigin,
-        referer: `${catalog.checkoutOrigin}/`,
-        'x-api-key': catalog.venueSlug,
-        'x-cell-id': catalog.cellId,
-        'x-checkout-slug': catalog.checkoutSlug,
-        'x-origin-id': catalog.originId,
-      },
-    });
-    const text = await response.text();
-    const body = parseJsonOrNull(text);
+    return await Promise.race([
+      (async () => {
+        const response = await fetchImpl(url, {
+          method: 'GET',
+          signal: abort.signal,
+          headers: {
+            accept: 'application/json',
+            origin: catalog.checkoutOrigin,
+            referer: `${catalog.checkoutOrigin}/`,
+            'x-api-key': catalog.venueSlug,
+            'x-cell-id': catalog.cellId,
+            'x-checkout-slug': catalog.checkoutSlug,
+            'x-origin-id': catalog.originId,
+          },
+        });
+        const text = await response.text();
+        const body = parseJsonOrNull(text);
 
-    return {
-      body,
-      ok: response.ok && Array.isArray(body),
-      skipped: false,
-      status: response.status,
-    };
+        return {
+          body,
+          ok: response.ok && Array.isArray(body),
+          skipped: false,
+          status: response.status,
+        };
+      })(),
+      deadline,
+    ]);
   } catch {
     return {
       body: null,
@@ -60,6 +77,8 @@ async function fetchPublicCheckoutCatalog(rollerEnv, fetchImpl = globalThis.fetc
       skipped: false,
       status: 0,
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

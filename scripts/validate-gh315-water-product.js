@@ -33,7 +33,7 @@ function load() {
     }
   };`, {
     module, exports: module.exports, process: { env }, Buffer, URL, URLSearchParams, TextDecoder, TextEncoder,
-    console: { log() {}, error() {} }, setTimeout, clearTimeout, fetch: failNetwork,
+    console: { log() {}, error() {}, warn() {} }, setTimeout, clearTimeout, fetch: failNetwork,
     require(id) {
       if (id === 'crypto') return crypto;
       if (id.startsWith('@aws-sdk/')) return aws;
