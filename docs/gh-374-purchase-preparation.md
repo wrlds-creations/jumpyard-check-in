@@ -195,6 +195,14 @@ evidence is recorded in this file, `AWS_RESOURCES.md`, `REPO_CURRENT_STATE.md` a
 the linked GitHub issue. The separate #329 and existing normal-404 alarm draft
 remain outside this correction; no new follow-up draft was created.
 
+The dependent evidence PR #377 integrates #330's rollout documentation from
+PR #376. Its first CI run `33868746713` passed Phone, Infrastructure and Admin,
+but Repository rejected the 12,000-character current-state limit. Only the two
+new summary lines were shortened; this report retains the complete evidence,
+both AWS histories remain, and #330's acceptance document is unchanged from main.
+The existing history/archive validator then passed. No application change or
+additional publication was needed for this documentation correction.
+
 ### Handset acceptance
 
 After verified public promotion, open the public guest link afresh in Safari and
