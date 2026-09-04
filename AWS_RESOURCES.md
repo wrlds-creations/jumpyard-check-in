@@ -4,6 +4,10 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issues #339/#341 Catalog Resilience (Implementation; Not Deployed)
+
+The approved combined change updates only existing Booking/DataSync Lambda source: persist the single daily product refresh before unrelated source reads, diagnose unavailable prices, and isolate a bounded public-catalog failure to catalog-gated offers. Existing 24-hour prices, request pacing, resources, schema, IAM, schedules, gates and Nacka scope remain unchanged. Read-only inspection on 2026-09-04 confirmed account `376129878018`, `eu-north-1`, active DataSync (600 s timeout; no product TTL override) and enabled daily `cron(0 2 * * ? *)`. No AWS mutation or promotion has occurred. [Scope and validation](docs/gh-339-gh-341-catalog-resilience.md).
+
 ### Issue #330 Add-On Payment Back (Rollout Verified 2026-09-04; No AWS Resource Change)
 
 [PR #372](https://github.com/wrlds-creations/jumpyard-check-in/pull/372) merged `668a476d21173a14c7bd449784ab7ef53247f502`. Immutable [release 33862373255](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33862373255), artifact `9933035732`, passed protected [Park 33863602024](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33863602024) and [public 33863606635](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33863606635). Each exact artifact/target plan was reviewed before delegated approval under Love's instruction to finish #330; public approval followed successful Park verification.
