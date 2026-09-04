@@ -3,6 +3,7 @@ const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
+const { withBookingPackageContents } = require('./package-contents');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
@@ -88,7 +89,7 @@ exports.handler = async (event) => {
 
       return jsonResponse(200, correlationId, {
         status: 'found',
-        booking: scopedBooking,
+        booking: withBookingPackageContents(scopedBooking),
         eligibility,
         guestAccess,
         source: {
@@ -230,7 +231,7 @@ exports.handler = async (event) => {
 
     return jsonResponse(200, correlationId, {
       status: 'found',
-      booking: scopedBooking,
+      booking: withBookingPackageContents(scopedBooking),
       eligibility,
       guestAccess,
       source: {

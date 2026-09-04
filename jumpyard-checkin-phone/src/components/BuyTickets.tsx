@@ -1,4 +1,6 @@
 'use client';
+import { PackageContentRows } from '@/components/PackageContentRows';
+import { scalePackageContents } from '@/flow/packageContents';
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
@@ -764,6 +766,7 @@ export const BuyTickets = ({
   const familyProducts = visibleProductSections.family;
   const maxQuantity = getMaxBookingProductQuantity(selectedProduct);
   const jumperCount = getJumperCount(selectedProduct, quantity);
+  const selectedPackageContents = scalePackageContents(selectedProduct?.packageContents, quantity);
   const buyAddons = useMemo<BuyAddonEntry[]>(
     () => getBuyAddonEntriesForSlot(selectedSlot, t.addons),
     [selectedSlot, t.addons]
@@ -1763,6 +1766,7 @@ export const BuyTickets = ({
             <h2 className="text-2xl font-black italic text-foreground uppercase mb-2">
               {getQuantityTitle(selectedProduct, t.buy)}
             </h2>
+            <PackageContentRows contents={selectedPackageContents} />
             <p className="text-foreground text-sm font-normal italic uppercase mb-6 flex items-center justify-center gap-2">
               <JumpyardIcon name="time" className="w-6 h-6" /> {t.buy.startTimeLabel} {selectedProduct.startTime} {t.buy.todaySuffix}
             </p>
@@ -2081,13 +2085,14 @@ export const BuyTickets = ({
                 <div className="border-t border-border px-4 py-3">
                   {basketLines.map((line) => (
                     <div key={line.key} className="grid grid-cols-[minmax(0,1fr)_2.5rem_4.5rem] gap-2 py-1.5 text-sm">
-                      <span className="min-w-0 truncate font-bold italic uppercase text-foreground">
+                      <span className="min-w-0 break-words font-bold italic uppercase text-foreground">
                         {formatBasketLineLabel(line.label)}
                       </span>
                       <span className="text-center text-xs text-foreground">{line.qty} st</span>
                       <span className="text-right font-black italic text-primary">{formatMoney(line.total)}</span>
                     </div>
                   ))}
+                  <PackageContentRows contents={selectedPackageContents} />
                   {checkoutTotal !== null && checkoutAmount !== null && checkoutTotal !== checkoutAmount && (
                     <div className="mt-2 flex justify-between gap-3 border-t border-border pt-2 text-[11px] text-foreground">
                       <span>{t.buy.originalTotal}</span>
@@ -2165,13 +2170,14 @@ export const BuyTickets = ({
                     key={line.key}
                     className="grid grid-cols-[minmax(0,1fr)_2.5rem_4.5rem] gap-2 py-1.5 text-sm"
                   >
-                    <span className="min-w-0 truncate font-bold italic uppercase text-foreground">
+                    <span className="min-w-0 break-words font-bold italic uppercase text-foreground">
                       {formatBasketLineLabel(line.label)}
                     </span>
                     <span className="text-center text-xs text-foreground">{line.qty} st</span>
                     <span className="text-right font-black italic text-primary">{formatMoney(line.total)}</span>
                   </div>
                 ))}
+                <PackageContentRows contents={selectedPackageContents} />
               </div>
             </div>
 

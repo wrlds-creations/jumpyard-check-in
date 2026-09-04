@@ -51,6 +51,7 @@ function loadBooking(environment) {
     exports: module.exports,
     process: { env: { ...environment } },
     require(moduleId) {
+      if (moduleId === './package-contents') return require(path.join(ROOT, 'infra/lambda/booking/package-contents.js'));
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule();
       if (moduleId === './kiosk-terminal-contract') {

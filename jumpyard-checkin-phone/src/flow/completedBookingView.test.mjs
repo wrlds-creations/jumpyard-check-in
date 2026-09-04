@@ -39,6 +39,7 @@ const motion = { div: ({ children, ...props }) => {
 const icon = () => null;
 const { ConfirmationScreen } = load('components/ConfirmationScreen.tsx', {
   '@/context/LanguageContext': language,
+  '@/flow/packageContents': load('flow/packageContents.ts'),
   'framer-motion': { motion },
   '@/components/JumpyardIcon': { JumpyardIcon: icon },
   '@/components/QrCode': { QrCode: ({ value, testId }) => React.createElement('span', { 'data-testid': testId, 'data-qr-value': value }) },
