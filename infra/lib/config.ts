@@ -31,6 +31,7 @@ export const PARK_TEST_EMAIL_CONFIGURATION_SET_NAME = 'jumpyard-check-in-park-te
 export const PARK_TEST_EMAIL_FROM_ADDRESS = 'nackaforum@jumpyard.se';
 export const PARK_TEST_EMAIL_FROM_DISPLAY_NAME = 'JumpYard Nacka';
 export const PARK_TEST_EMAIL_IDENTITY_DOMAIN = 'jumpyard.se';
+export const PARK_TEST_ALARM_NOTIFICATION_EMAIL = 'aws-alarm@wrlds.com';
 export const PARK_TEST_LIVE_PAYMENT_SMOKE_APPROVAL = 'T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED';
 export const PARK_TEST_POST_PAYMENT_SYNC_APPROVAL = 'T0169_POST_PAYMENT_SYNC_APPROVED';
 export const PARK_TEST_LIVE_LOOKUP_SMOKE_APPROVAL = 'T0160_LIVE_LOOKUP_SMOKE_APPROVED';
@@ -71,6 +72,10 @@ export type StaffIdentityConfig =
     };
 
 export interface JumpYardCloudConfig {
+  readonly alarmNotifications: {
+    readonly emailAddresses: readonly string[];
+    readonly okNotifications: boolean;
+  };
   readonly api: {
     readonly allowedCorsOrigins: readonly string[];
     readonly throttlingBurstLimit: number;
@@ -160,6 +165,10 @@ export interface JumpYardCloudConfig {
 }
 
 interface RawConfig {
+  readonly alarmNotifications?: {
+    readonly emailAddresses?: unknown;
+    readonly okNotifications?: unknown;
+  };
   readonly api?: {
     readonly allowedCorsOrigins?: unknown;
     readonly throttlingBurstLimit?: unknown;
@@ -268,6 +277,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   }
 
   const raw = JSON.parse(fs.readFileSync(absoluteConfigPath, 'utf8')) as RawConfig;
+  const alarmNotifications = readAlarmNotificationsConfig(raw.alarmNotifications);
   const api = readApiConfig(raw.api);
   const tags = readRequiredTags(raw.tags);
   const awsAccount = readString(raw.awsAccount, 'awsAccount');
@@ -316,6 +326,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   }
 
   validateEnvironmentContract({
+    alarmNotifications,
     awsAccount,
     awsRegion,
     auroraServerless,
@@ -333,6 +344,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   });
 
   return {
+    alarmNotifications,
     api,
     awsAccount,
     awsRegion,
@@ -353,6 +365,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
 }
 
 interface EnvironmentContractInput {
+  readonly alarmNotifications: JumpYardCloudConfig['alarmNotifications'];
   readonly awsAccount: string;
   readonly awsRegion: string;
   readonly auroraServerless: JumpYardCloudConfig['auroraServerless'];
@@ -393,6 +406,9 @@ function validateEnvironmentContract(input: EnvironmentContractInput): void {
     }
     if (input.webhookProcessing.liveApproval.length > 0) {
       throw new Error('dev webhookProcessing.liveApproval must remain empty.');
+    }
+    if (input.alarmNotifications.emailAddresses.length > 0) {
+      throw new Error('dev alarmNotifications.emailAddresses must remain empty while Playground is hibernated.');
     }
     return;
   }
@@ -544,6 +560,16 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
 
   if (input.tags['WRLDS:DataClassification'] !== 'confidential') {
     throw new Error('park-test WRLDS:DataClassification must be confidential.');
+  }
+
+  if (
+    input.alarmNotifications.emailAddresses.length > 0 &&
+    (input.alarmNotifications.emailAddresses.length !== 1 ||
+      input.alarmNotifications.emailAddresses[0] !== PARK_TEST_ALARM_NOTIFICATION_EMAIL)
+  ) {
+    throw new Error(
+      `park-test alarmNotifications.emailAddresses must be exactly ${PARK_TEST_ALARM_NOTIFICATION_EMAIL} when supplied.`,
+    );
   }
 
   const controlledT30EmailApproved =
@@ -1116,6 +1142,31 @@ function readBookingTimeSmsConfig(raw: RawConfig['bookingTimeSms']): JumpYardClo
   }
 
   return config;
+}
+
+function readAlarmNotificationsConfig(
+  raw: RawConfig['alarmNotifications'],
+): JumpYardCloudConfig['alarmNotifications'] {
+  const emailAddresses = readOptionalStringArray(raw?.emailAddresses, 'alarmNotifications.emailAddresses').map(
+    (value) => value.toLowerCase(),
+  );
+  const okNotifications = readOptionalBoolean(raw?.okNotifications, true, 'alarmNotifications.okNotifications');
+
+  for (const address of emailAddresses) {
+    if (!isEmailLike(address)) {
+      throw new Error('alarmNotifications.emailAddresses must contain valid email addresses.');
+    }
+  }
+
+  if (new Set(emailAddresses).size !== emailAddresses.length) {
+    throw new Error('alarmNotifications.emailAddresses must not contain duplicate addresses.');
+  }
+
+  if (emailAddresses.length > 5) {
+    throw new Error('alarmNotifications.emailAddresses supports at most five recipients.');
+  }
+
+  return { emailAddresses, okNotifications };
 }
 
 function readGuestEmailConfig(raw: RawConfig['guestEmail']): JumpYardCloudConfig['guestEmail'] {

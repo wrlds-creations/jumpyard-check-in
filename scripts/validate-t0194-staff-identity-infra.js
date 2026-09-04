@@ -81,8 +81,8 @@ function iamPoliciesReference(template, logicalId) {
 function validateParkTest(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    202,
-    'T0194 remains intact inside T0197/T0200, issue #212, and the exact #216 scheduler boundary.',
+    205,
+    'T0194 remains intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, and the #335 alarm topic, subscription and sustained Roller alarm.',
   );
   assert.equal(entriesOfType(template, 'AWS::SES::ConfigurationSet').length, 1);
   assert.equal(entriesOfType(template, 'AWS::SES::ConfigurationSetEventDestination').length, 1);

@@ -307,6 +307,46 @@ npm.cmd run validate
 git diff --check
 ```
 
+## Park-Test Alarm Notifications (#335)
+
+The park backend routes its meaningful CloudWatch alarms to the SNS topic `jumpyard-check-in-park-test-alarms`, which emails the WRLDS forwarding alias `aws-alarm@wrlds.com`. Recipients change only through `infra/config` review; console-added subscriptions drift and disappear on the next protected deploy.
+
+### Recipient setup
+
+1. After the first protected deploy that creates the topic, AWS sends one `AWS Notification - Subscription Confirmation` email to the alias. The alias owner opens the link once; nothing is delivered before that.
+2. Verify with a read-only readback that the subscription is confirmed (no `PendingConfirmation`).
+3. Prove delivery once, only in a separately approved window, by forcing one routed alarm into `ALARM` and back with `set-alarm-state`. This changes alarm state only; it does not touch bookings, Roller or Aurora.
+
+```powershell
+aws sns list-subscriptions-by-topic --topic-arn arn:aws:sns:eu-north-1:376129878018:jumpyard-check-in-park-test-alarms --profile wrlds-dev --region eu-north-1
+aws cloudwatch describe-alarms --alarm-name-prefix jumpyard-check-in-park-test --query 'MetricAlarms[].[AlarmName,StateValue,length(AlarmActions)]' --output table --profile wrlds-dev --region eu-north-1
+aws cloudwatch describe-alarm-history --alarm-name jumpyard-check-in-park-test-api-5xx --history-item-type StateUpdate --max-items 20 --profile wrlds-dev --region eu-north-1
+```
+
+### What arrives and what to do
+
+Each email names the alarm, the metric value that crossed the threshold and the time. A second email arrives when the alarm returns to `OK`; a short blip therefore produces two emails and usually needs no action beyond a look at the dashboard. Nothing in an alarm email is guest data.
+
+| Alarm | Meaning | Safe first action |
+|---|---|---|
+| `api-5xx` | The public API answered a server error to a guest or staff device. | Read API access logs for route/status, then the matching Lambda log group. Repeated 5xx without Lambda errors points at integration timeouts. |
+| `api-high-4xx` | At least 25 rejected requests in five minutes: bad codes, an outdated app or auth trouble. | Check route distribution and the deployed app version before changing limits. |
+| `api-throttled-requests` | API Gateway started refusing requests. | Identify the source of the burst; do not raise limits during the incident. |
+| `*-lambda-errors` | One handler crashed. | Tail that handler's log group for the latest `ERROR` or timeout. |
+| `lookup/booking/redeem/session/webhook-lambda-throttles` | Real concurrency shortage. | Check traffic and reserved concurrency before anything else. |
+| `roller-api-errors-sustained` | Roller answered errors in three consecutive five-minute periods. | Verify Roller status and credentials; expect guest lookups and purchases to fail until it clears. Escalate to Roller when the park is open. |
+| `webhook-queue-stale`, `webhook-processing-failures`, `webhook-retry-exhausted`, `webhook-dlq-visible`, `roller-ops-dlq-visible` | Roller events or background jobs are not being reconciled. | Follow the webhook runbook; do not replay before understanding the failure. |
+| `booking-index-stale` | No successful nightly seed for five six-hour periods. | Check the data-sync run rows and the latest data-sync log before rerunning. |
+| `email-*` | Guest email bounced, was rejected or damaged the account reputation. | Guest sends are disabled; treat any firing as unexpected and stop sends. |
+
+Dashboard-only, never emailed: `webhook-processor-lambda-throttles` and `data-sync-lambda-throttles` (both workers deliberately run one at a time, so throttling is normal queueing) and the single-period `roller-api-errors` alarm (one rejected Roller request, such as an unknown booking code, is routine).
+
+### Acknowledgement and escalation
+
+- The recipient replies in the WRLDS thread or Project item with what was seen and the first action, so a second reader does not repeat it.
+- P0 per the severity guide: stop write testing, notify Love/WRLDS, and contact Roller or AWS when they are implicated.
+- Expected noise from `api-5xx` or `api-high-4xx` during a real park day is a reason to tune the alarm through a reviewed change, not to unsubscribe.
+
 ## Park-Test Release And Rollback
 
 Routine park-test changes are deployed from GitHub, not from an operator laptop:
