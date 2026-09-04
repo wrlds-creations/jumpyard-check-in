@@ -344,10 +344,12 @@ Each email names the alarm, the metric value that crossed the threshold and the 
 
 Dashboard-only, never emailed: `webhook-processor-lambda-throttles` and `data-sync-lambda-throttles` (both workers deliberately run one at a time, so throttling is normal queueing) and the single-period `roller-api-errors` alarm (one rejected Roller request, such as an unknown booking code, is routine).
 
+On 2026-09-04, the Outlook folder `Inkorg/Jumpyard Check-in Alarms` and an active rule were verified: sender `no-reply@sns.amazonaws.com` AND body contains `jumpyard-check-in-park-test` moves the message to that folder and requests a desktop notification. Four existing messages were moved there; no new message was sent for this mailbox organization.
+
 ### Acknowledgement and escalation
 
 - Love owns first response through `love@wrlds.com` and records the alarm/time, acknowledgement, observed impact and first action in the existing incident thread or Project item. Do not reply to the SNS sender.
-- This alias forwards to one person; it provides no second responder, automatic escalation, acknowledgement deadline or guaranteed out-of-hours coverage. A backup responder and response expectation must be agreed before describing the route as fully staffed operations coverage. Existing external monitoring remains unconfirmed.
+- Love confirmed on 2026-09-04 that he is the sole responder and no other external monitoring exists. This alias provides no second responder, automatic escalation, acknowledgement deadline or guaranteed out-of-hours coverage. A backup responder and response expectation must be agreed before describing the route as fully staffed operations coverage.
 - P0 per the severity guide: stop write testing, notify Love/WRLDS, and contact Roller or AWS when they are implicated.
 - Expected noise from `api-5xx` or `api-high-4xx` during a real park day is a reason to tune the alarm through a reviewed change, not to unsubscribe.
 
