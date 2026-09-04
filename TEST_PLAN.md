@@ -40,6 +40,8 @@ Use this file to define active validation for the current project or milestone. 
 
 ## Application Validation
 
+`npm run validate:gh330-addon-payment-back` verifies the add-on Back rule per payment state (allowed before submission and after a confirmed refusal, hidden while submitted, unresolved or approved, no Back on the safety video after a completed payment), the page-level hiding, the retired-checkout guard and add-on recovery replacement/late-result cases without any provider call. Back during a slow add-on payment and after approval on a handset remains a post-promotion check.
+
 `npm run validate:gh367-combo-contents` verifies exact Weekday Combo response projection, package scaling, separate admission/pizza rows in Swedish and English, guest resume, mixed/linked purchases, deferred staff fulfillment and unchanged provider item/ticket authority. Synthetic browser fixtures verify mobile layout; a published handset flow remains a post-promotion check.
 
 The deployed T0194 runtime baseline remains covered by its four focused validators, `npm run validate`, `npm run infra:check`, dependency/migration self-tests, admin TypeScript/lint/build checks, synth, reviewed deploy diffs, mobile evidence, repeated-login correction, automated queue-request stability/race checks, exact Pages readback, and complete live account lifecycle. Historical evidence is in [docs/history/validation-log.md](docs/history/validation-log.md) and [docs/t0194-staff-identity.md](docs/t0194-staff-identity.md). GitHub-native planning changes require separate live readback of the linked Project; the immutable mapping is in [docs/history/github-project-migration-2026-07-14.md](docs/history/github-project-migration-2026-07-14.md).

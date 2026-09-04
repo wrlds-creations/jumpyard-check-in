@@ -61,6 +61,7 @@ import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { ExitFlowDialog } from '@/components/ExitFlowDialog';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { getExitFlowMode, hasReachedSafety, isStartState } from '@/flow/exitFlowPolicy';
+import { getFlowBackAction, type AddonBackRule } from '@/flow/addonPaymentNavigation';
 import {
     getApprovedPurchaseIdentifier,
     getPaidConfirmationRetryDelay,
@@ -128,7 +129,10 @@ function getBackState(state: FlowState, ctx: FlowContext): FlowState | null {
         case 'APP_SKYRIDER_ATTEST': return 'APP_ADDONS';
         case 'APP_CONNECTED': return ctx.skyriderSelected && !ctx.skyriderHeightConfirmed ? 'APP_SKYRIDER_ATTEST' : 'APP_ADDONS';
         case 'APP_PAYMENT': return prePaymentBack(ctx);
-        case 'APP_SAFETY_VIDEO': return ctx.paymentTotal > 0 ? 'APP_PAYMENT' : prePaymentBack(ctx);
+        case 'APP_SAFETY_VIDEO':
+            // #330: a completed payment never offers a way back into the purchase screens.
+            if (ctx.paymentCompleted) return null;
+            return ctx.paymentTotal > 0 ? 'APP_PAYMENT' : prePaymentBack(ctx);
         case 'APP_SAFETY_ATTEST': return 'APP_SAFETY_VIDEO';
         default: return null;
     }
@@ -415,6 +419,7 @@ function CheckInFlow() {
     const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
     const [addonsStep, setAddonsStep] = useState<AddonsOfferStep>('SELECT');
     const [addonsBackRequest, setAddonsBackRequest] = useState(0);
+    const [addonsBackRule, setAddonsBackRule] = useState<AddonBackRule>('page');
     const [buyStep, setBuyStep] = useState<BuyTicketsStep>('TIMESLOT');
     const [exitDialogOpen, setExitDialogOpen] = useState(false);
     const [safetyExitLocked, setSafetyExitLocked] = useState(false);
@@ -1289,7 +1294,10 @@ function CheckInFlow() {
     }, [ctx.booking, ctx.checkinSession, state]);
 
     useEffect(() => {
-        if (state !== 'APP_ADDONS') setAddonsStep('SELECT');
+        if (state !== 'APP_ADDONS') {
+            setAddonsStep('SELECT');
+            setAddonsBackRule('page');
+        }
     }, [state]);
 
     useEffect(() => {
@@ -1346,7 +1354,8 @@ function CheckInFlow() {
     }, [state, recoveryGateReady]);
 
     const backState = getBackState(state, ctx);
-    const addonsHandlesBack = state === 'APP_ADDONS' && addonsStep !== 'SELECT' && addonsStep !== 'APPROVED';
+    // #330: the add-on offer decides whether Back is offered during its own payment.
+    const flowBackAction = getFlowBackAction({ state, backState, addonsBackRule });
     const matchingAddonsPrefetch = getMatchingAddonsPrefetch(ctx.booking);
     const showingBuyPaymentRecovery = state === 'KIOSK_CHOICE'
         && Boolean(buyRecoverySnapshot && buyRecoveryStatus?.startsWith('payment-')
@@ -1381,10 +1390,10 @@ function CheckInFlow() {
             />
 
             <div className={`w-full max-w-md min-w-0 px-4 h-8 items-center justify-between ${state === 'KIOSK_BUY' ? 'hidden' : 'flex'} ${hasProgressBar(progressState) ? '' : 'pr-10'}`}>
-                {(backState || addonsHandlesBack) && (
+                {flowBackAction && (
                     <button
                         onClick={() => {
-                            if (addonsHandlesBack) {
+                            if (flowBackAction === 'addons') {
                                 setAddonsBackRequest((request) => request + 1);
                                 scrollToTop();
                                 return;
@@ -1574,6 +1583,7 @@ function CheckInFlow() {
                             existingAddons={ctx.existingAddons}
                             prefetchedAvailability={matchingAddonsPrefetch}
                             onStepChange={setAddonsStep}
+                            onBackRuleChange={setAddonsBackRule}
                             onPaymentApproved={preparePaidAddonsForSafety}
                             onContinue={(result) => advance(getAddonsFlowPatch(result))}
                             onPendingDone={() => {
