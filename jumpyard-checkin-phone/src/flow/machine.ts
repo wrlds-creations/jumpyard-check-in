@@ -46,13 +46,10 @@ export function initialState(channel: Channel): FlowState {
 // Branching from KIOSK_CHOICE is event-driven (guest picks BOOKING vs BUY).
 export type Branch = 'booking' | 'buy' | null;
 
-// Gate after addons/skyrider/connected: pick the next step.
-// New ordering: addons group → [payment if needed] → safety (video + attest) → confirm.
-// Safety moved to the end per Jumpyard midcheck decision (2026-04-16): payment feels
-// "final" for guests, so the QR code should be gated behind safety acknowledgement
-// as the last step, like check-in on an airline ticket.
+// Real payment is owned by BuyTickets/AddonsOffer and clears paymentTotal before
+// continuing. An unhandled balance stays with that flow, never the old mock view.
 function afterAddonsGroupGate(ctx: FlowContext): FlowState {
-  return ctx.paymentTotal > 0 ? 'APP_PAYMENT' : 'APP_SAFETY_VIDEO';
+  return ctx.paymentTotal > 0 ? 'APP_ADDONS' : 'APP_SAFETY_VIDEO';
 }
 
 function afterSkyriderGate(ctx: FlowContext): FlowState {
@@ -99,7 +96,8 @@ export function nextState(
       return afterAddonsGroupGate(ctx);
 
     case 'APP_PAYMENT':
-      return 'APP_SAFETY_VIDEO';
+      // Retained as a progress identifier, not a standalone payment operation.
+      return 'APP_ADDONS';
 
     case 'APP_SAFETY_VIDEO':
       return 'APP_SAFETY_ATTEST';

@@ -126,7 +126,7 @@ test('after a completed payment the safety video offers no way back into the pur
     paymentTotal: 0, paymentCompleted: false, ...patch,
   });
   assert.equal(getBackState('APP_SAFETY_VIDEO', ctx()), 'APP_ADDONS', 'an existing booking without a purchase may still return to the offer');
-  assert.equal(getBackState('APP_SAFETY_VIDEO', ctx({ paymentTotal: 250 })), 'APP_PAYMENT', 'an unpaid legacy payment step keeps its return');
+  assert.equal(getBackState('APP_SAFETY_VIDEO', ctx({ paymentTotal: 250 })), 'APP_ADDONS', 'an unpaid legacy step returns to real add-on payment, never the mock view');
   assert.equal(getBackState('APP_SAFETY_VIDEO', ctx({ paymentCompleted: true })), null, 'paid add-ons: no Back');
   assert.equal(getBackState('APP_SAFETY_VIDEO', ctx({ paymentCompleted: true, paymentTotal: 250 })), null, 'paid entry: no Back');
   assert.equal(getBackState('APP_SAFETY_VIDEO', ctx({ paymentCompleted: true, connectedSelected: true })), null);

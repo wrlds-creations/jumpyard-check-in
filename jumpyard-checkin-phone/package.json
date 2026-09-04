@@ -15,7 +15,9 @@
     "test:paid-confirmation": "node --no-warnings --experimental-strip-types --test src/flow/paidBookingConfirmation.test.mjs",
     "test:language-toggle": "node --no-warnings --test src/flow/languageToggle.test.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:production-mock-boundary": "node --no-warnings --experimental-strip-types --test src/flow/productionMockBoundary.test.mjs",
+    "postbuild": "node scripts/verify-production-mock-boundary.mjs"
   },
   "dependencies": {
     "@roller/ecom-payments": "file:vendor/ecom-payments",
