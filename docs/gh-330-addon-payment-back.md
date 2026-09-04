@@ -100,3 +100,94 @@ arrow may exist after a completed payment, for a regular booking as well, and ap
 it inside #330. A resumed session that reaches the safety step without a payment in this flow
 keeps its existing Back to the offer; the exit action was already hidden there by the server
 safety state.
+
+## Protected rollout — 2026-09-04
+
+Love asked Codex to finish the interrupted #330 release after the implementation agent merged
+[PR #372](https://github.com/wrlds-creations/jumpyard-check-in/pull/372). The selected source is
+`668a476d21173a14c7bd449784ab7ef53247f502`. No implementation change was needed during takeover.
+Documentation branch `codex/gh-330-rollout-evidence` was reconciled with `main` at `4ed47e5`
+before committing. This report describes the dated #330 rollout; #374 owns its later promotion.
+
+[CI 33859902705](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33859902705)
+passed Repository, Infrastructure, Phone and Admin. Repository dependency installation took
+19 minutes 38 seconds; its validation took 72 seconds. The successful immutable
+[release 33862373255](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33862373255)
+built the selected source once. No deployment or rollback rebuild was used.
+
+| Release evidence | Verified value |
+|---|---|
+| Artifact | `9933035732`, `park-test-release-668a476d21173a14c7bd449784ab7ef53247f502` |
+| Artifact ZIP SHA256 | `4d7f911de3d16e82c464c3310e47e3f3642c3e07cb8038b324ad7dabdf9b1764` |
+| Manifest SHA256 | `7b77bd10f6cfd0d31e9c3c7d7a438c1ef43df795d30d0d812a031342e615ccc9` |
+| Validated files | 545 |
+| Canonical current/release template SHA256 | `1886c2000490398221f1147d4f9366ef03c3ee4495b683aae56ece8cf7847cf3` |
+| CDK assembly SHA256 | `36d3b0cae830b09a67fdf78cb485bed1e355b8e1b4a92e414ffcea4d65d7ddf2` |
+| Phone tree SHA256 | `d2acf867c2a9b6b5d087a3ef9f9e07851e34285f7cdc615c3e374e4c44bd4bd5` |
+| Admin tree SHA256 | `5cc873a875e670a66ce6dbbc54322d63b789e38b42d1a9305880ea6343dc5fbb` |
+
+Independent preflight byte-matched all four live root HTML responses and their 44 referenced
+JS/CSS responses to the previously deployed `4d3e68d58ed69d48f7164a95e3977cc4af44857d`
+artifact. The selected source adds only #330 and #367 rollout documentation to that baseline.
+Its CDK assembly, migration runtime and deployment config are identical to the baseline.
+
+The protected [Park plan 33863602024](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33863602024)
+validated the exact artifact and AWS account `376129878018`, region `eu-north-1`, and stack
+`jumpyard-check-in-park-test-stack`. It compared 202 current and selected resources, with no
+added, changed or removed resource or template section. Migration apply was explicitly false.
+The plan was reviewed before delegated approval under Love's takeover instruction. Existing
+WRLDS metadata, Nacka venue `50871`, dates through `2026-09-30`, and runtime gates remain intact.
+
+Park run `33863602024` passed every step. CDK reported `no changes`; migrations `0001` through
+`0020` were already applied before and after, with no migration apply. Successful stack status,
+exact template equality, `IN_SYNC` drift, zero active alarms, empty queues, exact-SHA Pages
+metadata, HTTP/API-target and Apple association checks all passed. Park phone deployment is
+`49cf5678`; Park admin deployment is `81a1adc6`. An independent byte comparison matched both
+Park root HTML responses and all 22 root-referenced JS/CSS responses to the selected artifact.
+
+The [public plan 33863606635](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33863606635)
+validated the same artifact and the fixed phone/admin targets for `https://checkin.jumpyard.se`
+and `https://staff-checkin.jumpyard.se`. Delegated public approval followed successful Park
+verification and independent artifact readback; the public workflow performs no AWS mutation.
+
+Public run `33863606635` completed successfully at `10:51:35Z`. Phone deployment `d8069039`
+and admin deployment `ea8ffa4e` carry the selected full SHA. Git-disconnected project/domain
+checks, allowed and rejected CORS origins, Cognito callbacks, exact-SHA deployment metadata,
+public HTTP/API configuration and the Apple association checksum all passed.
+
+At `2026-09-04T10:51:50.175Z`, final independent readback byte-matched all four Park/public
+root HTML responses and all 44 referenced JS/CSS responses to the selected artifact. The two
+phone roots share SHA256 `36ef6e8bbbd5c0dbfdabda21d42346a7a759a3cfd8195bdd1945ae18a04736e2`;
+the two staff roots share `77c85d5abbff2f622f585a13004b49a85bbba12818a85af44c5fea55a900d83a`.
+Local artifact and readback reports are under `%TEMP%/jumpyard-gh330-evidence-20260904/`;
+the linked workflow plans, logs and artifact hashes provide durable release provenance.
+
+Initial evidence-document validation passed `node scripts/validate-current-ticket.js`,
+`node scripts/validate-aws-tags.js`, `node scripts/validate-template.js`,
+`node scripts/validate-followups.js` and `git diff --check`. The history-archive validator reported
+only the pre-existing Windows CRLF size failure for the then-unchanged `PROJECT_CONTEXT.md`
+(12,074 characters locally, 11,967 with LF). Its existing Project draft owns that correction;
+the selected source already passed the complete Linux CI/release checks. No application code
+was changed or rebuilt while writing this evidence.
+
+Before committing on the reconciled `4ed47e5` base, the same four documentation validators,
+`node scripts/validate-history-archives.js` and `git diff --check` all passed. The mainline
+`PROJECT_CONTEXT.md` now checks out within the size limit; no validator was changed.
+
+For the #330 rollout, the retained rollback candidate was the actually deployed previous
+[release 33847988150](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33847988150),
+SHA `4d3e68d58ed69d48f7164a95e3977cc4af44857d`, artifact `9927575535`, ZIP SHA256
+`bc0e5101cd367b24300aa6b42db580c12ee172abb5b3a81d7b2f14d5a668fd7d`.
+It passed Park `33850212562` and public `33849552330` and was unexpired through
+`2026-12-03T07:16:37Z`. Rollback of that rollout would select the same artifact through both
+protected workflows, restoring the previous Back behavior without reversing payment or guest state.
+
+No live booking, payment, redemption, guest message, provider setting, rollback or re-promotion
+was performed during this takeover. No new follow-up Project draft was needed; #337 and the
+existing Windows line-ending validation draft retain the previously documented limitations.
+Love explicitly accepted closure on 2026-09-04: "snyggt! Vi kan stänga den!" after receiving
+the behavior explanation and handset checklist. No itemized handset outcomes or additional
+live-payment evidence were supplied. The dated rollout evidence and that acceptance are
+recorded in the [GitHub closeout comment](https://github.com/wrlds-creations/jumpyard-check-in/issues/330#issuecomment-5539582893).
+Love subsequently authorized committing this documentation. Passing automated checks and
+deployed-file equality do not stand in for a real slow/refused/approved payment flow on a handset.
