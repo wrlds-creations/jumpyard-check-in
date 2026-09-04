@@ -218,6 +218,13 @@ validated locally and its template matched the pre-deploy stack. Rollback would
 promote that same artifact through the protected workflows. No rollback or
 re-promotion was needed.
 
+During documentation closeout, the separately owned #335 [Park run 33876824492](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33876824492)
+successfully promoted `1783cd468caa0198755841641fc3a55962bdeda0`, which descends
+from this catalog release. Its 205-resource plan leaves the Booking/DataSync
+functions unchanged. The snapshot therefore records that newer Park version and
+the still-current public `0e04fb4` version separately. #335 owns alarm delivery
+acceptance and its rollout evidence; this closeout does not claim those tests.
+
 Love explicitly requested available testing followed by closure. #339 preserves
 #294's independent commit, detects unavailable prices/failed refreshes and keeps
 expired prices out of offers. #341 safely omits unverified Combo eligibility
