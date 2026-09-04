@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #347 Phone Production Mock Boundary (Published; No AWS Resource Change)
+
+Reviewed [PR #385](https://github.com/wrlds-creations/jumpyard-check-in/pull/385) merged `32fcb57f0c3a9aa88b331dc7ebf9403b5c0e0eef`. Immutable [release 33880879052](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33880879052), artifact `9939991649`, passed protected [Park 33881473361](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33881473361) then [public 33881809105](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33881809105) after each actual plan was reviewed and approved under Love's publication instruction. This isolates phone simulations to development; #337/#342 recovery changes are excluded.
+
+The identical-template plan retained 205 resources with zero changes; CDK reported `no changes`. Template hash: `45be018ca5b478d3b1e1962135df2370356044dce4a66d52e9f885af902c6abe`. Migrations remain applied through `0020`, with apply disabled. Exact template, successful stack state, `IN_SYNC` drift, zero active alarms, empty queues, exact-SHA Pages, domains/CORS/Cognito and Apple association checks passed. Independent readback matched 70 responses across Park/public; 12 hosted browser cases passed. Account `376129878018`, `eu-north-1`, WRLDS metadata, backend, schema, IAM, runtime gates and #335 alarm routing remain unchanged.
+
+Prior Park release `33876169856` / `1783cd4`, artifact `9938138226`, is the verified unexpired rollback candidate preserving alarm routing. No rollback, re-promotion, real transaction or guest message occurred. Physical handset/Wi-Fi testing is not claimed. [Artifact, approval, browser and rollback evidence](docs/gh347-production-mock-boundary.md#protected-rollout--2026-09-04).
+
 ### Issues #339/#341 Catalog Resilience (Published 2026-09-04)
 
 Reviewed [PR #380](https://github.com/wrlds-creations/jumpyard-check-in/pull/380) merged `0e04fb4f3a86d11366687e4aa7b4cd232d1fc4ce`, retaining #343 and #374. Immutable [release 33875422657](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33875422657), artifact `9937812376`, passed protected [Park 33875994276](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33875994276) then [public 33876020299](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33876020299). Each exact plan was reviewed before delegated approval under Love's explicit publication instruction; public approval followed successful Park checks and independent artifact readback.
