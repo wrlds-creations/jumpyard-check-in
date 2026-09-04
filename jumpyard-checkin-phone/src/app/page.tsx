@@ -15,7 +15,6 @@ import {
 } from '@/components/AddonsOffer';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { ConnectedProfiles } from '@/components/ConnectedProfiles';
-import { PaymentView } from '@/components/PaymentView';
 import { ConfirmationScreen } from '@/components/ConfirmationScreen';
 import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import { detectChannel, initialContext, initialState, nextState } from '@/flow/machine';
@@ -133,7 +132,7 @@ function getBackState(state: FlowState, ctx: FlowContext): FlowState | null {
         case 'APP_SAFETY_VIDEO':
             // #330: a completed payment never offers a way back into the purchase screens.
             if (ctx.paymentCompleted) return null;
-            return ctx.paymentTotal > 0 ? 'APP_PAYMENT' : prePaymentBack(ctx);
+            return prePaymentBack(ctx);
         case 'APP_SAFETY_ATTEST': return 'APP_SAFETY_VIDEO';
         default: return null;
     }
@@ -1647,22 +1646,6 @@ function CheckInFlow() {
                             key="connected"
                             count={ctx.selectedAddons.find(a => a.id === 'connected')?.qty ?? 1}
                             onContinue={(profiles: ConnectedProfile[]) => advance({ connectedProfiles: profiles })}
-                        />
-                    )}
-
-                    {state === 'APP_PAYMENT' && ctx.booking && (
-                        <PaymentView
-                            key="payment"
-                            bookingId={ctx.booking.id}
-                            total={ctx.paymentTotal}
-                            items={ctx.selectedAddons}
-                            baseProduct={ctx.baseTotal > 0 ? {
-                                label: ctx.baseProductLabel!,
-                                quantity: ctx.baseQuantity,
-                                unitPrice: ctx.baseUnitPrice,
-                                total: ctx.baseTotal,
-                            } : null}
-                            onPaid={() => advance({ paymentCompleted: true })}
                         />
                     )}
 

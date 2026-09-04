@@ -74,7 +74,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Phone purchases use server-owned Roller paths and Live availability. Weekday Combo `1242135`/`1242136` requires public eligibility; catalog failure omits Combo (#341). Daily price refresh precedes booking reads (#339); 24-hour expiry stays. D0207: 2x60-min bands + 1 later pizza; no socks/drinks.
 - Live water: `970411`/`970363` (D0195).
 - D0196/D0197: compact add-ons use plus/minus, native scroll and Continue validation. D0205/#350: tiny top-right SV/EN control; both languages only on start screens.
-- New PWA bookings use `sendConfirmations=true`; phone recovery follows D0201/D0203/D0206. D0209: prepare before receipt.
+- New PWA bookings use `sendConfirmations=true`; phone recovery follows D0201/D0203/D0206. D0209: prepare before receipt. Mocks: dev only.
 
 ## Data And Integration Facts
 

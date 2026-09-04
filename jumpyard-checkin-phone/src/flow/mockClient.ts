@@ -1,9 +1,14 @@
 import type { Addon, Booking, ConnectedProfile } from './types';
 
-// Mock stubs for JY Cloud internal API.
-// TODO: Replace with real endpoints when JumpYard Cloud is available.
+// Local preview stubs only. Guest flows use cloudClient and RollerPaymentDropIn.
+// Keep this runtime boundary even when a caller accidentally imports a mock.
 
-const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+const delay = (ms: number) => {
+  if (process.env.NODE_ENV !== 'development') {
+    throw new Error('Mock operations are only available in local development.');
+  }
+  return new Promise<void>(resolve => setTimeout(resolve, ms));
+};
 
 // TODO: POST /api/cloud/booking/lookup { token }
 export async function validateToken(token: string): Promise<Booking> {
