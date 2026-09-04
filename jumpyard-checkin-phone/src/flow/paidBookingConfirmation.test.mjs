@@ -106,14 +106,15 @@ test('the same purchase identity is reused for every confirmation check', () => 
 test('phone approval no longer accepts the first lookup regardless of paid state', () => {
   assert.doesNotMatch(buySource, /resolvedBooking = await lookupBooking\(identifier\);\s*break;/);
   assert.match(buySource, /resolvePaidConfirmation\(lookupBooking, identifier, \{ wait \}\)/);
+  assert.match(buySource, /resolvePurchasePreparation\(lookupBooking, identifier, \{ signal: preparation\.signal, isCurrent \}\)/);
   assert.match(buySource, /confirmation\.status === 'unavailable'/);
-  assert.match(buySource, /onBookingReady\(confirmation\.booking\)/);
+  assert.match(buySource, /onBookingReady\(confirmation\.booking, \{ signal: preparation\.signal, isCurrent \}\)/);
   assert.match(buySource, /setStep\('APPROVED'\);[\s\S]*resolvePaidDraftBooking\(undefined, true\)/);
 });
 
 test('an approved purchase continues into safety while ROLLER confirms; only unapproved bookings see the summary', () => {
   assert.match(pageSource, /if \(!booking\.paid\) \{\s*if \(paymentApproved\) return continueIntoSafetyAwaitingConfirmation\(\);/);
-  assert.match(pageSource, /preparePaidNewBooking\(booking, null, \{ paymentApproved: true \}\)/);
+  assert.match(pageSource, /preparePaidNewBooking\(booking, null, \{ \.\.\.preparation, paymentApproved: true \}\)/);
   assert.match(pageSource, /snapshot\.draftState\?\.paymentApproved === true/);
   assert.match(pageSource, /if \(paymentApproved\) return continueIntoSafetyAwaitingConfirmation\(\);\s*setSessionStartError/);
 });
