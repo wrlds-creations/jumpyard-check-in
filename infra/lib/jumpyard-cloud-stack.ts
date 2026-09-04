@@ -1,6 +1,7 @@
 import { Stack, StackProps, Tags, CfnOutput, CustomResource, Duration, RemovalPolicy, ArnFormat } from 'aws-cdk-lib';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as cr from 'aws-cdk-lib/custom-resources';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -14,6 +15,8 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ses from 'aws-cdk-lib/aws-ses';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
@@ -1150,14 +1153,29 @@ exports.handler = async (event) => {
 
   private addOperationalObservability(config: JumpYardCloudConfig, resources: ObservabilityResources): void {
     const period = Duration.minutes(5);
-    const lambdaHandlers = [
+    // #335: alarms that signal a real operational problem notify the configured recipients.
+    // Alarms that also fire during normal operation stay dashboard-only so the channel is trusted.
+    const alarmNotificationAction = this.createAlarmNotificationRouting(config);
+    const routeAlarm = (alarm: cloudwatch.Alarm): cloudwatch.Alarm => {
+      if (!alarmNotificationAction) return alarm;
+      alarm.addAlarmAction(alarmNotificationAction);
+      if (config.alarmNotifications.okNotifications) alarm.addOkAction(alarmNotificationAction);
+      return alarm;
+    };
+    const lambdaHandlers: ReadonlyArray<{
+      readonly id: string;
+      readonly name: string;
+      readonly fn: lambda.Function;
+      // Reserved concurrency of one makes throttling part of normal serialized operation.
+      readonly expectedThrottles?: boolean;
+    }> = [
       { id: 'Lookup', name: 'lookup', fn: resources.lookupHandler },
       { id: 'Booking', name: 'booking', fn: resources.bookingHandler },
       { id: 'Redeem', name: 'redeem', fn: resources.redeemHandler },
       { id: 'Session', name: 'session', fn: resources.sessionHandler },
       { id: 'Webhook', name: 'webhook', fn: resources.webhookHandler },
-      { id: 'WebhookProcessor', name: 'webhook-processor', fn: resources.webhookProcessorHandler },
-      { id: 'DataSync', name: 'data-sync', fn: resources.dataSyncHandler },
+      { id: 'WebhookProcessor', name: 'webhook-processor', fn: resources.webhookProcessorHandler, expectedThrottles: true },
+      { id: 'DataSync', name: 'data-sync', fn: resources.dataSyncHandler, expectedThrottles: true },
     ];
 
     const apiMetric = (metricName: string, statistic: string) =>
@@ -1376,36 +1394,43 @@ exports.handler = async (event) => {
       );
     }
 
-    new cloudwatch.Alarm(this, 'Api5xxAlarm', {
-      alarmName: `${config.resourcePrefix}-api-5xx`,
-      metric: apiMetric('5xx', 'Sum'),
-      threshold: 1,
-      evaluationPeriods: 1,
-      datapointsToAlarm: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    routeAlarm(
+      new cloudwatch.Alarm(this, 'Api5xxAlarm', {
+        alarmName: `${config.resourcePrefix}-api-5xx`,
+        metric: apiMetric('5xx', 'Sum'),
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+    );
 
-    new cloudwatch.Alarm(this, 'ApiHigh4xxAlarm', {
-      alarmName: `${config.resourcePrefix}-api-high-4xx`,
-      metric: apiMetric('4xx', 'Sum'),
-      threshold: 25,
-      evaluationPeriods: 1,
-      datapointsToAlarm: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    routeAlarm(
+      new cloudwatch.Alarm(this, 'ApiHigh4xxAlarm', {
+        alarmName: `${config.resourcePrefix}-api-high-4xx`,
+        metric: apiMetric('4xx', 'Sum'),
+        threshold: 25,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+    );
 
-    new cloudwatch.Alarm(this, 'ApiThrottledRequestsAlarm', {
-      alarmName: `${config.resourcePrefix}-api-throttled-requests`,
-      metric: throttledRequestMetric,
-      threshold: 1,
-      evaluationPeriods: 1,
-      datapointsToAlarm: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    routeAlarm(
+      new cloudwatch.Alarm(this, 'ApiThrottledRequestsAlarm', {
+        alarmName: `${config.resourcePrefix}-api-throttled-requests`,
+        metric: throttledRequestMetric,
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+    );
 
+    // Dashboard-only: single rejected Roller requests such as an unknown booking code are normal.
     new cloudwatch.Alarm(this, 'RollerApiErrorsAlarm', {
       alarmName: `${config.resourcePrefix}-roller-api-errors`,
       metric: rollerApiErrors,
@@ -1416,124 +1441,166 @@ exports.handler = async (event) => {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
+    if (alarmNotificationAction) {
+      routeAlarm(
+        new cloudwatch.Alarm(this, 'RollerApiErrorsSustainedAlarm', {
+          alarmName: `${config.resourcePrefix}-roller-api-errors-sustained`,
+          alarmDescription:
+            'Roller API calls failed in three consecutive five-minute periods, which indicates a sustained provider, credential or connectivity problem rather than an isolated rejected request.',
+          // The error-only metric omits successful/quiet periods. Fill those slots so
+          // CloudWatch cannot substitute older errors across gaps in its evaluation range.
+          metric: new cloudwatch.MathExpression({
+            expression: 'FILL(errors,0)',
+            usingMetrics: { errors: rollerApiErrors },
+            period,
+          }),
+          threshold: 1,
+          evaluationPeriods: 3,
+          datapointsToAlarm: 3,
+          comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        }),
+      );
+    }
+
     if (config.guestEmail.configurationSetName) {
       for (const event of ['Bounce', 'Complaint', 'Reject', 'RenderingFailure'] as const) {
-        new cloudwatch.Alarm(this, `GuestEmail${event}Alarm`, {
-          alarmName: `${config.resourcePrefix}-email-${event.toLowerCase()}`,
-          alarmDescription: `The park-test SES configuration set reported a ${event} event.`,
-          metric: guestEmailMetric(event),
+        routeAlarm(
+          new cloudwatch.Alarm(this, `GuestEmail${event}Alarm`, {
+            alarmName: `${config.resourcePrefix}-email-${event.toLowerCase()}`,
+            alarmDescription: `The park-test SES configuration set reported a ${event} event.`,
+            metric: guestEmailMetric(event),
+            threshold: 1,
+            evaluationPeriods: 1,
+            datapointsToAlarm: 1,
+            comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+          }),
+        );
+      }
+
+      routeAlarm(
+        new cloudwatch.Alarm(this, 'SesAccountBounceRateAlarm', {
+          alarmName: `${config.resourcePrefix}-email-account-bounce-rate`,
+          alarmDescription: 'SES account bounce rate reached the proactive two-percent warning threshold.',
+          metric: sesAccountBounceRate,
+          threshold: 0.02,
+          evaluationPeriods: 1,
+          datapointsToAlarm: 1,
+          comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        }),
+      );
+
+      routeAlarm(
+        new cloudwatch.Alarm(this, 'SesAccountComplaintRateAlarm', {
+          alarmName: `${config.resourcePrefix}-email-account-complaint-rate`,
+          alarmDescription: 'SES account complaint rate reached the proactive 0.05-percent warning threshold.',
+          metric: sesAccountComplaintRate,
+          threshold: 0.0005,
+          evaluationPeriods: 1,
+          datapointsToAlarm: 1,
+          comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        }),
+      );
+    }
+
+    routeAlarm(
+      new cloudwatch.Alarm(this, 'RollerOpsDlqVisibleAlarm', {
+        alarmName: `${config.resourcePrefix}-roller-ops-dlq-visible`,
+        metric: resources.deadLetterQueue.metricApproximateNumberOfMessagesVisible({ statistic: 'Maximum', period }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+    );
+
+    routeAlarm(
+      new cloudwatch.Alarm(this, 'WebhookDlqVisibleAlarm', {
+        alarmName: `${config.resourcePrefix}-webhook-dlq-visible`,
+        metric: resources.webhookDeadLetterQueue.metricApproximateNumberOfMessagesVisible({
+          statistic: 'Maximum',
+          period,
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+    );
+
+    routeAlarm(
+      new cloudwatch.Alarm(this, 'WebhookQueueAgeAlarm', {
+        alarmName: `${config.resourcePrefix}-webhook-queue-stale`,
+        alarmDescription: 'A durable Roller webhook signal has waited more than five minutes for reconciliation.',
+        metric: resources.webhookQueue.metricApproximateAgeOfOldestMessage({ statistic: 'Maximum', period }),
+        threshold: 300,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+    );
+
+    routeAlarm(
+      new cloudwatch.Alarm(this, 'WebhookProcessingFailureAlarm', {
+        alarmName: `${config.resourcePrefix}-webhook-processing-failures`,
+        alarmDescription: 'The Roller webhook worker failed an authoritative reconciliation attempt.',
+        metric: webhookProcessingFailures,
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+    );
+
+    routeAlarm(
+      new cloudwatch.Alarm(this, 'WebhookRetryExhaustedAlarm', {
+        alarmName: `${config.resourcePrefix}-webhook-retry-exhausted`,
+        alarmDescription: 'A Roller webhook event reached the automatic reconciliation attempt limit.',
+        metric: webhookRetryExhausted,
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+    );
+
+    if (config.dataSync.scheduleEnabled) {
+      routeAlarm(
+        new cloudwatch.Alarm(this, 'BookingIndexFreshnessAlarm', {
+          alarmName: `${config.resourcePrefix}-booking-index-stale`,
+          alarmDescription: 'No successful booking-index seed has been observed for five consecutive six-hour periods.',
+          metric: bookingIndexSyncSuccess,
+          threshold: 1,
+          evaluationPeriods: 5,
+          datapointsToAlarm: 5,
+          comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+        }),
+      );
+    }
+
+    for (const handler of lambdaHandlers) {
+      routeAlarm(
+        new cloudwatch.Alarm(this, `${handler.id}ErrorsAlarm`, {
+          alarmName: `${config.resourcePrefix}-${handler.name}-lambda-errors`,
+          metric: handler.fn.metricErrors({ statistic: 'Sum', period }),
           threshold: 1,
           evaluationPeriods: 1,
           datapointsToAlarm: 1,
           comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
           treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-        });
-      }
+        }),
+      );
 
-      new cloudwatch.Alarm(this, 'SesAccountBounceRateAlarm', {
-        alarmName: `${config.resourcePrefix}-email-account-bounce-rate`,
-        alarmDescription: 'SES account bounce rate reached the proactive two-percent warning threshold.',
-        metric: sesAccountBounceRate,
-        threshold: 0.02,
-        evaluationPeriods: 1,
-        datapointsToAlarm: 1,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
-
-      new cloudwatch.Alarm(this, 'SesAccountComplaintRateAlarm', {
-        alarmName: `${config.resourcePrefix}-email-account-complaint-rate`,
-        alarmDescription: 'SES account complaint rate reached the proactive 0.05-percent warning threshold.',
-        metric: sesAccountComplaintRate,
-        threshold: 0.0005,
-        evaluationPeriods: 1,
-        datapointsToAlarm: 1,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
-    }
-
-    new cloudwatch.Alarm(this, 'RollerOpsDlqVisibleAlarm', {
-      alarmName: `${config.resourcePrefix}-roller-ops-dlq-visible`,
-      metric: resources.deadLetterQueue.metricApproximateNumberOfMessagesVisible({ statistic: 'Maximum', period }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      datapointsToAlarm: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-
-    new cloudwatch.Alarm(this, 'WebhookDlqVisibleAlarm', {
-      alarmName: `${config.resourcePrefix}-webhook-dlq-visible`,
-      metric: resources.webhookDeadLetterQueue.metricApproximateNumberOfMessagesVisible({
-        statistic: 'Maximum',
-        period,
-      }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      datapointsToAlarm: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-
-    new cloudwatch.Alarm(this, 'WebhookQueueAgeAlarm', {
-      alarmName: `${config.resourcePrefix}-webhook-queue-stale`,
-      alarmDescription: 'A durable Roller webhook signal has waited more than five minutes for reconciliation.',
-      metric: resources.webhookQueue.metricApproximateAgeOfOldestMessage({ statistic: 'Maximum', period }),
-      threshold: 300,
-      evaluationPeriods: 1,
-      datapointsToAlarm: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-
-    new cloudwatch.Alarm(this, 'WebhookProcessingFailureAlarm', {
-      alarmName: `${config.resourcePrefix}-webhook-processing-failures`,
-      alarmDescription: 'The Roller webhook worker failed an authoritative reconciliation attempt.',
-      metric: webhookProcessingFailures,
-      threshold: 1,
-      evaluationPeriods: 1,
-      datapointsToAlarm: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-
-    new cloudwatch.Alarm(this, 'WebhookRetryExhaustedAlarm', {
-      alarmName: `${config.resourcePrefix}-webhook-retry-exhausted`,
-      alarmDescription: 'A Roller webhook event reached the automatic reconciliation attempt limit.',
-      metric: webhookRetryExhausted,
-      threshold: 1,
-      evaluationPeriods: 1,
-      datapointsToAlarm: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-
-    if (config.dataSync.scheduleEnabled) {
-      new cloudwatch.Alarm(this, 'BookingIndexFreshnessAlarm', {
-        alarmName: `${config.resourcePrefix}-booking-index-stale`,
-        alarmDescription: 'No successful booking-index seed has been observed for five consecutive six-hour periods.',
-        metric: bookingIndexSyncSuccess,
-        threshold: 1,
-        evaluationPeriods: 5,
-        datapointsToAlarm: 5,
-        comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.BREACHING,
-      });
-    }
-
-    for (const handler of lambdaHandlers) {
-      new cloudwatch.Alarm(this, `${handler.id}ErrorsAlarm`, {
-        alarmName: `${config.resourcePrefix}-${handler.name}-lambda-errors`,
-        metric: handler.fn.metricErrors({ statistic: 'Sum', period }),
-        threshold: 1,
-        evaluationPeriods: 1,
-        datapointsToAlarm: 1,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
-
-      new cloudwatch.Alarm(this, `${handler.id}ThrottlesAlarm`, {
+      const throttlesAlarm = new cloudwatch.Alarm(this, `${handler.id}ThrottlesAlarm`, {
         alarmName: `${config.resourcePrefix}-${handler.name}-lambda-throttles`,
         metric: handler.fn.metricThrottles({ statistic: 'Sum', period }),
         threshold: 1,
@@ -1542,7 +1609,26 @@ exports.handler = async (event) => {
         comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       });
+      if (!handler.expectedThrottles) routeAlarm(throttlesAlarm);
     }
+  }
+
+  private createAlarmNotificationRouting(config: JumpYardCloudConfig): cloudwatch.IAlarmAction | undefined {
+    if (config.alarmNotifications.emailAddresses.length === 0) return undefined;
+
+    // Notifications carry alarm names, metric values and timestamps only; no guest data,
+    // secrets or payment material reaches this topic. Email subscriptions deliver nothing
+    // until the recipient confirms the subscription.
+    const topic = new sns.Topic(this, 'AlarmNotificationsTopic', {
+      topicName: `${config.resourcePrefix}-alarms`,
+      displayName: 'JumpYard Check-in alarms',
+    });
+    for (const address of config.alarmNotifications.emailAddresses) {
+      topic.addSubscription(new snsSubscriptions.EmailSubscription(address));
+    }
+    new CfnOutput(this, 'AlarmNotificationsTopicArn', { value: topic.topicArn });
+
+    return new cloudwatchActions.SnsAction(topic);
   }
 
   private configureSmsDeliveryStatusLogging(config: JumpYardCloudConfig): void {

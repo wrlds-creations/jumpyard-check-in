@@ -307,6 +307,50 @@ npm.cmd run validate
 git diff --check
 ```
 
+## Park-Test Alarm Notifications (#335)
+
+After the protected #335 rollout and delivery proof, the park backend will route selected CloudWatch alarms to `jumpyard-check-in-park-test-alarms`, which emails `aws-alarm@wrlds.com` and forwards to Love's `love@wrlds.com` inbox. The alias is the SNS endpoint; a separate mailbox is not required. Recipient changes must be reviewed in `infra/config`. Extra console subscriptions are unmanaged and are not guaranteed to disappear on a later deploy.
+
+### Recipient setup
+
+1. Before deployment, the mail administrator must confirm that the alias exists, accepts external email and delivers to `love@wrlds.com`. Check junk/quarantine and forwarding rules. Domain MX records alone do not prove alias configuration. Alias existence, subscription confirmation and actual alarm delivery are three separate checks.
+2. The first protected deploy sends `AWS Notification - Subscription Confirmation` to the alias. Love receives the forwarded email in his inbox. Use its token with an authenticated SNS `ConfirmSubscription` request and `AuthenticateOnUnsubscribe=true`, rather than opening the confirmation link directly. This prevents an unauthenticated unsubscribe link from disabling the shared alarm address. Keep the short-lived link/token out of GitHub, logs and committed files.
+3. Read back the exact endpoint `aws-alarm@wrlds.com`, protocol `email`, a real subscription ARN (not `PendingConfirmation`), and subscription attributes `PendingConfirmation=false` and `ConfirmationWasAuthenticated=true`. Confirm ALARM and OK actions on all 28 intended alarms. A successful deploy alone does not verify SNS delivery.
+4. In a separately approved window, select one currently OK routed alarm, verify that its only ALARM/OK actions are this SNS topic, and run one controlled `set-alarm-state` ALARM/OK test with an explicit test reason. Record both transitions, successful notification actions and Love's receipt of both emails in `love@wrlds.com`. Metric evaluation may restore OK automatically; inspect history before any retry. Finish with a naturally evaluated OK state. Changing alarm state can execute its configured actions; it does not change the underlying metric or prove a real incident.
+
+AWS documents [SMTP email subscriptions and mailing-list support](https://docs.aws.amazon.com/sns/latest/dg/sns-email-notifications.html) and [authenticated subscription confirmation](https://docs.aws.amazon.com/sns/latest/api/API_ConfirmSubscription.html). Forwarding must preserve the confirmation content. Resolve bounced mail before retrying; SNS can suppress a bouncing address for seven days.
+
+```powershell
+aws sns list-subscriptions-by-topic --topic-arn arn:aws:sns:eu-north-1:376129878018:jumpyard-check-in-park-test-alarms --profile wrlds-dev --region eu-north-1
+aws cloudwatch describe-alarms --alarm-name-prefix jumpyard-check-in-park-test --query 'MetricAlarms[].[AlarmName,StateValue,length(AlarmActions)]' --output table --profile wrlds-dev --region eu-north-1
+aws cloudwatch describe-alarm-history --alarm-name jumpyard-check-in-park-test-api-5xx --history-item-type StateUpdate --max-items 20 --profile wrlds-dev --region eu-north-1
+```
+
+### What arrives and what to do
+
+Each email names the alarm, the metric value that crossed the threshold and the time. A second email arrives when the alarm returns to `OK`. Review and acknowledge the incident even if it clears quickly; OK does not prove that affected requests recovered. The configured alarms contain operational metadata, not guest records.
+
+| Alarm | Meaning | Safe first action |
+|---|---|---|
+| `api-5xx` | The public API answered a server error to a guest or staff device. | Read API access logs for route/status, then the matching Lambda log group. Repeated 5xx without Lambda errors points at integration timeouts. |
+| `api-high-4xx` | At least 25 rejected requests in five minutes: bad codes, an outdated app or auth trouble. | Check route distribution and the deployed app version before changing limits. |
+| `api-throttled-requests` | API Gateway started refusing requests. | Identify the source of the burst; do not raise limits during the incident. |
+| `*-lambda-errors` | One handler crashed. | Tail that handler's log group for the latest `ERROR` or timeout. |
+| `lookup/booking/redeem/session/webhook-lambda-throttles` | Real concurrency shortage. | Check traffic and reserved concurrency before anything else. |
+| `roller-api-errors-sustained` | At least one Roller error in each of three five-minute periods. This is not an error-rate or outage measurement. | Inspect statuses and affected operations; repeated guest input errors can also contribute. Escalate confirmed provider failures to Roller. |
+| `webhook-queue-stale`, `webhook-processing-failures`, `webhook-retry-exhausted`, `webhook-dlq-visible`, `roller-ops-dlq-visible` | Roller events or background jobs are not being reconciled. | Follow the webhook runbook; do not replay before understanding the failure. |
+| `booking-index-stale` | No successful nightly seed for five six-hour periods. | Check the data-sync run rows and the latest data-sync log before rerunning. |
+| `email-*` | Guest email bounced, was rejected or damaged the account reputation. | Guest sends are disabled; treat any firing as unexpected and stop sends. |
+
+Dashboard-only, never emailed: `webhook-processor-lambda-throttles` and `data-sync-lambda-throttles` (both workers deliberately run one at a time, so throttling is normal queueing) and the single-period `roller-api-errors` alarm (one rejected Roller request, such as an unknown booking code, is routine).
+
+### Acknowledgement and escalation
+
+- Love owns first response through `love@wrlds.com` and records the alarm/time, acknowledgement, observed impact and first action in the existing incident thread or Project item. Do not reply to the SNS sender.
+- This alias forwards to one person; it provides no second responder, automatic escalation, acknowledgement deadline or guaranteed out-of-hours coverage. A backup responder and response expectation must be agreed before describing the route as fully staffed operations coverage. Existing external monitoring remains unconfirmed.
+- P0 per the severity guide: stop write testing, notify Love/WRLDS, and contact Roller or AWS when they are implicated.
+- Expected noise from `api-5xx` or `api-high-4xx` during a real park day is a reason to tune the alarm through a reviewed change, not to unsubscribe.
+
 ## Park-Test Release And Rollback
 
 Routine park-test changes are deployed from GitHub, not from an operator laptop:

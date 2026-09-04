@@ -2,6 +2,12 @@
   "awsAccount": "376129878018",
   "awsRegion": "eu-north-1",
   "resourcePrefix": "jumpyard-check-in-park-test",
+  "alarmNotifications": {
+    "emailAddresses": [
+      "aws-alarm@wrlds.com"
+    ],
+    "okNotifications": true
+  },
   "api": {
     "allowedCorsOrigins": [
       "https://jumpyard-check-in-park-test.pages.dev",
