@@ -5,7 +5,7 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-09-04
-- Public: `0e04fb4` (#339/#341); Park: `1783cd4` (#335). [Alarm delivery](docs/gh-335-park-alarm-routing.md) verified. #374 Apple Pay accepted; Klarna: #353/#361.
+- Public/Park: `32fcb57` (#347). [Mock boundary](docs/gh347-production-mock-boundary.md) verified. #335 alarms; #374 Apple Pay accepted; Klarna: #353/#361.
 - Operational planning: private [JumpYard Check-in Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to `wrlds-creations/jumpyard-check-in`; Love confirmed the same repository as the Project's default in GitHub Settings.
 - Product/runtime state: Park has 205 resources, migrations through `0020`, and 27 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption, and late Handoff attachment are proven. A definitively approved kiosk payment now returns its provisional session with the bounded `safety` hint immediately instead of waiting for ROLLER readback; redemption remains blocked until authoritative synchronization. Physical proof remains in kiosk issue #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
