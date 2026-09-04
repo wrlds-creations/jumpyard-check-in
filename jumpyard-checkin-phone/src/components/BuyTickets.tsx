@@ -52,12 +52,13 @@ import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { AddonChoices, type AddonChoicesHandle } from '@/components/AddonChoices';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
+import { resolvePurchasePreparation } from '@/flow/purchasePreparation';
 
 interface BuyTicketsProps {
   recoverySnapshot?: BuyFlowRecoverySnapshot | null;
   inlineExitVisible?: boolean;
   onBack: () => void;
-  onBookingReady: (booking: Booking) => Promise<() => void>;
+  onBookingReady: (booking: Booking, preparation?: { signal: AbortSignal; isCurrent: () => boolean }) => Promise<() => void | Promise<void>>;
   onRequestExit?: () => void;
   onStepChange?: (step: BuyTicketsStep) => void;
 }
@@ -736,13 +737,15 @@ export const BuyTickets = ({
   const [paymentApprovedForSync, setPaymentApprovedForSync] = useState(false);
   const [paymentNavigationLocked, setPaymentNavigationLocked] = useState(false);
   const [paymentContinuePending, setPaymentContinuePending] = useState(false);
+  const [paymentReadyForSafety, setPaymentReadyForSafety] = useState(false);
   const [paymentFailure, setPaymentFailure] = useState<'failed' | 'unknown' | null>(null);
   const [paymentStatusChecking, setPaymentStatusChecking] = useState(false);
   const paymentStatusCheckingRef = useRef(false);
   const activePaymentAttemptRef = useRef<string | null>(null);
   const paymentResolutionStartedRef = useRef(false);
-  const paymentContinuationRef = useRef<(() => void) | null>(null);
+  const paymentContinuationRef = useRef<(() => void | Promise<void>) | null>(null);
   const paymentContinueRequestedRef = useRef(false);
+  const paymentPreparationAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     activePaymentAttemptRef.current = getDraftPaymentAttemptId(draft);
@@ -750,6 +753,8 @@ export const BuyTickets = ({
       activePaymentAttemptRef.current = null;
     };
   }, [draft]);
+
+  useEffect(() => () => paymentPreparationAbortRef.current?.abort(), []);
 
   useEffect(() => {
     onStepChange?.(step);
@@ -838,6 +843,8 @@ export const BuyTickets = ({
   const checkoutLocked = Boolean(draft) || showPaymentSyncCard;
 
   const clearPaymentSyncState = () => {
+    paymentPreparationAbortRef.current?.abort();
+    setPaymentReadyForSafety(false);
     setPaymentSyncError(null);
     setPaymentApprovedForSync(false);
     setPaymentNavigationLocked(false);
@@ -1348,15 +1355,24 @@ export const BuyTickets = ({
     if (!identifier || paymentResolutionStartedRef.current) return;
 
     paymentResolutionStartedRef.current = true;
+    paymentPreparationAbortRef.current?.abort();
+    const preparation = new AbortController();
+    paymentPreparationAbortRef.current = preparation;
+    const attemptId = getDraftPaymentAttemptId(activeDraft);
+    const isCurrent = () => !preparation.signal.aborted && (!waitForGuestConfirmation || activePaymentAttemptRef.current === attemptId);
     setPaymentSyncing(true);
+    setPaymentReadyForSafety(false);
     setPaymentSyncError(null);
     try {
-      // #331: one bounded lookup. An approved payment that ROLLER has not confirmed yet is
-      // "awaiting", not a failure: the guest continues into safety and the paid state is
-      // confirmed again before the staff handoff, so this step never polls ROLLER.
+      // #374 waits only for usable booking context. #331 still accepts a successful
+      // unpaid response here and confirms payment later, before staff handoff.
       const confirmation = confirmedBooking?.paid === true
         ? { status: 'paid' as const, booking: confirmedBooking }
-        : await resolvePaidConfirmation(lookupBooking, identifier, { wait });
+        : waitForGuestConfirmation
+          ? await resolvePurchasePreparation(lookupBooking, identifier, { signal: preparation.signal, isCurrent })
+          : await resolvePaidConfirmation(lookupBooking, identifier, { wait });
+
+      if (!isCurrent()) return;
 
       if (confirmation.status === 'unavailable') {
         paymentResolutionStartedRef.current = false;
@@ -1366,39 +1382,51 @@ export const BuyTickets = ({
         return;
       }
 
-      writeDraftRecovery('APP_SAFETY_VIDEO', activeDraft, selectedProduct, selectedTime, jumperCount, true);
-      const continueToSafety = await onBookingReady(confirmation.booking);
+      const preparedContinuation = await onBookingReady(confirmation.booking, { signal: preparation.signal, isCurrent });
+      if (!isCurrent()) return;
+      const continueToSafety = async () => {
+        if (!isCurrent()) return;
+        // Keep PAYMENT recovery while the guest still sees preparation/confirmation.
+        // Enter saved safety immediately before navigation and payment-marker release.
+        writeDraftRecovery('APP_SAFETY_VIDEO', activeDraft, selectedProduct, selectedTime, jumperCount, true);
+        await preparedContinuation();
+      };
       if (!waitForGuestConfirmation) {
-        continueToSafety();
+        await continueToSafety();
         return;
       }
 
       paymentContinuationRef.current = continueToSafety;
-      if (paymentContinueRequestedRef.current) {
-        paymentContinuationRef.current = null;
-        continueToSafety();
-      }
+      setPaymentReadyForSafety(true);
     } catch {
+      if (!isCurrent()) return;
       paymentResolutionStartedRef.current = false;
       paymentContinueRequestedRef.current = false;
       setPaymentContinuePending(false);
       setPaymentSyncError(t.buy.paymentSyncFailed);
     } finally {
-      setPaymentSyncing(false);
+      if (isCurrent()) setPaymentSyncing(false);
     }
   };
 
-  const continueAfterApprovedPayment = () => {
+  const continueAfterApprovedPayment = async () => {
     const continueToSafety = paymentContinuationRef.current;
-    if (continueToSafety) {
-      paymentContinuationRef.current = null;
-      continueToSafety();
-      return;
-    }
-
+    if (!continueToSafety || paymentContinueRequestedRef.current) return;
     paymentContinueRequestedRef.current = true;
     setPaymentContinuePending(true);
-    void resolvePaidDraftBooking(undefined, true);
+    try {
+      await continueToSafety();
+      paymentContinuationRef.current = null;
+    } catch {
+      if (paymentPreparationAbortRef.current?.signal.aborted) return;
+      paymentContinuationRef.current = null;
+      paymentResolutionStartedRef.current = false;
+      setPaymentReadyForSafety(false);
+      setPaymentSyncError(t.buy.paymentSyncFailed);
+    } finally {
+      paymentContinueRequestedRef.current = false;
+      setPaymentContinuePending(false);
+    }
   };
 
   const clearConfirmedFailedPayment = async (beforeClear?: () => void) => {
@@ -2316,12 +2344,11 @@ export const BuyTickets = ({
             <PhonePaymentConfirmation
               language={lang}
               amountLabel={formatMoney(draftAmountOwing)}
+              preparationState={paymentSyncError ? 'delayed' : paymentReadyForSafety ? 'ready' : 'preparing'}
+              onRetryPreparation={() => void resolvePaidDraftBooking(undefined, true)}
               isContinuing={paymentContinuePending}
               onContinueToSafety={continueAfterApprovedPayment}
             />
-            {paymentSyncError && (
-              <p className="mt-3 text-center text-sm font-bold text-danger">{paymentSyncError}</p>
-            )}
           </div>
         </motion.div>
       )}

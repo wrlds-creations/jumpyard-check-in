@@ -6,17 +6,17 @@ import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { PhonePaymentConfirmation, type PhonePaymentLanguage } from '@/components/PhonePaymentConfirmation';
 import styles from './preview.module.css';
 
-type PreviewState = 'processing' | 'approved' | 'declined' | 'unknown' | 'safety';
+type PreviewState = 'processing' | 'approved' | 'declined' | 'unknown' | 'preparing' | 'delayed' | 'safety';
 type PurchasePath = 'entry' | 'addon';
 
 const ICONS: JumpyardIconName[] = ['admission-ticket', 'addons-bag', 'payment-card', 'safety-check', 'success-check'];
-const STATES: PreviewState[] = ['processing', 'approved', 'declined', 'unknown'];
+const STATES: PreviewState[] = ['processing', 'approved', 'declined', 'unknown', 'preparing', 'delayed'];
 const COPY = {
   sv: {
     preview: 'Lokal förhandsvisning', disclaimer: 'Inga riktiga betalningar',
     controls: 'Testa andra lägen', play: 'Spela godkänt flöde',
     path: 'Köp', entry: 'Ny entré · 200 kr', addon: 'Tillägg · 20 kr', state: 'Visa läge',
-    names: ['Pågår', 'Godkänt', 'Nekat', 'Besked saknas'],
+    names: ['Pågår', 'Godkänt', 'Nekat', 'Besked saknas', 'Slutför köp', 'Fördröjd bokning'],
     steps: ['Entré', 'Tillägg', 'Betalning', 'Säkerhet', 'Klar'], booking: 'Bokning', progress: 'Din bokning',
     processing: 'Betalning pågår', waiting: 'Inväntar betalningsbesked',
     declined: 'Betalningen nekades', declinedBody: 'Ingen betalning godkändes.',
@@ -27,7 +27,7 @@ const COPY = {
     preview: 'Local preview', disclaimer: 'No real payments',
     controls: 'Test other states', play: 'Play approved flow',
     path: 'Purchase', entry: 'New entry · SEK 200', addon: 'Add-on · SEK 20', state: 'Show state',
-    names: ['Processing', 'Approved', 'Declined', 'Result missing'],
+    names: ['Processing', 'Approved', 'Declined', 'Result missing', 'Completing purchase', 'Booking delayed'],
     steps: ['Entry', 'Add-ons', 'Payment', 'Safety', 'Done'], booking: 'Booking', progress: 'Your booking',
     processing: 'Payment in progress', waiting: 'Waiting for payment result',
     declined: 'Payment declined', declinedBody: 'No payment was approved.',
@@ -106,8 +106,14 @@ export default function PhonePaymentPreview() {
         </nav>
 
         <main className={styles.stage}>
-          {state === 'approved' ? (
-            <PhonePaymentConfirmation language={language} amountLabel={amountLabel} onContinueToSafety={() => show('safety')} />
+          {state === 'approved' || state === 'preparing' || state === 'delayed' ? (
+            <PhonePaymentConfirmation
+              language={language}
+              amountLabel={amountLabel}
+              preparationState={state === 'approved' ? 'ready' : state}
+              onRetryPreparation={() => { play(); setState('preparing'); }}
+              onContinueToSafety={() => show('safety')}
+            />
           ) : state === 'safety' ? (
             <section className={styles.message} aria-labelledby="preview-safety-title">
               <JumpyardIcon name="safety-check" className={styles.messageIcon} />

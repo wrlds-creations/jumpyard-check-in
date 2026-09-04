@@ -375,7 +375,7 @@ const CUSTOMER_ADDON_LABELS: Record<AddonId, string> = {
   water_bottle: 'Vattenflaska',
 };
 
-export async function lookupBooking(code: string): Promise<Booking> {
+export async function lookupBooking(code: string, options: { signal?: AbortSignal } = {}): Promise<Booking> {
   const identifier = code.trim();
   if (!identifier) {
     throw new CloudLookupError('lookup_failed', 'Booking reference is required.');
@@ -387,6 +387,7 @@ export async function lookupBooking(code: string): Promise<Booking> {
   try {
     response = await fetch(`${getApiBaseUrl()}/v1/check-in/lookup`, {
       method: 'POST',
+      signal: options.signal,
       headers: {
         'content-type': 'application/json',
       },
@@ -488,6 +489,7 @@ export async function resolveCheckInSessionLink(token: string): Promise<CheckInS
 export async function startCheckInSession(
   booking: Booking,
   guestResumeStep?: 'safety',
+  options: { signal?: AbortSignal } = {},
 ): Promise<CheckInSession> {
   const identifier = booking.rollerUniqueId ?? booking.id;
   if (!identifier) {
@@ -505,6 +507,7 @@ export async function startCheckInSession(
   try {
     response = await fetch(`${getApiBaseUrl()}/v1/check-in/sessions`, {
       method: 'POST',
+      signal: options.signal,
       headers: {
         authorization: `Bearer ${guestAccessToken}`,
         'content-type': 'application/json',
