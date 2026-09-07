@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #340 Safe Server Diagnostics (Published 2026-09-07)
+
+Reviewed [PR #387](https://github.com/wrlds-creations/jumpyard-check-in/pull/387) merged `11fdcb3d82f10fbc011a0161d59ede73e6146544`. Immutable [release 34103357175](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34103357175), artifact `10011585061`, passed protected [Park 34104000787](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34104000787) and [public 34104120749](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34104120749). Each exact plan was reviewed before delegated approval under Love's explicit merge/deployment instruction; public approval followed successful Park verification.
+
+The 205-resource plan changed only code and asset paths for Lookup, Booking and Redeem. Selected/deployed template hash: `12f145b9b225ec4abb84845c0e1add67c8d6c1cd7d5c7ad3fac0be2e441ac3eb`. Independent readback byte-matched all 11 packaged files across those three active, successfully updated functions, including the identical safe diagnostics helper. All 595 artifact checksums, template equality, `IN_SYNC` drift, zero active alarms, empty queues, migrations through `0020` with apply disabled, exact-SHA Pages and public HTTP/domain/CORS/Cognito/Apple checks passed. Independent static readback matched 30 responses per lane, 60 total.
+
+Account `376129878018`, `eu-north-1`, complete WRLDS metadata, Nacka scope, resources, IAM, schema, gates and #335 notification routing are unchanged. Diagnostic log volume increases only by bounded safe records/metadata; there is no new custom metric or alarm. Previously published release `33880879052` / `32fcb57`, artifact `9939991649`, remains verified unexpired for rollback. No rollback, re-promotion, real transaction or guest send occurred. Natural 5xx correlation remains unobserved in the short post-deploy sample; injected failures were validated only in isolation. [Approval, hashes, validation and limits](docs/gh-340-safe-server-errors.md#protected-rollout--2026-09-07).
+
 ### Issue #347 Phone Production Mock Boundary (Published; No AWS Resource Change)
 
 Reviewed [PR #385](https://github.com/wrlds-creations/jumpyard-check-in/pull/385) merged `32fcb57f0c3a9aa88b331dc7ebf9403b5c0e0eef`. Immutable [release 33880879052](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33880879052), artifact `9939991649`, passed protected [Park 33881473361](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33881473361) then [public 33881809105](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/33881809105) after each actual plan was reviewed and approved under Love's publication instruction. This isolates phone simulations to development; #337/#342 recovery changes are excluded.
