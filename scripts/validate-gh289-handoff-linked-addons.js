@@ -57,6 +57,7 @@ function loadInternals(sourcePath, source, names, send) {
       },
     },
     require(moduleId) {
+      if (moduleId === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule(send);
       if (moduleId.startsWith('./')) return require(path.join(localDirectory, moduleId));

@@ -2,6 +2,10 @@ const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client
 const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 const crypto = require('crypto');
+const { createServerDiagnostics } = require('./server-diagnostics');
+const diagnostics = createServerDiagnostics('redeem',
+  (entry) => console.error(JSON.stringify(entry)),
+  (entry) => console.warn(JSON.stringify(entry)));
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const MAX_REDEEM_TICKETS = 10;
@@ -424,6 +428,7 @@ exports.handler = async (event) => {
       },
     });
   } catch (error) {
+    diagnostics.capture(error);
     const safeError = classifyError(error);
     return jsonResponse(safeError.statusCode, correlationId, {
       status: safeError.status,
@@ -2488,12 +2493,7 @@ async function recordRedeemBookkeeping({
     });
     await writeEventLog({ booking, correlationId, eventType, payload, summary });
   } catch (error) {
-    console.warn(JSON.stringify({
-      correlationId,
-      eventType: 'checkin.redeem_bookkeeping_failed',
-      failureClass: error?.name || 'Error',
-      failureCode: stringOrNull(error?.code),
-    }));
+    diagnostics.warn('checkin.redeem_bookkeeping_failed', error, correlationId);
   }
 }
 
@@ -3297,6 +3297,7 @@ function buildRollerUrl(baseUrl, endpointPath) {
 }
 
 function emitRollerApiMetric({ method, operation, status, ok }) {
+  diagnostics.provider({ operation, status, ok });
   const statusCode = Number.isInteger(status) ? status : 0;
   const metricValues = {
     RollerApiCallCount: 1,
@@ -3328,6 +3329,7 @@ function emitRollerApiMetric({ method, operation, status, ok }) {
       Handler: sanitizeMetricValue(process.env.JUMPYARD_HANDLER || 'redeem'),
       Operation: sanitizeMetricValue(operation || 'unknown'),
       Method: sanitizeMetricValue(method || 'UNKNOWN'),
+      ...diagnostics.ids(),
       StatusCode: statusCode,
       Ok: Boolean(ok),
       ...metricValues,
@@ -3575,6 +3577,7 @@ function classifyError(error) {
 }
 
 function jsonResponse(statusCode, correlationId, payload) {
+  diagnostics.response(statusCode, correlationId, payload);
   return {
     statusCode,
     headers: {
@@ -3588,6 +3591,24 @@ function jsonResponse(statusCode, correlationId, payload) {
     }),
   };
 }
+
+// #340: observe existing boundaries without retries, extra requests or changed outcomes.
+executeStatement = diagnostics.step('database', executeStatement);
+getRollerConfig = diagnostics.step('configuration', getRollerConfig);
+readSecret = diagnostics.step('configuration', readSecret);
+readParameter = diagnostics.step('configuration', readParameter);
+getRollerAccessToken = diagnostics.step('roller_authentication', getRollerAccessToken);
+getBookingDetail = diagnostics.step('roller_booking_detail', getBookingDetail);
+getVerifiedRollerVenueId = diagnostics.step('roller_venue', getVerifiedRollerVenueId);
+getProductCatalogBestEffort = diagnostics.step('roller_products', getProductCatalogBestEffort);
+normalizeBooking = diagnostics.step('booking_normalization', normalizeBooking);
+redeemRollerTickets = diagnostics.step('roller_redemption', redeemRollerTickets);
+getStaffAuthConfig = diagnostics.step('configuration', getStaffAuthConfig);
+authorizePinStaffRedeemRequest = diagnostics.step('staff_authorization', authorizePinStaffRedeemRequest);
+authorizeStaffRedeemRequest = diagnostics.step('staff_authorization', authorizeStaffRedeemRequest);
+finalizeRedeemLocally = diagnostics.step('finalize_redeem', finalizeRedeemLocally);
+handleStaffSessionRedeem = diagnostics.step('staff_redeem', handleStaffSessionRedeem, 'staff_redeem');
+exports.handler = diagnostics.wrap(exports.handler);
 
 exports.__test = {
   claimExistingIdempotencyKey,

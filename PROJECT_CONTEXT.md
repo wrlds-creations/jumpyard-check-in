@@ -69,6 +69,8 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 ## Current Implemented Flow Facts
 
+- #340: safe, correlated server-error reports.
+
 - Lookup is Aurora-first with Roller-authoritative refresh, Nacka/date scope, and nearest same-day selection. Ready bookings start/resume a server session; opaque booking-bound guest proof stays in phone memory and hash-only in Aurora.
 - Safety: server-owned handoff, approval-to-safety and final paid check (D0199/#331); video recovery/media (D0210/#343). Staff identity/heartbeat: #334.
 - Phone purchases use server-owned Roller paths and Live availability. Weekday Combo `1242135`/`1242136` requires public eligibility; catalog failure omits Combo (#341). Daily price refresh precedes booking reads (#339); 24-hour expiry stays. D0207: 2x60-min bands + 1 later pizza; no socks/drinks.
