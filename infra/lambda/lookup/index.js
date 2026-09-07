@@ -3,6 +3,8 @@ const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
+const { createServerDiagnostics } = require('./server-diagnostics');
+const diagnostics = createServerDiagnostics('lookup', (entry) => console.error(JSON.stringify(entry)));
 const { withBookingPackageContents } = require('./package-contents');
 
 const DATABASE_NAME = 'jumpyard_cloud';
@@ -245,6 +247,7 @@ exports.handler = async (event) => {
       },
     });
   } catch (error) {
+    diagnostics.capture(error);
     const safeError = classifyError(error);
     return jsonResponse(safeError.statusCode, correlationId, {
       status: safeError.status,
@@ -2141,6 +2144,7 @@ function buildRollerUrl(baseUrl, endpointPath) {
 }
 
 function emitRollerApiMetric({ method, operation, status, ok }) {
+  diagnostics.provider({ operation, status, ok });
   const statusCode = Number.isInteger(status) ? status : 0;
   const metricValues = {
     RollerApiCallCount: 1,
@@ -2172,6 +2176,7 @@ function emitRollerApiMetric({ method, operation, status, ok }) {
       Handler: sanitizeMetricValue(process.env.JUMPYARD_HANDLER || 'lookup'),
       Operation: sanitizeMetricValue(operation || 'unknown'),
       Method: sanitizeMetricValue(method || 'UNKNOWN'),
+      ...diagnostics.ids(),
       StatusCode: statusCode,
       Ok: Boolean(ok),
       ...metricValues,
@@ -2514,6 +2519,7 @@ function classifyError(error) {
 }
 
 function jsonResponse(statusCode, correlationId, payload) {
+  diagnostics.response(statusCode, correlationId, payload);
   return {
     statusCode,
     headers: {
@@ -2526,6 +2532,25 @@ function jsonResponse(statusCode, correlationId, payload) {
     }),
   };
 }
+
+// #340: observe existing boundaries without retries, extra requests or changed outcomes.
+executeStatement = diagnostics.step('database', executeStatement);
+getRollerConfig = diagnostics.step('configuration', getRollerConfig);
+readSecret = diagnostics.step('configuration', readSecret);
+readParameter = diagnostics.step('configuration', readParameter);
+getRollerAccessToken = diagnostics.step('roller_authentication', getRollerAccessToken);
+getBookingDetail = diagnostics.step('roller_booking_detail', getBookingDetail);
+getVerifiedRollerVenueId = diagnostics.step('roller_venue', getVerifiedRollerVenueId);
+getProductCatalogBestEffort = diagnostics.step('roller_products', getProductCatalogBestEffort);
+normalizeBooking = diagnostics.step('booking_normalization', normalizeBooking);
+searchBookings = diagnostics.step('roller_booking_search', searchBookings);
+getLocalBooking = diagnostics.step('local_booking', getLocalBooking);
+upsertLiveBooking = diagnostics.step('persist_booking', upsertLiveBooking);
+reconcilePrepaymentDraftFromPaidBooking = diagnostics.step('reconcile_booking', reconcilePrepaymentDraftFromPaidBooking);
+createGuestAccessToken = diagnostics.step('guest_access', createGuestAccessToken);
+requestKioskAuthoritativeConfirmation = diagnostics.step('kiosk_confirmation', requestKioskAuthoritativeConfirmation);
+handleT0201ControlledT30EmailRefresh = diagnostics.step('controlled_email_refresh', handleT0201ControlledT30EmailRefresh, 'controlled_email_refresh');
+exports.handler = diagnostics.wrap(exports.handler);
 
 exports._internal = {
   extractRollerVenueIdentity,

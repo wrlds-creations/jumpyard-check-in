@@ -48,6 +48,7 @@ function loadBookingInternals() {
     exports: module.exports,
     process: { env: { ROLLER_DATA_SYNC_VENUE_ID: '50871' } },
     require(moduleId) {
+      if (moduleId === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
       if (moduleId === './package-contents') return require(path.join(path.dirname(bookingPath), 'package-contents.js'));
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule();

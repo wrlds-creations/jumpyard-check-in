@@ -35,6 +35,7 @@ function load() {
     module, exports: module.exports, process: { env }, Buffer, URL, URLSearchParams, TextDecoder, TextEncoder,
     console: { log() {}, error() {}, warn() {} }, setTimeout, clearTimeout, fetch: failNetwork,
     require(id) {
+      if (id === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
       if (id === 'crypto') return crypto;
       if (id.startsWith('@aws-sdk/')) return aws;
       if (id.startsWith('./')) return require(path.join(path.dirname(bookingPath), id));

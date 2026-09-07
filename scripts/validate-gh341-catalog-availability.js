@@ -105,6 +105,7 @@ function load(catalogFetch, options = {}) {
     AbortController, setTimeout, clearTimeout, console: { log() {}, error() {} },
     process: { env: { JUMPYARD_ENVIRONMENT: 'park-test' } }, fetch: failExternal,
     require(id) {
+      if (id === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
       if (id === 'crypto') return crypto;
       if (id.startsWith('@aws-sdk/')) return aws;
       if (id === './phone-product-catalog') return catalogModule.exports;

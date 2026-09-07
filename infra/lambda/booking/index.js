@@ -3,6 +3,8 @@ const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
+const { createServerDiagnostics } = require('./server-diagnostics');
+const diagnostics = createServerDiagnostics('booking', (entry) => console.error(JSON.stringify(entry)));
 const { withPackageContents } = require('./package-contents');
 const {
   buildKioskQuotePayload,
@@ -262,8 +264,8 @@ exports.handler = async (event) => {
       },
     });
   } catch (error) {
+    diagnostics.capture(error);
     const safeError = classifyError(error);
-    emitSafeBookingOperationFailure({ correlationId, error, routeKey });
     return jsonResponse(safeError.statusCode, correlationId, {
       status: safeError.status,
       error: {
@@ -5142,6 +5144,7 @@ function buildRollerUrl(baseUrl, endpointPath) {
 }
 
 function emitRollerApiMetric({ method, operation, status, ok }) {
+  diagnostics.provider({ operation, status, ok });
   const statusCode = Number.isInteger(status) ? status : 0;
   const metricValues = {
     RollerApiCallCount: 1,
@@ -5173,6 +5176,7 @@ function emitRollerApiMetric({ method, operation, status, ok }) {
       Handler: sanitizeMetricValue(process.env.JUMPYARD_HANDLER || 'booking'),
       Operation: sanitizeMetricValue(operation || 'unknown'),
       Method: sanitizeMetricValue(method || 'UNKNOWN'),
+      ...diagnostics.ids(),
       StatusCode: statusCode,
       Ok: Boolean(ok),
       ...metricValues,
@@ -5282,34 +5286,6 @@ function emitKioskPublishMetric(statusCode, result) {
       ...values,
     }),
   );
-}
-
-function emitSafeBookingOperationFailure({ correlationId, error, routeKey }) {
-  const operation = routeKey === 'POST /v1/bookings/{bookingReference}/add-products'
-    ? 'add_product_draft'
-    : routeKey === 'POST /v1/bookings/{bookingReference}/add-products/quote'
-      ? 'add_product_quote'
-      : routeKey === 'POST /v1/bookings/draft/finalize'
-        ? 'draft_finalize'
-        : 'other';
-  const allowedFailureClasses = new Set([
-    'BadRequestException',
-    'DatabaseError',
-    'Error',
-    'ServiceException',
-    'TimeoutError',
-    'TypeError',
-    'ValidationException',
-  ]);
-  const candidate = stringOrNull(error?.name);
-  const failureClass = candidate && allowedFailureClasses.has(candidate) ? candidate : 'unknown';
-
-  console.error(JSON.stringify({
-    correlationId,
-    eventType: 'booking.operation_failed',
-    failureClass,
-    operation,
-  }));
 }
 
 function rollerOperationFromEndpointPath(endpointPath, method) {
@@ -5601,6 +5577,7 @@ function classifyError(error) {
 }
 
 function jsonResponse(statusCode, correlationId, payload) {
+  diagnostics.response(statusCode, correlationId, payload);
   return {
     statusCode,
     headers: {
@@ -5614,6 +5591,24 @@ function jsonResponse(statusCode, correlationId, payload) {
     }),
   };
 }
+
+// #340: observe existing boundaries without retries, extra requests or changed outcomes.
+executeStatement = diagnostics.step('database', executeStatement);
+getRollerConfig = diagnostics.step('configuration', getRollerConfig);
+readSecret = diagnostics.step('configuration', readSecret);
+readParameter = diagnostics.step('configuration', readParameter);
+getRollerAccessToken = diagnostics.step('roller_authentication', getRollerAccessToken);
+postRollerJson = diagnostics.step('roller_write', postRollerJson);
+getRollerJson = diagnostics.step('roller_read', getRollerJson);
+handleAvailability = diagnostics.step('availability', handleAvailability, 'availability');
+handleQuote = diagnostics.step('quote', handleQuote, 'quote');
+handleDraft = diagnostics.step('draft', handleDraft, 'draft');
+handleAddProductQuote = diagnostics.step('add_product_quote', handleAddProductQuote, 'add_product_quote');
+handleAddProductDraft = diagnostics.step('add_product_draft', handleAddProductDraft, 'add_product_draft');
+handleDraftFinalize = diagnostics.step('draft_finalize', handleDraftFinalize, 'draft_finalize');
+handleKioskPaymentReconciliation = diagnostics.step('kiosk_reconciliation', handleKioskPaymentReconciliation, 'kiosk_reconciliation');
+handleKioskAuthoritativeConfirmation = diagnostics.step('kiosk_confirmation', handleKioskAuthoritativeConfirmation, 'kiosk_confirmation');
+exports.handler = diagnostics.wrap(exports.handler);
 
 exports.__test = {
   mapPhoneAddonProducts,

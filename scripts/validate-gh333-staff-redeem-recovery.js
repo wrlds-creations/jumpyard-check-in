@@ -288,6 +288,7 @@ function loadRedeem({ database, roller, env = environment() }) {
     module,
     process: { env: { ...env } },
     require(moduleId) {
+      if (moduleId === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule;
       throw new Error(`Unexpected require(${JSON.stringify(moduleId)}) during GH-333 validation.`);
@@ -465,10 +466,10 @@ async function validateBookkeepingFailureKeepsTheReceipt() {
   assert.equal(result.body.session?.status, 'redeemed');
   assert.ok(sqlIndex(result.calls, /WITH marked_tickets AS/) >= 0);
   assert.ok(
-    result.warnings.some((line) => line.includes('checkin.redeem_bookkeeping_failed') && line.includes('synthetic_db_failure')),
+    result.warnings.some((line) => line.includes('checkin.redeem_bookkeeping_failed') && line.includes('database')),
     'A bookkeeping failure after the receipt is logged without personal data.',
   );
-  assert.ok(!result.warnings.some((line) => /synthetic-token|synthetic-secret/.test(line)));
+  assert.ok(!result.warnings.some((line) => /synthetic-token|synthetic-secret|synthetic_db_failure/.test(line)));
   console.log('[pass] a bookkeeping failure after the receipt does not undo the completed redeem');
 }
 

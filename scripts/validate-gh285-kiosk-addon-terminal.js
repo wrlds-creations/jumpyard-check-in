@@ -48,6 +48,7 @@ function loadBookingInternals() {
     exports: module.exports,
     process: { env: {} },
     require(moduleId) {
+      if (moduleId === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
       if (moduleId === './package-contents') return require(path.join(path.dirname(bookingPath), 'package-contents.js'));
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule();
@@ -155,12 +156,8 @@ assert.doesNotMatch(
   'the least-privilege booking role must not read booking_links',
 );
 assert.match(persistLinkSource, /createdAt: null/);
-assert.match(bookingSource, /emitSafeBookingOperationFailure\(\{ correlationId, error, routeKey \}\)/);
-const safeFailureStart = bookingSource.indexOf('function emitSafeBookingOperationFailure');
-const safeFailureEnd = bookingSource.indexOf('function rollerOperationFromEndpointPath', safeFailureStart);
-const safeFailureSource = bookingSource.slice(safeFailureStart, safeFailureEnd);
-assert.match(safeFailureSource, /booking\.operation_failed/);
-assert.doesNotMatch(safeFailureSource, /error\?\.message|error\.message|error\?\.stack|error\.stack/);
+assert.match(bookingSource, /diagnostics\.capture\(error\)/);
+assert.match(bookingSource, /exports\.handler = diagnostics\.wrap\(exports\.handler\)/);
 assert.match(bookingSource, /requireTickets: existing\.flow_type !== 'add_product'/);
 const addProductHandlerStart = bookingSource.indexOf('async function handleAddProductDraft');
 const addProductHandlerEnd = bookingSource.indexOf('function normalizeQuoteRequest', addProductHandlerStart);

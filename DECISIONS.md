@@ -222,6 +222,8 @@ This file is the source of truth for meaningful project decisions. Add entries w
 
 | `D0214` | 2026-09-04 | Phone mock operations and extension previews are available only in explicit local development; public checkout uses the real purchase components. | A public extension route exposed simulated payment and QR creation, and the old payment branch retained a mock import. | #347 isolates previews, rejects mock execution outside development and verifies route/import boundaries plus the production export. Healthy guest flows gain no step, wait or network request. [Evidence](docs/gh347-production-mock-boundary.md). | An explicitly approved non-production preview environment or replacement real extension flow. |
 
+| `D0215` | 2026-09-07 | Lookup, booking and redeem report server failures through bounded, request-scoped diagnostics with source-owned categories and stages. | Generic 5xx responses lacked useful cause evidence; raw exception text or caller correlation ids could disclose sensitive data. | #340 emits one safe report per failed invocation, joins existing API/provider logs with AWS request ids and a generated diagnostic id, hashes caller correlation values, and preserves all responses, request counts and metric/alarm definitions. Standalone Lambda copies are tested for equality. [Contract and limits](docs/gh-340-safe-server-errors.md). | New handler/route boundaries, an approved tracing platform, or live evidence that the safe classification is insufficient. |
+
 ## Active Constraints
 
 | Constraint | Source | Impact | Revisit Trigger |

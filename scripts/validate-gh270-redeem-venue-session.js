@@ -47,6 +47,7 @@ function loadRedeemInternals(fetchImpl, environment = {}) {
       },
     },
     require(moduleId) {
+      if (moduleId === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule();
       throw new Error(`Unexpected require(${JSON.stringify(moduleId)}) during GH-270 validation.`);
