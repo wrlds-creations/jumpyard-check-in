@@ -12,7 +12,7 @@ const ROOT = path.resolve(__dirname, '..');
 const CANARY = 'DO_NOT_LOG_guest@example.invalid_PIN_123456_JWT_secret';
 const CORRELATION = 'caller-secret-123456';
 const CONTEXT = { awsRequestId: 'a1b2c3d4-1234-1234-1234-a1b2c3d4e5f6' };
-const event = (body, route = 'POST /v1/bookings/lookup', requestId = 'syntheticRequest01=') => ({
+const event = (body, route = 'POST /v1/check-in/lookup', requestId = 'syntheticRequest01=') => ({
   body: JSON.stringify({ correlationId: CORRELATION, ...body }),
   routeKey: route,
   rawPath: route.slice(5),
@@ -99,7 +99,7 @@ for (const name of ['lookup', 'booking', 'redeem']) {
     }, fetch: async () => response(503, { customerPayload: CANARY }) });
     const body = name === 'booking' ? { items: [{ productId: 1, quantity: 1, bookingDate: '2026-09-07', startTime: '10:00' }] }
       : { identifier: '12345', idempotencyKey: 'synthetic-key' };
-    const request = event(body, name === 'booking' ? 'POST /v1/bookings/quote' : 'POST /v1/bookings/lookup');
+    const request = event(body, name === 'booking' ? 'POST /v1/bookings/quote' : name === 'redeem' ? 'POST /v1/check-in/redeem' : 'POST /v1/check-in/lookup');
     if (name === 'redeem') request.headers['x-jumpyard-redeem-token'] = CANARY;
     const result = await app.handler(request, CONTEXT);
     assert.equal(result.statusCode, 500);
