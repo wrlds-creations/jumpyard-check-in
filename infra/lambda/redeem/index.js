@@ -477,8 +477,9 @@ async function handleStaffHandout(event, correlationId) {
   let session = await getStaffRedeemSession(checkinSessionId, auth.staff.venueId);
   if (!session) return handoutBlocked(correlationId, 'session_not_found');
   const store = createHandoutStore({ executeStatement, mappedRows, stringParameter });
+  let manifest;
   const reply = async (result) => {
-    const handout = await store.readState(session, auth.staff.venueId);
+    const handout = await store.readState(session, auth.staff.venueId, manifest);
     const { error, ...details } = result;
     return result.error
       ? handoutBlocked(correlationId, error, { ...details, handout })
@@ -493,7 +494,6 @@ async function handleStaffHandout(event, correlationId) {
   if (session.visitDate !== today) return handoutBlocked(correlationId, 'wrong_date');
   if (session.bookingSyncStatus !== 'confirmed') return handoutBlocked(correlationId, 'booking_sync_pending');
   if (session.safetyStatus !== 'completed') return handoutBlocked(correlationId, 'safety_not_completed');
-  if (body.area === 'cafe' && session.status !== 'redeemed') return handoutBlocked(correlationId, 'admission_not_confirmed');
   const request = { identifier: session.rollerUniqueId, bookingReference: session.bookingReference,
     rollerUniqueId: session.rollerUniqueId, expectedDate: session.visitDate,
     ticketIds: session.selectedTicketIds, confirmRedeem: true, idempotencyKey: `staff-redeem:${checkinSessionId}` };
@@ -504,7 +504,7 @@ async function handleStaffHandout(event, correlationId) {
   if (!isPaymentComplete(context.booking) || isInactiveBookingStatus(context.booking.bookingStatus) || context.booking.isTombstoned) {
     return handoutBlocked(correlationId, 'payment_or_booking_changed');
   }
-  let manifest = await store.readManifest(session, auth.staff.venueId);
+  manifest = await store.readManifest(session, auth.staff.venueId);
   if (body.action === 'select') return reply(await store.change(session, auth.staff, body, manifest));
 
   // Persist the exact, explicitly confirmed receipt BEFORE attempting ROLLER. On

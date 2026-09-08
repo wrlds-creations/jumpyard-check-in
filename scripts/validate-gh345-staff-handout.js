@@ -183,7 +183,7 @@ test('PostgreSQL: concurrent daily numbers, claims, partial receipts, recovery a
     const row = JSON.parse(await sql(`SELECT selection FROM jumpyard.staff_handout_claims WHERE checkin_session_id = ${literal(session)}`));
     assert.equal(row[0].id, 'bands');
     assert.equal((await change(session, owner, 'cafe', 'select', 0, [{ id: 'coffee', quantity: 1 }])).error, 'staff_busy');
-    assert.equal((await change(session, 'Cafestaff', 'cafe', 'select', 0, [{ id: 'coffee', quantity: 1 }])).error, 'admission_not_confirmed');
+    assert.equal((await change(session, 'Cafestaff', 'cafe', 'select', 0, [{ id: 'bands', quantity: 3 }])).error, 'invalid_selection');
   });
   let operationId;
   await t.test('A confirmation interrupted before admission retains the same immutable operation', async () => {
@@ -325,12 +325,40 @@ test('PostgreSQL: concurrent daily numbers, claims, partial receipts, recovery a
         jsonb_build_object('bookingName', 'Guest ' || n) FROM generate_series(1, 205) n;`);
     const board = createStaffBoard({ ...adapter('jumpyard_session_runtime'), mapSession: (row) => row });
     const rows = []; let cursor = null;
-    do { const page = await board.list({ venueId: park, day, search: null, cursor }); rows.push(...page.sessions); cursor = page.nextCursor; } while (cursor);
+    do { const page = await board.list({ venueId: park, day, search: null, cursor, todayOnly: true }); rows.push(...page.sessions); cursor = page.nextCursor; } while (cursor);
     assert.equal(rows.length, 205);
     assert.equal(new Set(rows.map((row) => row.checkin_session_id)).size, 205);
     assert.ok(rows.every((row) => row.status === 'upcoming'));
     const found = await board.list({ venueId: park, day, search: 'guest 205', cursor: null });
     assert.equal(found.sessions.length, 1);
     assert.equal(found.sessions[0].booking_reference, id('ref205'));
+  });
+
+  await t.test('Today lookup includes earlier allocations and preserves ambiguous groups and stable pagination', async () => {
+    const park = `${venue}_todaylookup`;
+    const current = await seed('todaylookup', park);
+    const earlier = id('earlierallocation');
+    const otherDay = await seed('otherday', park);
+    await sql(`UPDATE jumpyard.checkin_sessions SET handoff_code='7777', handoff_day=CAST(${literal(day)} AS date),
+      handoff_venue_id=${literal(park)} WHERE checkin_session_id=${literal(current)};
+      INSERT INTO jumpyard.checkin_sessions (checkin_session_id,roller_unique_id,booking_reference,visit_date,expires_at,handoff_code,handoff_day,handoff_venue_id,status)
+      VALUES (${literal(earlier)},${literal(id('todaylookup'))},${literal(id('todaylookup'))},${literal(day)},now()+interval '2 hours','7777',CAST(${literal(day)} AS date)-1,${literal(park)},'redeemed');
+      UPDATE jumpyard.roller_bookings SET booking_date=CAST(${literal(day)} AS date)-1 WHERE roller_unique_id=${literal(id('otherday'))};
+      UPDATE jumpyard.checkin_sessions SET visit_date=CAST(${literal(day)} AS date)-1,handoff_code='7777',handoff_day=CAST(${literal(day)} AS date)-2,
+        handoff_venue_id=${literal(park)} WHERE checkin_session_id=${literal(otherDay)};`);
+    const board = createStaffBoard({ ...adapter('jumpyard_session_runtime'), mapSession: row => row });
+    const today = { venueId:park, day, search:'7777', cursor:null, todayOnly:true };
+    const matches = (await board.list(today)).sessions;
+    assert.deepEqual(new Set(matches.map(row=>row.checkin_session_id)), new Set([current,earlier]));
+    const next = (await board.list({...today,cursor:matches[0].board_cursor})).sessions;
+    assert.deepEqual(next.map(row=>row.checkin_session_id), [matches[1].checkin_session_id]);
+    assert.equal((await board.list({...today,todayOnly:false})).sessions[0].checkin_session_id, current, 'older clients retain allocation-date lookup');
+    assert.equal((await board.list({...today,search:'test guest'})).sessions.length, 1, 'name search only shows today');
+    assert.equal((await board.list({...today,search:null,bookingId:id('otherday')})).sessions.length, 0);
+    assert.equal((await board.list({...today,search:null,todayOnly:false,bookingId:id('otherday')})).sessions.length, 1, 'legacy stable booking detail remains available');
+    await sql(`UPDATE jumpyard.checkin_sessions SET handoff_code=${literal(`JY${Date.now()}`)},handoff_day=NULL WHERE checkin_session_id=${literal(otherDay)}`);
+    const legacy = await sql(`SELECT lower(handoff_code) FROM jumpyard.checkin_sessions WHERE checkin_session_id=${literal(otherDay)}`);
+    assert.equal((await board.list({...today,search:legacy})).sessions.length, 0, 'legacy codes cannot escape today-only scope');
+    assert.equal((await board.list({...today,search:legacy,todayOnly:false})).sessions.length, 1);
   });
 });

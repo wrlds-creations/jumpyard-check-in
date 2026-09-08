@@ -17,6 +17,7 @@ import {
 import {
   changeStaffHandout,
   type HandoutRequest,
+  type HandoutResult,
   getStaffSession,
   loginStaff,
   listReadyStaffSessions,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/adminApi";
 import StaffExperience from "@/components/staff/StaffExperience";
 import { boardPollDelay, handoutMessage, stockholmDay } from "@/components/staff/flow";
+import { createSelectionBuffer, mergeHandoutSummary, type HandoutDraft } from "@/components/staff/selection";
 import {
   canStaffRedeem as staffCanRedeem,
   clearStaffAuthStorage,
@@ -992,7 +994,8 @@ export default function Home() {
   const [state, setState] = useState<LoadState>("loading");
   const [operatingDay, setOperatingDay] = useState(stockholmDay);
   const operatingDayRef = useRef(operatingDay);
-  const followTodayRef = useRef(true);
+  const [handoutDraft, setHandoutDraft] = useState<HandoutDraft | null>(null);
+  const selectionBufferRef = useRef<(ReturnType<typeof createSelectionBuffer> & { checkinSessionId: string; area: HandoutRequest["area"] }) | null>(null);
   const [handoutBusy, setHandoutBusy] = useState(false);
   const [handoutError, setHandoutError] = useState("");
   const [handoutRecoveryTarget, setHandoutRecoveryTarget] = useState<StaffApiError["recoveryTarget"]>(undefined);
@@ -1046,6 +1049,8 @@ export default function Home() {
     lifecycleGenerationRef.current += 1;
     handoutVersionRef.current += 1;
     handoutBusyRef.current = false;
+    selectionBufferRef.current = null;
+    setHandoutDraft(null);
     setHandoutBusy(false);
     setHandoutError("");
     setHandoutRecoveryTarget(undefined);
@@ -1155,7 +1160,7 @@ export default function Home() {
 
   const refreshSessions = useCallback(async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
     const today = stockholmDay();
-    if (followTodayRef.current && operatingDayRef.current !== today) {
+    if (operatingDayRef.current !== today) {
       operatingDayRef.current = today;
       queueQueryVersionRef.current += 1;
       setOperatingDay(today);
@@ -1182,6 +1187,7 @@ export default function Home() {
 
         const requestedQuery = queueQueryRef.current;
         const requestedQueryVersion = queueQueryVersionRef.current;
+        const requestedHandoutVersion = handoutVersionRef.current;
         queueLastRequestedKeyRef.current = queueRequestKey(activeAuth, requestedQueryVersion);
         if (showLoading) setState("loading");
         setError("");
@@ -1200,6 +1206,9 @@ export default function Home() {
             continue;
           }
 
+          // A list started before a product write must not undo its accepted
+          // receipt/ownership. The next scheduled refresh will catch up.
+          if (requestedHandoutVersion !== handoutVersionRef.current || handoutBusyRef.current) continue;
           const currentSelectedId = selectedIdRef.current;
           // A refreshed queue must never close a guest opened by QR or change the
           // operator's selected context (including a completed entrance/café visit).
@@ -1313,7 +1322,7 @@ export default function Home() {
       if (!isSameStaffSession(authRef.current, requestAuth) || version !== queueQueryVersionRef.current) return;
       setSessions(matches);
       if (matches.length === 1) selectSession(matches[0].checkinSessionId);
-      else if (matches.length === 0) setError("Ingen träff. Kontrollera datumet eller sök på namn eller bokningsnummer.");
+      else if (matches.length === 0) setError("Ingen bokning idag. Sök på namn eller bokningsnummer.");
       else setError("Flera bokningar matchar. Välj rätt gäst i listan.");
     } catch (failure) {
       if (requestAuth && !isSameStaffSession(authRef.current, requestAuth)) return;
@@ -1704,8 +1713,20 @@ export default function Home() {
   }, [terminateStaffSession]);
 
   const handleHandout = useCallback(async (request: HandoutRequest): Promise<boolean> => {
-    if (handoutBusyRef.current || !detailRef.current) return false;
+    if (!detailRef.current) return false;
     const selected = detailRef.current;
+    const currentBuffer = selectionBufferRef.current;
+    if (request.action === "select" && currentBuffer?.checkinSessionId === selected.checkinSessionId && currentBuffer.area === request.area) {
+      currentBuffer.update(request.selection || []);
+      setHandoutDraft({ checkinSessionId: selected.checkinSessionId, area: request.area, selection: request.selection || [] });
+      return false;
+    }
+    if (handoutBusyRef.current) return false;
+    const buffer = request.action === "select" ? Object.assign(createSelectionBuffer(request), {
+      checkinSessionId: selected.checkinSessionId, area: request.area,
+    }) : null;
+    selectionBufferRef.current = buffer;
+    if (buffer) setHandoutDraft({ checkinSessionId: selected.checkinSessionId, area: request.area, selection: request.selection || [] });
     const generation = lifecycleGenerationRef.current;
     const version = ++handoutVersionRef.current;
     handoutBusyRef.current = true;
@@ -1713,16 +1734,26 @@ export default function Home() {
     setHandoutError("");
     setHandoutRecoveryTarget(undefined);
     let activeAuth: StaffAuthSession | null = null;
+    let refreshAfterFailure = false;
     try {
       activeAuth = await getUsableAuth();
-      if (generation !== lifecycleGenerationRef.current || selectedIdRef.current !== selected.checkinSessionId) return false;
-      const result = await changeStaffHandout(selected.checkinSessionId, activeAuth.auth.token, request);
-      if (!isSameStaffSession(authRef.current, activeAuth) || generation !== lifecycleGenerationRef.current) return false;
-      if (selectedIdRef.current === selected.checkinSessionId && detailRef.current) {
-        setCurrentDetail({ ...detailRef.current, ...result.session, handout: result.handout });
-      }
-      void refreshSessions({ showLoading: false });
-      return result.completed === true;
+      if (generation !== lifecycleGenerationRef.current) return false;
+      const requestAuth = activeAuth;
+      const send = async (next: HandoutRequest): Promise<HandoutResult | null> => {
+        if (!isSameStaffSession(authRef.current, requestAuth) || generation !== lifecycleGenerationRef.current) return null;
+        const result = await changeStaffHandout(selected.checkinSessionId, requestAuth.auth.token, next);
+        if (!isSameStaffSession(authRef.current, requestAuth) || generation !== lifecycleGenerationRef.current) return null;
+        if (selectedIdRef.current === selected.checkinSessionId && detailRef.current) {
+          setCurrentDetail({ ...detailRef.current, ...result.session, handout: result.handout });
+        }
+        setSessions((rows) => rows.map((row) => mergeHandoutSummary(row, selected, result)));
+        return result;
+      };
+      const result = buffer ? await buffer.drain(send) : await send(request);
+      // Selection replies already contain current state; avoid a whole-day
+      // database/reconciliation refresh after every tap.
+      if (request.action !== "select") void refreshSessions({ showLoading: false });
+      return result?.completed === true;
     } catch (failure) {
       if (generation !== lifecycleGenerationRef.current || (activeAuth && !isSameStaffSession(authRef.current, activeAuth))) return false;
       if (handleProtectedAuthFailure(failure)) return false;
@@ -1730,13 +1761,18 @@ export default function Home() {
         setHandoutRecoveryTarget(failure instanceof StaffApiError ? failure.recoveryTarget : undefined);
         setHandoutError(handoutMessage(failure instanceof StaffApiError ? failure.code : null,
           "Svaret kom inte fram. Kontrollera status och fortsätt bekräfta med samma val."));
-        void refreshSelectedDetail();
+        refreshAfterFailure = true;
       }
       return false;
     } finally {
       if (version === handoutVersionRef.current) {
         handoutBusyRef.current = false;
+        selectionBufferRef.current = null;
+        setHandoutDraft(null);
         setHandoutBusy(false);
+        // refreshSelectedDetail deliberately skips during writes. Recover only
+        // after releasing that guard, including a lost selection response.
+        if (refreshAfterFailure) void refreshSelectedDetail();
       }
     }
   }, [getUsableAuth, handleProtectedAuthFailure, refreshSelectedDetail, refreshSessions, setCurrentDetail]);
@@ -1829,9 +1865,8 @@ export default function Home() {
 
   if (auth.identityMode === "pin") return <StaffExperience auth={auth} sessions={sessions} detail={detail}
     selectedId={selectedId} loading={state === "loading"} detailLoading={detailState === "loading"}
-    busy={handoutBusy} error={handoutError || error} query={query} day={operatingDay}
+    busy={handoutBusy} draft={handoutDraft} error={handoutError || error} query={query} day={operatingDay}
     recoveryTarget={handoutRecoveryTarget}
-    onDay={(day) => { followTodayRef.current = day === stockholmDay(); operatingDayRef.current = day; queueQueryVersionRef.current += 1; setOperatingDay(day); }}
     onQuery={setCurrentQuery} onSearch={handleSearchSubmit} onOpen={(id) => { setHandoutError(""); setHandoutRecoveryTarget(undefined); selectSession(id); }} onClose={closeSelectedSession}
     onLogout={handleStaffLogout} onHandout={handleHandout}
     onRefresh={() => { void refreshSessions(); void refreshSelectedDetail(); }}

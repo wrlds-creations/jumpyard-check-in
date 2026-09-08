@@ -470,7 +470,8 @@ async function handleStaffSessionList(event, correlationId) {
 
   if (event?.queryStringParameters?.view === 'board') {
     const query = event.queryStringParameters;
-    const day = stringOrNull(query.day) || new Intl.DateTimeFormat('en-CA', {
+    const todayOnly = query.scope === 'today';
+    const day = (!todayOnly && stringOrNull(query.day)) || new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Europe/Stockholm', year: 'numeric', month: '2-digit', day: '2-digit',
     }).format(new Date());
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !stringOrNull(auth.staff?.venueId)) {
@@ -480,7 +481,7 @@ async function handleStaffSessionList(event, correlationId) {
     if (!query.cursor) await refreshLinkedAddOnEffectiveSyncState(null, auth.staff.venueId);
     const board = createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSession: mapStaffSessionSummaryRow });
     const result = await board.list({ day, search: normalizeStaffSearchQuery(query.q),
-      cursor: stringOrNull(query.cursor)?.slice(0, 200) || null, venueId: auth.staff.venueId });
+      cursor: stringOrNull(query.cursor)?.slice(0, 600) || null, venueId: auth.staff.venueId, todayOnly });
     return jsonResponse(200, correlationId, { status: 'found', ...result,
       sessions: filterT0176FrontendRedeemRehearsalSessions(result.sessions) });
   }
@@ -536,8 +537,11 @@ async function handleStaffSessionDetail(event, correlationId) {
       venueId: stringOrNull(auth.staff?.venueId), bookingId: checkinSessionId.slice(8) });
     const booking = result.sessions[0];
     if (!booking) return jsonResponse(404, correlationId, { status: 'not_found', error: { code: 'session_not_found' } });
-    return jsonResponse(200, correlationId, { status: 'found', session: { ...booking,
-      items: await findStaffBookingItems(booking.rollerUniqueId, auth.staff.venueId), tickets: [] } });
+    const [items, handout] = await Promise.all([
+      findStaffBookingItems(booking.rollerUniqueId, auth.staff.venueId),
+      createHandoutStore({ executeStatement, mappedRows, stringParameter }).readState(booking, auth.staff.venueId),
+    ]);
+    return jsonResponse(200, correlationId, { status: 'found', session: { ...booking, items, handout, tickets: [] } });
   }
   const session = await findStaffSessionDetail(checkinSessionId, stringOrNull(auth.staff?.venueId));
   if (!session) {
@@ -2913,17 +2917,19 @@ async function findStaffSessionDetail(checkinSessionId, staffVenueId = null) {
   const session = mapStaffSessionSummaryRow(firstMappedRow(result));
   if (!session) return null;
 
-  const authoritativeItems = await findStaffBookingItems(session.rollerUniqueId, staffVenueId);
+  const [authoritativeItems, provisionalLinkedAddOns, tickets] = await Promise.all([
+    findStaffBookingItems(session.rollerUniqueId, staffVenueId),
+    session.bookingSyncStatus === 'pending' || session.bookingSyncStatus === 'needs_staff'
+      ? findProvisionalLinkedAddOnStaffItems(session.rollerUniqueId, staffVenueId)
+      : [],
+    findStaffBookingTickets(session.rollerUniqueId, session.selectedTicketIds, staffVenueId),
+  ]);
   const baseItems = authoritativeItems.length > 0
     ? authoritativeItems
     : session.bookingSyncStatus === 'pending'
       ? await findProvisionalStaffBookingItems(session.rollerUniqueId, staffVenueId)
       : [];
-  const provisionalLinkedAddOns = session.bookingSyncStatus === 'pending' || session.bookingSyncStatus === 'needs_staff'
-    ? await findProvisionalLinkedAddOnStaffItems(session.rollerUniqueId, staffVenueId)
-    : [];
   const items = [...baseItems, ...provisionalLinkedAddOns];
-  const tickets = await findStaffBookingTickets(session.rollerUniqueId, session.selectedTicketIds, staffVenueId);
 
   return {
     ...session,

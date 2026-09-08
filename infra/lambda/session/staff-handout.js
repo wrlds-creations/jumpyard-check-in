@@ -80,7 +80,11 @@ function buildManifest(items, visitDate) {
 function createHandoutStore({ executeStatement, mappedRows, stringParameter }) {
   const p = stringParameter;
   async function readManifest(session, venueId) {
-    const result = await executeStatement(`SELECT item.roller_unique_id, item.booking_item_id,
+    const result = await executeStatement(`WITH source_bookings AS MATERIALIZED (
+      SELECT CAST(:bookingId AS text) AS roller_unique_id UNION
+      SELECT link.linked_roller_unique_id FROM jumpyard.booking_links link
+        WHERE link.original_roller_unique_id = :bookingId AND link.link_type = 'add_product_draft'
+    ) SELECT item.roller_unique_id, item.booking_item_id,
       item.product_id, COALESCE(item.parent_product_id, catalog.summary ->> 'parentProductId') AS parent_product_id,
       COALESCE(item.product_name, catalog.summary ->> 'name') AS product_name,
       COALESCE(item.parent_product_name, catalog.summary ->> 'parentProductName') AS parent_product_name,
@@ -90,15 +94,13 @@ function createHandoutStore({ executeStatement, mappedRows, stringParameter }) {
           AND (ticket.booking_item_id = item.booking_item_id OR ticket.booking_item_key = item.booking_item_key)
           AND ticket.ticket_id IN (SELECT jsonb_array_elements_text(CAST(:selectedTickets AS jsonb))))::int AS selected_units,
       (COALESCE(catalog.summary, '{}'::jsonb) || item.item_summary)::text AS summary
-      FROM jumpyard.roller_booking_items item
-      JOIN jumpyard.roller_bookings booking USING (roller_unique_id)
+      FROM source_bookings source
+      JOIN jumpyard.roller_booking_items item ON item.roller_unique_id = source.roller_unique_id
+      JOIN jumpyard.roller_bookings booking ON booking.roller_unique_id = item.roller_unique_id
       LEFT JOIN LATERAL (SELECT pc.summary FROM jumpyard.product_catalog_cache pc
         WHERE pc.roller_env = booking.roller_env AND pc.summary ->> 'id' = item.product_id
         ORDER BY pc.fetched_at DESC LIMIT 1) catalog ON true
       WHERE booking.venue_id = :venueId AND ${paidBookingSql('booking')}
-        AND (item.roller_unique_id = :bookingId OR EXISTS (
-          SELECT 1 FROM jumpyard.booking_links link WHERE link.original_roller_unique_id = :bookingId
-            AND link.linked_roller_unique_id = item.roller_unique_id AND link.link_type = 'add_product_draft'))
       ORDER BY item.booking_item_id`, [p('venueId', venueId), p('bookingId', session.rollerUniqueId),
       p('selectedTickets', JSON.stringify(session.selectedTicketIds || []))]);
     return buildManifest(mappedRows(result).map((row) => ({
@@ -109,10 +111,13 @@ function createHandoutStore({ executeStatement, mappedRows, stringParameter }) {
       selectedUnits: Number(row.selected_units),
     })), session.visitDate);
   }
-  async function readState(session, venueId) {
-    const manifest = await readManifest(session, venueId);
+  async function readState(session, venueId, knownManifest) {
     const parameters = [p('bookingId', session.rollerUniqueId), p('visitDate', session.visitDate), p('venueId', venueId)];
-    const result = await executeStatement(`SELECT
+    // Independent reads run together. A write may reuse only the manifest it has
+    // just validated in this request; claims and receipts are always read anew.
+    const [manifest, result] = await Promise.all([
+      knownManifest ?? readManifest(session, venueId),
+      executeStatement(`SELECT
       COALESCE((SELECT jsonb_agg(jsonb_build_object('area', c.area, 'actorId', c.actor_id,
         'actorName', c.actor_name, 'expiresAt', c.expires_at, 'revision', c.revision,
         'selection', c.selection, 'pendingOperation', c.pending_operation, 'checkinSessionId', c.checkin_session_id))
@@ -124,7 +129,8 @@ function createHandoutStore({ executeStatement, mappedRows, stringParameter }) {
         ORDER BY op.completed_at) FROM jumpyard.staff_handout_operations op
         WHERE op.roller_unique_id = :bookingId AND op.visit_date = CAST(:visitDate AS date)
           AND op.status = 'completed' AND EXISTS (SELECT 1 FROM jumpyard.roller_bookings b
-            WHERE b.roller_unique_id = op.roller_unique_id AND b.venue_id = :venueId)), '[]'::jsonb)::text AS receipts`, parameters);
+            WHERE b.roller_unique_id = op.roller_unique_id AND b.venue_id = :venueId)), '[]'::jsonb)::text AS receipts`, parameters),
+    ]);
     const row = mappedRows(result)[0] || {};
     const receipts = json(row.receipts, []);
     return {

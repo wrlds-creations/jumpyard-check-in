@@ -1,16 +1,16 @@
 # #345 Staff handout and daily numbers
 
-Implementation branch: `codex/gh-345-staff-handoff`, based on `6b938a9`.
+Initial implementation: `codex/gh-345-staff-handoff`, based on `6b938a9`. Live-feedback refinements: `codex/gh-345-staff-speed`, based on merged `c3cf035`.
 Scope: [#345](https://github.com/wrlds-creations/jumpyard-check-in/issues/345).
 The reviewed #389 prototype is design input. This implementation uses the real staff root, personal PIN sessions, Cloud API and operational database. It does not ship the prototype's fixtures or a second production app.
 
 ## Guest and staff behavior
 
 1. Finish guest check-in on phone or kiosk. The existing shared ready endpoint assigns the session a four-digit number and keeps its stable QR identity.
-2. Entrance opens Ready for the next actual pass. Staff can choose Started, Upcoming or Checked-in, another pass/date, earlier arrivals, or search across the selected day's passes and states. Bookings without a session are visible but cannot skip guest payment/safety.
+2. Entrance opens Ready for the next actual pass. Staff can choose Started, Upcoming or Checked-in, another pass, earlier arrivals, or search across today's passes and states. The date picker is removed; the server owns today in Stockholm. Bookings without a session are visible but cannot skip guest payment/safety.
 3. Open a guest without claiming them. The first product selection saves both ownership and selected quantities. Another operator sees the owner and cannot overwrite that selection. Closing/reopening retains it; a resume action returns to the exact pending session.
-4. Select the purchased bands/socks or other entrance goods and confirm. Bands represent the selected admission group. Non-admission products can be collected in smaller quantities. The existing ROLLER redemption/recovery path remains authoritative.
-5. The same guest number/session QR works in Café after admission. One of two coffees can be collected, leaving one for later. Each receipt retains product identity, quantity, staff member and time. Café never redeems admission a second time.
+4. Select the purchased bands/socks or other entrance goods and confirm. One tap selects all remaining entrance goods of that kind; entrance quantity steppers are removed. Bands represent the selected admission group. Café retains partial quantities. The existing ROLLER redemption/recovery path remains authoritative.
+5. The same guest number/session QR works in Café as soon as guest check-in is ready, even before entrance admission. Purchases are visible immediately, including read-only views for guests still preparing. Each counter can collect only its own goods. One of two coffees can be collected, leaving one for later. Each receipt retains product identity, quantity, staff member and time. Café never redeems admission or marks a ready session redeemed.
 
 White surfaces, black text, JumpYard red, existing brand PNG icons and the reviewed compact typography replace the previous production list for PIN staff. Admin Cognito/TOTP and legacy dev authentication remain available. The scanner uses the existing camera reader. No APK is created.
 
@@ -18,7 +18,7 @@ White surfaces, black text, JumpYard red, existing brand PNG icons and the revie
 
 `ready_staff_session` locks the session, atomically reserves a number in `handoff_day_counters`, and attaches it in one transaction. The database clock in `Europe/Stockholm` decides the allocation date, independently of the phone or database session timezone. New allocations start at `0001` each calendar day and park; the last number is `9999`. A ready session's expiry covers the visit day.
 
-The display number is not an access credential. Its identity is `(park, allocation day, number)`. `handoffDay` is displayed on the phone and used by exact staff number search; the queue date normally selects visit date. For four-digit searches it selects **allocation date**, which may differ if a guest prepared earlier. Staff still see the visit date and guest before confirmation. Earlier allocated sessions retain their number across midnight and after admission. Staff can select the issuance date or scan the session QR instead of guessing an old number's date.
+The display number is not an access credential. Its identity is `(park, allocation day, number)`. `handoffDay` is displayed on the phone. The staff app searches today's **visit date**, including codes allocated on an earlier day. If the same number identifies multiple groups visiting today, show every candidate, including separate groups on one booking; never select one silently. Search preserves each exact session rather than substituting an admitted café session. Existing sessions retain their number across midnight. Stable QR remains the unambiguous identity. Older API callers without `scope=today` retain allocation-date lookup.
 
 The stable formats remain `JY_HANDOFF:<code>:<checkinSessionId>` and `JY_SESSION:<checkinSessionId>`. Old JY codes keep their existing values. Searching an earlier group's number still finds that session when another group starts on the same booking. Café can open the previously admitted group in that case.
 
@@ -26,7 +26,7 @@ When a day's series is full, readiness succeeds with no short code and the stabl
 
 ## Data, concurrency and recovery
 
-- Migration `0021_staff_daily_handout.sql` adds allocation day/venue, scoped uniqueness, aggregate counters, per-visit/area claims and immutable collection operations. No new runtime service is added.
+- Migration `0021_staff_daily_handout.sql` adds allocation day/venue, scoped uniqueness, aggregate counters, per-visit/area claims and immutable collection operations. No new runtime service is added. Forward migration `0022_staff_cafe_ready_collection.sql` replaces only the collection function's admission prerequisite for café. Applied `0021` stays byte-identical; ready/safety/sync/expiry, ownership, item-area and quantity guards remain. An operation containing admission items still requires confirmed redemption before its receipt completes.
 - Claim selection uses actor and visit locks, row locking and revision checks. One operator holds one active selection; entrance and café have separate owners. Ownership expires after three minutes without selection/confirmation. Read-only polling does not prolong a lease. Expired unfinished selections may be replaced; uncertain confirmed operations must be resumed with their original identity.
 - Before a ROLLER write, the exact selected operation is persisted. A lost response resumes that operation. Admission uses `staff-redeem:<sessionId>` and #333's durable receipt/ticket-state recovery. Collection finalization and claim release are atomic; replay does not create another receipt.
 - A pending operation reserves its item identity even if a later catalog correction moves the product between entrance and café. The other counter must resume the original operation rather than create another receipt for the same goods.
@@ -36,7 +36,7 @@ When a day's series is full, readiness succeeds with no short code and the stabl
 
 ## API changes
 
-`GET /v1/staff/check-in/sessions?view=board&day=YYYY-MM-DD&q=...&cursor=...` requires staff read permission and venue. It returns paginated day bookings, including `booking:<id>` rows without guest sessions, selected-session details, active claims, café remaining counts and an admitted `cafeSession` when available. `nextCursor` must be consumed until absent. The app fails visibly rather than silently showing an incomplete day. The legacy list without `view=board` is preserved. Existing linked-payment reconciliation runs before the first board page.
+`GET /v1/staff/check-in/sessions?view=board&scope=today&q=...&cursor=...` requires staff read permission and venue. The server selects the Stockholm date, ignoring a supplied `day` for this scope. It returns paginated day bookings, including `booking:<id>` rows without guest sessions, selected-session details, active claims, café remaining counts and an admitted `cafeSession` when available. `nextCursor` must be consumed until absent. The app fails visibly rather than silently showing an incomplete day. The legacy list without `view=board` and board callers using `day` without `scope=today` are preserved. Existing linked-payment reconciliation runs before the first board page.
 
 `GET /v1/staff/check-in/sessions/{id}` includes authoritative `handout.items`, `claims`, `receipts`, available quantities and admission actor. Opening it never acquires a claim.
 
@@ -139,3 +139,21 @@ Open [the guest app](https://checkin.jumpyard.se) and [the staff app](https://st
 5. Test the physical Motorola camera and an actual website booking ticket QR. The previously inspected PDF had no QR; unsupported provider URL formats have not been guessed. The stable JumpYard session QR and raw booking/ticket identifiers retain their supported search paths.
 
 Issue #345 remains open for this practical acceptance. APK packaging and a live load benchmark are outside this delivery; local automation and server readback do not substitute for handset/physical collection proof.
+
+## Live-feedback refinements — 2026-09-08
+
+Love approved keeping #345 open and improving the published app. Café collection is authorized “Ja, så snart gästens check-in är klar”, independently of entrance admission. The UI changes and API/date compatibility are described above. Applied migration 0021 is unchanged; 0022 replaces its collection function while preserving grants, counters, all other guards and immutable pending operations. No new AWS resource, route, permission, dependency or provider write is introduced.
+
+### Performance evidence
+
+Read-only CloudWatch aggregates from the existing API access log over one hour: board 166 successful requests, mean 7,031 ms and p95 7,907 ms; detail 336 requests, mean 623 ms and p95 794 ms; handout 20 requests, mean 1,513 ms (selection and confirmation share this route). This is server latency, not browser/network timing.
+
+The same restricted live session database principal read 42 bookings for September 8. The deployed board query took 10,808 ms in a timed Data API call; the local revised query took 141 ms. Separate EXPLAIN ANALYZE runs measured 15,830 vs 111 ms: the old entitlement join examined unrelated bookings and performed roughly 772,000 item-index probes; the new query first limits each row to its own booking and linked purchases. These are bounded diagnostic samples, not a load test or a promise of every end-to-end response time. No customer write occurred.
+
+### Validation and rollout status
+
+Focused native PostgreSQL/Lambda/pure checks: 29/29; staff component, selection-buffer and client checks: 13/13; full staff test suite: 91/91. Cases include café before admission with a lost committed receipt and safe replay; retained safety/readiness/expiry/payment/area guards; whole-day pagination; earlier allocations and ambiguous groups; rapid/coalesced taps, failed/cancelled saves, and preserving another selected group.
+
+Local lint, TypeScript, full repository validation and the staff production build passed. All 22 migrations also applied to a new PostgreSQL 17 database. Browser review at 320/390/1,100 px verified instant multi-product selection with five-second delayed responses; accepted revision ordering; green completed goods without counts; café visibility before guest readiness with disabled collection; partial café collection before admission; recovery after a lost committed selection; logout discarding the unsent second selection; and an older delayed board response preserving the accepted selection. No horizontal overflow was present at 320 or 1,100 px. Physical Motorola/camera, real ticket QR and customer handout remain Love's acceptance.
+
+Protected promotion remains pending until the reviewed PR is merged and its immutable artifact is built. Rollback candidate is the previously deployed `ca38fec4515d135f642d10de3f839871d07e2498` from release `34229583004`. Keep 0022 applied on rollback: old Lambda code independently blocks early café collection, but existing café receipts and daily counters remain intact. Staff must resume outstanding receipts with a compatible artifact; never undo physical collection or roll counters back.
