@@ -28,6 +28,8 @@ From this app: `npm run lint`, `npx tsc --noEmit`, `node --test src/lib/*.test.m
 From repository root: `npm run validate`, `npm run infra:check`, `npm run validate:gh345-staff-handout`.
 The native database tests require the disposable PostgreSQL instance described in [the issue runbook](../docs/gh-345-staff-handout.md).
 
-Final results on September 8: lint, TypeScript, all 84 staff tests and production build passed. Repository and infrastructure suites passed. #345 passed 25 native/API/pure checks plus six frontend/model tests without skips; all 21 migrations also passed against a newly created database. Phone validation/build passed. Detailed results, known dependency follow-up and rollout/rollback plan are in the issue runbook.
+Final results on September 8: lint, TypeScript, all 84 staff tests and production build passed. Repository and infrastructure suites passed. #345 passed 26 native/API/pure checks plus six frontend/model tests without skips; all 21 migrations also passed against a newly created database. Phone validation/build passed. Detailed results, known dependency follow-up and rollout/rollback plan are in the issue runbook.
 
-No commit or deployment is included in this local review. Physical Motorola/camera and ordinary website ticket QR acceptance follow protected promotion. APK packaging remains outside #345.
+Following Love's explicit publication approval, PRs #393/#394 merged and immutable release `34229583004` / `ca38fec4515d135f642d10de3f839871d07e2498` passed protected Park `34230754910` and public `34231738633`. The real [staff app](https://staff-checkin.jumpyard.se) and [guest app](https://checkin.jumpyard.se) now serve that artifact; all 60 independently fetched Park/public static responses matched. [Exact migration, backend, approval and public-version evidence](../docs/gh-345-staff-handout.md#protected-rollout--2026-09-08).
+
+Physical Motorola/camera, two-phone collection and ordinary website ticket QR acceptance remain for Love's live walkthrough. APK packaging remains outside #345. The old localhost `/preview` is not the deployed app.

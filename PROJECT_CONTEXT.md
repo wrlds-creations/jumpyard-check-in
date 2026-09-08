@@ -15,7 +15,7 @@ The Nacka path is `dev/Playground -> Park verification -> protected public promo
 
 The [2026-06-11 roadmap](docs/assets/jumpyard-next-sprint-roadmap.pdf) covers phone, admin, and required cloud work in Sprint 3.
 
-The check-in app suite connects to Roller Playground and park-test Live through a server-side layer. The target production architecture remains:
+The apps connect to Roller Playground or park-test Live through the server API:
 
 ```text
 check-in app -> JumpYard Cloud/server API -> Roller API
@@ -25,8 +25,8 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 ## Current Workstream Ownership
 
-- Sprint 3 covers `jumpyard-checkin-phone`, `jumpyard-checkin-admin`, and required Cloud/API/AWS work. Every implementation needs a plain-language explanation, Love's approval, an Issue, and an issue-linked branch/PR.
-- Kiosk UI/print/terminal and JumpyBoard/AirHive remain separate workstreams; only approved interface contracts may cross into shared Cloud/API.
+- Sprint 3: phone/admin and required Cloud/API/AWS. Implementation requires a plain-language explanation, Love's approval, an Issue and issue-linked branch/PR.
+- Kiosk/print/terminal and JumpyBoard/AirHive are separate; only approved interface contracts cross into shared Cloud/API.
 
 ## Context Archives
 
@@ -54,7 +54,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - The Nacka `50871` full-flow window for `2026-06-29` through `2026-09-30` remains open until Love asks to close it; Issue/PR closeout is not a close-window deploy.
 - Park-test phone PWA builds must set `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL` to the park-test API, or the app falls back to dev.
 - Park-test post-payment sync only refreshes a recent local `new_booking` prepayment draft.
-- Deployed gates fail closed, require Nacka `50871` plus allowed dates, and reject invalid request items before side effects. The 27 routes use six IAM, four Cognito JWT, and seventeen Lambda-auth boundaries; shared-IP-safe route limits passed the 120-guest/20-minute and 40-device burst models.
+- Deployed gates fail closed, require Nacka `50871` plus allowed dates, and reject invalid request items before side effects. The 28 routes use six IAM, four Cognito JWT, and eighteen Lambda-auth boundaries; shared-IP-safe route limits passed the 120-guest/20-minute and 40-device burst models.
 - T0194: staff PIN; admin Cognito/TOTP (8-character upper/lower/digit). Apps share phone styling; Cognito stays English/Open Sans.
 
 ## Durable Workflow Facts
@@ -70,7 +70,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 ## Current Implemented Flow Facts
 
 - #340: safe, correlated server-error reports.
-- #345 [staff handout](docs/gh-345-staff-handout.md): implementation; rollout pending.
+- #345 [staff handout](docs/gh-345-staff-handout.md): daily numbers and handout live.
 
 - Lookup is Aurora-first with Roller-authoritative refresh, Nacka/date scope, and nearest same-day selection. Ready bookings start/resume a server session; opaque booking-bound guest proof stays in phone memory and hash-only in Aurora.
 - Safety: server-owned handoff, approval-to-safety and final paid check (D0199/#331); video recovery/media (D0210/#343). Staff identity/heartbeat: #334.
