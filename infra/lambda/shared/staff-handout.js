@@ -51,6 +51,10 @@ function buildManifest(items, visitDate) {
     const item = withPackageContents(raw);
     const kind = classifyItem(item);
     if (!kind) return [];
+    const productName = item.productName?.trim();
+    const displayName = (!productName || /^(antal|quantity|qty)$/i.test(productName))
+      ? item.parentProductName?.trim() || productName || 'Produkt'
+      : productName;
     const parts = item.packageContents || [{ kind, quantity: item.quantity,
       collection: ['coffee', 'pizza', 'cafe'].includes(kind) ? 'later' : 'checkin' }];
     return parts.filter((part) => part.kind !== 'admission' || raw.selectedUnits !== 0).map((part) => ({
@@ -60,11 +64,12 @@ function buildManifest(items, visitDate) {
       productId: item.productId,
       area: part.collection === 'later' ? 'cafe' : 'entrance',
       kind: part.kind,
-      name: part.kind === 'admission' ? 'Besöksband' : part.kind === 'pizza' ? 'Pizza' : item.productName || 'Produkt',
+      name: part.kind === 'admission' ? 'Besöksband'
+        : item.packageContents && part.kind === 'pizza' ? 'Pizza' : displayName,
       detail: part.kind === 'admission'
         ? [...new Set([part.durationMinutes ? `${part.durationMinutes} min` : null,
           item.parentProductName, item.productName].filter(Boolean))].join(' · ') || null
-        : item.parentProductName || null,
+        : item.parentProductName && item.parentProductName !== displayName ? item.parentProductName : null,
       quantity: part.quantity,
       ...(part.kind === 'admission' && Number.isSafeInteger(raw.selectedUnits)
         ? { sessionLimit: Math.min(part.quantity, raw.selectedUnits * (item.packageContents ? 2 : 1)) } : {}),
