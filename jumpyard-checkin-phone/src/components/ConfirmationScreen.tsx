@@ -120,7 +120,7 @@ export const ConfirmationScreen = ({
 
                 </div>
 
-                {!completed && handoffQrValue && (
+                {handoffQrValue && (
                     <div
                         className="mb-4 border-b border-border pb-4 text-center"
                         data-testid="ready-entry-handoff-card"
@@ -128,14 +128,16 @@ export const ConfirmationScreen = ({
                         <p className="text-[10px] font-black italic uppercase tracking-wider text-primary">
                             {t.confirm.showStaffNote}
                         </p>
+                        {handoffCode && <p data-testid="ready-entry-number" className="mt-2 text-5xl font-black tabular-nums tracking-wider">{handoffCode}</p>}
                         <QrCode
                             value={handoffQrValue}
                             className="mx-auto mt-3 h-40 w-40 rounded-xl border border-border bg-white p-2"
                             testId="ready-entry-handoff-qr"
                         />
                         <p className="mx-auto mt-3 max-w-[18rem] text-sm font-bold italic text-foreground">
-                            {t.confirm.qrHelp}
+                            {lang === 'sv' ? 'Visa samma nummer eller QR-kod i entrén och caféet.' : 'Use the same number or QR code at the entrance and café.'}
                         </p>
+                        {checkinSession?.handoffDay && <p className="mt-1 text-xs font-medium">{lang === 'sv' ? 'Nummer från' : 'Number issued'} {checkinSession.handoffDay}</p>}
                     </div>
                 )}
 

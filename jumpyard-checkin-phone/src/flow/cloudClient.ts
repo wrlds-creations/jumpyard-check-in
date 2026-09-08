@@ -111,6 +111,7 @@ interface CloudSession {
   guestResumeStep?: string | null;
   handoffStatus?: string | null;
   handoffCode?: string | null;
+  handoffDay?: string | null;
   safetyStatus?: string | null;
   completedAt?: string | null;
   expiresAt?: string | null;
@@ -1069,6 +1070,7 @@ function toCheckInSession(session: CloudSession, guestAccess?: CloudGuestAccess)
     guestAccessToken: normalizeOptionalString(guestAccess?.token) ?? undefined,
     guestAccessExpiresAt: guestAccess?.expiresAt ?? null,
     handoffCode: session.handoffCode ?? null,
+    handoffDay: session.handoffDay ?? null,
     handoffStatus: session.handoffStatus ?? null,
     safetyStatus: session.safetyStatus ?? null,
     completedAt: session.completedAt ?? null,

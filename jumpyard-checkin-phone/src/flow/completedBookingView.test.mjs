@@ -106,7 +106,8 @@ test('ready and completed confirmation screens render and invoke the supplied Ne
       buttons[0].props.onClick();
       assert.equal(clicks, 1);
       assert.equal(content(nodes(tree, node => node.type === 'h1')[0]), state === 'ready' ? t.confirm.title : t.confirm.alreadyCheckedInTitle);
-      assert.equal(markup.includes('data-testid="ready-entry-handoff-qr"'), state === 'ready');
+      // The same session QR remains available after admission for café collection.
+      assert.equal(markup.includes('data-testid="ready-entry-handoff-qr"'), state !== 'already-checked-in');
       assert.equal(markup.includes('data-testid="already-checked-in-card"'), state !== 'ready');
     }
   }

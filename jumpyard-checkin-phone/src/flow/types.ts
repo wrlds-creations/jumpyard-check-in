@@ -68,6 +68,7 @@ export interface CheckInSession {
   guestAccessExpiresAt?: string | null;
   handoffStatus?: string | null;
   handoffCode?: string | null;
+  handoffDay?: string | null;
   safetyStatus?: string | null;
   completedAt?: string | null;
   expiresAt?: string | null;

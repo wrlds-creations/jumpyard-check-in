@@ -11,6 +11,8 @@ const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
 const { buildCheckinEmailMessage, buildCheckinEmailPreview } = require('./email-template');
 const { withPackageContents } = require('./package-contents');
+const { createHandoutStore } = require('./staff-handout');
+const { createStaffBoard } = require('./staff-board');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const ACTIVE_SESSION_STATUSES = ['guest_in_progress', 'ready_for_staff', 'staff_in_progress'];
@@ -434,11 +436,13 @@ async function handleReadyForStaff(event, body, correlationId) {
     });
   }
 
-  const handoffCode = session.handoffCode || (await generateUnusedHandoffCode());
   const updatedSession = await markSessionReadyForStaff(session.checkinSessionId, {
-    handoffCode,
     safetyStatus: request.safetyStatus,
   });
+  if (!updatedSession || updatedSession.status !== 'ready_for_staff') {
+    return jsonResponse(409, correlationId, { status: 'blocked', session: updatedSession,
+      error: { code: 'session_state_changed', message: 'The visit has already completed or expired. Refresh its status.' } });
+  }
   await completeIdempotencyKey(request.idempotencyKey, 'succeeded', `ready_for_staff:${updatedSession.checkinSessionId}`);
   await writeEventLog({
     booking: updatedSession,
@@ -462,6 +466,23 @@ async function handleStaffSessionList(event, correlationId) {
   const auth = await authorizeStaffRequest(event, STAFF_READ_PERMISSION);
   if (!auth.ok) {
     return staffAuthErrorResponse(correlationId, auth);
+  }
+
+  if (event?.queryStringParameters?.view === 'board') {
+    const query = event.queryStringParameters;
+    const day = stringOrNull(query.day) || new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Stockholm', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !stringOrNull(auth.staff?.venueId)) {
+      return jsonResponse(400, correlationId, { status: 'invalid_request', error: { code: 'invalid_operating_day' } });
+    }
+    // Preserve #289's reconciliation before evaluating the Ready stage.
+    if (!query.cursor) await refreshLinkedAddOnEffectiveSyncState(null, auth.staff.venueId);
+    const board = createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSession: mapStaffSessionSummaryRow });
+    const result = await board.list({ day, search: normalizeStaffSearchQuery(query.q),
+      cursor: stringOrNull(query.cursor)?.slice(0, 200) || null, venueId: auth.staff.venueId });
+    return jsonResponse(200, correlationId, { status: 'found', ...result,
+      sessions: filterT0176FrontendRedeemRehearsalSessions(result.sessions) });
   }
 
   const request = normalizeStaffListRequest(event);
@@ -509,6 +530,15 @@ async function handleStaffSessionDetail(event, correlationId) {
     });
   }
 
+  if (checkinSessionId.startsWith('booking:')) {
+    const board = createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSession: mapStaffSessionSummaryRow });
+    const result = await board.list({ day: null, search: null, cursor: null,
+      venueId: stringOrNull(auth.staff?.venueId), bookingId: checkinSessionId.slice(8) });
+    const booking = result.sessions[0];
+    if (!booking) return jsonResponse(404, correlationId, { status: 'not_found', error: { code: 'session_not_found' } });
+    return jsonResponse(200, correlationId, { status: 'found', session: { ...booking,
+      items: await findStaffBookingItems(booking.rollerUniqueId, auth.staff.venueId), tickets: [] } });
+  }
   const session = await findStaffSessionDetail(checkinSessionId, stringOrNull(auth.staff?.venueId));
   if (!session) {
     return jsonResponse(404, correlationId, {
@@ -520,9 +550,11 @@ async function handleStaffSessionDetail(event, correlationId) {
     });
   }
 
+  const handout = await createHandoutStore({ executeStatement, mappedRows, stringParameter })
+    .readState(session, stringOrNull(auth.staff?.venueId));
   return jsonResponse(200, correlationId, {
-    status: 'found',
-    session,
+    status: 'found', session: { ...session, handout, counts: { ...session.counts,
+      admission: handout.items.filter((item) => item.kind === 'admission').reduce((sum, item) => sum + (item.sessionLimit ?? item.quantity), 0) } },
   });
 }
 
@@ -2515,6 +2547,7 @@ async function findReadyStaffSessions(request, staffVenueId = null) {
          cs.status,
          cs.safety_status,
          cs.handoff_code,
+         cs.handoff_day::text AS handoff_day,
          cs.handoff_status,
          COALESCE(cs.session_summary ->> 'bookingSyncStatus', 'confirmed') AS booking_sync_status,
          cs.selected_ticket_ids::text AS selected_ticket_ids,
@@ -2724,12 +2757,14 @@ async function findStaffSessionDetail(checkinSessionId, staffVenueId = null) {
        cs.status,
        cs.safety_status,
        cs.handoff_code,
+       cs.handoff_day::text AS handoff_day,
        cs.handoff_status,
        COALESCE(cs.session_summary ->> 'bookingSyncStatus', 'confirmed') AS booking_sync_status,
        cs.selected_ticket_ids::text AS selected_ticket_ids,
        cs.expires_at::text AS expires_at,
        cs.ready_for_staff_at::text AS ready_for_staff_at,
        cs.completed_at::text AS completed_at,
+       (cs.session_summary -> 'staffActor')::text AS checked_in_by,
        cs.created_at::text AS created_at,
        cs.updated_at::text AS updated_at,
        b.booking_status,
@@ -3963,6 +3998,7 @@ async function findActiveSession(rollerUniqueId, visitDate) {
        safety_status,
        session_summary ->> 'guestResumeStep' AS guest_resume_step,
        handoff_code,
+       handoff_day::text AS handoff_day,
        handoff_status,
        selected_ticket_ids::text AS selected_ticket_ids,
        expires_at::text AS expires_at,
@@ -3994,6 +4030,7 @@ async function findSessionById(checkinSessionId) {
        safety_status,
        session_summary ->> 'guestResumeStep' AS guest_resume_step,
        handoff_code,
+       handoff_day::text AS handoff_day,
        handoff_status,
        selected_ticket_ids::text AS selected_ticket_ids,
        expires_at::text AS expires_at,
@@ -4029,6 +4066,7 @@ function mapStaffSessionSummaryRow(row) {
     },
     bookingReference: stringOrNull(row.booking_reference),
     bookingSyncStatus: stringOrNull(row.booking_sync_status) || 'confirmed',
+    checkedInBy: parseJsonObject(row.checked_in_by),
     checkinSessionId: stringOrNull(row.checkin_session_id),
     completedAt: stringOrNull(row.completed_at),
     counts: {
@@ -4040,6 +4078,7 @@ function mapStaffSessionSummaryRow(row) {
     expiresAt: stringOrNull(row.expires_at),
     guest,
     handoffCode: stringOrNull(row.handoff_code),
+    handoffDay: stringOrNull(row.handoff_day),
     handoffStatus: stringOrNull(row.handoff_status),
     isExpired: isExpired(row.expires_at),
     readyForStaffAt: stringOrNull(row.ready_for_staff_at),
@@ -4109,6 +4148,7 @@ async function createSession({ booking, guestResumeStep, idempotencyKey, selecte
        safety_status,
        session_summary ->> 'guestResumeStep' AS guest_resume_step,
        handoff_code,
+       handoff_day::text AS handoff_day,
        handoff_status,
        selected_ticket_ids::text AS selected_ticket_ids,
        expires_at::text AS expires_at,
@@ -4149,6 +4189,7 @@ async function markGuestResumeStep(checkinSessionId, guestResumeStep) {
        safety_status,
        session_summary ->> 'guestResumeStep' AS guest_resume_step,
        handoff_code,
+       handoff_day::text AS handoff_day,
        handoff_status,
        selected_ticket_ids::text AS selected_ticket_ids,
        expires_at::text AS expires_at,
@@ -4165,46 +4206,16 @@ async function markGuestResumeStep(checkinSessionId, guestResumeStep) {
   return mapSessionRow(firstMappedRow(result)) || findSessionById(checkinSessionId);
 }
 
-async function markSessionReadyForStaff(checkinSessionId, { handoffCode, safetyStatus }) {
+async function markSessionReadyForStaff(checkinSessionId, { safetyStatus }) {
   const result = await executeStatement(
-    `UPDATE jumpyard.checkin_sessions
-     SET
-       status = 'ready_for_staff',
-       handoff_status = 'ready_for_staff',
-       safety_status = COALESCE(:safetyStatus, safety_status),
-       handoff_code = COALESCE(handoff_code, :handoffCode),
-       ready_for_staff_at = COALESCE(ready_for_staff_at, now()),
-       updated_at = now(),
-       session_summary = session_summary || CAST(:sessionSummary AS jsonb)
-     WHERE checkin_session_id = :checkinSessionId
-     RETURNING
-       checkin_session_id,
-       roller_unique_id,
-       booking_reference,
-       visit_date::text AS visit_date,
-       status,
-       safety_status,
-       handoff_code,
-       handoff_status,
-       selected_ticket_ids::text AS selected_ticket_ids,
-       expires_at::text AS expires_at,
-       ready_for_staff_at::text AS ready_for_staff_at,
-       completed_at::text AS completed_at,
-       created_at::text AS created_at,
-       updated_at::text AS updated_at`,
-    [
-      stringParameter('checkinSessionId', checkinSessionId),
-      stringParameter('handoffCode', handoffCode),
-      stringParameter('safetyStatus', safetyStatus),
-      stringParameter(
-        'sessionSummary',
-        JSON.stringify({
-          readyForStaffSource: 'checkin_session_api',
-        }),
-      ),
-    ],
+    `SELECT checkin_session_id, roller_unique_id, booking_reference, visit_date::text AS visit_date,
+       status, safety_status, handoff_code, handoff_day::text AS handoff_day, handoff_status,
+       selected_ticket_ids::text AS selected_ticket_ids, expires_at::text AS expires_at,
+       ready_for_staff_at::text AS ready_for_staff_at, completed_at::text AS completed_at,
+       created_at::text AS created_at, updated_at::text AS updated_at
+     FROM jumpyard.ready_staff_session(:checkinSessionId, :safetyStatus)`,
+    [stringParameter('checkinSessionId', checkinSessionId), stringParameter('safetyStatus', safetyStatus)],
   );
-
   return mapSessionRow(firstMappedRow(result));
 }
 
@@ -4214,24 +4225,10 @@ async function markSessionExpired(checkinSessionId) {
      SET status = 'expired',
          handoff_status = 'expired',
          updated_at = now()
-     WHERE checkin_session_id = :checkinSessionId`,
+     WHERE checkin_session_id = :checkinSessionId
+       AND status IN ('guest_in_progress', 'ready_for_staff', 'staff_in_progress') AND expires_at <= now()`,
     [stringParameter('checkinSessionId', checkinSessionId)],
   );
-}
-
-async function generateUnusedHandoffCode() {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const code = `JY${crypto.randomInt(1000, 10000)}`;
-    const result = await executeStatement(
-      `SELECT 1 FROM jumpyard.checkin_sessions WHERE handoff_code = :handoffCode LIMIT 1`,
-      [stringParameter('handoffCode', code)],
-    );
-    if ((result.records ?? []).length === 0) return code;
-  }
-
-  const error = new Error('Could not allocate a unique handoff code.');
-  error.code = 'handoff_code_collision';
-  throw error;
 }
 
 async function reserveIdempotencyKey(operation, idempotencyKey, requestHash) {
@@ -4342,6 +4339,7 @@ function mapSessionRow(row) {
     expiresAt: stringOrNull(row.expires_at),
     guestResumeStep: normalizeGuestResumeStep(row.guest_resume_step),
     handoffCode: stringOrNull(row.handoff_code),
+    handoffDay: stringOrNull(row.handoff_day),
     handoffStatus: stringOrNull(row.handoff_status),
     readyForStaffAt: stringOrNull(row.ready_for_staff_at),
     rollerUniqueId: stringOrNull(row.roller_unique_id),

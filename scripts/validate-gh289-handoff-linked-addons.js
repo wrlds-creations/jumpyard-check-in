@@ -57,6 +57,9 @@ function loadInternals(sourcePath, source, names, send) {
       },
     },
     require(moduleId) {
+      if (moduleId === './staff-handout') return require('../infra/lambda/shared/staff-handout');
+      if (moduleId === './staff-handout-write') return require('../infra/lambda/redeem/staff-handout-write');
+      if (moduleId === './staff-board') return require('../infra/lambda/session/staff-board');
       if (moduleId === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
       if (moduleId.startsWith('@aws-sdk/')) return fakeAwsModule(send);

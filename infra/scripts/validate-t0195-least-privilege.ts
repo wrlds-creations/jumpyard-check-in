@@ -31,7 +31,7 @@ interface Template {
   readonly Resources?: Record<string, TemplateResource>;
 }
 
-type Permission = 'DELETE' | 'INSERT' | 'SELECT' | 'UPDATE';
+type Permission = 'DELETE' | 'INSERT' | 'SELECT' | 'UPDATE' | 'EXECUTE';
 
 function synthParkTest(): Template {
   const configPath = path.resolve(__dirname, '..', 'config', 'park-test.json');
@@ -142,7 +142,7 @@ function parseGrants(sql: string): Map<string, Map<string, Set<Permission>>> {
     const permissions = match[1]
       .split(',')
       .map((value) => value.trim().toUpperCase())
-      .filter((value): value is Permission => ['DELETE', 'INSERT', 'SELECT', 'UPDATE'].includes(value));
+      .filter((value): value is Permission => ['DELETE', 'INSERT', 'SELECT', 'UPDATE', 'EXECUTE'].includes(value));
     const roleGrants = result.get(role) ?? new Map<string, Set<Permission>>();
     for (const table of tables) {
       const tableGrants = roleGrants.get(table) ?? new Set<Permission>();
@@ -171,11 +171,13 @@ function validateHandlerSqlAgainstGrants(
   grants: Map<string, Map<string, Set<Permission>>>,
   handler: HandlerName,
 ): void {
-  const filePath = path.resolve(__dirname, '..', 'lambda', handler, 'index.js');
-  const source = readFileSync(filePath, 'utf8');
+  const directory = path.resolve(__dirname, '..', 'lambda', handler);
+  const source = readdirSync(directory).filter((name) => name.endsWith('.js'))
+    .map((name) => readFileSync(path.join(directory, name), 'utf8')).join('\n');
   const role = ROLE_BY_HANDLER[handler];
   const patterns: readonly [Permission, RegExp][] = [
-    ['SELECT', /\b(?:FROM|JOIN)\s+jumpyard\.([a-z_]+)/gi],
+    ['SELECT', /\b(?:FROM|JOIN)\s+jumpyard\.([a-z_]+)\b(?!\s*\()/gi],
+    ['EXECUTE', /\b(?:FROM|JOIN|SELECT)\s+jumpyard\.([a-z_]+)\s*\(/gi],
     ['INSERT', /\bINSERT\s+INTO\s+jumpyard\.([a-z_]+)/gi],
     ['UPDATE', /\bUPDATE\s+jumpyard\.([a-z_]+)/gi],
     ['DELETE', /\bDELETE\s+FROM\s+jumpyard\.([a-z_]+)/gi],

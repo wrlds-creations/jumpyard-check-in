@@ -1,4 +1,5 @@
 const DEFAULT_CLOUD_API_BASE_URL = "https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com";
+export const STAFF_BOARD_PAGE_INTERVAL_MS = 300;
 
 export interface StaffBookingSummary {
   amountOwingCents: number | null;
@@ -12,6 +13,7 @@ export interface StaffBookingSummary {
 }
 
 export interface StaffSessionCounts {
+  admission?: number;
   bookingItems: number;
   selectedTickets: number;
   tickets: number;
@@ -34,6 +36,12 @@ export interface StaffSessionSummary {
   expiresAt: string | null;
   guest: StaffGuestIdentity | null;
   handoffCode: string | null;
+  handoffDay?: string | null;
+  checkedInBy?: { actorId?: string; displayName?: string } | null;
+  claims?: HandoutClaim[];
+  cafeQuantity?: number;
+  cafeRemaining?: number;
+  cafeSession?: Pick<StaffSessionSummary, "checkinSessionId" | "handoffCode" | "handoffDay" | "completedAt" | "checkedInBy" | "status" | "handoffStatus"> | null;
   handoffStatus: string | null;
   isExpired: boolean;
   readyForStaffAt: string | null;
@@ -90,6 +98,53 @@ export interface StaffBookingTicket {
 export interface StaffSessionDetail extends StaffSessionSummary {
   items: StaffBookingItem[];
   tickets: StaffBookingTicket[];
+  handout?: HandoutState;
+}
+
+export type HandoutArea = "entrance" | "cafe";
+export interface HandoutSelection { id: string; quantity: number }
+export interface HandoutItem extends HandoutSelection {
+  area: HandoutArea;
+  kind: string;
+  name: string;
+  detail: string | null;
+  collected: number;
+  available?: number;
+}
+export interface HandoutClaim {
+  area: HandoutArea;
+  actorId: string | null;
+  actorName: string | null;
+  expiresAt: string;
+  revision: number;
+  selection: HandoutSelection[];
+  pendingOperation: string | null;
+  checkinSessionId: string;
+}
+export interface HandoutReceipt {
+  operationId: string;
+  area: HandoutArea;
+  actorId: string;
+  actorName: string;
+  items: HandoutItem[];
+  completedAt: string;
+}
+export interface HandoutState {
+  claims: HandoutClaim[];
+  items: HandoutItem[];
+  receipts: HandoutReceipt[];
+}
+export interface HandoutRequest {
+  area: HandoutArea;
+  action: "select" | "release" | "confirm";
+  revision: number;
+  selection?: HandoutSelection[];
+}
+export interface HandoutResult {
+  status: string;
+  completed?: boolean;
+  handout: HandoutState;
+  session: Partial<StaffSessionSummary>;
 }
 
 export type StaffRedeemRecovery = "local_receipt" | "roller_ticket_status";
@@ -221,6 +276,7 @@ export function isStaffAuthenticationFailure(code: string | null) {
 export class StaffApiError extends Error {
   readonly code: string | null;
   readonly status: number;
+  recoveryTarget?: { checkinSessionId: string; area: HandoutArea };
 
   constructor(message: string, status: number, code?: string | null) {
     super(message);
@@ -510,25 +566,59 @@ export async function updateAdminStaff(
   return staff;
 }
 
-export async function listReadyStaffSessions(staffToken: string, query?: string): Promise<StaffSessionSummary[]> {
+export async function listReadyStaffSessions(staffToken: string, query?: string, day?: string): Promise<StaffSessionSummary[]> {
   const params = new URLSearchParams();
+  if (day) params.set("view", "board");
+  if (day) params.set("day", day);
   const trimmedQuery = query?.trim();
   if (trimmedQuery) params.set("q", trimmedQuery);
-
-  const suffix = params.toString() ? `?${params.toString()}` : "";
-  const response = await fetch(`${getApiBaseUrl()}/v1/staff/check-in/sessions${suffix}`, {
-    headers: {
-      accept: "application/json",
-      authorization: `Bearer ${staffToken}`,
-    },
-  });
-  const body = await parseJson<StaffListResponse>(response);
-
-  if (!response.ok || body.status !== "found") {
-    throw staffApiError(response, body, "JumpYard Cloud kunde inte hämta handovers.");
+  const sessions: StaffSessionSummary[] = [];
+  const cursors = new Set<string>();
+  for (let page = 0; page < 50; page += 1) {
+    const pageStartedAt = Date.now();
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    const response = await fetch(`${getApiBaseUrl()}/v1/staff/check-in/sessions${suffix}`, {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${staffToken}`,
+      },
+    });
+    const body = await parseJson<StaffListResponse & { nextCursor?: string | null }>(response);
+    if (!response.ok || body.status !== "found") {
+      throw staffApiError(response, body, "JumpYard Cloud kunde inte hämta handovers.");
+    }
+    sessions.push(...(body.sessions ?? []).filter((session) => Boolean(session.checkinSessionId)));
+    if (!body.nextCursor) return sessions;
+    if (cursors.has(body.nextCursor)) break;
+    cursors.add(body.nextCursor);
+    params.set("cursor", body.nextCursor);
+    // Bound simultaneous whole-day pagination across the park's staff phones.
+    const pause = STAFF_BOARD_PAGE_INTERVAL_MS - (Date.now() - pageStartedAt);
+    if (pause > 0) await new Promise<void>((resolve) => setTimeout(resolve, pause));
   }
+  throw new Error("Alla bokningar kunde inte hämtas. Sök efter gästen eller uppdatera igen.");
+}
 
-  return (body.sessions ?? []).filter((session) => Boolean(session.checkinSessionId));
+export async function changeStaffHandout(checkinSessionId: string, staffToken: string, request: HandoutRequest): Promise<HandoutResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/v1/staff/check-in/sessions/${encodeURIComponent(checkinSessionId)}/handout`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { accept: "application/json", authorization: `Bearer ${staffToken}`, "content-type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    const body = await parseJson<HandoutResult & { checkinSessionId?: string; area?: HandoutArea; error?: { code?: string; message?: string } }>(response);
+    if (!response.ok || body.status !== "ok") {
+      const error = staffApiError(response, body, "Utlämningen kunde inte bekräftas. Kontrollera status och försök igen.");
+      if (body.checkinSessionId && (body.area === "entrance" || body.area === "cafe")) {
+        error.recoveryTarget = { checkinSessionId: body.checkinSessionId, area: body.area };
+      }
+      throw error;
+    }
+    return body;
+  } finally { clearTimeout(timeout); }
 }
 
 export async function getStaffSession(checkinSessionId: string, staffToken: string): Promise<StaffSessionDetail> {

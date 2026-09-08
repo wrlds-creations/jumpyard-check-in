@@ -277,7 +277,7 @@ function validateQueueRequestStability(page) {
     'automatic staff queue refresh',
   );
   assert.match(automaticRefresh, /queueLastRequestedKeyRef\.current === scheduledRequestKey/);
-  assert.match(automaticRefresh, /\[authSessionKey, query, refreshSessions\]/);
+  assert.match(automaticRefresh, /\[authSessionKey, query, operatingDay, refreshSessions\]/);
   assert.doesNotMatch(automaticRefresh, /\[auth, query, refreshSessions\]/);
   assert.doesNotMatch(automaticRefresh, /queueQueryRef\.current = query/);
 

@@ -254,6 +254,14 @@ const API_ROUTE_PROTECTION_CATALOG = [
   },
   {
     authorizationType: 'NONE',
+    handler: 'redeem',
+    routeKey: 'POST /v1/staff/check-in/sessions/{checkinSessionId}/handout',
+    throttlingBurstLimit: 40,
+    throttlingRateLimit: 20,
+    trustClass: 'staff_protected',
+  },
+  {
+    authorizationType: 'NONE',
     handler: 'booking',
     routeKey: 'POST /v1/bookings/quote',
     throttlingBurstLimit: 40,
