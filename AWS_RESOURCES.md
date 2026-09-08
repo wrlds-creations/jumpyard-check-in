@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #353 Klarna Phone Exclusions (Published 2026-09-08; No AWS Resource Change)
+
+Reviewed [PR #390](https://github.com/wrlds-creations/jumpyard-check-in/pull/390) merged `c60f4d3d9a901ebae625af9f1ad03c3ddfa47f4f`. Immutable [release 34207599674](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34207599674), artifact `10048622809`, passed protected [Park 34208225791](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34208225791) and [public 34208537881](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34208537881). Each actual plan was reviewed before delegated approval under Love's explicit publication instruction; public promotion followed successful Park verification. Both lanes used the same artifact without rebuilding.
+
+The 205-resource plan and CDK deployment reported no changes. Current/selected/deployed template hash remains `12f145b9b225ec4abb84845c0e1add67c8d6c1cd7d5c7ad3fac0be2e441ac3eb`. All 595 checksums, template equality, `IN_SYNC` drift, zero active alarms, empty queues, migrations through `0020` with apply disabled, exact-SHA Pages and public HTTP/domain/CORS/Cognito/Apple checks passed. Final independent static readback matched 30 responses per lane (60 total); the staff root briefly differed just after publication, then matched on direct and full repeat reads without intervention.
+
+AWS account `376129878018`, region `eu-north-1`, complete WRLDS metadata, resources, cost posture, IAM, schema, Nacka scope/dates, gates and #335 alarm routing are unchanged. Previous release `34103357175` / `11fdcb3`, artifact `10011585061`, is verified unexpired for rollback. No rollback, re-promotion, Live transaction, provider setting or guest send occurred. Physical Live method visibility remains for Love's own phone; Google Pay awaits Pabel/ROLLER and #353 remains open/Blocked. [Approval, hashes, checks and limits](docs/gh-353-hide-klarna.md#protected-rollout--2026-09-08).
+
 ### Issue #340 Safe Server Diagnostics (Published 2026-09-07)
 
 Reviewed [PR #387](https://github.com/wrlds-creations/jumpyard-check-in/pull/387) merged `11fdcb3d82f10fbc011a0161d59ede73e6146544`. Immutable [release 34103357175](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34103357175), artifact `10011585061`, passed protected [Park 34104000787](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34104000787) and [public 34104120749](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34104120749). Each exact plan was reviewed before delegated approval under Love's explicit merge/deployment instruction; public approval followed successful Park verification.
