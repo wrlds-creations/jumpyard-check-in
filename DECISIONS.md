@@ -224,6 +224,8 @@ This file is the source of truth for meaningful project decisions. Add entries w
 
 | `D0215` | 2026-09-07 | Lookup, booking and redeem report server failures through bounded, request-scoped diagnostics with source-owned categories and stages. | Generic 5xx responses lacked useful cause evidence; raw exception text or caller correlation ids could disclose sensitive data. | #340 emits one safe report per failed invocation, joins existing API/provider logs with AWS request ids and a generated diagnostic id, hashes caller correlation values, and preserves all responses, request counts and metric/alarm definitions. Standalone Lambda copies are tested for equality. [Contract and limits](docs/gh-340-safe-server-errors.md). | New handler/route boundaries, an approved tracing platform, or live evidence that the safe classification is insufficient. |
 
+| `D0216` | 2026-09-08 | Exclude Klarna from fresh phone payment sessions for both entry and linked add-on purchases. | Love confirmed Anders's September 7 decision that Klarna must not be offered and approved implementation in #353; Google Pay still awaits Pabel/ROLLER. | The phone's existing Roller HTTP adapter merges `klarna`, `klarna_account` and `klarna_paynow` into the SDK's `unsupportedPaymentMethods` session request, preserving device exclusions and all other fields. The vendored SDK, merchant configuration, other channels and submitted-attempt returns remain unchanged. Provider-side enforcement and handset visibility require verification after protected promotion. | An explicit product decision to re-enable Klarna, a changed Roller session contract, or provider/device evidence that exclusions are not honored. |
+
 ## Active Constraints
 
 | Constraint | Source | Impact | Revisit Trigger |

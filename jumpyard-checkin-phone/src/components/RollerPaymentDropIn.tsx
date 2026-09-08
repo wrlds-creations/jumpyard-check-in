@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 import type { NewBookingDraftResult } from '@/flow/cloudClient';
 import { isEcommercePaymentNavigationLocked, type EcommercePaymentStatus } from '@/flow/exitFlowPolicy';
+import { excludeKlarnaFromPaymentSession } from '@/flow/paymentMethodPolicy';
 import {
   acquirePaymentRecoveryOwnership, beginPaymentRecovery, bindPaymentRecoverySession, claimPaymentRedirect, clearPaymentRecovery,
   classifyPaymentResult, consumePaymentRedirect, getPaymentRedirect, hasPaymentRedirect,
@@ -160,7 +161,7 @@ export const RollerPaymentDropIn = ({
       setMessage(null);
       waitForResult();
       try {
-        const { EcomPaymentService, PaymentResult } = await import('@roller/ecom-payments');
+        const { EcomPaymentService, PaymentResult, PaymentProviders } = await import('@roller/ecom-payments');
         if (!canInitialize()) return;
         const service = new EcomPaymentService();
         const handlers = {
@@ -231,7 +232,9 @@ export const RollerPaymentDropIn = ({
             post: async (url: string, data?: unknown, options?: PaymentHttpOptions) => {
               const createsSession = new URL(url).pathname.endsWith('/payment/session');
               if (!current() || (createsSession && !canInitialize())) throw new Error('Payment attempt no longer active');
-              const response = await paymentPost(url, data, { ...options, signal: abort.signal });
+              const request = createsSession && !returnId
+                ? excludeKlarnaFromPaymentSession(data, PaymentProviders.adyen) : data;
+              const response = await paymentPost(url, request, { ...options, signal: abort.signal });
               if (createsSession && !canInitialize()) throw new Error('Payment attempt no longer active');
               if (createsSession && response?.session?.id) {
                 if (!await bindPaymentRecoverySession(attemptId, String(response.session.id))) {
