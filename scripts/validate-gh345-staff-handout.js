@@ -35,6 +35,19 @@ test('Item identity survives renaming and separates two purchases of the same pr
   assert.notEqual(first.id, buildManifest([item({ bookingItemId: 'i2' })], day)[0].id);
   assert.notEqual(first.id, buildManifest([item({ rollerUniqueId: 'linked' })], day)[0].id);
 });
+test('Live quantity variants use their product name; purchased pizza and drink wording stays intact', () => {
+  const socks = buildManifest([item({ productId: '970338', productName: 'Antal',
+    parentProductName: 'JumpYard-strumpor', summary: { productType: 'addon' } })], day)[0];
+  assert.equal(socks.kind, 'socks');
+  assert.equal(socks.name, 'JumpYard-strumpor');
+  assert.equal(socks.detail, null);
+  const pizza = buildManifest([item({ productId: '970359', productName: 'Pizza & Saft',
+    summary: { productType: 'addon' } })], day)[0];
+  assert.equal(pizza.name, 'Pizza & Saft');
+  assert.equal(pizza.area, 'cafe');
+  assert.equal(pizza.quantity, 2);
+  assert.equal(buildManifest([item({ productName: 'Bryggkaffe' })], day)[0].name, 'Bryggkaffe');
+});
 test('Deployed shared modules are byte-identical to their canonical source', () => {
   for (const name of ['staff-handout.js', 'package-contents.js']) for (const target of ['session', 'redeem']) {
     assert.equal(fs.readFileSync(path.join(root, 'infra/lambda', target, name), 'utf8'), fs.readFileSync(path.join(root, 'infra/lambda/shared', name), 'utf8'));

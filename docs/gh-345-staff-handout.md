@@ -64,13 +64,15 @@ Final local results, September 8:
 | `npm run validate` | Passed full repository suite; affected queue/identity/capacity and #345 checks rerun after final review fixes |
 | `npm --prefix infra run check` | Passed full infrastructure/configuration/CDK/protected-workflow suite |
 | All migrations `0001`–`0021` in a new PostgreSQL 17 database | 21 passed, including a final clean-database run after the pending-item reservation fix |
-| `GH345_PSQL=... npm run validate:gh345-staff-handout` | 25/25 database/API/pure tests and 6/6 actual frontend/model tests; no skips |
+| `GH345_PSQL=... npm run validate:gh345-staff-handout` | 26/26 database/API/pure tests and 6/6 actual frontend/model tests; no skips |
 | Staff lint, `tsc --noEmit`, `node --test src/lib/*.test.mjs`, build | Passed; 84/84 tests; no `/preview` route in the production export |
 | Phone lint, `tsc --noEmit`, payment/safety/package/mock-boundary checks and build | Passed, including 137/137 payment-recovery tests; preview routes export only not-found pages |
 | Browser walkthrough | 320, 390 and 1,100 px; same-session QR payload, first selection, reopen/recovery, entrance, partial café, attributed history, and live colleague ownership/release update without reload |
 | `git diff --check`, history/context validator | Passed |
 
 The browser uses synthetic bookings and a temporary local API. Native API integration tests execute the real redemption/recovery handler with simulated identity/provider responses; browser QA itself stubs admission. No live customer payment, admission, café collection, messaging or load test was performed.
+
+A read-only Nacka data check before promotion confirmed 20 applied migrations, 103 sessions and 90 existing legacy codes. Actual purchased/catalog shapes classify admission, socks, coffee and Combo correctly. The check also showed quantity-only product variants (`Antal`) and the purchased `Pizza & Saft` line: display now uses the parent product for generic quantity labels and preserves the full purchased food name. No product entitlement or quantity is added by that display correction.
 
 Dependency audit: the existing CDK development toolchain still has three high-severity package entries, already present in base `6b938a9` (`aws-cdk-lib`, bundled `brace-expansion` and `fast-uri`). Evidence was added to the existing Project draft **Resolve the aws-cdk brace-expansion advisory** (`PVTI_lADOBXiXg84BdXuJzgyxz_Q`); no duplicate draft or unrelated dependency upgrade was created. The added development-only PostgreSQL test driver is not affected by these findings.
 
