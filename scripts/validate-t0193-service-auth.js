@@ -89,6 +89,9 @@ module.exports.__t0193ServiceAuth = {
     module,
     process: { env: { ...(options.environment ?? {}) } },
     require(moduleId) {
+      if (moduleId === './staff-handout') return require('../infra/lambda/shared/staff-handout');
+      if (moduleId === './staff-handout-write') return require('../infra/lambda/redeem/staff-handout-write');
+      if (moduleId === './staff-board') return require('../infra/lambda/session/staff-board');
       if (moduleId === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
       if (moduleId === './package-contents') return require(path.join(path.dirname(absolutePath), 'package-contents.js'));
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;

@@ -115,6 +115,7 @@
   "devDependencies": {
     "@types/node": "^20.17.10",
     "aws-cdk": "^2.175.1",
+    "pg": "8.23.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.2"
   }

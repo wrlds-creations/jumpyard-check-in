@@ -459,7 +459,7 @@ Implemented in T0023 for dev.
 Rules:
 
 - Used after guest-side steps are complete enough for pilot handoff.
-- Generates or refreshes a handoff code/status for staff/admin surfaces.
+- Allocates the existing session's readable number transactionally: `0001` through `9999` per park and server-owned Stockholm allocation day (`handoffDay`), with no same-day wrap. Retries retain the number; completed sessions never reopen. Legacy JY values remain valid; exhausted series use the stable session QR. See [#345](docs/gh-345-staff-handout.md).
 - Does not call Roller.
 - Does not redeem tickets.
 - Records an event-log row for audit.
@@ -479,6 +479,8 @@ Rules:
 
 ### `GET /v1/staff/check-in/sessions`
 
+The #345 production staff board adds `view=board&day=YYYY-MM-DD&q=...&cursor=...` under current personal staff read/venue authorization. It returns all stages, including bookings without guest sessions, in bounded pages with `nextCursor`. Exact four-digit searches use allocation date; normal queue/name/reference searches use visit date. Responses include staff-visible guest display name, masked contact metadata, ownership, admission actor and café remaining state. Existing linked-payment reconciliation still applies. No claim is acquired by a read. The following legacy list behavior remains for requests without `view=board`.
+
 Returns ready-for-staff sessions for the staff/admin surface.
 
 Implemented in T0026 for dev and protected by T0047 staff auth.
@@ -495,6 +497,8 @@ Rules:
 - Do not mutate session state.
 
 ### `GET /v1/staff/check-in/sessions/{checkinSessionId}`
+
+Under current staff venue/read authorization, #345 also returns completed sessions, read-only `booking:<id>` placeholders and authoritative `handout` items/available quantities, claims and attributed receipts. Opening details never claims a guest. [Current handout contract](docs/gh-345-staff-handout.md#api-changes).
 
 Returns detail for one ready-for-staff session.
 
@@ -532,7 +536,11 @@ Rules:
 - This replaces any direct phone call to the protected T0021 dev redeem path.
 - The lower-level direct redeem dev token remains only for controlled internal/dev testing outside the normal staff handoff UI.
 
-### `POST /v1/check-in/redeem`
+### `POST /v1/staff/check-in/sessions/{checkinSessionId}/handout`
+
+#345 accepts `{area, action, revision, selection?}` with `entrance|cafe`, `select|release|confirm`, and purchased item IDs/positive integer quantities. Personal operator authorization, venue/date/safety/payment/synchronization and emergency gates apply. First selection atomically claims the area; stale/competing selections conflict. Confirmation persists an immutable intent, reuses the existing admission/recovery endpoint when required, then records physical collection and releases ownership atomically. Café requires completed admission and does not redeem tickets again. The old staff redeem endpoint respects active claims. [Requests, response/recovery semantics and migration](docs/gh-345-staff-handout.md#api-changes).
+
+### `POST /v1/check-in/redeem` (internal route)
 
 Redeems selected tickets after lookup and validation. After T0022 this is treated as an internal/staff-confirmed operation shape, not as a public guest-phone endpoint.
 

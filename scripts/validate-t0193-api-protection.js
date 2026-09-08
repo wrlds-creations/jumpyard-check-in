@@ -26,6 +26,7 @@ const EXPECTED_ROUTES = [
   ['GET /v1/staff/check-in/sessions/{checkinSessionId}', 'NONE', 'session', 'staff_protected', 'staff_detail'],
   ['POST /v1/check-in/redeem', 'AWS_IAM', 'redeem', 'legacy_dev_only', 'legacy_redeem'],
   ['POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem', 'NONE', 'redeem', 'staff_protected', 'staff_redeem'],
+  ['POST /v1/staff/check-in/sessions/{checkinSessionId}/handout', 'NONE', 'redeem', 'staff_protected', 'staff_handout'],
   ['POST /v1/bookings/quote', 'NONE', 'booking', 'guest_public', 'quote'],
   ['POST /v1/bookings/draft', 'NONE', 'booking', 'guest_write', 'draft'],
   ['POST /v1/bookings/draft/finalize', 'NONE', 'booking', 'guest_write', 'draft'],
@@ -90,7 +91,7 @@ function resourcesOfType(template, resourceType) {
 
 function validateRouteCatalog(template) {
   const routeEntries = resourcesOfType(template, 'AWS::ApiGatewayV2::Route');
-  assert.equal(routeEntries.length, EXPECTED_ROUTES.length, 'The HTTP API must synthesize exactly 27 routes.');
+  assert.equal(routeEntries.length, EXPECTED_ROUTES.length, 'The HTTP API must synthesize exactly 28 routes.');
 
   const routesByKey = new Map(
     routeEntries.map(([logicalId, resource]) => [resource.Properties.RouteKey, { logicalId, resource }]),
@@ -170,7 +171,7 @@ function validateRouteSettings(template, routesByKey) {
 function validateApprovedProtectionResources(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    205,
+    208,
     'The T0193 boundary must remain intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the GH-224 terminal route, and the #335 alarm topic, subscription and sustained Roller alarm.',
   );
   assert.equal(resourcesOfType(template, 'AWS::SES::ConfigurationSet').length, 1);

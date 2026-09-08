@@ -20,6 +20,7 @@ const ROUTE_LIMITS = Object.freeze({
   staff_list: Object.freeze({ rate: 20, burst: 50 }),
   staff_detail: Object.freeze({ rate: 20, burst: 50 }),
   staff_redeem: Object.freeze({ rate: 5, burst: 20 }),
+  staff_handout: Object.freeze({ rate: 20, burst: 40 }),
   webhook_bookings: Object.freeze({ rate: 10, burst: 50 }),
   webhook_redemptions: Object.freeze({ rate: 10, burst: 50 }),
   internal_session_link: Object.freeze({ rate: 1, burst: 5 }),
@@ -361,4 +362,5 @@ if (require.main === module) {
 
 module.exports = {
   ROUTE_LIMITS,
+  TokenBucket,
 };

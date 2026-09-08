@@ -22,7 +22,7 @@ vm.runInNewContext(compiled, {
   exports: loadedModule.exports,
   module: loadedModule,
   require(id) {
-    if (id.startsWith('@/lib/')) return {};
+    if (id.startsWith('@/lib/') || id.startsWith('@/components/staff/')) return {};
     if (id === 'next/image') {
       return { __esModule: true, default: (props) => React.createElement('img', props) };
     }

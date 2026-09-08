@@ -4,6 +4,10 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #345 Staff Handout (Prepared Locally; Not Deployed)
+
+The approved implementation reuses the existing Nacka backend/account/region and its exact metadata. The local full-flow assembly adds one staff handout route/integration/Lambda permission (205 to 208 resources), updates session/redeem code and prepares forward-only migration `0021` with restricted operational grants. No database replacement, new runtime service, IAM action expansion, park/date expansion or guest-send activation is intended. Counters contain non-guest aggregate high-water marks; claims/receipts follow existing guest-data retention. PostgreSQL tests are local and isolated. No #345 AWS resource, migration, release or deployment has been applied. [Targets, privacy, migration, restore and rollback plan](docs/gh-345-staff-handout.md).
+
 ### Issue #353 Klarna Phone Exclusions (Published 2026-09-08; No AWS Resource Change)
 
 Reviewed [PR #390](https://github.com/wrlds-creations/jumpyard-check-in/pull/390) merged `c60f4d3d9a901ebae625af9f1ad03c3ddfa47f4f`. Immutable [release 34207599674](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34207599674), artifact `10048622809`, passed protected [Park 34208225791](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34208225791) and [public 34208537881](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34208537881). Each actual plan was reviewed before delegated approval under Love's explicit publication instruction; public promotion followed successful Park verification. Both lanes used the same artifact without rebuilding.

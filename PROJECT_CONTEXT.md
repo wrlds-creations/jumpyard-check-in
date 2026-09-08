@@ -55,7 +55,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Park-test phone PWA builds must set `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL` to the park-test API, or the app falls back to dev.
 - Park-test post-payment sync only refreshes a recent local `new_booking` prepayment draft.
 - Deployed gates fail closed, require Nacka `50871` plus allowed dates, and reject invalid request items before side effects. The 27 routes use six IAM, four Cognito JWT, and seventeen Lambda-auth boundaries; shared-IP-safe route limits passed the 120-guest/20-minute and 40-device burst models.
-- T0194 gives staff PIN-only login and admins Cognito/TOTP with the approved eight-character upper/lowercase/digit policy. Staff/admin views use the phone style and mobile-safe layout; Cognito remains English/Open Sans.
+- T0194: staff PIN; admin Cognito/TOTP (8-character upper/lower/digit). Apps share phone styling; Cognito stays English/Open Sans.
 
 ## Durable Workflow Facts
 
@@ -70,6 +70,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 ## Current Implemented Flow Facts
 
 - #340: safe, correlated server-error reports.
+- #345 [staff handout](docs/gh-345-staff-handout.md): implementation; rollout pending.
 
 - Lookup is Aurora-first with Roller-authoritative refresh, Nacka/date scope, and nearest same-day selection. Ready bookings start/resume a server session; opaque booking-bound guest proof stays in phone memory and hash-only in Aurora.
 - Safety: server-owned handoff, approval-to-safety and final paid check (D0199/#331); video recovery/media (D0210/#343). Staff identity/heartbeat: #334.

@@ -35,7 +35,7 @@ const queuePolling = section(
 );
 assert.match(queuePolling, /document\.visibilityState !== "visible"/);
 assert.match(queuePolling, /refreshSessions\(\{ showLoading: false \}\)\.finally\(scheduleRefresh\)/);
-assert.match(queuePolling, /}, 5_000\)/);
+assert.match(queuePolling, /}, queuePollDelayRef\.current\)/);
 assert.match(queuePolling, /document\.addEventListener\("visibilitychange", handleVisibility\)/);
 assert.match(queuePolling, /document\.removeEventListener\("visibilitychange", handleVisibility\)/);
 assert.match(queuePolling, /\[authSessionKey, refreshSessions\]/);

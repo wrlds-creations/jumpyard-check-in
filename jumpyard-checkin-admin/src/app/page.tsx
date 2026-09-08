@@ -15,6 +15,8 @@ import {
   X,
 } from "lucide-react";
 import {
+  changeStaffHandout,
+  type HandoutRequest,
   getStaffSession,
   loginStaff,
   listReadyStaffSessions,
@@ -26,6 +28,8 @@ import {
   type StaffSessionDetail,
   type StaffSessionSummary,
 } from "@/lib/adminApi";
+import StaffExperience from "@/components/staff/StaffExperience";
+import { boardPollDelay, handoutMessage, stockholmDay } from "@/components/staff/flow";
 import {
   canStaffRedeem as staffCanRedeem,
   clearStaffAuthStorage,
@@ -986,6 +990,14 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<StaffSessionSummary[]>([]);
   const [state, setState] = useState<LoadState>("loading");
+  const [operatingDay, setOperatingDay] = useState(stockholmDay);
+  const operatingDayRef = useRef(operatingDay);
+  const followTodayRef = useRef(true);
+  const [handoutBusy, setHandoutBusy] = useState(false);
+  const [handoutError, setHandoutError] = useState("");
+  const [handoutRecoveryTarget, setHandoutRecoveryTarget] = useState<StaffApiError["recoveryTarget"]>(undefined);
+  const handoutBusyRef = useRef(false);
+  const handoutVersionRef = useRef(0);
   const authRef = useRef<StaffAuthSession | null>(null);
   const activityWriteAtRef = useRef(0);
   const detailRef = useRef<StaffSessionDetail | null>(null);
@@ -1000,6 +1012,7 @@ export default function Home() {
   const queueQueryVersionRef = useRef(0);
   const queueRefreshInFlightRef = useRef(false);
   const queueRefreshPendingRef = useRef(false);
+  const queuePollDelayRef = useRef(2_000);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const scannerHandledRef = useRef(false);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -1031,6 +1044,11 @@ export default function Home() {
 
   const clearSensitiveUi = useCallback(() => {
     lifecycleGenerationRef.current += 1;
+    handoutVersionRef.current += 1;
+    handoutBusyRef.current = false;
+    setHandoutBusy(false);
+    setHandoutError("");
+    setHandoutRecoveryTarget(undefined);
     scannerControlsRef.current?.stop();
     scannerControlsRef.current = null;
     setCurrentAuth(null);
@@ -1136,6 +1154,12 @@ export default function Home() {
   }, [returnToQueueAfterRedeem]);
 
   const refreshSessions = useCallback(async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
+    const today = stockholmDay();
+    if (followTodayRef.current && operatingDayRef.current !== today) {
+      operatingDayRef.current = today;
+      queueQueryVersionRef.current += 1;
+      setOperatingDay(today);
+    }
     const requestedAuth = authRef.current;
     if (requestedAuth) {
       queueLastRequestedKeyRef.current = queueRequestKey(requestedAuth, queueQueryVersionRef.current);
@@ -1163,7 +1187,8 @@ export default function Home() {
         setError("");
 
         try {
-          const nextSessions = await listReadyStaffSessions(activeAuth.auth.token, requestedQuery);
+          const nextSessions = await listReadyStaffSessions(activeAuth.auth.token, requestedQuery,
+            activeAuth.identityMode === "pin" ? operatingDayRef.current : undefined);
           if (!isSameStaffSession(authRef.current, activeAuth)) {
             if (authRef.current) queueRefreshPendingRef.current = true;
             continue;
@@ -1176,12 +1201,12 @@ export default function Home() {
           }
 
           const currentSelectedId = selectedIdRef.current;
-          const nextSelectedId =
-            currentSelectedId && nextSessions.some((session) => session.checkinSessionId === currentSelectedId)
-              ? currentSelectedId
-              : null;
+          // A refreshed queue must never close a guest opened by QR or change the
+          // operator's selected context (including a completed entrance/café visit).
+          const nextSelectedId = currentSelectedId;
 
           setSessions(nextSessions);
+          queuePollDelayRef.current = boardPollDelay(nextSessions.length);
           setCurrentSelectedId(nextSelectedId);
           if (!nextSelectedId) {
             setDetailState("idle");
@@ -1211,7 +1236,7 @@ export default function Home() {
   }, [getUsableAuth, handleProtectedAuthFailure, setCurrentDetail, setCurrentSelectedId]);
 
   const refreshSelectedDetail = useCallback(async ({ showLoading = false }: { showLoading?: boolean } = {}) => {
-    if (!selectedIdRef.current || !authRef.current) return;
+    if (!selectedIdRef.current || !authRef.current || handoutBusyRef.current) return;
     if (detailRefreshInFlightRef.current) {
       detailRefreshPendingRef.current = true;
       return;
@@ -1226,10 +1251,12 @@ export default function Home() {
         if (showLoading && !detailRef.current) setDetailState("loading");
 
         let requestAuth: StaffAuthSession | null = null;
+        const requestedHandoutVersion = handoutVersionRef.current;
         try {
           requestAuth = await getUsableAuth();
           const nextDetail = await getStaffSession(requestedSelectedId, requestAuth.auth.token);
           if (
+            requestedHandoutVersion !== handoutVersionRef.current || handoutBusyRef.current ||
             requestedSelectedId !== selectedIdRef.current ||
             !isSameStaffSession(authRef.current, requestAuth)
           ) {
@@ -1266,47 +1293,38 @@ export default function Home() {
     }
   }, [getUsableAuth, handleProtectedAuthFailure, refreshSessions, setCurrentDetail]);
 
-  const openHandoffPayload = useCallback(
-    (value: string) => {
-      const parsed = parseHandoffPayload(value);
-      if (!parsed) {
-        setError("Koden känns inte igen. Skanna QR-koden eller klistra in hela handoff-koden.");
-        return;
-      }
-
-      setScannerMessage("");
-
-      if (parsed.checkinSessionId) {
-        setCurrentQuery(parsed.handoffCode ?? parsed.checkinSessionId);
-        selectSession(parsed.checkinSessionId);
-        return;
-      }
-
-      const handoffCode = parsed.handoffCode?.toLowerCase();
-      const matchingSession = handoffCode
-        ? sessions.find((session) => session.handoffCode?.toLowerCase() === handoffCode)
-        : null;
-
-      if (matchingSession) {
-        setCurrentQuery(parsed.handoffCode ?? matchingSession.handoffCode ?? "");
-        selectSession(matchingSession.checkinSessionId);
-        return;
-      }
-
-      setCurrentQuery(parsed.handoffCode ?? parsed.raw);
-      setError("Handoff-koden finns inte i väntelistan. Tryck Uppdatera eller klistra in hela QR-payloaden.");
-    },
-    [selectSession, sessions, setCurrentQuery]
-  );
-
-  const handleSearchSubmit = useCallback(() => {
-    if (parseHandoffPayload(query)) {
-      openHandoffPayload(query);
+  const openHandoffPayload = useCallback(async (value: string) => {
+    const raw = value.trim();
+    if (!raw || raw.length > 400) return;
+    const parsed = parseHandoffPayload(raw);
+    setScannerMessage("");
+    if (parsed?.checkinSessionId) {
+      setCurrentQuery(parsed.handoffCode || "");
+      selectSession(parsed.checkinSessionId);
       return;
     }
+    setCurrentQuery(raw);
+    const version = queueQueryVersionRef.current;
+    let requestAuth: StaffAuthSession | null = null;
+    try {
+      requestAuth = await getUsableAuth();
+      const matches = await listReadyStaffSessions(requestAuth.auth.token, raw,
+        requestAuth.identityMode === "pin" ? operatingDayRef.current : undefined);
+      if (!isSameStaffSession(authRef.current, requestAuth) || version !== queueQueryVersionRef.current) return;
+      setSessions(matches);
+      if (matches.length === 1) selectSession(matches[0].checkinSessionId);
+      else if (matches.length === 0) setError("Ingen träff. Kontrollera datumet eller sök på namn eller bokningsnummer.");
+      else setError("Flera bokningar matchar. Välj rätt gäst i listan.");
+    } catch (failure) {
+      if (requestAuth && !isSameStaffSession(authRef.current, requestAuth)) return;
+      if (handleProtectedAuthFailure(failure)) return;
+      setError("Sökningen kunde inte slutföras. Försök igen.");
+    }
+  }, [getUsableAuth, handleProtectedAuthFailure, selectSession, setCurrentQuery]);
 
-    void refreshSessions();
-  }, [openHandoffPayload, query, refreshSessions]);
+  const handleSearchSubmit = useCallback(() => {
+    void openHandoffPayload(query);
+  }, [openHandoffPayload, query]);
 
   useEffect(() => {
     const channel = openStaffLogoutChannel(() => {
@@ -1373,7 +1391,7 @@ export default function Home() {
       void refreshSessions();
     }, query.trim() ? 250 : 0);
     return () => window.clearTimeout(timeoutId);
-  }, [authSessionKey, query, refreshSessions]);
+  }, [authSessionKey, query, operatingDay, refreshSessions]);
 
   useEffect(() => {
     const activeAuth = authRef.current;
@@ -1505,7 +1523,8 @@ export default function Home() {
   }, [authSessionKey, refreshSelectedDetail, selectedId]);
 
   useEffect(() => {
-    if (!selectedId || !authSessionKey || detail?.bookingSyncStatus !== "pending") return;
+    if (!selectedId || !authSessionKey ||
+        (auth?.identityMode !== "pin" && detail?.bookingSyncStatus !== "pending")) return;
 
     let stopped = false;
     let timeoutId: number | null = null;
@@ -1518,7 +1537,7 @@ export default function Home() {
       if (stopped || document.visibilityState !== "visible") return;
       timeoutId = window.setTimeout(() => {
         void refreshSelectedDetail().finally(scheduleRefresh);
-      }, 5_000);
+      }, 2_000);
     };
     const handleVisibility = () => {
       clearScheduledRefresh();
@@ -1533,7 +1552,7 @@ export default function Home() {
       clearScheduledRefresh();
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [authSessionKey, detail?.bookingSyncStatus, refreshSelectedDetail, selectedId]);
+  }, [auth?.identityMode, authSessionKey, detail?.bookingSyncStatus, refreshSelectedDetail, selectedId]);
 
   useEffect(() => {
     if (!authSessionKey) return;
@@ -1549,7 +1568,7 @@ export default function Home() {
       if (stopped || document.visibilityState !== "visible") return;
       timeoutId = window.setTimeout(() => {
         void refreshSessions({ showLoading: false }).finally(scheduleRefresh);
-      }, 5_000);
+      }, queuePollDelayRef.current);
     };
     const handleVisibility = () => {
       clearScheduledRefresh();
@@ -1684,6 +1703,44 @@ export default function Home() {
     void terminateStaffSession();
   }, [terminateStaffSession]);
 
+  const handleHandout = useCallback(async (request: HandoutRequest): Promise<boolean> => {
+    if (handoutBusyRef.current || !detailRef.current) return false;
+    const selected = detailRef.current;
+    const generation = lifecycleGenerationRef.current;
+    const version = ++handoutVersionRef.current;
+    handoutBusyRef.current = true;
+    setHandoutBusy(true);
+    setHandoutError("");
+    setHandoutRecoveryTarget(undefined);
+    let activeAuth: StaffAuthSession | null = null;
+    try {
+      activeAuth = await getUsableAuth();
+      if (generation !== lifecycleGenerationRef.current || selectedIdRef.current !== selected.checkinSessionId) return false;
+      const result = await changeStaffHandout(selected.checkinSessionId, activeAuth.auth.token, request);
+      if (!isSameStaffSession(authRef.current, activeAuth) || generation !== lifecycleGenerationRef.current) return false;
+      if (selectedIdRef.current === selected.checkinSessionId && detailRef.current) {
+        setCurrentDetail({ ...detailRef.current, ...result.session, handout: result.handout });
+      }
+      void refreshSessions({ showLoading: false });
+      return result.completed === true;
+    } catch (failure) {
+      if (generation !== lifecycleGenerationRef.current || (activeAuth && !isSameStaffSession(authRef.current, activeAuth))) return false;
+      if (handleProtectedAuthFailure(failure)) return false;
+      if (selectedIdRef.current === selected.checkinSessionId) {
+        setHandoutRecoveryTarget(failure instanceof StaffApiError ? failure.recoveryTarget : undefined);
+        setHandoutError(handoutMessage(failure instanceof StaffApiError ? failure.code : null,
+          "Svaret kom inte fram. Kontrollera status och fortsätt bekräfta med samma val."));
+        void refreshSelectedDetail();
+      }
+      return false;
+    } finally {
+      if (version === handoutVersionRef.current) {
+        handoutBusyRef.current = false;
+        setHandoutBusy(false);
+      }
+    }
+  }, [getUsableAuth, handleProtectedAuthFailure, refreshSelectedDetail, refreshSessions, setCurrentDetail]);
+
   const filteredSessions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return sessions;
@@ -1770,6 +1827,21 @@ export default function Home() {
     );
   }
 
+  if (auth.identityMode === "pin") return <StaffExperience auth={auth} sessions={sessions} detail={detail}
+    selectedId={selectedId} loading={state === "loading"} detailLoading={detailState === "loading"}
+    busy={handoutBusy} error={handoutError || error} query={query} day={operatingDay}
+    recoveryTarget={handoutRecoveryTarget}
+    onDay={(day) => { followTodayRef.current = day === stockholmDay(); operatingDayRef.current = day; queueQueryVersionRef.current += 1; setOperatingDay(day); }}
+    onQuery={setCurrentQuery} onSearch={handleSearchSubmit} onOpen={(id) => { setHandoutError(""); setHandoutRecoveryTarget(undefined); selectSession(id); }} onClose={closeSelectedSession}
+    onLogout={handleStaffLogout} onHandout={handleHandout}
+    onRefresh={() => { void refreshSessions(); void refreshSelectedDetail(); }}
+    onScan={() => { closeSelectedSession(); setScannerMessage(""); setScannerState("starting"); setScannerOpen(true); }}
+    scanner={scannerOpen ? <div className="mx-auto max-w-xl px-3 py-3" data-testid="handoff-qr-scanner">
+      <div className="overflow-hidden rounded-2xl border border-primary"><video ref={scannerVideoRef} className="aspect-[4/3] w-full bg-black object-cover" muted playsInline />
+        <div className="flex items-center justify-between gap-3 bg-white p-3"><p role="status" className="text-sm font-bold">{scannerState === "error" ? scannerMessage : "Rikta kameran mot QR-koden"}</p>
+          <button type="button" onClick={() => setScannerOpen(false)} className="min-h-11 px-3 text-sm font-bold">Stäng</button></div></div>
+    </div> : null} />;
+
   return (
     <main className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b border-border bg-white/95 px-4 py-2 backdrop-blur sm:px-6 lg:px-8">
@@ -1786,9 +1858,7 @@ export default function Home() {
             <div className="min-w-0">
               <h1 className="text-xl font-black italic uppercase leading-none text-foreground sm:text-2xl">Handoff</h1>
               <p className="truncate text-xs font-bold text-foreground sm:text-sm" data-testid="staff-personal-identity">
-                {auth.identityMode === "pin"
-                  ? `${auth.staff.displayName} · ${staffRoleLabel(auth.staff.role)}`
-                  : "Redo för check-in"}
+                {`${auth.staff.displayName} · ${staffRoleLabel(auth.staff.role)}`}
               </p>
             </div>
           </div>

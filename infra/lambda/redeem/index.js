@@ -2,6 +2,7 @@ const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client
 const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 const crypto = require('crypto');
+const { createHandoutStore } = require('./staff-handout-write');
 const { createServerDiagnostics } = require('./server-diagnostics');
 const diagnostics = createServerDiagnostics('redeem',
   (entry) => console.error(JSON.stringify(entry)),
@@ -87,6 +88,10 @@ exports.handler = async (event) => {
   const trustedStaffVenueId = stringOrNull(trustedStaffActor?.venueId);
 
   try {
+    if (isStaffHandoutRoute(event)) {
+      if (isEmergencyStopEnabled()) return emergencyStopBlockedResponse(correlationId);
+      return await handleStaffHandout(event, correlationId);
+    }
     if (isStaffSessionRedeemRoute(event)) {
       if (isEmergencyStopEnabled()) {
         return emergencyStopBlockedResponse(correlationId);
@@ -440,6 +445,121 @@ exports.handler = async (event) => {
   }
 };
 
+function isStaffHandoutRoute(event) {
+  return event?.routeKey === 'POST /v1/staff/check-in/sessions/{checkinSessionId}/handout' ||
+    (event?.requestContext?.http?.method === 'POST' && /^\/v1\/staff\/check-in\/sessions\/[^/]+\/handout$/.test(event.rawPath || ''));
+}
+
+function handoutBlocked(correlationId, code, extra = {}) {
+  return jsonResponse(code === 'session_not_found' ? 404 : 409, correlationId, {
+    status: 'blocked', error: { code, message: code }, ...extra,
+  });
+}
+
+async function handleStaffHandout(event, correlationId) {
+  const body = parseOptionalJsonBody(event);
+  const checkinSessionId = stringOrNull(event?.pathParameters?.checkinSessionId) ||
+    String(event.rawPath || '').match(/^\/v1\/staff\/check-in\/sessions\/([^/]+)\/handout$/)?.[1];
+  if (!body || !checkinSessionId || !['entrance', 'cafe'].includes(body.area) ||
+      !['select', 'release', 'confirm'].includes(body.action) ||
+      !Number.isSafeInteger(body.revision) || body.revision < 0 ||
+      (body.action === 'select' && (!Array.isArray(body.selection) || body.selection.length > 100 ||
+        body.selection.some((line) => typeof line?.id !== 'string' || line.id.length > 400 ||
+          !Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 9999)))) {
+    return jsonResponse(400, correlationId, { status: 'invalid_request',
+      error: { code: 'invalid_handout', message: 'Invalid collection request.' } });
+  }
+  const auth = await authorizeStaffRedeemRequest(event);
+  if (!auth.ok) return staffAuthErrorResponse(correlationId, auth);
+  if (!auth.staff?.venueId || !(auth.staff.staffIdentityId || auth.staff.actorId)) {
+    return handoutBlocked(correlationId, 'personal_staff_identity_required');
+  }
+  let session = await getStaffRedeemSession(checkinSessionId, auth.staff.venueId);
+  if (!session) return handoutBlocked(correlationId, 'session_not_found');
+  const store = createHandoutStore({ executeStatement, mappedRows, stringParameter });
+  const reply = async (result) => {
+    const handout = await store.readState(session, auth.staff.venueId);
+    const { error, ...details } = result;
+    return result.error
+      ? handoutBlocked(correlationId, error, { ...details, handout })
+      : jsonResponse(200, correlationId, { status: 'ok', ...result, handout,
+        session: buildStaffRedeemSessionResponse(session) });
+  };
+  if (body.action === 'release') {
+    return reply(await store.change(session, auth.staff, body, []));
+  }
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Stockholm',
+    year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  if (session.visitDate !== today) return handoutBlocked(correlationId, 'wrong_date');
+  if (session.bookingSyncStatus !== 'confirmed') return handoutBlocked(correlationId, 'booking_sync_pending');
+  if (session.safetyStatus !== 'completed') return handoutBlocked(correlationId, 'safety_not_completed');
+  if (body.area === 'cafe' && session.status !== 'redeemed') return handoutBlocked(correlationId, 'admission_not_confirmed');
+  const request = { identifier: session.rollerUniqueId, bookingReference: session.bookingReference,
+    rollerUniqueId: session.rollerUniqueId, expectedDate: session.visitDate,
+    ticketIds: session.selectedTicketIds, confirmRedeem: true, idempotencyKey: `staff-redeem:${checkinSessionId}` };
+  let context = await getRedeemContext(session.rollerUniqueId, auth.staff.venueId);
+  if (!context) return handoutBlocked(correlationId, 'session_not_found');
+  const gate = evaluateRedeemWriteGate(context, request, { selectedTicketIds: session.selectedTicketIds });
+  if (!gate.enabled) return handoutBlocked(correlationId, gate.reason);
+  if (!isPaymentComplete(context.booking) || isInactiveBookingStatus(context.booking.bookingStatus) || context.booking.isTombstoned) {
+    return handoutBlocked(correlationId, 'payment_or_booking_changed');
+  }
+  let manifest = await store.readManifest(session, auth.staff.venueId);
+  if (body.action === 'select') return reply(await store.change(session, auth.staff, body, manifest));
+
+  // Persist the exact, explicitly confirmed receipt BEFORE attempting ROLLER. On
+  // timeout the claim retains this operation and the next confirmation resumes it.
+  const prepared = await store.change(session, auth.staff, { ...body, action: 'prepare' }, manifest);
+  if (prepared.error) return reply(prepared);
+  if (prepared.completed) return reply(prepared);
+  // The existing admission path refreshes the original booking. Refresh selected
+  // linked goods as well BEFORE admission so refunded add-ons cannot be handed out.
+  const admissionPending = prepared.needsAdmission && session.status !== 'redeemed';
+  const refreshIds = [...new Set(prepared.items.map((item) => item.sourceBookingId))]
+    .filter((id) => id !== session.rollerUniqueId);
+  if (!admissionPending) refreshIds.unshift(session.rollerUniqueId);
+  if (refreshIds.length) {
+    const config = await getRollerConfig();
+    const token = await getRollerAccessToken(config);
+    for (const bookingId of refreshIds) {
+      const linkedContext = bookingId === session.rollerUniqueId ? context : await getRedeemContext(bookingId, auth.staff.venueId);
+      if (!linkedContext) return handoutBlocked(correlationId, 'booking_refresh_failed');
+      const refresh = await refreshRedeemContextFromRoller(config, token, linkedContext, request, auth.staff.venueId);
+      if (!refresh.ok) return handoutBlocked(correlationId, refresh.reason);
+      if (!isPaymentComplete(refresh.context.booking) || refresh.context.booking.isTombstoned ||
+          isInactiveBookingStatus(refresh.context.booking.bookingStatus)) return handoutBlocked(correlationId, 'payment_or_booking_changed');
+      if (bookingId === session.rollerUniqueId) context = refresh.context;
+    }
+    manifest = await store.readManifest(session, auth.staff.venueId);
+    if (prepared.items.some((line) => !manifest.some((item) => item.id === line.id && item.quantity >= line.quantity))) {
+      return handoutBlocked(correlationId, 'handout_products_changed');
+    }
+  }
+  if (prepared.needsAdmission && session.status !== 'redeemed') {
+    const response = await handleStaffSessionRedeem({ ...event,
+      rawPath: `/v1/staff/check-in/sessions/${checkinSessionId}/redeem`,
+      routeKey: 'POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem',
+      pathParameters: { checkinSessionId },
+      body: JSON.stringify({ confirmRedeem: true, idempotencyKey: request.idempotencyKey,
+        handoutOperationId: prepared.operationId }),
+    }, correlationId);
+    const result = parseJsonOrNull(response.body) || {};
+    if (response.statusCode !== 200 || result.status !== 'redeemed') return response;
+    session = await getStaffRedeemSession(checkinSessionId, auth.staff.venueId);
+  } else {
+    const freshGate = evaluateRedeemWriteGate(context, request, { selectedTicketIds: session.selectedTicketIds });
+    if (!freshGate.enabled) return handoutBlocked(correlationId, freshGate.reason);
+  }
+  // Refresh can remove/refund an item or reconcile provisional keys. Never collect
+  // a line which no longer exists or silently substitute a similarly named product.
+  manifest = await store.readManifest(session, auth.staff.venueId);
+  if (prepared.items.some((line) => !manifest.some((item) => item.id === line.id && item.quantity >= line.quantity))) {
+    return handoutBlocked(correlationId, 'handout_products_changed');
+  }
+  const completed = await store.change(session, auth.staff, { ...body, action: 'complete' }, manifest);
+  return reply(completed);
+}
+
 async function handleStaffSessionRedeem(event, correlationId) {
   const body = parseOptionalJsonBody(event);
   correlationId = normalizeCorrelationId(body.correlationId) || correlationId;
@@ -497,6 +617,12 @@ async function handleStaffSessionRedeem(event, correlationId) {
       },
     });
   }
+
+  // GH-345: old clients cannot bypass an active product selection or pending receipt.
+  if (session.handoutClaim && (
+    session.handoutClaim.actorId !== (auth.staff.staffIdentityId || auth.staff.actorId) ||
+    !session.handoutClaim.operationId || body.handoutOperationId !== session.handoutClaim.operationId
+  )) return handoutBlocked(correlationId, 'guest_claimed');
 
   const sessionDecision = evaluateStaffRedeemSession(session);
   if (!sessionDecision.canRedeem) {
@@ -781,6 +907,12 @@ async function getStaffRedeemSession(checkinSessionId, staffVenueId = null) {
        cs.ready_for_staff_at::text AS ready_for_staff_at,
        cs.completed_at::text AS completed_at,
        cs.updated_at::text AS updated_at
+       ,(cs.session_summary -> 'staffActor')::text AS checked_in_by
+       ,(SELECT jsonb_build_object('actorId', claim.actor_id, 'operationId', claim.pending_operation)::text
+          FROM jumpyard.staff_handout_claims claim
+          WHERE claim.roller_unique_id = cs.roller_unique_id AND claim.visit_date = cs.visit_date
+            AND claim.area = 'entrance' AND (claim.expires_at > now() OR claim.pending_operation IS NOT NULL)
+          LIMIT 1) AS handout_claim
      FROM jumpyard.checkin_sessions AS cs
      LEFT JOIN jumpyard.roller_bookings AS booking
        ON booking.roller_unique_id = cs.roller_unique_id
@@ -929,6 +1061,8 @@ function mapStaffRedeemSessionRow(row) {
     completedAt: stringOrNull(row.completed_at),
     expiresAt: stringOrNull(row.expires_at),
     handoffCode: stringOrNull(row.handoff_code),
+    handoutClaim: parseJsonOrNull(row.handout_claim),
+    checkedInBy: parseJsonOrNull(row.checked_in_by),
     handoffStatus: stringOrNull(row.handoff_status),
     readyForStaffAt: stringOrNull(row.ready_for_staff_at),
     rollerUniqueId: stringOrNull(row.roller_unique_id),
@@ -946,6 +1080,7 @@ function buildStaffRedeemSessionResponse(session) {
   return {
     bookingReference: session.bookingReference,
     checkinSessionId: session.checkinSessionId,
+    checkedInBy: session.checkedInBy ?? null,
     completedAt: session.completedAt,
     handoffCode: session.handoffCode,
     handoffStatus: session.handoffStatus,
