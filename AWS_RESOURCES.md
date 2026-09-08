@@ -4,11 +4,15 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-### Issue #345 Live-feedback Refinements (Prepared)
+### Issue #345 Live-feedback Refinements (Published 2026-09-08)
 
-The approved staff-speed follow-up changes the session/redeem code and adds forward migration `0022_staff_cafe_ready_collection.sql`. It permits café goods after guest readiness without redeeming entrance. Applied 0021 is unchanged. No AWS resource, route, IAM permission, tag, park/date gate or provider setting is added or widened. The existing account `376129878018`, region `eu-north-1`, Nacka stack and WRLDS metadata apply. Promotion must select one immutable artifact through the usual reviewed Park/public plans; `ca38fec` / release `34229583004` remains the deployed version until that succeeds. [Scope, timing evidence and rollback](docs/gh-345-staff-handout.md#live-feedback-refinements--2026-09-08).
+Reviewed [PR #397](https://github.com/wrlds-creations/jumpyard-check-in/pull/397) produced `653c09676201b9856d5b744d0ef716bf6a510088`. Immutable [release 34239775713](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34239775713), artifact `10061675619`, passed protected [Park 34240532179](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34240532179) and [public 34241257794](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34241257794). Each actual plan was reviewed before delegated approval under Love's existing publication instruction; public approval followed successful Park and independent readbacks. Both lanes used the same artifact without rebuilding.
 
-### Issue #345 Staff Handout (Published 2026-09-08)
+The independently reproduced plan retained 208 resources and changed only code assets in the existing session/redeem functions. Selected/deployed template hash: `b053900d5b4ef8ea4abef6555660d0ce84b1b960f36e8c2f9f134735cdedab43`. Forward migration `0022_staff_cafe_ready_collection.sql` permits café goods after guest readiness without redeeming entrance. Applied 0021 is unchanged. All 22 migration checksums, all ten deployed Lambda files and 60 independent Park/public static responses matched the artifact; its 662 file checksums passed. The actual restricted runtime role read 58 bookings for today in a 343 ms Data API sample. Template equality, `IN_SYNC` drift, zero active alarms, empty queues, exact-SHA Pages, HTTP/domain/CORS/Cognito/Apple checks and public PIN rendering passed.
+
+No AWS resource, route, IAM permission, tag, park/date gate or provider setting was added or widened. Existing account `376129878018`, region `eu-north-1`, Nacka stack, WRLDS metadata and guest-send closure remain. Prior release `34229583004` / `ca38fec` was reverified unexpired for rollback; keep 0022, receipts and counters intact. No rollback, re-promotion, customer collection or guest send was performed. Physical acceptance remains with Love. [Exact approvals, hashes, performance limits and rollback](docs/gh-345-staff-handout.md#protected-refinement-rollout).
+
+### Issue #345 Initial Staff Handout (Historical Publication 2026-09-08)
 
 Reviewed [PR #393](https://github.com/wrlds-creations/jumpyard-check-in/pull/393) and the real-product label correction [PR #394](https://github.com/wrlds-creations/jumpyard-check-in/pull/394) produced `ca38fec4515d135f642d10de3f839871d07e2498`. Immutable [release 34229583004](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34229583004), artifact `10057451678`, passed protected [Park 34230754910](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34230754910) and [public 34231738633](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34231738633). Love explicitly authorized commit, push, merge and deployment; the actual Park plan was independently matched to live AWS before delegated protected approval, and the exact public plan was approved only after Park succeeded. Both lanes promoted the same artifact without rebuilding.
 
@@ -1349,11 +1353,11 @@ The same review found a narrow reset/login race: an old PIN could finish slow ve
 
 ## Aurora Schema Inventory
 
-T0007 created schema `jumpyard` in database `jumpyard_cloud`. Park-test is applied through migration `0021`; the T0195-T0197 migrations remain the schema foundation, migrations `0017`-`0020` add signed/refund-safe webhook state plus kiosk payment, reconciliation, and provisional-handoff state, and `0021` adds daily-number allocation and staff collection with restricted runtime grants.
+T0007 created schema `jumpyard` in database `jumpyard_cloud`. Park-test is applied through migration `0022`; the T0195-T0197 migrations remain the schema foundation, migrations `0017`-`0020` add signed/refund-safe webhook state plus kiosk payment, reconciliation, and provisional-handoff state. `0021` adds daily-number allocation and staff collection with restricted runtime grants; `0022` permits ready-guest café collection before admission while preserving the other guards and grants.
 
 | Table | Purpose |
 |---|---|
-| `schema_migrations` | Tracks applied SQL migrations and checksums. Retained for database integrity; park-test is applied through `0021 staff daily handout`. |
+| `schema_migrations` | Tracks applied SQL migrations and checksums. Retained for database integrity; park-test is applied through `0022 staff cafe ready collection`. |
 | `roller_bookings` | Latest normalized Roller booking snapshot from seed, webhook enrichment, or live refresh. T0016 and T0017 can upsert refreshed booking rows. |
 | `roller_booking_items` | Normalized booking item/product rows. T0016 and T0017 can upsert refreshed item rows. |
 | `roller_booking_tickets` | Ticket ids and redeem readiness context from `/data/tickets`, lookup live refresh, or webhook enrichment. |
@@ -1414,7 +1418,7 @@ T0146 defined the separate technical `park-test` environment contract, and T0150
 | Secrets/SSM | Dedicated `/jumpyard-check-in-park-test/...` names |
 | Frontend | Same phone/admin source, separate deployment/API target |
 | Raw payload bucket | Synthesizes as `jumpyard-check-in-park-test-raw-376129878018-eu-north-1` to satisfy S3 length limits |
-| Status | Nacka pilot-production backend under D0189/#264, still technically named/tagged `park-test`. #345 is deployed with migrations through `0021`, 208 resources and 28 API routes; selected/deployed template equality, `IN_SYNC` drift, zero active alarms and empty queues passed for immutable release `ca38fec`. Live webhook `1465` retains the FIFO worker/recovery path; #257 repaired provisional-item reconciliation and recovered its classified failed events. #345 replaces #266's five-second staff queue refresh with bounded adaptive board polling and two-second selected-guest updates. Administrator TOTP and personal-PIN authorization remain. Nacka/date scope stays open through `2026-09-30`; broader venue scope remains closed. T0201's single automatic controlled email proof remains historical and its control is disarmed. General guest sends, lifecycle apply and multi-park expansion remain closed. The two approved public frontends use the same selected #345 artifact; exact rollout evidence is recorded above. |
+| Status | Nacka pilot-production backend under D0189/#264, still technically named/tagged `park-test`. #345 is deployed with migrations through `0022`, 208 resources and 28 API routes; selected/deployed template equality, `IN_SYNC` drift, zero active alarms and empty queues passed for immutable release `653c096`. Live webhook `1465` retains the FIFO worker/recovery path; #257 repaired provisional-item reconciliation and recovered its classified failed events. #345 uses today's visits, bounded adaptive board polling and two-second selected-guest updates; café collection is independent of entrance once guest check-in is ready. Administrator TOTP and personal-PIN authorization remain. Nacka/date scope stays open through `2026-09-30`; broader venue scope remains closed. T0201's single automatic controlled email proof remains historical and its control is disarmed. General guest sends, lifecycle apply and multi-park expansion remain closed. The two approved public frontends use the same selected #345 artifact; exact rollout evidence is recorded above. |
 
 ## Governance Notes
 
