@@ -3,9 +3,12 @@ const { buildManifest, paidBookingSql } = require('./staff-handout');
 
 function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSession }) {
   const p = stringParameter;
-  async function list({ day, search, cursor, venueId, bookingId = null }) {
+  async function list({ day, search, cursor, venueId, bookingId = null, todayOnly = false }) {
     const result = await executeStatement(`WITH board AS (
       SELECT b.roller_unique_id, b.booking_reference, b.booking_date::text AS booking_date,
+        CASE WHEN CAST(:todayOnly AS boolean) AND :search ~ '^[0-9]{4}$'
+          THEN json_build_array(b.roller_unique_id, cs.checkin_session_id)::text
+          ELSE b.roller_unique_id END AS board_cursor,
         b.start_time::text AS start_time, b.end_time::text AS end_time,
         b.booking_status, b.payment_status, b.freshness_status, b.amount_owing_cents, b.total_cents,
         COALESCE(cs.checkin_session_id, 'booking:' || b.roller_unique_id) AS checkin_session_id,
@@ -30,13 +33,14 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
           'productId', i.product_id, 'parentProductId', i.parent_product_id, 'productName', i.product_name,
           'parentProductName', i.parent_product_name, 'quantity', i.quantity, 'bookingDate', i.booking_date,
           'summary', COALESCE(catalog.summary, '{}'::jsonb) || i.item_summary))
-          FROM jumpyard.roller_booking_items i JOIN jumpyard.roller_bookings purchased USING (roller_unique_id)
+          FROM (SELECT b.roller_unique_id UNION
+            SELECT link.linked_roller_unique_id FROM jumpyard.booking_links link
+              WHERE link.original_roller_unique_id = b.roller_unique_id AND link.link_type = 'add_product_draft') source
+          JOIN jumpyard.roller_bookings purchased ON purchased.roller_unique_id = source.roller_unique_id
+          JOIN jumpyard.roller_booking_items i ON i.roller_unique_id = purchased.roller_unique_id
           LEFT JOIN LATERAL (SELECT pc.summary FROM jumpyard.product_catalog_cache pc WHERE pc.roller_env = purchased.roller_env
             AND pc.summary ->> 'id' = i.product_id ORDER BY pc.fetched_at DESC LIMIT 1) catalog ON true
-          WHERE purchased.venue_id = :venueId AND ${paidBookingSql('purchased')}
-            AND (i.roller_unique_id = b.roller_unique_id OR EXISTS (SELECT 1 FROM jumpyard.booking_links link
-              WHERE link.original_roller_unique_id = b.roller_unique_id AND link.linked_roller_unique_id = i.roller_unique_id
-                AND link.link_type = 'add_product_draft'))), '[]'::jsonb)::text AS handout_catalog,
+          WHERE purchased.venue_id = :venueId AND ${paidBookingSql('purchased')}), '[]'::jsonb)::text AS handout_catalog,
         COALESCE((SELECT jsonb_object_agg(totals.id, totals.quantity) FROM (
           SELECT item ->> 'id' AS id, sum((item ->> 'quantity')::int) AS quantity
           FROM jumpyard.staff_handout_operations op CROSS JOIN LATERAL jsonb_array_elements(op.items) item
@@ -58,8 +62,10 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
       FROM jumpyard.roller_bookings b
       LEFT JOIN LATERAL (SELECT s.* FROM jumpyard.checkin_sessions s
         WHERE s.roller_unique_id = b.roller_unique_id AND s.visit_date = b.booking_date
-        ORDER BY CASE WHEN lower(s.handoff_code) = :search AND (s.handoff_day = CAST(:day AS date) OR s.handoff_day IS NULL)
-          THEN 0 ELSE 1 END, s.created_at DESC, s.checkin_session_id DESC LIMIT 1) cs ON true
+          AND (NOT CAST(:todayOnly AS boolean) OR CAST(:search AS text) IS NULL OR :search !~ '^[0-9]{4}$' OR s.handoff_code = :search)
+        ORDER BY CASE WHEN lower(s.handoff_code) = :search AND (CAST(:todayOnly AS boolean) OR s.handoff_day = CAST(:day AS date) OR s.handoff_day IS NULL)
+          THEN 0 ELSE 1 END, s.created_at DESC, s.checkin_session_id DESC
+        LIMIT CASE WHEN CAST(:todayOnly AS boolean) AND :search ~ '^[0-9]{4}$' THEN NULL ELSE 1 END) cs ON true
       LEFT JOIN LATERAL (
         SELECT first_name, last_name, email_masked, phone_masked FROM (
           SELECT 0 AS priority, d.customer_first_name AS first_name, d.customer_last_name AS last_name,
@@ -74,20 +80,21 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
         ) contacts ORDER BY priority LIMIT 1
       ) identity ON true
       WHERE b.venue_id = :venueId AND b.is_tombstoned = false
+        AND (NOT CAST(:todayOnly AS boolean) OR b.booking_date = CAST(:day AS date))
         AND lower(COALESCE(b.booking_status, '')) NOT IN ('deleted', 'cancelled', 'draft')
         AND (CAST(:bookingId AS text) IS NULL OR b.roller_unique_id = :bookingId)
         AND ((CAST(:bookingId AS text) IS NOT NULL) OR b.booking_date = CAST(:day AS date)
           OR (:search ~ '^jy[0-9]+$' AND lower(cs.handoff_code) = :search)
           OR (:search ~ '^[0-9]{4}$' AND cs.handoff_day = CAST(:day AS date)))
-        AND (CAST(:cursor AS text) IS NULL OR b.roller_unique_id > :cursor)
     ) SELECT * FROM board
-      WHERE CAST(:search AS text) IS NULL OR CASE WHEN :search ~ '^[0-9]{4}$'
-        THEN handoff_code = :search AND CAST(handoff_day AS date) = CAST(:day AS date)
+      WHERE (CAST(:cursor AS text) IS NULL OR board_cursor > :cursor)
+        AND (CAST(:search AS text) IS NULL OR CASE WHEN :search ~ '^[0-9]{4}$'
+        THEN handoff_code = :search AND (CAST(:todayOnly AS boolean) OR CAST(handoff_day AS date) = CAST(:day AS date))
         ELSE position(:search IN lower(concat_ws(' ', booking_reference, roller_unique_id, handoff_code, guest_name,
           guest_email_masked, guest_phone_masked))) > 0
           OR EXISTS (SELECT 1 FROM jumpyard.roller_booking_tickets t WHERE t.roller_unique_id = board.roller_unique_id
-            AND (lower(t.ticket_id) = :search OR lower(t.custom_ticket_id) = :search)) END
-      ORDER BY roller_unique_id LIMIT 101`, [p('day', day), p('search', search), p('cursor', cursor),
+            AND (lower(t.ticket_id) = :search OR lower(t.custom_ticket_id) = :search)) END)
+      ORDER BY board_cursor LIMIT 101`, [p('day', day), p('search', search), p('cursor', cursor), p('todayOnly', String(todayOnly)),
       p('venueId', venueId), p('bookingId', bookingId)]);
     const rows = mappedRows(result);
     return { sessions: rows.slice(0, 100).map((row) => {
@@ -100,7 +107,7 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
         cafeSession: parse(row.cafe_session, null),
         checkedInBy: parse(row.checked_in_by, null), claims: parse(row.claims, []) };
     }),
-      nextCursor: rows.length > 100 ? rows[99].roller_unique_id : null,
+      nextCursor: rows.length > 100 ? rows[99].board_cursor : null,
       operatingDay: day };
   }
   return { list };

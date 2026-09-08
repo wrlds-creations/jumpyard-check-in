@@ -569,7 +569,7 @@ export async function updateAdminStaff(
 export async function listReadyStaffSessions(staffToken: string, query?: string, day?: string): Promise<StaffSessionSummary[]> {
   const params = new URLSearchParams();
   if (day) params.set("view", "board");
-  if (day) params.set("day", day);
+  if (day) params.set("scope", "today");
   const trimmedQuery = query?.trim();
   if (trimmedQuery) params.set("q", trimmedQuery);
   const sessions: StaffSessionSummary[] = [];

@@ -12,15 +12,15 @@ class TestDate extends Date {
   constructor(value = instant) { super(value); }
   static now() { return instant; }
 }
-function load(relative, extra = '') {
+function load(relative, extra = '', { states = [], globals = {} } = {}) {
   const filename = new URL(relative, import.meta.url);
   const source = ts.transpileModule(fs.readFileSync(filename, 'utf8') + extra, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
   }).outputText;
   const loadedModule = { exports: {} };
-  vm.runInNewContext(source, { module: loadedModule, exports: loadedModule.exports, Date: TestDate, Intl,
+  vm.runInNewContext(source, { module: loadedModule, exports: loadedModule.exports, Date: TestDate, Intl, ...globals,
     require(id) {
-      if (id === 'react') return { ...React, useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}] };
+      if (id === 'react') return { ...React, useState: (initial) => [states.length ? states.shift() : typeof initial === 'function' ? initial() : initial, () => {}] };
       if (id === 'next/image') return { __esModule: true, default: (props) => React.createElement('img', props) };
       if (id === './flow') return load('../components/staff/flow.ts');
       if (id === './ui') return load('../components/staff/ui.tsx');
@@ -31,6 +31,7 @@ function load(relative, extra = '') {
 }
 const { default: StaffExperience, Detail, ProductRow } = load('../components/staff/StaffExperience.tsx', '\nexport { Detail, ProductRow };');
 const { nextPass, stageOf, activeClaim, boardPollDelay } = load('../components/staff/flow.ts');
+const { createSelectionBuffer, mergeHandoutSummary } = load('../components/staff/selection.ts');
 const { ROUTE_LIMITS, TokenBucket } = require('../../../scripts/validate-t0193-capacity.js');
 const { STAFF_BOARD_PAGE_INTERVAL_MS } = load('./adminApi.ts');
 function nodes(tree, predicate) {
@@ -82,9 +83,16 @@ test('Reopened selection is checked; a colleague cannot edit or confirm it', () 
   assert.match(text(tree), /Sara hjälper gästen/);
 });
 
-test('Café requires admission, allows partial quantities, and excludes already collected coffee', () => {
+test('Ready guests can collect coffee before admission; each counter only changes its own goods', () => {
   let tree = Detail({ props: props(session()), area: 'cafe' });
+  assert.equal(buttons(tree).find((button) => button.props['aria-label'] === 'Kaffe, 2 kvar').props.disabled, false);
+  assert.equal(buttons(tree).find((button) => button.props['aria-label'] === 'Besöksband, 3 kvar').props.disabled, true);
+  tree = Detail({ props: props(session()), area: 'entrance' });
   assert.equal(buttons(tree).find((button) => button.props['aria-label'] === 'Kaffe, 2 kvar').props.disabled, true);
+  for (const notReady of [{safetyStatus:'not_started'}, {bookingSyncStatus:'pending'}, {status:'upcoming'}]) {
+    tree = Detail({ props: props(session(notReady)), area:'cafe' });
+    assert.equal(buttons(tree).find((button)=>button.props['aria-label']==='Kaffe, 2 kvar').props.disabled, true);
+  }
   tree = Detail({ props: props(session({ status: 'redeemed', handoffStatus: 'completed', checkedInBy: { displayName: 'Sara' } })), area: 'cafe' });
   assert.equal(buttons(tree).find((button) => button.props['aria-label'] === 'Kaffe, 2 kvar').props.disabled, false);
   assert.equal(nodes(tree, (node) => node.type === 'details')[0].props.open, false);
@@ -96,6 +104,111 @@ test('Café requires admission, allows partial quantities, and excludes already 
   tree = ProductRow({ item: { ...coffee, collected: 1, available: 1 }, quantity: 0, disabled: false, onQuantity: (value) => { selected = value; } });
   buttons(tree)[0].props.onClick();
   assert.equal(selected, 1);
+});
+
+test('Entrance selects all socks without steppers; completed products have a green outline without zero counts', () => {
+  const socks = {...band, id:'socks', kind:'socks', name:'Strumpor', quantity:4, available:4};
+  let selected;
+  let tree = ProductRow({ item:socks, quantity:0, disabled:false, onQuantity:value=>{selected=value;} });
+  buttons(tree)[0].props.onClick();
+  assert.equal(selected, 4);
+  tree = ProductRow({ item:socks, quantity:4, disabled:false, onQuantity(){} });
+  assert.equal(buttons(tree).length, 1);
+  tree = ProductRow({ item:{...socks,collected:4,available:0}, quantity:0, disabled:false, onQuantity(){} });
+  assert.equal(tree.props['data-state'], 'completed');
+  assert.match(tree.props.className, /border-success.*shadow/);
+  assert.doesNotMatch(text(tree), /0|4|utlämna|kvar|st\b/);
+  assert.equal(buttons(tree)[0].props['aria-label'], 'Strumpor, utlämnat');
+});
+
+test('Unacknowledged selections show immediately, permit the next tap and block final confirmation', () => {
+  const changes = [];
+  const draft = {checkinSessionId:'s1',area:'entrance',selection:[{id:'b',quantity:3}]};
+  const socks = {...band,id:'socks',kind:'socks',name:'Strumpor'};
+  const detail = session({handout:{items:[band,socks,coffee],claims:[],receipts:[]}});
+  const tree = Detail({props:{...props(detail,changes),busy:true,draft},area:'entrance'});
+  assert.equal(buttons(tree).find(button=>button.props['aria-label']==='Besöksband, 3 kvar').props['aria-pressed'], true);
+  const next = buttons(tree).find(button=>button.props['aria-label']==='Strumpor, 3 kvar');
+  assert.equal(next.props.disabled, false);
+  next.props.onClick();
+  assert.deepEqual(JSON.parse(JSON.stringify(changes[0].selection)), [{id:'b',quantity:3},{id:'socks',quantity:3}]);
+  assert.equal(buttons(tree).find(button=>text(button)==='Sparar…').props.disabled, true);
+  assert.equal(nodes(tree,node=>node.props?.['data-state']==='completed').length, 0);
+});
+
+test('Café includes upcoming purchases and preserves exact search candidates; date picker and continuation banner are absent', () => {
+  const render = load('../components/staff/StaffExperience.tsx','',{states:['cafe']}).default;
+  const detail = session({status:'upcoming',cafeQuantity:2,cafeRemaining:2});
+  const tree = render(props(detail));
+  assert.ok(buttons(tree).some(button=>text(button).includes('Testgäst')));
+  assert.equal(nodes(tree,node=>node.type==='input'&&node.props.type==='date').length, 0);
+  assert.doesNotMatch(text(tree), /Fortsätt med/);
+  const search = load('../components/staff/StaffExperience.tsx','',{states:['cafe']}).default;
+  const first = session({checkinSessionId:'first',cafeSession:{checkinSessionId:'admitted',status:'redeemed'}});
+  const second = session({checkinSessionId:'second',cafeSession:first.cafeSession});
+  const opened = [];
+  const searched = search({...props(first),sessions:[first,second],query:'7777',onOpen:id=>opened.push(id)});
+  for(const button of buttons(searched).filter(button=>text(button).includes('Testgäst'))) button.props.onClick();
+  assert.deepEqual(opened,['first','second']);
+});
+
+const plain = value => JSON.parse(JSON.stringify(value));
+function deferred() { let resolve; let reject; const promise = new Promise((done,fail)=>{resolve=done;reject=fail;}); return {promise,resolve,reject}; }
+const accepted = revision => ({session:{status:'ready_for_staff'},handout:{claims:[{area:'entrance',revision}],items:[],receipts:[]}});
+test('Rapid selections are coalesced behind the first claim and use each accepted revision', {timeout:2000}, async () => {
+  const replies = [deferred(),deferred()]; const sent = []; const secondSent = deferred();
+  const buffer = createSelectionBuffer({area:'entrance',action:'select',revision:0,selection:[{id:'b',quantity:3}]});
+  const draining = buffer.drain(request=>{sent.push(plain(request));if(sent.length===2)secondSent.resolve();return replies[sent.length-1].promise;});
+  buffer.update([{id:'b',quantity:3},{id:'socks',quantity:3}]);
+  buffer.update([{id:'socks',quantity:3}]);
+  assert.equal(sent.length,1);
+  replies[0].resolve(accepted(7));
+  await secondSent.promise;
+  assert.equal(sent.length,2);
+  assert.equal(sent[1].revision,7);
+  assert.deepEqual(sent[1].selection,[{id:'socks',quantity:3}]);
+  replies[1].resolve(accepted(8));
+  assert.equal((await draining).handout.claims[0].revision,8);
+});
+test('A failed or cancelled save never sends queued selections or claims completion', async () => {
+  for(const cancel of [false,true]) {
+    const reply=deferred(); let sends=0;
+    const buffer=createSelectionBuffer({area:'entrance',action:'select',revision:0,selection:[]});
+    const draining=buffer.drain(()=>{sends+=1;return reply.promise;});
+    buffer.update([{id:'b',quantity:3}]);
+    if(cancel) { reply.resolve(null); assert.equal(await draining,null); }
+    else { reply.reject(new Error('Lost response')); await assert.rejects(draining,/Lost response/); }
+    assert.equal(sends,1);
+  }
+});
+test('Receipt updates preserve another group and never turn an early café collection into admission', () => {
+  const selected=session({rollerUniqueId:'booking1'});
+  const row={...selected,checkinSessionId:'newer-group',status:'guest_in_progress'};
+  const result={session:{status:'ready_for_staff'},handout:{claims:[],items:[{...coffee,collected:1,available:1}],receipts:[]}};
+  const updated=mergeHandoutSummary(row,selected,result);
+  assert.equal(updated.status,'guest_in_progress');
+  assert.equal(updated.checkinSessionId,'newer-group');
+  assert.equal(updated.cafeRemaining,1);
+  assert.equal(updated.cafeSession,undefined);
+  const unrelated={...row,rollerUniqueId:'another-booking'};
+  assert.equal(mergeHandoutSummary(unrelated,selected,result),unrelated);
+});
+
+test('Today-only API requests follow the server day, retain all pages and preserve older list callers', async () => {
+  const urls=[];
+  const api=load('./adminApi.ts','',{globals:{
+    URLSearchParams, setTimeout:callback=>{callback();},
+    process:{env:{NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL:'https://synthetic.invalid'}},
+    fetch:async url=>{urls.push(new URL(url)); return {ok:true,status:200,text:async()=>JSON.stringify({status:'found',sessions:[{checkinSessionId:`row${urls.length}`}],nextCursor:urls.length===1?'next-group':null})};},
+  }});
+  const rows=await api.listReadyStaffSessions('synthetic',' 7777 ','2000-01-01');
+  assert.equal(rows.length,2);
+  assert.equal(urls[0].searchParams.get('scope'),'today');
+  assert.equal(urls[0].searchParams.has('day'),false);
+  assert.equal(urls[0].searchParams.get('q'),'7777');
+  assert.equal(urls[1].searchParams.get('cursor'),'next-group');
+  await api.listReadyStaffSessions('synthetic');
+  assert.equal(urls[2].searchParams.has('view'),false);
 });
 
 test('Pending confirmation offers the same operation, and explicit recovery opens its own session', () => {

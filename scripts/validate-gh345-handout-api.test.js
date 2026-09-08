@@ -136,4 +136,54 @@ test('Handout HTTP contract: authoritative database, ROLLER receipt recovery and
     assert.equal(retried.body.handout.receipts.length, 1);
     assert.equal(provider.calls, priorCalls + 1);
   });
+
+  await t.test('Ready guests collect one coffee before entrance; retry never redeems bands or collects twice', async () => {
+    const fixture = await seed('cafe-before-entrance');
+    const before = provider.calls;
+    const selected = await request(fixture, {area:'cafe',action:'select',revision:0,selection:[{id:fixture.coffee,quantity:1}]});
+    assert.equal(selected.status, 200, JSON.stringify(selected.body));
+    const confirmation = {area:'cafe',action:'confirm',revision:selected.body.handout.claims.find((claim)=>claim.area==='cafe').revision};
+    provider.databaseFault = 'after-commit';
+    assert.equal((await request(fixture, confirmation)).status, 500);
+    const coffee = await request(fixture, confirmation);
+    assert.equal(coffee.status, 200, JSON.stringify(coffee.body));
+    assert.equal(coffee.body.handout.receipts.length, 1);
+    assert.equal(coffee.body.handout.receipts[0].area, 'cafe');
+    assert.equal(coffee.body.handout.items.find((item)=>item.kind==='coffee').available, 1);
+    assert.equal(coffee.body.handout.items.find((item)=>item.kind==='admission').collected, 0);
+    assert.equal(coffee.body.session.status, 'ready_for_staff');
+    assert.equal(provider.calls, before, 'coffee must not redeem admission');
+    assert.equal((await pool.query('SELECT completed_at FROM jumpyard.checkin_sessions WHERE checkin_session_id=$1', [fixture.sessionId])).rows[0].completed_at, null);
+    const bands = await selectBands(fixture);
+    assert.equal(bands.status, 200, JSON.stringify(bands.body));
+    const entrance = await request(fixture, {area:'entrance',action:'confirm',revision:bands.body.handout.claims.find((claim)=>claim.area==='entrance').revision});
+    assert.equal(entrance.status, 200, JSON.stringify(entrance.body));
+    assert.equal(entrance.body.session.status, 'redeemed');
+    assert.equal(entrance.body.handout.items.find((item)=>item.kind==='coffee').available, 1);
+    assert.equal(entrance.body.handout.receipts.length, 2);
+    assert.equal(provider.calls, before + 1);
+  });
+
+  await t.test('Early café keeps safety, readiness, expiry, payment and counter boundaries', async () => {
+    const fixture = await seed('cafe-guards');
+    const before = provider.calls;
+    const coffee = () => request(fixture, {area:'cafe',action:'select',revision:0,selection:[{id:fixture.coffee,quantity:1}]});
+    for (const [column, value, code] of [
+      ['safety_status','not_started','safety_not_completed'],
+      ['status','guest_in_progress','session_not_ready_for_staff'],
+      ['expires_at','2000-01-01T00:00:00Z','session_not_ready_for_staff'],
+    ]) {
+      const saved = (await pool.query(`SELECT ${column} FROM jumpyard.checkin_sessions WHERE checkin_session_id=$1`, [fixture.sessionId])).rows[0][column];
+      await pool.query(`UPDATE jumpyard.checkin_sessions SET ${column}=$2 WHERE checkin_session_id=$1`, [fixture.sessionId,value]);
+      assert.equal((await coffee()).body.error.code, code);
+      await pool.query(`UPDATE jumpyard.checkin_sessions SET ${column}=$2 WHERE checkin_session_id=$1`, [fixture.sessionId,saved]);
+    }
+    await pool.query("UPDATE jumpyard.roller_bookings SET payment_status='Unpaid' WHERE roller_unique_id=$1", [fixture.bookingId]);
+    assert.notEqual((await coffee()).status, 200);
+    await pool.query("UPDATE jumpyard.roller_bookings SET payment_status='Paid' WHERE roller_unique_id=$1", [fixture.bookingId]);
+    assert.equal((await request(fixture, {area:'entrance',action:'select',revision:0,selection:[{id:fixture.coffee,quantity:1}]})).body.error.code, 'invalid_selection');
+    assert.equal((await request(fixture, {area:'cafe',action:'select',revision:0,selection:[{id:fixture.bands,quantity:3}]})).body.error.code, 'invalid_selection');
+    assert.equal(provider.calls, before);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM jumpyard.staff_handout_operations WHERE checkin_session_id=$1', [fixture.sessionId])).rows[0].n, 0);
+  });
 });

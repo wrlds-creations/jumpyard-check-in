@@ -4,6 +4,10 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #345 Live-feedback Refinements (Prepared)
+
+The approved staff-speed follow-up changes the session/redeem code and adds forward migration `0022_staff_cafe_ready_collection.sql`. It permits café goods after guest readiness without redeeming entrance. Applied 0021 is unchanged. No AWS resource, route, IAM permission, tag, park/date gate or provider setting is added or widened. The existing account `376129878018`, region `eu-north-1`, Nacka stack and WRLDS metadata apply. Promotion must select one immutable artifact through the usual reviewed Park/public plans; `ca38fec` / release `34229583004` remains the deployed version until that succeeds. [Scope, timing evidence and rollback](docs/gh-345-staff-handout.md#live-feedback-refinements--2026-09-08).
+
 ### Issue #345 Staff Handout (Published 2026-09-08)
 
 Reviewed [PR #393](https://github.com/wrlds-creations/jumpyard-check-in/pull/393) and the real-product label correction [PR #394](https://github.com/wrlds-creations/jumpyard-check-in/pull/394) produced `ca38fec4515d135f642d10de3f839871d07e2498`. Immutable [release 34229583004](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34229583004), artifact `10057451678`, passed protected [Park 34230754910](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34230754910) and [public 34231738633](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34231738633). Love explicitly authorized commit, push, merge and deployment; the actual Park plan was independently matched to live AWS before delegated protected approval, and the exact public plan was approved only after Park succeeded. Both lanes promoted the same artifact without rebuilding.
