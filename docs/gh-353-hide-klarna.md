@@ -54,4 +54,38 @@ The isolated fixture is outside the repository at `%TEMP%/jumpyard-gh353-ui/veri
 
 Publication is approved through the normal immutable release and protected Park/public promotion. On the selected artifact, verify Klarna and Delbetalning are absent for fresh entry and add-on purchases on real phones, card/eligible Apple Pay remain available, and Google Pay remains offered while its provider question is unresolved. Check old-attempt returns without clearing or replacing any uncertain payment. If ROLLER does not honor the exclusion list, keep this acceptance open and ask for its exact supported mapping/channel contract.
 
-The local implementation/validation performed no live payment, booking, refund, provider outreach, AWS/Cloudflare change, release, promotion or rollback. Publication evidence follows separately. No new follow-up draft was needed. #353 must not close until both the Klarna rollout acceptance and the separate Google Pay dependency are resolved.
+The local implementation/validation performed no live payment, booking, refund, provider outreach, AWS/Cloudflare change, release, promotion or rollback. No new follow-up draft was needed. #353 must not close until both the Klarna rollout acceptance and the separate Google Pay dependency are resolved.
+
+## Reviewed implementation — 2026-09-08
+
+[PR #390](https://github.com/wrlds-creations/jumpyard-check-in/pull/390) was reviewed at head `372c35ef93e85e6a4e4e7d0bb3f63c6818699da9`. The recorded code review found no blocking issue in the fresh-session scope, SDK contract, preserved request fields or return/unknown-attempt protections; this was Codex's review, not an independent human approval. All four required checks (Repository, Infrastructure, Phone, Admin) passed in [CI 34207335079](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34207335079). Normal protected merge produced `c60f4d3d9a901ebae625af9f1ad03c3ddfa47f4f`; no direct-main push or protection bypass was used.
+
+Love chose to perform the post-publication check on his own phone. Physical Nacka Live verification of method visibility for fresh entry and linked add-on sessions remains pending his report. No payment submission is needed for this acceptance; do not clear or replace an existing unresolved attempt. Static asset checks and offline SDK/browser tests do not establish Live enforcement or a successful payment.
+
+## Immutable release and protected plan — 2026-09-08
+
+[Release 34207599674](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34207599674) built `c60f4d3d9a901ebae625af9f1ad03c3ddfa47f4f` successfully. Artifact `10048622809` is `park-test-release-c60f4d3d9a901ebae625af9f1ad03c3ddfa47f4f`; its GitHub digest is `sha256:2f5261ed8cad4f9279c71dd49a5963cbbf9d960061975bd4925a6c3814970519`. Both release validators passed locally after download, including all 595 file checksums and exact Park/public targets.
+
+| Component | SHA256 |
+|---|---|
+| Manifest | `2c5f427f74fa06b7ad3f9da06f1c00eabe85837500fccd5008373279930cb453` |
+| Phone output | `cf075869762316a9d831559347b099108d816cd8905421e7e98d6068a9545bb3` |
+| Admin output | `15e7955859df93d660421ae1f7e5e0678cc952c8986b4fa98307bb7359f8330a` |
+| CDK assembly | `2c4c5ec3ac8b71b9b67bdf2cd2ca7cee071ab847e8dde74295118336fc5fc50e` |
+| Migration runtime | `e1bb391d5ebd1add6bdd03025341bfd1103db22f059042824f4c883b8171cd3d` |
+
+The actual read-only plan in [Park 34208225791](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34208225791), artifact `park-test-plan-34208225791`, showed 205 current/release resources and no changed resources or template sections. Current and selected canonical template hashes both equal `12f145b9b225ec4abb84845c0e1add67c8d6c1cd7d5c7ad3fac0be2e441ac3eb`. The exact plan and artifact were reviewed before approving the normal protected `park-test` job on Love's behalf, as expressly authorized in #353. Migration apply is false; source backend/admin/workflows are unchanged from the previously published `11fdcb3`.
+
+The reviewed target remains AWS account `376129878018`, `eu-north-1`, stack `jumpyard-check-in-park-test-stack`, Nacka venue `50871`, operating dates through `2026-09-30`. Existing WRLDS tags remain client/cost center `JumpYard`, project `jumpyard-check-in`, environment `park-test`, owner/creator `love`, repository `wrlds-creations/jumpyard-check-in`, managed by `cdk`, data classification `confidential`, exportable `true`. No new resource, migration, IAM, schema, credential, provider setting, guest-send gate or alarm-route change is included.
+
+Previously published [release 34103357175](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34103357175), SHA `11fdcb3d82f10fbc011a0161d59ede73e6146544`, artifact `10011585061`, was confirmed unexpired until `2026-12-06T08:57:30Z`. Its successful Park/public runs are `34104000787` / `34104120749`. It remains the selected rollback candidate through the same immutable-artifact/protected-plan path; no rollback or re-promotion rehearsal was requested.
+
+## Protected rollout — 2026-09-08
+
+Park run `34208225791` succeeded. CDK reported no changes. The workflow passed exact selected/deployed template equality, `IN_SYNC` drift, zero alarms in `ALARM`, empty visible/in-flight queues, migrations applied through `0020` with migration apply disabled, exact release-SHA metadata on both Pages projects, and HTTP/API/Apple-association checks. A separate read-only byte comparison matched 14 phone and 16 admin responses, including root/route HTML, referenced JS/CSS and the phone Apple association, against the selected immutable artifact.
+
+After Park succeeded, [public run 34208537881](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34208537881) selected the same release run, SHA and artifact. Completed plan job `102003755205` revalidated the 595 files and exact public origins/projects, with no AWS mutation, ROLLER write or guest message in the frontend workflow. This actual plan was read before delegated approval of the normal protected `park-test` job; no bypass or rebuild was used.
+
+Public promotion succeeded for `https://checkin.jumpyard.se` and `https://staff-checkin.jumpyard.se`, with exact-SHA Pages metadata, active domains, expected API/Cognito settings, CORS allow/block probes and the unchanged Apple association SHA256 `8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6`. Independent readback matched the public phone's 14 responses immediately. The staff root HTML initially differed just after publication; a subsequent direct read and full repeated byte comparison matched all 16 staff responses without any intervention. This transient is consistent with publication propagation but its cache layer was not diagnosed.
+
+Final independent evidence therefore contains 30 exact matches per lane, 60 total, saved outside the repository in `%TEMP%/jumpyard-gh353-static-park.json` and `%TEMP%/jumpyard-gh353-static-public.json`. The read-only fixture `%TEMP%/jumpyard-gh353-static-readback.cjs` compares selected artifact bytes with HTTPS responses; it does not create provider sessions or transactions. No rollback, re-promotion, Live purchase, refund, guest send or provider outreach occurred. `AWS_RESOURCES.md` records this no-resource-change rollout, and `REPO_CURRENT_STATE.md` records the published SHA. Physical Klarna/alternative-method acceptance remains with Love; Google Pay/Pabel remains unresolved and #353 stays open/Blocked.
