@@ -90,10 +90,52 @@ Exact existing metadata: Client `JumpYard`, Project `jumpyard-check-in`, Environ
 
 Migration `0021` is forward-only. Never reverse it or decrement counters on application rollback. An older artifact may understand legacy readiness/admission but lacks the new handout endpoint/UI; it is **not** an operationally equivalent café rollback. A known compatible #345 artifact is preferred. Before reverting to a pre-#345 artifact, stop physical handout, retain the ledger, review outstanding selections/receipts, use stable session/booking identity rather than old undated number search, and explicitly agree the reduced operation. An incompatible rollback requires a corrective immutable release.
 
-## Release status
+## Protected rollout — 2026-09-08
 
-Local implementation and validation are complete; protected rollout is pending. Love has explicitly authorized commit, push, merge and deployment. The rollout evidence will identify the reviewed PR and exact release, database apply and backend/public versions. Keep the issue open until the selected artifact is verified and physical acceptance limits are recorded.
+The implementation and public promotion are complete. [PR #393](https://github.com/wrlds-creations/jumpyard-check-in/pull/393) merged the staff flow as `e13df7ab3537c41bea7d30ec427bc7af2edf47f3`; [PR #394](https://github.com/wrlds-creations/jumpyard-check-in/pull/394) corrected the actual purchased product labels and merged as **`ca38fec4515d135f642d10de3f839871d07e2498`**, the selected deployed version. Both had documented Codex source review, successful required checks and normal protected squash merges; no independent human code review is claimed. CI runs [34228164584](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34228164584) and [34229265041](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34229265041) passed all five jobs, including native PostgreSQL 17 tests.
 
-The currently deployed pre-#345 fallback is release `34207599674`, SHA `c60f4d3d9a901ebae625af9f1ad03c3ddfa47f4f`, artifact `10048622809` (verified unexpired on September 8). It preserves Klarna exclusions and #333 admission recovery but lacks the new collection ledger UI/endpoint, so the reduced-operation rollback constraints above apply. No rollback is requested or performed by this promotion.
+| Evidence | Exact value |
+| --- | --- |
+| Immutable release | [34229583004](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34229583004), successful; 661 file checksums verified |
+| Artifact | `10057451678`, `park-test-release-ca38fec4515d135f642d10de3f839871d07e2498`, 26,470,337 bytes |
+| Artifact SHA256 | `e14880668278c0daa860a88e70a2763b50c92d078c4b35028697eff0e54580cf` |
+| Manifest SHA256 | `183e52ce33857b6ac69e6fd08a895f28feaec9307264bab9dd1c3ea069f70c53` |
+| Park promotion | [34230754910](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34230754910), successful at 13:23:13 UTC; `apply_migrations=true` |
+| Public promotion | [34231738633](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34231738633), successful at 13:25:55 UTC |
+| Deployed template SHA256 | `84778ba5e89d189496317b65c3267e4747dc48574d1d38bd77bf55dc47de3cbd` |
+| Migration `0021` SHA256 | `c49572b60853b8b4eee46145aa335ef08473bacd6cb24bedcc617f7e1e4abb57` |
+| Park Pages deployments | phone `9fd88425`; staff `e69c34a9` |
+| Public Pages deployments | phone `f827016f`; staff `87371033` |
 
-Love's live walkthrough after promotion: prepare a visit; confirm the four-digit number; give out bands/socks; scan the same code at Café; collect one coffee; check one remains and both staff names are correct; repeat from a second phone and verify duplicate collection is blocked.
+Love's explicit commit/push/merge/deploy instruction also authorized delegated approval through the existing protected `park-test` gate. Before Park approval, the downloaded actual plan was independently reproduced against live AWS with exact equality: 205 to 208 resources, only the handout route/integration/invoke permission added, and stage/session/redeem updated. There were no removals or other template section changes; the code updates changed asset references only. All 20 previously applied SQL checksums matched before the single pending migration was approved. Protected deployment record: `6328433738`.
+
+Public approval followed successful Park verification. Actual plan job `102079321621` verified the same artifact digest, all 661 files, the exact two production Pages projects/public origins and existing Nacka API. Protected deployment record: `6328619024`. The workflow made no AWS mutations. Neither promotion rebuilt source or bypassed the environment gate.
+
+Post-deployment verification:
+
+- Park reached `UPDATE_COMPLETE`; selected/deployed templates match, drift is `IN_SYNC`, no monitored alarm is in `ALARM`, and both queue counts are zero. The API has 28 routes: six IAM, four JWT and eighteen with caller-specific Lambda authorization. The new handout route uses rate/burst `20/40`.
+- Migration `0021` applied at 13:20:32 UTC. An independent read-only query matched all **21** migration checksums against the selected artifact. The pre-existing **103 sessions and 90 legacy codes** remained unchanged at readback; no daily code was allocated by deployment or verification.
+- Independent retrieval of both active Lambda ZIPs matched **all ten packaged files** to the selected artifact. Session code SHA256 (base64): `Dogw/9zcddOeoh9W2RM29uLgyL+Zm700aJYCUhHouCc=`; redeem: `eea0P2GUKs6fHV3ulyL5D5ZzIuMLdiEejo17Bd4f1MM=`. Both updates reported `Successful`.
+- The selected release's actual board SQL ran read-only with **`jumpyard_session_runtime`**, the real restricted production database role: all **33** Nacka bookings for September 8 returned in one page. This verifies SQL/grants with real data, not a credentialed browser/PIN acceptance test.
+- Unauthenticated board and handout requests returned HTTP **401**, `staff_auth_session_required`, before customer/provider mutation.
+- Exact-SHA Cloudflare metadata, active public domains, allowed/blocked CORS, Cognito callbacks and Apple Pay association checks passed. Independent byte comparison matched **30 responses per lane, 60 total**: phone root/linked assets/Apple association and staff root/admin/callback/linked assets. The public staff page rendered the existing PIN login in the browser.
+
+Account, region, full WRLDS metadata, Nacka venue/date limits and closed general guest messaging remain as specified above. There was no live customer purchase, admission, physical collection, guest send, load test or financial-provider setting change. Documentation-only evidence merges do not replace the deployed `ca38fec` artifact.
+
+### Rollback availability
+
+The previously deployed pre-#345 fallback is [release 34207599674](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34207599674), SHA `c60f4d3d9a901ebae625af9f1ad03c3ddfa47f4f`, artifact `10048622809`, digest `2f5261ed8cad4f9279c71dd49a5963cbbf9d960061975bd4925a6c3814970519`. It was verified unexpired on September 8 and previously passed Park `34208225791` / public `34208537881`. It preserves Klarna exclusions and #333 admission recovery but lacks the new collection ledger UI/endpoint, so the reduced-operation constraints above apply.
+
+A same-schema #345 candidate also exists: successful [release 34228621504](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34228621504), SHA `e13df7ab3537c41bea7d30ec427bc7af2edf47f3`, artifact `10056994786`, digest `d1fd54b070fd0ab1b4adc97dfcb26f505cdae72211e9fc96f302501aa7cea9be`. Only the subsequent product-label correction differs. This candidate is built/CI-validated and unexpired, **not previously deployed or Park-proven**. Never reverse migration `0021` or decrement counters. No rollback or re-promotion was requested/performed during this rollout, so there are no such new run IDs.
+
+### Love's live walkthrough
+
+Open [the guest app](https://checkin.jumpyard.se) and [the staff app](https://staff-checkin.jumpyard.se). Reload every shared staff phone before testing and log in with existing personal PINs. Use a visit containing the relevant purchased goods; do not expect coffee on a booking that did not buy it.
+
+1. Finish a fresh guest check-in and verify the four-digit number and allocation date. Earlier JY sessions retain their old codes; midnight starts a new series without renumbering an existing guest.
+2. In Entré, find/scan that guest, select the purchased bands/socks and confirm. First selection should display ownership on a second staff phone, without a separate take-guest button.
+3. Present the same session QR/number in Café. Collect one of two purchased coffees, verify one remains, then inspect the entrance/café staff names and times.
+4. Reopen on the second phone and verify ownership, saved state and already-collected quantities prevent duplicate handout. Keep an uncertain confirmation open and use its recovery action before physical repetition.
+5. Test the physical Motorola camera and an actual website booking ticket QR. The previously inspected PDF had no QR; unsupported provider URL formats have not been guessed. The stable JumpYard session QR and raw booking/ticket identifiers retain their supported search paths.
+
+Issue #345 remains open for this practical acceptance. APK packaging and a live load benchmark are outside this delivery; local automation and server readback do not substitute for handset/physical collection proof.
