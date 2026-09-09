@@ -5,9 +5,9 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-09-08
-- Public/Park: `ca38fec` ([#345](docs/gh-345-staff-handout.md)): daily numbers, staff design and entrance/café receipts; handset acceptance remains. #353 Klarna exclusions; #340 diagnostics; #335 alarms; #374 Apple Pay accepted.
+- Public/Park: `653c096` ([#345](docs/gh-345-staff-handout.md)): daily numbers, today's queue, instant selection and café before entrance; handset acceptance remains. 91 staff/29 native checks passed. #353 Klarna exclusions; #340 diagnostics; #335 alarms; #374 Apple Pay accepted.
 - Operations: private [Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to this repository; Love confirmed it as the Project default.
-- Runtime: Park has 208 resources, migrations through `0021`, and 28 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption and late Handoff attachment are proven. Definitive kiosk payment approval returns its provisional session and bounded `safety` hint before ROLLER readback; redemption still requires authoritative synchronization. Physical proof: kiosk #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
+- Runtime: Park has 208 resources, migrations through `0022`, and 28 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption and late Handoff attachment are proven. Definitive kiosk payment approval returns its provisional session and bounded `safety` hint before ROLLER readback; redemption still requires authoritative synchronization. Physical proof: kiosk #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
 - Product approval and implementation status live in GitHub Issues and the Project; current mutable state is read from GitHub rather than copied here.
 
@@ -43,7 +43,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 - GitHub-native release `32372219796` and Park run `32372746116` deployed the existing-booking kiosk terminal add-on contract. Kiosk drafts resolve the terminal alias server-side, return a fresh card-present attempt identity, and finalize/status the add-product operation without a second guest check-in or Handoff session. Phone/Park keep ecommerce behavior. A safe negative public probe reached the new route contract and failed before provider mutation as expected; supervised physical payment proof remains open on issue #285.
 - T0200/T0201 provide verified DKIM, SES suppression/telemetry, six alarms, and restricted application sending. Three direct proofs plus one automatic proof delivered with zero provider failures; the general gate is false and the T0201 control is disarmed.
 - T0196 completed all 53 unique modified-date windows through `2026-07-15`. Aurora contains 6,174 Live/Nacka bookings, 8,921 items, 6,662 tickets, 6,127 payments, and 983 guest profiles; zero bookings are older than 30 days, 92 are for the current date, 120 are future, and future visits extend through `2026-12-30`. Roller remains authoritative and critical writes still refresh/confirm against Roller.
-- Migrations `0010`-`0021` are deployed to park-test. `0018`: kiosk payment attempts/partial unique index; `0019`: bounded reconciliation/timing; `0020`: restricted provisional kiosk handoff; `0021`: retained park/day counters, ownership and collection receipts. Lifecycle dry-run predates the booking-index import; apply needs replanning/recounting and remains separately gated.
+- Park migrations through `0022` are deployed. `0018`: kiosk payment attempts/partial unique index; `0019`: bounded reconciliation/timing; `0020`: restricted provisional kiosk handoff; `0021`: retained counters, ownership/receipts; `0022`: ready café before admission. Lifecycle dry-run predates the booking-index import; apply requires replanning/recounting and separate approval.
 
 ## Durable Documents And History
 
