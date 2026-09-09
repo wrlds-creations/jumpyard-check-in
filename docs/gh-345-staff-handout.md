@@ -4,6 +4,14 @@ Initial implementation: `codex/gh-345-staff-handoff`, based on `6b938a9`. Live-f
 Scope: [#345](https://github.com/wrlds-creations/jumpyard-check-in/issues/345).
 The reviewed #389 prototype is design input. This implementation uses the real staff root, personal PIN sessions, Cloud API and operational database. It does not ship the prototype's fixtures or a second production app.
 
+## Android acceptance and closeout — 2026-09-09
+
+Love accepted the installed JumpYard Personal v1.0.0 app: **“Jag testade och jag är nöjd.”** This completes the owner acceptance checkpoint for #345. It is general acceptance, not an itemized report of optical ticket-QR or two-phone tests. Earlier pending-acceptance statements below are historical rollout evidence.
+
+[PR #401](https://github.com/wrlds-creations/jumpyard-check-in/pull/401) merged as `822384309ece85fc95f0e5e951e048c6eca39601` after implementation-agent source review and all six [CI jobs](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34334993759) passed at `66f1f007b3a134897db3770de9d707a8c5e2aa93`; no independent human code review or merge bypass is claimed. [The Android runbook](../jumpyard-checkin-android/README.md) records exact package, APK/certificate hashes, local validation and Motorola evidence, including a successful in-place update and matching installed APK readback.
+
+The tested APK is retained unchanged. AirDroid locking is colleague-owned and excluded from closure. Signing-key backup before wider distribution remains the separate Project draft **Escrow staff Android signing key before wider device rollout**. No new backend/web deployment, rollback or re-promotion was needed; `971d901` remains live through release `34327287544`, Park `34327943053` and public `34328439965`. Automatic mainline artifact builds do not deploy.
+
 ## Guest and staff behavior
 
 1. Finish guest check-in on phone or kiosk. The existing shared ready endpoint assigns the session a four-digit number and keeps its stable QR identity.
@@ -140,7 +148,7 @@ Open [the guest app](https://checkin.jumpyard.se) and [the staff app](https://st
 4. Reopen on the second phone and verify ownership, saved state and already-collected quantities prevent duplicate handout. Keep an uncertain confirmation open and use its recovery action before physical repetition.
 5. Test the physical Motorola camera and an actual website booking ticket QR. The previously inspected PDF had no QR; unsupported provider URL formats have not been guessed. The stable JumpYard session QR and raw booking/ticket identifiers retain their supported search paths.
 
-Issue #345 remains open for practical acceptance. The September 9 Android extension supersedes the original APK exclusion; a live load benchmark remains outside this delivery. Local automation and server readback do not substitute for physical collection proof.
+Love completed the practical acceptance checkpoint on September 9, as recorded above. The Android extension supersedes the original APK exclusion; a live load benchmark remains outside this delivery. Local automation and server readback do not substitute for physical collection proof.
 
 ## Live clarity refinements — 2026-09-09
 
