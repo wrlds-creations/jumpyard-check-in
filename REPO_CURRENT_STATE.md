@@ -5,7 +5,7 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-09-09
-- Public/Park: `971d901` ([#345](docs/gh-345-staff-handout.md)): admission counts, clear collection/loading, daily codes and early café. 94 staff/30 native checks passed. Android v1.0.0 merged (#401, `8223843`) and accepted by Love. #353 Klarna exclusions; #340 diagnostics; #335 alarms; #374 Apple Pay accepted.
+- Public/Park: `971d901` ([#345](docs/gh-345-staff-handout.md)): counts, collection/loading, daily codes and early café. 94 staff/30 native checks; APK 1.0.0 merged/accepted (#401, `8223843`). #353 Klarna exclusions; #340 diagnostics; #335 alarms; #374 Apple Pay accepted.
 - Operations: private [Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to this repository; Love confirmed it as the Project default.
 - Runtime: Park has 208 resources, migrations through `0022`, and 28 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption and late Handoff attachment are proven. Definitive kiosk payment approval returns its provisional session and bounded `safety` hint before ROLLER readback; redemption still requires authoritative synchronization. Physical proof: kiosk #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
