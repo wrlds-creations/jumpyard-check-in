@@ -2,15 +2,15 @@
 
 import Image from "next/image";
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { Check, ChevronDown, Minus, Plus, RefreshCcw, ScanLine, Search, X } from "lucide-react";
+import { Check, ChevronDown, LoaderCircle, Minus, Plus, RefreshCcw, ScanLine, Search, X } from "lucide-react";
 import type { HandoutArea, HandoutItem, HandoutRequest, HandoutSelection, StaffAuthSession, StaffSessionDetail, StaffSessionSummary } from "@/lib/adminApi";
 import { activeClaim, clock, itemIcon, nextPass, stageOf, stockholmDay, type Stage } from "./flow";
 import { Icon, cls } from "./ui";
 import type { HandoutDraft } from "./selection";
 
 const stages: { id: Stage; label: string }[] = [
-  { id: "ready", label: "Redo" }, { id: "started", label: "Påbörjade" },
-  { id: "upcoming", label: "Kommande" }, { id: "completed", label: "Incheckade" },
+  { id: "upcoming", label: "Kommande" }, { id: "started", label: "Påbörjade" },
+  { id: "ready", label: "Redo" }, { id: "completed", label: "Incheckade" },
 ];
 interface Props {
   auth: StaffAuthSession;
@@ -36,6 +36,11 @@ interface Props {
   onHandout: (request: HandoutRequest) => Promise<boolean>;
 }
 
+function AdmissionCount({ count }: { count?: number }) {
+  if (!Number.isSafeInteger(count) || !count || count < 0) return null;
+  return <span className="flex items-center gap-1"><Icon name="visitor-wristband" className="h-5 w-5" />{count} {count === 1 ? "entré" : "entréer"}</span>;
+}
+
 function BookingRow({ session, area, actorId, selected, onOpen }: {
   session: StaffSessionSummary; area: HandoutArea; actorId?: string; selected: boolean; onOpen: () => void;
 }) {
@@ -54,7 +59,7 @@ function BookingRow({ session, area, actorId, selected, onOpen }: {
     </span>
     <span className="mt-2 flex flex-wrap items-center justify-between gap-2">
       <span className="flex items-center gap-3 text-xs font-bold">
-        <span className="flex items-center gap-1"><Icon name="group" className="h-5 w-5" />{session.counts.admission || session.counts.selectedTickets || session.counts.tickets || "—"}</span>
+        <AdmissionCount count={session.counts.admission} />
         <span className="flex items-center gap-1"><Icon name="time" className="h-5 w-5" />{clock(session.booking.startTime)}</span>
       </span>
       <span className={`text-xs font-bold ${claim ? "text-primary" : stage === "ready" || stage === "completed" ? "text-success" : ""}`}>{status}</span>
@@ -62,27 +67,30 @@ function BookingRow({ session, area, actorId, selected, onOpen }: {
   </button>;
 }
 
-function ProductRow({ item, quantity, disabled, onQuantity }: {
-  item: HandoutItem; quantity: number; disabled: boolean; onQuantity: (quantity: number) => void;
+function ProductRow({ item, quantity, disabled, readOnly = false, onQuantity }: {
+  item: HandoutItem; quantity: number; disabled: boolean; readOnly?: boolean; onQuantity: (quantity: number) => void;
 }) {
   const remaining = item.available ?? Math.max(0, item.quantity - item.collected);
   const done = remaining === 0 && item.collected > 0;
   const partial = item.area === "cafe";
   const duration = !done && item.kind === "admission" ? item.detail?.match(/\b\d+\s*min\b/)?.[0] : null;
-  return <div data-state={done ? "completed" : quantity > 0 ? "selected" : "available"}
-    className={`rounded-2xl border bg-white transition-[border-color,box-shadow] ${done ? "border-success/65 shadow-[0_0_0_2px_#087f5b12,0_0_18px_#087f5b16]" : quantity > 0 ? "border-success ring-2 ring-success/10" : "border-border"}`}>
-    <button type="button" onClick={() => onQuantity(quantity > 0 ? 0 : partial ? Math.min(1, remaining) : remaining)} disabled={disabled || remaining === 0}
-      aria-pressed={quantity > 0} aria-label={done ? `${item.name}, utlämnat` : `${item.name}, ${remaining} kvar`}
-      className="grid min-h-18 w-full grid-cols-[auto_1fr_auto_auto] items-center gap-3 px-3 py-3 text-left">
+  const label = done ? `${item.name}, utlämnat` : `${item.name}, ${remaining} kvar`;
+  const content = <>
       <Icon name={itemIcon[item.kind] || "addons-bag"} className="h-10 w-10" />
       <span className="min-w-0"><span className="block text-sm font-black italic uppercase leading-tight">{item.name}</span>
         {duration && <span className="mt-1 block text-xs font-medium">{duration}</span>}</span>
       {!done && <span className="text-2xl font-black italic tabular-nums">{remaining || item.quantity}</span>}
-      {done ? <span className="col-start-4 grid h-7 w-7 place-items-center text-success"><Check size={23} strokeWidth={3} /></span> : <span aria-hidden="true"
+      {done ? <span className="col-start-4 grid h-7 w-7 place-items-center text-success"><Check size={23} strokeWidth={3} /></span> : !readOnly && <span aria-hidden="true"
         className={`grid h-7 w-7 place-items-center rounded-full border-2 ${quantity > 0 ? "border-success text-success" : "border-border"}`}>
         {quantity > 0 && <Check size={16} strokeWidth={3} />}</span>}
-    </button>
-    {quantity > 0 && remaining > 1 && partial && <div className="flex items-center justify-end border-t border-success/15 px-3 py-1">
+  </>;
+  const rowClass = `grid min-h-18 w-full ${readOnly && !done ? "grid-cols-[auto_1fr_auto]" : "grid-cols-[auto_1fr_auto_auto]"} items-center gap-3 px-3 py-3 text-left`;
+  return <div data-state={done ? "completed" : quantity > 0 ? "selected" : "available"}
+    className={`rounded-2xl border bg-white transition-[border-color,box-shadow] ${done ? "border-success/65 shadow-[0_0_0_2px_#087f5b12,0_0_18px_#087f5b16]" : quantity > 0 ? "border-success ring-2 ring-success/10" : "border-border"}`}>
+    {readOnly ? <div className={rowClass} role="group" aria-label={label}>{content}</div> :
+      <button type="button" onClick={() => onQuantity(quantity > 0 ? 0 : partial ? Math.min(1, remaining) : remaining)} disabled={disabled || remaining === 0}
+        aria-pressed={quantity > 0} aria-label={label} className={rowClass}>{content}</button>}
+    {!readOnly && quantity > 0 && remaining > 1 && partial && <div className="flex items-center justify-end border-t border-success/15 px-3 py-1">
       <div className="flex items-center gap-2">
         <button type="button" disabled={disabled} onClick={() => onQuantity(quantity - 1)} aria-label={`Minska ${item.name}`} className="grid h-11 w-11 place-items-center"><Minus size={18} /></button>
         <span className="min-w-12 text-center text-lg font-black tabular-nums">{quantity}<span className="text-xs font-bold"> / {remaining}</span></span>
@@ -99,7 +107,7 @@ function Detail({ props, area, onArea }: { props: Props; area: HandoutArea; onAr
   if (!detail) return <section className="rounded-3xl border border-border bg-white p-5">
     <button type="button" className={cls.text} onClick={props.onClose}>Tillbaka</button>
     {preview && <h2 className="mt-3 text-2xl font-black italic uppercase">{preview.guest?.name || preview.bookingReference}</h2>}
-    <p role="status" className="py-4 text-sm font-bold">{props.detailLoading ? "Hämtar produkter…" : props.error || "Öppna en bokning eller skanna gästens QR-kod."}</p>
+    <p role="status" className="flex items-center gap-2 py-4 text-sm font-bold">{props.detailLoading && <LoaderCircle size={18} aria-hidden="true" className="animate-spin text-primary motion-reduce:animate-none" />}{props.detailLoading ? "Hämtar produkter…" : props.error || "Öppna en bokning eller skanna gästens QR-kod."}</p>
   </section>;
   const handout = detail.handout;
   const claim = handout?.claims.find((item) => item.area === area);
@@ -114,6 +122,7 @@ function Detail({ props, area, onArea }: { props: Props; area: HandoutArea; onAr
   const products = handout?.items.filter((item) => item.area === area) || [];
   const other = handout?.items.filter((item) => item.area !== area) || [];
   const remaining = products.filter((item) => (item.available ?? item.quantity - item.collected) > 0);
+  const allSelected = remaining.length > 0 && remaining.every((item) => selected.some((line) => line.id === item.id && line.quantity === (item.available ?? item.quantity - item.collected)));
   const reader = props.auth.staff.role === "staff_reader";
   const blocked = reader || !handout || colleague || detail.visitDate !== stockholmDay() ||
     (!complete && stage !== "ready");
@@ -139,7 +148,7 @@ function Detail({ props, area, onArea }: { props: Props; area: HandoutArea; onAr
     <div className="flex items-start justify-between gap-3 border-b border-border p-4">
       <div className="min-w-0"><h2 className="break-words text-2xl font-black italic uppercase leading-tight sm:text-3xl">{detail.guest?.name || "Bokning"}</h2>
         <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-bold">
-          <span className="flex items-center gap-1"><Icon name="group" className="h-5 w-5" />{detail.counts.admission || detail.counts.selectedTickets || detail.counts.tickets} gäster</span>
+          <AdmissionCount count={detail.counts.admission} />
           <span className="flex items-center gap-1"><Icon name="time" className="h-5 w-5" />{clock(detail.booking.startTime)}</span>
           <span>{detail.bookingReference}</span>
           {detail.handoffDay && detail.handoffDay !== detail.visitDate && <span>Nummer från {detail.handoffDay}</span>}
@@ -154,13 +163,16 @@ function Detail({ props, area, onArea }: { props: Props; area: HandoutArea; onAr
     {blocker && <p className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-bold"><Icon name="info" className="h-6 w-6" />{blocker}</p>}
     <div className="p-3 sm:p-4">
       <div className="mb-2 flex min-h-9 items-center justify-between gap-3"><h3 className="text-xs font-black italic uppercase tracking-wider">{area === "cafe" ? "Café" : "Lämna ut"}</h3>
-        {remaining.length > 1 && !blocked && <button type="button" className={cls.text} disabled={disabled} onClick={() => change(remaining.map((item) => ({ id: item.id, quantity: item.available ?? item.quantity - item.collected })))}>Välj alla</button>}
+        {remaining.length > 1 && !blocked && <button type="button" aria-pressed={allSelected} aria-label={allSelected ? "Rensa alla val" : "Välj alla"}
+          className={`flex min-h-11 items-center gap-2 rounded-xl border px-3 text-xs font-bold transition disabled:opacity-50 ${allSelected ? "border-success text-success shadow-[0_0_12px_#087f5b12]" : "border-primary/40 text-primary hover:bg-primary/5"}`}
+          disabled={disabled} onClick={() => change(allSelected ? [] : remaining.map((item) => ({ id: item.id, quantity: item.available ?? item.quantity - item.collected })))}>
+          <span aria-hidden="true" className={`grid h-5 w-5 place-items-center rounded-md border ${allSelected ? "border-success" : "border-primary/50"}`}>{allSelected && <Check size={14} strokeWidth={3} />}</span>{allSelected ? "Alla valda" : "Välj alla"}</button>}
       </div>
       <div className="grid gap-2">{products.map((item) => <ProductRow key={item.id} item={item} quantity={selected.find((line) => line.id === item.id)?.quantity || 0} disabled={disabled} onQuantity={(value) => quantity(item, value)} />)}</div>
       {products.length === 0 && <p className="py-3 text-sm">{stage === "ready" || complete ? "Inget att lämna ut här." : "Produkterna visas när bokningen är klar."}</p>}
       {other.length > 0 && <details className="mt-4" open={area === "entrance"}>
-        <summary className="cursor-pointer py-2 text-xs font-black italic uppercase tracking-wider">{area === "cafe" ? "Entré" : "Café"}</summary>
-        <div className="grid gap-2">{other.map((item) => <ProductRow key={item.id} item={item} quantity={0} disabled onQuantity={() => {}} />)}</div>
+        <summary className="cursor-pointer py-2 text-xs font-black italic uppercase tracking-wider">{area === "cafe" ? "Entré" : "Hämtas i caféet"}</summary>
+        <div className="grid gap-2">{other.map((item) => <ProductRow key={item.id} item={item} quantity={0} disabled readOnly onQuantity={() => {}} />)}</div>
       </details>}
       {area === "cafe" && Boolean(handout?.receipts.length) && <details className="mt-3"><summary className="cursor-pointer py-2 text-xs font-bold">Historik</summary>
         <ul className="grid gap-2">{handout?.receipts.map((receipt) => <li key={receipt.operationId} className="rounded-xl border border-border p-3 text-sm">
@@ -177,9 +189,9 @@ function Detail({ props, area, onArea }: { props: Props; area: HandoutArea; onAr
       {props.recoveryTarget && <button type="button" className={`${cls.text} mb-3 w-full`} onClick={() => {
         onArea(props.recoveryTarget!.area); props.onOpen(props.recoveryTarget!.checkinSessionId);
       }}>Öppna pågående utlämning</button>}
-      <button type="button" className={`${cls.primary} min-h-14 w-full`} disabled={props.busy || blocked || (!pending && selected.length === 0 && !served && remaining.length > 0)}
+      <button type="button" aria-busy={props.busy} className={`${cls.primary} min-h-14 w-full gap-2 disabled:aria-busy:bg-primary disabled:aria-busy:text-white`} disabled={props.busy || blocked || (!pending && selected.length === 0 && !served && remaining.length > 0)}
         onClick={served || (!pending && remaining.length === 0) ? props.onScan : () => void confirm()}>
-        {props.busy ? "Sparar…" : pending ? "Fortsätt bekräfta" : served || remaining.length === 0 ? "Skanna nästa" : needsAdmission && !complete ? "Checka in" : "Lämna ut"}
+        {props.busy && <LoaderCircle size={20} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />}<span aria-live="polite">{props.busy ? "Sparar…" : pending ? "Fortsätt bekräfta" : served || remaining.length === 0 ? "Skanna nästa" : needsAdmission && !complete ? "Checka in" : "Lämna ut"}</span>
       </button>
     </div>
   </section>;
@@ -193,7 +205,8 @@ export default function StaffExperience(props: Props) {
   const passTime = pass || nextPass(props.sessions, new Date(), props.day);
   const slots = [...new Set(props.sessions.map((session) => session.booking.startTime?.slice(0, 5)).filter((value): value is string => Boolean(value)))].sort();
   const passBookings = props.sessions.filter((session) => passTime === "all" || session.booking.startTime?.slice(0, 5) === passTime);
-  const cafeSummary = (session: StaffSessionSummary) => !props.query.trim() && stageOf(session) !== "completed" && session.cafeSession ? { ...session, ...session.cafeSession } : session;
+  const cafeSummary = (session: StaffSessionSummary) => !props.query.trim() && stageOf(session) !== "completed" && session.cafeSession
+    ? { ...session, ...session.cafeSession, counts: { ...session.counts, admission: undefined } } : session;
   const cafeBookings = props.sessions.filter((session) => (session.cafeQuantity || 0) > 0).map(cafeSummary);
   const visible = props.query.trim() ? area === "cafe" ? props.sessions.map(cafeSummary) : props.sessions
     : area === "cafe" ? cafeBookings.filter((session) => cafeDone ? session.cafeRemaining === 0 : (session.cafeRemaining || 0) > 0) : passBookings.filter((session) => stageOf(session) === stage);
@@ -207,7 +220,7 @@ export default function StaffExperience(props: Props) {
         <div className="min-w-0"><h1 className="text-xl font-black italic uppercase leading-none sm:text-2xl">Check-in</h1>
           <p className="mt-1 truncate text-xs font-bold" data-testid="staff-personal-identity">{props.auth.staff.displayName}</p></div>
       </div><div className="flex items-center gap-1"><button type="button" aria-label="Uppdatera" className={cls.icon} onClick={props.onRefresh}><RefreshCcw size={17} className={props.loading ? "animate-spin" : ""} /></button>
-        <button type="button" onClick={props.onLogout} className="min-h-11 px-2 text-xs font-bold italic sm:text-sm">Byt personal</button></div></div>
+        <button type="button" onClick={props.onLogout} aria-label="Byt personal" className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-primary/30 bg-white px-2.5 text-xs font-bold text-primary transition hover:bg-primary/5 active:scale-[0.98] sm:text-sm"><Icon name="profile" className="h-6 w-6" /><span>Byt<span className="hidden min-[400px]:inline"> personal</span></span></button></div></div>
     </header>
     {props.scanner}
     {detail && <div className="mx-auto max-w-3xl px-3 py-3 lg:hidden">{detail}</div>}

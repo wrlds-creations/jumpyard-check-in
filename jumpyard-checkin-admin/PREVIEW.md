@@ -1,5 +1,15 @@
 # Staff design integration for #345
 
+## Live clarity refinements — 2026-09-09
+
+`codex/gh-345-staff-clarity` continues the approved design after mixed-product live feedback. Queue and detail label actual admission contents as `1 entré` / `2 entréer`; product-ticket totals are never a guest fallback. Counts use the existing manifest classification, verified package contents and selected group limits. Unknown/zero counts are omitted, including a café row redirected to an earlier group whose admission count is not present in the summary.
+
+Entrance tabs now read Kommande, Påbörjade, Redo, Incheckade; Redo remains the default next-session view. The outlined Välj alla control indicates Alla valda and clears all choices on a second tap. Other-counter goods are informational rows, without disabled checkboxes. Existing profile artwork accompanies the compact Byt personal control. Accessible, reduced-motion-aware spinners accompany detail loading and saving; server acknowledgement still gates completion.
+
+The isolated local review uses port 3002/4005 and native PostgreSQL, with no AWS/ROLLER calls. A synthetic mixed purchase has one admission plus five extra product lines. At 390 px, queue/detail agree on one entrance; entrance cannot select coffee/pizza, and selecting all only chooses entrance goods. Five-second selection and seven-second confirmation delays visibly retain saving feedback until acknowledgement. At 320 px, café selects one of two coffees with no horizontal overflow. Screenshots: local `gh345-staff-clarity-20260909` folder. Live customer collection and physical camera acceptance remain Love's test.
+
+Validation and protected rollout evidence are recorded in [the issue runbook](../docs/gh-345-staff-handout.md#live-clarity-refinements--2026-09-09). This section describes the pending refinement; the September 8 release below remains deployed until a new protected promotion succeeds.
+
 The approved `/preview` design from `codex/gh-389-staff-preview` is implemented in the production staff root on `codex/gh-345-staff-handoff`. The source preview worktree and return patch remain untouched. #389 is design provenance; #345 owns this product change.
 
 ## Differences from RETURN.md

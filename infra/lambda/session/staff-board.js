@@ -25,13 +25,13 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
         identity.email_masked AS guest_email_masked, identity.phone_masked AS guest_phone_masked,
         (SELECT count(*) FROM jumpyard.roller_booking_items i WHERE i.roller_unique_id = b.roller_unique_id)::int AS item_count,
         (SELECT count(*) FROM jumpyard.roller_booking_tickets t WHERE t.roller_unique_id = b.roller_unique_id)::int AS ticket_count,
-        (SELECT COALESCE(sum(CASE WHEN COALESCE(t.product_id, i.product_id) = '1242136' THEN 2 ELSE 1 END), 0)
-          FROM jumpyard.roller_booking_tickets t LEFT JOIN jumpyard.roller_booking_items i ON i.booking_item_key = t.booking_item_key
-          WHERE t.roller_unique_id = b.roller_unique_id AND (cs.checkin_session_id IS NULL OR t.ticket_id IN
-            (SELECT jsonb_array_elements_text(cs.selected_ticket_ids))))::int AS admission_count,
         COALESCE((SELECT jsonb_agg(jsonb_build_object('rollerUniqueId', i.roller_unique_id, 'bookingItemId', i.booking_item_id,
           'productId', i.product_id, 'parentProductId', i.parent_product_id, 'productName', i.product_name,
           'parentProductName', i.parent_product_name, 'quantity', i.quantity, 'bookingDate', i.booking_date,
+          'selectedUnits', CASE WHEN cs.checkin_session_id IS NULL THEN NULL ELSE
+            (SELECT count(*) FROM jumpyard.roller_booking_tickets t WHERE t.roller_unique_id = b.roller_unique_id
+              AND (t.booking_item_id = i.booking_item_id OR t.booking_item_key = i.booking_item_key)
+              AND t.ticket_id IN (SELECT jsonb_array_elements_text(cs.selected_ticket_ids))) END,
           'summary', COALESCE(catalog.summary, '{}'::jsonb) || i.item_summary))
           FROM (SELECT b.roller_unique_id UNION
             SELECT link.linked_roller_unique_id FROM jumpyard.booking_links link
@@ -98,10 +98,12 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
       p('venueId', venueId), p('bookingId', bookingId)]);
     const rows = mappedRows(result);
     return { sessions: rows.slice(0, 100).map((row) => {
-      const items = buildManifest(parse(row.handout_catalog, []), row.visit_date).filter((item) => item.area === 'cafe');
+      const manifest = buildManifest(parse(row.handout_catalog, []), row.visit_date);
+      const items = manifest.filter((item) => item.area === 'cafe');
       const collected = parse(row.collected_items, {});
       const session = mapSession(row);
-      return { ...session, counts: { ...session.counts, admission: Number(row.admission_count) },
+      return { ...session, counts: { ...session.counts,
+        admission: manifest.filter((item) => item.kind === 'admission').reduce((sum, item) => sum + (item.sessionLimit ?? item.quantity), 0) },
         cafeQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
         cafeRemaining: items.reduce((sum, item) => sum + Math.max(0, item.quantity - (collected[item.id] || 0)), 0),
         cafeSession: parse(row.cafe_session, null),

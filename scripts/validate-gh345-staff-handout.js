@@ -253,6 +253,44 @@ test('PostgreSQL: concurrent daily numbers, claims, partial receipts, recovery a
     assert.equal((await board.list({ venueId: 'other-venue', day, search: null, cursor: null })).sessions.length, 0);
     assert.equal((await board.list({ venueId: venue, day, search: 'test guest', cursor: null })).sessions.length, result.sessions.length);
   });
+  await t.test('Board admission counts agree with detail for mixed products, packages and selected groups', async () => {
+    const testSession = await seed('mixed-count');
+    const booking = id('mixed-count');
+    const board = createStaffBoard({ ...adapter('jumpyard_session_runtime'), mapSession: row => row });
+    const store = createHandoutStore(adapter('jumpyard_redeem_runtime'));
+    const products = [
+      ['entry', 'Entry', 'standardPass'], ['socks', 'Strumpor', 'retail'],
+      ['coffee', 'Bryggkaffe', 'food'], ['pizza', 'Pizza', 'food'],
+      ['water', 'Vatten', 'retail'], ['padlock', 'Hänglås', 'retail'],
+    ];
+    for (const [product, name, type] of products) {
+      const key = id(`mixed-${product}`);
+      await sql(`INSERT INTO jumpyard.roller_booking_items
+        (booking_item_key, booking_item_id, roller_unique_id, product_id, product_name, quantity, booking_date, item_summary)
+        VALUES (${literal(key)}, ${literal(key)}, ${literal(booking)}, ${literal(product)}, ${literal(name)}, 1, ${literal(day)}, ${literal(JSON.stringify({type}))}::jsonb);
+        INSERT INTO jumpyard.roller_booking_tickets (ticket_id, roller_unique_id, booking_item_key, booking_item_id)
+        VALUES (${literal(key)}, ${literal(booking)}, ${literal(key)}, ${literal(key)});`);
+    }
+    async function assertCount(tickets, expected) {
+      await sql(`UPDATE jumpyard.checkin_sessions SET selected_ticket_ids = ${literal(JSON.stringify(tickets))}::jsonb WHERE checkin_session_id = ${literal(testSession)}`);
+      const result = await board.list({venueId:venue,day,search:null,cursor:null,bookingId:booking,todayOnly:true});
+      assert.equal(result.sessions[0].counts.admission, expected);
+      const detail = await store.readState({checkinSessionId:testSession,rollerUniqueId:booking,visitDate:day,selectedTicketIds:tickets},venue);
+      assert.equal(detail.items.filter(item=>item.kind==='admission').reduce((sum,item)=>sum+(item.sessionLimit??item.quantity),0), expected);
+    }
+    await assertCount(products.map(([product])=>id(`mixed-${product}`)), 1);
+    await assertCount([id('mixed-coffee'),id('mixed-pizza')], 0);
+    await sql(`UPDATE jumpyard.roller_booking_items SET product_id = '1242136', parent_product_id = '1242135',
+      product_name = 'Weekday Combo', quantity = 2 WHERE booking_item_key = ${literal(id('mixed-entry'))};
+      INSERT INTO jumpyard.roller_booking_tickets (ticket_id, roller_unique_id, booking_item_key, booking_item_id)
+        VALUES (${literal(id('second-combo'))}, ${literal(booking)}, ${literal(id('mixed-entry'))}, ${literal(id('mixed-entry'))});`);
+    await assertCount([id('mixed-entry'),id('mixed-coffee')], 2);
+    await assertCount([id('second-combo')], 2);
+    await assertCount([id('mixed-entry'),id('second-combo')], 4);
+    await sql(`DELETE FROM jumpyard.checkin_sessions WHERE checkin_session_id = ${literal(testSession)}`);
+    const upcoming = await board.list({venueId:venue,day,search:null,cursor:null,bookingId:booking,todayOnly:true});
+    assert.equal(upcoming.sessions[0].counts.admission, 4, 'not-started bookings show purchased admissions');
+  });
   await t.test('Existing retention removes all guest handout state but never rewinds the daily counter', async () => {
     const before = await sql(`SELECT last_number FROM jumpyard.handoff_day_counters WHERE venue_id = ${literal(venue)}`);
     await sql(`DELETE FROM jumpyard.roller_bookings WHERE roller_unique_id = ${literal(id('group0'))}`);
@@ -303,6 +341,7 @@ test('PostgreSQL: concurrent daily numbers, claims, partial receipts, recovery a
     const priorCode = await sql(`SELECT handoff_code FROM jumpyard.checkin_sessions WHERE checkin_session_id = ${literal(testSession)}`);
     const priorGuest = await board.list({ venueId: venue, day, search: priorCode, cursor: null });
     assert.equal(priorGuest.sessions[0].checkin_session_id, testSession, 'earlier group code still resolves after a new session starts');
+    assert.equal(priorGuest.sessions[0].counts.admission, 2, 'a completed selected group keeps its original entrance count');
     const currentBooking = await board.list({ venueId: venue, day, search: null, cursor: null, bookingId: booking });
     assert.equal(currentBooking.sessions[0].cafeSession.checkinSessionId, testSession, 'café can open the admitted group while the next group is preparing');
     for (const [payment, bookingStatus, owing, visible] of [
