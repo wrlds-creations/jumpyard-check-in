@@ -1,5 +1,9 @@
 # Staff design integration for #345
 
+## Owner acceptance — 2026-09-09
+
+Love accepted the installed JumpYard Personal v1.0.0 APK: **“Jag testade och jag är nöjd.”** [PR #401](https://github.com/wrlds-creations/jumpyard-check-in/pull/401) merged as `8223843` after source review and all six CI jobs passed. [Android validation and exact APK identity](../jumpyard-checkin-android/README.md#device-validation--september-9-2026) separate automated evidence from this general owner acceptance. Earlier pending-acceptance notes below describe the preceding rollout stages; they do not add a new closure gate. AirDroid locking belongs to Love's colleague. The tested APK and deployed web artifact `971d901` are unchanged by this closeout.
+
 ## Live clarity refinements — 2026-09-09
 
 `codex/gh-345-staff-clarity` continues the approved design after mixed-product live feedback. Queue and detail label actual admission contents as `1 entré` / `2 entréer`; product-ticket totals are never a guest fallback. Counts use the existing manifest classification, verified package contents and selected group limits. Unknown/zero counts are omitted, including a café row redirected to an earlier group whose admission count is not present in the summary.
@@ -42,7 +46,7 @@ Initial release results on September 8: lint, TypeScript, all 84 staff tests and
 
 Following Love's explicit publication approval, PRs #393/#394 merged and immutable release `34229583004` / `ca38fec4515d135f642d10de3f839871d07e2498` passed protected Park `34230754910` and public `34231738633`. All 60 independently fetched Park/public static responses matched. This initial artifact was subsequently replaced by the refinement below. [Historical initial rollout evidence](../docs/gh-345-staff-handout.md#protected-rollout--2026-09-08).
 
-Love extended #345 to include the [staff Android APK](../jumpyard-checkin-android/README.md) on September 9. It opens the existing production staff root with native camera permissions; no separate UI fork. AirDroid locking belongs to Love's colleague. Real website ticket QR and two-phone customer acceptance remain for Love. The old localhost `/preview` is not the deployed app.
+Love extended #345 to include the [staff Android APK](../jumpyard-checkin-android/README.md) on September 9 and accepted the installed app later that day, as recorded above. It opens the existing production staff root with native camera permissions; no separate UI fork. AirDroid locking belongs to Love's colleague. The old localhost `/preview` is not the deployed app.
 
 ## Live-feedback refinement review — 2026-09-08
 
