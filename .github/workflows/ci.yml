@@ -14,6 +14,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  staff-android:
+    name: Staff Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Set up Java 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify the runner's Android SDK
+        run: test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+      - name: Lint, test and build the unsigned release
+        working-directory: jumpyard-checkin-android
+        run: bash gradlew lintDebug lintRelease testDebugUnitTest testReleaseUnitTest assembleRelease --console=plain
+      # No signing material or installable production APK is published by pull-request CI.
+
   staff-handout-database:
     name: Staff handout database
     runs-on: ubuntu-latest
