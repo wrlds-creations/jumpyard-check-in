@@ -69,7 +69,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 ## Current Implemented Flow Facts
 
-- #340: safe, correlated server-error reports.
+- #340: safe, correlated server-error reports. #403: lookup reads audit IDs.
 - #345 [staff handout](docs/gh-345-staff-handout.md): daily codes, today-only queue, early café; [Android APK](jumpyard-checkin-android/README.md) approved. AirDroid locking is colleague-owned.
 
 - Lookup is Aurora-first with Roller-authoritative refresh, Nacka/date scope, and nearest same-day selection. Ready bookings start/resume a server session; opaque booking-bound guest proof stays in phone memory and hash-only in Aurora.
