@@ -29,7 +29,7 @@ function load(relative, extra = '', { states = [], globals = {} } = {}) {
   }, { filename: filename.pathname });
   return loadedModule.exports;
 }
-const { default: StaffExperience, Detail, ProductRow } = load('../components/staff/StaffExperience.tsx', '\nexport { Detail, ProductRow };');
+const { default: StaffExperience, Detail, ProductRow, BookingRow } = load('../components/staff/StaffExperience.tsx', '\nexport { Detail, ProductRow, BookingRow };');
 const { nextPass, stageOf, activeClaim, boardPollDelay } = load('../components/staff/flow.ts');
 const { createSelectionBuffer, mergeHandoutSummary } = load('../components/staff/selection.ts');
 const { ROUTE_LIMITS, TokenBucket } = require('../../../scripts/validate-t0193-capacity.js');
@@ -43,7 +43,7 @@ function nodes(tree, predicate) {
 function text(tree) {
   if (Array.isArray(tree)) return tree.map(text).join('');
   if (typeof tree === 'string' || typeof tree === 'number') return String(tree);
-  return text(tree?.props?.children || '');
+  return text(tree?.props?.children ?? '');
 }
 const band = { id: 'b', area: 'entrance', kind: 'admission', name: 'Besöksband', quantity: 3, collected: 0, available: 3 };
 const coffee = { id: 'c', area: 'cafe', kind: 'coffee', name: 'Kaffe', quantity: 2, collected: 0, available: 2 };
@@ -86,9 +86,13 @@ test('Reopened selection is checked; a colleague cannot edit or confirm it', () 
 test('Ready guests can collect coffee before admission; each counter only changes its own goods', () => {
   let tree = Detail({ props: props(session()), area: 'cafe' });
   assert.equal(buttons(tree).find((button) => button.props['aria-label'] === 'Kaffe, 2 kvar').props.disabled, false);
-  assert.equal(buttons(tree).find((button) => button.props['aria-label'] === 'Besöksband, 3 kvar').props.disabled, true);
+  assert.equal(buttons(tree).some((button) => button.props['aria-label'] === 'Besöksband, 3 kvar'), false);
+  assert.equal(nodes(tree, (node) => node.props?.role === 'group' && node.props['aria-label'] === 'Besöksband, 3 kvar').length, 1);
   tree = Detail({ props: props(session()), area: 'entrance' });
-  assert.equal(buttons(tree).find((button) => button.props['aria-label'] === 'Kaffe, 2 kvar').props.disabled, true);
+  assert.equal(buttons(tree).some((button) => button.props['aria-label'] === 'Kaffe, 2 kvar'), false);
+  const readOnly = nodes(tree, (node) => node.props?.role === 'group' && node.props['aria-label'] === 'Kaffe, 2 kvar')[0];
+  assert.ok(readOnly);
+  assert.equal(nodes(readOnly, (node) => node.props?.['aria-pressed'] !== undefined || /rounded-full/.test(node.props?.className || '')).length, 0);
   for (const notReady of [{safetyStatus:'not_started'}, {bookingSyncStatus:'pending'}, {status:'upcoming'}]) {
     tree = Detail({ props: props(session(notReady)), area:'cafe' });
     assert.equal(buttons(tree).find((button)=>button.props['aria-label']==='Kaffe, 2 kvar').props.disabled, true);
@@ -133,7 +137,47 @@ test('Unacknowledged selections show immediately, permit the next tap and block 
   next.props.onClick();
   assert.deepEqual(JSON.parse(JSON.stringify(changes[0].selection)), [{id:'b',quantity:3},{id:'socks',quantity:3}]);
   assert.equal(buttons(tree).find(button=>text(button)==='Sparar…').props.disabled, true);
+  assert.equal(buttons(tree).find(button=>text(button)==='Sparar…').props['aria-busy'], true);
   assert.equal(nodes(tree,node=>node.props?.['data-state']==='completed').length, 0);
+});
+
+test('Queue and detail label actual admissions and never substitute product ticket totals', () => {
+  for (const count of [1, 2, 0, undefined]) {
+    const detail = session({ counts: { admission: count, selectedTickets: 6, tickets: 6 } });
+    for (const tree of [BookingRow({session:detail,area:'entrance'}), Detail({props:props(detail),area:'entrance'})]) {
+      const labels = nodes(tree, node => node.type === 'span').map(text);
+      assert.equal(labels.includes(`${count} ${count === 1 ? 'entré' : 'entréer'}`), Boolean(count));
+      assert.ok(!labels.some(label => /6.*(?:entré|gäst)|gäster/.test(label)));
+    }
+  }
+});
+
+test('Stage order follows the guest journey while Ready remains the operational default', () => {
+  const tree = StaffExperience(props(session()));
+  const tabs = buttons(tree).filter(button => /^(Kommande|Påbörjade|Redo|Incheckade)\d+$/.test(text(button)));
+  assert.deepEqual(tabs.map(button => text(button).replace(/\d+$/, '')), ['Kommande','Påbörjade','Redo','Incheckade']);
+  assert.deepEqual(tabs.map(button => Boolean(button.props['aria-pressed'])), [false,false,true,false]);
+  let switched = false;
+  const header = StaffExperience({...props(session()),onLogout(){switched=true;}});
+  buttons(header).find(button=>button.props['aria-label']==='Byt personal').props.onClick();
+  assert.equal(switched, true);
+});
+
+test('Select all only selects this counter, indicates full selection and can clear it', () => {
+  const socks = {...band,id:'socks',kind:'socks',name:'Strumpor'};
+  const detail = session({handout:{items:[band,socks,coffee],claims:[],receipts:[]}});
+  const changes=[];
+  let tree = Detail({props:props(detail,changes),area:'entrance'});
+  let all = buttons(tree).find(button=>button.props['aria-label']==='Välj alla');
+  assert.equal(all.props['aria-pressed'], false);
+  all.props.onClick();
+  assert.deepEqual(JSON.parse(JSON.stringify(changes[0].selection)),[{id:'b',quantity:3},{id:'socks',quantity:3}]);
+  tree = Detail({props:{...props(detail,changes),draft:{checkinSessionId:'s1',area:'entrance',selection:changes[0].selection}},area:'entrance'});
+  all = buttons(tree).find(button=>button.props['aria-label']==='Rensa alla val');
+  assert.equal(all.props['aria-pressed'], true);
+  assert.equal(text(all), 'Alla valda');
+  all.props.onClick();
+  assert.equal(changes[1].selection.length, 0);
 });
 
 test('Café includes upcoming purchases and preserves exact search candidates; date picker and continuation banner are absent', () => {
@@ -146,6 +190,9 @@ test('Café includes upcoming purchases and preserves exact search candidates; d
   const search = load('../components/staff/StaffExperience.tsx','',{states:['cafe']}).default;
   const first = session({checkinSessionId:'first',cafeSession:{checkinSessionId:'admitted',status:'redeemed'}});
   const second = session({checkinSessionId:'second',cafeSession:first.cafeSession});
+  const retargeted = load('../components/staff/StaffExperience.tsx','',{states:['cafe']}).default;
+  const earlier = retargeted(props({...first,cafeQuantity:2,cafeRemaining:2}));
+  assert.ok(!nodes(earlier,node=>node.type==='span').map(text).includes('3 entréer'), 'do not label an earlier café group with the newer group entrance count');
   const opened = [];
   const searched = search({...props(first),sessions:[first,second],query:'7777',onOpen:id=>opened.push(id)});
   for(const button of buttons(searched).filter(button=>text(button).includes('Testgäst'))) button.props.onClick();
