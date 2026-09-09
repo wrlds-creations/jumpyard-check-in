@@ -9,6 +9,9 @@ Branch: `codex/gh-403-lookup-audit-permission`, from current main
 `822384309ece85fc95f0e5e951e048c6eca39601`. No unmerged dependency; local #396
 work remains untouched in its original checkout. Current main already owns
 migration `0022`, so the correction is the new forward migration `0023`.
+Before publication, main `01fd179acf35fd4be54986fc97e4323f1e759c17` was merged
+without rewriting history. The one context-document conflict retains the current
+#345 handset acceptance and this issue's lookup grant; runtime code is unchanged.
 
 ## Confirmed incident
 
