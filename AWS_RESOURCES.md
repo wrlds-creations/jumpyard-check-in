@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #345 Staff Clarity (Published 2026-09-09)
+
+Reviewed [PR #399](https://github.com/wrlds-creations/jumpyard-check-in/pull/399) produced `971d9013d577db66fa8799bbd9d2db408b98607a`. Immutable [release 34327287544](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34327287544), artifact `10094475142`, passed protected [Park 34327943053](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34327943053) and [public 34328439965](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34328439965). Both actual plans were reviewed before delegated approval under Love's existing publication instruction; public approval followed Park success and independent readbacks. Both lanes promoted the same artifact without rebuilding.
+
+The independently reproduced 208-resource plan changes only the existing Session Lambda code/asset path. Selected/deployed template hash: `e411cfc2b29802172b5f7f351f5a29fed23244d625788e59059eece5ce81e1a2`. All 662 artifact checksums, ten deployed Lambda files and 60 Park/public static responses matched. All 22 SQL checksums remain unchanged with `apply_migrations=false`. The restricted runtime query confirms one entrance for the reported mixed purchase; the old query returned six. The installed today query read seven bookings in a 96 ms Data API sample, not an end-to-end benchmark. Protected template/drift, alarms, queues, Pages, domain/CORS/Cognito/Apple checks passed; a fresh public browser rendered PIN login.
+
+Account `376129878018`, `eu-north-1`, Nacka scope, complete WRLDS metadata, 208 resources, 28 routes, IAM, schema, gates and closed general guest messaging remain. No resource or provider setting was added or widened. Previously deployed release `34239775713` / `653c096` remains verified unexpired with all 662 checksums valid for rollback; retain 0022, receipts and counters. No rollback, re-promotion, real customer collection or guest send occurred. [Exact approvals, hashes and validation](docs/gh-345-staff-handout.md#protected-clarity-rollout).
+
 ### Issue #345 Live-feedback Refinements (Published 2026-09-08)
 
 Reviewed [PR #397](https://github.com/wrlds-creations/jumpyard-check-in/pull/397) produced `653c09676201b9856d5b744d0ef716bf6a510088`. Immutable [release 34239775713](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34239775713), artifact `10061675619`, passed protected [Park 34240532179](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34240532179) and [public 34241257794](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34241257794). Each actual plan was reviewed before delegated approval under Love's existing publication instruction; public approval followed successful Park and independent readbacks. Both lanes used the same artifact without rebuilding.
