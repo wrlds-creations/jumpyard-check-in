@@ -12,7 +12,7 @@ The reviewed #389 prototype is design input. This implementation uses the real s
 4. Select the purchased bands/socks or other entrance goods and confirm. One tap selects all remaining entrance goods of that kind; entrance quantity steppers are removed. Bands represent the selected admission group. Café retains partial quantities. The existing ROLLER redemption/recovery path remains authoritative.
 5. The same guest number/session QR works in Café as soon as guest check-in is ready, even before entrance admission. Purchases are visible immediately, including read-only views for guests still preparing. Each counter can collect only its own goods. One of two coffees can be collected, leaving one for later. Each receipt retains product identity, quantity, staff member and time. Café never redeems admission or marks a ready session redeemed.
 
-White surfaces, black text, JumpYard red, existing brand PNG icons and the reviewed compact typography replace the previous production list for PIN staff. Admin Cognito/TOTP and legacy dev authentication remain available. The scanner uses the existing camera reader. No APK is created.
+White surfaces, black text, JumpYard red, existing brand PNG icons and the reviewed compact typography replace the previous production list for PIN staff. Admin Cognito/TOTP and legacy dev authentication remain available in the browser. The scanner uses the existing camera reader. Love extended #345 on September 9 to include a [staff Android APK](../jumpyard-checkin-android/README.md) opening this same staff root; AirDroid locking belongs to his colleague.
 
 ## Daily allocation and lookup
 
@@ -140,7 +140,7 @@ Open [the guest app](https://checkin.jumpyard.se) and [the staff app](https://st
 4. Reopen on the second phone and verify ownership, saved state and already-collected quantities prevent duplicate handout. Keep an uncertain confirmation open and use its recovery action before physical repetition.
 5. Test the physical Motorola camera and an actual website booking ticket QR. The previously inspected PDF had no QR; unsupported provider URL formats have not been guessed. The stable JumpYard session QR and raw booking/ticket identifiers retain their supported search paths.
 
-Issue #345 remains open for this practical acceptance. APK packaging and a live load benchmark are outside this delivery; local automation and server readback do not substitute for handset/physical collection proof.
+Issue #345 remains open for practical acceptance. The September 9 Android extension supersedes the original APK exclusion; a live load benchmark remains outside this delivery. Local automation and server readback do not substitute for physical collection proof.
 
 ## Live clarity refinements — 2026-09-09
 

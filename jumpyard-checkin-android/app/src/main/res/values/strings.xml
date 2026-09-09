@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="loading">Öppnar JumpYard…</string>
+    <string name="offline_title">Vi får inte kontakt</string>
+    <string name="offline_body">Kontrollera internet och försök igen.</string>
+    <string name="retry">Försök igen</string>
+    <string name="camera_denied">Tillåt kameran i appens behörigheter för att skanna. Du kan också söka på gästens nummer.</string>
+    <string name="navigation_blocked">Öppna personalappen här. Administration görs i webbläsaren.</string>
+    <string name="logo_description">JumpYard</string>
+</resources>

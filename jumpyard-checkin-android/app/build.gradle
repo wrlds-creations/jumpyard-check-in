@@ -1,0 +1,67 @@
+plugins { id 'com.android.application' }
+
+def signingPath = System.getenv('JY_ANDROID_KEYSTORE')
+def signingPassword = System.getenv('JY_ANDROID_STORE_PASSWORD')
+def signingAlias = System.getenv('JY_ANDROID_KEY_ALIAS')
+def signingKeyPassword = System.getenv('JY_ANDROID_KEY_PASSWORD')
+def hasSigning = signingPath && signingPassword && signingAlias && signingKeyPassword
+def debugUrl = providers.gradleProperty('debugStartUrl').getOrElse('https://staff-checkin.jumpyard.se/')
+if (!(debugUrl in ['https://staff-checkin.jumpyard.se/', 'http://127.0.0.1:3002/'])) {
+    throw new GradleException('debugStartUrl must be the staff origin or the isolated USB localhost fixture.')
+}
+
+android {
+    namespace 'se.jumpyard.staff'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'se.jumpyard.staff'
+        minSdk 28
+        targetSdk 36
+        versionCode 1
+        versionName '1.0.0'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+    }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        if (hasSigning) {
+            pilot {
+                storeFile file(signingPath)
+                storePassword signingPassword
+                keyAlias signingAlias
+                keyPassword signingKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix '.test'
+            versionNameSuffix '-test'
+            buildConfigField 'String', 'START_URL', '"' + debugUrl + '"'
+            resValue 'string', 'app_name', 'JumpYard Test'
+        }
+        release {
+            debuggable false
+            buildConfigField 'String', 'START_URL', '"https://staff-checkin.jumpyard.se/"'
+            resValue 'string', 'app_name', 'JumpYard Personal'
+            if (hasSigning) signingConfig signingConfigs.pilot
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    lint {
+        abortOnError true
+        warningsAsErrors true
+        // Toolchain upgrades are reviewed explicitly; do not fail reproducible builds on an update notice.
+        disable 'AndroidGradlePluginVersion'
+    }
+}
+
+dependencies { testImplementation 'junit:junit:4.13.2' }
+
+// An unsigned APK must never be mistaken for the distributable pilot package.
+tasks.register('assemblePilot') {
+    if (!hasSigning) throw new GradleException('Set all four JY_ANDROID signing environment variables before assembling the pilot APK.')
+    dependsOn 'assembleRelease'
+}

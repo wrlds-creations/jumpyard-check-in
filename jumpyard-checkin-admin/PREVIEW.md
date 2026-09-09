@@ -42,7 +42,7 @@ Initial release results on September 8: lint, TypeScript, all 84 staff tests and
 
 Following Love's explicit publication approval, PRs #393/#394 merged and immutable release `34229583004` / `ca38fec4515d135f642d10de3f839871d07e2498` passed protected Park `34230754910` and public `34231738633`. All 60 independently fetched Park/public static responses matched. This initial artifact was subsequently replaced by the refinement below. [Historical initial rollout evidence](../docs/gh-345-staff-handout.md#protected-rollout--2026-09-08).
 
-Physical Motorola/camera, two-phone collection and ordinary website ticket QR acceptance remain for Love's live walkthrough. APK packaging remains outside #345. The old localhost `/preview` is not the deployed app.
+Love extended #345 to include the [staff Android APK](../jumpyard-checkin-android/README.md) on September 9. It opens the existing production staff root with native camera permissions; no separate UI fork. AirDroid locking belongs to Love's colleague. Real website ticket QR and two-phone customer acceptance remain for Love. The old localhost `/preview` is not the deployed app.
 
 ## Live-feedback refinement review — 2026-09-08
 
