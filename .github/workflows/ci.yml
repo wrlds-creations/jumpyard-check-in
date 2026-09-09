@@ -68,6 +68,11 @@ jobs:
         env:
           GH345_PSQL: psql
         run: node --test scripts/validate-gh345-staff-handout.js scripts/validate-gh345-handout-api.test.js
+      - name: Test lookup audit permissions against PostgreSQL
+        env:
+          GH403_DATABASE_TEST: 'true'
+          GH403_PGPORT: '55435'
+        run: npm run validate:gh403-lookup-audit
 
   repository:
     name: Repository
