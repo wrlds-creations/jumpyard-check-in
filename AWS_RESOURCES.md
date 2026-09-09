@@ -4,6 +4,14 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #403 Lookup Audit Permission (Published 2026-09-09)
+
+Reviewed [PR #404](https://github.com/wrlds-creations/jumpyard-check-in/pull/404) produced `bad087f7bda40a640d833744a9987fe32c88f529`. Immutable [release 34341707774](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34341707774), artifact `10100210328`, passed all 663 checksums and protected [Park 34342369893](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34342369893). Same-artifact [public 34342753755](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34342753755) succeeded after Park success, independent runtime readback and exact-plan approval. Both exact plans were reviewed before delegated approval under Love's explicit publication instruction. Template/drift, alarm/queue, Pages/domain/CORS/Cognito/Apple checks passed; independent HTML reads on all four origins exactly matched the artifact.
+
+The 208-resource template is unchanged, hash `e411cfc2b29802172b5f7f351f5a29fed23244d625788e59059eece5ce81e1a2`. Migration `0023_lookup_event_log_conflict_key.sql` was the sole pending change and grants only SELECT(event_id) on jumpyard.event_log to jumpyard_lookup_runtime. All 23 live migration checksums match. The actual runtime identity confirms that column read is now true while content reads, whole-table reads, UPDATE and DELETE remain denied; both actual audit INSERTs pass non-executing EXPLAIN. Native regression separately proves before-failure, after-success and duplicate suppression. Existing customer data and lost historical audit records are not edited.
+
+Account `376129878018`, `eu-north-1`, complete WRLDS metadata, Nacka/date gates, 208 resources, 28 routes, IAM, secrets and closed guest messaging remain. No new resource or provider setting was introduced. Prior deployed release `34327287544` / `971d901` is unexpired and checksum-verified for rollback; retain the additive grant and migration receipt. No rollback, re-promotion or financial handset test occurred. [Exact authorization, checks and acceptance limits](docs/gh-403-lookup-audit-permission.md#protected-rollout--2026-09-09).
+
 ### Issue #345 Staff Clarity (Published 2026-09-09)
 
 Reviewed [PR #399](https://github.com/wrlds-creations/jumpyard-check-in/pull/399) produced `971d9013d577db66fa8799bbd9d2db408b98607a`. Immutable [release 34327287544](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34327287544), artifact `10094475142`, passed protected [Park 34327943053](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34327943053) and [public 34328439965](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34328439965). Both actual plans were reviewed before delegated approval under Love's existing publication instruction; public approval followed Park success and independent readbacks. Both lanes promoted the same artifact without rebuilding.
@@ -1361,11 +1369,11 @@ The same review found a narrow reset/login race: an old PIN could finish slow ve
 
 ## Aurora Schema Inventory
 
-T0007 created schema `jumpyard` in database `jumpyard_cloud`. Park-test is applied through migration `0022`; the T0195-T0197 migrations remain the schema foundation, migrations `0017`-`0020` add signed/refund-safe webhook state plus kiosk payment, reconciliation, and provisional-handoff state. `0021` adds daily-number allocation and staff collection with restricted runtime grants; `0022` permits ready-guest café collection before admission while preserving the other guards and grants.
+T0007 created schema `jumpyard` in database `jumpyard_cloud`. Park-test is applied through migration `0023`; the T0195-T0197 migrations remain the schema foundation, migrations `0017`-`0020` add signed/refund-safe webhook state plus kiosk payment, reconciliation, and provisional-handoff state. `0021` adds daily-number allocation and staff collection with restricted runtime grants; `0022` permits ready-guest café collection before admission while preserving the other guards and grants. `0023` adds only the lookup role's event-log conflict-key read.
 
 | Table | Purpose |
 |---|---|
-| `schema_migrations` | Tracks applied SQL migrations and checksums. Retained for database integrity; park-test is applied through `0022 staff cafe ready collection`. |
+| `schema_migrations` | Tracks applied SQL migrations and checksums. Retained for database integrity; park-test is applied through `0023 lookup event log conflict key`. |
 | `roller_bookings` | Latest normalized Roller booking snapshot from seed, webhook enrichment, or live refresh. T0016 and T0017 can upsert refreshed booking rows. |
 | `roller_booking_items` | Normalized booking item/product rows. T0016 and T0017 can upsert refreshed item rows. |
 | `roller_booking_tickets` | Ticket ids and redeem readiness context from `/data/tickets`, lookup live refresh, or webhook enrichment. |
@@ -1426,7 +1434,7 @@ T0146 defined the separate technical `park-test` environment contract, and T0150
 | Secrets/SSM | Dedicated `/jumpyard-check-in-park-test/...` names |
 | Frontend | Same phone/admin source, separate deployment/API target |
 | Raw payload bucket | Synthesizes as `jumpyard-check-in-park-test-raw-376129878018-eu-north-1` to satisfy S3 length limits |
-| Status | Nacka pilot-production backend under D0189/#264, still technically named/tagged `park-test`. #345 is deployed with migrations through `0022`, 208 resources and 28 API routes; selected/deployed template equality, `IN_SYNC` drift, zero active alarms and empty queues passed for immutable release `653c096`. Live webhook `1465` retains the FIFO worker/recovery path; #257 repaired provisional-item reconciliation and recovered its classified failed events. #345 uses today's visits, bounded adaptive board polling and two-second selected-guest updates; café collection is independent of entrance once guest check-in is ready. Administrator TOTP and personal-PIN authorization remain. Nacka/date scope stays open through `2026-09-30`; broader venue scope remains closed. T0201's single automatic controlled email proof remains historical and its control is disarmed. General guest sends, lifecycle apply and multi-park expansion remain closed. The two approved public frontends use the same selected #345 artifact; exact rollout evidence is recorded above. |
+| Status | Nacka pilot-production backend under D0189/#264, still technically named/tagged `park-test`. #403 is deployed with migrations through `0023`, 208 resources and 28 API routes; selected/deployed template equality, `IN_SYNC` drift, zero active alarms and empty queues passed for immutable release `bad087f`. Live webhook `1465` retains the FIFO worker/recovery path; #257 repaired provisional-item reconciliation and recovered its classified failed events. #345 uses today's visits, bounded adaptive board polling and two-second selected-guest updates; café collection is independent of entrance once guest check-in is ready. Administrator TOTP and personal-PIN authorization remain. Nacka/date scope stays open through `2026-09-30`; broader venue scope remains closed. T0201's single automatic controlled email proof remains historical and its control is disarmed. General guest sends, lifecycle apply and multi-park expansion remain closed. The two approved public frontends use the same selected #403 artifact; exact rollout evidence is recorded above. |
 
 ## Governance Notes
 

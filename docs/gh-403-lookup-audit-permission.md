@@ -104,3 +104,68 @@ The correction removes this known failure/retry, but does not guarantee a fixed
 latency or solve unrelated provider/network delay. Existing lost audit evidence
 is not backfilled by this change. Keep the issue open for rollout and handset
 acceptance. No new follow-up Project draft was created.
+
+## Protected rollout — 2026-09-09
+
+[Implementation PR #404](https://github.com/wrlds-creations/jumpyard-check-in/pull/404)
+was reviewed at head `d6a2a55631aa9750d1a97e7f9e1bd3bfb8f84b95`; all six CI
+jobs passed in [34341392540](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34341392540),
+including the explicit native database regression. The implementing agent recorded
+its review; no independent human review is claimed. Merge commit:
+`bad087f7bda40a640d833744a9987fe32c88f529`.
+
+| Stage | Exact evidence |
+|---|---|
+| Immutable release | [34341707774](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34341707774), artifact `10100210328`, all 663 checksums verified. |
+| Protected Park | [34342369893](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34342369893), successful; `apply_migrations=true`. |
+| Protected public | [34342753755](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34342753755), successful; the same immutable artifact was promoted after exact-plan review. |
+| Rollback candidate | Previous deployed [34327287544](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34327287544), SHA `971d9013d577db66fa8799bbd9d2db408b98607a`, artifact `10094475142`; unexpired and all 662 checksums verified. |
+
+The actual Park plan was downloaded and matched to an independently read live
+CloudFormation template before delegated protected approval. Both template hashes
+are `e411cfc2b29802172b5f7f351f5a29fed23244d625788e59059eece5ce81e1a2`:
+208 resources, no resource or template-section changes. CDK reported no changes.
+All 22 previous migration files match the previous deployed artifact byte for byte;
+read-only migration status also checked their live checksums. Only 0023 was pending.
+The protected runner applied it at 10:52:02 UTC (12:52:02 Stockholm), recording
+its ordinary schema-migration receipt. Afterward all 23 migrations were applied
+with matching checksums. No customer, booking or payment content was edited.
+
+Park's required postchecks passed: exact selected/deployed template, successful
+stack state, `IN_SYNC` drift, zero active alarms, empty queues, exact-SHA Pages,
+HTTP/API configuration and Apple Pay association. The same-artifact public plan
+was inspected from completed job `102437138314` before its delegated approval,
+after Park success and the independent runtime checks below. It targets only
+`checkin.jumpyard.se` and `staff-checkin.jumpyard.se` on the existing approved
+Cloudflare projects. No rebuild or local deployment was used. Public checks passed exact-SHA Pages,
+custom domains, allowed/blocked CORS, Cognito callbacks, phone/staff HTTP/API
+configuration and Apple Pay association. Independent reads returned HTTP 200
+and byte-identical artifact HTML on all four Park/public phone/admin origins.
+Phone HTML SHA256: `49bb98d84296c4a934c34c791497250aeee31a3b607bef4ecd2a5c0b0e31f025`;
+admin: `d84fe72dcf9d5aa0ee4e4c4d5e9c5d4ba7a64da2c8c58be145734ce036d671e2`.
+
+Independent Data API inspection used the actual lookup Lambda's configured
+runtime secret, without retrieving or displaying its value. Before/after checks
+confirmed `current_user=jumpyard_lookup_runtime`: INSERT remains true;
+SELECT(event_id) changed false to true; full-table SELECT, UPDATE, DELETE and
+reads of correlation_id, event_type, subject_ref, summary, event_payload and
+created_at remain false. Both actual production audit functions produced valid
+`EXPLAIN (FORMAT JSON) INSERT ... ON CONFLICT (event_id) DO NOTHING` plans.
+There was no ANALYZE and neither insert executed; parameters were synthetic.
+This proves deployed permission acceptance, not measured purchase latency.
+
+Account `376129878018`, region `eu-north-1`, existing Nacka stack, complete
+WRLDS metadata, 208 resources, 28 routes, venue/date gates and general guest-send
+closure remain. Only the approved lookup column grant expands. No resource,
+IAM, secret, provider setting, financial transaction, guest message, historical
+backfill, rollback or re-promotion was performed. A rollback must retain 0023.
+
+This dependent evidence update also refreshes `AWS_RESOURCES.md` and
+`REPO_CURRENT_STATE.md` to the verified merged/deployed facts. The implementation
+already updated project context, D0163 and the test plan. Original local #396
+work remains untouched. No new Project draft was created. Keep #403 open for
+Love's handset test: record its approximate time and payment-to-safety delay,
+then correlate any remaining delay without assuming it is this fixed error.
+
+Evidence-only closeout passed history-policy, AWS inventory/tag, static issue
+resolver and whitespace validation. Its PR changes only these three documents.
