@@ -199,6 +199,7 @@ function formatBuyFlowError(
   fallback: string
 ) {
   if (!(error instanceof CloudBookingError)) return fallback;
+  if (error.code === 'customer_phone_preservation_unverified') return error.code;
 
   const productUnavailable = /^Product\s+(\d+)\s+is not available for\s+([\d-]+)\s+([\d:]+)\.?$/i.exec(error.message);
   if (productUnavailable) {
@@ -362,10 +363,6 @@ function getAddonMaxQuantity(
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
-function isValidPhone(value: string) {
-  return value.replace(/\D/g, '').length >= 6;
 }
 
 function canStartPayment(draft: NewBookingDraftResult) {
@@ -569,8 +566,7 @@ function isValidRecoveredCustomer(contact: BuyFlowRecoveryContact) {
   return (
     contact.firstName.trim().length > 0 &&
     contact.lastName.trim().length > 0 &&
-    isValidEmail(contact.email) &&
-    isValidPhone(contact.phone)
+    isValidEmail(contact.email)
   );
 }
 
@@ -579,7 +575,7 @@ function toRecoveredCustomer(contact: BuyFlowRecoveryContact): NewBookingCustome
     email: contact.email.trim(),
     firstName: contact.firstName.trim(),
     lastName: contact.lastName.trim(),
-    phone: contact.phone.trim(),
+    phone: contact.phone.trim() || undefined,
   };
 }
 
@@ -724,6 +720,9 @@ export const BuyTickets = ({
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const displayedSubmitError = submitError === 'customer_phone_preservation_unverified'
+    ? t.buy.contactVerificationFailed
+    : submitError;
   const [paymentSyncing, setPaymentSyncing] = useState(false);
   const [paymentSyncError, setPaymentSyncError] = useState<string | null>(null);
   const [paymentApprovedForSync, setPaymentApprovedForSync] = useState(false);
@@ -1131,8 +1130,7 @@ export const BuyTickets = ({
   const customerValid =
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
-    isValidEmail(email) &&
-    isValidPhone(phone);
+    isValidEmail(email);
   const paymentOptionStatus =
     paymentOptionState === 'applied'
       ? {
@@ -1307,7 +1305,7 @@ export const BuyTickets = ({
     email: email.trim(),
     firstName: firstName.trim(),
     lastName: lastName.trim(),
-    phone: phone.trim(),
+    phone: phone.trim() || undefined,
   });
 
   const buildItems = (): NewBookingItemRequest[] => {
@@ -2033,20 +2031,6 @@ export const BuyTickets = ({
                 />
               </label>
 
-              <label className="block">
-                <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider flex items-center gap-1.5 mb-1">
-                  <JumpyardIcon name="phone" className="h-5 w-5" /> {t.buy.phoneLabel}
-                </span>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(event) => updateContact(setPhone, event.target.value)}
-                  placeholder={t.buy.phonePlaceholder}
-                  autoComplete="tel"
-                  disabled={checkoutLocked}
-                  className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
-                />
-              </label>
             </section>
 
             <section className="mb-4 rounded-2xl border-2 border-primary/25 bg-white px-4 shadow-sm">
@@ -2225,7 +2209,7 @@ export const BuyTickets = ({
             </div>
 
             {submitError && (
-              <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>
+              <p className="mb-4 text-sm text-danger font-bold italic">{displayedSubmitError}</p>
             )}
 
             <button
@@ -2311,7 +2295,7 @@ export const BuyTickets = ({
               </div>
             </div>
 
-            {submitError && <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>}
+            {submitError && <p className="mb-4 text-sm text-danger font-bold italic">{displayedSubmitError}</p>}
 
             <button
               onClick={() => {

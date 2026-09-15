@@ -285,6 +285,9 @@ export const AddonsOffer = ({
     const [draft, setDraft] = useState<AddProductDraftResult | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const displayedSubmitError = submitError === 'customer_phone_preservation_unverified'
+        ? t.buy.contactVerificationFailed
+        : submitError;
     const [paymentFailure, setPaymentFailure] = useState<'failed' | 'unknown' | null>(null);
     const [paymentChecking, setPaymentChecking] = useState(false);
     const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
@@ -564,7 +567,9 @@ export const AddonsOffer = ({
             setDraft(result);
             setStep(canStartPayment(result) ? 'PAYMENT' : 'PENDING');
         } catch (error) {
-            setSubmitError(error instanceof CloudBookingError ? error.message : t.addons.draftFailed);
+            setSubmitError(error instanceof CloudBookingError && error.code === 'customer_phone_preservation_unverified'
+                ? error.code
+                : error instanceof CloudBookingError ? error.message : t.addons.draftFailed);
         } finally {
             setSubmitting(false);
         }
@@ -627,7 +632,7 @@ export const AddonsOffer = ({
                     {(submitError || catalogError) && (
                         <div className="mb-3 bg-white border border-danger/25 rounded-xl p-3 text-sm text-foreground flex gap-2">
                             <AlertCircle size={18} className="text-danger flex-shrink-0 mt-0.5" />
-                            <span>{submitError || catalogError}</span>
+                            <span>{displayedSubmitError || catalogError}</span>
                         </div>
                     )}
 
@@ -701,7 +706,7 @@ export const AddonsOffer = ({
                         <span className="text-xl font-black italic text-primary">{formatMoney(quote.costs.amountOwing)}</span>
                     </div>
 
-                    {submitError && <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>}
+                    {submitError && <p className="mb-4 text-sm text-danger font-bold italic">{displayedSubmitError}</p>}
 
                     <button
                         onClick={() => void createDraft()}
