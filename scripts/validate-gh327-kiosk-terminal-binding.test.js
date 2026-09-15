@@ -124,6 +124,8 @@ function handlerFixture(extra = {}) {
     validateT0176FullFlowOriginalBookingAccess: () => ({ ok: true }), verifyGuestAccessForBooking: async () => ({ ok: true }),
     getBookingReferenceFromPath: () => 'original-fixture',
     resolveOriginalBookingContext: async () => ({ ok: true, venueId: '50871', bookingReference: 'original-fixture', rollerUniqueId: 'original-id', customer: body.customer }),
+    // Terminal tests start with verified contact; GH409 separately exercises live contact resolution.
+    resolvePreservedDraftCustomer: async (_config, _token, customer) => ({ ok: true, customer }),
     executeStatement: async (sql, parameters) => {
       calls.push({ sql, parameters });
       const keys = JSON.parse(parameters.find((p) => p.name === 'keys').value.stringValue);
@@ -162,6 +164,15 @@ for (const method of ['handleDraft', 'handleAddProductDraft']) {
       assert.equal(result.statusCode, 409);
       assert.equal(calls.length, 0);
     }
+  });
+  test(`${method}: unverified contact cannot reserve a terminal or dispatch a provider write`, async () => {
+    const { calls, body, backend } = handlerFixture({
+      resolvePreservedDraftCustomer: async () => ({ ok: false, error: { code: 'customer_phone_preservation_unverified' } }),
+    });
+    const result = await backend[method]({}, body, 'test');
+    assert.equal(result.statusCode, 409);
+    assert.equal(JSON.parse(result.body).error.code, 'customer_phone_preservation_unverified');
+    assert.deepEqual(calls, []);
   });
   test(`${method}: a busy reservation never dispatches another draft`, async () => {
     const { calls, body, backend } = handlerFixture({ reserveKioskDraftBinding: async () => ({ code: 'kiosk_payment_busy' }) });

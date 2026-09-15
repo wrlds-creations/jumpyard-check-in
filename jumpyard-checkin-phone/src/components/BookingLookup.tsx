@@ -92,6 +92,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
 };
 
 function getLookupErrorTitle(error: LookupIssue, t: ReturnType<typeof useTranslation>['t']) {
+    if (error === 'phone_lookup_disabled') return t.lookup.phoneLookupDisabled;
     if (error === 'payment_required') return t.lookup.paymentRequired;
     if (error === 'wrong_date') return t.lookup.wrongDate;
     if (error === 'no_redeemable_tickets') return t.lookup.noRedeemableTickets;
@@ -101,6 +102,7 @@ function getLookupErrorTitle(error: LookupIssue, t: ReturnType<typeof useTransla
 }
 
 function getLookupErrorDescription(error: LookupIssue, t: ReturnType<typeof useTranslation>['t']) {
+    if (error === 'phone_lookup_disabled') return t.lookup.phoneLookupDisabledDesc;
     if (error === 'payment_required') return t.lookup.paymentRequiredDesc;
     if (error === 'wrong_date') return t.lookup.wrongDateDesc;
     if (error === 'no_redeemable_tickets') return t.lookup.noRedeemableTicketsDesc;
