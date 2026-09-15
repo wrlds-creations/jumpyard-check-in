@@ -1,0 +1,19 @@
+{
+  "unchangedContent": [
+    {
+      "before": "skills/aws-project-infrastructure/references/aws-cdk-patterns.md",
+      "after": ".agents/skills/aws-project-infrastructure/references/aws-cdk-patterns.md"
+    },
+    {
+      "before": "skills/aws-project-infrastructure/references/github-actions-oidc.md",
+      "after": ".agents/skills/aws-project-infrastructure/references/github-actions-oidc.md"
+    },
+    {
+      "before": "skills/aws-project-infrastructure/references/resource-inventory.md",
+      "after": ".agents/skills/aws-project-infrastructure/references/resource-inventory.md"
+    }
+  ],
+  "reviewedSharedReplacements": [
+    "skills/aws-project-infrastructure/references/tagging.md"
+  ]
+}

@@ -1,5 +1,15 @@
 # Project Context
 
+## Must know
+
+- Repository: wrlds-creations/jumpyard-check-in; shared JumpYard Next Project #5.
+- Phone/staff-admin and required Cloud/API scope. Kiosk and JumpyBoard remain separate except approved interface contracts.
+- Roller is authoritative; Aurora is the operational cache. Frontends use JumpYard Cloud, never direct Roller REST.
+- Technical park-test is Nacka pilot production. Preserve its venue/date gates and current full-flow window.
+- Main merges build an immutable artifact only. Promotion/rollback select the exact successful run/SHA, require reviewed plan and protected approval, and never rebuild.
+- Workflow cleanup authorizes no cloud, Roller, payment, messaging, secret, lifecycle or product mutation. Read Security And Operational Constraints for those tasks.
+- Workflow: node scripts/wrlds/validate.js; node --test scripts/wrlds/tests/*.test.js.
+
 This file holds confirmed durable facts. The private [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5) owns operations, repository Issues own approved scope, and [Sprint 1 history](docs/history/sprint-1-ticket-history.md) is archived. Unknowns remain `TBD`.
 
 ## Project Identity
@@ -67,29 +77,10 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - `CODEX_TASK.md` is a static resolver. `FOLLOWUPS.md` is policy only; completed followups and migration mapping are historical.
 - Legacy ticket IDs are preserved for traceability. GitHub issue `#192` and legacy ticket `T0192` are unrelated and must retain their prefixes.
 
-## Current Implemented Flow Facts
-
-- #340: safe, correlated server-error reports. #403: lookup reads audit IDs.
-- [#345](docs/gh-345-staff-handout.md): daily codes, today-only queue, early café; APK accepted. AirDroid: colleague.
-
-- Lookup is Aurora-first with Roller-authoritative refresh, Nacka/date scope, and nearest same-day selection. Ready bookings start/resume a server session; opaque booking-bound guest proof stays in phone memory and hash-only in Aurora.
-- Safety: server-owned handoff, approval-to-safety and final paid check (D0199/#331); video recovery/media (D0210/#343). Staff identity/heartbeat: #334.
-- Phone purchases use server-owned Roller paths and Live availability. Weekday Combo `1242135`/`1242136` requires public eligibility; catalog failure omits Combo (#341). Daily price refresh precedes booking reads (#339); 24-hour expiry stays. D0207: 2x60-min bands + 1 later pizza; no socks/drinks.
-- Live water: `970411`/`970363` (D0195).
-- D0196/D0197: compact add-ons use plus/minus, native scroll and Continue validation. D0205/#350: tiny top-right SV/EN control; both languages only on start screens.
-- New PWA bookings use `sendConfirmations=true`; phone recovery follows D0201/D0203/D0206. D0209: prepare before receipt. Mocks: dev only.
-
-## Data And Integration Facts
-
-- Aurora stores normalized booking, item, ticket, payment, product, contact, webhook, session, token, delivery, and draft/link state. Data API windows populate an operational cache, never the source of truth.
-- Booking webhooks use `x-roller-apikey`; the Park pilot-production backend validates its secret value. A broader multi-park webhook and credential model remains open.
-- Dev schedules are off for Aurora auto-pause; manual operations wake it. Guest messaging resolves opaque `jy_token` links server-side.
-- Park-test Live/Nacka index sync runs daily with bounded traffic, 30-day-past/all-future retention, and freshness monitoring. Webhook `1465` feeds durable FIFO intake and a serialized authoritative worker with DLQ/recovery/replay. Critical actions still confirm against Roller. See [T0196](docs/t0196-booking-index-morning-seed.md) and [T0197](docs/t0197-webhook-reconciliation.md).
-
 ## Security And Operational Constraints
 
 - Context-hygiene Issues cannot change Roller Live, credentials, `.env`, AWS/deploys, Aurora migrations, payment source, messaging, or app behavior.
-- AWS work requires [AWS_RESOURCES.md](AWS_RESOURCES.md), `skills/aws-project-infrastructure/`, and confirmed metadata. Park-test releases follow [the T0198 runbook](docs/t0198-controlled-cicd.md); migrations are explicit and forward-only.
+- AWS work requires [AWS_RESOURCES.md](AWS_RESOURCES.md), `.agents/skills/aws-project-infrastructure/`, and confirmed metadata. Park-test releases follow [the T0198 runbook](docs/t0198-controlled-cicd.md); migrations are explicit and forward-only.
 - Guest messaging remains gated. #216 proved one automatic Nacka T-30 email, then disarmed its control. The scheduler exists but the general gate is false. Broader delivery needs an approved time window; #220 changes neither message links nor send authority. Peak remains 3,000/day and 5/minute.
 - Staff/admin PII is staff-only and must not be exposed in public guest UI or unauthenticated APIs.
 - Phone-local contact recovery uses a 12-hour device-clock expiry, active monotonic cleanup, minute checkpoints, and fail-closed detected rollback before reuse; a fully closed/offline browser cannot execute deletion or prove unobserved real time. Park-test Lambda/API logs and the private raw-payload bucket retain data for 30 days, while Aurora automated backup/PITR remains seven days.
@@ -109,3 +100,7 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 ## Current Open Questions
 
 Candidate investigations and decisions are maintained in the [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5), not duplicated here. Durable provider-owned questions and current safe boundaries remain under [External Gates](docs/roadmap/backlog.md#external-gates). Neither a Project draft nor an external gate is implementation approval.
+
+## Runtime detail
+
+See [current runtime detail](references/current-runtime-detail.md) when changing phone/admin or data integration.

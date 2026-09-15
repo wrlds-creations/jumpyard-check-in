@@ -11,3 +11,5 @@ npm-debug.log*
 cdk.out
 infra/cdk.out
 infra/cdk.context.json
+
+.wrlds-local/
