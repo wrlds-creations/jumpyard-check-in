@@ -5,7 +5,7 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-09-15
-- Backend/Park and public frontends: `02155e5` ([#421 rollout](docs/gh421-quote-reuse-rollout.md)): reuse applied quotes; #409 contact safeguards; #343 SV/EN video. [#327](docs/gh-327-kiosk-terminal-binding.md): V210/P400 paid; Kiosk 2 active. #403 lookup grant; #345 handout/daily codes/early café; APK accepted (#401). #353 Klarna; #340 diagnostics; #335 alarms; #374 Apple Pay.
+- Backend/Park/public: `02155e5`, immutable release `34984915362`, protected Park `34985824066` and public `34987254267`. [#409 contact policy](docs/gh409-no-phone-contact.md) and [#421 quote reuse](docs/gh421-quote-reuse-rollout.md) are published. [#327](docs/gh-327-kiosk-terminal-binding.md): V210/P400 paid; Kiosk 2 active. #343 SV/EN video; #403 lookup grant; #345 handout/daily codes/early café; APK accepted (#401). #353 Klarna; #340 diagnostics; #335 alarms; #374 Apple Pay.
 - Operations: private [Project](https://github.com/orgs/wrlds-creations/projects/5), shared across all four JumpYard repositories; each new item names its exact Target repository.
 - Runtime: Park has 208 resources, migrations through `0023`, and 28 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption and late Handoff attachment are proven. Definitive kiosk payment approval returns its provisional session and bounded `safety` hint before ROLLER readback; redemption still requires authoritative synchronization. Physical proof: kiosk #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
@@ -26,6 +26,8 @@ GitHub issue `#192` and legacy ticket `T0192` are unrelated; preserve both prefi
 The full working agreement is in `AGENTS.md` and [references/github-collaboration-workflow.md](references/github-collaboration-workflow.md). The one-time reconciliation is in [docs/history/github-project-migration-2026-07-14.md](docs/history/github-project-migration-2026-07-14.md).
 
 ## Current Product Baseline
+
+- Phone/kiosk contact requires name/email only; public phone lookup is disabled. Cloud preserves verified live guest numbers and excludes placeholder variants from SMS. Unverified/new/unindexed contacts stop before payment; a complete and atomic ROLLER preservation contract plus physical acceptance remain open ([#409](docs/gh409-no-phone-contact.md)).
 
 - Phone prepares safety before receipt (#374/D0209); #331 and #330/D0208 preserved. SV/EN video: #343/D0210/D0219.
 - Catalog refresh precedes booking reads; public failure omits Combo (#339/#341).
@@ -62,7 +64,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 
 ## Validation Baseline
 
-Use TEST_PLAN.md for current checks. Prior dated release/run evidence remains in [the pre-upgrade snapshot](docs/history/workflow-0.2-baseline/REPO_CURRENT_STATE.md#validation-baseline). No new deployment is claimed.
+Use TEST_PLAN.md for current checks. [#409 rollout evidence](docs/gh409-no-phone-contact.md#protected-rollout--2026-09-15) records required CI (including native PostgreSQL), immutable-artifact checks, protected deployment and independent runtime/static verification. Prior dated release/run evidence remains in [the pre-upgrade snapshot](docs/history/workflow-0.2-baseline/REPO_CURRENT_STATE.md#validation-baseline).
 
 ## Current Risks And Boundaries
 
