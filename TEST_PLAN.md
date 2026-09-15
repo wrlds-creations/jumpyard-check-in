@@ -4,6 +4,12 @@ Use this file to define active validation for the current project or milestone. 
 
 ## Current Root Validation
 
+### Localized safety media (#343)
+
+- `npm --prefix jumpyard-checkin-phone run test:safety-video`: media hashes, fast-start atom order, per-language size budgets, playback recovery and stale/denied language-play attempts.
+- After the phone production build, run `node scripts/verify-safety-video-browser.mjs` from `jumpyard-checkin-phone` with an existing Playwright installation (`PLAYWRIGHT_MODULE` can identify its entry file). The isolated temporary fixture uses real production-mode components and exported styles/media; it is never published. It measures first frames at 10 Mbps/100 ms RTT (five samples), a slow-network case, cached return requests, rapid language changes, full viewing, pause/failure recovery, saved preference and StrictMode, at 320/390 px. `SAFETY_BROWSER_OUTPUT` selects the evidence directory.
+- Record first-run outliers and any missed timing target. Physical Safari/PWA, Android, actual hosted cache headers and shared park Wi-Fi remain distinct post-promotion checks.
+
 | Command | Purpose | Expected Result |
 |---|---|---|
 | `npm run validate:gh353-klarna-policy` | Exercise the real phone component and installed Roller SDK offline: both purchase kinds exclude Klarna in fresh session requests, preserve device exclusions and old payment returns, and reject replacement attempts while payment is unresolved. | 13 tests pass; provider-side exclusion and handset visibility still need post-promotion verification. |
