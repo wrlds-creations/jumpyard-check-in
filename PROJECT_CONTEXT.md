@@ -45,7 +45,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Check-in is modeled as ticket-level redemption through Roller `POST /redemptions`, not a booking-level flag.
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
-- Kiosk profiles and payment locks: [#327](docs/gh-327-kiosk-terminal-binding.md).
+- Kiosk 1/V210 paid proof and P400 gates: [#327](docs/gh-327-kiosk-terminal-binding.md).
 - Kiosk safety/handoff may follow durable terminal approval; redemption requires confirmed ROLLER booking and ticket ids.
 - Raw payloads, access tokens, PINs, secrets, and unmasked credentials are prohibited persisted data. Booking/contact state is removed or anonymized 30 days after visit; pseudonymous audit/run metadata at 90 days; expired access rows within 24 hours. Disabled staff lose display PII after 90 days; PIN-pepper changes require versioned security-driven re-enrollment. Non-dev handlers have restricted DB principals; Aurora admin is only for migrations, provisioning, and guarded recovery.
 - Dev is retired Playground and its Aurora auto-pauses. The existing Park environment is the sole Live backend and sharp pilot-production environment for Nacka.
