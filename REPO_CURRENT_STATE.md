@@ -5,7 +5,7 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-09-15
-- Public/Park: `65efb38` ([#343](docs/gh-343-safety-video-recovery.md)): SV/EN video. #403 lookup audit-ID grant; [#345](docs/gh-345-staff-handout.md): handout, daily codes, early café; APK 1.0.0 accepted (#401). #353 Klarna exclusions; #340 diagnostics; #335 alarms; #374 Apple Pay accepted.
+- Backend/Park: `ce7c795` ([#327](docs/gh-327-kiosk-terminal-binding.md)): kiosk binding; commissioning pending. Public frontends: `65efb38` (#343 SV/EN video). #403 lookup grant; #345 handout/daily codes/early café; APK accepted (#401). #353 Klarna; #340 diagnostics; #335 alarms; #374 Apple Pay.
 - Operations: private [Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to this repository; Love confirmed it as the Project default.
 - Runtime: Park has 208 resources, migrations through `0023`, and 28 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption and late Handoff attachment are proven. Definitive kiosk payment approval returns its provisional session and bounded `safety` hint before ROLLER readback; redemption still requires authoritative synchronization. Physical proof: kiosk #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.

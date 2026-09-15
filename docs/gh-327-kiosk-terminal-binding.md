@@ -32,3 +32,33 @@ These bounded operational locks are not an audit archive. Partial claims expire 
 - Existing kiosk terminal, reconciliation, add-product and exact-payment-state regressions; full repository and infrastructure checks before handoff.
 
 Local PostgreSQL 17.11 passed all 14 focused tests on 2026-09-15, including all twelve concurrent requests. The atomic conflict behavior is defined by [PostgreSQL INSERT](https://www.postgresql.org/docs/17/sql-insert.html). `npm run infra:check` and the full validation chain passed. The full chain used an in-memory LF normalization for the two bounded context documents, matching Linux CI; the default Windows CRLF checkout exceeds their raw-character limits. This existing validator issue has a Project draft, and no unrelated history or mainline snapshot was rewritten. `git diff --check` passed. No live provider request, secret update, deployment or physical payment was part of this local evidence.
+
+## Protected backend rollout — 2026-09-15
+
+Love's explicit green light authorized the coordinated release. Reviewed [backend PR #411](https://github.com/wrlds-creations/jumpyard-check-in/pull/411) and [kiosk PR #101](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/pull/101) are merged. Backend CI [34966043543](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34966043543) passed all six jobs, including real PostgreSQL concurrency. The paired source remains one APK and one web application. Both Issues remain open for commissioning and physical proof.
+
+| Evidence | Selected value / result |
+| --- | --- |
+| Backend source | `ce7c795c1fd460936b552323805790d8bf657827` |
+| Immutable release | [34966352071](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34966352071), artifact `10394873499` |
+| Local artifact validation | 664 files; manifest SHA256 `01bf0b9dfc9380f8c87538ec5b32b79a07303f669b793adb012043a28bbaf809` |
+| Protected plan/deployment | [34967225013](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34967225013), successful |
+| Exact plan | 208 resources before/after; only Booking Lambda `Code` changes; no resource additions/removals or other template changes |
+| Deployed template | `ae412badf5c7d0d6fde1ba93e30c2440a85ef4b0dec9b39f7b0181e36a8981e6` |
+| Runtime readback | Active/successful Lambda; all six deployed code files exactly match the immutable artifact |
+| Operational checks | Template equality, `IN_SYNC` drift, zero active alarms, empty queues, exact-SHA Park Pages, public Park probes; migrations through `0023`, no migration apply |
+| Rollback artifact retained | Release [34963769097](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34963769097), source `65efb3811a5ee226aa38e72b4449e72f985da09c`; all 664 files independently verified |
+
+The actual GitHub plan was reviewed and independently compared with the running AWS template before normal delegated protected-environment approval. The existing account `376129878018`, region `eu-north-1`, stack and ten WRLDS metadata values match the Issue. IAM, schema, routes, venue/date window, messaging gates and resource counts are unchanged. The deployed booking runtime's existing DB permissions also passed a non-executing `EXPLAIN` of the exact reservation statement; it wrote no rows. No local CDK deployment, rebuild, rollback, re-promotion or public phone/admin promotion occurred. Public frontends remain on #343's approved source.
+
+Four safe live probes returned the expected rejection: malformed and unknown new-booking identities returned `409 kiosk_installation_not_authorized`; incomplete add-on identity returned `400 kiosk_installation_identity_incomplete`; the phone channel rejected kiosk identity with `400 kiosk_installation_identity_not_allowed`. They used synthetic data and stopped before provider calls; the new-booking probes produced only failed local idempotency records. An aggregate query under the actual restricted booking DB identity reported zero card-present attempts in the previous 24 hours after the probes. No ROLLER draft, payment, booking, refund, redemption or guest message was created.
+
+## Remaining commissioning evidence
+
+The existing provider secret was read privately and remains unchanged. Its P400 `primary` mapping is preserved; no installation/profile records or terminal lock ids have been applied yet. The provider support case identifies V210 but does not prove it is currently online. Secret registration must follow native identity creation, exact private plan review and version-guarded apply/readback.
+
+The kiosk source is `aca0f33c59f18d75611607d2a1dc728ed2b1c974`. Its tested site and `0.1.6-debug` APK are frozen with a 143-file checksum manifest. Wireless ADB pairing succeeded and read-only checks found one physical Android 14 kiosk; duplicate ADB aliases refer to that same device. The installed APK was retained for rollback without copying app data. Installation and publication await the requested confirmation that the kiosk is idle and has no unresolved guest purchase. The existing installed APK uses the same version label but has different contents, so package version alone is not release proof.
+
+After the idle-window confirmation: install the frozen APK preserving app data, create/register its private installation identity, publish the frozen site, and verify the authenticated Android profile selector, cancellation, persistence and relaunch. The installer enters the Android device credential personally. Then verify mapping/online status and negative authorization cases before requesting the exact attended V210 cart/amount/card approval. At most one V210 attempt is allowed; an ambiguous result requires diagnosis without retry. Physical P400 regression remains open and no new P400 charge is authorized.
+
+Follow-up planning remains separate: the kiosk Project draft **Restore a reproducible kiosk reference infra dependency install** records its existing copied-infra lockfile issue; the Windows context-validator newline draft records the existing local-only size discrepancy. Neither changes this release's scope.
