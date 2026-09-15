@@ -2302,7 +2302,14 @@ function normalizeEmail(value) {
   return email && email.includes('@') ? email : null;
 }
 
+// GH-409: this provider placeholder is not a guest contact or an identity.
+function isPlaceholderPhone(value) {
+  const digits = String(value ?? '').replace(/\D/g, '').replace(/^00/, '');
+  return ['0700000000', '46700000000', '460700000000', '700000000'].includes(digits);
+}
+
 function normalizePhone(value) {
+  if (isPlaceholderPhone(value)) return null;
   const phone = stringOrNull(value)?.replace(/[^\d+]/g, '');
   return phone || null;
 }

@@ -5,6 +5,7 @@ const DEFAULT_CLOUD_API_BASE_URL = 'https://m0uo5g4mde.execute-api.eu-north-1.am
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
 
 export type LookupIssue =
+  | 'phone_lookup_disabled'
   | 'not_found'
   | 'payment_required'
   | 'wrong_date'
@@ -189,7 +190,7 @@ export interface NewBookingCustomer {
   firstName: string;
   lastName: string;
   email: string;
-  phone: string;
+  phone?: string;
 }
 
 export interface NewBookingItemRequest {
@@ -380,6 +381,10 @@ export async function lookupBooking(code: string, options: { signal?: AbortSigna
   const identifier = code.trim();
   if (!identifier) {
     throw new CloudLookupError('lookup_failed', 'Booking reference is required.');
+  }
+
+  if (inferIdentifierType(identifier) === 'phone') {
+    throw new CloudLookupError('phone_lookup_disabled', 'Use a booking reference, QR code or email address.');
   }
 
   let response: Response;
@@ -891,6 +896,8 @@ function inferIdentifierType(identifier: string) {
 
 function isLikelyPhoneIdentifier(value: string) {
   const digits = value.replace(/\D/g, '');
+  if (!/^[+\d\s()./-]+$/.test(value)) return false;
+  if (/^46(?:0)?7\d{8}$/.test(digits)) return true;
   if (digits.length < 7 || digits.length > 15) return false;
   if (/^\+|^00/.test(value)) return true;
   if (/^0\d{6,14}$/.test(digits)) return true;
@@ -933,6 +940,10 @@ async function parseBookingResponse<T>(response: Response): Promise<T | null> {
 function createLookupError(body: CloudLookupResponse | null, httpStatus?: number) {
   if (body?.status === 'not_found' || body?.error?.code === 'booking_not_found') {
     return new CloudLookupError('not_found', 'Booking was not found.', httpStatus);
+  }
+
+  if (body?.error?.code === 'phone_lookup_disabled') {
+    return new CloudLookupError('phone_lookup_disabled', 'Use a booking reference or email address.', httpStatus);
   }
 
   return new CloudLookupError('lookup_failed', body?.error?.message ?? 'JumpYard Cloud lookup failed.', httpStatus);
