@@ -1,5 +1,53 @@
 # Phone Discount-Code Feedback (#407)
 
+## Protected rollout — 2026-09-15
+
+Love asked for commit, push, merge and deploy of the phone and kiosk work.
+Reviewed [PR #415](https://github.com/wrlds-creations/jumpyard-check-in/pull/415)
+merged as `4bd7501c62997180d6177006c9827443b5495d32` (branch `5cf5229` plus a merge of
+main that renumbered this decision to D0221 and folded the #407 pointer into the
+flow-facts line). All six PR CI jobs passed on Linux, including repository
+validation and the whitespace check. Review was performed by the implementation
+agent; no independent human review is claimed. The kiosk counterpart shipped as
+kiosk PR #107 / release evidence PR #108.
+
+### Exact artifact and Park verification
+
+- Immutable [release 34977478153](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34977478153),
+  artifact `10400526044`, digest
+  `sha256:9594b167742775be2c2c907b09680159798906a232811ad235f2d9657a338086`,
+  manifest SHA256 `592a80ad968ef0a11ace27895870a1d0afb1acbd4f526437d9a7eba9c0552bde`.
+- Protected [Park run 34978297036](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34978297036)
+  passed (plan job `104411639224`, deployment job `104411768211`). The uploaded
+  plan was read before delegated approval under Love's instruction: 208 current
+  and 208 release resources, Added/Removed/Changed none, identical current and
+  release template SHA256
+  `ae412badf5c7d0d6fde1ba93e30c2440a85ef4b0dec9b39f7b0181e36a8981e6`, apply
+  migrations false, zero alarms in `ALARM` before dispatch.
+- Post-deploy verification in the same job passed: template equality, `IN_SYNC`
+  drift, zero active alarms, empty queues and exact-SHA Pages checks. Park phone
+  deployment `https://53b3bcc3.jumpyard-check-in-park-test.pages.dev` serves the
+  new chooser text (chunk readback); admin deployment
+  `https://1e15e78f.jumpyard-checkin-admin-park-test.pages.dev`.
+- No backend, schema, gate, IAM, provider or infrastructure change. Account
+  `376129878018`, region `eu-north-1` and the Nacka `50871` stack are unchanged.
+
+### Nacka public promotion
+
+- Protected [public run 34978711381](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34978711381)
+  promoted the same artifact (plan job `104413086026`, deployment job
+  `104413154417`): identical artifact id, digest and manifest, allowed public
+  origins `https://checkin.jumpyard.se` and `https://staff-checkin.jumpyard.se`.
+- Production Pages deployments: phone
+  `https://20ab2766.jumpyard-check-in-production.pages.dev`, admin
+  `https://48d53fe0.jumpyard-checkin-admin-production.pages.dev`; the workflow's
+  public domain verification passed.
+- Readback: before promotion none of the ten `https://checkin.jumpyard.se`
+  page chunks contained the chooser text; after promotion a page chunk does and
+  four chunk names changed.
+- Rollback candidate: release run `34975928084` (`96c2221`, previous public
+  frontend `65efb38`). Public handset acceptance by Love remains the final check.
+
 ## Scope And Provenance
 
 - Issue: [#407](https://github.com/wrlds-creations/jumpyard-check-in/issues/407).
@@ -51,4 +99,4 @@ Kiosk parity has its own implementation and evidence under [kiosk #99](https://g
 
 ## Delivery Boundary
 
-No commit, push, PR, release, deployment, ROLLER business write, AWS resource change or guest message is included. Public handset acceptance requires a separately requested reviewed release. `REPO_CURRENT_STATE.md` is unchanged because this work is unmerged. D0221 records the label/feedback policy; D0218 belongs to the separate #396 work.
+The rollout above covers commit, PR, release and both protected promotions; no ROLLER business write, AWS resource change or guest message is included. Public handset acceptance by Love remains. `REPO_CURRENT_STATE.md` is unchanged because this work is unmerged. D0221 records the label/feedback policy; D0218 belongs to the separate #396 work.
