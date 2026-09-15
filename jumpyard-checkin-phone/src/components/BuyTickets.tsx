@@ -2,7 +2,7 @@
 import { PackageContentRows } from '@/components/PackageContentRows';
 import { scalePackageContents } from '@/flow/packageContents';
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, ArrowLeft, Check, ChevronDown, Minus, Plus, RefreshCw, X } from 'lucide-react';
 import {
@@ -20,6 +20,8 @@ import {
   type NewBookingProduct,
   type NewBookingQuote,
 } from '@/flow/cloudClient';
+import { getPaymentOptionInputState, type PaymentOptionInputState } from '@/flow/paymentOptionFeedback';
+import { PaymentCodeRejectedDialog } from '@/components/PaymentCodeRejectedDialog';
 import type { Addon, AddonId, Booking } from '@/flow/types';
 import { ADDON_CATALOG_CONFIG, BUY_ENTRY_ADDON_IDS } from '@/flow/addonCatalog';
 import { resolvePaidConfirmation } from '@/flow/paidBookingConfirmation';
@@ -85,12 +87,19 @@ interface BuyAddonEntry {
 }
 
 type AddonQuantityMap = Record<AddonId, number>;
-type PaymentOptionInputState = 'empty' | 'ready' | 'applied' | 'rejected';
+// Membership codes are redeemed through the existing discountCodes payload until a membership route exists.
+type PaymentOptionType = 'discount' | 'member' | 'giftCard';
 
 const PAYMENT_OPTION_CODE_MAX_LENGTH = 32;
+const PAYMENT_OPTION_TYPES: PaymentOptionType[] = ['discount', 'member', 'giftCard'];
+const PAYMENT_OPTION_TYPE_ICONS: Record<PaymentOptionType, 'points-star' | 'profile' | 'presentkort'> = {
+  discount: 'points-star',
+  member: 'profile',
+  giftCard: 'presentkort',
+};
 const SOCKS_UNLIMITED_MAX = Number.MAX_SAFE_INTEGER;
-const PAYMENT_OPTION_INPUT_CLASS =
-  'w-full bg-surface border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:ring-2 focus:ring-primary/10 outline-none transition-all';
+const PAYMENT_OPTION_GROUP_CLASS =
+  'flex items-stretch overflow-hidden rounded-xl border bg-surface transition-all focus-within:ring-2 focus-within:ring-primary/10';
 
 const createEmptyAddonQty = (): AddonQuantityMap => ({
   skyrider: 0,
@@ -146,27 +155,10 @@ function clampPaymentOptionCode(value: string) {
   return value.slice(0, PAYMENT_OPTION_CODE_MAX_LENGTH);
 }
 
-function getPaymentOptionInputState(
-  value: string,
-  paymentInputsDirty: boolean,
-  errors: unknown[]
-): PaymentOptionInputState {
-  if (!value.trim()) return 'empty';
-  if (paymentInputsDirty) return 'ready';
-  return errors.length > 0 ? 'rejected' : 'applied';
-}
-
-function getPaymentOptionInputClass(state: PaymentOptionInputState) {
-  if (state === 'rejected') return `${PAYMENT_OPTION_INPUT_CLASS} border-danger/40 focus:border-danger focus:ring-danger/10`;
-  if (state === 'applied') return `${PAYMENT_OPTION_INPUT_CLASS} border-primary/40 bg-primary/5 focus:border-primary`;
-  if (state === 'ready') return `${PAYMENT_OPTION_INPUT_CLASS} border-primary/60 bg-white focus:border-primary`;
-  return `${PAYMENT_OPTION_INPUT_CLASS} border-border focus:border-primary`;
-}
-
-function getPaymentOptionFeedbackClass(state: PaymentOptionInputState) {
-  if (state === 'rejected') return 'text-danger';
-  if (state === 'ready' || state === 'applied') return 'text-primary';
-  return 'text-muted';
+function getPaymentOptionGroupClass(state: PaymentOptionInputState) {
+  if (state === 'rejected') return `${PAYMENT_OPTION_GROUP_CLASS} border-danger/40 focus-within:border-danger focus-within:ring-danger/10`;
+  if (state === 'applied') return `${PAYMENT_OPTION_GROUP_CLASS} border-primary/40 bg-primary/5`;
+  return `${PAYMENT_OPTION_GROUP_CLASS} border-border focus-within:border-primary`;
 }
 
 function getGiftCardAppliedAmount(quote: NewBookingQuote | null) {
@@ -720,10 +712,10 @@ export const BuyTickets = ({
   const [phone, setPhone] = useState('');
   const [giftCardNumber, setGiftCardNumber] = useState('');
   const [clipCardCode, setClipCardCode] = useState('');
+  const [paymentOptionType, setPaymentOptionType] = useState<PaymentOptionType>('discount');
+  const [codeRejectedDialogOpen, setCodeRejectedDialogOpen] = useState(false);
   const [paymentOptionsOpen, setPaymentOptionsOpen] = useState(false);
   const [checkoutBreakdownOpen, setCheckoutBreakdownOpen] = useState(false);
-  const [giftCardInputDirty, setGiftCardInputDirty] = useState(false);
-  const [clipCardInputDirty, setClipCardInputDirty] = useState(false);
   const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
   const [alreadyHasApprovedSocks, setAlreadyHasApprovedSocks] = useState(false);
   const [alreadyHasWaterBottle, setAlreadyHasWaterBottle] = useState(false);
@@ -746,6 +738,18 @@ export const BuyTickets = ({
   const paymentContinuationRef = useRef<(() => void | Promise<void>) | null>(null);
   const paymentContinueRequestedRef = useRef(false);
   const paymentPreparationAbortRef = useRef<AbortController | null>(null);
+  const quoteRequestVersionRef = useRef(0);
+  const quoteOperationInFlightRef = useRef(false);
+  const [applyingCodes, setApplyingCodes] = useState(false);
+  const invalidateQuote = useCallback(() => {
+    quoteRequestVersionRef.current += 1;
+    setQuote(null);
+    return quoteRequestVersionRef.current;
+  }, []);
+
+  useEffect(() => () => {
+    quoteRequestVersionRef.current += 1;
+  }, []);
 
   useEffect(() => {
     activePaymentAttemptRef.current = getDraftPaymentAttemptId(draft);
@@ -802,36 +806,27 @@ export const BuyTickets = ({
   const discountCodeInputs = buildDiscountCodeInputs(clipCardCode);
   const productLabels = buildProductLabelMap(selectedProduct, buyAddons);
   const selectedProductDurationLabel = getProductDurationLabel(selectedProduct);
-  const giftCardErrors = quote?.giftCards?.errors ?? [];
-  const discountCodeErrors = quote?.discountCodes?.errors ?? [];
-  const giftCardInputState = getPaymentOptionInputState(giftCardNumber, giftCardInputDirty, giftCardErrors);
-  const clipCardInputState = getPaymentOptionInputState(clipCardCode, clipCardInputDirty, discountCodeErrors);
-  const giftCardInputFeedback =
-    giftCardInputState === 'empty'
-      ? null
-      : giftCardInputState === 'ready' && giftCardNumber.length >= PAYMENT_OPTION_CODE_MAX_LENGTH
-        ? t.buy.paymentCodeMaxLength
-        : giftCardInputState === 'ready'
-          ? t.buy.paymentCodeReady
-          : giftCardInputState === 'rejected'
-            ? t.buy.giftCardRejected
-            : t.buy.paymentCodeDone;
-  const clipCardInputFeedback =
-    clipCardInputState === 'empty'
-      ? null
-      : clipCardInputState === 'ready' && clipCardCode.length >= PAYMENT_OPTION_CODE_MAX_LENGTH
-        ? t.buy.paymentCodeMaxLength
-        : clipCardInputState === 'ready'
-          ? t.buy.paymentCodeReady
-          : clipCardInputState === 'rejected'
-            ? t.buy.clipCardRejected
-            : t.buy.paymentCodeDone;
-  const paymentInputsHaveValues = Boolean(giftCardNumber.trim() || clipCardCode.trim());
-  const paymentInputsBlockingErrors =
-    (!giftCardInputDirty && Boolean(giftCardNumber.trim()) && giftCardErrors.length > 0) ||
-    (!clipCardInputDirty && Boolean(clipCardCode.trim()) && discountCodeErrors.length > 0);
   const giftCardAppliedAmount = getGiftCardAppliedAmount(quote);
   const discountCodeAppliedAmount = getDiscountCodeAppliedAmount(quote);
+  const giftCardInputState = getPaymentOptionInputState(giftCardNumber, quote?.giftCards, giftCardAppliedAmount);
+  const clipCardInputState = getPaymentOptionInputState(clipCardCode, quote?.discountCodes, discountCodeAppliedAmount);
+  const paymentOptionValue = paymentOptionType === 'giftCard' ? giftCardNumber : clipCardCode;
+  const paymentOptionState = paymentOptionType === 'giftCard' ? giftCardInputState : clipCardInputState;
+  const paymentOptionAppliedAmount = paymentOptionType === 'giftCard' ? giftCardAppliedAmount : discountCodeAppliedAmount;
+  const paymentOptionFieldLabel =
+    paymentOptionType === 'giftCard'
+      ? t.buy.giftCardLabel
+      : paymentOptionType === 'member'
+        ? t.buy.memberCodeLabel
+        : t.buy.clipCardLabel;
+  const paymentOptionPlaceholder =
+    paymentOptionType === 'giftCard'
+      ? t.buy.giftCardPlaceholder
+      : paymentOptionType === 'member'
+        ? t.buy.memberCodePlaceholder
+        : t.buy.clipCardPlaceholder;
+  const paymentInputsHaveValues = Boolean(giftCardNumber.trim() || clipCardCode.trim());
+  const paymentInputsBlockingErrors = giftCardInputState === 'rejected' || clipCardInputState === 'rejected';
   const draftAmountOwing = getDraftAmountOwing(draft);
   const noPaymentRequired = draftAmountOwing !== null && draftAmountOwing <= 0;
   const showPaymentSyncCard = paymentApprovedForSync || paymentSyncing || Boolean(paymentSyncError);
@@ -840,7 +835,7 @@ export const BuyTickets = ({
     (step === 'PAYMENT' && (paymentNavigationLocked || paymentApprovedForSync || paymentSyncing || paymentFailure === 'unknown'));
   const checkoutAmount = draftAmountOwing ?? quote?.costs.amountOwing ?? basketEstimateTotal;
   const checkoutTotal = quote?.costs.total ?? basketEstimateTotal;
-  const checkoutLocked = Boolean(draft) || showPaymentSyncCard;
+  const checkoutLocked = submitting || Boolean(draft) || showPaymentSyncCard;
 
   const clearPaymentSyncState = () => {
     paymentPreparationAbortRef.current?.abort();
@@ -869,15 +864,14 @@ export const BuyTickets = ({
       setLoadingAvailability(Boolean(savedStartTime));
       setAvailabilityError(null);
       setSubmitError(null);
-      setQuote(null);
+      invalidateQuote();
       setDraft(null);
       setPaymentSyncing(false);
       setPaymentSyncError(null);
       setPaymentApprovedForSync(false);
       setGiftCardNumber('');
       setClipCardCode('');
-      setGiftCardInputDirty(false);
-      setClipCardInputDirty(false);
+      setPaymentOptionType('discount');
       setPaymentOptionsOpen(hasSavedPaymentOptions(recoverySnapshot));
       setFirstName(savedContact.firstName);
       setLastName(savedContact.lastName);
@@ -1054,7 +1048,7 @@ export const BuyTickets = ({
       alive = false;
       restoringPrePaymentRef.current = false;
     };
-  }, [recoverySnapshot, t.addons, t.buy]);
+  }, [invalidateQuote, recoverySnapshot, t.addons, t.buy]);
 
   useEffect(() => {
     if (draft || restoringPrePaymentRef.current || !isBuyStep(step)) return;
@@ -1136,6 +1130,30 @@ export const BuyTickets = ({
     lastName.trim().length > 0 &&
     isValidEmail(email) &&
     isValidPhone(phone);
+  const paymentOptionStatus =
+    paymentOptionState === 'applied'
+      ? {
+          tone: 'accepted' as const,
+          title: paymentOptionType === 'giftCard' ? t.buy.giftCardAcceptedTitle : t.buy.paymentCodeAcceptedTitle,
+          detail: `-${formatMoney(paymentOptionAppliedAmount)} ${t.buy.paymentCodeAcceptedDetail}`,
+        }
+      : paymentOptionState === 'rejected'
+        ? {
+            tone: 'rejected' as const,
+            title: paymentOptionType === 'giftCard' ? t.buy.giftCardRejectedTitle : t.buy.paymentCodeRejectedTitle,
+            detail: t.buy.paymentCodeRejectedDetail,
+          }
+        : null;
+  const paymentOptionHint =
+    paymentOptionState === 'ready'
+      ? !customerValid
+        ? t.buy.paymentOptionsContactRequired
+        : paymentOptionValue.length >= PAYMENT_OPTION_CODE_MAX_LENGTH
+          ? t.buy.paymentCodeMaxLength
+          : t.buy.paymentCodeCheckedOnContinue
+      : paymentOptionState === 'empty' && paymentOptionType === 'discount'
+        ? t.buy.paymentOptionClipCardHint
+        : null;
 
   const loadAvailability = async (requestedSlots = selectedTime ? [selectedTime] : slots) => {
     if (requestedSlots.length === 0) return;
@@ -1161,14 +1179,13 @@ export const BuyTickets = ({
     setSelectedProduct(null);
     setQuantity(1);
     setAddonQty(createEmptyAddonQty());
-    setQuote(null);
+    invalidateQuote();
     setDraft(null);
     clearPaymentSyncState();
     setGiftCardNumber('');
     setClipCardCode('');
+    setPaymentOptionType('discount');
     setPaymentOptionsOpen(false);
-    setGiftCardInputDirty(false);
-    setClipCardInputDirty(false);
     setSkyriderConsentConfirmed(false);
     setAlreadyHasApprovedSocks(false);
     setAlreadyHasWaterBottle(false);
@@ -1180,7 +1197,7 @@ export const BuyTickets = ({
     setSelectedProduct(product);
     setQuantity(1);
     setAddonQty(createEmptyAddonQty());
-    setQuote(null);
+    invalidateQuote();
     setDraft(null);
     clearPaymentSyncState();
     setSkyriderConsentConfirmed(false);
@@ -1200,31 +1217,53 @@ export const BuyTickets = ({
       }
       return next;
     });
-    setQuote(null);
+    invalidateQuote();
     setDraft(null);
     clearPaymentSyncState();
     setSkyriderConsentConfirmed(false);
   };
 
+  const updateContact = (setValue: (value: string) => void, value: string) => {
+    setValue(value);
+    setSubmitError(null);
+    invalidateQuote();
+  };
+
+  // One code at a time: entering either type clears the other field.
   const updateGiftCardNumber = (value: string) => {
     setGiftCardNumber(clampPaymentOptionCode(value));
+    setClipCardCode('');
     setSubmitError(null);
     setDraft(null);
     clearPaymentSyncState();
-    if (quote) setGiftCardInputDirty(true);
+    invalidateQuote();
   };
 
   const updateClipCardCode = (value: string) => {
     setClipCardCode(clampPaymentOptionCode(value));
+    setGiftCardNumber('');
     setSubmitError(null);
     setDraft(null);
     clearPaymentSyncState();
-    if (quote) setClipCardInputDirty(true);
+    invalidateQuote();
+  };
+
+  const updatePaymentOptionValue = (value: string) => {
+    if (paymentOptionType === 'giftCard') updateGiftCardNumber(value);
+    else updateClipCardCode(value);
+  };
+
+  const removePaymentOption = () => updatePaymentOptionValue('');
+
+  const selectPaymentOptionType = (type: PaymentOptionType) => {
+    if (type === paymentOptionType) return;
+    setPaymentOptionType(type);
+    if (paymentInputsHaveValues) updatePaymentOptionValue('');
   };
 
   const setOneAddon = (id: AddonId, nextQty: number) => {
     setSubmitError(null);
-    setQuote(null);
+    invalidateQuote();
     setDraft(null);
     clearPaymentSyncState();
     const addon = buyAddons.find((entry) => entry.id === id);
@@ -1236,7 +1275,7 @@ export const BuyTickets = ({
   const setSocksConfirmation = (checked: boolean) => {
     setAlreadyHasApprovedSocks(checked);
     setSubmitError(null);
-    setQuote(null);
+    invalidateQuote();
     setDraft(null);
     clearPaymentSyncState();
   };
@@ -1244,7 +1283,7 @@ export const BuyTickets = ({
   const setWaterBottleConfirmation = (checked: boolean) => {
     setAlreadyHasWaterBottle(checked);
     setSubmitError(null);
-    setQuote(null);
+    invalidateQuote();
     setDraft(null);
     clearPaymentSyncState();
   };
@@ -1288,20 +1327,48 @@ export const BuyTickets = ({
     ];
   };
 
-  const createDraft = async () => {
+  const applyPaymentOptions = async () => {
+    if (!selectedProduct || !customerValid || !paymentInputsHaveValues || submitting || draft || quoteOperationInFlightRef.current) return;
+    quoteOperationInFlightRef.current = true;
+    setApplyingCodes(true);
+    setSubmitError(null);
+    const requestVersion = invalidateQuote();
+    try {
+      const quoted = await quoteNewBooking(
+        buildCustomer(), buildItems(), shouldPrecheckBasketAvailability, giftCardInputs, discountCodeInputs
+      );
+      if (quoteRequestVersionRef.current !== requestVersion) return;
+      setQuote(quoted);
+    } catch (error) {
+      if (quoteRequestVersionRef.current === requestVersion) {
+        setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.paymentOptionsFailed));
+      }
+    } finally {
+      quoteOperationInFlightRef.current = false;
+      setApplyingCodes(false);
+    }
+  };
+
+  const createDraft = async (codes?: { giftCards: NewBookingGiftCardInput[]; discountCodes: NewBookingDiscountCodeInput[] }) => {
     if (draft) {
       setStep('PAYMENT');
       return;
     }
-    if (!selectedProduct || !customerValid || submitting) return;
+    if (!selectedProduct || !customerValid || submitting || quoteOperationInFlightRef.current) return;
     if (needsSkyRiderConsent()) {
       setStep('SKYRIDER_ATTEST');
       return;
     }
-    if (paymentInputsBlockingErrors) {
-      setSubmitError(t.buy.paymentOptionsUpdateRequired);
+    // A code the current quote already rejected: ask before continuing without it.
+    if (!codes && paymentInputsBlockingErrors) {
+      setCodeRejectedDialogOpen(true);
       return;
     }
+    const giftCards = codes?.giftCards ?? giftCardInputs;
+    const discountCodes = codes?.discountCodes ?? discountCodeInputs;
+    const requestVersion = invalidateQuote();
+    const quoteIsCurrent = () => quoteRequestVersionRef.current === requestVersion;
+    quoteOperationInFlightRef.current = true;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -1309,14 +1376,14 @@ export const BuyTickets = ({
         buildCustomer(),
         buildItems(),
         shouldPrecheckBasketAvailability,
-        giftCardInputs,
-        discountCodeInputs
+        giftCards,
+        discountCodes
       );
+      if (!quoteIsCurrent()) return;
       setQuote(quoted);
-      setGiftCardInputDirty(false);
-      setClipCardInputDirty(false);
       if (hasPaymentOptionQuoteErrors(quoted)) {
-        setSubmitError(t.buy.paymentOptionsUpdateRequired);
+        // Continue also applies an unapplied code; a rejected one needs the guest's decision.
+        setCodeRejectedDialogOpen(true);
         return;
       }
 
@@ -1327,8 +1394,8 @@ export const BuyTickets = ({
         buildItems(),
         `phone-draft:${selectedProduct.productId}:${selectedProduct.startTime}:${itemKey}:${Date.now().toString(36)}`,
         shouldPrecheckBasketAvailability,
-        giftCardInputs,
-        discountCodeInputs
+        giftCards,
+        discountCodes
       );
       setDraft(result);
       clearPaymentSyncState();
@@ -1339,10 +1406,21 @@ export const BuyTickets = ({
       }
       setStep(canStartPayment(result) ? 'PAYMENT' : 'PENDING');
     } catch (error) {
-      setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.draftFailed));
+      if (quoteIsCurrent()) setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.draftFailed));
     } finally {
+      quoteOperationInFlightRef.current = false;
       setSubmitting(false);
     }
+  };
+
+  const continueWithoutCode = () => {
+    setCodeRejectedDialogOpen(false);
+    updatePaymentOptionValue('');
+    return createDraft({ giftCards: [], discountCodes: [] });
+  };
+
+  const editRejectedCode = () => {
+    setCodeRejectedDialogOpen(false);
   };
 
   const resolvePaidDraftBooking = async (
@@ -1453,7 +1531,7 @@ export const BuyTickets = ({
       });
     })) return;
     setDraft(null);
-    setQuote(null);
+    invalidateQuote();
     setSubmitError(null);
     clearPaymentSyncState();
     setStep('CONTACT');
@@ -1496,6 +1574,7 @@ export const BuyTickets = ({
 
   const backFromStep = () => {
     if (backNavigationLocked) return;
+    if (step === 'CONTACT' && !draft) invalidateQuote();
     if (step === 'PAYMENT') {
       if (paymentFailure === 'failed') {
         retryFailedPayment();
@@ -1907,7 +1986,7 @@ export const BuyTickets = ({
                   <input
                     type="text"
                     value={firstName}
-                    onChange={(event) => setFirstName(event.target.value)}
+                    onChange={(event) => updateContact(setFirstName, event.target.value)}
                     autoComplete="given-name"
                     disabled={checkoutLocked}
                     className="w-full bg-white border border-border rounded-xl px-3 py-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
@@ -1920,7 +1999,7 @@ export const BuyTickets = ({
                   <input
                     type="text"
                     value={lastName}
-                    onChange={(event) => setLastName(event.target.value)}
+                    onChange={(event) => updateContact(setLastName, event.target.value)}
                     autoComplete="family-name"
                     disabled={checkoutLocked}
                     className="w-full bg-white border border-border rounded-xl px-3 py-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
@@ -1935,7 +2014,7 @@ export const BuyTickets = ({
                 <input
                   type="email"
                   value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  onChange={(event) => updateContact(setEmail, event.target.value)}
                   placeholder={t.buy.emailPlaceholder}
                   autoComplete="email"
                   disabled={checkoutLocked}
@@ -1950,7 +2029,7 @@ export const BuyTickets = ({
                 <input
                   type="tel"
                   value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
+                  onChange={(event) => updateContact(setPhone, event.target.value)}
                   placeholder={t.buy.phonePlaceholder}
                   autoComplete="tel"
                   disabled={checkoutLocked}
@@ -1981,118 +2060,121 @@ export const BuyTickets = ({
 
               {(paymentOptionsOpen || paymentInputsHaveValues) && (
                 <div className="border-t border-primary/15 pb-4 pt-3">
-                  <label className="block mb-3">
-                    <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider flex items-center gap-1.5 mb-1">
-                      <JumpyardIcon name="presentkort" className="h-5 w-5" /> {t.buy.giftCardLabel}
-                    </span>
+                  <p className="mb-1.5 text-[10px] font-black italic uppercase tracking-wider text-foreground">
+                    {t.buy.paymentOptionTypeQuestion}
+                  </p>
+                  <div
+                    role="radiogroup"
+                    aria-label={t.buy.paymentOptionTypeQuestion}
+                    className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-border bg-surface p-1"
+                  >
+                    {PAYMENT_OPTION_TYPES.map((type) => {
+                      const active = paymentOptionType === type;
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          onClick={() => selectPaymentOptionType(type)}
+                          disabled={checkoutLocked}
+                          className={`flex flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[9px] font-black italic uppercase leading-none tracking-wide transition-all ${
+                            active ? 'bg-white text-foreground shadow-sm ring-1 ring-primary/40' : 'text-muted'
+                          }`}
+                        >
+                          <JumpyardIcon
+                            name={PAYMENT_OPTION_TYPE_ICONS[type]}
+                            className={`h-6 w-6 ${active ? '' : 'opacity-40'}`}
+                          />
+                          {type === 'giftCard'
+                            ? t.buy.paymentOptionTypeGiftCard
+                            : type === 'member'
+                              ? t.buy.paymentOptionTypeMember
+                              : t.buy.paymentOptionTypeDiscount}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className={getPaymentOptionGroupClass(paymentOptionState)}>
                     <input
                       type="text"
-                      value={giftCardNumber}
-                      onChange={(event) => updateGiftCardNumber(event.target.value)}
-                      placeholder={t.buy.giftCardPlaceholder}
+                      value={paymentOptionValue}
+                      onChange={(event) => updatePaymentOptionValue(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter') return;
+                        event.preventDefault();
+                        void applyPaymentOptions();
+                      }}
+                      placeholder={paymentOptionPlaceholder}
                       maxLength={PAYMENT_OPTION_CODE_MAX_LENGTH}
                       autoComplete="off"
+                      spellCheck={false}
                       disabled={checkoutLocked}
-                      aria-describedby={giftCardInputFeedback ? 'gift-card-feedback' : undefined}
-                      aria-invalid={giftCardInputState === 'rejected'}
-                      className={getPaymentOptionInputClass(giftCardInputState)}
+                      aria-label={paymentOptionFieldLabel}
+                      aria-describedby={paymentOptionStatus || paymentOptionHint ? 'payment-code-feedback' : undefined}
+                      aria-invalid={paymentOptionState === 'rejected'}
+                      className="min-w-0 flex-1 bg-transparent px-4 py-3 text-base text-foreground placeholder:text-muted/40 outline-none disabled:opacity-60"
                     />
-                    {giftCardInputFeedback && (
-                      <p
-                        id="gift-card-feedback"
-                        className={`mt-1 text-[11px] font-bold ${getPaymentOptionFeedbackClass(giftCardInputState)}`}
+                    {paymentOptionState === 'applied' ? (
+                      <button
+                        type="button"
+                        onClick={removePaymentOption}
+                        disabled={checkoutLocked}
+                        aria-label={t.buy.paymentOptionRemove}
+                        className="flex items-center px-3 text-foreground disabled:opacity-40"
                       >
-                        {giftCardInputFeedback}
-                      </p>
-                    )}
-                  </label>
-
-                  <label className="block">
-                    <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider flex items-center gap-1.5 mb-1">
-                      <JumpyardIcon name="points-star" className="h-5 w-5" /> {t.buy.clipCardLabel}
-                    </span>
-                    <input
-                      type="text"
-                      value={clipCardCode}
-                      onChange={(event) => updateClipCardCode(event.target.value)}
-                      placeholder={t.buy.clipCardPlaceholder}
-                      maxLength={PAYMENT_OPTION_CODE_MAX_LENGTH}
-                      autoComplete="off"
-                      disabled={checkoutLocked}
-                      aria-describedby={clipCardInputFeedback ? 'clip-card-feedback' : undefined}
-                      aria-invalid={clipCardInputState === 'rejected'}
-                      className={getPaymentOptionInputClass(clipCardInputState)}
-                    />
-                    {clipCardInputFeedback && (
-                      <p
-                        id="clip-card-feedback"
-                        className={`mt-1 text-[11px] font-bold ${getPaymentOptionFeedbackClass(clipCardInputState)}`}
+                        <X size={18} />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void applyPaymentOptions()}
+                        disabled={!paymentInputsHaveValues || !customerValid || checkoutLocked || applyingCodes}
+                        className="flex items-center whitespace-nowrap px-3 text-[11px] font-black italic uppercase tracking-wider text-primary disabled:opacity-40"
                       >
-                        {clipCardInputFeedback}
-                      </p>
+                        {applyingCodes ? t.buy.paymentOptionsChecking : t.buy.paymentOptionsApply}
+                      </button>
                     )}
-                  </label>
+                  </div>
+                  {paymentOptionStatus ? (
+                    <div
+                      id="payment-code-feedback"
+                      className={`mt-2 flex items-start gap-3 rounded-xl border px-3 py-2.5 ${
+                        paymentOptionStatus.tone === 'accepted'
+                          ? 'border-success/30 bg-success/10'
+                          : 'border-danger/30 bg-danger/5'
+                      }`}
+                    >
+                      <JumpyardIcon
+                        name={paymentOptionStatus.tone === 'accepted' ? 'success-check' : 'warning'}
+                        className="h-7 w-7 flex-shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p
+                          className={`text-sm font-black italic uppercase leading-tight ${
+                            paymentOptionStatus.tone === 'accepted' ? 'text-success' : 'text-danger'
+                          }`}
+                        >
+                          {paymentOptionStatus.title}
+                        </p>
+                        <p className="mt-0.5 text-xs font-bold text-foreground">{paymentOptionStatus.detail}</p>
+                      </div>
+                    </div>
+                  ) : paymentOptionHint ? (
+                    <p id="payment-code-feedback" className="mt-1 text-[11px] font-bold text-muted">
+                      {paymentOptionHint}
+                    </p>
+                  ) : null}
+                  <p role="status" className="sr-only">
+                    {applyingCodes
+                      ? t.buy.paymentOptionsChecking
+                      : paymentOptionStatus
+                        ? `${paymentOptionStatus.title}. ${paymentOptionStatus.detail}`
+                        : ''}
+                  </p>
                 </div>
               )}
             </section>
-
-            {!giftCardInputDirty && giftCardNumber.trim() && (
-              <div
-                className={`bg-white border rounded-xl p-3 mb-4 ${
-                  giftCardErrors.length > 0 ? 'border-danger/30' : 'border-primary/30'
-                }`}
-              >
-                <div className="flex justify-between gap-3 text-sm">
-                  <span className="text-foreground font-black italic uppercase">{t.buy.giftCardLabel}</span>
-                  <span className={`font-black ${giftCardErrors.length > 0 ? 'text-danger' : 'text-primary'}`}>
-                    {giftCardErrors.length > 0
-                      ? t.buy.giftCardRejected
-                      : giftCardAppliedAmount !== null && giftCardAppliedAmount > 0
-                        ? `-${formatMoney(giftCardAppliedAmount)}`
-                        : t.buy.giftCardApplied}
-                  </span>
-                </div>
-                {giftCardErrors.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {giftCardErrors.map((error, index) => (
-                      <p key={`${error.code ?? 'gift-card'}-${index}`} className="text-sm text-danger font-bold">
-                        {error.message || t.buy.giftCardErrorFallback}
-                      </p>
-                    ))}
-                    <p className="text-xs text-foreground">{t.buy.giftCardFixHint}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!clipCardInputDirty && clipCardCode.trim() && (
-              <div
-                className={`bg-white border rounded-xl p-3 mb-4 ${
-                  discountCodeErrors.length > 0 ? 'border-danger/30' : 'border-primary/30'
-                }`}
-              >
-                <div className="flex justify-between gap-3 text-sm">
-                  <span className="text-foreground font-black italic uppercase">{t.buy.clipCardLabel}</span>
-                  <span className={`font-black ${discountCodeErrors.length > 0 ? 'text-danger' : 'text-primary'}`}>
-                    {discountCodeErrors.length > 0
-                      ? t.buy.clipCardRejected
-                      : discountCodeAppliedAmount !== null && discountCodeAppliedAmount > 0
-                        ? `-${formatMoney(discountCodeAppliedAmount)}`
-                        : t.buy.clipCardApplied}
-                  </span>
-                </div>
-                {discountCodeErrors.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {discountCodeErrors.map((error, index) => (
-                      <p key={`${error.code ?? 'clip-card'}-${index}`} className="text-sm text-danger font-bold">
-                        {error.message || t.buy.clipCardErrorFallback}
-                      </p>
-                    ))}
-                    <p className="text-xs text-foreground">{t.buy.clipCardFixHint}</p>
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="mb-4 overflow-hidden rounded-2xl border border-border bg-white">
               <button
@@ -2143,11 +2225,20 @@ export const BuyTickets = ({
                 }
                 void createDraft();
               }}
-              disabled={!customerValid || submitting || paymentInputsBlockingErrors}
+              disabled={!customerValid || submitting || applyingCodes}
               className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center active:scale-[0.98]"
             >
-              {submitting ? t.buy.creating : t.buy.createDraft}
+              {submitting ? t.buy.creating : quote && checkoutAmount <= 0 ? t.buy.createDraftFree : t.buy.createDraft}
             </button>
+            <PaymentCodeRejectedDialog
+              open={codeRejectedDialogOpen}
+              title={paymentOptionType === 'giftCard' ? t.buy.giftCardRejectedTitle : t.buy.paymentCodeRejectedTitle}
+              description={t.buy.codeRejectedDialogBody}
+              continueLabel={t.buy.codeRejectedContinueWithout}
+              editLabel={t.buy.codeRejectedEditCode}
+              onContinueWithout={() => void continueWithoutCode()}
+              onEdit={editRejectedCode}
+            />
           </div>
         </motion.div>
       )}

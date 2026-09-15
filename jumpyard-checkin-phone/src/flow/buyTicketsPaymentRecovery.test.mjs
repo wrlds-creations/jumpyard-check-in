@@ -66,6 +66,7 @@ function recoveryHarness({ failure = 'unknown', outcome = failure, lookup = asyn
     setPaymentApprovedForSync: value => events.push(['approved', value]),
     setDraft: value => events.push(['draft', value]),
     setQuote: value => events.push(['quote', value]),
+    invalidateQuote: () => events.push(['quote', null]),
     setSubmitError: value => events.push(['submit-error', value]),
     clearPaymentSyncState: () => events.push(['clear-sync']),
     setStep: value => events.push(['step', value]),
