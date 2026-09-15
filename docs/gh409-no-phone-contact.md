@@ -73,3 +73,5 @@ Integration branch `codex/gh-409-integrate-no-phone` starts from `950843916c7ecf
 Integrated verification: 38 code-application tests, 137 payment-recovery tests, the 13+4 contact tests, phone lint/typecheck and documentation validators pass. Current CI will validate the exact PR head; no independent human review is claimed.
 
 Before merge, current main advanced to `fe77d42` with WRLDS 0.2. The integration retains its native skills, validators and compact context without changing runtime behavior.
+
+CI integration correction: run 34982978611 exposed the older #327 terminal fixture treating every SQL read as a reservation. The new contact guard correctly rejected its missing guest evidence. The terminal fixture now supplies a verified contact prerequisite, while GH409 retains actual resolver tests; two new handler checks prove unverified contact performs neither terminal reservation nor provider writes. Native PostgreSQL reservation checks are unchanged.
