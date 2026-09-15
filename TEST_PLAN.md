@@ -41,6 +41,14 @@ Use this file to define active validation for the current project or milestone. 
 | `git diff --check` | Check the current working diff for whitespace errors. | Passes; CRLF conversion warnings are acceptable if the command exits 0. |
 | `npm run validate:gh339-catalog-resilience` | Prove independent product refresh, fresh-price omission diagnostics, optional catalog failure isolation, bounded response-body waits and unchanged authoritative time-slot availability. | 27 scenarios pass with synthetic AWS/HTTP responses; no live calls. |
 
+## Discount And Gift-Card Feedback (#407)
+
+Verify standalone Apply stays on Contact with updated quote/price and no draft, including partial/full coverage. Check duplicate Apply, Apply versus Continue, late responses, request retry, contact requirements and a fresh quote on Continue. Kiosk parity belongs to kiosk #99.
+
+- Run `npm --prefix jumpyard-checkin-phone run test:payment-options` (also included in `npm run validate`). Synthetic tests exercise the actual input/quote handlers for initial entry, positive/negative/no-effect evidence, edits/removal, one code type at a time (type switch and cross-clearing), Continue rechecking a rejected code and continuing without it, contact/basket changes, late responses, separate code payloads, and paid/free continuation.
+- Regress `test:payment-recovery`, `test:payment-confirmation`, and `test:addon-back`; run phone lint, TypeScript/build and `npm run infra:check`.
+- Inspect the production export against a loopback-only synthetic API at 320/390px in Swedish and English. Verify discoverable labels, neutral new-code feedback, rejection, accepted amount, edit/removal invalidation and a late response after Back. Real code values, ROLLER business writes and deployment are excluded.
+
 ## Application Validation
 
 `npm run validate:gh330-addon-payment-back` verifies the add-on Back rule per payment state (allowed before submission and after a confirmed refusal, hidden while submitted, unresolved or approved, no Back on the safety video after a completed payment), the page-level hiding, the retired-checkout guard and add-on recovery replacement/late-result cases without any provider call. Back during a slow add-on payment and after approval on a handset remains a post-promotion check.

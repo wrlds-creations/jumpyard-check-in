@@ -69,6 +69,8 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 ## Current Implemented Flow Facts
 
+- #407: [verified code feedback](docs/gh407-code-feedback.md).
+
 - #340: safe, correlated server-error reports. #403: lookup reads audit IDs.
 - [#345](docs/gh-345-staff-handout.md): daily codes, today-only queue, early café; APK accepted. AirDroid: colleague.
 
