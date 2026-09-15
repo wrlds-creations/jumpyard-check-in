@@ -70,9 +70,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 ## Current Implemented Flow Facts
 
-- #407: [verified code feedback](docs/gh407-code-feedback.md).
-
-- #340: safe, correlated server-error reports. #403: lookup reads audit IDs.
+- #340: safe, correlated server-error reports. #403: lookup reads audit IDs. #407: [apply codes](docs/gh407-code-feedback.md).
 - [#345](docs/gh-345-staff-handout.md): daily codes, today-only queue, early café; APK accepted. AirDroid: colleague.
 
 - Lookup is Aurora-first with Roller-authoritative refresh, Nacka/date scope, and nearest same-day selection. Ready bookings start/resume a server session; opaque booking-bound guest proof stays in phone memory and hash-only in Aurora.
@@ -104,7 +102,7 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 
 ## Current Readiness Gates
 
-- The [GitHub Project](https://github.com/orgs/wrlds-creations/projects/5) owns readiness. T0195-T0197 are deployed; gated actions remain. [AWS_RESOURCES.md](AWS_RESOURCES.md) holds evidence. #264 approves the pilot role; each promotion still needs protected plan/approval.
+- The GitHub Project owns readiness. T0195-T0197 are deployed; gated actions remain. [AWS_RESOURCES.md](AWS_RESOURCES.md) holds evidence. #264 approves the pilot role; each promotion still needs protected plan/approval.
 - Remaining blockers include lifecycle recovery/apply, integrated rehearsal, messaging-window approval, #264 Park/public rollout evidence, and natural webhook observation.
 - #335 alarm delivery is proven. Love is the sole responder with no other monitoring, confirmed 2026-09-04.
 - Roller ECOM owns payment eligibility. #353/D0216 excludes Klarna from fresh phone sessions.
