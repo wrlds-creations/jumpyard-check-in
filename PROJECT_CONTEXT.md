@@ -57,6 +57,8 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Deployed gates fail closed, require Nacka `50871` plus allowed dates, and reject invalid request items before side effects. The 28 routes use six IAM, four Cognito JWT, and eighteen Lambda-auth boundaries; shared-IP-safe route limits passed the 120-guest/20-minute and 40-device burst models.
 - T0194: staff PIN; admin Cognito/TOTP (8-character upper/lower/digit). Apps share phone styling; Cognito stays English/Open Sans.
 
+- Contact policy: D0220; [preservation gate](docs/gh409-no-phone-contact.md).
+
 ## Durable Workflow Facts
 
 - Private GitHub Project #5 owns operational fields; drafts require Love's approval before conversion to an Issue.

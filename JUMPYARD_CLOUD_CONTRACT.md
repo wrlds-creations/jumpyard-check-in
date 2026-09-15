@@ -2,6 +2,18 @@
 
 This file defines the first Sprint 1 contract for the phone-first JumpYard check-in flows. It is a planning and implementation boundary document; it does not create AWS resources and it does not implement Roller writes.
 
+## Approved Visitor Contact Policy (2026-09-15)
+
+Shared Cloud issue [#409](https://github.com/wrlds-creations/jumpyard-check-in/issues/409) and kiosk issue [#100](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/issues/100) remove visitor phone entry. The following contract supersedes the historical required-phone examples below; it is not a deployment claim.
+
+- Purchase input requires first name, last name and email. `customer.phone` is optional for compatibility with saved drafts; fresh clients omit it.
+- Cloud must preserve an existing real ROLLER guest phone. A submitted or cached number is not authoritative. The current guarded implementation confirms a candidate's exact email and phone through live guest detail before creating entry or add-product drafts.
+- Only a verified guest without a real phone receives `0700000000` in the provider payload. Equivalent placeholder spellings are missing contact internally, are not SMS-ready and cannot be sent SMS, including legacy stored values. No bulk contact deletion is authorized.
+- Uncertain guest matching returns HTTP 409 `customer_phone_preservation_unverified` before draft creation/payment initiation; the reservation is marked failed. Existing payment identities are not recreated.
+- **Rollout gate:** documented booking search is fuzzy and capped at the 100 most recent non-cancelled bookings. No result cannot establish that an email has no existing guest. New/unindexed, ambiguous and unverifiable customers currently stop for staff help. A supported complete email lookup or atomic create-without-phone-update contract is required before general rollout. A fresh detail read is not an atomic guarantee against concurrent profile edits.
+- Public lookup accepts booking reference, email and supported QR/booking identifiers. Explicit or inferred phone requests return HTTP 400 `phone_lookup_disabled` before provider/cache/access work, regardless of a misleading `identifierType`. Phone keyword search is disabled. Genuine numeric booking references retain their existing behavior.
+- Promote shared Cloud safeguards before either frontend, after provider-contract validation and reviewed deployment approval.
+
 ## Source Materials
 
 - `PROJECT_CONTEXT.md`
@@ -84,7 +96,7 @@ Purpose:
 
 - Preload today's and near-future bookings before guests arrive.
 - Reduce peak-time dependency on live Roller REST lookup.
-- Build local indexes in Aurora for fast lookup by booking reference, ticket id, name/email/phone where appropriate.
+- Build local indexes in Aurora for fast lookup by booking reference, ticket id, name/email where appropriate; phone is not a public lookup key.
 - Support staff dashboards and handoff state without polling Roller for every screen.
 
 Rules:
@@ -732,7 +744,7 @@ Draft rules:
 - Use Roller `POST /bookings/draft`.
 - T0031 implemented this in the deployed booking Lambda.
 - `confirmDraft=true` and an idempotency key are required because this creates a Roller Playground draft booking.
-- First name, last name, email, and phone are required for the current server contract.
+- First name, last name and email are required; phone follows the approved visitor contact policy above.
 - For the phone buy-entry path, `items[]` may contain the core entry product plus selected mapped add-ons so the guest pays once for the combined basket.
 - Draft creation holds capacity through Roller's draft timer.
 - Return the draft unique id, normalized costs, payment config from `GET /venues/me`, and the raw `paymentJwt` only in the API response.

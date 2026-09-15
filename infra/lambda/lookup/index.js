@@ -55,6 +55,13 @@ exports.handler = async (event) => {
       });
     }
 
+    if (request.phoneLookupRequested || request.identifierType === 'phone') {
+      return jsonResponse(400, correlationId, {
+        status: 'invalid_request',
+        error: { code: 'phone_lookup_disabled', message: 'Use a booking reference, QR code or email address.' },
+      });
+    }
+
     if (isParkTestEnvironment()) {
       parkTestAccess = await validateParkTestLookupAccess(request);
       if (!parkTestAccess.ok) {
@@ -401,6 +408,7 @@ function parseRequest(event) {
       venueId: parsed.venueId ? String(parsed.venueId).trim() : null,
       identifier,
       identifierType,
+      phoneLookupRequested: String(parsed.identifierType ?? '').trim().toLowerCase() === 'phone',
       expectedDate,
       expectedStartTime: parsed.expectedStartTime ? String(parsed.expectedStartTime).trim() : null,
       correlationId: normalizeCorrelationId(parsed.correlationId),
@@ -441,6 +449,8 @@ function shouldTryLocalLookup(request) {
 function isLikelyPhoneIdentifier(value) {
   const text = String(value ?? '').trim();
   const digits = text.replace(/\D/g, '');
+  if (!/^[+\d\s()./-]+$/.test(text)) return false;
+  if (/^46(?:0)?7\d{8}$/.test(digits)) return true;
   if (digits.length < 7 || digits.length > 15) return false;
   if (/^\+|^00/.test(text)) return true;
   if (/^0\d{6,14}$/.test(digits)) return true;
@@ -1007,7 +1017,7 @@ async function getBookingFromRollerSearch(config, token, products, request, acce
 }
 
 function shouldUseRollerBookingSearch(request, access) {
-  return access?.mode === 'assisted_lookup' && (request.identifierType === 'email' || request.identifierType === 'phone');
+  return access?.mode === 'assisted_lookup' && request.identifierType === 'email';
 }
 
 function getSearchKeywordCandidates(identifier, identifierType) {
@@ -1337,7 +1347,7 @@ async function validateParkTestLookupAccess(request) {
         ok: false,
         statusCode: 403,
         code: 'live_lookup_not_allowed',
-        message: 'Only booking references, email, or phone are approved for assisted park-test lookup.',
+        message: 'Only booking references, QR codes, or email are approved for assisted park-test lookup.',
       };
     }
 
@@ -1463,7 +1473,8 @@ function isParkTestLiveLookupIdentifierAllowed(identifier) {
 
 function isAssistedLookupIdentifierShapeAllowed(identifier, identifierType = inferIdentifierType(identifier)) {
   const normalized = String(identifier ?? '').trim();
-  if (identifierType === 'email' || identifierType === 'phone') return true;
+  if (identifierType === 'email') return true;
+  if (identifierType === 'phone') return false;
 
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized)) {
     return true;

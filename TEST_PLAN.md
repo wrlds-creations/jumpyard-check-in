@@ -12,6 +12,7 @@ Use this file to define active validation for the current project or milestone. 
 
 | Command | Purpose | Expected Result |
 |---|---|---|
+| `npm run validate:gh409-phone-policy` | Test optional contact, live exact-email preservation, placeholder ingestion/SMS refusal, both draft-handler write guards and phone lookup rejection; verify phone form/recovery/copy. | Synthetic-only pass. [Provider and browser limits](docs/gh409-no-phone-contact.md) remain explicit. |
 | `npm run validate:gh353-klarna-policy` | Exercise the real phone component and installed Roller SDK offline: both purchase kinds exclude Klarna in fresh session requests, preserve device exclusions and old payment returns, and reject replacement attempts while payment is unresolved. | 13 tests pass; provider-side exclusion and handset visibility still need post-promotion verification. |
 | `node scripts/validate-current-ticket.js` | Confirm `CODEX_TASK.md` is a static resolver for `codex/gh-<issue>-<slug>` and the workflow requires `gh issue view`. | Passes locally without network access. |
 | `node scripts/validate-followups.js` | Confirm operational follow-ups and queue state are owned by GitHub Project drafts rather than mutable Markdown ledgers. | Passes locally without network access. |
