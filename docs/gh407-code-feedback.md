@@ -103,6 +103,8 @@ The rollout above covers commit, PR, release and both protected promotions; no R
 
 ## Reuse on Continue (#421)
 
+The follow-up is now published: [verified rollout, exact artifacts and recovery](gh421-quote-reuse-rollout.md). The checks below describe the earlier local checkpoint.
+
 Love's 2026-09-15 follow-up after the release above changes the earlier fresh-Continue requirement. The local follow-up is tracked in [#421](https://github.com/wrlds-creations/jumpyard-check-in/issues/421), paired with [kiosk #111](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/issues/111).
 
 A successful Apply stores its quote in component memory. Continue reuses it without clearing the accepted feedback or discounted amount. Existing input/back invalidation and unmount clear it synchronously. A supplied expired or malformed expiry cannot be reused; absent expiry adds no invented timeout. Rejected quotes are never cached, and continue-without-code uses empty code payloads and a fresh quote. The draft still receives the code and its returned amount determines paid/free navigation. No persistent code storage or provider/backend change.
