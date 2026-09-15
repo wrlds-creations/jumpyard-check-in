@@ -1,0 +1,2194 @@
+{
+  "base": "93ce93c893e896d12ec5d81b0670152b38ace3ba",
+  "comparison": "No Git changes outside reviewed workflow files; Git text normalization applies. Secrets excluded; submodule pins compared as Git state.",
+  "files": [
+    {
+      "file": ".github/workflows/ci.yml",
+      "workingTreeSha256": "66f9f623513373ef5d04968bcc2a43e94f88ea0a3a700db66ad1c4f5546e2c60"
+    },
+    {
+      "file": ".github/workflows/deploy-checkin-domain-test.yml",
+      "workingTreeSha256": "05cce971c5d6c7da9b8ed9fa3ef213ef9897e3d6adcb31d2d7036c499a9c7883"
+    },
+    {
+      "file": ".github/workflows/deploy-park-test.yml",
+      "workingTreeSha256": "5a6b25eccbbd340a2f41ddb85c3019d6a32b8856ec35a0494c0921f325238a5a"
+    },
+    {
+      "file": ".github/workflows/release.yml",
+      "workingTreeSha256": "04edf5a1b91a411904870759bdeaf2fa8865b1a7bfb85e04d39b73f377345740"
+    },
+    {
+      "file": "API_PROTECTION_BOUNDARY.md",
+      "workingTreeSha256": "0a0212a374311f0ecc86b0f1c5a45ff3adb277584c48e08f51d3ed2e7cec5820"
+    },
+    {
+      "file": "AWS_RESOURCES.md",
+      "workingTreeSha256": "e631fe840bcc1f5afb4db8097c458b305682f03b0cbbc3abc22340573932647b"
+    },
+    {
+      "file": "BOOKING_INDEX_INGESTION_CONTRACT.md",
+      "workingTreeSha256": "724197d177b77b0b14d1962bcb4767dd87375b52eadd5dda388105c5fbb43722"
+    },
+    {
+      "file": "FOLLOWUPS.md",
+      "workingTreeSha256": "2b221e881d305d7904b88a8a6f7dea1860dbf37976edf68ac313eac04963f70d"
+    },
+    {
+      "file": "GIFT_CARD_MULTI_VISIT_DISCOVERY.md",
+      "workingTreeSha256": "3b50f9c56a25d6a711945af050e7a3c4e729f3e328e70481997c112806a35c92"
+    },
+    {
+      "file": "GUEST_MESSAGING_PRODUCTION_UNLOCK.md",
+      "workingTreeSha256": "e5eb56465aaebfcb299921c9c23324fe3146068bcbb4c9d85febe226f41532eb"
+    },
+    {
+      "file": "GUSTAV_DEMO_RUNBOOK.md",
+      "workingTreeSha256": "a45f27c3d2a10336927294cbf208f0ff110602422faf0fcac80d08887f6aedf1"
+    },
+    {
+      "file": "JUMPYARD_CLOUD_CONTRACT.md",
+      "workingTreeSha256": "029ca9dcba82b6beab33174d14261148e2dcc8144f613bd1d4e66f4f7d84288f"
+    },
+    {
+      "file": "OPERATIONS_RUNBOOK.md",
+      "workingTreeSha256": "0098c4c51be568c0ead2034ac1aace1bc4209a9b7e66bcd51ed3bc80c2fa59ae"
+    },
+    {
+      "file": "config/production-domains.json",
+      "workingTreeSha256": "24cdc1061a6fd652d6e6358bbfb2e283bb83456bd1f25e9e7d18adc18e434280"
+    },
+    {
+      "file": "docs/assets/jumpyard-next-sprint-roadmap.pdf",
+      "workingTreeSha256": "469737e15ea567f21ae43f5b303f5871c4f06f6a0f4c589efce588b7330d365e"
+    },
+    {
+      "file": "docs/assets/park-test-locks-explainer-imagegen-base.png",
+      "workingTreeSha256": "8647e606c586b5fa5050f16a790b3630505bc24822a9ce9347efbe9278e3f315"
+    },
+    {
+      "file": "docs/assets/park-test-locks-explainer.pdf",
+      "workingTreeSha256": "7f0d1565d427181cb7d6a198d8c7f73fa53432387db3edbca75e2fbca90416b4"
+    },
+    {
+      "file": "docs/assets/park-test-locks-explainer.png",
+      "workingTreeSha256": "ab60679fbe615df25abc2e3fde50d48486b6a3c47690febe2ee8dbda53ff67e1"
+    },
+    {
+      "file": "docs/assets/park-test-phone-app-qr.png",
+      "workingTreeSha256": "d90d3c406e2b2aaa1358d083045dea674629de99033444b5b3a263aa312560a7"
+    },
+    {
+      "file": "docs/assets/park-test-phone-app-qr.svg",
+      "workingTreeSha256": "b80339879415d7f8c74423b9d0c1c92a35a10d27fad1ce5ec8e873e092710fed"
+    },
+    {
+      "file": "docs/context-hygiene-audit.md",
+      "workingTreeSha256": "dee4a0fbcad8360baa0e941f0dfd8beee5bfd027e0bc4e0e19d826e51592cc1a"
+    },
+    {
+      "file": "docs/gh-192-github-collaboration-migration-audit.md",
+      "workingTreeSha256": "bd6e90f9a6e12f3484ea682c7a927da222d87268727e794a31fbdf6e6cd1b930"
+    },
+    {
+      "file": "docs/gh-224-kiosk-terminal-backend.md",
+      "workingTreeSha256": "e8a589e0863eee4c7d6495f13b66abecf9d638ae95f7c48805f7f6d34c5d747e"
+    },
+    {
+      "file": "docs/gh-227-kiosk-terminal-object-contract.md",
+      "workingTreeSha256": "eea0b120f5161386eba759995eb8a41297e32836719269fe2c608cc101e44a55"
+    },
+    {
+      "file": "docs/gh-230-assisted-lookup-venue.md",
+      "workingTreeSha256": "dbeba479f5db59e37a30592ac06615ebdc40ee075bd1f40fd0a87da3e2fb8b58"
+    },
+    {
+      "file": "docs/gh-233-cost-allocation-tags.md",
+      "workingTreeSha256": "462f9146581f4b8c4572d129f1e0fbc7e5ff736adfb217224ae41203fe766ff1"
+    },
+    {
+      "file": "docs/gh-239-kiosk-payment-reconciliation.md",
+      "workingTreeSha256": "8d078e6f6ad4290452309ea70925ddfeede478d9fb915102b8833c322bf526e8"
+    },
+    {
+      "file": "docs/gh-249-provisional-kiosk-handoff.md",
+      "workingTreeSha256": "43eeb0a89f8de956ff75f1ffa6fffbd2e9b671ae31104712481f1336f739f338"
+    },
+    {
+      "file": "docs/gh-264-nacka-pilot-production.md",
+      "workingTreeSha256": "fa3f01f7df1cd7c30c520d157039d56a92f996eb34f2bcf129183dbb7a57ea33"
+    },
+    {
+      "file": "docs/gh-315-water-product.md",
+      "workingTreeSha256": "df650f905481c9b7242ead8e4d4585f5f073f6cf8455ab770f2d205dd39cf793"
+    },
+    {
+      "file": "docs/gh-318-phone-addon-choices.md",
+      "workingTreeSha256": "019777139e9c3a0b689717eaf98cfe0ca19cd5d9fdaab853ebc008d595524d72"
+    },
+    {
+      "file": "docs/gh-321-compact-phone-addons.md",
+      "workingTreeSha256": "d73c78c59885c901b7a598cec651284301a67137df80d5d38926b17730956f53"
+    },
+    {
+      "file": "docs/gh-324-phone-payment-confirmation.md",
+      "workingTreeSha256": "02c9f69a1a7be5ce088ff488ab473697cd7b6fdebba768505bc7e7ea71e318a6"
+    },
+    {
+      "file": "docs/gh-330-addon-payment-back.md",
+      "workingTreeSha256": "cdcb30fbaf40103e7c76d7497aee25916d732ddec50657a9ac93f492a00a669e"
+    },
+    {
+      "file": "docs/gh-331-paid-booking-confirmation.md",
+      "workingTreeSha256": "4f8b0bea36cf2f0063e6ece3441ee27bb761b0ea096acc68416989684ea59662"
+    },
+    {
+      "file": "docs/gh-333-staff-redeem-recovery.md",
+      "workingTreeSha256": "91f78179749b42138f5308a976f63b12b5154cd220323faedae2fcd1d2dd5d52"
+    },
+    {
+      "file": "docs/gh-334-staff-heartbeat.md",
+      "workingTreeSha256": "3ca63cc635dd028ca4e36d7a029b94420851630462be0946f8c9072784751c9c"
+    },
+    {
+      "file": "docs/gh-335-park-alarm-routing.md",
+      "workingTreeSha256": "505df2a96cfbd0ab67cf74072d7a75cb33b95bd608437ac939280f60b07e8595"
+    },
+    {
+      "file": "docs/gh-338-exact-payment-status.md",
+      "workingTreeSha256": "0d2a8954bd73e6880b5fdd4c0868570adc70919148cde80181dcfb8915cf92ec"
+    },
+    {
+      "file": "docs/gh-339-gh-341-catalog-resilience.md",
+      "workingTreeSha256": "f5bd7904368c35cefe663082b95d1c3451954a6679befc1d9361b0dcf52f9e00"
+    },
+    {
+      "file": "docs/gh-340-safe-server-errors.md",
+      "workingTreeSha256": "5c782023503fc2874474c36c46f705af7c63ca334ece491d280a0a1907d279a9"
+    },
+    {
+      "file": "docs/gh-343-safety-video-recovery.md",
+      "workingTreeSha256": "3fb7a7f31153e8d0bcbbbf127d543595fb3c1e66e9cf81cdad69c6fe6c12c3f3"
+    },
+    {
+      "file": "docs/gh-345-staff-handout.md",
+      "workingTreeSha256": "b61bc31c0af5a91c5959f278603f4552c6c964947e24e6b2bc3583802286f9b1"
+    },
+    {
+      "file": "docs/gh-350-phone-language-toggle.md",
+      "workingTreeSha256": "f617c98256963bbb506e3e8d9018e3cecf5b363c3cb28083df748644f3a1ebf8"
+    },
+    {
+      "file": "docs/gh-351-phone-payment-recovery.md",
+      "workingTreeSha256": "6fe4101cad2d8c52ca5f9c419b3eeef5ff01ed4b7f242854a405c902e81f3639"
+    },
+    {
+      "file": "docs/gh-353-hide-klarna.md",
+      "workingTreeSha256": "4a71caa41f210de5e4a645b987b66165ad804c528e8d564e42ec526b3ab6bc17"
+    },
+    {
+      "file": "docs/gh-367-combo-contents.md",
+      "workingTreeSha256": "7430e53e83ba945c50ea4131b622b1e8cdfcbc0ee2c6959c97fe89326aa5a3e3"
+    },
+    {
+      "file": "docs/gh-374-purchase-preparation.md",
+      "workingTreeSha256": "d6202e74bd012b801423a55aa6f38dce807c38e1e38901b5093506430c19056f"
+    },
+    {
+      "file": "docs/gh-403-lookup-audit-permission.md",
+      "workingTreeSha256": "34d0e8407591ddc86b8c3b6a3a3b3719b057c94fdc7cd58ab7719fa1fa22605c"
+    },
+    {
+      "file": "docs/gh347-production-mock-boundary.md",
+      "workingTreeSha256": "7642d788810343a2017907cfe9d92fe41f73a1a5644301b910f7c354ea12d090"
+    },
+    {
+      "file": "docs/gh361-phone-wallet-recovery.md",
+      "workingTreeSha256": "6250b1bc7c6ecd720c59c7f61573e090a20772ad2bf866d9e0438dd1020b9096"
+    },
+    {
+      "file": "docs/history/completed-tickets.md",
+      "workingTreeSha256": "886790b6a681e4df160825651d1be591ea43e5c2f01c17898f0462f46add6b4a"
+    },
+    {
+      "file": "docs/history/followups-done.md",
+      "workingTreeSha256": "a96d31546aabe70d5c0b82c476dc4435bb19761b585f55d9cb13abd5d27ccb0e"
+    },
+    {
+      "file": "docs/history/github-project-migration-2026-07-14.md",
+      "workingTreeSha256": "0dfb310afeca15d91cd96fa6d6479ec668a4fd4a0483c1f17f954160036ecc8b"
+    },
+    {
+      "file": "docs/history/sprint-1-ticket-history.md",
+      "workingTreeSha256": "bc1953364e5b80313d358c7b024af7b209580be4c04f05ef38b4d72aab71c33b"
+    },
+    {
+      "file": "docs/history/validation-log.md",
+      "workingTreeSha256": "d06066ce8751bc199702328a959ea344837fe9f91da4be1ba97867edc376c71d"
+    },
+    {
+      "file": "docs/roadmap/backlog.md",
+      "workingTreeSha256": "f9d5df43ffcf649028474589a2a7caaadad1c721183459bb18748bef26644a9c"
+    },
+    {
+      "file": "docs/roadmap/park-test-feedback-improvements.md",
+      "workingTreeSha256": "a0e031cc3b97f7be1cfa7b0b742f2369f08835980d9db692a0cede863654f476"
+    },
+    {
+      "file": "docs/t0145-current-state-audit.md",
+      "workingTreeSha256": "e3ea42f09dd9c10dcda68f39ca762bffd6a5ee01481803cc86929fc0fb1bb2b2"
+    },
+    {
+      "file": "docs/t0146-park-test-environment-contract.md",
+      "workingTreeSha256": "85fbaef105b31283a1545b27f90077b0dada72c23b30b6353c22abef762d48aa"
+    },
+    {
+      "file": "docs/t0148-park-test-synth-skeleton.md",
+      "workingTreeSha256": "ca5116e51d55e69018400a725708673b1994048752648a4453f9471ec12b915f"
+    },
+    {
+      "file": "docs/t0149-park-test-deploy-rollback-preflight.md",
+      "workingTreeSha256": "b096c7c2e7a3db163e1f8ef3e09ab865ccf0964fa09f3f513058995e34b47631"
+    },
+    {
+      "file": "docs/t0150-park-test-foundation-deploy.md",
+      "workingTreeSha256": "e0fc65a50f11a82c0ac8a2ef0fb9d3755af37b2a31f6dfe9886e433293aa50f8"
+    },
+    {
+      "file": "docs/t0151-park-test-db-migrations.md",
+      "workingTreeSha256": "bc9ea3e9dd6489618b0819be760fb0b693ecd2945c00431268eed6ddddcd6428"
+    },
+    {
+      "file": "docs/t0152-park-test-secrets-gates.md",
+      "workingTreeSha256": "7e4dd24bc7c47d1f68923ac49e6c8a755199d6766b67ba66077a78bde24081d8"
+    },
+    {
+      "file": "docs/t0153-roller-live-readonly-preflight.md",
+      "workingTreeSha256": "d93c448a7dde835a156207151f59d7a05a3a0a218d647f8a0f9fc74cde5b5358"
+    },
+    {
+      "file": "docs/t0154-live-webhook-dry-run.md",
+      "workingTreeSha256": "d07ffe88c5cc35e8113e04502b410ecc75267d42746defcb213e242896e7765f"
+    },
+    {
+      "file": "docs/t0155-live-webhook-registration.md",
+      "workingTreeSha256": "cd70c5fd881013a4e9f361411790f45f5762cbbc3bccf89182f4ebf8ba170758"
+    },
+    {
+      "file": "docs/t0156-park-test-frontend-target.md",
+      "workingTreeSha256": "56e1c12aa3bf3d047f975c0e1b34b8fb831afe04473700ed09e47894e6f1105b"
+    },
+    {
+      "file": "docs/t0157-live-quote-cost-smoke.md",
+      "workingTreeSha256": "ffb47f251451dbd814e2d0634c27f27b03e3916ed1791f63c1ca1ddc403a4dc5"
+    },
+    {
+      "file": "docs/t0158-controlled-live-draft-smoke.md",
+      "workingTreeSha256": "ffeb5743a22f1a4e853869bb4455818ee2f068dc717cb8eeeaa743f807e9913a"
+    },
+    {
+      "file": "docs/t0159-internal-live-payment-smoke.md",
+      "workingTreeSha256": "1e8c9a47ca21e2a4bdbe8ebf37f9b0328df7927dce8e93bc1c9b62fed20fd1f7"
+    },
+    {
+      "file": "docs/t0160-live-existing-booking-lookup-smoke.md",
+      "workingTreeSha256": "d7258ced7a7358cff5a7697fd298c1b5390f86ee4b6145b9798deeda32f85151"
+    },
+    {
+      "file": "docs/t0161-live-catalog-index-readiness.md",
+      "workingTreeSha256": "04956295125625d29fe617422754872095a7b709228c6c0c7475e3011abdc8ce"
+    },
+    {
+      "file": "docs/t0162-existing-booking-addon-smoke.md",
+      "workingTreeSha256": "3fd7e4dacac1628b0bcfb1cb6c6af54e7564b60c341aac33d7719940b14cad58"
+    },
+    {
+      "file": "docs/t0163-live-contact-resolver.md",
+      "workingTreeSha256": "18bf06c50ac1cb45edb2611a3bd5e4606209f559e56235eca34d61b308f5ea5a"
+    },
+    {
+      "file": "docs/t0164-existing-booking-addon-payment-smoke.md",
+      "workingTreeSha256": "97003bd3e9c1bd34def8b038a930e3eb23ca358bb3499bc1059d4ebe0d9d8467"
+    },
+    {
+      "file": "docs/t0165-linked-addon-settlement-reconciliation.md",
+      "workingTreeSha256": "847f22fa5689d96cbff439dcd093ee44b52f97c161542040fceff8e6bebb8254"
+    },
+    {
+      "file": "docs/t0166-controlled-live-redeem-smoke.md",
+      "workingTreeSha256": "e59845917e4f0f5ad6a2c42ce981c9002a7b642b0bf166f8f4a203a7ac19650a"
+    },
+    {
+      "file": "docs/t0167-receipt-confirmation-handling.md",
+      "workingTreeSha256": "84d8449e573b0b67d49691a90a8c3edf3f0b5dc236353e0a56207f07f1c3e9f1"
+    },
+    {
+      "file": "docs/t0168-new-booking-addon-visibility.md",
+      "workingTreeSha256": "0fc7fe5c2757e48258860115616099988114dea4f39e224219efe80ab4178ac2"
+    },
+    {
+      "file": "docs/t0169-post-payment-booking-sync.md",
+      "workingTreeSha256": "c2de7898bd374708c2ca042666c8450a64d38cb09b6ab315e1a38cb918d87445"
+    },
+    {
+      "file": "docs/t0170-park-test-gate-runbook.md",
+      "workingTreeSha256": "38200074aa1a7c8e1d145d96fa8e6c5eef591bda8613abb58bdc935f7d22e814"
+    },
+    {
+      "file": "docs/t0171-park-test-lookup-mode.md",
+      "workingTreeSha256": "bfc3d349531c3fe025798d8157cf2565389229221496001caa0e6841856ce8d9"
+    },
+    {
+      "file": "docs/t0172-assisted-email-lookup.md",
+      "workingTreeSha256": "00df68b700314144b480c085914936e3067fe55bf2a1e1d699cbd92cedc5509b"
+    },
+    {
+      "file": "docs/t0173-webhook-reconciliation-readiness.md",
+      "workingTreeSha256": "bb37eea2f998717b1dc1787dd1ee0124c4a56387ff9ff208f61c4ec346d9cb52"
+    },
+    {
+      "file": "docs/t0174-ready-entry-handout-ui.md",
+      "workingTreeSha256": "0e6e9911f46ede7e579ac7997d27f9eff2983178acd77d186e35a7babf3b080b"
+    },
+    {
+      "file": "docs/t0175-payment-method-readiness.md",
+      "workingTreeSha256": "f6ab8ba3147588d6bf6ce0932a5d5bedcb31d19a7bfe9c9d1f89d5ee8eaa6e20"
+    },
+    {
+      "file": "docs/t0176-frontend-redeem-rehearsal.md",
+      "workingTreeSha256": "ad6fcfb2ff3ab92c284421322e92e4aaed00bf5050da35055613a3dcf0eca6a4"
+    },
+    {
+      "file": "docs/t0177-guest-contact-lookup.md",
+      "workingTreeSha256": "3c94b925d2dba2b7fac21c1a35a94ad3c9b77caeb1b658302cac40bffade013b"
+    },
+    {
+      "file": "docs/t0178-park-test-ui-ux-readiness.md",
+      "workingTreeSha256": "0303500ee03e32fa760777035836c5fa3e023039981d3b14536d8643c4fd07c4"
+    },
+    {
+      "file": "docs/t0179-staff-assisted-visitor-test.md",
+      "workingTreeSha256": "2bd86812d370672204e155afb5e3d160fc50d207401331b042bb21c852679d5c"
+    },
+    {
+      "file": "docs/t0180-outcome-go-no-go.md",
+      "workingTreeSha256": "a1c975f989391602a841e465a44f5269f8657af812c918ae701c4ecfa12a53da"
+    },
+    {
+      "file": "docs/t0182-mobile-viewport-layout.md",
+      "workingTreeSha256": "b778966e37506f647c11a5d18b7846b1f8452c563a5a0d3568e810df739f5e9d"
+    },
+    {
+      "file": "docs/t0183-safety-video-rules-closeout.md",
+      "workingTreeSha256": "ab561952e51e8756a1728ed5d444a422bfeaaf201de2562bd4c8741f19e1acad"
+    },
+    {
+      "file": "docs/t0184-older-guest-support-closeout.md",
+      "workingTreeSha256": "4f982cad67e8235f8b9a045e71dcd7a377bdfa29f34e069b79f32a1180f0fae6"
+    },
+    {
+      "file": "docs/t0185-socks-confirmation-closeout.md",
+      "workingTreeSha256": "1832998ba2b25c5c9bf846a9d58c2d9ec7bf7fa951df4ef31ec938d9bceb5884"
+    },
+    {
+      "file": "docs/t0186-water-bottle-addon.md",
+      "workingTreeSha256": "5694697bc2123368b7f931d6eb1e19a39b584f14b63f4fed4f0f87d0fea964f4"
+    },
+    {
+      "file": "docs/t0188-sprint-3-phone-admin-plan.md",
+      "workingTreeSha256": "cae67c42f811694be3955d8d16eb279166b6cc162d87a8c83abd799d3864cf20"
+    },
+    {
+      "file": "docs/t0189-complete-sprint-3-target-plan.md",
+      "workingTreeSha256": "9dc23d77d5f4c0150374a20b3c0a98e8d84c5fb878d5eb5920531869c7c4057a"
+    },
+    {
+      "file": "docs/t0190-critical-safety-gates.md",
+      "workingTreeSha256": "94402af3578455730c73cf06d322dac24d89da4e28f999898abe7345fbd72a4f"
+    },
+    {
+      "file": "docs/t0191-park-test-preproduction-contract.md",
+      "workingTreeSha256": "08a9ef93cb3add252a608c64cbdecde26ce9d5476d1e11fa8d0c0178261875c0"
+    },
+    {
+      "file": "docs/t0192-park-test-foundation-qualification.md",
+      "workingTreeSha256": "22c81b40fcf8ed0a530dfbde61cc6be19715c3630a4e0f19465c417a12ff661d"
+    },
+    {
+      "file": "docs/t0193-api-protection.md",
+      "workingTreeSha256": "197c9578600ab9a77549dda9dd7da1bef28d18f19b103f4473e500cc69329d2a"
+    },
+    {
+      "file": "docs/t0194-staff-identity.md",
+      "workingTreeSha256": "351584f56e21b78919bfafb3aa5d207c7218e4500595eb3a273531830a862fed"
+    },
+    {
+      "file": "docs/t0195-aurora-recovery-rehearsal.md",
+      "workingTreeSha256": "935ed1abf5bf12c58f3bdc74747149702a6b10c3a1251cf0932c122a02b716c9"
+    },
+    {
+      "file": "docs/t0195-data-lifecycle-policy.md",
+      "workingTreeSha256": "628b64f71560a1888600b60ba7ab96b9de91f5919258008f1aab56c794b33bff"
+    },
+    {
+      "file": "docs/t0196-booking-index-morning-seed.md",
+      "workingTreeSha256": "7a784a873cd316b6e99337dbe8beec843aeb343f19a37c41a3dabb90d83f8fc0"
+    },
+    {
+      "file": "docs/t0197-webhook-reconciliation.md",
+      "workingTreeSha256": "4326e213ca70fd9be9bfffe6f6147549fe0cee4acd89488005ce509379f32682"
+    },
+    {
+      "file": "docs/t0198-controlled-cicd.md",
+      "workingTreeSha256": "17d44a46d85a174b5fd3d10d32dbc0b9d93a75f4eda62c715a514a832c4f168e"
+    },
+    {
+      "file": "docs/t0199-production-domains.md",
+      "workingTreeSha256": "c364d8d0441834bab88a38eb3941d1dbc58f0f4dfa556ee42facf59acbdfe7b9"
+    },
+    {
+      "file": "docs/t0200-email-sender-readiness.md",
+      "workingTreeSha256": "73dff2865aaa0229f84c7c8bb328e033af5488d67ba0a341985db1571bbd1f6f"
+    },
+    {
+      "file": "docs/t0201-controlled-t30-email.md",
+      "workingTreeSha256": "ea4b6719aa0a5b25cbbcaef37f148f56771fc653541e34775836ad4b459cffee"
+    },
+    {
+      "file": "docs/t0202-controlled-checkin-domain-test.md",
+      "workingTreeSha256": "a0df201ac442d9b95b3b242768e2e7475ec535aa76437f9ebfdfec8575b7771a"
+    },
+    {
+      "file": "infra/bin/github-deployment-access.ts",
+      "workingTreeSha256": "24087f2a5c865facd4d3229592cda58f9a0c1bb8fc09df3b2ed88953daa82372"
+    },
+    {
+      "file": "infra/bin/jumpyard-cloud.ts",
+      "workingTreeSha256": "db4612b7402d8b95074f2fe562b90b9951da80529f75be5de5d13cdbd0d1f233"
+    },
+    {
+      "file": "infra/cdk.json",
+      "workingTreeSha256": "b241593edfb0409c46e06bcb7fe3c63c1386f0b47dee3344f8917db80c76cc21"
+    },
+    {
+      "file": "infra/config/dev.example.json",
+      "workingTreeSha256": "3f7e45b05f69a2ac0a4303e4ab038cc7e4cb21fb9e643db23ce552b3ea4a9a06"
+    },
+    {
+      "file": "infra/config/dev.json",
+      "workingTreeSha256": "ecc7d5b2d1ba709629f13ab68fb1cd10a9a06aa8b6fd852df1cf07f8e9ad5278"
+    },
+    {
+      "file": "infra/config/park-test-assisted-lookup.json",
+      "workingTreeSha256": "7c1bf382e887c4811aa95bb39c0ff4aa50320bb64e2f676bc3c355b468c126cd"
+    },
+    {
+      "file": "infra/config/park-test-frontend-redeem-rehearsal.json",
+      "workingTreeSha256": "e7ddf81b032bd9045e4e502d17402541810a16f91a4a2900d5a790b056e6c875"
+    },
+    {
+      "file": "infra/config/park-test-full-flow-rehearsal.json",
+      "workingTreeSha256": "e8a9aa14978ddd9591c247e418bae0d0177d9c7c85c0c93f8005206fbcb6a915"
+    },
+    {
+      "file": "infra/config/park-test-live-addon-settlement-smoke.json",
+      "workingTreeSha256": "ae5088601fab87ac93a71edce24c3bb468e2dd99b95fbed212958cbc17e84e93"
+    },
+    {
+      "file": "infra/config/park-test-live-addon-smoke.json",
+      "workingTreeSha256": "fdc3386c648d1ab8bd42d5d4604b14c597150658e80d9fe675668fcf817b8652"
+    },
+    {
+      "file": "infra/config/park-test-live-lookup-smoke.json",
+      "workingTreeSha256": "eea4ff81c6d0121e1d6c345d3882b370da4f4023dad4e3e60a21f044c171d2bc"
+    },
+    {
+      "file": "infra/config/park-test-live-payment-smoke.json",
+      "workingTreeSha256": "865912826b8738f79f7eb5f401bdbe49c8eef552620b0decdce2d5744840f99b"
+    },
+    {
+      "file": "infra/config/park-test-live-payment-sync-smoke.json",
+      "workingTreeSha256": "4609460a30ac0806e5bea9a27c2703c550a05310dd5781c888c354237e461a67"
+    },
+    {
+      "file": "infra/config/park-test-live-redeem-smoke.json",
+      "workingTreeSha256": "208a584f603b7d82495c9a08279362391d2c6fba2fcffb298277562bf9254279"
+    },
+    {
+      "file": "infra/config/park-test.json",
+      "workingTreeSha256": "12fd59d0f1bbba3323fae7f97c1bbe18e2dce4a902f17051bf78a7a6721358ca"
+    },
+    {
+      "file": "infra/lambda/booking/index.js",
+      "workingTreeSha256": "9696c53f0109b0f56ed5de56107a0c145ba9395237c95abec7b648e13e219e8d"
+    },
+    {
+      "file": "infra/lambda/booking/kiosk-terminal-contract.js",
+      "workingTreeSha256": "db5c560ba36b7c1a319d5f92fe73c5bb120ccdcbaf3d9812e20e02a8181559a9"
+    },
+    {
+      "file": "infra/lambda/booking/package-contents.js",
+      "workingTreeSha256": "93ba0fbde98fc7ec8cca7c0e300f799e540302c86ce8e08c0633244757c01e83"
+    },
+    {
+      "file": "infra/lambda/booking/phone-product-catalog.js",
+      "workingTreeSha256": "744c0e191f8896ea448721a2536b9ad50f12a651601aa1331e2c82a70871457c"
+    },
+    {
+      "file": "infra/lambda/booking/phone-product-catalog.test.js",
+      "workingTreeSha256": "e0d5f6d908e37fe823c346d8295529acc92a8a0c054c65865715344f1c79654f"
+    },
+    {
+      "file": "infra/lambda/booking/server-diagnostics.js",
+      "workingTreeSha256": "e1994be79adc50206808b1a1022129cb694046bb445d137b7d1c01a71af33260"
+    },
+    {
+      "file": "infra/lambda/data-sync/index.js",
+      "workingTreeSha256": "36c9827dc30c8d18ef578be850baac87fc82fa44befe9645917ee08b61fe417d"
+    },
+    {
+      "file": "infra/lambda/lookup/index.js",
+      "workingTreeSha256": "29c868354edaf045f02f3908cc61ad8a38bf2319086df1a1c3d66d08e4588b37"
+    },
+    {
+      "file": "infra/lambda/lookup/package-contents.js",
+      "workingTreeSha256": "93ba0fbde98fc7ec8cca7c0e300f799e540302c86ce8e08c0633244757c01e83"
+    },
+    {
+      "file": "infra/lambda/lookup/server-diagnostics.js",
+      "workingTreeSha256": "e1994be79adc50206808b1a1022129cb694046bb445d137b7d1c01a71af33260"
+    },
+    {
+      "file": "infra/lambda/redeem/index.js",
+      "workingTreeSha256": "c8b7b80676954da6ce1f785fea946cd7161826165413e82af92a7c103ebc21b5"
+    },
+    {
+      "file": "infra/lambda/redeem/package-contents.js",
+      "workingTreeSha256": "93ba0fbde98fc7ec8cca7c0e300f799e540302c86ce8e08c0633244757c01e83"
+    },
+    {
+      "file": "infra/lambda/redeem/server-diagnostics.js",
+      "workingTreeSha256": "e1994be79adc50206808b1a1022129cb694046bb445d137b7d1c01a71af33260"
+    },
+    {
+      "file": "infra/lambda/redeem/staff-handout-write.js",
+      "workingTreeSha256": "39ea30ce72a1194e233e5ec7a675129a09d6edbb50a953cad934d9d60c152082"
+    },
+    {
+      "file": "infra/lambda/redeem/staff-handout.js",
+      "workingTreeSha256": "e5b9e1176c7c81d39a08824a8438f9df07bec6a799c38ec10462b7a98603a012"
+    },
+    {
+      "file": "infra/lambda/session/email-template.js",
+      "workingTreeSha256": "618313bcb39c590beae713569e82abb20bc29b1d11655b4e9140b0dfe9675580"
+    },
+    {
+      "file": "infra/lambda/session/index.js",
+      "workingTreeSha256": "1389e1a7fc43a1b73127fb0a0f90c8a0ef320a71f2101b644685c87b6be1fb6d"
+    },
+    {
+      "file": "infra/lambda/session/package-contents.js",
+      "workingTreeSha256": "93ba0fbde98fc7ec8cca7c0e300f799e540302c86ce8e08c0633244757c01e83"
+    },
+    {
+      "file": "infra/lambda/session/staff-board.js",
+      "workingTreeSha256": "e2d04400976c09dc62d250d16dfdf9b8ddd9cbe19cc0de06f251136c0f9aea23"
+    },
+    {
+      "file": "infra/lambda/session/staff-handout.js",
+      "workingTreeSha256": "e5b9e1176c7c81d39a08824a8438f9df07bec6a799c38ec10462b7a98603a012"
+    },
+    {
+      "file": "infra/lambda/shared/package-contents.js",
+      "workingTreeSha256": "93ba0fbde98fc7ec8cca7c0e300f799e540302c86ce8e08c0633244757c01e83"
+    },
+    {
+      "file": "infra/lambda/shared/package-contents.test.js",
+      "workingTreeSha256": "59772b717df6a87009109fa9fb519a399964ae8062b50ce4115bd6fae0e8917e"
+    },
+    {
+      "file": "infra/lambda/shared/staff-handout.js",
+      "workingTreeSha256": "e5b9e1176c7c81d39a08824a8438f9df07bec6a799c38ec10462b7a98603a012"
+    },
+    {
+      "file": "infra/lambda/webhook/index.js",
+      "workingTreeSha256": "e1823c593421d1def4243a297526a5f586d707a95039f31488ef20340ec97e91"
+    },
+    {
+      "file": "infra/lib/admin-managed-login-branding.ts",
+      "workingTreeSha256": "acb9ce1e71efc8435198c4b83120200151d08c302ee5dec2186d4a215a62e690"
+    },
+    {
+      "file": "infra/lib/config.ts",
+      "workingTreeSha256": "dd79d9f5adcd886a59e108c5f450fef54d306c138112816ebd1bcda9e9dd6d44"
+    },
+    {
+      "file": "infra/lib/github-deployment-access-stack.ts",
+      "workingTreeSha256": "5dcf1bb93f0117adff4939b2e4dbc53d9525bcb7877846a9278128b5d54ebb3d"
+    },
+    {
+      "file": "infra/lib/jumpyard-cloud-stack.ts",
+      "workingTreeSha256": "153b6e9abb9981ab58e932da83f8586583063e502902162fbf10a51c3e90050e"
+    },
+    {
+      "file": "infra/migrations/0001_initial_schema.sql",
+      "workingTreeSha256": "1c4f33de3c9ad4c4187f02d38e86606b581d66118250a5893642f8fa950918fe"
+    },
+    {
+      "file": "infra/migrations/0002_related_data_sources.sql",
+      "workingTreeSha256": "1a5f560e8641cddb82cbf189e9752f829e4371c35ae141ac912f43c902f75b42"
+    },
+    {
+      "file": "infra/migrations/0003_checkin_sessions.sql",
+      "workingTreeSha256": "59620e922e41e7425f38a1ed2f3ec7ac75b66633b836f95823db8e8b450d3dff"
+    },
+    {
+      "file": "infra/migrations/0004_prepayment_booking_drafts.sql",
+      "workingTreeSha256": "5239c10774514710cd344092e8ae34ba0a47d18888f860906be8fd1f0993178a"
+    },
+    {
+      "file": "infra/migrations/0005_add_product_draft_links.sql",
+      "workingTreeSha256": "10c72a86e2ec2c1683d98e6d69ecac312c6836700e7a43141784e42c29c9c07f"
+    },
+    {
+      "file": "infra/migrations/0006_sms_deliveries.sql",
+      "workingTreeSha256": "a9210fbd5279b324392f00b829358ca7817faeb65e38b44d0fa356ef8a714199"
+    },
+    {
+      "file": "infra/migrations/0007_email_deliveries.sql",
+      "workingTreeSha256": "12f1f12dcf00b5a93200511b277b3380c28c3550143b013ba2b8b046bb349f19"
+    },
+    {
+      "file": "infra/migrations/0008_prepayment_draft_customer_names.sql",
+      "workingTreeSha256": "0dac7c4a7ee8da9be266492fdfe65e2ef56a917c65f43101acdcc9c7b7573fb4"
+    },
+    {
+      "file": "infra/migrations/0009_staff_identity.sql",
+      "workingTreeSha256": "71ef245f3ad7c216a5ac8c9aafa10be128ee4049108d376477ce7bd5c1419fdc"
+    },
+    {
+      "file": "infra/migrations/0010_data_lifecycle.sql",
+      "workingTreeSha256": "75c84c87e73e5ca75d75bdc05afd7735bd64100ebaee74bf161a56b5ec20d122"
+    },
+    {
+      "file": "infra/migrations/0011_runtime_database_roles.sql",
+      "workingTreeSha256": "f0bf34dc615a419c57681011fad163550812b5f220b99184ce07ce03958f7f91"
+    },
+    {
+      "file": "infra/migrations/0012_staff_pin_pepper_version.sql",
+      "workingTreeSha256": "a9dba389bc9ab2bd57fc2b29d0114f2897a1d0750770630407f48aef68a10aeb"
+    },
+    {
+      "file": "infra/migrations/0013_t0196_data_sync_conflict_keys.sql",
+      "workingTreeSha256": "548c2c6c33b6c049b6b348b11bd931e6187ccf91f223bbbacd78e42166abc7ca"
+    },
+    {
+      "file": "infra/migrations/0014_t0196_signed_payment_amounts.sql",
+      "workingTreeSha256": "cf31576c7d0b9db80ff22a0a2662e8b52e87be0cc0d6c99785fd4e60d7166a69"
+    },
+    {
+      "file": "infra/migrations/0015_t0197_webhook_reconciliation.sql",
+      "workingTreeSha256": "e3009dc6c2c75bb89b3b0dec5f9ff161c232d783916975d9c61122cf4db8668b"
+    },
+    {
+      "file": "infra/migrations/0016_t0197_event_log_conflict_key.sql",
+      "workingTreeSha256": "7ef7ba739bf844ade88d60985344703e637fd3d62238caea5db704835bc0f8fc"
+    },
+    {
+      "file": "infra/migrations/0017_gh_212_signed_booking_amount_owing.sql",
+      "workingTreeSha256": "d3218535fd479c7ddb1936b906cb0c58e6acf02dcbed43470b569a77efa49c29"
+    },
+    {
+      "file": "infra/migrations/0018_kiosk_terminal_payment_attempts.sql",
+      "workingTreeSha256": "15fdfab7d44f3bb3aa58a50a606268e98b33a8e8a3042f1b46aef065de471845"
+    },
+    {
+      "file": "infra/migrations/0019_kiosk_payment_reconciliation.sql",
+      "workingTreeSha256": "24f8c3cc141670986cd30c73692bd0cb408ee5990134ce420b4c0a8e0dcf02fa"
+    },
+    {
+      "file": "infra/migrations/0020_provisional_kiosk_handoff.sql",
+      "workingTreeSha256": "092f16ea0b97f463cb17ffb8a5c1d0ca5669eaf23d1c5a9cf3dc14bbcd567415"
+    },
+    {
+      "file": "infra/migrations/0021_staff_daily_handout.sql",
+      "workingTreeSha256": "76efaf53a3a99091bf3ab7ad1629726dee032aa2354b0abffa9d710ca2803030"
+    },
+    {
+      "file": "infra/migrations/0022_staff_cafe_ready_collection.sql",
+      "workingTreeSha256": "b173512ab4a07e7aa54e88c23b2ffa445aae3ba27fbfa30b771ee45de9640466"
+    },
+    {
+      "file": "infra/migrations/0023_lookup_event_log_conflict_key.sql",
+      "workingTreeSha256": "c2584d2241726c439482c8dbaf35eeb1fb83f722ace29b4f6a3f1011ad75713b"
+    },
+    {
+      "file": "infra/package-lock.json",
+      "workingTreeSha256": "d76d5ccf9e803a52878ad40e3679cd654088917545b8f20e6788dd8d0c8723e3"
+    },
+    {
+      "file": "infra/package.json",
+      "workingTreeSha256": "c8acbbcd87b352a3e90a495bab2759ae00442a23f834ad2b282dbfe0871a6b6e"
+    },
+    {
+      "file": "infra/scripts/aurora-recovery-rehearsal.ts",
+      "workingTreeSha256": "3bb302bc989eeffc6bed146ea86f931359af0435398ea98e22de4261bbc45330"
+    },
+    {
+      "file": "infra/scripts/data-lifecycle.ts",
+      "workingTreeSha256": "ea1e00027f634686d485c5a7495a94dc51afd37a25920bbe2a2595fd96bb8123"
+    },
+    {
+      "file": "infra/scripts/import-bookingitems.ts",
+      "workingTreeSha256": "9fddc91d696260dd2aa29d0105d59363cfc3c3bc65506ff0d172b6441d61c35a"
+    },
+    {
+      "file": "infra/scripts/import-data-api-backfill.ts",
+      "workingTreeSha256": "a64d125956c3eebba92064d2d0fa35b7ec73928aadfe628a3ff45588bb11e187"
+    },
+    {
+      "file": "infra/scripts/import-products.ts",
+      "workingTreeSha256": "26acffc81a615e08842221f9ee819755676ff3f52b1780c0d57715bf765cbdd7"
+    },
+    {
+      "file": "infra/scripts/import-related-data.ts",
+      "workingTreeSha256": "5b78cd85994be26f96962512334c77c135af9b3b3899a2868d42118d36690012"
+    },
+    {
+      "file": "infra/scripts/manage-staff-identity.ts",
+      "workingTreeSha256": "a2e1990166ab36ddcedaf4011b626f6d9ce45b97ffe77d9cc7cb52af17bf1ae5"
+    },
+    {
+      "file": "infra/scripts/register-roller-webhook.ts",
+      "workingTreeSha256": "e58012c48a551535a28bbf65e5bde2ddc299aedf35fda0303116d1e6c9f6c0d8"
+    },
+    {
+      "file": "infra/scripts/roller-live-booking-index.ts",
+      "workingTreeSha256": "996498ebda2de91557e3fbad00e5172743e08f0fc0b262b1707004e8f132b3ea"
+    },
+    {
+      "file": "infra/scripts/roller-live-catalog-index-readiness.ts",
+      "workingTreeSha256": "6560c2c589729fcdeae929e39cad0a1221e2e1c4b22d19b4e7b6b435b555d649"
+    },
+    {
+      "file": "infra/scripts/roller-live-contact-resolver.ts",
+      "workingTreeSha256": "161b6bbe89ed2122d5b55e127116a43c0719560fed1b979cb33ce1ea46556325"
+    },
+    {
+      "file": "infra/scripts/roller-live-draft-smoke.ts",
+      "workingTreeSha256": "da7b2bfaffe6c899aa3d436f0e3c0482023e90795054e094fbc4b2f6351237f6"
+    },
+    {
+      "file": "infra/scripts/roller-live-quote-smoke.ts",
+      "workingTreeSha256": "363c2806a08ac8a115e809b39a76917ab501d3f68523b4961a5dfde31ab5009f"
+    },
+    {
+      "file": "infra/scripts/roller-live-readonly-preflight.ts",
+      "workingTreeSha256": "3d5a7938dc016eac56f8d8c46fcff7da62e94ff89bbda74f3d851c31702211a7"
+    },
+    {
+      "file": "infra/scripts/roller-live-webhook-dry-run.ts",
+      "workingTreeSha256": "54a367ca8453f8ea16568c835556991ea6d53f51c2d009a3dcdd1bc8ac15afd9"
+    },
+    {
+      "file": "infra/scripts/roller-live-webhook-reconciliation.ts",
+      "workingTreeSha256": "aaef1187f20984405c12647fce2a9fb3d6f1fc8c1ca21a8eba8425d37cf0d9c0"
+    },
+    {
+      "file": "infra/scripts/roller-live-webhook-register.ts",
+      "workingTreeSha256": "a08a8f441503fdee0309d14691a02ec2cedc8eadcc0a6d32cb7ce501a1fb95ff"
+    },
+    {
+      "file": "infra/scripts/rotate-staff-pin-pepper.ts",
+      "workingTreeSha256": "065dc2c6bb620b8e184cd7b3347b6bc1f888ec0e11f1b35cd06bde7523fc8807"
+    },
+    {
+      "file": "infra/scripts/run-migrations.ts",
+      "workingTreeSha256": "d99166fc2b953c3a6fffcc647cdd06e3269a9815889e91dfed0a467683250e0f"
+    },
+    {
+      "file": "infra/scripts/t0201-controlled-t30-email.ts",
+      "workingTreeSha256": "802a8b7778a0a76bf0b91ab7054f8fac73873ebf6114f39571223e0622b31ddb"
+    },
+    {
+      "file": "infra/scripts/validate-config-guards.ts",
+      "workingTreeSha256": "4d57576dddf692e4958c019b9148e257c09539d88c1b70e94b8ac42c0fb01caf"
+    },
+    {
+      "file": "infra/scripts/validate-park-test-synth.ts",
+      "workingTreeSha256": "b7b8468e5771817c3ed00c042c6fb778aff2c79e3f23085f0647ba0e718d2ec1"
+    },
+    {
+      "file": "infra/scripts/validate-t0195-least-privilege.ts",
+      "workingTreeSha256": "e64a07178384a1ad5af9bc6d48439245168381c48d98014fe490de0385feb360"
+    },
+    {
+      "file": "infra/tsconfig.json",
+      "workingTreeSha256": "0c2db72efa1077c32fa24278504da39c8cb69ce8c3296b2efafd77ad3192c258"
+    },
+    {
+      "file": "jumpyard-checkin-admin/.gitignore",
+      "workingTreeSha256": "87ae45b2c803ef8ea5d19cc809756e9d051d37f5463ef91bbfb72f229c84cbce"
+    },
+    {
+      "file": "jumpyard-checkin-admin/PREVIEW.md",
+      "workingTreeSha256": "d181fe803ded15ff01cc8ded47ed7d21f1c16fe29c5ef723440d7398bc9813e5"
+    },
+    {
+      "file": "jumpyard-checkin-admin/README.md",
+      "workingTreeSha256": "40cd3011dff9bca4cd0b44418bfa0e40fedc421c7f96790ee817c1e702034324"
+    },
+    {
+      "file": "jumpyard-checkin-admin/eslint.config.mjs",
+      "workingTreeSha256": "0f11bdd9196c7a14b14ad1460f74a6866736ed4d830dbaddbab955fda351c299"
+    },
+    {
+      "file": "jumpyard-checkin-admin/next.config.ts",
+      "workingTreeSha256": "a0413bd100f715272355b22ba9ab6c27fc6a4d7ceb24e12f5b87f50f0236d4c3"
+    },
+    {
+      "file": "jumpyard-checkin-admin/package-lock.json",
+      "workingTreeSha256": "e8fd3588c521c0e9a56ccd958a5ef4270b212c372940ae49a1cd37fef8bc933a"
+    },
+    {
+      "file": "jumpyard-checkin-admin/package.json",
+      "workingTreeSha256": "eb642db4213b5a9e5f3ff8560eddbf07be2ab0f4883dba67771b334c045eca67"
+    },
+    {
+      "file": "jumpyard-checkin-admin/postcss.config.mjs",
+      "workingTreeSha256": "7b299d3d3b16699ddda397c0b2373b3af4f25f8fc9ccc9b3d9e64ef083bc1c21"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/_headers",
+      "workingTreeSha256": "7359a1158143142d7b568dd06afdc4fc78fedf8469693f18c6b367aa208d33cc"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/addons-bag.png",
+      "workingTreeSha256": "2c023db86cfded344adfe43d5acae56b899f73e5598b5aa87815b2f8f3b40206"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/admission-ticket.png",
+      "workingTreeSha256": "5b23d1c14f201b3481f06dfb306283318d540986dc365f5912ae29f64e97c37f"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/booking-card.png",
+      "workingTreeSha256": "6f2e98526eb2a8e97a101417cc06c1d7c53b58bec8ac81b0659e7e18538d5d9b"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/combo-pizza.png",
+      "workingTreeSha256": "7788cd910f593a1dc44707c7e6368b641cf5a47f1590a1a565c0d61f7e9ded95"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/drink-cup.png",
+      "workingTreeSha256": "cfbbe7f056066c1b6d1027a65e6c64af55f51c06d0dd1bd9c1c44b1e63b242ca"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/grip-socks.png",
+      "workingTreeSha256": "0d17110aa69a109890a810cd8caf0cebce64b007ced6f81c79f0a0065ea5fde2"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/group.png",
+      "workingTreeSha256": "6b77bdd57b14aff165f171ccd93490fe4e57465bb666ab8fc99a2dec49d15821"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/info.png",
+      "workingTreeSha256": "24f41ade4e472d996397e582a266fa019658fe5ce301bf888ea14247bd0b15e3"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/jump.png",
+      "workingTreeSha256": "183699c66f7d64423d914a8dbbf4fd1bc9c52dc29d3bafcf9c41ace915deb598"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/padlock.png",
+      "workingTreeSha256": "4b749dedf751b6b4118b423bc52c241e421b19e26c291d6da3723edbb592ba70"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/payment-card.png",
+      "workingTreeSha256": "c98f7dc6bb3360704f7a898007bd9d2c52efe8c7e5c695d2a8a8d9a916bd9e72"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/profile.png",
+      "workingTreeSha256": "265ba734df6f27ae4c13aa2543244f117d4303ea45439fc94b4e3f6a8ad0f8ca"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/safety-check.png",
+      "workingTreeSha256": "e535414e3601573d1b2b755f1e6ca5d179c069b658f1a7b0658e743fe4994703"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/success-check.png",
+      "workingTreeSha256": "ae00cf89bbecbaf2ca415ea2e39651644efe29902102dae4abab1640951706d5"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/time.png",
+      "workingTreeSha256": "2b93457b64914e229fb05e422be688718bed132b9d318896101d129554e59753"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/visitor-wristband.png",
+      "workingTreeSha256": "f63199c03ccaff7890488de593d70f850b87d66f8c456607266ecd35f5164c95"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/water-bottle.png",
+      "workingTreeSha256": "e43ee7848d5becaa32914b0ee85f18e66077e0cd98608fde5c2ca4354d542fbb"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard-next-icons/zipline.png",
+      "workingTreeSha256": "9cd2394bc4ceb1da9eababfe2d6ca38c33cc3b580a59b70435fbaac0adf4e0e4"
+    },
+    {
+      "file": "jumpyard-checkin-admin/public/jumpyard_logo.png",
+      "workingTreeSha256": "175452889b571e96802bc770023c33f62da8943b10c617bfbb63628c022f49d4"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/app/admin/page.tsx",
+      "workingTreeSha256": "107cdcaaa04c07e4a32e71500db5545b38bbad5065768de47016fc438cdf8c72"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/app/auth/callback/page.tsx",
+      "workingTreeSha256": "6db0540c044c033d5cdcdd2573f5dbef8716d70bfa93c1161c1fda1f8da5d320"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/app/globals.css",
+      "workingTreeSha256": "c0b86a95f8e7577c598b22124d7a24d69a6aa7c752405517bd822b84d5a9a8ec"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/app/layout.tsx",
+      "workingTreeSha256": "490627e6d39897503bfbe0990e769fad996ebde4a63250582150e03abed22979"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/app/manifest.ts",
+      "workingTreeSha256": "9c8805df009ca7a7813267668c4ecc73168bada8db34882f20f695c615185b08"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/app/page.tsx",
+      "workingTreeSha256": "70bc886692d272724574621ae8975cf2646580ebb61feddf0b3de34f0caf34be"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/components/staff/StaffExperience.tsx",
+      "workingTreeSha256": "c0e4d993cad5bdadac4ef03c63bc5788981a6ddcefa1e57d99c8ba5f07436145"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/components/staff/flow.ts",
+      "workingTreeSha256": "147cbc778f3ceee9cd11289c83cdae00a272cfd812ae419d74d9e5aa0d5d8490"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/components/staff/selection.ts",
+      "workingTreeSha256": "f79d09a14612df96d5be834bc41ed3ce008c217e423e79ad95e5d0cc2c627b81"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/components/staff/ui.tsx",
+      "workingTreeSha256": "d6f6a00995b4f8a98beefd7a4bac32bfb4adcd8dbbe8d27a05017f9cc8bddeef"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/lib/adminApi.ts",
+      "workingTreeSha256": "852b1f3d2bc942362ef45d439150e02ee336bb5b9c326e1de673bdbcbe3faf00"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/lib/adminIdentity.ts",
+      "workingTreeSha256": "189a4cf5422041dd46319ffc92a2ecc9accc595f7749f6d90e6ba5da58944cd4"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/lib/packageContents.test.mjs",
+      "workingTreeSha256": "464ac47bb0d3e81d39bb4f13921ca9c89807b13e8f9d83d8343165fa06464648"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/lib/staffExperience.test.mjs",
+      "workingTreeSha256": "11eca98e950589bf02a9cbf898dbb7df9703e838843fd001f89cdd27720ac018"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/lib/staffIdentity.test.mjs",
+      "workingTreeSha256": "1f26ada283a63d958f22d9571ccc09c5fbacaa7d25ffc7f6615b8ed36d9f154c"
+    },
+    {
+      "file": "jumpyard-checkin-admin/src/lib/staffIdentity.ts",
+      "workingTreeSha256": "5ef8674cdbeb7d8c5cba03be67711caaaaed904d1eacbca4b448265c5c3296e2"
+    },
+    {
+      "file": "jumpyard-checkin-admin/tsconfig.json",
+      "workingTreeSha256": "dbacf04aa5f38c1ce4b0f030fbb84e5adff19306fb785b2e4aafef9c58705658"
+    },
+    {
+      "file": "jumpyard-checkin-android/.gitignore",
+      "workingTreeSha256": "3fdd012f3531ef7503bf653fae9e73d7759c4ac209de5435661e45b23223391c"
+    },
+    {
+      "file": "jumpyard-checkin-android/README.md",
+      "workingTreeSha256": "34da0f7c7504e6ee56a9050dfa327badc2c7a6c0e8b9f188a76e3fba9ba95814"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/build.gradle",
+      "workingTreeSha256": "76380017b116ec79ba312530d098d62b63d0b39e48647b06477d46df81e77666"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/src/debug/AndroidManifest.xml",
+      "workingTreeSha256": "0bba054a6c0cfdfb6d67695e3450cab83b216d39b6f6a98677ce88ac0949ec5a"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/src/debug/res/xml/debug_network_security.xml",
+      "workingTreeSha256": "d3f7e2cb21246e9ab0e592e2826f7906bc8a6ae86c43df8357290ff8a443d6ea"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/src/main/AndroidManifest.xml",
+      "workingTreeSha256": "9285b4b9984949dd5fb1ac6f62b791c2ac186fc95887394d76a049df09af08cb"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/src/main/java/se/jumpyard/staff/MainActivity.java",
+      "workingTreeSha256": "7fbc1d50246cd96d79d2ec1f2ce1857c69fbbdc262a8f10805e2b11171283611"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/src/main/java/se/jumpyard/staff/WebPolicy.java",
+      "workingTreeSha256": "f98bf9a3449d25d0c8d125c49b6f83fa076d42eb6e683c0dbf5f7f4c391dfdb0"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/src/main/res/drawable-nodpi/jumpyard_logo.png",
+      "workingTreeSha256": "175452889b571e96802bc770023c33f62da8943b10c617bfbb63628c022f49d4"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/src/main/res/drawable/launcher_foreground.xml",
+      "workingTreeSha256": "4b36a1f36da2934eee4e3db59361ef613d02d4008ef06d26cb3ce9674ffddbcc"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/src/main/res/mipmap-anydpi/ic_launcher.xml",
+      "workingTreeSha256": "306641977321a2ae87575de3633cf9f07e451365a563bd244e27338caf884498"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/src/main/res/values/strings.xml",
+      "workingTreeSha256": "885b52d90cd6abef531bbc1933ffc94afa1d7d29c83d7acd9dea95b646964369"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/src/main/res/values/styles.xml",
+      "workingTreeSha256": "a404d997f25d97a048c95124ab2cb10bde908c7c0e3efe591a20f254a8ad52a6"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/src/main/res/xml/data_extraction_rules.xml",
+      "workingTreeSha256": "60d637642543fc11016253c447e2d2af8352e249454f8d0d87cd03702dec9071"
+    },
+    {
+      "file": "jumpyard-checkin-android/app/src/test/java/se/jumpyard/staff/WebPolicyTest.java",
+      "workingTreeSha256": "b0663621b7df3f595b3e9af826ab87ea2897a49f00296da78944a282a41d1f51"
+    },
+    {
+      "file": "jumpyard-checkin-android/build-pilot.ps1",
+      "workingTreeSha256": "3fff426fdaeabb421d43775fac70c4cf9a8f3962027b2be7efaace945335b7c5"
+    },
+    {
+      "file": "jumpyard-checkin-android/build.gradle",
+      "workingTreeSha256": "10b7d4e7d8f05fca41aecc0c2c51a6214bbe6818900c8a99a4e9ffcecca07af1"
+    },
+    {
+      "file": "jumpyard-checkin-android/gradle.properties",
+      "workingTreeSha256": "4352572c440c0900c53f135599c4be78316a6c35b830a6ca6a94255234359b24"
+    },
+    {
+      "file": "jumpyard-checkin-android/gradle/wrapper/gradle-wrapper.jar",
+      "workingTreeSha256": "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f"
+    },
+    {
+      "file": "jumpyard-checkin-android/gradle/wrapper/gradle-wrapper.properties",
+      "workingTreeSha256": "f55ea33a3d46631639251549d10df4302261d5bc2dcd16484e10bda4dfdbd5e3"
+    },
+    {
+      "file": "jumpyard-checkin-android/gradlew",
+      "workingTreeSha256": "d2f351cc4d1d088f1ca59c12df28ec27dacc43a97607c056b0c0d549eda44a13"
+    },
+    {
+      "file": "jumpyard-checkin-android/gradlew.bat",
+      "workingTreeSha256": "57931b17dd228e5c24dac90e815d0bf82477e831a4618dfab4136f5446b42a9f"
+    },
+    {
+      "file": "jumpyard-checkin-android/settings.gradle",
+      "workingTreeSha256": "09f83907c958c26ce353f7b52281f7f43c133012533e0459f3575c665a66f5b2"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/.gitignore",
+      "workingTreeSha256": "cfdbd5a321f3ba279e434c025fc9a44bf2d3bd3a1af5affb8429d79bd18af054"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/Dockerfile",
+      "workingTreeSha256": "2ea7a73292e415e3782baa5b2c8e55191e3873c2a62c36ecb6ea3ffde060f29d"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/README.md",
+      "workingTreeSha256": "a9716bd57288505495a4e0771dde28556b06db62ec18b781497c785213ead5a9"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/eslint.config.mjs",
+      "workingTreeSha256": "275a07c13fc7c83a652efcfa9fb6a207c451a2f5088e6793415ce44281285720"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/next.config.ts",
+      "workingTreeSha256": "a972c4f0ffa6dd714e7909b02d1ac19d2f2fe3d01f191efd2c5054bd6f142ec1"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/package-lock.json",
+      "workingTreeSha256": "03b07b4e224dad85660dc8e4f482a3ee0767d3c3639b4902a14f9ed222442bef"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/package.json",
+      "workingTreeSha256": "131c7f0436be882afd7bad6072ef52890c7f7c40b7eb5631ddd5a54a8132ed35"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/postcss.config.mjs",
+      "workingTreeSha256": "7b299d3d3b16699ddda397c0b2373b3af4f25f8fc9ccc9b3d9e64ef083bc1c21"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/public/jumpyard_logo.png",
+      "workingTreeSha256": "175452889b571e96802bc770023c33f62da8943b10c617bfbb63628c022f49d4"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/app/favicon.ico",
+      "workingTreeSha256": "2b8ad2d33455a8f736fc3a8ebf8f0bdea8848ad4c0db48a2833bd0f9cd775932"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/app/globals.css",
+      "workingTreeSha256": "fad20e2731180b910c860a377a23c4bc32f4fa74c1ec49469a2726b578a3f539"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/app/layout.tsx",
+      "workingTreeSha256": "7a845c13b0f5ae2e849c44a2e6f59770a2d2f7e917e7268f8ac5bf8dd3ba2621"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/app/page.tsx",
+      "workingTreeSha256": "4b6a1fd1eb1e555d279c918d0738e5b0ff4b863cfcb84c21810da117f6ebd3af"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/AddonsOffer.tsx",
+      "workingTreeSha256": "cfbfc02c6ea26e2dc3fc9070bf10458744d0a702e14c13e6b708bc87475edac1"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/BookingCheck.tsx",
+      "workingTreeSha256": "8e079d8e3720158eb602aee4ac2dcb04f51efa9abf7b7ad8c3c06feacf8d6b14"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/BookingSummary.tsx",
+      "workingTreeSha256": "b0f49e9f2d343883cf5b20e08d8ccfec7a893fb729b6166e1aa87b117bd5a5d6"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/BuyTickets.tsx",
+      "workingTreeSha256": "f7fb5d1787e855cd6c147e58363a85d675c4302aa6d4721c6f53dee883fa908d"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/ConfirmationScreen.tsx",
+      "workingTreeSha256": "551ed41d46987594c0ab1dec9d1f187d3152a3a966eb8074adbd0e1661a62a08"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/ConnectedProfiles.tsx",
+      "workingTreeSha256": "7aaf2f1f6dae01aa1d580e49f18729c4203d654237114022e39716f64a689d5e"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/IdleScreen.tsx",
+      "workingTreeSha256": "ae19fd87ee582dea92f3d19b07ce608eed91b8e1f2e6c4b2dd61103e35822ea8"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/PaymentView.tsx",
+      "workingTreeSha256": "48a8eb21eff15e2e27b3c8a190f888bca93db77fa1388d24d6d03db9078f5ecc"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/PresentCode.tsx",
+      "workingTreeSha256": "b490c627c9bbe8de37e3cc1608fbb050cfa93032f7aad2271c1718e5b1bfa2b3"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/SafetyAttest.tsx",
+      "workingTreeSha256": "b82b2dacf6ddad62d26466420ea9e7cae375917b6308466f276c9b39b3dba4a0"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/SafetyVideo.tsx",
+      "workingTreeSha256": "bcabc44fd20ad658fcf01c8d0ffcf9dd8edb6acda5806bcc827184c2feee0129"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/SkyRiderAttest.tsx",
+      "workingTreeSha256": "3d6aedf86b6ebbc98113fb1bdae352bf28aae540f73b308a204d64c9d4307bd3"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/StartScreen.tsx",
+      "workingTreeSha256": "1999fb24cdfad34340895975973d0324e0c536559143150b9ad7b6da66f26e4e"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/StepSelection.tsx",
+      "workingTreeSha256": "f2f0bfb67b5e0d9b390359a80d5a059bd955389885024dfc894e732a4fdc3f65"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/components/SuccessPrint.tsx",
+      "workingTreeSha256": "d2dafb42e36ebf07501008bd5fefdd39b49e3b668eafdc5a71ebfb02f86e41bf"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/context/LanguageContext.tsx",
+      "workingTreeSha256": "b84a9ee8f47fd979cc269e825c8dd9febda72ac1c3d1512b7b4eb51121bc718f"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/flow/machine.ts",
+      "workingTreeSha256": "07b814187d907ccca229fbbdf665d61bb6d70bb5e937f87c31499a0a9000267f"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/flow/mockClient.ts",
+      "workingTreeSha256": "c62fe2da2739f143cc737e90804be615459c8d7b1a615a0f10fe0b10f98d032e"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/src/flow/types.ts",
+      "workingTreeSha256": "229c17dedc43c16986f45542d41d4b282c56849be57a27e7bd4e9f86198ea943"
+    },
+    {
+      "file": "jumpyard-checkin-kiosk/tsconfig.json",
+      "workingTreeSha256": "dbacf04aa5f38c1ce4b0f030fbb84e5adff19306fb785b2e4aafef9c58705658"
+    },
+    {
+      "file": "jumpyard-checkin-phone/.gitignore",
+      "workingTreeSha256": "cfdbd5a321f3ba279e434c025fc9a44bf2d3bd3a1af5affb8429d79bd18af054"
+    },
+    {
+      "file": "jumpyard-checkin-phone/Dockerfile",
+      "workingTreeSha256": "2ea7a73292e415e3782baa5b2c8e55191e3873c2a62c36ecb6ea3ffde060f29d"
+    },
+    {
+      "file": "jumpyard-checkin-phone/README.md",
+      "workingTreeSha256": "1b37a01c6bb1669a6166ff7b630ac79c20b36d10996f5009935af409a37ad22e"
+    },
+    {
+      "file": "jumpyard-checkin-phone/eslint.config.mjs",
+      "workingTreeSha256": "0ab3b5e4558c6180c3eb4232d41ccec0be3645e15089d5ac11de4854c7385b6a"
+    },
+    {
+      "file": "jumpyard-checkin-phone/next.config.ts",
+      "workingTreeSha256": "ae6cc6510ac75b843d4f09911ff5cc7da104b03f855bb9720cc69d7633ab4f68"
+    },
+    {
+      "file": "jumpyard-checkin-phone/package-lock.json",
+      "workingTreeSha256": "809fab4b116670fcbdd7214a1e1ff5cf384c8c74f88866bbc3ab7a4726906ead"
+    },
+    {
+      "file": "jumpyard-checkin-phone/package.json",
+      "workingTreeSha256": "d1441c7a348526f217205942a97d73e0afeeed17a3cf56f51a4e3fc91ae66372"
+    },
+    {
+      "file": "jumpyard-checkin-phone/postcss.config.mjs",
+      "workingTreeSha256": "7b299d3d3b16699ddda397c0b2373b3af4f25f8fc9ccc9b3d9e64ef083bc1c21"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/.well-known/apple-developer-merchantid-domain-association",
+      "workingTreeSha256": "8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/_headers",
+      "workingTreeSha256": "f7eca438adbb7fddfcd4fbc8d138cb5c8641b9dc1d7ef0206c100df531d174dd"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/achievement-badge.png",
+      "workingTreeSha256": "ac2e55ed66e3d80141ee9a0c38bb6a89fb3199c0495a148e561b2f89994b94e9"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/add-guest.png",
+      "workingTreeSha256": "89b5c1b6999535b5d2f87353ac99db86bbb3c0e26a90dbeebf9cd4ca3c0d9d1b"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/add-jump-session.png",
+      "workingTreeSha256": "73596ffaca3a3ea3a8fcfcc653824d125e254063cb1f2e01e5ae5af4d8b96035"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/addons-bag.png",
+      "workingTreeSha256": "2c023db86cfded344adfe43d5acae56b899f73e5598b5aa87815b2f8f3b40206"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/admission-ticket-red-white-flame.png",
+      "workingTreeSha256": "55622ced235b2fad247a939fe0730e59b2425dbfa4b8e4d62a7455137bca7cda"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/admission-ticket.png",
+      "workingTreeSha256": "5b23d1c14f201b3481f06dfb306283318d540986dc365f5912ae29f64e97c37f"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/age-limit.png",
+      "workingTreeSha256": "d2e0095641da297bb4b3f11941d6bda78a5ad912a1f0b38e9edf58d8a04c3a8e"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/booking-card.png",
+      "workingTreeSha256": "6f2e98526eb2a8e97a101417cc06c1d7c53b58bec8ac81b0659e7e18538d5d9b"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/booking-confirmed-on-red-black-badge.png",
+      "workingTreeSha256": "418968e7e2bc8ae395c04dfd1991d0b9f08beaf91103ae9a19332d57007f8ff8"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/booking-confirmed-on-red-white-calendar.png",
+      "workingTreeSha256": "a40508dedb40bb2bfbd0c620ba8a1c7ca713433ba9dcfe0134dff78770228eae"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/booking-confirmed-on-red.png",
+      "workingTreeSha256": "15a88b46a592af451ca40abe7fa753e9bd54f2116071ce74a8a54a30d9f5c711"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/booking-confirmed.png",
+      "workingTreeSha256": "5bae36d38ca9f442d2c2a3f09ff3bc08cb6bab7a30251e0a3d4fcd2c15ac34c9"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/child.png",
+      "workingTreeSha256": "f12ef48c955c4626deed2c8da2dfe0ffdbdbbaee1afe5cc36f85c55b9a747bfd"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/combo-60-min.png",
+      "workingTreeSha256": "7a1ea18dec7f0892fcd794f07f6fe10d45c9e58420677ef78c5545a50b96dd66"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/combo-calendar.png",
+      "workingTreeSha256": "7799d08a23f0e3f930f499a8b54b4b717a9f9d024f8d485a519d1269622abd37"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/combo-pizza.png",
+      "workingTreeSha256": "7788cd910f593a1dc44707c7e6368b641cf5a47f1590a1a565c0d61f7e9ded95"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/combo-two-people.png",
+      "workingTreeSha256": "ae65b57a4e3c86d58ec11c0974e8b7e68fe07fd3be49ec99fdaeb2c6a5c6580f"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/connected-band.png",
+      "workingTreeSha256": "ab1a0bb1d6beeab852bff5da77dffe3659eb2de7a39cb1ffec312e2a92e1d16f"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/drink-cup.png",
+      "workingTreeSha256": "cfbbe7f056066c1b6d1027a65e6c64af55f51c06d0dd1bd9c1c44b1e63b242ca"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/email-confirmed.png",
+      "workingTreeSha256": "4418cb69d9b1f3bd5efaaf245b18fb71d10d14c3a80baae6af6a71f093d77aaa"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/foam-pit-landing.png",
+      "workingTreeSha256": "eaf90cf77cc2ed22dcab07617b4321bd44dd0a91bbae7bb17321e9a96ace2b44"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/gift-card.png",
+      "workingTreeSha256": "d4249ca9f7f36616b99ccb4fdfc92afe6d3f6adde205b388dc88c583b624249f"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/grip-socks.png",
+      "workingTreeSha256": "0d17110aa69a109890a810cd8caf0cebce64b007ced6f81c79f0a0065ea5fde2"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/group.png",
+      "workingTreeSha256": "6b77bdd57b14aff165f171ccd93490fe4e57465bb666ab8fc99a2dec49d15821"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/home.png",
+      "workingTreeSha256": "353c7fd0b8fcbd89a77e910f8954d157a40aa4aaba20200fd699c40ce2bf91fd"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/info.png",
+      "workingTreeSha256": "24f41ade4e472d996397e582a266fa019658fe5ce301bf888ea14247bd0b15e3"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/jump.png",
+      "workingTreeSha256": "183699c66f7d64423d914a8dbbf4fd1bc9c52dc29d3bafcf9c41ace915deb598"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/location-pin.png",
+      "workingTreeSha256": "21db9c525004fb2e475edba2391b358cf7f155eaf28f2041c8875808b215483c"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/no-edge-bounce.png",
+      "workingTreeSha256": "beb7354b1d9f4144645ed392d810a2d6212d7a7f83612a62f7afaa677ebfccbf"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/no-running.png",
+      "workingTreeSha256": "2c541ecf96886c0a5e8e60364f2cea5974c68cb25091b1da790e6521f30560e7"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/padlock.png",
+      "workingTreeSha256": "4b749dedf751b6b4118b423bc52c241e421b19e26c291d6da3723edbb592ba70"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/park.png",
+      "workingTreeSha256": "7acbc93e221217cce050b53dd677d279b7a46a57de266d950c3406830dfbf5e8"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/payment-card.png",
+      "workingTreeSha256": "c98f7dc6bb3360704f7a898007bd9d2c52efe8c7e5c695d2a8a8d9a916bd9e72"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/phone.png",
+      "workingTreeSha256": "84ecbd61a346c40fc51a2987239ee63d668c3934a45fd9fe77cbd0b305c56a74"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/points-star.png",
+      "workingTreeSha256": "00beda086161afbc188cf06358049ce276ba00e72e33492baca94f081e3b6419"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/presentkort.png",
+      "workingTreeSha256": "3117810aa7fdbdf8a8f2682f2179816819f769c40f0aef9630b69cbfbe392003"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/profile.png",
+      "workingTreeSha256": "265ba734df6f27ae4c13aa2543244f117d4303ea45439fc94b4e3f6a8ad0f8ca"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/receipt.png",
+      "workingTreeSha256": "f7084905d003edbbd340ded0dec0fdf7d42933a702502651dfa883f5e8b2fc10"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/reward-gift.png",
+      "workingTreeSha256": "f237904f14e18b962c7b9fd65669c5960e00c439e727e950b0a6fc34a031c19d"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/safe-tricks.png",
+      "workingTreeSha256": "87b7b86f3eb5b5f587dcd60fd161163bfc4b4722fb545a6e508d451d99443178"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/safety-check.png",
+      "workingTreeSha256": "e535414e3601573d1b2b755f1e6ca5d179c069b658f1a7b0658e743fe4994703"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/scan-frame.png",
+      "workingTreeSha256": "986be668c9cef00917ec5aae3aca921842c2968d86fee9605941fb5a1a772079"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/streak.png",
+      "workingTreeSha256": "eb9a6a31e289ac92029124b99f83d851f146ebaf798c131da8134347938e6408"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/success-check.png",
+      "workingTreeSha256": "ae00cf89bbecbaf2ca415ea2e39651644efe29902102dae4abab1640951706d5"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/time.png",
+      "workingTreeSha256": "2b93457b64914e229fb05e422be688718bed132b9d318896101d129554e59753"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/trampoline-jump.png",
+      "workingTreeSha256": "e7d7e9eb31403657701458386ba4fafd0b6bb99c53c5006f719e36c670d5926c"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/visit-calendar.png",
+      "workingTreeSha256": "5f4cec5fb7f2477f855fd3f11942b440e246e58cd8b4e68c4dd6464ba179d16a"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/visitor-wristband.png",
+      "workingTreeSha256": "f63199c03ccaff7890488de593d70f850b87d66f8c456607266ecd35f5164c95"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/warning-transparent.png",
+      "workingTreeSha256": "d3439209b11daa642a65699b5f0d8283fb69cb869ca4aa23effc3555a68c740b"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/warning.png",
+      "workingTreeSha256": "cea3ae794175fefdc65c7038a3b46a55a3c6de3e36bcd3676e1026435ca68d5a"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/water-bottle.png",
+      "workingTreeSha256": "e43ee7848d5becaa32914b0ee85f18e66077e0cd98608fde5c2ca4354d542fbb"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard-next-icons/zipline.png",
+      "workingTreeSha256": "9cd2394bc4ceb1da9eababfe2d6ca38c33cc3b580a59b70435fbaac0adf4e0e4"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard_logo.png",
+      "workingTreeSha256": "175452889b571e96802bc770023c33f62da8943b10c617bfbb63628c022f49d4"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/jumpyard_logo_splash.png",
+      "workingTreeSha256": "3ffe915e918d9b264ef03c80c425e1bc7b3ba91178901c869acdfc73b13aa2c6"
+    },
+    {
+      "file": "jumpyard-checkin-phone/public/safety-video.mp4",
+      "workingTreeSha256": "7606140fbd6107ccf0928c74d9f49d610c79d4d8f2da4714e8fadae5ea83ab51"
+    },
+    {
+      "file": "jumpyard-checkin-phone/scripts/preview-phone-addons.html",
+      "workingTreeSha256": "56b27c9d9bfa8883b89780d12331e6383ea335449f119e8650d3eda1e0394893"
+    },
+    {
+      "file": "jumpyard-checkin-phone/scripts/preview-phone-addons.mjs",
+      "workingTreeSha256": "bc32bf728d576a585041fc38fc5d482873c2108d04207aad23861ea77e1560d3"
+    },
+    {
+      "file": "jumpyard-checkin-phone/scripts/test-addon-choices.mjs",
+      "workingTreeSha256": "436e27e998d449870b0f27549fd349a379585e688e205a6e4780248fef9e0f91"
+    },
+    {
+      "file": "jumpyard-checkin-phone/scripts/verify-production-mock-boundary.mjs",
+      "workingTreeSha256": "eb4acfc5fcd4eb1cde4f18ce8975c05ea1afa27b2735d5d3733a8c3b29c4e252"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/app/extend/ExtensionPreview.tsx",
+      "workingTreeSha256": "8aafae13f14dd5ccf6ba487fb3404b6357cc4098d38109d8d1b7240a8c26c3c9"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/app/extend/page.tsx",
+      "workingTreeSha256": "95e64d6c9e70034d2eecb420603fb84b1931b4dd3ec4b12366f0d08148f8aaf3"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/app/favicon.ico",
+      "workingTreeSha256": "2b8ad2d33455a8f736fc3a8ebf8f0bdea8848ad4c0db48a2833bd0f9cd775932"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/app/globals.css",
+      "workingTreeSha256": "c7a5a3e95b64f90e79308b6d2f14d255f0055f712e75b085540d198ee824dfd7"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/app/layout.tsx",
+      "workingTreeSha256": "0e1d3d8e11705919ba9168914f4f67b2906c0337c18dffa66411e3d6f3a9f0dc"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/app/page.tsx",
+      "workingTreeSha256": "fc807fa8dd48f9c799bec5bba0eac4db3a357f9ce92157abcccda0284e600ffb"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/app/preview/payment/PhonePaymentPreview.test.mjs",
+      "workingTreeSha256": "117c3e5e41c85ccc0936a67cf7b5ba15061dec1da4b1cdedf96d398152d03639"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/app/preview/payment/PhonePaymentPreview.tsx",
+      "workingTreeSha256": "f2ae33de02eb08398e74fbf82ae0a4720c28fed7832676d6b12d42cb46389b5a"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/app/preview/payment/page.tsx",
+      "workingTreeSha256": "ebe9dc89608e2f6fef6e86216ec2bc1df592491e7a39623ce093d22e2ebb914d"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/app/preview/payment/preview.module.css",
+      "workingTreeSha256": "ffd2fd4a0465d75446dbc8410196403bc483b804c0807b793f6193c7d512ab69"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/app/preview/safety/SafetyVideoPreview.tsx",
+      "workingTreeSha256": "88a26f1b0f0c9bd1ee3661230b24c917f8cc305297b7baa6019ce4aa5f7bf41a"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/app/preview/safety/page.tsx",
+      "workingTreeSha256": "7ecab5f3d57c22431a5643dbc3b561c9b29fa3f4f5992a5ad03c1bb03d24570f"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/AddonChoices.tsx",
+      "workingTreeSha256": "f2dc7cf7346a63cc80bba058ea961644bae36845e92681a39f661179e9d2fd6a"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/AddonsOffer.tsx",
+      "workingTreeSha256": "8a41ba7cce65ab6f29a9652682653bcfd4ffc124b52e4dd1203531e298435edb"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/BookingLookup.tsx",
+      "workingTreeSha256": "450dcb71f2cb881e5d54a5684d23bd151618b5635699ab017506d5e2a80c8045"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/BookingSummary.tsx",
+      "workingTreeSha256": "8cb8678e121bcf33530068027bc22410b63a9ca47d4c4ca8e5880d35151cadd6"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/BuyTickets.tsx",
+      "workingTreeSha256": "a6bc61ab4b8dcc81f73cf1dfa4a435f51e5aa87d3b0f9c32dbfe9bee7ed17ad4"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/ConfirmationScreen.tsx",
+      "workingTreeSha256": "aaa1fd4df3f9c8c21566770004e9b2d337d2244885743c66fb1b8ca79365c7ef"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/ConnectedProfiles.tsx",
+      "workingTreeSha256": "046573b46fd967a2d35ea88a0867cf366809062c046fd7591d360208bb6175ab"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/ExitFlowDialog.tsx",
+      "workingTreeSha256": "7a2d58937036163d3a5b9a24f181b2005baac01598bb5e36646ef13e94d768ab"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/ExtendPay.tsx",
+      "workingTreeSha256": "b29a44baa86a6be789bcb1ad733193d96e226fc9e718a2aba6bf585bf5b063a0"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/ExtendQR.tsx",
+      "workingTreeSha256": "4bd60937f7c3b1f994e8367b202ae35379906684dba80c51f0741dcfe0424a3d"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/ExtendView.tsx",
+      "workingTreeSha256": "7950db32d87588c97b1c2a9ed3e8dd62757117a3230b8f7979ee0d6fa9be1426"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/IdleScreen.tsx",
+      "workingTreeSha256": "261d50b665826596a377d4f39477e85d64fdc3b9d4a05640084ec61fa3821fa3"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/JumpyardIcon.tsx",
+      "workingTreeSha256": "5b7274f1c01b6dba8d30f3e2cf8fdea8d61b2827a6ff14e2395ff36e6039b1eb"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/LanguageToggle.tsx",
+      "workingTreeSha256": "dd274678fc5c3c5bdfbc9b9b9a0f12eff6819d60e666ac91fe4e64a71852d2fd"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/PackageContentRows.tsx",
+      "workingTreeSha256": "4ffa77630b46def07da568d1c0130908e7bd150aaeb76ed2b8f176bd910deddc"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/ParkChoice.tsx",
+      "workingTreeSha256": "195a987abcb9e214423d50e82e4a1057ee4f260f7a36de0da9ab2ab2aef9cf9c"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/PaymentView.tsx",
+      "workingTreeSha256": "315a9875ad4e4f0b3176d6aba4025a93393cab6c8a12c16e8164f875a9c89b8f"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/PhonePaymentConfirmation.module.css",
+      "workingTreeSha256": "c70aa8c5234845aea0a4cae0ee752ec3e5f8723cda918c8f08fdc29b6efe5f8f"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/PhonePaymentConfirmation.test.mjs",
+      "workingTreeSha256": "b564b1a9eea5f2b7a73e74c23e34d84073d6ea77031413d8f60782bedff3f944"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/PhonePaymentConfirmation.tsx",
+      "workingTreeSha256": "44af44c63573c14874410cc0f4e348e5c07cd61866d8d0c6f8769b2f634ce63b"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/PresentCode.tsx",
+      "workingTreeSha256": "bf4e8110c0834d60924bb8a4795c442249cf78eb1da79522403bdc18e21ecf6d"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/QrCode.tsx",
+      "workingTreeSha256": "3c6e0452b7014070ea7022ca661558d9b6b2152e82352920c6e519c984883b0d"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/RollerPaymentDropIn.tsx",
+      "workingTreeSha256": "37db8ebeed36c3f440e3202cc61b193e9f96494d3fef96a75b184331cd6ac064"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/SafetyAttest.tsx",
+      "workingTreeSha256": "b230edb749ee66266d75a2ec7fc1a158d836b24170348ee2c1934a0723e8dbb5"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/SafetyVideo.tsx",
+      "workingTreeSha256": "2ffc70c81979e022a60ddf077d7da4ddc8de5ca81b0071c5053fedfa8daffe02"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/SkyRiderAttest.tsx",
+      "workingTreeSha256": "c8faeb5cf05f357e5245084eac16b6e89ad1419093dae8ac9e1c5703e52d33ac"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/StartScreen.tsx",
+      "workingTreeSha256": "2e3aec181e53276130392810cd6e07f513688d5bdb1ddd74dde27f277975aacc"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/components/SuccessPrint.tsx",
+      "workingTreeSha256": "dfe6caddcd78842b1a6775e660fb3ee67d0d3bde2e7c4e1b2142aff3931bb7bf"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/context/LanguageContext.tsx",
+      "workingTreeSha256": "17d65a1586585609aa6d5f842942e9d00b3d530dd2d3b477467f987edd17c182"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/context/weekdayComboCopy.ts",
+      "workingTreeSha256": "ff8159e319b528e0ecfc749df78389c3a1090db99c3010c0c69ddbc53049176a"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/addonCatalog.ts",
+      "workingTreeSha256": "898c1d8359826c8deddea20525afd6b2a43c5fe9188ba62ef6947e6782a73f13"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/addonChoices.ts",
+      "workingTreeSha256": "302cb925d035cc8552e06624fb550d699d1b48c08b5e7af54959afd5bf52359f"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/addonPaymentNavigation.test.mjs",
+      "workingTreeSha256": "c3aba96ee4d5882087ce840c2f19a3fa63e6e8ff1681a5ac04dccc4e36e2455a"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/addonPaymentNavigation.ts",
+      "workingTreeSha256": "098af332517316c8fe189a9ec8360cb494698a545688bc3d8e320203d4577b86"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/buyFlowRecovery.ts",
+      "workingTreeSha256": "f8cec5ff2cd49ace9dce74d0bc0d7d20db02969e0fdb7c8b34e67bc55cfb83d3"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/buyTicketsPaymentRecovery.test.mjs",
+      "workingTreeSha256": "e10e393d8c917697f89a83e03921cdb872f0fe4e27878323be8410e1c95e51ec"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/cloudClient.ts",
+      "workingTreeSha256": "bb1b1afddd41fab1ef9cc16ccb9420eb391177968f83cf6a05f8189917744f67"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/completedBookingView.test.mjs",
+      "workingTreeSha256": "c38ee41696460a2f1d8f75004e519511f1aadd1a1d719a7a1ccce926bdb21c5e"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/completedPurchaseRecovery.test.mjs",
+      "workingTreeSha256": "fdaa7b8ae534ea619cffc121e7c74aa9718c4bf285a53084ae83e3585890e9f0"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/exitFlowPolicy.test.mjs",
+      "workingTreeSha256": "50216540b63bdbb7404bd68894005126422bf57b2d2782a6423d12381664ec23"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/exitFlowPolicy.ts",
+      "workingTreeSha256": "7551b74f340682e0aeb51711eb07832491d61a694a4ef01c0ff0a60ebfe7840f"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/googlePaySubmissionRecovery.test.mjs",
+      "workingTreeSha256": "7a79f8395e1676946086c983d6f4807fe5c54eb684b82646dcd6f479ff081c54"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/languageToggle.test.mjs",
+      "workingTreeSha256": "ab642cb86f60d945951fe73b4b3ef248a402d2f749c919fe9e026accb39b2548"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/machine.ts",
+      "workingTreeSha256": "7ac61460084493e836dabb00ab029a9dfe14ff69e171e0d995fa8d6f6cf3733e"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/mockClient.ts",
+      "workingTreeSha256": "08824d71bc4068a553db9d00c324c4ef52a99901844e3fbdc60ab08f1f5dc573"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/packageContents.test.mjs",
+      "workingTreeSha256": "05cf427726506decbc00a24b73ba9a0d768efcd12820c93d6c44b2009406b306"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/packageContents.ts",
+      "workingTreeSha256": "bd5154e7948ce02161469a75122bd32382846c1fdd0c03e1e14cfdf3c6c4be5a"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/pagePaymentRecovery.test.mjs",
+      "workingTreeSha256": "eaf9fa814feed28471b094fba339f408d9a00632a875039043911e67fef4d1db"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/paidBookingConfirmation.test.mjs",
+      "workingTreeSha256": "0f2559d889a3d350c19ec44b494878365a6753ebf6f69e4995fb0b7e7fb550eb"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/paidBookingConfirmation.ts",
+      "workingTreeSha256": "90b6c9c297253910bcd269c7e5007aa91108e4f49568769914f22dc844ce4f8e"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/paymentMethodPolicy.test.mjs",
+      "workingTreeSha256": "d1a43bbfb51ba38c77a8ee529bb2c0dd6c8a8680ecfe011efe69e281d047db82"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/paymentMethodPolicy.ts",
+      "workingTreeSha256": "d8e4f0538f4b23513b430271748a7448b96aed3152f5476daeee6bbc16bb0104"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/paymentRecovery.test.mjs",
+      "workingTreeSha256": "156639baef6e7b22c130c38fdd220f9c208720ab1955152c1541ca1f9e0001eb"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/paymentRecovery.ts",
+      "workingTreeSha256": "bb332ee7bd571e7ef2b04f1e0751a9feb94559d3442f87a5d7b2ddcdf03beaca"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/phonePaymentConfirmation.test.mjs",
+      "workingTreeSha256": "853d993786cf43e7c2e52b9f0021bba82ec9497ac864e46c103a9f283c141d25"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/phonePaymentRecovery.test.mjs",
+      "workingTreeSha256": "72721516073aa00fa20e53494340a98944b5200939efdc90b65fb6e0e1c95ecf"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/productVisibility.test.mjs",
+      "workingTreeSha256": "24cabd4b811c3a1aa5d7335725d8c40311904363527542c55f7028bfc98d63e2"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/productVisibility.ts",
+      "workingTreeSha256": "c3b50561f614b0b76d2ef86852bbf82e0f2267381b8bfc854691dfca8e91b93f"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/productionMockBoundary.test.mjs",
+      "workingTreeSha256": "dd262b81d950946bc7d0ec19fe37661ddd92808c6a66481a885dcdb1d159f39b"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/purchasePreparation.test.mjs",
+      "workingTreeSha256": "ea19683afa7d8c5acd5018191e0fd75ce84af4060f574e0f55c2bc08c9a6873a"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/purchasePreparation.ts",
+      "workingTreeSha256": "3e4dda097c01a0a4173655d20cfc3aba45ddd95606e578dc668a0127c0a46c8b"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/purchasePreparationFlow.test.mjs",
+      "workingTreeSha256": "cf8104cf48edf8d82f3713a3d0f8cbacee0712430549a8c4fa95b05f8f545de3"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/safetyPlayback.test.mjs",
+      "workingTreeSha256": "5fda7e0998358640683b7e3796f03f5349856d7a285d26c8e336e37f6c41b477"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/safetyPlayback.ts",
+      "workingTreeSha256": "4664650c02a0490c707a73e12e7760be11a8e0930285140f8142e220554c2f12"
+    },
+    {
+      "file": "jumpyard-checkin-phone/src/flow/types.ts",
+      "workingTreeSha256": "2128cdf5ae20508de2bb557760310c20970dbf6eaed39d1daa73d679fbf47b7f"
+    },
+    {
+      "file": "jumpyard-checkin-phone/tsconfig.json",
+      "workingTreeSha256": "dbacf04aa5f38c1ce4b0f030fbb84e5adff19306fb785b2e4aafef9c58705658"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/adyen.d.ts",
+      "workingTreeSha256": "9e12bc4ca40ed6fc5e4d4f3594354b39331720f7ab84b0791b5c4ad8a4bfc71a"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/adyen.js",
+      "workingTreeSha256": "eddd1340fd17c3b46ec6a4a7d7acc56de665b166b01841317a060b06f86c88b2"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/adyen.model.d.ts",
+      "workingTreeSha256": "aa8258d2eb1e2dfad5436361cb9b17673a1726fa3d38922f12f1d134c7132c06"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/adyen.model.js",
+      "workingTreeSha256": "a362aad2c841a3dc2943fd32d52de6d8e49205bc63916f805dcefd382cf6d7f9"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/guid.service.d.ts",
+      "workingTreeSha256": "3186a33d52e7eef8dcb555971e96af76a640a9f8d78cd69d762247b2cce42539"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/guid.service.js",
+      "workingTreeSha256": "1b32910f1357859b88fa23604a1de9ce0984bbe49277290abed13092644e9931"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/index.d.ts",
+      "workingTreeSha256": "f92f80ca153681900aacf6ae86b79df37eb3f9116e98e866781b4738c5788796"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/index.js",
+      "workingTreeSha256": "f92f80ca153681900aacf6ae86b79df37eb3f9116e98e866781b4738c5788796"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/local-storage.service.d.ts",
+      "workingTreeSha256": "56dd2147560faa84ffb80c55096c98aec6eed354cb8a4e30b57ca6d3578815ff"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/local-storage.service.js",
+      "workingTreeSha256": "6a8b1d7ffdc1c7dbae9116288c632dd902baa18f267a615f98957f2db452ef69"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/non-persistent-storage.class.d.ts",
+      "workingTreeSha256": "79bdbbd528335d93112419ae0a4c83132bf84872ff95c03d3ddfb85cad29923e"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/non-persistent-storage.class.js",
+      "workingTreeSha256": "97e94dde9e5c176f8a885c9e9e071ce55025b2e63fd8c18aa36cb55926bd482d"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/payment-provider.d.ts",
+      "workingTreeSha256": "09791162b3672bef0a5ed7edd932bb14249ac4e56aaeb9adb91075ba266c02ac"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/payment-provider.js",
+      "workingTreeSha256": "af3e8f8a9097d9d5651c88dbde5cf07e3e0f503e3b6ec9a36bc7c9816923c979"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/payment.model.d.ts",
+      "workingTreeSha256": "8216299548785910c990eede71cd8f943b36186393f381cb4cd17236c267e339"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/payment.model.js",
+      "workingTreeSha256": "646955678dca58982627842f97a1355f1c097336a4dcd67e4aacc6be9f18212d"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/payment.service.d.ts",
+      "workingTreeSha256": "369ce5c3cb7e492fc4fe63ce4ab036f883717b2522c9ae34a0e7a505a1013c88"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/payment.service.js",
+      "workingTreeSha256": "91af5cb47704d7d3d7c9557d6084a3d928c41915727038fd67f6ce28713430bb"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/paypal/paypal.d.ts",
+      "workingTreeSha256": "ca6abfee8a83dae6f103888f0273917b84db6b3b07ef557de7a4dfb3f12b6544"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/paypal/paypal.js",
+      "workingTreeSha256": "3a99b047b4705238a6dbdf2b67666042ba990dcf83f5bc66f9afa3e91808db9f"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/paypal/paypal.model.d.ts",
+      "workingTreeSha256": "bdce51cdcd369517f58c93a592fe02e298aaec318218edf3741c47c284e0d9ef"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/paypal/paypal.model.js",
+      "workingTreeSha256": "fb6db641d280ecd60a2bb02b994a0d90ad0d463ddaccfd49ecdcf1d0afa969b9"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/url-helper.class.d.ts",
+      "workingTreeSha256": "98b7ba378b2e36f26d65ed3f470e309dfc455af9a9a2134e8c435e67136d68a4"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/dist/url-helper.class.js",
+      "workingTreeSha256": "29180fa95c54228e478d04a8ea7790311899bf9b8743c0bb51d50c7767440d9c"
+    },
+    {
+      "file": "jumpyard-checkin-phone/vendor/ecom-payments/package.json",
+      "workingTreeSha256": "8c98e80d9c54ee6bbc9259bc0bc07e00f7cadceca2232338450fc1d908dca227"
+    },
+    {
+      "file": "package.json",
+      "workingTreeSha256": "27a5b5a1ee4314998a26a85afcb0caf1ec07911515cd8be304648d726b1036cb"
+    },
+    {
+      "file": "scripts/build-park-test-release.js",
+      "workingTreeSha256": "a7d7db82781dd0bd112647ac2c28df3f3800e816b22a4cc458cad06533c69b68"
+    },
+    {
+      "file": "scripts/check-roller-env.js",
+      "workingTreeSha256": "90c1e9d81439a9fbf80cf575a123cb919dee55e3d196391cc5127cc90f7cc346"
+    },
+    {
+      "file": "scripts/compare-cloudformation-templates.js",
+      "workingTreeSha256": "2cc52c27df55a9fe17851c978c8dcf6cdeede3e169803374c737e686b43daced"
+    },
+    {
+      "file": "scripts/render-t0200-email-preview.js",
+      "workingTreeSha256": "bdca01e7f3070aecec1d3ef8a9a01e5f225b4d8ea63110ebc21351a1e7c8b129"
+    },
+    {
+      "file": "scripts/roller-client.js",
+      "workingTreeSha256": "7f0ace5ca3e0cd89277c06ba259737f3844dfd23aaccf2e10b8862f002c758ce"
+    },
+    {
+      "file": "scripts/roller-data-api-smoke.js",
+      "workingTreeSha256": "0d06561ba6f6f618255c463d9e3c5f4b4ea88dd4adcdd92896a8fe96192879c9"
+    },
+    {
+      "file": "scripts/roller-payment-discovery.js",
+      "workingTreeSha256": "b4c7ce1ab618b581af0361a3714cbbd2c12b20d6425a02a8fad14c2178a25ca2"
+    },
+    {
+      "file": "scripts/roller-payment-package-poc.js",
+      "workingTreeSha256": "93dc7a7659a322a776c1391b045697026297aee686af2700cb4295f5d1e7fb2a"
+    },
+    {
+      "file": "scripts/roller-payment-readiness.js",
+      "workingTreeSha256": "2d343f91d17c53c49f60d3fa435e58fcf57865e6022a3468205226f0a7b32084"
+    },
+    {
+      "file": "scripts/roller-seed-playground.js",
+      "workingTreeSha256": "e9dd18bf545928f11aa19be748269a909c693391606aeeb70907f47091b46366"
+    },
+    {
+      "file": "scripts/roller-smoke.js",
+      "workingTreeSha256": "abffa55e75ed20892100f4bf28854c5a0364ec73a35f315de1c59c2fb68a3885"
+    },
+    {
+      "file": "scripts/send-t0200-controlled-email.js",
+      "workingTreeSha256": "cecb3a79a29271ed1bf6eb12ce306657cebe60259f045ae76cc7383247f64d00"
+    },
+    {
+      "file": "scripts/validate-assisted-lookup-venue.js",
+      "workingTreeSha256": "feae457c27f9cf2c208aa4d3076fa9c03485751a9e968241b515ccb18fa346de"
+    },
+    {
+      "file": "scripts/validate-checkin-domain-release.js",
+      "workingTreeSha256": "cb3b6f7a522edc66c4362fbe1eea98326f2a2da3964c8588c61e381363e3a4b9"
+    },
+    {
+      "file": "scripts/validate-gh253-handoff-sync-products.js",
+      "workingTreeSha256": "518b1a9590e8bad38c299e577d39ac5352c2b047e3652dfbc3b3f6dc729ddda4"
+    },
+    {
+      "file": "scripts/validate-gh257-webhook-item-reconcile.js",
+      "workingTreeSha256": "73560b7b9a21a0fc479dd424820ae84d5e7e9438f985987a5f6b9667c61c9ee8"
+    },
+    {
+      "file": "scripts/validate-gh263-handoff-live-queue.js",
+      "workingTreeSha256": "e9201d5b1900bc9c44602b59aa7080d958e9ee1e96cf94c363ec213a04679028"
+    },
+    {
+      "file": "scripts/validate-gh264-pilot-production.js",
+      "workingTreeSha256": "bb6fc31032c8e42bf4a833511906fae67d4bb567858329ba04bd815eb8dd01a7"
+    },
+    {
+      "file": "scripts/validate-gh270-redeem-venue-session.js",
+      "workingTreeSha256": "06176d9f92ea85b19b80de041edfa02db98032fb14e8f8d50c4a0e3503aa13a9"
+    },
+    {
+      "file": "scripts/validate-gh274-redeem-success-visible.js",
+      "workingTreeSha256": "bb826fdc7b991829697114528a29c2d7d04372e36bae378d2d85f83e51ad9a46"
+    },
+    {
+      "file": "scripts/validate-gh279-redeem-item-reconcile.js",
+      "workingTreeSha256": "a70d7c923ce18eaf7fedacab62ac32fda5c44a06310bbcdbcbb05ecd07c88a7a"
+    },
+    {
+      "file": "scripts/validate-gh282-kiosk-handoff-repair.js",
+      "workingTreeSha256": "61a811746459be482fdc540c2ad79e62cd5ee53fd0baab96922ec3b59d4d849e"
+    },
+    {
+      "file": "scripts/validate-gh285-kiosk-addon-terminal.js",
+      "workingTreeSha256": "356a7b31959da537da492fa1b6554c589cca077ee2b2c547831abe7fd66861d8"
+    },
+    {
+      "file": "scripts/validate-gh289-handoff-linked-addons.js",
+      "workingTreeSha256": "5d068ef1a43e51414758045d860805cf24b1283edb56e4e24d53f890f769b317"
+    },
+    {
+      "file": "scripts/validate-gh294-product-cache-sync.js",
+      "workingTreeSha256": "8bba56665311db67386467ae76cb0e66cdc86cab0b9d0646acd3b5f413732e0b"
+    },
+    {
+      "file": "scripts/validate-gh300-guest-linked-addons.js",
+      "workingTreeSha256": "bccec7dd56bc0f216d5ef673e5e4d96bc2e395e14329765900151a933d08d3c3"
+    },
+    {
+      "file": "scripts/validate-gh305-cross-device-safety-resume.js",
+      "workingTreeSha256": "e55dfe3c89b40766abd446847b21218400f4ace86a80a304fd9de13af5db187c"
+    },
+    {
+      "file": "scripts/validate-gh315-water-product.js",
+      "workingTreeSha256": "dc029c0255601151cd131e3ac58e99bd8450f5e9b39de9a00f436849e696a17a"
+    },
+    {
+      "file": "scripts/validate-gh333-staff-redeem-recovery.js",
+      "workingTreeSha256": "4ba8f7e4c2c71fcfce404ffdbd8894ba3eab095e648e32c2560d7a8670f6c30b"
+    },
+    {
+      "file": "scripts/validate-gh335-alarm-routing.js",
+      "workingTreeSha256": "b12262e993190c5cf9fc390cf6ebec0d9b77c577bbb98a4a9feeabedddec6704"
+    },
+    {
+      "file": "scripts/validate-gh338-exact-payment-status.js",
+      "workingTreeSha256": "3115728ca119cd6cc9686691fae3b7937bb796caa10732b5e982f1719a2d14dc"
+    },
+    {
+      "file": "scripts/validate-gh339-addon-catalog.js",
+      "workingTreeSha256": "aeb8fb87266f629553707bcf86cbd9dfc5ef0f30abfb56ba4b793e3192485314"
+    },
+    {
+      "file": "scripts/validate-gh339-product-refresh.js",
+      "workingTreeSha256": "0b953e5a4533f0f28ceb067e476d09c60ed068607ea93d9cbeedd0ec5ebd6bbf"
+    },
+    {
+      "file": "scripts/validate-gh340-server-errors.test.js",
+      "workingTreeSha256": "96a12ac37e149386b9d42e3faa952f272e7bcde0895e06ad511d15686651cbc5"
+    },
+    {
+      "file": "scripts/validate-gh341-catalog-availability.js",
+      "workingTreeSha256": "13d237b35cb78199cd815910116fc4b93568c527b756c959999cb4872e030e2e"
+    },
+    {
+      "file": "scripts/validate-gh345-handout-api.test.js",
+      "workingTreeSha256": "681ce5369b75c8d15a52b4ddb88614452506ad1db3262af34051bdf6150a9aff"
+    },
+    {
+      "file": "scripts/validate-gh345-staff-handout.js",
+      "workingTreeSha256": "9f4837db0e4abeb62f6a59a31789a7cea08175fa69889f9598913c9878998d33"
+    },
+    {
+      "file": "scripts/validate-gh403-lookup-audit.test.js",
+      "workingTreeSha256": "50bea0651125ed0bc56f378441b0754a678ac34cb3d6774c2500aaa34953af3a"
+    },
+    {
+      "file": "scripts/validate-github-project-migration.js",
+      "workingTreeSha256": "4ed2540638df87a514a48395649256b75c9690014b53bc8096c8e25c53417c53"
+    },
+    {
+      "file": "scripts/validate-history-archives.js",
+      "workingTreeSha256": "a9523d805602514b24d06fe952412f7e62e9ab580087309f210a11d7b86b286a"
+    },
+    {
+      "file": "scripts/validate-kiosk-payment-reconciliation.js",
+      "workingTreeSha256": "0ca9d38001eb5fbebbf533db7eacc388c7ca8e4790897050c3209af8ed78a358"
+    },
+    {
+      "file": "scripts/validate-kiosk-terminal-backend.js",
+      "workingTreeSha256": "e5e13fa42f0f22f0f74eb7e4ffd8c965e86c34f5f0af76f1d42cc74b7cc2505e"
+    },
+    {
+      "file": "scripts/validate-park-test-frontend-target.js",
+      "workingTreeSha256": "9725f1a6cdf991d215fbe4254540e688b2ccd25ddb6a4d58c16b63719741a79f"
+    },
+    {
+      "file": "scripts/validate-park-test-release.js",
+      "workingTreeSha256": "cee396530493f2216272e48ca25bc3ac5e31f0cb9bc1916e1429262d89003088"
+    },
+    {
+      "file": "scripts/validate-t0177-contact-lookup.js",
+      "workingTreeSha256": "381d4d53e8ac3b845de24a6bdbdc0d59a938a53b67df34e97c6650b32fb04101"
+    },
+    {
+      "file": "scripts/validate-t0190-safety-gates.js",
+      "workingTreeSha256": "592c279f680c2e1950830e3ae5fd839a2b50caeb69f0512ad50adee0b42d131f"
+    },
+    {
+      "file": "scripts/validate-t0192-request-item-dates.js",
+      "workingTreeSha256": "539362416ba4c222c71c5a543b55ef9e1c1756901e73b4ffa6b9964ee5a42a43"
+    },
+    {
+      "file": "scripts/validate-t0193-api-protection.js",
+      "workingTreeSha256": "a5cd5d8a432ba5d940dd5e0c7e1aa28655daa6e03e2b59d8079fc1d71f641b59"
+    },
+    {
+      "file": "scripts/validate-t0193-capacity.js",
+      "workingTreeSha256": "7c062d93764c1223abb2f1cbb08dc7921f4eb9212302b6b102b4baeecef93388"
+    },
+    {
+      "file": "scripts/validate-t0193-guest-access.js",
+      "workingTreeSha256": "319a54f3ec7e17f133a8c4e6d61141359a1ff46c4f7db0d757e1d2a26a8fbb8a"
+    },
+    {
+      "file": "scripts/validate-t0193-payload-limits.js",
+      "workingTreeSha256": "bf8a511823a8b5362f3e11920dcdeb42572266c6e9feebf2296ccc2e6e1be889"
+    },
+    {
+      "file": "scripts/validate-t0193-service-auth.js",
+      "workingTreeSha256": "024c418a796f7911410a28b9ee1e897f187b3bd9e34df9ebca825b0abac8a4a1"
+    },
+    {
+      "file": "scripts/validate-t0194-staff-identity-backend.js",
+      "workingTreeSha256": "06a1cca5aa771a985dd5ef22e4729a134869d553af44ab1361b173b73ddc0083"
+    },
+    {
+      "file": "scripts/validate-t0194-staff-identity-frontend.js",
+      "workingTreeSha256": "1e3300f03c57bfb307c03fc3c54a83de9d0a14a908b38bc756f04ce1dc3c9e4c"
+    },
+    {
+      "file": "scripts/validate-t0194-staff-identity-infra.js",
+      "workingTreeSha256": "13769a7f052ccf1b2cbe0e73119541bd9a0c899b4d16c3a95f8984d1058b5fed"
+    },
+    {
+      "file": "scripts/validate-t0195-aurora-recovery.js",
+      "workingTreeSha256": "a03f2f6fa08908b2387faee8068c3201f9791285517b56e9e4f50f05b24dc325"
+    },
+    {
+      "file": "scripts/validate-t0195-data-lifecycle.js",
+      "workingTreeSha256": "0108acaa5ac3ff70b8204bf2d4acca4fc509d8aba6c2148a8507d62fb5c12ba0"
+    },
+    {
+      "file": "scripts/validate-t0195-phone-local-contact.js",
+      "workingTreeSha256": "cf7a332e4b2b1f1f7c1bc9dbd33c359466cee8ea1f0ddbc319dc7a4d279b2970"
+    },
+    {
+      "file": "scripts/validate-t0195-pin-pepper-lifecycle.js",
+      "workingTreeSha256": "c2790903fff04c6082f562a6ff07ca793b9451258ef74e90d39505369b15411b"
+    },
+    {
+      "file": "scripts/validate-t0196-booking-index.js",
+      "workingTreeSha256": "3b30ff84ca22dbdef7d15fc7438126ad6301e0338383b13027d10eb3ce33d1e5"
+    },
+    {
+      "file": "scripts/validate-t0197-webhook-reconciliation.js",
+      "workingTreeSha256": "f74e91d60e4799eae75c8b7cf3527dbf940f3a3a5a37919cde9d608b81cb3cd0"
+    },
+    {
+      "file": "scripts/validate-t0199-production-domains.js",
+      "workingTreeSha256": "532033731e100e0d127189a40481ce5a96fa912293ffeaf6514a5d714712e394"
+    },
+    {
+      "file": "scripts/validate-t0200-email-sender.js",
+      "workingTreeSha256": "5e38e85a1086d4cb873943fafff30ceb57ee7490dfa08c46d52f6607c6e337c0"
+    },
+    {
+      "file": "scripts/validate-t0201-controlled-t30-email.js",
+      "workingTreeSha256": "2c0d6e2a55bf25ebc5dd77fb4ee0383ad621a4e515400fdd9b000521667d491c"
+    },
+    {
+      "file": "scripts/validate-t0202-checkin-domain-test.js",
+      "workingTreeSha256": "0b8ac50ff70ce44f0f51eabeb33f3f064ebdf7ec4a10e34d9c9269806edb9d90"
+    },
+    {
+      "file": "scripts/verify-public-checkin-domain.js",
+      "workingTreeSha256": "844f25fd21c444b366430aa5b5ad5ad56808513a2cd184aefb60f57ddc47eee2"
+    },
+    {
+      "file": "scripts/verify-public-park-test.js",
+      "workingTreeSha256": "918b40a65226706180099ce6a6ac708b32486c438b6fad721ab61d413456f4b4"
+    }
+  ]
+}

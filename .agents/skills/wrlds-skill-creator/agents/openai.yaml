@@ -1,0 +1,4 @@
+interface:
+  display_name: "WRLDS Skill Creator"
+  short_description: "Create focused Codex skills"
+  default_prompt: "Use $wrlds-skill-creator to create a concise WRLDS skill for the requested workflow."
