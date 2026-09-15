@@ -73,6 +73,11 @@ jobs:
           GH403_DATABASE_TEST: 'true'
           GH403_PGPORT: '55435'
         run: npm run validate:gh403-lookup-audit
+      - name: Test kiosk terminal reservations against PostgreSQL
+        env:
+          GH327_DATABASE_TEST: 'true'
+          GH327_PGPORT: '55435'
+        run: npm run validate:gh327-kiosk-terminal-binding
 
   repository:
     name: Repository

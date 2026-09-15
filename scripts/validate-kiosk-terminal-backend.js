@@ -37,6 +37,10 @@ const terminalMap = normalizePaymentTerminalMap({
   ignored: 123,
 });
 assert.deepEqual(terminalMap, {
+  missingDevice: {
+    terminalId: 'server-owned-terminal',
+    promptForTip: false,
+  },
   primary: {
     deviceId: 'server-owned-device',
     terminalId: 'server-owned-terminal',
@@ -62,6 +66,13 @@ assert.equal(
   resolveKioskPaymentTerminal(
     { paymentTerminals: terminalMap },
     { channel: 'kiosk', paymentTerminalAlias: 'missing' },
+  ).error.code,
+  'kiosk_payment_terminal_not_configured',
+);
+assert.equal(
+  resolveKioskPaymentTerminal(
+    { paymentTerminals: terminalMap },
+    { channel: 'kiosk', paymentTerminalAlias: 'missingDevice' },
   ).error.code,
   'kiosk_payment_terminal_not_configured',
 );
