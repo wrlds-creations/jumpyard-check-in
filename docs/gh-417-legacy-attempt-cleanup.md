@@ -24,7 +24,7 @@ In-memory before/after comparisons proved that **every other draft, every cached
 
 Before apply and on verification, the existing Aurora cluster was encrypted, deletion-protected and had at least seven days of backup retention with a recent restore point. Recovery, if needed, means supervised isolated point-in-time restore to before this operation followed by exact record recovery; never overwrite the active pilot database to recover these six rows. No separate snapshot/resource was created.
 
-Provider business writes: **0**. Payment retries, refunds, booking cancellations, guest messages and lock releases: **0**. No schema, IAM, resource, secret, runtime, deployment or general retention-policy change occurred. The deployed backend remains release `34966352071` / Park `34967225013`; no rollback or re-promotion occurred.
+Provider business writes: **0**. Payment retries, refunds, booking cancellations, guest messages and lock releases: **0**. No schema, IAM, resource, secret, runtime, deployment or general retention-policy change occurred in this cleanup. Kiosk binding was deployed by release `34966352071` / Park `34967225013`; the parallel #407 promotion subsequently used release `34977478153` / Park `34978297036` with the identical backend template and no resource/code delta. No rollback or re-promotion was performed by #417.
 
 ## Completion boundary
 
