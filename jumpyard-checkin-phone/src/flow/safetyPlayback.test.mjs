@@ -193,3 +193,50 @@ test('dispose pauses media, clears timers, and prevents every late callback', as
   assert.equal(h.events.length, count);
   assert.equal(h.timers, 0);
 });
+
+test('a browser denying automatic language playback offers explicit resume from zero', async () => {
+  const h = harness();
+  h.video.play = () => Promise.reject(new DOMException('Gesture required', 'NotAllowedError'));
+  h.controller.start({ automatic: true });
+  await flush();
+  assert.deepEqual(h.state, { phase: 'paused', progress: 0 });
+  assert.equal(h.timers, 0);
+  h.video.play = () => Promise.resolve();
+  h.controller.start();
+  assert.equal(h.state.phase, 'loading');
+  assert.equal(h.video.currentTime, 0);
+});
+
+test('automatic language playback still reports actual media failures', async () => {
+  const h = harness();
+  h.video.play = () => Promise.reject(new DOMException('Bad source', 'NotSupportedError'));
+  h.controller.start({ automatic: true });
+  await flush();
+  assert.equal(h.state.phase, 'error');
+});
+
+test('synchronous automatic permission denial also retains explicit resume', () => {
+  const h = harness();
+  h.video.play = () => { throw new DOMException('Gesture required', 'NotAllowedError'); };
+  h.controller.start({ automatic: true });
+  assert.deepEqual(h.state, { phase: 'paused', progress: 0 });
+  assert.equal(h.timers, 0);
+});
+
+test('a retired language cannot pause or complete the next language', async () => {
+  const old = harness();
+  const delayed = deferred();
+  old.video.play = () => delayed.promise;
+  old.controller.start({ automatic: true });
+  old.controller.dispose();
+  const current = harness();
+  current.play();
+  delayed.reject(new DOMException('Old gesture', 'NotAllowedError'));
+  old.finish();
+  await flush();
+  assert.equal(current.state.phase, 'playing');
+  assert.equal(current.video.currentTime, 0);
+  assert.equal(old.timers, 0);
+  current.finish();
+  assert.equal(current.state.phase, 'done');
+});
