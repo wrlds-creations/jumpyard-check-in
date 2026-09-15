@@ -88,6 +88,9 @@ function harness({ recovery = false, zeroPurchase = false, lookup = async () => 
   let record = zeroPurchase ? null : { ...payment };
   const state = {
     AbortController, Error,
+    useCallback: fn => fn,
+    quoteRequestVersionRef: { current: 0 },
+    quoteOperationInFlightRef: { current: false },
     draft: zeroPurchase ? null : draft,
     selectedProduct: { productId: 'entry-original', type: 'entry', startTime: '10:00' }, selectedTime: '10:00', jumperCount: 2,
     step: 'PAYMENT', paymentReadyForSafety: false, paymentSyncError: null, paymentContinuePending: false,
@@ -162,7 +165,7 @@ function harness({ recovery = false, zeroPurchase = false, lookup = async () => 
   ] : [
     ...['getDraftAmountOwing', 'getDraftPaymentAttemptId', 'writeDraftRecovery',
       'resolvePaidDraftBooking', 'continueAfterApprovedPayment'].map(name => declaration('buy', name)),
-    ...(zeroPurchase ? ['createDraft', 'clearPaymentSyncState'].map(name => declaration('buy', name)) : []),
+    ...(zeroPurchase ? ['invalidateQuote', 'createDraft', 'clearPaymentSyncState'].map(name => declaration('buy', name)) : []),
     `const onBookingReady = ${prop('page', 'BuyTickets', 'onBookingReady')};`,
     `const approve = ${prop('buy', 'RollerPaymentDropIn', 'onApproved')};`,
     `const retry = ${prop('buy', 'PhonePaymentConfirmation', 'onRetryPreparation')};`,

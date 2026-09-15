@@ -9,7 +9,7 @@
     "test:product-visibility": "node --experimental-default-type=module --experimental-strip-types --test src/flow/productVisibility.test.mjs",
     "test:exit-flow": "node --no-warnings --experimental-strip-types --test src/flow/exitFlowPolicy.test.mjs",
     "test:addon-back": "node --no-warnings --experimental-strip-types --test src/flow/addonPaymentNavigation.test.mjs",
-    "test:safety-video": "node --no-warnings --experimental-strip-types --test src/flow/safetyPlayback.test.mjs",
+    "test:safety-video": "node --no-warnings --experimental-strip-types --test src/flow/safetyPlayback.test.mjs src/flow/safetyMedia.test.mjs",
     "test:payment-confirmation": "node --no-warnings --experimental-strip-types --test src/flow/phonePaymentConfirmation.test.mjs src/components/PhonePaymentConfirmation.test.mjs src/flow/purchasePreparation.test.mjs src/flow/purchasePreparationFlow.test.mjs src/app/preview/payment/PhonePaymentPreview.test.mjs",
     "test:payment-recovery": "node --no-warnings --experimental-strip-types --test src/flow/paymentRecovery.test.mjs src/flow/phonePaymentRecovery.test.mjs src/flow/googlePaySubmissionRecovery.test.mjs src/flow/buyTicketsPaymentRecovery.test.mjs src/flow/pagePaymentRecovery.test.mjs src/flow/completedPurchaseRecovery.test.mjs src/flow/completedBookingView.test.mjs",
     "test:payment-methods": "node --no-warnings --experimental-strip-types --test src/flow/paymentMethodPolicy.test.mjs",
@@ -18,7 +18,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:production-mock-boundary": "node --no-warnings --experimental-strip-types --test src/flow/productionMockBoundary.test.mjs",
-    "postbuild": "node scripts/verify-production-mock-boundary.mjs"
+    "postbuild": "node scripts/verify-production-mock-boundary.mjs",
+    "test:payment-options": "node --no-warnings --experimental-strip-types --test src/flow/paymentOptionFeedback.test.mjs"
   },
   "dependencies": {
     "@roller/ecom-payments": "file:vendor/ecom-payments",

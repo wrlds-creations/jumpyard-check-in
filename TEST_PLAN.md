@@ -1,8 +1,18 @@
 # Test Plan
 
+## Kiosk installation binding (#327)
+
+Run `npm run validate:gh327-kiosk-terminal-binding` for both draft handlers and profile authorization. Set `GH327_DATABASE_TEST=true` for the disposable PostgreSQL concurrency/role test (local port 55327, CI port 55435). [Contract, rollout and physical acceptance](docs/gh-327-kiosk-terminal-binding.md) distinguish local evidence from the outstanding attended terminal proof.
+
 Use this file to define active validation for the current project or milestone. Historical validation evidence was moved to [docs/history/validation-log.md](docs/history/validation-log.md) during T0128.
 
 ## Current Root Validation
+
+### Localized safety media (#343)
+
+- `npm --prefix jumpyard-checkin-phone run test:safety-video`: media hashes, fast-start atom order, per-language size budgets, playback recovery and stale/denied language-play attempts.
+- After the phone production build, run `node scripts/verify-safety-video-browser.mjs` from `jumpyard-checkin-phone` with an existing Playwright installation (`PLAYWRIGHT_MODULE` can identify its entry file). The isolated temporary fixture uses real production-mode components and exported styles/media; it is never published. It measures first frames at 10 Mbps/100 ms RTT (five samples), a slow-network case, cached return requests, rapid language changes, full viewing, pause/failure recovery, saved preference and StrictMode, at 320/390 px. `SAFETY_BROWSER_OUTPUT` selects the evidence directory.
+- Record first-run outliers and any missed timing target. Physical Safari/PWA, Android, actual hosted cache headers and shared park Wi-Fi remain distinct post-promotion checks.
 
 | Command | Purpose | Expected Result |
 |---|---|---|
@@ -40,6 +50,14 @@ Use this file to define active validation for the current project or milestone. 
 | `npm run validate` | Run root workflow/current-ticket/followup/history/tag checks, T0193/T0194 regressions, all T0195 lifecycle/security/recovery validators, T0196 booking-index validation, T0197 webhook reconciliation validation, T0198 delivery controls, T0199 domains, and T0200 email sender readiness. | Passes locally without changing AWS, Roller, credentials, data, snapshots, DNS, Cloudflare, SMS, email, or production. |
 | `git diff --check` | Check the current working diff for whitespace errors. | Passes; CRLF conversion warnings are acceptable if the command exits 0. |
 | `npm run validate:gh339-catalog-resilience` | Prove independent product refresh, fresh-price omission diagnostics, optional catalog failure isolation, bounded response-body waits and unchanged authoritative time-slot availability. | 27 scenarios pass with synthetic AWS/HTTP responses; no live calls. |
+
+## Discount And Gift-Card Feedback (#407)
+
+Verify standalone Apply stays on Contact with updated quote/price and no draft, including partial/full coverage. Check duplicate Apply, Apply versus Continue, late responses, request retry, contact requirements and a fresh quote on Continue. Kiosk parity belongs to kiosk #99.
+
+- Run `npm --prefix jumpyard-checkin-phone run test:payment-options` (also included in `npm run validate`). Synthetic tests exercise the actual input/quote handlers for initial entry, positive/negative/no-effect evidence, edits/removal, one code type at a time (type switch and cross-clearing), Continue rechecking a rejected code and continuing without it, contact/basket changes, late responses, separate code payloads, and paid/free continuation.
+- Regress `test:payment-recovery`, `test:payment-confirmation`, and `test:addon-back`; run phone lint, TypeScript/build and `npm run infra:check`.
+- Inspect the production export against a loopback-only synthetic API at 320/390px in Swedish and English. Verify discoverable labels, neutral new-code feedback, rejection, accepted amount, edit/removal invalidation and a late response after Back. Real code values, ROLLER business writes and deployment are excluded.
 
 ## Application Validation
 

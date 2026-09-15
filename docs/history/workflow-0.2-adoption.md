@@ -34,3 +34,7 @@ Full npm run validate and npm run infra:check passed on 2026-09-15 after install
 Publication, CI, review, merge and any automatically triggered previews/production builds are still separate pending actions. Existing original checkouts remain untouched.
 
 Archived AGENTS instructions use the filename AGENTS.before-workflow-0.2.md so historical text cannot become an active nested agent instruction.
+
+## Mainline reconciliation before publication
+
+The original local evidence above uses the initial base recorded at the top. Before publication, the workflow branch incorporated reviewed mainline 4bd7501c62997180d6177006c9827443b5495d32. New product, media, terminal-provisioning and release evidence is retained. Workflow changes remain limited to instructions, skills, tooling and their documentation. The PR carries subsequent validation evidence against this combined branch.
