@@ -59,6 +59,7 @@ function harness({ provider = async () => quote(), draftAmount = 0 } = {}) {
     useCallback: fn => fn,
     PAYMENT_OPTION_CODE_MAX_LENGTH: 32,
     quoteRequestVersionRef: { current: 0 },
+    appliedQuoteRef: { current: null },
     quoteOperationInFlightRef: { current: false },
     paymentInputsHaveValues: true,
     setApplyingCodes: value => { state.applyingCodes = value; },
@@ -103,6 +104,94 @@ function harness({ provider = async () => quote(), draftAmount = 0 } = {}) {
   }).outputText, vm.createContext(state));
   return { state, events, ...state.handlers };
 }
+
+for (const kind of ['discountCodes', 'giftCards']) {
+  for (const amount of [100, 200]) {
+    test(`Apply then Continue: ${kind} ${amount} keeps its accepted quote and makes one draft`, async () => {
+      const host = harness({ provider: async () => quote(amount, [], kind), draftAmount: 200 - amount });
+      if (kind === 'giftCards') {
+        host.state.giftCardInputs = [{ giftCardNumber: 'synthetic-gift' }];
+        host.state.discountCodeInputs = [];
+      }
+      await host.applyPaymentOptions();
+      const accepted = host.state.quote;
+      const eventCount = host.events.length;
+      await host.createDraft();
+      assert.equal(host.events.filter(([type]) => type === 'request').length, 1);
+      assert.equal(host.events.filter(([type]) => type === 'create').length, 1);
+      assert.equal(host.state.quote, accepted);
+      assert.ok(host.events.slice(eventCount).every(([type, value]) => type !== 'quote' || value === accepted),
+        'accepted feedback and discounted total never clear during Continue');
+      const create = host.events.find(([type]) => type === 'create')[1];
+      assert.equal(create[4], host.state.giftCardInputs);
+      assert.equal(create[5], host.state.discountCodeInputs);
+      assert.equal(host.state.step, amount === 200 ? 'PENDING' : 'PAYMENT');
+    });
+  }
+}
+
+for (const change of ['updateClipCardCode', 'updateGiftCardNumber', 'contact', 'basket', 'back', 'type', 'remove']) {
+  test(`Continue requotes after an applied quote is invalidated by ${change}`, async () => {
+    const host = harness({ draftAmount: 100 });
+    await host.applyPaymentOptions();
+    if (change === 'contact') host.updateContact(() => {}, 'changed@example.invalid');
+    else if (change === 'basket') host.invalidateQuote();
+    else if (change === 'back') host.backFromStep();
+    else if (change === 'type') host.selectPaymentOptionType('giftCard');
+    else if (change === 'remove') host.removePaymentOption();
+    else host[change]('synthetic-new');
+    assert.equal(host.state.quote, null);
+    assert.equal(host.state.appliedQuoteRef.current, null);
+    await host.createDraft();
+    assert.equal(host.events.filter(([type]) => type === 'request').length, 2);
+    assert.equal(host.events.filter(([type]) => type === 'create').length, 1);
+  });
+}
+
+for (const expiresAt of [null, new Date(Date.now() + 86400000).toISOString(), '2000-01-01T00:00:00Z', 'invalid']) {
+  test(`Continue only reuses an Apply quote within its supplied expiry: ${expiresAt}`, async () => {
+    const host = harness({ provider: async () => ({ ...quote(100), expiresAt }), draftAmount: 100 });
+    await host.applyPaymentOptions();
+    await host.createDraft();
+    const reusable = expiresAt === null || Date.parse(expiresAt) > Date.now();
+    assert.equal(host.events.filter(([type]) => type === 'request').length, reusable ? 1 : 2);
+    assert.equal(host.events.filter(([type]) => type === 'create').length, 1);
+  });
+}
+
+test('rejected Apply cannot become a reusable quote or bypass the rejection decision', async () => {
+  const host = harness({ provider: async () => quote(0, [{ code: 'synthetic-invalid' }]) });
+  await host.applyPaymentOptions();
+  assert.equal(host.state.appliedQuoteRef.current, null);
+  host.state.paymentInputsBlockingErrors = true; // Derived by the next React render.
+  await host.createDraft();
+  assert.equal(host.state.codeRejectedDialogOpen, true);
+  assert.equal(host.events.filter(([type]) => type === 'request').length, 1);
+  assert.equal(host.events.filter(([type]) => type === 'create').length, 0);
+});
+
+test('Continue reusing Apply still locks concurrent actions and obeys the final draft amount', async () => {
+  const host = harness({ provider: async () => quote(200) });
+  await host.applyPaymentOptions();
+  const accepted = host.state.quote;
+  const pending = deferred();
+  host.state.createDraftBooking = async (...args) => {
+    host.events.push(['create', args]);
+    return pending.promise;
+  };
+  host.state.setSubmitting = () => {}; // Before React rerenders, only the ref can guard.
+  const checkout = host.createDraft();
+  assert.equal(host.state.quote, accepted);
+  await host.createDraft();
+  await host.applyPaymentOptions();
+  assert.equal(host.events.filter(([type]) => type === 'request').length, 1);
+  assert.equal(host.events.filter(([type]) => type === 'create').length, 1);
+  pending.resolve({ draft: { costs: { amountOwing: 100 } }, prepayment: { amountOwing: 100 } });
+  await checkout;
+  assert.equal(host.state.step, 'PAYMENT', 'draft amount remains authoritative even if the earlier quote was free');
+  assert.equal(host.events.filter(([type]) => type === 'resolve').length, 0);
+  assert.equal(host.state.quoteOperationInFlightRef.current, false);
+});
 
 for (const update of ['updateClipCardCode', 'updateGiftCardNumber']) {
   test(`${update}: initial entry, editing and removal discard previous totals and feedback`, () => {
@@ -216,7 +305,7 @@ test('Apply synchronously prevents duplicate requests and simultaneous Continue'
   await applying;
   assert.equal(host.state.quoteOperationInFlightRef.current, false);
   await host.createDraft();
-  assert.equal(host.events.filter(([type]) => type === 'request').length, 2, 'Continue rechecks the quote');
+  assert.equal(host.events.filter(([type]) => type === 'request').length, 1, 'Continue reuses the completed Apply');
   assert.equal(host.events.filter(([type]) => type === 'create').length, 1);
 });
 

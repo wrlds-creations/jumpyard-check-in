@@ -390,3 +390,7 @@ Issue #417 records Love's 2026-09-15 authorization to remove exactly six obsolet
 ## Workflow 0.2 — 2026-09-15
 
 Issue #406 adopts task-directed reading, native skills and repository-qualified issue resolution. Domain modules: aws. Preserve prior decisions and stricter product, privacy, hardware and release gates. Revisit module selection after an approved architecture/ownership change.
+
+## Reuse the applied checkout quote — #421 (2026-09-15)
+
+Love reported duplicate code checking and a visible price reset after the deployed Apply flow. #421 explicitly supersedes the earlier separate Continue-revalidation requirement. Keep the successful Apply quote in component memory until code, contact, basket, time/product, back or unmount invalidates it. Continue reuses that result without clearing totals; a supplied expiry must still be valid. Unapplied, rejected, invalidated or expired quotes do not bypass the existing check/decision path. The actual draft still sends the selected code and returns the authoritative amount; no persistent code cache or backend/payment contract changes. Paired issue: wrlds-creations/jumpyard-check-in-kiosk#111. Revisit if the provider quote/draft contract or approved checkout interaction changes.

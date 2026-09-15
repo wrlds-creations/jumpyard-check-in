@@ -90,6 +90,7 @@ function harness({ recovery = false, zeroPurchase = false, lookup = async () => 
     AbortController, Error,
     useCallback: fn => fn,
     quoteRequestVersionRef: { current: 0 },
+    appliedQuoteRef: { current: null },
     quoteOperationInFlightRef: { current: false },
     draft: zeroPurchase ? null : draft,
     selectedProduct: { productId: 'entry-original', type: 'entry', startTime: '10:00' }, selectedTime: '10:00', jumperCount: 2,
