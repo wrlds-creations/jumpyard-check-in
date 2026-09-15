@@ -5,7 +5,7 @@ Use this file as the short snapshot of what actually exists. Operational work st
 ## Snapshot
 
 - Date: 2026-09-15
-- Backend/Park: `ce7c795` ([#327](docs/gh-327-kiosk-terminal-binding.md)): V210 paid proof; P400 pending. Public frontends: `65efb38` (#343 SV/EN video). #403 lookup grant; #345 handout/daily codes/early café; APK accepted (#401). #353 Klarna; #340 diagnostics; #335 alarms; #374 Apple Pay.
+- Backend/Park: `ce7c795` ([#327](docs/gh-327-kiosk-terminal-binding.md)): V210 paid proof; P400 pending. Public frontends: `4bd7501` ([#407](docs/gh407-code-feedback.md) apply codes; #343 SV/EN video). #403 lookup grant; #345 handout/daily codes/early café; APK accepted (#401). #353 Klarna; #340 diagnostics; #335 alarms; #374 Apple Pay.
 - Operations: private [Project](https://github.com/orgs/wrlds-creations/projects/5), shared across all four JumpYard repositories; each new item names its exact Target repository.
 - Runtime: Park has 208 resources, migrations through `0023`, and 28 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption and late Handoff attachment are proven. Definitive kiosk payment approval returns its provisional session and bounded `safety` hint before ROLLER readback; redemption still requires authoritative synchronization. Physical proof: kiosk #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.

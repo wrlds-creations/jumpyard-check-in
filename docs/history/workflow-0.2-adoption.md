@@ -38,3 +38,5 @@ Archived AGENTS instructions use the filename AGENTS.before-workflow-0.2.md so h
 ## Mainline reconciliation before publication
 
 The original local evidence above uses the initial base recorded at the top. Before publication, the workflow branch incorporated reviewed mainline 4bd7501c62997180d6177006c9827443b5495d32. New product, media, terminal-provisioning and release evidence is retained. Workflow changes remain limited to instructions, skills, tooling and their documentation. The PR carries subsequent validation evidence against this combined branch.
+
+A later documentation-only mainline update, 974e7ff142252a6b2293874a4fb1d125a0f6bc9b, was reconciled before handoff. The latest public apply-codes release evidence is retained alongside the verified shared-Project ownership; product code is unchanged.
