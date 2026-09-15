@@ -109,3 +109,25 @@ At 14:21:56 UTC the existing secret received the reviewed, version-guarded P400 
 Love authenticated with the private Android credential and saved Kiosk 2. Native readback confirmed the choice; the existing browser initially retained Kiosk 1. A supervised wrapper/Chrome restart, while still idle, preserved the native settings/capability and loaded Kiosk 2 with the private fragment removed and no purchase recovery. Browser scripts match the already-published kiosk #99 source `93b0e9b` / Pages `c8239a54-1409-4efc-99f5-8f8b31c7e83d`, which retains #86 and #102. The installed hash-verified `0.1.6-debug` APK is unchanged. No app data was cleared.
 
 After 14:26:56 UTC, beyond the five-minute configuration cache boundary, live old-profile, wrong-venue and tampered-capability probes each returned `409 kiosk_installation_not_authorized` before provider writes. The focused binding suite passed all 13 local contract/handler tests; its PostgreSQL test is exercised by CI, including the green #417 run `34980177627`, rather than an additional local database run. Physical P400 purchase approval, displayed amount, definitive outcome, authoritative booking and final recovery/reset evidence remain pending. No provider business request or payment was started by configuration or restart. No deployment, rollback or re-promotion occurred; the current parallel #407 backend release/plan is recorded in the #417 evidence.
+
+## Physical P400 purchase and authoritative confirmation — 2026-09-15
+
+Love prepared the new-entry cart on Kiosk 2. At the agent's read-only review, the contact screen showed one `60 MIN ENTRÉ`, no add-ons and SEK 200, with the payment action enabled. The agent requested action-time confirmation but did **not** click the payment action. Love independently completed the purchase and reported "funkar!". No agent start marker was created and no second purchase was initiated. The final price differed from the earlier cart: authoritative ROLLER readback shows a SEK 100 discount and one **SEK 100 card payment**, with zero tip. Record the final provider result, not SEK 200, for this test. The actual card tap and amount on the physical terminal were not directly observed by the agent; a follow-up confirmation was requested.
+
+| Evidence | Final result |
+| --- | --- |
+| New card-present attempts since P400 configuration | Exactly 1 |
+| Draft created / approval stored (UTC) | 14:30:31 / 14:30:43 |
+| Reconciliation completed (UTC) | 14:31:39 |
+| Stored final state | `published` / `reconciled` / `confirmed` |
+| ROLLER direct booking read | Same draft/booking identity; fully paid; SEK 100 total, zero amount owing |
+| ROLLER payment collection | Exactly 1 card payment, SEK 100, zero tip |
+| Booking contents | 1 item, quantity 1, 1 ticket; the kiosk receipt labels it 60-minute entry |
+| Operational attachment | 1 matching session; both the installation claim and configured P400 terminal claim belong to this exact attempt |
+| Reconciliation metadata | 12 bounded attempts; last publish HTTP 409; authoritative final read confirms completion |
+
+The kiosk success screen was directly read as `DU ÄR INCHECKAD`, with the 60-minute entry and `KLAR, NÄSTA GÄST`. No client error was shown. The passive CDP observers lost their connection before recording the transaction, so they establish **no SDK dispatch count or timing** for this test; their zero captured requests must not be presented as zero actual requests. Backend/provider evidence above and Love's success report establish the outcome. This is not a separate bank-statement audit.
+
+The wireless ADB connection subsequently went offline. One reconnect of the already-paired transport did not restore access. The agent asked Love to verify next-guest reset; it has not been independently observed after this P400 purchase. Earlier V210 next-guest reset and the unchanged recovery implementation remain covered by their existing evidence/tests. The agent did not submit safety attestations, initiate print/redemption, cancel/refund a booking, force publication, release a lock or retry a payment. User-driven print/safety actions are not separately certified by this terminal test.
+
+Current installation assignment remains **Kiosk 2 / P400**; V210 remains configured with its original stable lock, but this installation's sole allowlist entry is Kiosk 2. Switching it back requires a reviewed server allowlist change while its current attempt is resolved, followed by authenticated native selection and relaunch; neither APK nor site needs rebuilding. Legacy `primary` compatibility is retained and shares P400's new lock. Production signing/device management and broader end-to-end printer/language acceptance remain separate scopes.

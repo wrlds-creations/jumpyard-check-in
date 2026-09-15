@@ -4,11 +4,11 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-### Issue #327 P400 Commissioning (Configuration Applied 2026-09-15)
+### Issue #327 P400 Commissioning (Applied and Payment Verified 2026-09-15)
 
 After Love confirmed the attended P400's ordinary idle screen, a fresh private preflight found one idle evaluation kiosk with no recovery, no unresolved current card-present attempt and no unresolved terminal claim. All ten metadata values and the existing account/region/venue matched. At 14:21:56 UTC, version-guarded promotion/readback of the existing ROLLER secret added Kiosk 2 pointing to `primary`, added one stable P400 lock and changed this installation's sole allowed profile from Kiosk 1 to Kiosk 2. Existing P400 device/terminal values, V210 mapping/lock, legacy setting and all unrelated fields were proved unchanged. Legacy and provisioned P400 callers share the same terminal claim. This is one physical kiosk reassigned for evaluation, not a second physical installation.
 
-Love authenticated and saved Kiosk 2. A supervised wrapper/Chrome restart preserved native identity/settings and loaded Kiosk 2 in the browser with the private fragment removed, no recovery and scripts matching the already-published #99 `93b0e9b` / `c8239a54` release. After the five-minute cache boundary, live old-profile, wrong-venue and tampered-capability probes returned `409 kiosk_installation_not_authorized` before provider writes. No APK, backend or web rebuild/deploy occurred here. The exact approved P400 purchase/readback remains pending. [Commissioning and evidence](docs/gh-327-kiosk-terminal-binding.md).
+Love authenticated and saved Kiosk 2. A supervised wrapper/Chrome restart preserved native identity/settings and loaded Kiosk 2 in the browser with the private fragment removed, no recovery and scripts matching the already-published #99 `93b0e9b` / `c8239a54` release. After the five-minute cache boundary, live old-profile, wrong-venue and tampered-capability probes returned `409 kiosk_installation_not_authorized` before provider writes. Love independently completed the next purchase and reported success. Direct ROLLER readback verifies one card payment of SEK 100 after a SEK 100 discount, one fully paid booking, one ticket and one session. Its one new reconciled attempt owns the existing installation and P400 claims. No APK, backend or web rebuild/deploy occurred here. [Full evidence and observation limits](docs/gh-327-kiosk-terminal-binding.md).
 
 ### Issue #417 Six Local Attempt Records Removed (2026-09-15)
 
