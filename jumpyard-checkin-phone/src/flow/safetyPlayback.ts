@@ -103,7 +103,7 @@ export function createSafetyPlayback(
   for (const [name, handler] of Object.entries(listeners)) video.addEventListener(name, handler);
 
   return {
-    start() {
+    start({ automatic = false }: { automatic?: boolean } = {}) {
       if (disposed || active) return;
       const resume = state.phase === 'paused' && !video.error;
       const reload = state.phase === 'error' || Boolean(video.error);
@@ -115,15 +115,27 @@ export function createSafetyPlayback(
       }
       update('loading', resume ? state.progress : 0);
       watchProgress();
+      const playFailed = (error: unknown) => {
+        if (ownedAttempt !== attempt || disposed) return;
+        if (automatic && error instanceof Error && error.name === 'NotAllowedError') {
+          // Language changes can lose Safari's sound gesture. Keep a usable
+          // explicit resume at zero instead of treating permission as broken media.
+          active = false;
+          attempt += 1;
+          clearWatchdog();
+          update('paused');
+          video.pause();
+        } else {
+          fail();
+        }
+      };
       try {
         if (reload) video.load();
         if (!resume) video.currentTime = 0;
         // Keep play() inside the guest's click for Safari's gesture requirement.
-        Promise.resolve(video.play()).catch(() => {
-          if (ownedAttempt === attempt) fail();
-        });
-      } catch {
-        if (ownedAttempt === attempt) fail();
+        Promise.resolve(video.play()).catch(playFailed);
+      } catch (error) {
+        playFailed(error);
       }
     },
     dispose() {

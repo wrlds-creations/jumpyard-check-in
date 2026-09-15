@@ -45,6 +45,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Check-in is modeled as ticket-level redemption through Roller `POST /redemptions`, not a booking-level flag.
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
+- Kiosk 1/V210 paid proof and P400 gates: [#327](docs/gh-327-kiosk-terminal-binding.md).
 - Kiosk safety/handoff may follow durable terminal approval; redemption requires confirmed ROLLER booking and ticket ids.
 - Raw payloads, access tokens, PINs, secrets, and unmasked credentials are prohibited persisted data. Booking/contact state is removed or anonymized 30 days after visit; pseudonymous audit/run metadata at 90 days; expired access rows within 24 hours. Disabled staff lose display PII after 90 days; PIN-pepper changes require versioned security-driven re-enrollment. Non-dev handlers have restricted DB principals; Aurora admin is only for migrations, provisioning, and guarded recovery.
 - Dev is retired Playground and its Aurora auto-pauses. The existing Park environment is the sole Live backend and sharp pilot-production environment for Nacka.
@@ -75,7 +76,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - [#345](docs/gh-345-staff-handout.md): daily codes, today-only queue, early café; APK accepted. AirDroid: colleague.
 
 - Lookup is Aurora-first with Roller-authoritative refresh, Nacka/date scope, and nearest same-day selection. Ready bookings start/resume a server session; opaque booking-bound guest proof stays in phone memory and hash-only in Aurora.
-- Safety: server-owned handoff, approval-to-safety and final paid check (D0199/#331); video recovery/media (D0210/#343). Staff identity/heartbeat: #334.
+- Safety: server-owned handoff, approval-to-safety and final paid check (D0199/#331); SV/EN video (D0210/D0219/#343). Staff identity/heartbeat: #334.
 - Phone purchases use server-owned Roller paths and Live availability. Weekday Combo `1242135`/`1242136` requires public eligibility; catalog failure omits Combo (#341). Daily price refresh precedes booking reads (#339); 24-hour expiry stays. D0207: 2x60-min bands + 1 later pizza; no socks/drinks.
 - Live water: `970411`/`970363` (D0195).
 - D0196/D0197: compact add-ons use plus/minus, native scroll and Continue validation. D0205/#350: tiny top-right SV/EN control; both languages only on start screens.

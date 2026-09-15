@@ -272,7 +272,7 @@ const sv = {
     done: 'Bekräfta säkerhetsreglerna',
     buyDone: 'Bekräfta säkerhetsreglerna',
     replay: 'Se videon igen',
-    durationBadge: 'ca 15 sek',
+    durationBadge: 'ca {seconds} sek',
   },
   safetyAttest: {
     title: 'Säkerhetsregler',
@@ -736,7 +736,7 @@ const en: typeof sv = {
     done: 'Confirm safety rules',
     buyDone: 'Confirm safety rules',
     replay: 'Watch again',
-    durationBadge: 'about 15 sec',
+    durationBadge: 'about {seconds} sec',
   },
   safetyAttest: {
     title: 'Safety rules',

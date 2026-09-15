@@ -1,4 +1,10 @@
+const crypto = require('crypto');
+
 const KIOSK_PAYMENT_CURRENCY = 'SEK';
+const KIOSK_CAPABILITY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const KIOSK_INSTALLATION_ID_PATTERN = /^ki_[a-f0-9]{24}$/;
+const KIOSK_PROFILE_IDS = new Set(['nacka-forum-kiosk-1', 'nacka-forum-kiosk-2']);
+const KIOSK_TERMINAL_LOCK_ID_PATTERN = /^kt_[a-f0-9]{32}$/;
 
 function normalizePaymentTerminalMap(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -13,19 +19,118 @@ function normalizePaymentTerminal(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const deviceId = stringOrNull(value.deviceId);
   const terminalId = stringOrNull(value.terminalId);
-  if (!deviceId || !terminalId) return null;
+  if (!terminalId) return null;
+  if (value.lockId !== undefined && !KIOSK_TERMINAL_LOCK_ID_PATTERN.test(value.lockId)) return null;
   return {
-    deviceId,
+    ...(deviceId ? { deviceId } : {}),
     terminalId,
     promptForTip: false,
+    ...(KIOSK_TERMINAL_LOCK_ID_PATTERN.test(value.lockId) ? { lockId: value.lockId } : {}),
+  };
+}
+
+function normalizeKioskInstallationMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([installationId, installation]) => [
+        String(installationId).trim(),
+        normalizeKioskInstallation(installation),
+      ])
+      .filter(([installationId, installation]) => (
+        KIOSK_INSTALLATION_ID_PATTERN.test(installationId) && installation
+      )),
+  );
+}
+
+function normalizeKioskInstallation(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const venueId = stringOrNull(value.venueId);
+  const allowedProfileIds = Array.isArray(value.allowedProfileIds)
+    ? [...new Set(value.allowedProfileIds.map(stringOrNull).filter((item) => KIOSK_PROFILE_IDS.has(item)))]
+    : [];
+  if (!venueId || allowedProfileIds.length === 0) return null;
+  return {
+    active: value.active === true,
+    allowedProfileIds,
+    venueId,
+  };
+}
+
+function normalizeKioskProfileMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([profileId, profile]) => [String(profileId).trim(), normalizeKioskProfile(profile)])
+      .filter(([profileId, profile]) => KIOSK_PROFILE_IDS.has(profileId) && profile),
+  );
+}
+
+function normalizeKioskProfile(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const paymentTerminalAlias = stringOrNull(value.paymentTerminalAlias);
+  const venueId = stringOrNull(value.venueId);
+  if (!paymentTerminalAlias || !venueId) return null;
+  return {
+    active: value.active === true,
+    paymentTerminalAlias,
+    venueId,
   };
 }
 
 function resolveKioskPaymentTerminal(config, request) {
   if (request.channel !== 'kiosk') return { enabled: false, paymentTerminal: null };
+
+  const installationId = stringOrNull(request.kioskInstallationId);
+  const profileId = stringOrNull(request.kioskProfileId);
+  const capability = stringOrNull(request.kioskCapability);
+  const usesInstallationIdentity = Boolean(installationId || profileId || capability);
+
+  if (usesInstallationIdentity) {
+    const installation = installationId ? config.kioskInstallations?.[installationId] : null;
+    const profile = profileId ? config.kioskProfiles?.[profileId] : null;
+    const authorized = Boolean(
+      installationId && KIOSK_INSTALLATION_ID_PATTERN.test(installationId) &&
+      profileId && KIOSK_PROFILE_IDS.has(profileId) &&
+      capability && KIOSK_CAPABILITY_PATTERN.test(capability) &&
+      !request.paymentTerminalAlias &&
+      installation?.active &&
+      profile?.active &&
+      installation.allowedProfileIds.includes(profileId) &&
+      installation.venueId === profile.venueId &&
+      config.kioskVenueId === '50871' && profile.venueId === config.kioskVenueId &&
+      (!request.venueId || request.venueId === profile.venueId) &&
+      kioskCapabilityMatchesInstallationId(capability, installationId)
+    );
+
+    if (!authorized) return kioskInstallationNotAuthorized();
+    const terminalMapping = config.paymentTerminals?.[profile.paymentTerminalAlias] ?? null;
+    if (!terminalMapping || !validTerminalLock(config.paymentTerminals, terminalMapping)) {
+      return {
+        enabled: true,
+        error: {
+          code: 'kiosk_payment_terminal_not_configured',
+          message: 'The configured kiosk profile has no available payment terminal.',
+        },
+        paymentTerminal: null,
+      };
+    }
+
+    const paymentTerminal = {
+      deviceId: installationId,
+      promptForTip: false,
+      terminalId: terminalMapping.terminalId,
+    };
+    return {
+      enabled: true, installationId, paymentTerminal, profileId,
+      reservationKeys: [`jykb_install_${installationId}`, `jykb_terminal_${terminalMapping.lockId}`].sort(),
+    };
+  }
+
+  if (config.allowLegacyKioskTerminalAlias === false) return kioskInstallationNotAuthorized();
   const alias = typeof request.paymentTerminalAlias === 'string' ? request.paymentTerminalAlias.trim() : '';
-  const paymentTerminal = alias ? config.paymentTerminals?.[alias] : null;
-  if (!alias || !paymentTerminal) {
+  const mapping = alias === 'primary' ? config.paymentTerminals?.[alias] : null;
+  if (!mapping?.deviceId) {
     return {
       enabled: true,
       error: {
@@ -35,7 +140,40 @@ function resolveKioskPaymentTerminal(config, request) {
       paymentTerminal: null,
     };
   }
-  return { enabled: true, paymentTerminal };
+  if (mapping.lockId && !validTerminalLock(config.paymentTerminals, mapping)) return kioskInstallationNotAuthorized();
+  const { lockId, ...paymentTerminal } = mapping;
+  return {
+    enabled: true, paymentTerminal,
+    ...(lockId ? { reservationKeys: [`jykb_terminal_${lockId}`] } : {}),
+  };
+}
+
+function validTerminalLock(mappings, terminal) {
+  if (!KIOSK_TERMINAL_LOCK_ID_PATTERN.test(terminal.lockId)) return false;
+  return Object.values(mappings).every((other) => (
+    other.terminalId !== terminal.terminalId || other.lockId === terminal.lockId
+  ));
+}
+
+function kioskInstallationNotAuthorized() {
+  return {
+    enabled: true,
+    error: {
+      code: 'kiosk_installation_not_authorized',
+      message: 'This kiosk installation is not authorized for the requested profile.',
+    },
+    paymentTerminal: null,
+  };
+}
+
+function kioskCapabilityMatchesInstallationId(capability, installationId) {
+  if (!KIOSK_CAPABILITY_PATTERN.test(capability) || !KIOSK_INSTALLATION_ID_PATTERN.test(installationId)) return false;
+  const actualFingerprint = crypto.createHash('sha256').update(capability, 'utf8').digest('hex').slice(0, 24);
+  const expectedFingerprint = installationId.slice(3);
+  return crypto.timingSafeEqual(
+    Buffer.from(actualFingerprint, 'utf8'),
+    Buffer.from(expectedFingerprint, 'utf8'),
+  );
 }
 
 function buildKioskQuotePayload(draftPayload) {
@@ -331,6 +469,8 @@ module.exports = {
   KIOSK_PAYMENT_CURRENCY,
   normalizeDraftFinalizeAction,
   normalizeBookingReadback,
+  normalizeKioskInstallationMap,
+  normalizeKioskProfileMap,
   normalizePaymentTerminalMap,
   normalizeTerminalOutcome,
   publicKioskPaymentStatus,

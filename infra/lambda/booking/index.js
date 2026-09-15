@@ -11,6 +11,8 @@ const {
   KIOSK_PAYMENT_CURRENCY,
   normalizeDraftFinalizeAction,
   normalizeBookingReadback,
+  normalizeKioskInstallationMap,
+  normalizeKioskProfileMap,
   normalizePaymentTerminalMap,
   normalizeTerminalOutcome,
   publicKioskPaymentStatus,
@@ -536,6 +538,8 @@ async function handleDraft(event, body, correlationId) {
     discounts: hashDiscountsForHash(request.discounts),
     giftCards: hashGiftCardsForHash(request.giftCards),
     items: request.items,
+    kioskInstallationId: request.kioskInstallationId,
+    kioskProfileId: request.kioskProfileId,
     operation: 'booking_draft_create',
     paymentTerminalAlias: request.paymentTerminalAlias,
     sendConfirmations: request.sendConfirmations,
@@ -595,6 +599,8 @@ async function handleDraft(event, body, correlationId) {
       });
     }
   }
+  const reservationError = await reserveKioskDraftBinding(terminalSelection, request);
+  if (reservationError) return jsonResponse(409, correlationId, { status: 'blocked', error: reservationError });
   const rollerResult = await postRollerJson(config, token, '/bookings/draft', payload);
 
   if (!rollerResult.ok) {
@@ -2359,6 +2365,8 @@ async function handleAddProductDraft(event, body, correlationId) {
     discounts: hashDiscountsForHash(request.discounts),
     giftCards: hashGiftCardsForHash(request.giftCards),
     items: request.items,
+    kioskInstallationId: request.kioskInstallationId,
+    kioskProfileId: request.kioskProfileId,
     operation: 'booking_add_product_draft_create',
     originalBookingReference: original.bookingReference,
     originalRollerUniqueId: original.rollerUniqueId,
@@ -2381,7 +2389,12 @@ async function handleAddProductDraft(event, body, correlationId) {
     });
   }
 
-  const terminalSelection = resolveKioskPaymentTerminal(config, request);
+  const terminalSelection = resolveKioskPaymentTerminal(config, {
+    ...request,
+    venueId: request.kioskInstallationId
+      ? request.venueId && request.venueId !== original.venueId ? 'mismatch' : original.venueId || 'unknown'
+      : request.venueId,
+  });
   if (terminalSelection.error) {
     await completeIdempotencyKey(request.idempotencyKey, 'failed', terminalSelection.error.code);
     return jsonResponse(409, correlationId, {
@@ -2424,6 +2437,8 @@ async function handleAddProductDraft(event, body, correlationId) {
       });
     }
   }
+  const reservationError = await reserveKioskDraftBinding(terminalSelection, request);
+  if (reservationError) return jsonResponse(409, correlationId, { status: 'blocked', error: reservationError });
   const rollerResult = await postRollerJson(config, token, '/bookings/draft', payload);
 
   if (!rollerResult.ok) {
@@ -2588,6 +2603,9 @@ function normalizeDraftRequest(event, body) {
     giftCards: normalizeGiftCards(body.giftCards),
     idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
     items: normalizeItems(body.items),
+    kioskCapability: stringOrNull(body.kioskCapability),
+    kioskInstallationId: stringOrNull(body.kioskInstallationId),
+    kioskProfileId: stringOrNull(body.kioskProfileId),
     name: stringOrNull(body.name),
     paymentTerminalAlias: stringOrNull(body.paymentTerminalAlias),
     requireAvailability: body.requireAvailability === true,
@@ -2621,6 +2639,9 @@ function normalizeAddProductDraftRequest(event, body, bookingReference) {
     giftCards: normalizeGiftCards(body.giftCards),
     idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
     items: normalizeItems(body.items),
+    kioskCapability: stringOrNull(body.kioskCapability),
+    kioskInstallationId: stringOrNull(body.kioskInstallationId),
+    kioskProfileId: stringOrNull(body.kioskProfileId),
     name: stringOrNull(body.name) || `Add-on for ${bookingReference}`,
     originalBookingReference: bookingReference,
     paymentTerminalAlias: stringOrNull(body.paymentTerminalAlias),
@@ -3103,19 +3124,8 @@ function validateDraftRequest(request) {
     };
   }
 
-  if (request.channel === 'kiosk' && !request.paymentTerminalAlias) {
-    return {
-      code: 'payment_terminal_alias_required',
-      message: 'Kiosk draft creation requires a payment terminal alias.',
-    };
-  }
-
-  if (request.channel !== 'kiosk' && request.paymentTerminalAlias) {
-    return {
-      code: 'payment_terminal_alias_not_allowed',
-      message: 'A payment terminal alias is only allowed for the kiosk channel.',
-    };
-  }
+  const kioskBindingError = validateKioskTerminalBinding(request);
+  if (kioskBindingError) return kioskBindingError;
 
   const customerError = validateCustomer(request.customer);
   if (customerError) return customerError;
@@ -3145,19 +3155,8 @@ function validateAddProductDraftRequest(request) {
     };
   }
 
-  if (request.channel === 'kiosk' && !request.paymentTerminalAlias) {
-    return {
-      code: 'payment_terminal_alias_required',
-      message: 'Kiosk draft creation requires a payment terminal alias.',
-    };
-  }
-
-  if (request.channel !== 'kiosk' && request.paymentTerminalAlias) {
-    return {
-      code: 'payment_terminal_alias_not_allowed',
-      message: 'A payment terminal alias is only allowed for the kiosk channel.',
-    };
-  }
+  const kioskBindingError = validateKioskTerminalBinding(request);
+  if (kioskBindingError) return kioskBindingError;
 
   if (hasAnyCustomerField(request.customer)) {
     const customerError = validateCustomer(request.customer);
@@ -3191,6 +3190,47 @@ function validateAvailabilityRequest(request) {
     }
   }
 
+  return null;
+}
+
+function validateKioskTerminalBinding(request) {
+  const identityParts = [request.kioskCapability, request.kioskInstallationId, request.kioskProfileId];
+  const identityPartCount = identityParts.filter(Boolean).length;
+
+  if (request.channel === 'kiosk') {
+    if (identityPartCount > 0 && identityPartCount < identityParts.length) {
+      return {
+        code: 'kiosk_installation_identity_incomplete',
+        message: 'Kiosk installation id, profile id, and capability must be supplied together.',
+      };
+    }
+    if (identityPartCount === identityParts.length && request.paymentTerminalAlias) {
+      return {
+        code: 'payment_terminal_alias_not_allowed',
+        message: 'A kiosk installation identity cannot be combined with a client terminal alias.',
+      };
+    }
+    if (identityPartCount === 0 && !request.paymentTerminalAlias) {
+      return {
+        code: 'payment_terminal_alias_required',
+        message: 'Kiosk draft creation requires an installation identity or legacy payment terminal alias.',
+      };
+    }
+    return null;
+  }
+
+  if (identityPartCount > 0) {
+    return {
+      code: 'kiosk_installation_identity_not_allowed',
+      message: 'A kiosk installation identity is only allowed for the kiosk channel.',
+    };
+  }
+  if (request.paymentTerminalAlias) {
+    return {
+      code: 'payment_terminal_alias_not_allowed',
+      message: 'A payment terminal alias is only allowed for the kiosk channel.',
+    };
+  }
   return null;
 }
 
@@ -3322,10 +3362,14 @@ async function getRollerConfig() {
   ]);
 
   const config = {
+    allowLegacyKioskTerminalAlias: secret.allowLegacyKioskTerminalAlias !== false,
     env: envParameter,
     baseUrl: baseUrlParameter,
     clientId: String(secret.clientId ?? secret.client_id ?? '').trim(),
     clientSecret: String(secret.clientSecret ?? secret.client_secret ?? '').trim(),
+    kioskInstallations: normalizeKioskInstallationMap(secret.kioskInstallations),
+    kioskProfiles: normalizeKioskProfileMap(secret.kioskProfiles),
+    kioskVenueId: stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID),
     paymentTerminals: normalizePaymentTerminalMap(secret.paymentTerminals ?? secret.kioskPaymentTerminals),
   };
 
@@ -4608,7 +4652,7 @@ async function persistPrepaymentDraft({
   const flowType = request.flowType === 'add_product' ? 'add_product' : 'new_booking';
   const paymentChannel = request.channel === 'kiosk' ? 'card_present' : 'ecommerce';
   const paymentAttemptId = paymentChannel === 'card_present'
-    ? `jytp_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`
+    ? request.reservedPaymentAttemptId || `jytp_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`
     : null;
   const totalCents = centsFromAmount(draft.costs.total);
   const amountOwingCents = centsFromAmount(draft.costs.amountOwing);
@@ -4825,7 +4869,61 @@ function centsFromAmount(amount) {
   return parsed === null ? null : Math.round(parsed * 100);
 }
 
+// One atomic unique-key claim per installation and physical terminal. Claims
+// survive lost responses and provider ambiguity; wall-clock expiry never opens
+// a second payment. Reuse requires a definitive stored outcome. No provider
+// identifiers or credentials are persisted in these operational rows.
+async function reserveKioskDraftBinding(selection, request) {
+  if (!selection.reservationKeys?.length) return null;
+  const paymentAttemptId = `jytp_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`;
+  const result = await executeStatement(
+    `INSERT INTO jumpyard.idempotency_records AS existing (
+       idempotency_key, operation, request_hash, status, result_ref, expires_at
+     )
+     SELECT key, 'kiosk_terminal_binding', :attemptId, 'started', :attemptId, 'infinity'::timestamptz
+     FROM jsonb_array_elements_text(CAST(:keys AS jsonb)) AS keys(key)
+     ORDER BY key
+     ON CONFLICT (idempotency_key) DO UPDATE SET
+       request_hash = EXCLUDED.request_hash,
+       status = EXCLUDED.status,
+       result_ref = EXCLUDED.result_ref,
+       expires_at = EXCLUDED.expires_at,
+       created_at = now(), updated_at = now()
+     WHERE existing.operation = 'kiosk_terminal_binding'
+       AND (existing.status = 'released' OR EXISTS (
+         SELECT 1 FROM jumpyard.prepayment_booking_drafts AS draft
+         WHERE draft.payment_attempt_id = existing.result_ref
+           AND draft.payment_channel = 'card_present'
+           AND (draft.payment_attempt_status IN ('failed', 'cancelled', 'reconciled')
+                OR draft.status = 'published')
+       ))
+     RETURNING idempotency_key`,
+    [
+      stringParameter('keys', JSON.stringify(selection.reservationKeys)),
+      stringParameter('attemptId', paymentAttemptId),
+    ],
+  );
+  if (mappedRows(result).length !== selection.reservationKeys.length) {
+    // A competing request may own one of the two keys. Release only our own
+    // partial claim, which has never reached the provider.
+    await executeStatement(
+      `UPDATE jumpyard.idempotency_records
+       SET status = 'released', result_ref = NULL, expires_at = now(), updated_at = now()
+       WHERE operation = 'kiosk_terminal_binding' AND result_ref = :attemptId`,
+      [stringParameter('attemptId', paymentAttemptId)],
+    );
+    await completeIdempotencyKey(request.idempotencyKey, 'failed', 'kiosk_payment_busy');
+    return { code: 'kiosk_payment_busy', message: 'This kiosk or terminal has an unresolved payment. Ask staff for help.' };
+  }
+  request.reservedPaymentAttemptId = paymentAttemptId;
+  return null;
+}
+
 async function reserveIdempotencyKey(operation, idempotencyKey, requestHash) {
+  // Keep the server-owned reservation namespace inaccessible to client keys.
+  if (idempotencyKey.startsWith('jykb_')) {
+    return { ok: false, code: 'idempotency_key_invalid', message: 'The idempotency key is not allowed.' };
+  }
   const insertResult = await executeStatement(
     `INSERT INTO jumpyard.idempotency_records (
        idempotency_key,

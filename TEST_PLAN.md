@@ -1,8 +1,18 @@
 # Test Plan
 
+## Kiosk installation binding (#327)
+
+Run `npm run validate:gh327-kiosk-terminal-binding` for both draft handlers and profile authorization. Set `GH327_DATABASE_TEST=true` for the disposable PostgreSQL concurrency/role test (local port 55327, CI port 55435). [Contract, rollout and physical acceptance](docs/gh-327-kiosk-terminal-binding.md) distinguish local evidence from the outstanding attended terminal proof.
+
 Use this file to define active validation for the current project or milestone. Historical validation evidence was moved to [docs/history/validation-log.md](docs/history/validation-log.md) during T0128.
 
 ## Current Root Validation
+
+### Localized safety media (#343)
+
+- `npm --prefix jumpyard-checkin-phone run test:safety-video`: media hashes, fast-start atom order, per-language size budgets, playback recovery and stale/denied language-play attempts.
+- After the phone production build, run `node scripts/verify-safety-video-browser.mjs` from `jumpyard-checkin-phone` with an existing Playwright installation (`PLAYWRIGHT_MODULE` can identify its entry file). The isolated temporary fixture uses real production-mode components and exported styles/media; it is never published. It measures first frames at 10 Mbps/100 ms RTT (five samples), a slow-network case, cached return requests, rapid language changes, full viewing, pause/failure recovery, saved preference and StrictMode, at 320/390 px. `SAFETY_BROWSER_OUTPUT` selects the evidence directory.
+- Record first-run outliers and any missed timing target. Physical Safari/PWA, Android, actual hosted cache headers and shared park Wi-Fi remain distinct post-promotion checks.
 
 | Command | Purpose | Expected Result |
 |---|---|---|

@@ -1,5 +1,266 @@
 # Phone safety video recovery — #343
 
+## Localized protected rollout — 2026-09-15
+
+Love explicitly requested phone push, merge and deployment, then kiosk work.
+Reviewed [PR #408](https://github.com/wrlds-creations/jumpyard-check-in/pull/408)
+merged as `65efb3811a5ee226aa38e72b4449e72f985da09c` from current main
+`93ce93c893e896d12ec5d81b0670152b38ace3ba`. All six PR CI jobs and main CI passed,
+including Linux repository validation; the earlier local CRLF limitation remains
+accurately recorded below. Review was performed by the implementation agent;
+no independent human review is claimed. Unrelated #396 changes are preserved.
+
+### Exact artifact and Park verification
+
+- Immutable [release 34963769097](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34963769097),
+  artifact `10394239520`, digest
+  `sha256:9c90f6a7dde4349ff421380b181d7c699db65cb31a004ace6cfc7080fbab5df9`.
+- All 664 file checksums passed independent validation. Manifest SHA256:
+  `9bf5cd4d4c43afad7c2e62699e7b5c2ae51ee895b823a2e24cf3ba6f35b9bfe1`.
+- Protected [Park run 34964331709](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34964331709)
+  passed. The actual uploaded plan was read before delegated approval under
+  Love's instruction: 208 current/selected resources, zero resource or template
+  section changes. Current/selected template SHA256:
+  `e411cfc2b29802172b5f7f351f5a29fed23244d625788e59059eece5ce81e1a2`.
+- CDK reported `no changes`. Migration apply was false; all migrations through
+  `0023` remain applied. Exact template, successful stack status, `IN_SYNC`
+  drift, zero active alarms, empty queues, exact-SHA Pages and HTTP/config checks
+  passed. No backend, schema, gate, IAM, provider or infrastructure change.
+- Account `376129878018`, region `eu-north-1`, existing Nacka `50871` stack/dates
+  through September 30 and all WRLDS metadata remain: Client/CostCenter JumpYard,
+  Project jumpyard-check-in, Environment park-test, Owner/CreatedBy love,
+  Repository wrlds-creations/jumpyard-check-in, ManagedBy cdk,
+  DataClassification confidential, Exportable true.
+- Independent readback byte-matched 26 root HTML/JS/CSS/media responses across
+  Park phone/admin. Both MP4 hashes match the reviewed optimized sources and
+  both return `video/mp4` plus `public, max-age=31536000, immutable`.
+- Hosted Edge 153 decoding in a browser-local probe played both complete films
+  without error at 720x1280, duration 15.018667 seconds. The single unthrottled
+  Park first-frame samples were 1,394 ms SV and 209 ms EN. These are separate
+  CDN observations, not the controlled local five-sample benchmark or a handset
+  guarantee. No business endpoint was exercised by the media probe.
+
+### Same-artifact public promotion
+
+Protected [public run 34964817955](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34964817955)
+passed after Park success and independent readback. The completed plan job
+`104366677216` was read before delegated approval: exact release above, fixed
+`jumpyard-check-in-production` and `jumpyard-checkin-admin-production` targets,
+`https://checkin.jumpyard.se` and `https://staff-checkin.jumpyard.se`, no AWS
+mutation. Domain, CORS, Cognito, Apple association and exact-SHA checks passed.
+
+Independent public readback matched another 26 HTML/JS/CSS/media responses,
+52 across the two lanes, plus the full bodies returned for four Range probes.
+Both public films have the same exact hashes and immutable cache headers as
+Park. Edge 153 played both to their natural end without media/page errors.
+Single unthrottled public first-frame samples: SV 1,698 ms, EN 271 ms;
+return to a fresh Swedish video element 209 ms. Resource Timing retained only
+the first Swedish transfer entry (3,819,815 encoded bytes) after the return.
+This is hosted media decoding in browser-local HTML, not a real paid guest
+journey or physical handset/Wi-Fi acceptance. The actual production component
+and language-switch behavior are covered separately by the local fixture.
+
+Evidence retained under `Downloads/JumpYard-gh343-originals`: selected/rollback
+release bundles and validators, `park-plan`, `park-deploy.log`, `public-plan.log`,
+`park-readback.json`, `public-readback.json`, `park-media-browser.json`,
+`public-media-browser.json` and the reproducible readback/probe scripts.
+
+### Delivery limitation and rollback
+
+The first independent readback probe incorrectly required HTTP 206 for a Range
+request. Park actually returns the complete, correct body with HTTP 200, matching
+the documented [Cloudflare Pages behavior](https://developers.cloudflare.com/pages/configuration/serving-pages/).
+The probe now records that limitation and verifies the full returned body rather
+than claiming partial-response support. This required no product or hosting
+change. The implementation's prior local performance tests already used full
+HTTP 200 responses and fast-start metadata. Physical Safari/PWA, Android and
+shared park Wi-Fi remain explicit manual acceptance limits.
+
+Previously published #403 [release 34341707774](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34341707774),
+SHA `bad087f7bda40a640d833744a9987fe32c88f529`, artifact `10100210328`, was
+reverified unexpired with all 663 checksums valid. Its template is identical to
+the new template and the application/schema inputs are unchanged. It remains
+the compatible protected rollback candidate; retain all 23 applied migrations.
+No rollback or re-promotion was needed or executed. No real booking, payment,
+redemption, refund, ROLLER write or guest message was used for verification.
+
+## Localized media extension — 2026-09-15
+
+Love reopened #343 for new Swedish/English films, quality/size optimization and
+fast language changes, then explicitly requested downloading Gustav's Dropbox
+files and completing the implementation. The existing browser inventory exposed
+the shared safety-video folder; browser attachment failed, so the ZIP was fetched
+directly from that link. The mailbox message itself was not read. Originals are
+retained outside Git in `Downloads/JumpYard-gh343-originals`; private share tokens
+are not committed. The folder name mentions kiosk; this issue owns the phone
+implementation. Love subsequently approved kiosk parity as a separate issue,
+to be implemented after the phone publication.
+
+Base: `93ce93c893e896d12ec5d81b0670152b38ace3ba` (`origin/main`), branch
+`codex/gh-343-localized-safety-videos`, isolated worktree
+`jumpyard-check-in-gh343-localized`. The uncommitted #396 checkout is preserved.
+On 2026-09-15 Love explicitly requested push, merge and deployment of the phone
+flow, then the kiosk implementation. This supersedes the earlier local-only
+delivery boundary. Publication uses the reviewed PR, immutable release, reviewed
+Park plan and protected approval, then the same artifact's protected Nacka public
+phone/admin promotion. The workflow also republishes the unchanged admin output.
+Migration apply remains disabled; no new infrastructure is in scope. Keep #343
+open for a dependent rollout-evidence PR. The currently published #403 release
+is the rollback candidate, subject to a fresh artifact/compatibility check.
+
+### Sources and quality
+
+| Language | Original | Original bytes | Optimized bytes | Reduction | SSIM |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Swedish | `sakerhetsvideo_SE_9x16_TEST.mp4` | 23,381,452 | 3,819,815 | 83.66% | 0.981763 |
+| English | `sakerhetsvideo_EN_9x16_TEST.mp4` | 23,383,454 | 3,809,758 | 83.71% | 0.981858 |
+
+Combined: 7,629,573 bytes instead of 46,764,906. The superseded single-language
+asset is removed from the new export. Each film retains all 375 frames at 25 fps,
+the 9:16 framing and the four original instruction segments. Video remains
+15.000 seconds; the MP4 reports 15.018667 seconds due to AAC packet padding.
+Both originals are 1080x1920 H.264/AAC; outputs are 720x1280 H.264 Main/yuv420p
+with the original AAC stream copied. Overall bitrate is 2.035/2.029 Mbps.
+
+The decoded PCM audio SHA256 is identical across both originals and both outputs:
+`2d4368dd8667fac3e52e9d314272c572a620f8d017d7c47e55c9ba8bac899221`.
+Container/audio packet counts differ due to priming metadata; decoded samples
+are identical. No audio re-encoding, cropping, instruction rewrite or runtime
+dependency was introduced. Four-point image strips at 0/4/8/12 seconds were
+visually compared in both languages; text remains readable. SSIM uses Lanczos
+downscaled originals and matching 1/25 time bases, not a handset quality claim.
+
+Original SHA256 values (SV, EN):
+
+- `d2a4d49c3c0365f9791ad54e0fcc2cdaaf9568d1b328aabacb68360cc3082831`
+- `096c688e8116dd5212db13d9d41fcf490cced32391b000e79076f854d80cecba`
+
+Output SHA256 values (SV, EN):
+
+- `f918b9754977bae7ff7e5540396d66df365180d06d17327964d628812f671d3c`
+- `316c51ceb304cccf353e8dacfce33480fc77c76958e842a077f0047cd3fbb830`
+
+Reproduction with installed FFmpeg:
+
+```text
+ffmpeg -i <original> -map 0:v:0 -map 0:a:0
+  -vf scale=720:1280:flags=lanczos -c:v libx264 -preset slow -crf 23
+  -pix_fmt yuv420p -profile:v main -level 3.1 -c:a copy
+  -movflags +faststart <optimized>
+```
+
+A one-second keyframe experiment was 4.78/4.79 MB. Since language changes restart
+at the first frame, the default keyframe interval retains the same measured
+quality within the predeclared 4 MB/film budget. Source `moov` metadata is moved
+ahead of media payload for early decoding; checked-in tests verify atom order.
+
+### Playback and caching decision
+
+D0219: the saved/current app language selects a content-addressed MP4 URL.
+Only one selected video is mounted with `preload=auto` at the safety step.
+No other language is fetched speculatively. `_headers` assigns one-year immutable
+browser caching to these versioned media URLs, keeping future releases distinct.
+Browser preload/cache behavior remains browser-controlled, especially on phones.
+
+Each language change replaces the video/controller, clears progress/completion
+and starts at zero. A playing/loading film requests immediate playback of the
+new selection; idle, paused, failed and completed selections present Play.
+Automatic sound permission denial presents explicit Resume at zero. Other media
+errors retain retry/staff help and the existing 12-second no-progress deadline.
+Cleanup pauses the old element, removes its source, aborts loading and clears
+listeners/watchdogs. React StrictMode setup restores the source after its test
+cleanup. No stale event or rejected play promise can complete the new selection.
+
+The earlier delivery below is historical and does not prove these new assets
+are deployed. Current local validation and timing evidence are recorded in the
+extension closeout section below.
+
+### Extension timing and validation — local only
+
+Final measurements use Edge 153.0.4234.32, a 390x844 mobile viewport on this
+Windows host, real H.264/AAC decoding, production-mode React components and
+exported styles/media. The loopback server applies the declared media cache rule
+and conservatively returns full-body HTTP 200, matching the earlier hosted range
+observation. CDP throttles throughput/latency. First frame is measured with
+`requestVideoFrameCallback` from the triggering click; page/JS loading precedes
+the measurement. Each cold sample clears the browser cache. A cached-return
+sample waits for the full response, not merely a nearly complete playback buffer.
+
+| Profile | Samples | Cold first image | First language switch | Cached return |
+| --- | ---: | ---: | ---: | ---: |
+| 10 Mbps, 100 ms latency | 5 | 440–619 ms | 309–377 ms | 72–149 ms |
+| 1 Mbps, 300 ms latency | 1 | 3,024 ms | 1,693 ms | 95 ms |
+
+The final 10 Mbps run meets the proposed 1-second first-frame and 300-ms cached
+return targets. An earlier five-sample run included one 2,736-ms cold-start
+outlier (others 467–472 ms); it remains recorded and prevents a universal latency
+claim. The 1 Mbps source rate is below the approximately 2 Mbps media bitrate,
+so buffering is expected. Cache eviction and switches before response completion
+can require another transfer; those cases are not claimed to be instant.
+
+The five 10 Mbps sequences each fetched only the selected 3,819,815-byte Swedish
+file, then the 3,809,758-byte English file on demand. Returning to Swedish made
+zero server requests and Resource Timing reported zero transferred bytes for
+that cache hit. No other-language request occurred before selection. Resource
+lifecycle checks inspect one attached video and paused/source-free retired
+elements; they do not measure native decoder memory or claim a heap benchmark.
+
+Twenty cold Swedish viewers imply 76.4 MB of media, compared with 467.6 MB of
+these new originals, or 40.7 Mbps if completed in 15 seconds before overhead.
+If all twenty select both languages once, the two full assets total 152.6 MB.
+These are illustrative payload calculations, not real park Wi-Fi load tests or
+an equation between 100 arrivals/hour and 100 concurrent players.
+
+Verified commands: 18 safety/media tests, 6 existing language-control tests,
+11 add-on navigation/payment-guard tests and 8 production mock-boundary tests
+pass. Phone lint passes with the four existing image warnings; TypeScript,
+production build/export, template validation and `git diff --check` pass.
+The export contains exactly the two new MP4s, the media cache declaration and
+no superseded single video. The production safety preview remains not-found.
+
+`npm run validate` stops at the known Windows newline-dependent context-size
+check. At the unchanged base, PROJECT_CONTEXT has 11,909 LF characters but
+12,020 in CRLF; REPO_CURRENT_STATE has 11,977 vs 12,062. The #343 one-line
+context update is shorter (11,906 LF). The 12,000 raw-character check still fails
+on the Windows checkout. Existing unapproved Project draft:
+`PVTI_lADOBXiXg84BdXuJzg5PU2I`, **Make context-size validation consistent for
+Windows line endings**. No duplicate draft or unrelated validator fix is added.
+
+Physical Safari/PWA, Android handset audio/quality, actual hosted cache headers
+and shared park Wi-Fi acceptance remain. No guest business request, payment,
+booking, redemption, provider change or publication is used by the local fixture.
+The relevant platform contracts are the [Pages static header rules](https://developers.cloudflare.com/pages/configuration/headers/)
+and [script-initiated playback rejection behavior](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/play).
+
+Final browser result: **passed**, zero uncaught page errors. Both 320/390px
+scenarios pass idle selection, pause, ten rapid alternating switches, complete
+Swedish and English playback, completion reset on language change and explicit
+continuation. Additional scenarios pass saved English/StrictMode, a pending old
+play promise plus late rejection/ended event, automatic permission denial with
+manual resume, and HTTP media failure with successful retry. All six cached
+return samples, including the 1 Mbps case, make zero new server requests.
+Swedish/English screenshots were visually reviewed at the narrow/normal widths.
+
+`npm run infra:check` also passes, including local synthesis and guarded self-tests.
+Final machine-readable browser evidence and screenshots are retained locally at
+`Downloads/JumpYard-gh343-originals/browser-final-complete/results.json` and sibling
+PNGs. The earlier outlier is in `browser-verification/results.json`. Media probes,
+aligned SSIM/decoded-audio comparisons, build/lint and validation logs are retained
+under the same originals directory. The checked-in browser script reproduces the
+verification with existing dependencies; no new runtime package is required.
+
+Changed application files: `SafetyVideo.tsx`, `safetyPlayback.ts`, `safetyMedia.ts`,
+the two duration strings in `LanguageContext.tsx`, the two hashed MP4s, `_headers`
+and removal of `public/safety-video.mp4`. Tests and their package command accompany
+the change. Durable updates: PROJECT_CONTEXT, D0219, TEST_PLAN and this evidence;
+REPO_CURRENT_STATE and AWS_RESOURCES are unchanged. No new follow-up draft was
+created; the existing Windows context-size draft covers the validation limitation.
+
+Reviewable local preview: `http://127.0.0.1:3430/preview/safety`. Next step: review
+the localized films and diff, then use an explicitly requested commit/PR and
+protected immutable release/publication to obtain real handset/park evidence.
+No release, deploy, rollback or re-promotion run was created by this extension.
+
 ## Approved scope and baseline
 
 Love approved the concrete phone proposal with “kÖR” on 2026-09-04: a smaller

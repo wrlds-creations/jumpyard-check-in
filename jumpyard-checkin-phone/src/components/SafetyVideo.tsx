@@ -1,17 +1,27 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, Loader2, Play, RotateCcw } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 import { createSafetyPlayback, type SafetyPlaybackState } from '@/flow/safetyPlayback';
+import { SAFETY_MEDIA } from '@/flow/safetyMedia';
 
 interface SafetyVideoProps {
     onComplete: (seenAt: string) => void;
     buyEntryFlow?: boolean;
 }
 
-export const SafetyVideo = ({ onComplete, buyEntryFlow = false }: SafetyVideoProps) => {
-    const { t } = useTranslation();
+export const SafetyVideo = (props: SafetyVideoProps) => {
+    const { lang } = useTranslation();
+    // Carry only playback intent across language changes, never viewing progress.
+    const continuePlaying = useRef(false);
+    return <LocalizedSafetyVideo key={lang} {...props} continuePlaying={continuePlaying} />;
+};
+
+function LocalizedSafetyVideo({ onComplete, buyEntryFlow = false, continuePlaying }: SafetyVideoProps & {
+    continuePlaying: RefObject<boolean>;
+}) {
+    const { t, lang } = useTranslation();
     const videoRef = useRef<HTMLVideoElement>(null);
     const playbackRef = useRef<ReturnType<typeof createSafetyPlayback> | null>(null);
     const [playback, setPlayback] = useState<SafetyPlaybackState>({ phase: 'idle', progress: 0 });
@@ -22,16 +32,28 @@ export const SafetyVideo = ({ onComplete, buyEntryFlow = false }: SafetyVideoPro
     const description = buyEntryFlow ? t.safetyVideo.buyDescription : t.safetyVideo.description;
     const doneLabel = buyEntryFlow ? t.safetyVideo.buyDone : t.safetyVideo.done;
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         const video = videoRef.current;
         if (!video) return;
-        const controller = createSafetyPlayback(video, setPlayback);
+        // React StrictMode replays effect setup after cleanup on the same node.
+        if (!video.getAttribute('src')) video.src = SAFETY_MEDIA[lang].src;
+        const controller = createSafetyPlayback(video, state => {
+            continuePlaying.current = state.phase === 'playing' || state.phase === 'loading';
+            setPlayback(state);
+        });
         playbackRef.current = controller;
+        // A keyed element isolates all events/promises from the previous language.
+        // Request playback immediately after a language click; browsers that block
+        // sound outside a direct gesture retain an explicit Resume action.
+        if (continuePlaying.current) controller.start({ automatic: true });
         return () => {
             playbackRef.current = null;
             controller.dispose();
+            // Removing a video alone can leave its transfer/decoder alive.
+            video.removeAttribute('src');
+            video.load();
         };
-    }, []);
+    }, [continuePlaying, lang]);
 
     useEffect(() => {
         const updateVideoSize = () => {
@@ -52,7 +74,7 @@ export const SafetyVideo = ({ onComplete, buyEntryFlow = false }: SafetyVideoPro
         <motion.div
             className="w-full max-w-md mx-auto flex min-h-0 flex-col items-center justify-center px-3 py-1"
             style={{ minHeight: 'calc(100dvh - 118px)' }}
-            initial={{ opacity: 0, y: 20 }}
+            initial={false}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
@@ -63,9 +85,11 @@ export const SafetyVideo = ({ onComplete, buyEntryFlow = false }: SafetyVideoPro
                 >
                     <video
                         ref={videoRef}
-                        src="/safety-video.mp4?v=343"
+                        src={SAFETY_MEDIA[lang].src}
+                        lang={lang}
+                        aria-label={t.safetyVideo.title}
                         playsInline
-                        preload="metadata"
+                        preload="auto"
                         className="absolute inset-0 w-full h-full object-cover"
                     />
 
@@ -82,7 +106,7 @@ export const SafetyVideo = ({ onComplete, buyEntryFlow = false }: SafetyVideoPro
                                 {title}
                             </h1>
                             <span className="mt-3 rounded-full bg-white px-3 py-1 text-[11px] font-black italic uppercase tracking-wider text-primary">
-                                {t.safetyVideo.durationBadge}
+                                {t.safetyVideo.durationBadge.replace('{seconds}', String(SAFETY_MEDIA[lang].durationSeconds))}
                             </span>
                             <p className="mt-2 max-w-[17rem] text-sm font-black italic uppercase leading-tight text-white">
                                 {description}
@@ -146,4 +170,4 @@ export const SafetyVideo = ({ onComplete, buyEntryFlow = false }: SafetyVideoPro
             </div>
         </motion.div>
     );
-};
+}
