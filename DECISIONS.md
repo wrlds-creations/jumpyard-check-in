@@ -234,6 +234,8 @@ This file is the source of truth for meaningful project decisions. Add entries w
 
 ## Active Constraints
 
+Issue #417 records Love's 2026-09-15 authorization to remove exactly six obsolete local payment attempts while preserving every booking and terminal claim. This is a bounded cache cleanup, not classification of their unknown financial outcomes or a relaxation of D0220. Fresh P400 commissioning requires independent evidence of the current idle state and its own purchase approval. [Decision, exact apply and recovery](docs/gh-417-legacy-attempt-cleanup.md).
+
 | Constraint | Source | Impact | Revisit Trigger |
 |---|---|---|---|
 | Roller is the source of truth for bookings. | Sprint 1 project context | Booking validation must reconcile with Roller. | Revisit if JumpYard chooses another booking system. |

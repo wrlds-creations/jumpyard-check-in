@@ -4,6 +4,10 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #417 Six Local Attempt Records Removed (2026-09-15)
+
+Love explicitly approved disposal of six obsolete August local attempts. At 14:05:15 UTC, the existing restricted lifecycle identity deleted exactly those six unpublished/unconfirmed rows in one guarded serializable transaction. All other drafts, every cached booking and every terminal-binding claim were proved unchanged; separate post-commit verification found zero remaining candidates. The existing encrypted Aurora recovery window was checked before and after. No provider data, secret, permission, schema, resource, runtime or deployment changed. Historical financial outcomes remain unknown; deletion is not reconciliation or permission to retry. The Project investigation is now approved [#417](https://github.com/wrlds-creations/jumpyard-check-in/issues/417); [exact selection, safeguards and recovery](docs/gh-417-legacy-attempt-cleanup.md). P400 commissioning remains #327/#86 and requires independent current-idle/payment evidence.
+
 ### Issue #327 V210 Registration (Applied and Physically Verified 2026-09-15)
 
 After Love confirmed the kiosk was idle, the existing Park ROLLER secret received one active installation and one allowed profile, `nacka-forum-kiosk-1`, resolving to the privately provider-confirmed V210 and a new stable terminal lock. The configuration has two terminal mappings; the existing P400 `primary` object, legacy compatibility setting and every unrelated secret field are preserved exactly. The private plan was reviewed before version-guarded promotion/readback; no credential, installation fingerprint or provider value was retained in evidence. No AWS resource, IAM, schema, route, venue/date window or gate changed.
