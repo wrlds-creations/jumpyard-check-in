@@ -2,6 +2,8 @@
 
 ## Must know
 
+- Checkout code application: Continue reuses the current successful Apply quote, preserving the discount/total; changed inputs or an expired quote require a fresh check. The draft still sends the code and owns the final amount. [Contract #421](docs/gh407-code-feedback.md#reuse-on-continue-421).
+
 - Repository: wrlds-creations/jumpyard-check-in; shared JumpYard Next Project #5.
 - Phone/staff-admin and required Cloud/API scope. Kiosk and JumpyBoard remain separate except approved interface contracts.
 - Roller is authoritative; Aurora is the operational cache. Frontends use JumpYard Cloud, never direct Roller REST.
