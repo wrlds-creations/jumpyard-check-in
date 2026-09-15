@@ -2,6 +2,7 @@
 
 ## Must know
 
+- Checkout code application: Continue reuses the current successful Apply quote, preserving the discount/total; changed inputs or an expired quote require a fresh check. The draft still sends the code and owns the final amount. [Contract #421](docs/gh407-code-feedback.md#reuse-on-continue-421).
 - Visitor contact: name/email only; D0222 rejects public phone lookup and stops unverified customers before payment to preserve existing ROLLER numbers.
 
 - Repository: wrlds-creations/jumpyard-check-in; shared JumpYard Next Project #5.

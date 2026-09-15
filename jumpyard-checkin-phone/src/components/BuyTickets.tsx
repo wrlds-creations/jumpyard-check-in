@@ -738,16 +738,19 @@ export const BuyTickets = ({
   const paymentContinueRequestedRef = useRef(false);
   const paymentPreparationAbortRef = useRef<AbortController | null>(null);
   const quoteRequestVersionRef = useRef(0);
+  const appliedQuoteRef = useRef<NewBookingQuote | null>(null);
   const quoteOperationInFlightRef = useRef(false);
   const [applyingCodes, setApplyingCodes] = useState(false);
   const invalidateQuote = useCallback(() => {
     quoteRequestVersionRef.current += 1;
+    appliedQuoteRef.current = null;
     setQuote(null);
     return quoteRequestVersionRef.current;
   }, []);
 
   useEffect(() => () => {
     quoteRequestVersionRef.current += 1;
+    appliedQuoteRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -1336,6 +1339,7 @@ export const BuyTickets = ({
         buildCustomer(), buildItems(), shouldPrecheckBasketAvailability, giftCardInputs, discountCodeInputs
       );
       if (quoteRequestVersionRef.current !== requestVersion) return;
+      if (!hasPaymentOptionQuoteErrors(quoted)) appliedQuoteRef.current = quoted;
       setQuote(quoted);
     } catch (error) {
       if (quoteRequestVersionRef.current === requestVersion) {
@@ -1364,13 +1368,20 @@ export const BuyTickets = ({
     }
     const giftCards = codes?.giftCards ?? giftCardInputs;
     const discountCodes = codes?.discountCodes ?? discountCodeInputs;
-    const requestVersion = invalidateQuote();
+    // Input edits clear this ref synchronously. Keep Apply's price and feedback
+    // while the authoritative draft is prepared; only missing/expired quotes need a check.
+    const appliedQuote = appliedQuoteRef.current;
+    const reusableQuote = !codes && appliedQuote &&
+      (!appliedQuote.expiresAt || Date.parse(appliedQuote.expiresAt) > Date.now())
+      ? appliedQuote
+      : null;
+    const requestVersion = reusableQuote ? quoteRequestVersionRef.current : invalidateQuote();
     const quoteIsCurrent = () => quoteRequestVersionRef.current === requestVersion;
     quoteOperationInFlightRef.current = true;
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const quoted = await quoteNewBooking(
+      const quoted = reusableQuote ?? await quoteNewBooking(
         buildCustomer(),
         buildItems(),
         shouldPrecheckBasketAvailability,
