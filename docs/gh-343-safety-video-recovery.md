@@ -1,5 +1,89 @@
 # Phone safety video recovery — #343
 
+## Localized protected rollout — 2026-09-15
+
+Love explicitly requested phone push, merge and deployment, then kiosk work.
+Reviewed [PR #408](https://github.com/wrlds-creations/jumpyard-check-in/pull/408)
+merged as `65efb3811a5ee226aa38e72b4449e72f985da09c` from current main
+`93ce93c893e896d12ec5d81b0670152b38ace3ba`. All six PR CI jobs and main CI passed,
+including Linux repository validation; the earlier local CRLF limitation remains
+accurately recorded below. Review was performed by the implementation agent;
+no independent human review is claimed. Unrelated #396 changes are preserved.
+
+### Exact artifact and Park verification
+
+- Immutable [release 34963769097](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34963769097),
+  artifact `10394239520`, digest
+  `sha256:9c90f6a7dde4349ff421380b181d7c699db65cb31a004ace6cfc7080fbab5df9`.
+- All 664 file checksums passed independent validation. Manifest SHA256:
+  `9bf5cd4d4c43afad7c2e62699e7b5c2ae51ee895b823a2e24cf3ba6f35b9bfe1`.
+- Protected [Park run 34964331709](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34964331709)
+  passed. The actual uploaded plan was read before delegated approval under
+  Love's instruction: 208 current/selected resources, zero resource or template
+  section changes. Current/selected template SHA256:
+  `e411cfc2b29802172b5f7f351f5a29fed23244d625788e59059eece5ce81e1a2`.
+- CDK reported `no changes`. Migration apply was false; all migrations through
+  `0023` remain applied. Exact template, successful stack status, `IN_SYNC`
+  drift, zero active alarms, empty queues, exact-SHA Pages and HTTP/config checks
+  passed. No backend, schema, gate, IAM, provider or infrastructure change.
+- Account `376129878018`, region `eu-north-1`, existing Nacka `50871` stack/dates
+  through September 30 and all WRLDS metadata remain: Client/CostCenter JumpYard,
+  Project jumpyard-check-in, Environment park-test, Owner/CreatedBy love,
+  Repository wrlds-creations/jumpyard-check-in, ManagedBy cdk,
+  DataClassification confidential, Exportable true.
+- Independent readback byte-matched 26 root HTML/JS/CSS/media responses across
+  Park phone/admin. Both MP4 hashes match the reviewed optimized sources and
+  both return `video/mp4` plus `public, max-age=31536000, immutable`.
+- Hosted Edge 153 decoding in a browser-local probe played both complete films
+  without error at 720x1280, duration 15.018667 seconds. The single unthrottled
+  Park first-frame samples were 1,394 ms SV and 209 ms EN. These are separate
+  CDN observations, not the controlled local five-sample benchmark or a handset
+  guarantee. No business endpoint was exercised by the media probe.
+
+### Same-artifact public promotion
+
+Protected [public run 34964817955](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34964817955)
+passed after Park success and independent readback. The completed plan job
+`104366677216` was read before delegated approval: exact release above, fixed
+`jumpyard-check-in-production` and `jumpyard-checkin-admin-production` targets,
+`https://checkin.jumpyard.se` and `https://staff-checkin.jumpyard.se`, no AWS
+mutation. Domain, CORS, Cognito, Apple association and exact-SHA checks passed.
+
+Independent public readback matched another 26 HTML/JS/CSS/media responses,
+52 across the two lanes, plus the full bodies returned for four Range probes.
+Both public films have the same exact hashes and immutable cache headers as
+Park. Edge 153 played both to their natural end without media/page errors.
+Single unthrottled public first-frame samples: SV 1,698 ms, EN 271 ms;
+return to a fresh Swedish video element 209 ms. Resource Timing retained only
+the first Swedish transfer entry (3,819,815 encoded bytes) after the return.
+This is hosted media decoding in browser-local HTML, not a real paid guest
+journey or physical handset/Wi-Fi acceptance. The actual production component
+and language-switch behavior are covered separately by the local fixture.
+
+Evidence retained under `Downloads/JumpYard-gh343-originals`: selected/rollback
+release bundles and validators, `park-plan`, `park-deploy.log`, `public-plan.log`,
+`park-readback.json`, `public-readback.json`, `park-media-browser.json`,
+`public-media-browser.json` and the reproducible readback/probe scripts.
+
+### Delivery limitation and rollback
+
+The first independent readback probe incorrectly required HTTP 206 for a Range
+request. Park actually returns the complete, correct body with HTTP 200, matching
+the documented [Cloudflare Pages behavior](https://developers.cloudflare.com/pages/configuration/serving-pages/).
+The probe now records that limitation and verifies the full returned body rather
+than claiming partial-response support. This required no product or hosting
+change. The implementation's prior local performance tests already used full
+HTTP 200 responses and fast-start metadata. Physical Safari/PWA, Android and
+shared park Wi-Fi remain explicit manual acceptance limits.
+
+Previously published #403 [release 34341707774](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/34341707774),
+SHA `bad087f7bda40a640d833744a9987fe32c88f529`, artifact `10100210328`, was
+reverified unexpired with all 663 checksums valid. Its template is identical to
+the new template and the application/schema inputs are unchanged. It remains
+the compatible protected rollback candidate; retain all 23 applied migrations.
+No rollback or re-promotion was needed or executed. No real booking, payment,
+redemption, refund, ROLLER write or guest message was used for verification.
+
 ## Localized media extension — 2026-09-15
 
 Love reopened #343 for new Swedish/English films, quality/size optimization and
