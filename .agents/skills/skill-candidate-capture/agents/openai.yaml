@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Candidate Capture"
+  short_description: "Spot reusable workflows worth preserving"
+  default_prompt: "Use $skill-candidate-capture to identify a useful skill update from the completed work."

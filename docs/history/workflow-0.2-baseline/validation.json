@@ -1,0 +1,37 @@
+[
+  {
+    "file": "validate-template.js",
+    "status": 0,
+    "output": "Template validation passed.\n"
+  },
+  {
+    "file": "validate-current-ticket.js",
+    "status": 0,
+    "output": "Static GitHub issue resolver validation passed.\n"
+  },
+  {
+    "file": "validate-followups.js",
+    "status": 0,
+    "output": "GitHub follow-up and backlog policy validation passed.\n"
+  },
+  {
+    "file": "validate-skills.js",
+    "status": 0,
+    "output": "Skill validation passed.\n"
+  },
+  {
+    "file": "validate-aws-tags.js",
+    "status": 0,
+    "output": "AWS tag validation passed.\n"
+  },
+  {
+    "file": "validate-history-archives.js",
+    "status": 1,
+    "output": "FAIL: REPO_CURRENT_STATE.md should stay short; move historical detail into docs/history or docs/roadmap\nFAIL: PROJECT_CONTEXT.md should stay focused on stable current facts; move ticket narrative into docs/history\nHistory archive validation failed with 2 issue(s).\n"
+  },
+  {
+    "file": "validate-github-project-migration.js",
+    "status": 0,
+    "output": "GitHub Project migration validation passed: 29 unique drafts, 47 exact-once followup dispositions, 40 legacy backlog IDs, 7 gates, and 2 archive rows.\n"
+  }
+]

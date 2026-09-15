@@ -1,48 +1,23 @@
-# GitHub Issue Task Resolver
+# GitHub issue resolver
 
-This file is static. Do not replace it with a branch-specific ticket brief and do not record active work here.
+This file is static. GitHub owns issue scope and Project status; local branch progress belongs in ignored .wrlds-local notes.
 
-## Resolve The Active Issue
+## Implementation
 
-Implementation branches use:
+Branches use codex/gh-<issue-number>-<short-slug>. Resolve the branch against the repository in .wrlds.json and the Git origin:
 
-```text
-codex/gh-<issue-number>-<short-slug>
+```sh
+node scripts/wrlds/resolve-issue.js
 ```
 
-Example:
+The command reads the issue through GitHub CLI, validates its identity and minimum task content, and prints the source and timestamp. It does not create issues, change status or infer user approval.
 
-```text
-codex/gh-42-add-session-export
-```
+Read the returned issue, including requirements, non-goals, dependencies, acceptance criteria and validation. Existing explicit user authorization applies. Draft ideas alone do not authorize implementation. Before a new branch, an explicitly supplied owner/repository#number or full GitHub issue URL may be passed with --issue; on an issue branch the two identities must agree.
 
-Resolve and read the issue before editing:
+## Offline continuation
 
-```bash
-branch="$(git branch --show-current)"
-issue="$(printf '%s' "$branch" | sed -nE 's#^codex/gh-([0-9]+)-.*#\1#p')"
-gh issue view "$issue" --json number,title,body,state,url,labels,assignees
-```
+To save an online snapshot locally, add --save-cache. The ignored snapshot is .wrlds-local/issue.json. Later, --offline reads only a matching snapshot and reports its age. It never claims fresh GitHub state or grants new permission.
 
-PowerShell:
+Continue previously authorized local work when the snapshot and current user instructions are sufficient. Keep pending external updates in .wrlds-local/pending.md. Before publishing or changing remote status, fetch fresh state, reconcile newer edits, and apply only authorized changes. Missing task content or a material scope conflict requires clarification.
 
-```powershell
-$branch = git branch --show-current
-if ($branch -notmatch '^codex/gh-(\d+)-[a-z0-9-]+$') {
-  throw "Expected codex/gh-<issue>-<slug>, got $branch"
-}
-$issue = $Matches[1]
-gh issue view $issue --json number,title,body,state,url,labels,assignees
-```
-
-The issue body owns the goal, context, requirements, non-goals, acceptance criteria, dependencies, and validation. Confirm that the issue is open and approved for implementation.
-
-## Exceptions
-
-- Read-only questions and repository exploration do not require an implementation issue.
-- Draft Project items are ideas, not approved implementation scope. Convert an approved draft to a repository issue first.
-- For an integration branch, use the integration issue and preserve source branch and legacy ticket references in the issue and PR.
-- For stacked work, the issue and PR must name the dependency and non-`main` base explicitly.
-- If the branch does not identify an issue and implementation is requested, create or obtain an issue before editing.
-
-See `references/github-collaboration-workflow.md` and `skills/github-collaboration/` for the complete workflow.
+Read-only exploration does not need an issue. Stacked work and legacy references follow [the collaboration workflow](references/github-collaboration-workflow.md).

@@ -6,7 +6,7 @@ Use this file as the short snapshot of what actually exists. Operational work st
 
 - Date: 2026-09-15
 - Backend/Park: `ce7c795` ([#327](docs/gh-327-kiosk-terminal-binding.md)): V210/P400 paid; Kiosk 2 active. Public frontends: `4bd7501` ([#407](docs/gh407-code-feedback.md) apply codes; #343 SV/EN video). #403 lookup grant; #345 handout/daily codes/early café; APK accepted (#401). #353 Klarna; #340 diagnostics; #335 alarms; #374 Apple Pay.
-- Operations: private [Project](https://github.com/orgs/wrlds-creations/projects/5), linked only to this repository; Love confirmed it as the Project default.
+- Operations: private [Project](https://github.com/orgs/wrlds-creations/projects/5), shared across all four JumpYard repositories; each new item names its exact Target repository.
 - Runtime: Park has 208 resources, migrations through `0023`, and 28 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption and late Handoff attachment are proven. Definitive kiosk payment approval returns its provisional session and bounded `safety` hint before ROLLER readback; redemption still requires authoritative synchronization. Physical proof: kiosk #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
 - Product approval and implementation status live in GitHub Issues and the Project; current mutable state is read from GitHub rather than copied here.
@@ -62,20 +62,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 
 ## Validation Baseline
 
-Current workflow and product checks are defined in [TEST_PLAN.md](TEST_PLAN.md). The closeout entrypoints are:
-
-- `npm run validate`
-- `npm run infra:check`
-- `git diff --check`
-- live readback of Project link, fields, item count, field completeness, and legacy-ID coverage
-
-The approved T0197 rollout passed exact Roller registration readback, negative auth/body tests, authenticated intake, authoritative normalized update, duplicate/out-of-order stability, guarded replay, direct recovery, retry/DLQ contract, migrations through `0016`, 187-resource deploy, aggregate retention checks, clean diff, and zero-drift checks. No natural Roller delivery occurred during the short validation window, so observing the next real booking change remains a bounded manual check. No Roller business write, guest send, lifecycle deletion, secret mutation, Cloudflare, or production change occurred.
-
-The T0198 rehearsal built final commit `bdd2d25` once, promoted it, rolled back to the immutable `020a84c` artifact, and re-promoted `bdd2d25`. The final run passed exact AWS account/stack/template checks, `IN_SYNC` drift, zero alarms, empty queues, migrations through `0016`, Cloudflare commit readback for both fixed Pages projects, and public HTTP/config checks. Required PR checks and protected-environment approval remain enforced; routine local park-test deployment is disabled by policy except for separately approved break-glass recovery.
-
-The T0200 rollout built `f74239e` once in release run `29568860560` and promoted it through protected run `29569173836`. The exact live plan added nine resources and removed none. Post-deploy verification passed with 196 resources, identical selected/deployed templates, `IN_SYNC` drift, zero alarms in `ALARM`, empty queues, migrations complete through `0016`, and exact Cloudflare commit readback. The later explicitly approved controlled proof delivered three messages with zero provider failure events and restored configuration-set sending to false; no application send gate or SES send IAM permission was opened.
-
-Issue #212's first promotion applied `0017` and the retry alarm but exposed API Gateway ARN normalization in final drift verification. PR #214 corrected it; release `30765157585` re-promoted as run `30765356271` with only `DefaultStage` changed and all AWS, Cloudflare, migration, queue, alarm, drift, and public checks green. The two failed rows, five classified DLQ messages, and a new safe signal all processed. No rollback, Roller business write, guest send, secret output, broad purge, or production change occurred.
+Use TEST_PLAN.md for current checks. Prior dated release/run evidence remains in [the pre-upgrade snapshot](docs/history/workflow-0.2-baseline/REPO_CURRENT_STATE.md#validation-baseline). No new deployment is claimed.
 
 ## Current Risks And Boundaries
 

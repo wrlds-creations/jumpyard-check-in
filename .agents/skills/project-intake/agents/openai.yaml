@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Intake"
+  short_description: "Fill WRLDS project context without over-asking"
+  default_prompt: "Use $project-intake to establish only the project facts needed for the current task."
