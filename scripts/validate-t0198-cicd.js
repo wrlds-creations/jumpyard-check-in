@@ -175,7 +175,7 @@ function main() {
   for (const relativePath of [
     'references/aws-cicd-standard.md',
     'references/github-collaboration-workflow.md',
-    'skills/github-collaboration/SKILL.md',
+    '.agents/skills/github-collaboration/SKILL.md',
   ]) {
     expectIncludes(relativePath, read(relativePath), 'GitHub', 'immutable');
   }

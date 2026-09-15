@@ -71,3 +71,5 @@ Love requested "bra pusha mergea deploy" after the limitation was reported. Issu
 Integration branch `codex/gh-409-integrate-no-phone` starts from `950843916c7ecfa24a13cf7b41f648dde112f8be` and preserves source commit `364f8b6`. It retains #327 installation binding and #407 code Apply behavior, removing only phone requirements. Decision D0222 avoids a collision with the intervening terminal decision.
 
 Integrated verification: 38 code-application tests, 137 payment-recovery tests, the 13+4 contact tests, phone lint/typecheck and documentation validators pass. Current CI will validate the exact PR head; no independent human review is claimed.
+
+Before merge, current main advanced to `fe77d42` with WRLDS 0.2. The integration retains its native skills, validators and compact context without changing runtime behavior.

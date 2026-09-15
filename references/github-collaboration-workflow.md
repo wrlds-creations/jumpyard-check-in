@@ -1,112 +1,65 @@
-# GitHub Collaboration Workflow
+# GitHub collaboration
 
-This reference defines the reusable WRLDS collaboration model for people and AI working in parallel.
+## Information ownership
 
-## Sources Of Truth
-
-| Concern | Source of truth |
+| Information | Owner |
 |---|---|
-| Unapproved idea | GitHub Project draft issue |
-| Approved implementation scope | Repository issue |
-| Priority, status, type, track, owner | GitHub Project fields |
-| Implementation and review | Issue-backed branch and PR |
-| Merged repository facts | `REPO_CURRENT_STATE.md` and code on `main` |
-| Durable project facts | `PROJECT_CONTEXT.md` |
-| Durable decisions | `DECISIONS.md` |
-| External gates and product guardrails | `docs/roadmap/backlog.md` or `FOLLOWUPS.md` |
-| Completed work | Closed issues and merged PRs |
-| Legacy evidence | `docs/history/` |
+| Goal, requirements, non-goals, acceptance and validation | Repository issue |
+| Priority, planning state, owner and scheduling | Linked GitHub Project |
+| Implementation/review evidence | Issue-backed branch and PR |
+| Durable facts and decisions | Project context and decision log |
+| Latest merged technical baseline | Repository current-state document |
+| Temporary local execution/offline notes | Ignored .wrlds-local directory |
 
-Do not maintain a second operational queue in Markdown.
+CODEX_TASK.md is a static resolver. Do not copy mutable fields into it. Configure the exact repository and Project URL in .wrlds.json. A draft is a proposal; approval can be given in the current user request and does not require a second ceremony.
 
-## Project Setup
+## Start authorized work
 
-GitHub CLI project operations require the `project` token scope:
+Read the relevant issue with the repository explicitly specified. Use node scripts/wrlds/resolve-issue.js for validated identity/content. Check current git status and the approved base. An explicit implementation request permits creating its concrete repository issue and work branch if needed; preserve unrelated changes. Use one issue per branch/worktree.
 
-```bash
-gh auth refresh -h github.com -s project
-gh auth status
-```
+Default branch names are codex/gh-<issue-number>-<short-slug>. The issue URL includes its repository; bare numbers and legacy T#### IDs are not globally unique identities.
 
-Create and link an organization project:
+## Permission boundaries
 
-```bash
-gh project create --owner <organization> --title "<Project name>"
-gh project link <project-number> --owner <organization> --repo <repository-name>
-```
+| Action | Authorization |
+|---|---|
+| Read repository/issues/Project | Normal task investigation |
+| Necessary local edits, tests and docs | Approved implementation scope |
+| Create/update an issue or Project item for the task | Requested issue/Project coordination, including an approved plan containing these actions |
+| Post comments or contact collaborators | Explicit messaging instruction or an explicitly invoked skill that authorizes it |
+| Commit/push | Explicit user request under WRLDS policy |
+| Merge, close an issue, deploy or change cloud resources | Required task-specific authorization and completion evidence |
 
-Set the default repository in the Project settings. Recommended status options are `Inbox`, `Backlog`, `Ready`, `In progress`, `In review`, `Blocked`, `Parked`, and `Done`. Common fields are `Priority`, `Type`, `Track`, and `Owner`; migrations may add `Legacy ID` temporarily.
+Do not ask again when the same action is already authorized. A cached status, issue label or unrelated historical approval is not new authorization. Preserve existing Project fields; avoid duplicates by searching before creation.
 
-Create custom fields with commands such as:
+## Completion states
 
-```bash
-gh project field-create <project-number> --owner <organization> --name Priority --data-type SINGLE_SELECT --single-select-options "P0,P1,P2,P3"
-gh project field-create <project-number> --owner <organization> --name Track --data-type SINGLE_SELECT --single-select-options "Product,Platform,ML,Operations"
-```
+Use the Project's existing equivalent states; do not rename its taxonomy merely to adopt the template.
 
-Field options are project-specific. Inspect IDs before automating updates:
+- In progress: implementation or required local verification is ongoing.
+- In review: a verified change is ready for the agreed review/integration step. State whether a PR has actually been published.
+- Blocked: a named external dependency prevents the remaining work; continue independent approved work.
+- Done: the issue's full acceptance, integration and any specified release/manual checks are satisfied.
 
-```bash
-gh project field-list <project-number> --owner <organization> --format json
-```
+Local completion does not imply merge, CI execution or deployment. The final PR may use Closes #42 when merging really completes all issue criteria. Use Refs #42 when later rollout evidence is required, and keep the issue open.
 
-## Draft Issue Triage
+## Offline work
 
-Create a draft for an idea that is not yet approved:
+The resolver's --save-cache stores issue identity, body and source timestamps in .wrlds-local/issue.json. --offline validates its repository/branch and reports snapshot age without pretending it is current. Continue sufficiently specified, already authorized local work. Capture pending updates separately. Refresh before remote changes and reconcile rather than replacing newer issue content or Project fields. Ask only when missing/conflicting information blocks the next action.
 
-```bash
-gh project item-create <project-number> --owner <organization> \
-  --title "Short outcome-oriented title" \
-  --body "Context, desired outcome, scope boundary, dependencies, risk, and validation expectation."
-```
+## Stacked work and integration
 
-Triage the draft by setting Project fields and adding enough context to make an approval decision. Drafts may remain in `Inbox`, `Backlog`, `Blocked`, or `Parked`; they are not implementation authorization.
+Independent work starts from current approved mainline. If an issue truly depends on unmerged work, state Depends on owner/repository#number and the exact base branch/SHA in the issue and PR. Preserve the dependency chain and revalidate after its base changes.
 
-When approved, convert the existing draft to a repository issue from the Project item menu or an available GitHub API integration. Select the linked/default repository and use the implementation issue form fields. Do not create a second issue and leave an ambiguous duplicate draft. Verify the resulting issue with:
+For stale shared branches, create a clean integration branch from the approved current base. Inspect original scope and intended combined behavior. Port relevant changes and resolve docs semantically; never select an entire document only because its timestamp is newer. Do not force-push another contributor's branch. Review the combined result and keep source references.
 
-```bash
-gh issue view <issue-number> --repo <organization>/<repository>
-```
+## Legacy migration
 
-## Approved Issue Contract
+Inventory source rows, issues, drafts and branches before migration. Reuse existing issues; do not renumber history. Map each unique legacy reference together with its source repository to its canonical issue/Project URL. Compare source and destination records, preserve useful history, then replace duplicate queues with pointers. Archive first; do not silently drop gates or unresolved work.
 
-An implementation issue owns:
+## Project setup
 
-- Goal
-- Context
-- Requirements
-- Non-goals
-- Acceptance criteria
-- Dependencies and approved base
-- Validation
-
-Project fields own priority, status, type, track, and owner. Avoid copying those mutable fields into source-controlled task files.
-
-## Branch And PR
-
-Create a branch from the current approved base:
-
-```bash
-git fetch origin
-git switch main
-git pull --ff-only origin main
-git switch -c codex/gh-42-add-session-export
-```
-
-Use `codex/gh-<issue-number>-<short-slug>` for new work. Read the issue before editing:
-
-```bash
-gh issue view 42 --json number,title,body,state,url,labels,assignees
-```
-
-The PR must:
-
-- contain `Closes #42`;
-- name the base branch and dependencies;
-- summarize intended behavior rather than only files changed;
-- report automated and manual validation;
-- identify unresolved risks and follow-up drafts;
-- avoid unrelated changes.
+Reuse a suitable existing Project and its fields. If a new Project is authorized, create it in the intended owner account, link the repository, and choose status/priority fields appropriate to that team. Confirm access with GitHub CLI or the connector before relying on writes. Record the URL and available statuses; never invent Project IDs or tool permissions.
 
 ## Release And Deployment
 
@@ -123,80 +76,11 @@ Do not store long-lived AWS access keys. Use GitHub OIDC with exact repository/b
 
 When a new workflow cannot be exercised safely until it exists on `main`, use a reviewed implementation PR followed by a dependent rollout-evidence PR under the same open Issue. The first PR references the Issue without closing it; the evidence PR uses `Closes #<issue>` only after deploy and rollback proof are complete.
 
-## Stacked Work
 
-Stack only when issue B truly depends on unmerged issue A.
+## Project-specific boundary
 
-1. Create B from A's branch.
-2. Record `Depends on #A` and `Base: <A branch>` in issue B and PR B.
-3. Target PR B at A's branch while A is open.
-4. Do not duplicate A's commits in review summaries.
-5. After A merges, update B from current `origin/main` and retarget B to `main`.
-6. Rebase or force-push only a branch you own and only when collaborators have agreed. Never rewrite a colleague's branch.
-
-Independent work should branch from `main`, even when it begins before another PR is merged.
-
-## Permanent Integration Rule
-
-Never merge a stale shared branch directly into `main`.
-
-1. Fetch all remote state.
-2. Preserve the contributor's source branch unchanged.
-3. Create a clean worktree from current `origin/main`.
-4. Create an issue-backed integration branch named `codex/gh-<issue>-integrate-<topic>`.
-5. Merge the source branch into the integration branch without rebasing or force-pushing the source branch.
-6. Resolve source code according to intended combined behavior and tests.
-7. Regenerate generated files using the canonical command instead of manually combining generated output.
-8. Resolve shared documentation semantically.
-9. Validate the integrated behavior.
-10. Open a reviewed PR to `main` with `Closes #<integration-issue>`.
-
-Example:
-
-```bash
-git fetch origin
-git worktree add ..\repo-integrate origin/main
-cd ..\repo-integrate
-git switch -c codex/gh-84-integrate-camera-work
-git merge --no-ff --no-commit origin/codex/legacy-camera-work
-# Resolve, regenerate, validate, then commit.
-```
-
-## Semantic Conflict Resolution
-
-Do not select an entire shared Markdown file because one copy is newer.
-
-- Preserve independent durable decisions from both branches.
-- Combine append-only history; dates may order entries but do not determine truth.
-- Resolve conflicting facts from merged code, canonical generated output, and validation evidence.
-- Keep `REPO_CURRENT_STATE.md` focused on the resulting merged mainline, not either branch's progress narrative.
-- Keep the latest mainline operational policy when a stale branch contains an old backlog or task ledger.
-- Create Project drafts for still-actionable findings instead of restoring legacy tables.
-
-## Duplicate Legacy Ticket IDs
-
-Historical branches may contain the same manual `T####` ID for unrelated work. Do not rewrite commits or renumber history.
-
-Preserve enough context to disambiguate each reference:
-
-- legacy ID;
-- ticket title or outcome;
-- source branch;
-- source commit or PR when available.
-
-The integration issue and new GitHub issue number become canonical. A migration record can map each legacy reference to its issue or Project item URL.
-
-## Backlog Migration
-
-Migrate from reconciled `main`, not from a stale feature branch.
-
-1. Inspect existing issues, Project drafts, open branches, and merged PRs.
-2. Count actionable legacy rows.
-3. Create one migration issue and branch for repository-document changes.
-4. Convert each still-actionable row to one Project draft, preserving legacy ID, goal, dependencies, risk, scope boundary, validation expectation, and status.
-5. Do not migrate completed work or external approval gates.
-6. Keep external gates and durable product guardrails in repository docs.
-7. Replace operational backlog tables with the Project link, policy, gates, guardrails, and a one-time migration record link.
-8. Compare final Project item count and legacy IDs against the source count before merging.
-
-New ideas go directly to Project drafts. Create a separate proposal document only when the design is too complex for an issue body.
+- Phone/staff-admin and required Cloud/API scope. Kiosk and JumpyBoard remain separate except approved interface contracts.
+- Roller is authoritative; Aurora is the operational cache. Frontends use JumpYard Cloud, never direct Roller REST.
+- Technical park-test is Nacka pilot production. Preserve its venue/date gates and current full-flow window.
+- Main merges build an immutable artifact only. Promotion/rollback select the exact successful run/SHA, require reviewed plan and protected approval, and never rebuild.
+- Workflow cleanup authorizes no cloud, Roller, payment, messaging, secret, lifecycle or product mutation. Read Security And Operational Constraints for those tasks.
