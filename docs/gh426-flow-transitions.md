@@ -1,6 +1,6 @@
 # Local phone transition review — #426
 
-Base: `168a82e0815662b5fdc7fe16567f1a86f2567d5d`. Branch: `codex/gh-426-smooth-phone-flow`. Prepared locally on 2026-09-17. The existing #396 worktree and its uncommitted changes were preserved. No commit, push, PR or deployment.
+Base: `168a82e0815662b5fdc7fe16567f1a86f2567d5d`. Branch: `codex/gh-426-smooth-phone-flow`. Prepared locally on 2026-09-17. The existing #396 worktree and its uncommitted changes were preserved. The initial handoff was local only; Love subsequently approved publication on 2026-09-18. See [verified rollout](gh426-flow-rollout.md) for the merged and deployed release.
 
 ## Change
 
@@ -26,7 +26,7 @@ The 390×844 iframe renders real presentation components with a separate fixture
 
 ## Remaining acceptance
 
-Physical iPhone/Android keyboard, touch timing, real slow-network and provider recovery behavior remain unverified. Long error text and every short-screen/step combination still need user/device review. The configured animation is not a measured physical latency guarantee. The fixture payment controller does not replace existing business regression tests or live acceptance. Shared #427 owns availability latency, kiosk #118 owns installed wrapper/P400 verification. User localhost review is next.
+Physical iPhone/Android keyboard, touch timing, real slow-network and provider recovery behavior remain unverified. Long error text and every short-screen/step combination still need user/device review. The configured animation is not a measured physical latency guarantee. The fixture payment controller does not replace existing business regression tests or live acceptance. Shared #427 owns availability latency, kiosk #118 owns installed wrapper/P400 verification. Love approved the softer localhost revision on 2026-09-18; physical acceptance remains open.
 
 ## Softer-transition browser review — 2026-09-18
 

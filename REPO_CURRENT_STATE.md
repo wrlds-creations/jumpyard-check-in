@@ -4,8 +4,8 @@ Use this file as the short snapshot of what actually exists. Operational work st
 
 ## Snapshot
 
-- Date: 2026-09-15
-- Backend/Park/public: `02155e5`, immutable release `34984915362`, protected Park `34985824066` and public `34987254267`. [#409 contact policy](docs/gh409-no-phone-contact.md) and [#421 quote reuse](docs/gh421-quote-reuse-rollout.md) are published. [#327](docs/gh-327-kiosk-terminal-binding.md): V210/P400 paid; Kiosk 2 active. #343 SV/EN video; #403 lookup grant; #345 handout/daily codes/early café; APK accepted (#401). #353 Klarna; #340 diagnostics; #335 alarms; #374 Apple Pay.
+- Date: 2026-09-18
+- Backend/Park/public: `8bebbe4`, immutable release `35344628449`, protected Park `35345372712` and public `35345771932`. [#426 smooth transitions](docs/gh426-flow-rollout.md) are published; backend template and migrations are unchanged from `02155e5`. [#409 contact policy](docs/gh409-no-phone-contact.md) and [#421 quote reuse](docs/gh421-quote-reuse-rollout.md) remain published. [#327](docs/gh-327-kiosk-terminal-binding.md): V210/P400 paid; Kiosk 2 active. #343 SV/EN video; #403 lookup grant; #345 handout/daily codes/early café; APK accepted (#401). #353 Klarna; #340 diagnostics; #335 alarms; #374 Apple Pay.
 - Operations: private [Project](https://github.com/orgs/wrlds-creations/projects/5), shared across all four JumpYard repositories; each new item names its exact Target repository.
 - Runtime: Park has 208 resources, migrations through `0023`, and 28 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption and late Handoff attachment are proven. Definitive kiosk payment approval returns its provisional session and bounded `safety` hint before ROLLER readback; redemption still requires authoritative synchronization. Physical proof: kiosk #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
