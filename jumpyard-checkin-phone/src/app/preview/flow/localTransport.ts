@@ -23,6 +23,13 @@ export function installLocalTransport(options: { delay: () => number; fail: () =
                 items: [{ productName: '60 min', parentProductName: 'Entré', productType: 'session', quantity: 2, bookingDate: new Date().toLocaleDateString('sv-SE'), startTime: '17:00', endTime: '18:00', tickets: [] }],
             } });
         }
+        if (url.pathname === '/v1/bookings/DEMO/add-products/quote' && Array.isArray(body.items)) {
+            const prices = new Map(makeAvailability(['17:00']).slots[0].products.map(product => [Number(product.productId), product.unitPrice]));
+            if (body.items.every((item: { productId: number; quantity: number }) => prices.has(item.productId) && Number.isInteger(item.quantity) && item.quantity > 0)) {
+                const total = body.items.reduce((sum: number, item: { productId: number; quantity: number }) => sum + prices.get(item.productId)! * item.quantity, 0);
+                return Response.json({ status: 'quoted', quote: { externalId: 'local-preview-quote', costs: { total, amountOwing: total } } });
+            }
+        }
         // No draft, payment, session, provider, email or production request.
         return Response.json({ status: 'blocked', error: { code: 'local_preview_only', message: 'Använd förhandsvisningens simulerade betalning.' } }, { status: 409 });
     };

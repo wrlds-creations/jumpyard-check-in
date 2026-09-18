@@ -517,12 +517,14 @@ export const AddonsOffer = ({
         void goToReview();
     };
 
+    const reviewQuoteInFlightRef = useRef(false);
     const goToReview = async (skyriderConsentOverride = skyriderConsentConfirmed) => {
-        if (submitting) return;
+        if (submitting || reviewQuoteInFlightRef.current) return;
         if (needsSkyRiderConsent(skyriderConsentOverride)) {
             setStep('SKYRIDER_ATTEST');
             return;
         }
+        reviewQuoteInFlightRef.current = true;
         setSubmitting(true);
         setSubmitError(null);
         try {
@@ -538,8 +540,14 @@ export const AddonsOffer = ({
         } catch (error) {
             setSubmitError(error instanceof CloudBookingError ? error.message : t.addons.quoteFailed);
         } finally {
+            reviewQuoteInFlightRef.current = false;
             setSubmitting(false);
         }
+    };
+
+    const confirmSkyRider = () => {
+        setSkyriderConsentConfirmed(true);
+        void goToReview(true);
     };
 
     const createDraft = async () => {
@@ -671,11 +679,9 @@ export const AddonsOffer = ({
 
             {step === 'SKYRIDER_ATTEST' && (
                 <SkyRiderAttest
-                    onComplete={() => {
-                        setSkyriderConsentConfirmed(true);
-                        setStep('SELECT');
-                        void goToReview(true);
-                    }}
+                    submitting={submitting}
+                    submitError={submitError}
+                    onComplete={confirmSkyRider}
                 />
             )}
 

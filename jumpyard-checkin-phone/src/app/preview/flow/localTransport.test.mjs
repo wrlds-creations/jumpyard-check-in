@@ -45,3 +45,16 @@ test('simulated failure stays local and can recover without reloading', async ()
   assert.equal((await h.window.fetch(url)).status, 200);
   assert.equal(h.forwarded.length, 0);
 });
+
+test('only the synthetic DEMO add-on quote is available; drafts and real booking quotes stay blocked', async () => {
+  const h = harness();
+  h.installLocalTransport({ delay: () => 0, fail: () => false });
+  const body = JSON.stringify({ items: [{ productId: 1765443, quantity: 2 }] });
+  const request = { method: 'POST', body };
+  const response = await h.window.fetch('https://example.invalid/v1/bookings/DEMO/add-products/quote', request);
+  assert.equal((await response.json()).quote.costs.amountOwing, 80);
+  for (const path of ['/v1/bookings/another/add-products/quote', '/v1/bookings/DEMO/add-products/draft']) {
+    assert.equal((await h.window.fetch('https://example.invalid' + path, request)).status, 409);
+  }
+  assert.equal(h.forwarded.length, 0);
+});

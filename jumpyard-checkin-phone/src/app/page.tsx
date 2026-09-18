@@ -1433,7 +1433,7 @@ function CheckInFlow() {
                 onConfirm={resetToStart}
             />
 
-            <FlowTransition resetDocumentScroll screenKey={`${state}:${buyRecoveryStatus ?? ''}`} className="phone-flow-content w-full max-w-full min-w-0 flex items-center justify-center relative">
+            <FlowTransition resetDocumentScroll variant={state === 'KIOSK_CHOICE' ? 'fade' : 'slide'} screenKey={`${state}:${buyRecoveryStatus ?? ''}`} className="phone-flow-content w-full max-w-full min-w-0 flex items-center justify-center relative">
                 {state === 'KIOSK_CHOICE' && activeReturnAttempt
                     && (buyRecoveryStatus === 'payment-return' || buyRecoveryStatus === 'payment-unknown' || buyRecoveryStatus === 'payment-checking') && (
                     <div className="w-full max-w-md px-4" hidden={buyRecoveryStatus !== 'payment-return'}>
@@ -1517,9 +1517,7 @@ function CheckInFlow() {
                     {state === 'KIOSK_LOOKUP' && (
                         <BookingLookup
                             key="park-lookup"
-                            onSuccess={booking => {
-                                void handleExistingBookingFound(booking);
-                            }}
+                            onSuccess={handleExistingBookingFound}
                             onBack={() => { setState('KIOSK_CHOICE'); }}
                         />
                     )}

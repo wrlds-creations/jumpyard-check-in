@@ -20,7 +20,7 @@ import styles from './preview.module.css';
 
 type Screen = 'home' | 'lookup' | 'booking' | 'buy' | 'addons' | 'payment' | 'approved' | 'video' | 'rules' | 'ready';
 const SCREENS: Screen[] = ['home','lookup','booking','buy','addons','payment','approved','video','rules','ready'];
-const BOOKING: Booking = { id: 'DEMO', jumpers: 2, time: '17:00', endTime: '18:00', durationMinutes: 60, products: 1, paid: true, guestName: 'Alex', lastName: 'Test', productLabel: '60 min', productType: 'entry', existingAddons: [{ id: 'socks', qty: 2, label: 'Hoppsockor', price: 49 }] };
+const BOOKING: Booking = { id: 'DEMO', guestAccessToken: 'local-fixture-only', jumpers: 2, time: '17:00', endTime: '18:00', durationMinutes: 60, products: 1, paid: true, guestName: 'Alex', lastName: 'Test', productLabel: '60 min', productType: 'entry', existingAddons: [{ id: 'socks', qty: 2, label: 'Hoppsockor', price: 49 }] };
 const SESSION: CheckInSession = { checkinSessionId: 'local-preview', status: 'ready_for_staff', handoffStatus: 'ready_for_staff', handoffCode: '0042', safetyStatus: 'completed' };
 
 export default function FlowPreview() {
@@ -99,9 +99,13 @@ function Preview() {
                 {!['home','payment','approved','video','rules','ready','buy'].includes(screen) && <button onClick={() => setScreen(screen === 'addons' ? 'booking' : 'home')}>{t.common.back}</button>}
                 {!['home','payment','approved','video','rules','ready','buy'].includes(screen) && <button className="ml-auto" onClick={reset}>{t.common.exit}</button>}
             </div>
-            <FlowTransition resetDocumentScroll screenKey={screen} className="phone-flow-content relative flex w-full max-w-full min-w-0 items-center justify-center">
+            <FlowTransition resetDocumentScroll variant={screen === 'home' ? 'fade' : 'slide'} screenKey={screen} className="phone-flow-content relative flex w-full max-w-full min-w-0 items-center justify-center">
                 {screen === 'home' && <ParkChoice onSelect={choice => setScreen(choice === 'BUY' ? 'buy' : 'lookup')} />}
-                {screen === 'lookup' && <BookingLookup onBack={reset} onSuccess={() => setScreen('booking')} />}
+                {screen === 'lookup' && <BookingLookup onBack={reset} onSuccess={async () => {
+                    // Exercise the second, session-routing wait without a real session call.
+                    await new Promise(resolve => setTimeout(resolve, settings.current.delay));
+                    setScreen('booking');
+                }} />}
                 {screen === 'booking' && <BookingSummary booking={BOOKING} onContinue={() => setScreen('addons')} />}
                 {screen === 'buy' && <BuyTickets onBack={reset} inlineExitVisible onRequestExit={reset} onBookingReady={async () => () => { setScreen('video'); }} />}
                 {screen === 'addons' && <AddonsOffer booking={BOOKING} guestCount={2} existingAddons={BOOKING.existingAddons!} onContinue={() => setScreen('video')} onPendingDone={reset} />}

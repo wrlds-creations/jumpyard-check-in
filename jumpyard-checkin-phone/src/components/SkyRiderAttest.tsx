@@ -6,9 +6,11 @@ import { JumpyardIcon } from '@/components/JumpyardIcon';
 
 interface SkyRiderAttestProps {
     onComplete: () => void;
+    submitting?: boolean;
+    submitError?: string | null;
 }
 
-export const SkyRiderAttest = ({ onComplete }: SkyRiderAttestProps) => {
+export const SkyRiderAttest = ({ onComplete, submitting = false, submitError = null }: SkyRiderAttestProps) => {
     const { t } = useTranslation();
     const [confirmed, setConfirmed] = useState(false);
     const infoItems = [
@@ -43,6 +45,8 @@ export const SkyRiderAttest = ({ onComplete }: SkyRiderAttestProps) => {
 
             <button
                 onClick={() => setConfirmed(c => !c)}
+                disabled={submitting}
+                aria-pressed={confirmed}
                 className={`w-full text-left p-4 rounded-2xl border-2 mb-4 transition-all shadow-sm ${
                     confirmed
                         ? 'bg-white border-primary'
@@ -61,12 +65,15 @@ export const SkyRiderAttest = ({ onComplete }: SkyRiderAttestProps) => {
                 </div>
             </button>
 
+            {submitError && <p role="alert" className="mb-4 w-full rounded-xl border border-danger/25 bg-white p-3 text-sm text-foreground">{submitError}</p>}
+
             <button
                 onClick={onComplete}
-                disabled={!confirmed}
+                disabled={!confirmed || submitting}
+                aria-busy={submitting}
                 className="w-full bg-primary hover:bg-surface hover:text-primary hover:border-primary border border-transparent text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all disabled:opacity-40 shadow-sm"
             >
-                {t.common.continue}
+                {submitting ? <span role="status">{t.buy.quoting}</span> : t.common.continue}
             </button>
         </FlowScreen>
     );

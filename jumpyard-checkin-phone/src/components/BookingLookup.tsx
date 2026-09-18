@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlowScreen } from '@/components/FlowTransition';
 import { CloudLookupError, lookupBooking, type LookupIssue } from '@/flow/cloudClient';
 import { useTranslation } from '@/context/LanguageContext';
@@ -7,7 +7,7 @@ import { JumpyardIcon } from '@/components/JumpyardIcon';
 import type { Booking } from '@/flow/types';
 
 interface BookingLookupProps {
-    onSuccess: (booking: Booking) => void;
+    onSuccess: (booking: Booking) => void | Promise<void>;
     onBack: () => void;
 }
 
@@ -16,18 +16,27 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<LookupIssue | null>(null);
+    const requestRef = useRef<symbol | null>(null);
+
+    useEffect(() => () => { requestRef.current = null; }, []);
 
     const handleSearch = async () => {
-        if (!code.trim()) return;
+        if (!code.trim() || requestRef.current) return;
+        const request = Symbol('lookup');
+        requestRef.current = request;
         setLoading(true);
         setError(null);
 
         try {
             const booking = await lookupBooking(code.trim());
-            onSuccess(booking);
+            if (requestRef.current !== request) return;
+            await onSuccess(booking);
+            // Successful handoff owns the next screen. Keep the outgoing button
+            // busy until unmount, including while the parent resolves the session.
         } catch (lookupError) {
+            if (requestRef.current !== request) return;
+            requestRef.current = null;
             setError(lookupError instanceof CloudLookupError ? lookupError.reason : 'lookup_failed');
-        } finally {
             setLoading(false);
         }
     };
@@ -53,8 +62,9 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
                     data-testid="booking-lookup-input"
                     type="text"
                     value={code}
+                    disabled={loading}
                     onChange={e => setCode(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void handleSearch(); } }}
                     placeholder={t.lookup.placeholder}
                     className="w-full bg-white border border-border rounded-xl px-4 py-3.5 text-base text-foreground placeholder:text-foreground/45 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-bold"
                 />
@@ -75,10 +85,11 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
                 data-testid="booking-lookup-submit"
                 onClick={handleSearch}
                 disabled={loading || !code.trim()}
-                className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
+                aria-busy={loading}
+                className={`w-full bg-primary text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 disabled:cursor-not-allowed ${!code.trim() ? 'opacity-40' : ''} ${loading ? '' : 'hover:bg-primary/90 active:scale-[0.98]'}`}
             >
                 {loading ? (
-                    <span className="flex items-center gap-2">
+                    <span className="flex items-center gap-2" role="status">
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         {t.common.processing}
                     </span>
