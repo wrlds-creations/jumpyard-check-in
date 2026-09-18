@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AnimatePresence, motion } from 'framer-motion';
+import { FlowMotion, FlowTransition, FlowScreen } from '@/components/FlowTransition';
 import { AlertCircle, ArrowLeft, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { BookingSummary } from '@/components/BookingSummary';
 import { SafetyVideo } from '@/components/SafetyVideo';
@@ -269,7 +269,7 @@ function BuyRecoveryCard({
     const completedUnavailable = status === 'completed-unavailable';
 
     return (
-        <motion.div
+        <FlowScreen
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
@@ -328,7 +328,7 @@ function BuyRecoveryCard({
                     </>
                 )}
             </div>
-        </motion.div>
+        </FlowScreen>
     );
 }
 
@@ -461,11 +461,6 @@ function CheckInFlow() {
         window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
     }, [linkToken]);
 
-    const scrollToTop = () => {
-        window.scrollTo(0, 0);
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
-    };
 
     const delay = (milliseconds: number) =>
         new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
@@ -474,7 +469,6 @@ function CheckInFlow() {
         const newCtx = { ...ctx, ...patch };
         setCtx(newCtx);
         setState(nextState(state, newCtx, branch));
-        scrollToTop();
     };
 
     const routeFromSessionResume = (
@@ -490,7 +484,6 @@ function CheckInFlow() {
             if (fallback === 'booking-summary') {
                 setCtx(nextCtx);
                 setState('APP_BOOKING');
-                scrollToTop();
                 return;
             }
 
@@ -501,14 +494,12 @@ function CheckInFlow() {
         setAlreadyCheckedIn(isCompletedSession(checkinSession));
         setCtx(nextCtx);
         setState(resumeState);
-        scrollToTop();
     };
 
     const routeAlreadyCheckedIn = (patch: Partial<FlowContext> = {}) => {
         setAlreadyCheckedIn(true);
         setCtx({ ...ctx, ...patch, checkinSession: null });
         setState('APP_PRESENT');
-        scrollToTop();
     };
 
     const getMatchingAddonsPrefetch = (booking: Booking | null) => {
@@ -614,7 +605,6 @@ function CheckInFlow() {
             if (run !== recoveryRunRef.current) return;
             setBuyRecoveryStatus(null);
             setState(next);
-            scrollToTop();
         };
         const bookingAddons = booking.existingAddons ?? [];
         const bookingPatch: Partial<FlowContext> = {
@@ -656,7 +646,6 @@ function CheckInFlow() {
             setCtx({ ...ctx, ...bookingPatch });
             return () => {
                 setState('APP_BOOKING');
-                scrollToTop();
             };
         }
 
@@ -694,7 +683,6 @@ function CheckInFlow() {
             setCtx({ ...ctx, ...bookingPatch, buyEntryFlow: false });
             return () => {
                 setState('APP_BOOKING');
-                scrollToTop();
             };
         }
     };
@@ -929,7 +917,6 @@ function CheckInFlow() {
         setBuyRecoverySnapshot(saved);
         setBuyRecoveryStatus(null);
         setState('KIOSK_BUY');
-        scrollToTop();
     };
 
     const continueRecoveredPurchase = () => {
@@ -955,7 +942,6 @@ function CheckInFlow() {
         const identifier = getBuyFlowRecoveryIdentifier(snapshot);
         if (!identifier) {
             setBuyRecoveryStatus('unsafe');
-            scrollToTop();
             return;
         }
 
@@ -979,7 +965,6 @@ function CheckInFlow() {
             if (!current()) return;
             setBuyRecoveryStatus(hasCompletedBuyFlowRecovery(snapshot) ? 'completed-unavailable'
                 : snapshot.draftState?.paymentApproved ? 'payment-unknown' : 'failed');
-            scrollToTop();
         }
     };
 
@@ -1067,7 +1052,6 @@ function CheckInFlow() {
         guestResumeStepWriteRef.current = null;
         setCtx({ ...initialContext(effectiveChannel), token: null });
         setState('KIOSK_CHOICE');
-        scrollToTop();
     };
 
     const restartAfterBuyRecovery = resetToStart;
@@ -1094,7 +1078,6 @@ function CheckInFlow() {
             }
 
             setSessionStartError(error instanceof CloudSessionError ? error.reason : 'session_failed');
-            scrollToTop();
         } finally {
             setIsStartingSession(false);
         }
@@ -1128,7 +1111,6 @@ function CheckInFlow() {
                 if (confirmation.status === 'unavailable') {
                     setPaidConfirmationState('idle');
                     setReadyForStaffError('network_error');
-                    scrollToTop();
                     return;
                 }
 
@@ -1172,7 +1154,6 @@ function CheckInFlow() {
 
             setPaidConfirmationState('idle');
             setReadyForStaffError(error instanceof CloudSessionError ? error.reason : 'session_failed');
-            scrollToTop();
         } finally {
             if (isCurrentRun()) setIsMarkingReadyForStaff(false);
         }
@@ -1202,15 +1183,11 @@ function CheckInFlow() {
             advance({ safetyAttestedAt: attestedAt, checkinSession });
         } catch (error) {
             setReadyForStaffError(error instanceof CloudSessionError ? error.reason : 'session_failed');
-            scrollToTop();
         } finally {
             setIsMarkingReadyForStaff(false);
         }
     };
 
-    useEffect(() => {
-        scrollToTop();
-    }, [state]);
 
     useEffect(() => {
         if (recoveryGateReady && state !== 'KIOSK_CHOICE') return;
@@ -1292,7 +1269,6 @@ function CheckInFlow() {
         if (isPrePaymentBuyFlowRecovery(snapshot)) {
             setBuyRecoveryStatus(null);
             setState('KIOSK_BUY');
-            scrollToTop();
             return;
         }
 
@@ -1381,7 +1357,6 @@ function CheckInFlow() {
                 if (!alive) return;
                 setSessionStartError(error instanceof CloudSessionError ? error.reason : 'session_failed');
                 setState('KIOSK_LOOKUP');
-                scrollToTop();
             });
         return () => {
             alive = false;
@@ -1431,11 +1406,9 @@ function CheckInFlow() {
                         onClick={() => {
                             if (flowBackAction === 'addons') {
                                 setAddonsBackRequest((request) => request + 1);
-                                scrollToTop();
                                 return;
                             }
                             setState(backState!);
-                            scrollToTop();
                         }}
                         className="flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
                     >
@@ -1460,7 +1433,7 @@ function CheckInFlow() {
                 onConfirm={resetToStart}
             />
 
-            <div className="phone-flow-content w-full max-w-full min-w-0 flex items-center justify-center relative">
+            <FlowTransition resetDocumentScroll screenKey={`${state}:${buyRecoveryStatus ?? ''}`} className="phone-flow-content w-full max-w-full min-w-0 flex items-center justify-center relative">
                 {state === 'KIOSK_CHOICE' && activeReturnAttempt
                     && (buyRecoveryStatus === 'payment-return' || buyRecoveryStatus === 'payment-unknown' || buyRecoveryStatus === 'payment-checking') && (
                     <div className="w-full max-w-md px-4" hidden={buyRecoveryStatus !== 'payment-return'}>
@@ -1476,9 +1449,9 @@ function CheckInFlow() {
                         />
                     </div>
                 )}
-                <AnimatePresence mode="wait">
+                <>
                     {state === 'APP_MOBILE' && (
-                        <motion.div
+                        <FlowScreen
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
@@ -1491,7 +1464,7 @@ function CheckInFlow() {
                             <p className="text-muted text-sm">
                                 {t.common.loading}
                             </p>
-                        </motion.div>
+                        </FlowScreen>
                     )}
 
                     {state === 'KIOSK_CHOICE' && !recoveryGateReady && (
@@ -1547,7 +1520,7 @@ function CheckInFlow() {
                             onSuccess={booking => {
                                 void handleExistingBookingFound(booking);
                             }}
-                            onBack={() => { setState('KIOSK_CHOICE'); scrollToTop(); }}
+                            onBack={() => { setState('KIOSK_CHOICE'); }}
                         />
                     )}
 
@@ -1629,7 +1602,6 @@ function CheckInFlow() {
                                 setAlreadyCheckedIn(false);
                                 setCtx({ ...initialContext(effectiveChannel), token: null });
                                 setState('KIOSK_CHOICE');
-                                scrollToTop();
                             }}
                         />
                     )}
@@ -1661,8 +1633,8 @@ function CheckInFlow() {
                             onStartOver={ctx.channel === 'park-qr' ? resetToStart : undefined}
                         />
                     )}
-                </AnimatePresence>
-            </div>
+                </>
+            </FlowTransition>
         </div>
     );
 }
@@ -1690,7 +1662,7 @@ function isCompletedSession(session: CheckInSession) {
 
 export default function Home() {
     return (
-        <LanguageProvider>
+        <LanguageProvider><FlowMotion>
             <main className="phone-flow-shell flex min-h-dvh w-full max-w-full min-w-0 flex-col items-center justify-start overflow-x-hidden p-3 pt-3 relative text-foreground bg-background selection:bg-primary selection:text-white">
                 <Suspense
                     fallback={
@@ -1702,6 +1674,6 @@ export default function Home() {
                     <CheckInFlow />
                 </Suspense>
             </main>
-        </LanguageProvider>
+        </FlowMotion></LanguageProvider>
     );
 }

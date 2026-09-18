@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { FlowScreen } from '@/components/FlowTransition';
 import { CloudLookupError, lookupBooking, type LookupIssue } from '@/flow/cloudClient';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon } from '@/components/JumpyardIcon';
@@ -33,7 +33,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
     };
 
     return (
-        <motion.div
+        <FlowScreen
             className="w-full max-w-md min-w-0 mx-auto flex flex-col justify-center px-4"
             style={{ minHeight: 'calc(100dvh - 120px)' }}
             initial={{ opacity: 0, y: 20 }}
@@ -56,20 +56,19 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
                     onChange={e => setCode(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSearch()}
                     placeholder={t.lookup.placeholder}
-                    autoFocus
                     className="w-full bg-white border border-border rounded-xl px-4 py-3.5 text-base text-foreground placeholder:text-foreground/45 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-bold"
                 />
             </div>
 
             {error && (
-                <motion.div
+                <FlowScreen
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     className="mb-4 min-w-0 bg-red-50 border border-red-200 p-3 rounded-xl"
                 >
                     <p className="text-sm text-red-700 font-medium">{getLookupErrorTitle(error, t)}</p>
                     <p className="text-xs text-red-500 mt-0.5">{getLookupErrorDescription(error, t)}</p>
-                </motion.div>
+                </FlowScreen>
             )}
 
             <button
@@ -87,7 +86,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
                     t.lookup.cta
                 )}
             </button>
-        </motion.div>
+        </FlowScreen>
     );
 };
 

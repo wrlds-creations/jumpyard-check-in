@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { FlowScreen } from '@/components/FlowTransition';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon } from '@/components/JumpyardIcon';
 
@@ -17,7 +17,7 @@ export const SkyRiderAttest = ({ onComplete }: SkyRiderAttestProps) => {
     ];
 
     return (
-        <motion.div
+        <FlowScreen
             className="w-full max-w-md mx-auto flex flex-col items-center px-4 py-3 text-center"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -68,6 +68,6 @@ export const SkyRiderAttest = ({ onComplete }: SkyRiderAttestProps) => {
             >
                 {t.common.continue}
             </button>
-        </motion.div>
+        </FlowScreen>
     );
 };

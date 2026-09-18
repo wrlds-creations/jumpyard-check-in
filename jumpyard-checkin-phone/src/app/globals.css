@@ -247,3 +247,15 @@ input {
 .addon-shop-footer > div { margin-bottom: 8px; padding: 10px 12px; }
 .addon-shop-footer > button { min-height: 48px; padding-block: 12px; }
 .addon-shop-preview { padding: 4px 8px; border: 1px solid var(--primary); border-radius: 8px; font-size: 12px; }
+
+/* The retiring view is a visual copy only, never a second active screen. */
+.flow-transition-snapshot, .flow-transition-snapshot * {
+  pointer-events: none !important;
+  user-select: none !important;
+  caret-color: transparent !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Headings receive programmatic focus for announcement, not keyboard interaction. */
+[data-flow-transition] :is(h1, h2)[tabindex="-1"]:focus { outline: none; }

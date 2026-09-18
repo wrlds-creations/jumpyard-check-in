@@ -3,7 +3,7 @@ import { PackageContentRows } from '@/components/PackageContentRows';
 import { scalePackageContents } from '@/flow/packageContents';
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { FlowScreen, StableLoadingRegion, FlowTransitionBoundary } from '@/components/FlowTransition';
 import { AlertCircle, ArrowLeft, Check, ChevronDown, Minus, Plus, RefreshCw, X } from 'lucide-react';
 import {
   CloudBookingError,
@@ -1694,8 +1694,12 @@ export const BuyTickets = ({
     );
   };
 
+  const presentationRef = useRef<HTMLDivElement>(null);
+
   return (
-    <motion.div
+    <FlowTransitionBoundary root={presentationRef} screenKey={step} resetDocumentScroll>
+    <FlowScreen
+      ref={presentationRef}
       className="phone-buy-flow w-full max-w-md min-w-0 mx-auto px-4"
       data-prepayment-status={draft?.prepayment?.status ?? ''}
       data-prepayment-draft-id={draft?.prepayment?.prepaymentDraftId ?? ''}
@@ -1728,7 +1732,7 @@ export const BuyTickets = ({
       </div>
 
       {step === 'TIMESLOT' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+        <FlowScreen initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">
             {t.buy.selectTime}
           </h2>
@@ -1741,10 +1745,7 @@ export const BuyTickets = ({
             </div>
           )}
 
-          {loadingAvailability ? (
-            <AvailabilityLoadingCard selectedTime={selectedTime} />
-          ) : (
-            <>
+          <StableLoadingRegion loading={loadingAvailability} fallback={<AvailabilityLoadingCard selectedTime={selectedTime} />}>
               <div className="flex flex-col gap-3 mb-6">
                 {slots.map((time) => {
                   const isSelected = selectedTime === time;
@@ -1778,8 +1779,7 @@ export const BuyTickets = ({
               >
                 {t.common.continue}
               </button>
-            </>
-          )}
+            </StableLoadingRegion>
 
           {availabilityError && (
             <button
@@ -1790,7 +1790,7 @@ export const BuyTickets = ({
               <RefreshCw size={15} /> {t.buy.retryAvailability}
             </button>
           )}
-        </motion.div>
+        </FlowScreen>
       )}
 
       {step === 'PRODUCT' && (
@@ -1858,7 +1858,7 @@ export const BuyTickets = ({
       )}
 
       {step === 'QUANTITY' && selectedProduct && (
-        <motion.div
+        <FlowScreen
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="w-full max-w-full min-w-0 flex items-center justify-center"
@@ -1926,11 +1926,11 @@ export const BuyTickets = ({
               {t.common.continue}
             </button>
           </div>
-        </motion.div>
+        </FlowScreen>
       )}
 
       {step === 'ADDONS' && selectedProduct && (
-        <motion.div
+        <FlowScreen
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="addon-shop-screen w-full flex flex-col"
@@ -1962,7 +1962,7 @@ export const BuyTickets = ({
               {t.common.continue}
             </button>
           </div>
-        </motion.div>
+        </FlowScreen>
       )}
 
       {step === 'SKYRIDER_ATTEST' && (
@@ -1975,7 +1975,7 @@ export const BuyTickets = ({
       )}
 
       {step === 'CONTACT' && selectedProduct && (
-        <motion.div
+        <FlowScreen
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="w-full flex flex-col items-center justify-center"
@@ -2220,6 +2220,7 @@ export const BuyTickets = ({
                 }
                 void createDraft();
               }}
+              data-testid="buy-contact-continue"
               disabled={!customerValid || submitting || applyingCodes}
               className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center active:scale-[0.98]"
             >
@@ -2235,11 +2236,11 @@ export const BuyTickets = ({
               onEdit={editRejectedCode}
             />
           </div>
-        </motion.div>
+        </FlowScreen>
       )}
 
       {step === 'REVIEW' && selectedProduct && (
-        <motion.div
+        <FlowScreen
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="w-full flex items-center justify-center"
@@ -2307,11 +2308,11 @@ export const BuyTickets = ({
               {t.common.continue}
             </button>
           </div>
-        </motion.div>
+        </FlowScreen>
       )}
 
       {step === 'PAYMENT' && draft && (
-        <motion.div
+        <FlowScreen
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="w-full flex items-center justify-center"
@@ -2416,11 +2417,11 @@ export const BuyTickets = ({
               </>
             )}
           </div>
-        </motion.div>
+        </FlowScreen>
       )}
 
       {step === 'APPROVED' && draft && (
-        <motion.div
+        <FlowScreen
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="w-full flex items-center justify-center"
@@ -2436,11 +2437,11 @@ export const BuyTickets = ({
               onContinueToSafety={continueAfterApprovedPayment}
             />
           </div>
-        </motion.div>
+        </FlowScreen>
       )}
 
       {step === 'PENDING' && draft && (
-        <motion.div
+        <FlowScreen
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="w-full flex items-center justify-center"
@@ -2490,8 +2491,9 @@ export const BuyTickets = ({
               {noPaymentRequired ? t.buy.paymentRetrySync : t.common.done}
             </button>
           </div>
-        </motion.div>
+        </FlowScreen>
       )}
-    </motion.div>
+    </FlowScreen>
+    </FlowTransitionBoundary>
   );
 };

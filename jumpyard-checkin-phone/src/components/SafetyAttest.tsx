@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { FlowScreen } from '@/components/FlowTransition';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import type { SessionIssue } from '@/flow/cloudClient';
@@ -59,7 +59,7 @@ export const SafetyAttest = ({
     const ageChecked = !!checked[AGE_KEY];
 
     return (
-        <motion.div
+        <FlowScreen
             className="w-full max-w-md mx-auto flex flex-col items-center px-4 py-3"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -192,6 +192,6 @@ export const SafetyAttest = ({
             >
                 {isSubmitting ? t.safetyAttest.readyForStaffProcessing : t.safetyAttest.cta}
             </button>
-        </motion.div>
+        </FlowScreen>
     );
 };

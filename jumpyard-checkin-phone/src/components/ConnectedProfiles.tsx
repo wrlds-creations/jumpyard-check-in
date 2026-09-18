@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { FlowScreen } from '@/components/FlowTransition';
 import type { ConnectedProfile } from '@/flow/types';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
@@ -36,7 +36,7 @@ export const ConnectedProfiles = ({ count, onContinue }: ConnectedProfilesProps)
     const canContinue = filledCount === slots;
 
     return (
-        <motion.div
+        <FlowScreen
             className="w-full max-w-md mx-auto flex flex-col items-center px-4 py-3"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -86,6 +86,6 @@ export const ConnectedProfiles = ({ count, onContinue }: ConnectedProfilesProps)
             >
                 {t.connected.confirm} ({filledCount})
             </button>
-        </motion.div>
+        </FlowScreen>
     );
 };
