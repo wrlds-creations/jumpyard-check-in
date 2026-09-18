@@ -21,7 +21,7 @@
     "postbuild": "node scripts/verify-production-mock-boundary.mjs",
     "test:payment-options": "node --no-warnings --experimental-strip-types --test src/flow/paymentOptionFeedback.test.mjs",
     "test:no-phone": "node --no-warnings --experimental-strip-types --test src/flow/noPhoneContact.test.mjs",
-    "test:flow-transitions": "node --test src/components/FlowTransition.test.mjs src/app/preview/flow/localTransport.test.mjs"
+    "test:flow-transitions": "node --test src/components/FlowTransition.test.mjs src/components/BookingLookup.test.mjs src/components/AddonSkyRider.test.mjs src/app/preview/flow/localTransport.test.mjs"
   },
   "dependencies": {
     "@roller/ecom-payments": "file:vendor/ecom-payments",

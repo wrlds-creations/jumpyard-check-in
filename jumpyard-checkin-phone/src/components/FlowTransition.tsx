@@ -37,6 +37,8 @@ interface FlowTransitionProps extends HTMLAttributes<HTMLDivElement> {
     screenKey: string;
     enabled?: boolean;
     resetDocumentScroll?: boolean;
+    focusHeading?: boolean;
+    variant?: 'slide' | 'fade';
 }
 
 interface BoundaryProps {
@@ -44,6 +46,8 @@ interface BoundaryProps {
     screenKey: string;
     enabled?: boolean;
     resetDocumentScroll?: boolean;
+    focusHeading?: boolean;
+    variant?: 'slide' | 'fade';
     children: ReactNode;
 }
 
@@ -78,7 +82,7 @@ class TransitionLifecycle extends Component<BoundaryProps & { reduced: boolean }
         if (this.props.enabled === false || !element) return;
 
         if (this.props.resetDocumentScroll) window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-        const heading = element.querySelector<HTMLElement>('h1, h2');
+        const heading = this.props.focusHeading === false ? null : element.querySelector<HTMLElement>('h1, h2');
         if (heading) {
             heading.tabIndex = -1;
             heading.focus({ preventScroll: true });
@@ -92,11 +96,13 @@ class TransitionLifecycle extends Component<BoundaryProps & { reduced: boolean }
                 snapshot.restoreScroll();
                 this.animations.push(snapshot.layer.animate(
                     [{ opacity: 1 }, { opacity: 0 }],
-                    { duration: 180, easing: 'ease-out', fill: 'forwards' },
+                    { duration: this.props.variant === 'fade' ? 240 : 180, easing: 'ease-out', fill: 'forwards' },
                 ));
             }
             this.animations.push(element.animate(
-                [{ opacity: snapshot ? 0 : 0.15, transform: 'translateY(12px)' }, { opacity: 1, transform: 'translateY(0)' }],
+                this.props.variant === 'fade'
+                    ? [{ opacity: snapshot ? 0 : 0.15 }, { opacity: 1 }]
+                    : [{ opacity: snapshot ? 0 : 0.15, transform: 'translateY(12px)' }, { opacity: 1, transform: 'translateY(0)' }],
                 { duration: 240, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' },
             ));
             // A cleanup timer only: never gates navigation or business state.
@@ -124,9 +130,9 @@ export function FlowTransitionBoundary(props: BoundaryProps) {
     return <TransitionLifecycle {...props} reduced={Boolean(reduced)} />;
 }
 
-export function FlowTransition({ screenKey, enabled = true, resetDocumentScroll = false, children, ...props }: FlowTransitionProps) {
+export function FlowTransition({ screenKey, enabled = true, resetDocumentScroll = false, focusHeading = true, variant = 'slide', children, ...props }: FlowTransitionProps) {
     const root = useRef<HTMLDivElement>(null);
-    return <FlowTransitionBoundary root={root} screenKey={screenKey} enabled={enabled} resetDocumentScroll={resetDocumentScroll}>
+    return <FlowTransitionBoundary root={root} screenKey={screenKey} enabled={enabled} resetDocumentScroll={resetDocumentScroll} focusHeading={focusHeading} variant={variant}>
         <div {...props} ref={root} data-flow-transition={enabled ? screenKey : undefined}>{children}</div>
     </FlowTransitionBoundary>;
 }

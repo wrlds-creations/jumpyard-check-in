@@ -51,6 +51,29 @@ function harness({ reduced = false, animateSupported = true, snapshotAvailable =
 test('initial and same-screen renders do not replay motion or steal input focus', () => {
   const h = harness(); h.update('start'); h.update('start'); assert.deepEqual(h.events, []);
 });
+
+test('next-guest reset crossfades for the full duration without translating the home screen or delaying reset', () => {
+  const h = harness();
+  h.update('home', { variant: 'fade' });
+  const animations = h.events.filter(e => e[0] === 'animate');
+  assert.deepEqual(animations.map(e => e[3].duration), [240, 240]);
+  assert.deepEqual(animations[1][2], [{ opacity: 0 }, { opacity: 1 }]);
+  assert.equal(h.events.filter(e => e[0] === 'focus').length, 1);
+  h.finish(); assert.equal(h.timers.size, 0);
+});
+
+test('loading phases crossfade without moving focus, and a fast result cancels the previous presentation', () => {
+  const h = harness();
+  h.update('TIMESLOT:loading', { focusHeading: false });
+  assert.equal(h.events.filter(e => e[0] === 'animate').length, 2);
+  assert.equal(h.events.filter(e => e[0] === 'focus').length, 0);
+  h.update('PRODUCT', { focusHeading: true });
+  assert.equal(h.events.filter(e => e[0] === 'focus').length, 1);
+  assert.equal(h.events.filter(e => e[0] === 'remove').length, 1);
+  assert.equal(h.timers.size, 1);
+  h.finish();
+  assert.equal(h.timers.size, 0);
+});
 test('captures outgoing DOM before mutation and navigates immediately with coordinated fades', () => {
   const h = harness(); h.update('lookup', { resetDocumentScroll: true });
   assert.deepEqual(h.events.map(e => e[0]), ['capture', 'scroll', 'focus', 'append', 'restore-scroll', 'animate', 'animate']);

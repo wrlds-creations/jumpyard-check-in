@@ -1697,7 +1697,7 @@ export const BuyTickets = ({
   const presentationRef = useRef<HTMLDivElement>(null);
 
   return (
-    <FlowTransitionBoundary root={presentationRef} screenKey={step} resetDocumentScroll>
+    <FlowTransitionBoundary root={presentationRef} screenKey={step === 'TIMESLOT' && loadingAvailability ? 'TIMESLOT:loading' : step} focusHeading={!loadingAvailability} resetDocumentScroll={!loadingAvailability}>
     <FlowScreen
       ref={presentationRef}
       className="phone-buy-flow w-full max-w-md min-w-0 mx-auto px-4"
