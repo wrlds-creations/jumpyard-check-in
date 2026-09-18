@@ -256,3 +256,6 @@ input {
   animation: none !important;
   transition: none !important;
 }
+
+/* Headings receive programmatic focus for announcement, not keyboard interaction. */
+[data-flow-transition] :is(h1, h2)[tabindex="-1"]:focus { outline: none; }
