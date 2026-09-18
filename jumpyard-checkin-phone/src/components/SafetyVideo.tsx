@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import { motion } from 'framer-motion';
+import { FlowScreen } from '@/components/FlowTransition';
 import { AlertCircle, Loader2, Play, RotateCcw } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 import { createSafetyPlayback, type SafetyPlaybackState } from '@/flow/safetyPlayback';
@@ -71,7 +71,7 @@ function LocalizedSafetyVideo({ onComplete, buyEntryFlow = false, continuePlayin
     const handlePlay = () => playbackRef.current?.start();
 
     return (
-        <motion.div
+        <FlowScreen
             className="w-full max-w-md mx-auto flex min-h-0 flex-col items-center justify-center px-3 py-1"
             style={{ minHeight: 'calc(100dvh - 118px)' }}
             initial={false}
@@ -168,6 +168,6 @@ function LocalizedSafetyVideo({ onComplete, buyEntryFlow = false, continuePlayin
                     )}
                 </div>
             </div>
-        </motion.div>
+        </FlowScreen>
     );
 }

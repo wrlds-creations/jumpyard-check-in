@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { FlowScreen } from '@/components/FlowTransition';
 import { submitPayment } from '@/flow/mockClient';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon } from '@/components/JumpyardIcon';
@@ -29,7 +29,7 @@ export const PaymentView = ({ bookingId, total, items, baseProduct, onPaid }: Pa
     };
 
     return (
-        <motion.div
+        <FlowScreen
             className="w-full max-w-md min-w-0 mx-auto flex flex-col items-center px-4 py-3"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -93,6 +93,6 @@ export const PaymentView = ({ bookingId, total, items, baseProduct, onPaid }: Pa
             </button>
 
             <p className="text-muted text-[11px] text-center mt-2">{t.payment.afterPaymentHint}</p>
-        </motion.div>
+        </FlowScreen>
     );
 };

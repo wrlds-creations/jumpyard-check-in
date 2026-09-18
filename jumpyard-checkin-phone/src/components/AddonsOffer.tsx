@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { FlowScreen, FlowTransitionBoundary } from '@/components/FlowTransition';
 import { AlertCircle, CreditCard } from 'lucide-react';
 import {
     CloudBookingError,
@@ -575,8 +575,11 @@ export const AddonsOffer = ({
         }
     };
 
+    const presentationRef = useRef<HTMLDivElement>(null);
+
     return (
-        <motion.div
+<FlowTransitionBoundary root={presentationRef} screenKey={step} enabled={true} resetDocumentScroll>
+        <FlowScreen ref={presentationRef}
             className={`w-full max-w-md min-w-0 mx-auto flex flex-col px-4 ${step === 'SELECT' ? 'addon-shop-screen pt-3' : 'py-3'}`}
             data-add-product-status={draft?.prepayment?.status ?? ''}
             data-add-product-draft-id={draft?.prepayment?.prepaymentDraftId ?? ''}
@@ -587,7 +590,7 @@ export const AddonsOffer = ({
             exit={{ opacity: 0, y: -20 }}
         >
             {step === 'PAYMENT' && draft && (
-                <motion.div
+                <FlowScreen
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="w-full max-w-full min-w-0 flex items-center justify-center"
@@ -620,7 +623,7 @@ export const AddonsOffer = ({
                             </button>
                         )}
                     </div>
-                </motion.div>
+                </FlowScreen>
             )}
 
             {step === 'SELECT' && (
@@ -677,7 +680,7 @@ export const AddonsOffer = ({
             )}
 
             {step === 'REVIEW' && quote && (
-                <motion.div data-testid="addons-review" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-full min-w-0 px-2 py-5">
+                <FlowScreen data-testid="addons-review" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-full min-w-0 px-2 py-5">
                     <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">{t.addons.reviewTitle}</h2>
                     <p className="text-foreground text-xs mb-5 text-center">{t.addons.reviewDesc}</p>
 
@@ -715,11 +718,11 @@ export const AddonsOffer = ({
                     >
                         {submitting ? t.buy.creating : t.addons.createDraft}
                     </button>
-                </motion.div>
+                </FlowScreen>
             )}
 
             {step === 'APPROVED' && (
-                <motion.div
+                <FlowScreen
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="w-full flex items-center justify-center"
@@ -730,11 +733,11 @@ export const AddonsOffer = ({
                         amountLabel={formatMoney(draft?.prepayment?.amountOwing ?? draft?.draft.costs.amountOwing)}
                         onContinueToSafety={() => completeAddons(true)}
                     />
-                </motion.div>
+                </FlowScreen>
             )}
 
             {step === 'PENDING' && draft && (
-                <motion.div
+                <FlowScreen
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="w-full flex items-center justify-center"
@@ -765,9 +768,10 @@ export const AddonsOffer = ({
                             {t.common.done}
                         </button>
                     </div>
-                </motion.div>
+                </FlowScreen>
             )}
-        </motion.div>
+        </FlowScreen>
+        </FlowTransitionBoundary>
     );
 };
 

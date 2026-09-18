@@ -1,5 +1,5 @@
 'use client';
-import { motion } from 'framer-motion';
+import { FlowScreen } from '@/components/FlowTransition';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { QrCode } from '@/components/QrCode';
@@ -85,7 +85,7 @@ export const ConfirmationScreen = ({
     ].filter((group) => group.items.length > 0);
 
     return (
-        <motion.div
+        <FlowScreen
             className="w-full max-w-lg min-w-0 mx-auto flex flex-col items-center justify-center px-4 py-3 text-center"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -204,7 +204,7 @@ export const ConfirmationScreen = ({
                     {t.confirm.done}
                 </button>
             )}
-        </motion.div>
+        </FlowScreen>
     );
 };
 

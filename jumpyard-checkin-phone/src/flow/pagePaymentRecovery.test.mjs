@@ -172,7 +172,9 @@ test('continuing a paid purchase still opens safety after retiring its own recov
     scrollToTop: () => events.push(['scroll']),
   });
   await host.continuePreparedPurchase('APP_SAFETY_VIDEO')();
-  assert.deepEqual(events, [['recovery', null], ['state', 'APP_SAFETY_VIDEO'], ['scroll']]);
+  // Scrolling now belongs to the incoming screen's layout effect, not this
+  // async business handler while the outgoing page is still mounted.
+  assert.deepEqual(events, [['recovery', null], ['state', 'APP_SAFETY_VIDEO']]);
 });
 
 function runRecoveryEffects(host) {

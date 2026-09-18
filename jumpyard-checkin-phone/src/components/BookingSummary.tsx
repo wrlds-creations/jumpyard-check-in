@@ -1,5 +1,5 @@
 'use client';
-import { motion } from 'framer-motion';
+import { FlowScreen } from '@/components/FlowTransition';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import type { SessionIssue } from '@/flow/cloudClient';
@@ -45,7 +45,7 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
     const guestDisplay = [booking?.guestName, booking?.lastName].filter(Boolean).join(' ');
 
     return (
-        <motion.div
+        <FlowScreen
             data-testid="booking-summary"
             data-booking-reference={booking.id}
             data-lookup-source-system={booking.lookupSource?.system ?? ''}
@@ -161,7 +161,7 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
                     {checkInAtRegister ? t.booking.checkInAtRegisterHint : t.booking.paymentRequiredHint}
                 </p>
             )}
-        </motion.div>
+        </FlowScreen>
     );
 };
 

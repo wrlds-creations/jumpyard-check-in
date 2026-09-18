@@ -41,6 +41,7 @@ const { ConfirmationScreen } = load('components/ConfirmationScreen.tsx', {
   '@/context/LanguageContext': language,
   '@/flow/packageContents': load('flow/packageContents.ts'),
   'framer-motion': { motion },
+  '@/components/FlowTransition': { FlowScreen: motion.div },
   '@/components/JumpyardIcon': { JumpyardIcon: icon },
   '@/components/QrCode': { QrCode: ({ value, testId }) => React.createElement('span', { 'data-testid': testId, 'data-qr-value': value }) },
 });
@@ -48,7 +49,7 @@ const page = ts.createSourceFile('page.tsx', read('app/page.tsx'), ts.ScriptTarg
 const cardDeclaration = page.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'BuyRecoveryCard');
 assert.ok(cardDeclaration, 'The actual recovery card must exist');
 const { BuyRecoveryCard } = compile(cardDeclaration.getText(page) + '\nexports.BuyRecoveryCard = BuyRecoveryCard;', require, {
-  useTranslation: language.useTranslation, motion, JumpyardIcon: icon, AlertCircle: icon, RefreshCw: icon, RotateCcw: icon,
+  useTranslation: language.useTranslation, FlowScreen: motion.div, JumpyardIcon: icon, AlertCircle: icon, RefreshCw: icon, RotateCcw: icon,
 });
 
 // Render the actual components with their real translations, and keep the React

@@ -1,5 +1,5 @@
 'use client';
-import { motion } from 'framer-motion';
+import { FlowScreen } from '@/components/FlowTransition';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon } from '@/components/JumpyardIcon';
 
@@ -11,7 +11,7 @@ export const ParkChoice = ({ onSelect }: ParkChoiceProps) => {
     const { t } = useTranslation();
 
     return (
-        <motion.div
+        <FlowScreen
             className="w-full max-w-md min-w-0 mx-auto flex flex-col items-center justify-center px-4"
             style={{ minHeight: 'calc(100dvh - 60px)' }}
             initial={{ opacity: 0, y: 20 }}
@@ -53,6 +53,6 @@ export const ParkChoice = ({ onSelect }: ParkChoiceProps) => {
                     </div>
                 </button>
             </div>
-        </motion.div>
+        </FlowScreen>
     );
 };
