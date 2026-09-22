@@ -1,0 +1,179 @@
+{
+  "files": [
+    {
+      "url": "https://checkin.jumpyard.se/",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/",
+      "sha256": "23cd9938b79653c19d1fecae7fa8e53d7eedb0daf6007700b0632657ebc3c853",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/",
+      "sha256": "d1b7d261c7bb74242d0a2d437a208bd0bb06c19e2532f18a08a816684119d00d",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/admin",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/admin",
+      "sha256": "5905e66df143fe8067aadad71239c1c47f8b5a03d6cf2a02430a324cf85652f8",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/0770be00415df3b4.js",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/0770be00415df3b4.js",
+      "sha256": "82b7bfdd2b70154810dab957bd8aedb244c318ebfb571d0f2f35d9d51779677a",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/19bff6fbc549cb49.css",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/19bff6fbc549cb49.css",
+      "sha256": "1cf4bfbc548ff68ee30e97a7222c634e6ce6b208756b9b49a5b96b223a11645a",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/414e77373f8ff61c.js",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/414e77373f8ff61c.js",
+      "sha256": "cf9a44f52123564d63020e83fb88e8b3cc07bbe300bf46e870f4bd712c56ff89",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/42879de7b8087bc9.js",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/42879de7b8087bc9.js",
+      "sha256": "613fc38eb4391aff9e5427bb995f1b34200c79ec2451763cbe7b082ff2b3e3de",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/42de57bf39e74bcb.js",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/42de57bf39e74bcb.js",
+      "sha256": "cb17e5c6357105e1c04f9f14eebc0cf403d974078927ea74dad5662870fcce64",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/4abfb21d4bffafd6.css",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/4abfb21d4bffafd6.css",
+      "sha256": "bc7a0f9c89a67ea4029864297dbe89844e28910e9901aef8d1f7ee5a19f1b1d2",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/88bde7eccb376661.js",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/88bde7eccb376661.js",
+      "sha256": "7a9cac4ec25cea0b93d93ee259ef4f1809d99998908a9568cbe21494ef7842cc",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/a6dad97d9634a72d.js",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/a6dad97d9634a72d.js",
+      "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/a9647f64cf15869b.js",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/a9647f64cf15869b.js",
+      "sha256": "a698491e4f2573b7f81eba12e8e40928fe97ac1672841c69b2326877976eb6c5",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/d0c139420deb751a.js",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/d0c139420deb751a.js",
+      "sha256": "3fc02cbe8c1a4818c383f22bdcac19c4028c99bd12f58e61fad4cdcb139bd66f",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/d4416ad906981f4f.js",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/d4416ad906981f4f.js",
+      "sha256": "1e891a44198850061350992bfd3e342eba59578b4f29d4530beb58832e375962",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/f4ea7a78afb49b4c.js",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/f4ea7a78afb49b4c.js",
+      "sha256": "b95ef807c297aac3a5fb33df738f6c0f7af7d4552683caaab90d447aee0e4f4c",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/_next/static/chunks/turbopack-d69c2d8d9feeb19c.js",
+      "immutableUrl": "https://3da69000.jumpyard-check-in-park-test.pages.dev/_next/static/chunks/turbopack-d69c2d8d9feeb19c.js",
+      "sha256": "a27a5797d5ee01e07c65b23815a5cf368f6bece039899afcfb202196951fd345",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/_next/static/chunks/03~yq9q893hmn.js",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/_next/static/chunks/03~yq9q893hmn.js",
+      "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/_next/static/chunks/09kol3n8ff2ss.css",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/_next/static/chunks/09kol3n8ff2ss.css",
+      "sha256": "12cd82064ac0402af5688cc2408cb9e3075a2e04c0e81828f906643fda52e429",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/_next/static/chunks/0fsi8lw5utejl.js",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/_next/static/chunks/0fsi8lw5utejl.js",
+      "sha256": "e9786b1305894e4119bb9811a816dac9cf576755596dd989ee15b455749fc35e",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/_next/static/chunks/0gxwci3e5-ykx.js",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/_next/static/chunks/0gxwci3e5-ykx.js",
+      "sha256": "b7d88d2456dbb62a50d55dda82bfd10e1a3d0dd1fe43a3eb62c1ac43d8060a76",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/_next/static/chunks/0w27mdo6cp6g0.js",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/_next/static/chunks/0w27mdo6cp6g0.js",
+      "sha256": "8404fd900ab800e19d4512ecdcedb3c4b2b2339212220c5fb65ff3e8c7850a59",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/_next/static/chunks/0yqph8tvduf8~.js",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/_next/static/chunks/0yqph8tvduf8~.js",
+      "sha256": "7a68d283ba7282f72d396e534bdbbfe9fea7cd0481bf919a6df96043cac11def",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/_next/static/chunks/0yyaye-743ip5.js",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/_next/static/chunks/0yyaye-743ip5.js",
+      "sha256": "62ef452a5060169fa2e677aa28178beaf6746ffc8e922a3fd90ba84ea05cb95e",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/_next/static/chunks/118frp9nxr0f8.js",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/_next/static/chunks/118frp9nxr0f8.js",
+      "sha256": "05d36844507ff4de80bf70fad8fbb44710a3f6426282ebd42973aff6a82afee9",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/_next/static/chunks/11bz7p2has_o~.js",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/_next/static/chunks/11bz7p2has_o~.js",
+      "sha256": "55fcd9f00e64946e1fd523aa4d94733456982f6823c47513445fc6aed01f4bbb",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/_next/static/chunks/13iu5jt_1zp8t.js",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/_next/static/chunks/13iu5jt_1zp8t.js",
+      "sha256": "6d27eb59c41bd302278a59ad2ae16f762f5bb9aa4cff175faac5261cfdb7f4bd",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://staff-checkin.jumpyard.se/_next/static/chunks/turbopack-0zms40is_t5j9.js",
+      "immutableUrl": "https://4d908b29.jumpyard-checkin-admin-park-test.pages.dev/_next/static/chunks/turbopack-0zms40is_t5j9.js",
+      "sha256": "824056d2757717fb2c0c6a83e34b830b974c4b0afef78d79c38af576514ebbeb",
+      "matchesImmutableDeployment": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/fonts/AcuminVariableConcept.woff2",
+      "sha256": "80e911c920e727d4a3078417e2821093b3853515c45af5844045f3c309a9e9ec",
+      "matchesMergedSource": true
+    },
+    {
+      "url": "https://checkin.jumpyard.se/jumpyard-next-icons/success-check-on-red.png",
+      "sha256": "b4ef2dc883ed8721ee0913d7d8144ca4337e9e7f1d4a4dc3351fac94cf326780",
+      "matchesMergedSource": true
+    }
+  ],
+  "previewStatus": 200,
+  "newCompletionPresent": true,
+  "approvedShadowPresent": true
+}
