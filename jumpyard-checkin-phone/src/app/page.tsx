@@ -16,6 +16,7 @@ import {
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { ConnectedProfiles } from '@/components/ConnectedProfiles';
 import { ConfirmationScreen } from '@/components/ConfirmationScreen';
+import { isPhoneCompletionReady } from '@/flow/phoneCompletion';
 import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import { detectChannel, initialContext, initialState, nextState } from '@/flow/machine';
 import type { Branch } from '@/flow/machine';
@@ -1374,6 +1375,8 @@ function CheckInFlow() {
     const showingCompletedBuyRecovery = state === 'KIOSK_CHOICE'
         && (buyRecoveryStatus === 'completed-unavailable' || buyRecoveryStatus === 'checking')
         && !recoveryReturnRecord && hasCompletedBuyFlowRecovery(buyRecoverySnapshot);
+    const phoneCompletion = Boolean((state === 'APP_CONFIRM' || state === 'APP_PRESENT') && ctx.booking
+        && isPhoneCompletionReady(ctx.checkinSession, ctx.channel, alreadyCheckedIn));
     const progressState: FlowState = showingCompletedBuyRecovery ? 'APP_CONFIRM' : showingBuyPaymentRecovery ? 'APP_PAYMENT' : state;
     const exitFlowMode = getExitFlowMode({
         addonsStep,
@@ -1394,7 +1397,7 @@ function CheckInFlow() {
             data-handoff-code={ctx.checkinSession?.handoffCode ?? ''}
             data-already-checked-in={String(alreadyCheckedIn)}
         >
-            <LanguageToggle compact={!isStartState(progressState)} className="absolute top-2 right-2 z-20" />
+            {!phoneCompletion && <><LanguageToggle compact={!isStartState(progressState)} className="absolute top-2 right-2 z-20" />
             <ProgressBar
                 state={progressState}
                 buyEntryFlow={ctx.buyEntryFlow || showingBuyPaymentRecovery || showingCompletedBuyRecovery}
@@ -1426,6 +1429,8 @@ function CheckInFlow() {
                     </button>
                 )}
             </div>
+
+            </>}
 
             <ExitFlowDialog
                 open={exitDialogOpen && exitFlowMode === 'confirm'}

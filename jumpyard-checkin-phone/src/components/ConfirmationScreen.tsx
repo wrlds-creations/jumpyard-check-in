@@ -5,6 +5,8 @@ import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { QrCode } from '@/components/QrCode';
 import type { Addon, Booking, Channel, CheckInSession } from '@/flow/types';
 import { getBookingContentRows, packageContentCopy } from '@/flow/packageContents';
+import { isPhoneCompletionReady } from '@/flow/phoneCompletion';
+import { PhoneCompletion } from './PhoneCompletion';
 
 interface ConfirmationScreenProps {
     booking: Booking;
@@ -43,7 +45,7 @@ export const ConfirmationScreen = ({
     alreadyCheckedIn = false,
     onStartOver,
 }: ConfirmationScreenProps) => {
-    const { t, lang } = useTranslation();
+    const { t, lang, setLang } = useTranslation();
     const completed = alreadyCheckedIn || isCompletedSession(checkinSession);
     const subtitle = channel === 'sms'
         ? t.confirm.smsSubtitle
@@ -83,6 +85,13 @@ export const ConfirmationScreen = ({
                 .map((item) => ({ ...item, icon: EXPERIENCE_ICONS[item.id] ?? 'gift-card', detail: undefined })),
         },
     ].filter((group) => group.items.length > 0);
+
+    if (isPhoneCompletionReady(checkinSession, channel, alreadyCheckedIn)) {
+        return <PhoneCompletion key={checkinSession!.checkinSessionId} lang={lang} onLanguageChange={setLang}
+            handoffCode={handoffCode} handoffPayload={handoffQrValue} handoffDay={checkinSession?.handoffDay}
+            sessionId={checkinSession?.checkinSessionId} handoffStatus={checkinSession?.handoffStatus} channel={channel}
+            items={handoutItems} groups={experienceGroups} onStartOver={onStartOver} />;
+    }
 
     return (
         <FlowScreen

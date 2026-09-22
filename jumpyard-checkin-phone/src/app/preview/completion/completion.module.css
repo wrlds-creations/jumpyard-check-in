@@ -1,0 +1,22 @@
+.preview { min-height: 100dvh; padding: 28px; display: flex; justify-content: center; align-items: flex-start; gap: 64px; background: #ededf0; color: #1c1c1e; }
+.tools { width: 280px; margin-top: 56px; flex: none; }
+.kicker { margin: 0 0 16px; font-size: 10px; font-weight: 800; letter-spacing: .12em; color: #71717a; }
+.tools h2 { font-size: 28px; line-height: 1.15; font-weight: 800; letter-spacing: -.04em; }
+.tools > p:not(.kicker) { font-size: 14px; line-height: 1.6; margin-top: 18px; color: #5c5c65; }
+.tools fieldset { border: 0; padding: 0; margin-top: 30px; }
+.tools legend, .selectLabel { font-size: 12px; font-weight: 700; }
+.widths { display: flex; gap: 8px; margin-top: 10px; }
+.widths button { background: white; border: 1px solid #d4d4d8; padding: 9px 12px; border-radius: 8px; min-height: 44px; font-size: 12px; cursor: pointer; }
+.widths button[aria-pressed='true'] { background: #1c1c1e; color: white; border-color: #1c1c1e; }
+.selectLabel { display: block; margin-top: 24px; }
+.selectLabel select { display: block; width: 100%; padding: 12px 8px; margin-top: 8px; border: 1px solid #d4d4d8; border-radius: 8px; background: white; font-size: 12px; font-weight: 400; }
+.tools > p.note { font-size: 12px; margin-top: 30px; }
+.viewport { width: var(--phone-width); height: 844px; max-width: 100%; overflow: auto; scrollbar-width: none; background: white; box-shadow: 0 8px 40px #18181b12; flex: none; container-type: inline-size; }
+.viewport::-webkit-scrollbar { display: none; }
+.home { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px; gap: 24px; text-align: center; }
+.home h1 { font-size: 34px; text-transform: uppercase; line-height: 1.1; }
+.home p { font-size: 14px; color: #71717a; }
+.homeIcon { width: 90px; height: 90px; }
+.home h1, .home button { font-family: 'Completion Acumin', Arial, sans-serif; font-variation-settings: 'wght' 900, 'slnt' -12; }
+.home button { width: 100%; padding: 14px 18px; background: #e31837; color: white; border-radius: 32px; text-transform: uppercase; font-size: 17px; cursor: pointer; }
+@media (max-width: 760px) { .preview { padding: 0; display: block; background: white; } .tools { display: none; } .viewport { width: 100%; height: auto; min-height: 100dvh; box-shadow: none; } }
