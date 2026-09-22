@@ -1,0 +1,48 @@
+@font-face {
+    font-family: 'Completion Acumin';
+    src: url('/fonts/AcuminVariableConcept.woff2') format('woff2');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+.screen { width: 100%; container-type: inline-size; min-height: 100dvh; background: white; display: flex; flex-direction: column; }
+.hero { position: relative; flex: none; display: flex; align-items: center; flex-direction: column; color: white; background: #e31837; padding: 27px 16px 71px; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 28px), 0 100%); }
+.language { position: absolute; top: 10px; right: 10px; color: white; background: transparent; font-size: 11px; font-weight: 800; min-width: 44px; min-height: 44px; cursor: pointer; }
+.check { width: 51px; height: 51px; object-fit: contain; margin-bottom: 14px; }
+.hero h1, .numberLabel, .number, .pickup h2, .quantity, .footer button, .dialog h2, .dialog > strong, .dialog button { font-family: 'Completion Acumin', Arial, sans-serif; font-variation-settings: 'wght' 900, 'wdth' 100, 'slnt' -12; font-synthesis: none; font-weight: 900; font-style: normal; }
+.hero h1 { font-size: clamp(24px, 7.6cqw, 33px); line-height: 1.12; text-transform: uppercase; letter-spacing: -.035em; margin: 0; }
+.numberLabel { text-transform: uppercase; font-size: 17px; line-height: 1.2; margin: 21px 0 0; }
+.number { display: block; font-size: 29cqw; line-height: 1.02; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin-top: 1px; padding-right: .045em; }
+.handoff { display: flex; align-items: center; flex-direction: column; margin-top: -59px; z-index: 1; padding-inline: 25px; }
+.qrButton { display: flex; padding: 5px; background: white; border-radius: 16px; box-shadow: 0 12px 28px #1c1c1e29, 0 3px 8px #1c1c1e14; cursor: zoom-in; }
+.qr { display: block; width: 158px; height: 158px; border-radius: 12px; overflow: hidden; }
+.instruction { margin: 16px 0 0; max-width: 310px; text-align: center; font-size: 13px; line-height: 1.45; font-weight: 700; }
+.pickup { padding: 24px 24px 0; }
+.pickup h2 { display: flex; align-items: center; gap: 10px; font-size: 20px; text-transform: uppercase; line-height: 1.2; margin: 0; padding-bottom: 12px; border-bottom: 1px solid #e4e4e7; }
+.bag { width: 29px; height: 29px; flex: none; }
+.pickup ul { list-style: none; margin: 0; padding: 0; }
+.pickup li { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 8px 0; border-bottom: 1px solid #e4e4e7; }
+.pickup li:last-child { border-bottom: none; }
+.itemIcon { width: 40px; height: 40px; flex: none; }
+.itemLabel { flex: 1; min-width: 0; font-size: 17px; line-height: 1.25; font-weight: 800; font-style: italic; overflow-wrap: anywhere; }
+.quantity { font-size: 38px; color: #e31837; line-height: 1; padding-right: .08em; }
+.pickup h2.laterTitle { font-size: 16px; margin-top: 18px; padding-bottom: 9px; }
+.cafeNote { font-size: 12px; line-height: 1.5; color: #71717a; margin: 8px 0; }
+.footer { margin-top: auto; padding: 20px 22px 24px; }
+.footer button { background: #f4f4f5; color: #1c1c1e; width: 100%; min-height: 48px; border: 0; border-radius: 40px; font-size: 17px; text-transform: uppercase; cursor: pointer; padding: 12px; }
+.screen button:focus-visible { outline: 3px solid #18181b; outline-offset: 4px; }
+.hero button:focus-visible { outline-color: white; }
+.dialog { position: fixed; inset: 0; margin: auto; width: min(350px, calc(100vw - 32px)); border: 0; border-radius: 20px; padding: 24px; text-align: center; color: #1c1c1e; }
+.dialog::backdrop { background: #18181bb3; }
+.dialog h2 { font-size: 23px; text-transform: uppercase; }
+.dialog > strong { display: block; font-size: 76px; line-height: 1.15; color: #e31837; }
+.enlargedQr { display: block; width: 100%; aspect-ratio: 1; }
+.dialog button { width: 100%; padding: 14px 18px; background: #e31837; color: white; border-radius: 32px; text-transform: uppercase; font-size: 17px; cursor: pointer; }
+
+.number[data-long='true'] { font-size: clamp(22px, 7cqw, 40px); overflow-wrap: anywhere; max-width: 100%; margin-block: 18px; }
+.dialog > strong[data-long='true'] { font-size: 28px; overflow-wrap: anywhere; }
+.itemDetail { display: block; font-size: 11px; line-height: 1.4; color: var(--primary); text-transform: uppercase; margin-top: 3px; }
+.issued { font-size: 11px; color: var(--muted); margin-top: 7px; }
+@container (max-width: 350px) { .hero { padding-top: 22px; } .check { width: 46px; height: 46px; } .pickup { padding-inline: 20px; } .itemLabel { font-size: 16px; } .instruction { font-size: 12px; } .numberLabel { margin-top: 18px; } }
+@media (max-width: 760px) { .footer { padding-bottom: max(24px, env(safe-area-inset-bottom)); } }

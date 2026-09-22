@@ -259,3 +259,8 @@ input {
 
 /* Headings receive programmatic focus for announcement, not keyboard interaction. */
 [data-flow-transition] :is(h1, h2)[tabindex="-1"]:focus { outline: none; }
+
+/* #432: the ready phone completion owns its full-width hero and language action. */
+.phone-flow-shell:has([data-phone-completion="true"]) { padding: 0; }
+.phone-flow:has([data-phone-completion="true"]) { max-width: 32rem; }
+.phone-flow-content:has([data-phone-completion="true"]) { align-items: stretch; }

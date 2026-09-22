@@ -1,5 +1,9 @@
 # Test Plan
 
+## Phone completion (#432)
+
+Run `npm --prefix jumpyard-checkin-phone run test:completion` plus the completed-booking/package-content regressions. Check SV/EN, 320–430px, zero-prefixed and long codes, missing/completed sessions, handoff day, Combo/café groups, QR modal focus/close and supplied safe reset. The production export must hide `/preview/completion`; verify rendered QR payload identity using synthetic data. Physical handset/scanner acceptance remains distinct from local browser and static publication checks. See [evidence](docs/gh432-phone-completion.md).
+
 ## Kiosk installation binding (#327)
 
 Run `npm run validate:gh327-kiosk-terminal-binding` for both draft handlers and profile authorization. Set `GH327_DATABASE_TEST=true` for the disposable PostgreSQL concurrency/role test (local port 55327, CI port 55435). [Contract, rollout and physical acceptance](docs/gh-327-kiosk-terminal-binding.md) distinguish automated checks from the completed attended V210/P400 payment and reset evidence.

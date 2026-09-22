@@ -22,8 +22,9 @@ function compile(input, localRequire, globals = {}) {
 function load(name, overrides = {}) {
   return compile(read(name), id => {
     if (id in overrides) return overrides[id];
-    if (!id.startsWith('.')) return require(id);
-    const base = path.posix.join(path.posix.dirname(name), id);
+    if (id.endsWith('.module.css')) return { default: new Proxy({}, { get: (_, key) => key }) };
+    if (!id.startsWith('.') && !id.startsWith('@/')) return require(id);
+    const base = id.startsWith('@/') ? id.slice(2) : path.posix.join(path.posix.dirname(name), id);
     const target = ['.ts', '.tsx'].map(ext => base + ext)
       .find(candidate => fs.existsSync(new URL('../' + candidate, import.meta.url)));
     assert.ok(target, `Unresolved import ${id} from ${name}`);
@@ -62,6 +63,8 @@ function render(Component, props, lang = 'sv') {
   function Probe() {
     translations = language.useTranslation().t;
     tree = Component(props);
+    // Resolve the new presentation child while keeping its real callbacks/hooks.
+    while (typeof tree.type === 'function') tree = tree.type(tree.props);
     return tree;
   }
   try {
@@ -99,14 +102,14 @@ test('ready and completed confirmation screens render and invoke the supplied Ne
         booking, checkinSession: session, jumperCount: 2, selectedAddons: [], onStartOver,
         alreadyCheckedIn: state === 'already-checked-in',
       }, lang);
-      const buttons = nodes(tree, node => node.type === 'button');
+      const buttons = nodes(tree, node => node.type === 'button' && node.props['data-testid'] === 'confirmation-start-over');
       assert.equal(buttons.length, 1, `${lang}/${state}`);
       assert.equal(buttons[0].props['data-testid'], 'confirmation-start-over');
       assert.equal(content(buttons[0]), lang === 'sv' ? 'Gör en ny bokning' : 'Make a new booking');
       assert.equal(buttons[0].props.onClick, onStartOver);
       buttons[0].props.onClick();
       assert.equal(clicks, 1);
-      assert.equal(content(nodes(tree, node => node.type === 'h1')[0]), state === 'ready' ? t.confirm.title : t.confirm.alreadyCheckedInTitle);
+      assert.equal(content(nodes(tree, node => node.type === 'h1')[0]), state === 'ready' ? (lang === 'sv' ? 'Du är incheckad' : 'You are checked in') : t.confirm.alreadyCheckedInTitle);
       // The same session QR remains available after admission for café collection.
       assert.equal(markup.includes('data-testid="ready-entry-handoff-qr"'), state !== 'already-checked-in');
       assert.equal(markup.includes('data-testid="already-checked-in-card"'), state !== 'ready');
@@ -120,7 +123,7 @@ test('confirmation screens without an onStartOver callback expose no New booking
       booking, checkinSession: completed ? { ...readySession, status: 'completed' } : readySession,
       jumperCount: 2, selectedAddons: [],
     });
-    assert.equal(nodes(tree, node => node.type === 'button').length, 0);
+    assert.equal(nodes(tree, node => node.type === 'button' && node.props['data-testid'] === 'confirmation-start-over').length, 0);
     assert.doesNotMatch(markup, /confirmation-start-over/);
   }
 });

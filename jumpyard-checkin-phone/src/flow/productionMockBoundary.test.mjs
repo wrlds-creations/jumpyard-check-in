@@ -151,8 +151,8 @@ test('no normal public entry or transitive import reaches the mock client', () =
   }
 });
 
-test('payment and safety previews remain explicitly development-only', () => {
-  for (const preview of ['payment', 'safety']) {
+test('payment, safety and completion previews remain explicitly development-only', () => {
+  for (const preview of ['payment', 'safety', 'completion']) {
     const entry = path.join(sourceRoot, `app/preview/${preview}/page.tsx`);
     assert.deepEqual(renderRouteBoundary(entry, 'production'), { result: 'not-found', rendered: false });
     assert.equal(renderRouteBoundary(entry, 'development').result, 'preview');

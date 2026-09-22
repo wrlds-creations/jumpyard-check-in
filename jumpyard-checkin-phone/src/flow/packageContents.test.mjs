@@ -16,6 +16,7 @@ function load(name) {
     target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX,
   } }).outputText;
   const localRequire = id => {
+    if (id.endsWith('.module.css')) return { default: new Proxy({}, { get: (_, key) => key }) };
     if (!id.startsWith('.') && !id.startsWith('@/')) return require(id);
     const base = id.startsWith('@/') ? id.slice(2) : path.posix.join(path.posix.dirname(name), id);
     const file = ['.ts', '.tsx'].map(ext => base + ext).find(candidate => fs.existsSync(new URL('../' + candidate, import.meta.url)));
@@ -124,8 +125,8 @@ test('actual Swedish/English QR screen separates bands from deferred pizza and c
     assert.ok(deferred.includes(later));
     assert.ok(deferred.includes(pizza));
     assert.ok(deferred.includes('Coffee'));
-    assert.match(handout, /text-primary">2<\/span>/);
-    assert.match(deferred, /text-primary">1<\/span>/);
+    assert.match(handout, /class="quantity">2<\/strong>/);
+    assert.match(deferred, /class="quantity">1<\/strong>/);
   }
 });
 
