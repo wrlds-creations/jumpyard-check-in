@@ -1,0 +1,536 @@
+{
+  "release": "f2fc522539197f9efc304262055c938b178ec5de",
+  "releaseRun": 35834109237,
+  "parkRun": 35834768020,
+  "publicRun": 35834923499,
+  "booking": {
+    "checkedAt": "2026-09-23T08:05:01.887Z",
+    "files": [
+      {
+        "file": "index.js",
+        "sha256": "755eda970c2d852ccd83179c46fa3aa863597a4efd078ef00239521c053b45a0"
+      },
+      {
+        "file": "kiosk-terminal-contract.js",
+        "sha256": "5d77cffec1efee59a6f48c3866614f0b8f99501624ed4e620395c94f23877db3"
+      },
+      {
+        "file": "package-contents.js",
+        "sha256": "dc9df6ff24b8e3c5d65a973f7f99bc2b04addea2be349bd42a3ac16c20758f4b"
+      },
+      {
+        "file": "phone-product-catalog.js",
+        "sha256": "ac42c192f7576b0fe00ce1264f98463b4672d8b40c19d38918cafd5cc43b24e5"
+      },
+      {
+        "file": "phone-product-catalog.test.js",
+        "sha256": "3521f17d04b6cc63b5d0ad251142e7d85e462a429c0f74cb03ab28c9de6bcce4"
+      },
+      {
+        "file": "server-diagnostics.js",
+        "sha256": "fc721e5179575b8ebfd0916435ac5cee3ae02c08657da641597824789a9304c7"
+      }
+    ]
+  },
+  "negativeChecks": {
+    "checkedAt": "2026-09-23T08:05:45.706Z",
+    "checks": [
+      {
+        "route": "/v1/bookings/draft",
+        "status": 400,
+        "code": "customer_required",
+        "message": "customer.phone is required for Roller draft booking creation."
+      },
+      {
+        "route": "/v1/check-in/lookup",
+        "status": 400,
+        "code": "phone_lookup_disabled",
+        "message": "Use a booking reference, QR code or email address."
+      }
+    ]
+  },
+  "static": [
+    {
+      "origin": "https://6803dd8b.jumpyard-check-in-park-test.pages.dev",
+      "checkedAt": "2026-09-23T08:05:31.415Z",
+      "count": 16,
+      "results": [
+        {
+          "file": "index.html",
+          "sha256": "800a560543123f6ad3f337559613929c55b0aa8801e74e04857e436526a68feb",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/19bff6fbc549cb49.css",
+          "sha256": "1cf4bfbc548ff68ee30e97a7222c634e6ce6b208756b9b49a5b96b223a11645a",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/4abfb21d4bffafd6.css",
+          "sha256": "bc7a0f9c89a67ea4029864297dbe89844e28910e9901aef8d1f7ee5a19f1b1d2",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/414e77373f8ff61c.js",
+          "sha256": "cf9a44f52123564d63020e83fb88e8b3cc07bbe300bf46e870f4bd712c56ff89",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/f4ea7a78afb49b4c.js",
+          "sha256": "b95ef807c297aac3a5fb33df738f6c0f7af7d4552683caaab90d447aee0e4f4c",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/d0c139420deb751a.js",
+          "sha256": "3fc02cbe8c1a4818c383f22bdcac19c4028c99bd12f58e61fad4cdcb139bd66f",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/a9647f64cf15869b.js",
+          "sha256": "a698491e4f2573b7f81eba12e8e40928fe97ac1672841c69b2326877976eb6c5",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/turbopack-d69c2d8d9feeb19c.js",
+          "sha256": "a27a5797d5ee01e07c65b23815a5cf368f6bece039899afcfb202196951fd345",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/42879de7b8087bc9.js",
+          "sha256": "613fc38eb4391aff9e5427bb995f1b34200c79ec2451763cbe7b082ff2b3e3de",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/88bde7eccb376661.js",
+          "sha256": "7a9cac4ec25cea0b93d93ee259ef4f1809d99998908a9568cbe21494ef7842cc",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/42de57bf39e74bcb.js",
+          "sha256": "cb17e5c6357105e1c04f9f14eebc0cf403d974078927ea74dad5662870fcce64",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/d06fb4b72ab3e4d1.js",
+          "sha256": "6475a0b83c5c3d7c62258c2ab8016135eb27f7b04fdf62330a2b4e6bd0d1a64e",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/5f228c17e17e97e8.js",
+          "sha256": "c54be8d6c947d52b798b2b57c21370b06b4d06ce1142c9ee4df9aaeff3d2d60c",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/a6dad97d9634a72d.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/e5fa9d8b57760e2c.js",
+          "sha256": "400f2d925709391c9cf96edcd2bd04c8be3a9cc8eb2b2f047f1c8db377e94988",
+          "status": 200
+        },
+        {
+          "file": ".well-known/apple-developer-merchantid-domain-association",
+          "sha256": "8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "origin": "https://14ea9473.jumpyard-checkin-admin-park-test.pages.dev",
+      "checkedAt": "2026-09-23T08:05:32.481Z",
+      "count": 11,
+      "results": [
+        {
+          "file": "index.html",
+          "sha256": "1d3f21253665dc44142d56d647c2baaffb7eca28a7912fbdb009828d1e35ee7d",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/09kol3n8ff2ss.css",
+          "sha256": "12cd82064ac0402af5688cc2408cb9e3075a2e04c0e81828f906643fda52e429",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/0gxwci3e5-ykx.js",
+          "sha256": "b7d88d2456dbb62a50d55dda82bfd10e1a3d0dd1fe43a3eb62c1ac43d8060a76",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/0yyaye-743ip5.js",
+          "sha256": "62ef452a5060169fa2e677aa28178beaf6746ffc8e922a3fd90ba84ea05cb95e",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/118frp9nxr0f8.js",
+          "sha256": "05d36844507ff4de80bf70fad8fbb44710a3f6426282ebd42973aff6a82afee9",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/turbopack-0zms40is_t5j9.js",
+          "sha256": "824056d2757717fb2c0c6a83e34b830b974c4b0afef78d79c38af576514ebbeb",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/0fsi8lw5utejl.js",
+          "sha256": "e9786b1305894e4119bb9811a816dac9cf576755596dd989ee15b455749fc35e",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/13iu5jt_1zp8t.js",
+          "sha256": "6d27eb59c41bd302278a59ad2ae16f762f5bb9aa4cff175faac5261cfdb7f4bd",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/11bz7p2has_o~.js",
+          "sha256": "55fcd9f00e64946e1fd523aa4d94733456982f6823c47513445fc6aed01f4bbb",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/0w27mdo6cp6g0.js",
+          "sha256": "8404fd900ab800e19d4512ecdcedb3c4b2b2339212220c5fb65ff3e8c7850a59",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/03~yq9q893hmn.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "origin": "https://checkin.jumpyard.se",
+      "checkedAt": "2026-09-23T08:07:55.237Z",
+      "count": 16,
+      "results": [
+        {
+          "file": "index.html",
+          "sha256": "800a560543123f6ad3f337559613929c55b0aa8801e74e04857e436526a68feb",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/19bff6fbc549cb49.css",
+          "sha256": "1cf4bfbc548ff68ee30e97a7222c634e6ce6b208756b9b49a5b96b223a11645a",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/4abfb21d4bffafd6.css",
+          "sha256": "bc7a0f9c89a67ea4029864297dbe89844e28910e9901aef8d1f7ee5a19f1b1d2",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/414e77373f8ff61c.js",
+          "sha256": "cf9a44f52123564d63020e83fb88e8b3cc07bbe300bf46e870f4bd712c56ff89",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/f4ea7a78afb49b4c.js",
+          "sha256": "b95ef807c297aac3a5fb33df738f6c0f7af7d4552683caaab90d447aee0e4f4c",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/d0c139420deb751a.js",
+          "sha256": "3fc02cbe8c1a4818c383f22bdcac19c4028c99bd12f58e61fad4cdcb139bd66f",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/a9647f64cf15869b.js",
+          "sha256": "a698491e4f2573b7f81eba12e8e40928fe97ac1672841c69b2326877976eb6c5",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/turbopack-d69c2d8d9feeb19c.js",
+          "sha256": "a27a5797d5ee01e07c65b23815a5cf368f6bece039899afcfb202196951fd345",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/42879de7b8087bc9.js",
+          "sha256": "613fc38eb4391aff9e5427bb995f1b34200c79ec2451763cbe7b082ff2b3e3de",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/88bde7eccb376661.js",
+          "sha256": "7a9cac4ec25cea0b93d93ee259ef4f1809d99998908a9568cbe21494ef7842cc",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/42de57bf39e74bcb.js",
+          "sha256": "cb17e5c6357105e1c04f9f14eebc0cf403d974078927ea74dad5662870fcce64",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/d06fb4b72ab3e4d1.js",
+          "sha256": "6475a0b83c5c3d7c62258c2ab8016135eb27f7b04fdf62330a2b4e6bd0d1a64e",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/5f228c17e17e97e8.js",
+          "sha256": "c54be8d6c947d52b798b2b57c21370b06b4d06ce1142c9ee4df9aaeff3d2d60c",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/a6dad97d9634a72d.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/e5fa9d8b57760e2c.js",
+          "sha256": "400f2d925709391c9cf96edcd2bd04c8be3a9cc8eb2b2f047f1c8db377e94988",
+          "status": 200
+        },
+        {
+          "file": ".well-known/apple-developer-merchantid-domain-association",
+          "sha256": "8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "origin": "https://staff-checkin.jumpyard.se",
+      "checkedAt": "2026-09-23T08:07:56.207Z",
+      "count": 11,
+      "results": [
+        {
+          "file": "index.html",
+          "sha256": "1d3f21253665dc44142d56d647c2baaffb7eca28a7912fbdb009828d1e35ee7d",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/09kol3n8ff2ss.css",
+          "sha256": "12cd82064ac0402af5688cc2408cb9e3075a2e04c0e81828f906643fda52e429",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/0gxwci3e5-ykx.js",
+          "sha256": "b7d88d2456dbb62a50d55dda82bfd10e1a3d0dd1fe43a3eb62c1ac43d8060a76",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/0yyaye-743ip5.js",
+          "sha256": "62ef452a5060169fa2e677aa28178beaf6746ffc8e922a3fd90ba84ea05cb95e",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/118frp9nxr0f8.js",
+          "sha256": "05d36844507ff4de80bf70fad8fbb44710a3f6426282ebd42973aff6a82afee9",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/turbopack-0zms40is_t5j9.js",
+          "sha256": "824056d2757717fb2c0c6a83e34b830b974c4b0afef78d79c38af576514ebbeb",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/0fsi8lw5utejl.js",
+          "sha256": "e9786b1305894e4119bb9811a816dac9cf576755596dd989ee15b455749fc35e",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/13iu5jt_1zp8t.js",
+          "sha256": "6d27eb59c41bd302278a59ad2ae16f762f5bb9aa4cff175faac5261cfdb7f4bd",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/11bz7p2has_o~.js",
+          "sha256": "55fcd9f00e64946e1fd523aa4d94733456982f6823c47513445fc6aed01f4bbb",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/0w27mdo6cp6g0.js",
+          "sha256": "8404fd900ab800e19d4512ecdcedb3c4b2b2339212220c5fb65ff3e8c7850a59",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/03~yq9q893hmn.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "origin": "https://fd9b4b40.jumpyard-check-in-kiosk.pages.dev",
+      "checkedAt": "2026-09-23T08:07:30.765Z",
+      "count": 17,
+      "results": [
+        {
+          "file": "index.html",
+          "sha256": "f0293866e188f921c1fb1baed1763fab94ea023fdf7e3ad9eac1c19a1171bf31",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/f99fbad7e64dd332.css",
+          "sha256": "c68a968fba8cf866c3f19efb82b1f56a0cd3f7d7ff5218c291e6cb1bdc8f6fa7",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/3ca512a72a655c5c.css",
+          "sha256": "fa937459a106c7f73c85bbb68102298cfa39e6d3baf5f7acc173dae9480f6b03",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/414e77373f8ff61c.js",
+          "sha256": "cf9a44f52123564d63020e83fb88e8b3cc07bbe300bf46e870f4bd712c56ff89",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/f4ea7a78afb49b4c.js",
+          "sha256": "b95ef807c297aac3a5fb33df738f6c0f7af7d4552683caaab90d447aee0e4f4c",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/d0c139420deb751a.js",
+          "sha256": "3fc02cbe8c1a4818c383f22bdcac19c4028c99bd12f58e61fad4cdcb139bd66f",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/a9647f64cf15869b.js",
+          "sha256": "a698491e4f2573b7f81eba12e8e40928fe97ac1672841c69b2326877976eb6c5",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/turbopack-d69c2d8d9feeb19c.js",
+          "sha256": "a27a5797d5ee01e07c65b23815a5cf368f6bece039899afcfb202196951fd345",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/42879de7b8087bc9.js",
+          "sha256": "613fc38eb4391aff9e5427bb995f1b34200c79ec2451763cbe7b082ff2b3e3de",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/a229f238ac1c9f75.js",
+          "sha256": "7be67a38fd4dafbab61310ecb3190d36d37f57ada0ce1d0627c51d733357cec8",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/ce42fa21813183d3.js",
+          "sha256": "e4d414a4567fc3f9059b334374069fec11dad3d9ccb5a9f92da8c8cad89de118",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/68df242b8ffecedb.js",
+          "sha256": "6b506b47beaa7d603a4fa03e507adeb4dac6e5b82608dc0a0fdb3b79078bf69c",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/c8fe903c82039359.js",
+          "sha256": "41453b9f74b86c488f5a7e3dd1f9eccffc432833cdb3ebb310301fe4de3cfdda",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/a6dad97d9634a72d.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/6fc78af9de5786ce.js",
+          "sha256": "f2a3a4012e6991a592d14f30cb00e74be733f528946178271bf81d9882688c14",
+          "status": 200
+        },
+        {
+          "file": ".well-known/apple-developer-merchantid-domain-association",
+          "sha256": "8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6",
+          "status": 200
+        },
+        {
+          "file": ".well-known/assetlinks.json",
+          "sha256": "c7dad3b62a0f97ced2482a08d6302f624d37f3963b4442fe618822508c355e5d",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "origin": "https://jumpyard-check-in-kiosk.pages.dev",
+      "checkedAt": "2026-09-23T08:07:31.964Z",
+      "count": 17,
+      "results": [
+        {
+          "file": "index.html",
+          "sha256": "f0293866e188f921c1fb1baed1763fab94ea023fdf7e3ad9eac1c19a1171bf31",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/f99fbad7e64dd332.css",
+          "sha256": "c68a968fba8cf866c3f19efb82b1f56a0cd3f7d7ff5218c291e6cb1bdc8f6fa7",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/3ca512a72a655c5c.css",
+          "sha256": "fa937459a106c7f73c85bbb68102298cfa39e6d3baf5f7acc173dae9480f6b03",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/414e77373f8ff61c.js",
+          "sha256": "cf9a44f52123564d63020e83fb88e8b3cc07bbe300bf46e870f4bd712c56ff89",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/f4ea7a78afb49b4c.js",
+          "sha256": "b95ef807c297aac3a5fb33df738f6c0f7af7d4552683caaab90d447aee0e4f4c",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/d0c139420deb751a.js",
+          "sha256": "3fc02cbe8c1a4818c383f22bdcac19c4028c99bd12f58e61fad4cdcb139bd66f",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/a9647f64cf15869b.js",
+          "sha256": "a698491e4f2573b7f81eba12e8e40928fe97ac1672841c69b2326877976eb6c5",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/turbopack-d69c2d8d9feeb19c.js",
+          "sha256": "a27a5797d5ee01e07c65b23815a5cf368f6bece039899afcfb202196951fd345",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/42879de7b8087bc9.js",
+          "sha256": "613fc38eb4391aff9e5427bb995f1b34200c79ec2451763cbe7b082ff2b3e3de",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/a229f238ac1c9f75.js",
+          "sha256": "7be67a38fd4dafbab61310ecb3190d36d37f57ada0ce1d0627c51d733357cec8",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/ce42fa21813183d3.js",
+          "sha256": "e4d414a4567fc3f9059b334374069fec11dad3d9ccb5a9f92da8c8cad89de118",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/68df242b8ffecedb.js",
+          "sha256": "6b506b47beaa7d603a4fa03e507adeb4dac6e5b82608dc0a0fdb3b79078bf69c",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/c8fe903c82039359.js",
+          "sha256": "41453b9f74b86c488f5a7e3dd1f9eccffc432833cdb3ebb310301fe4de3cfdda",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/a6dad97d9634a72d.js",
+          "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683",
+          "status": 200
+        },
+        {
+          "file": "_next/static/chunks/6fc78af9de5786ce.js",
+          "sha256": "f2a3a4012e6991a592d14f30cb00e74be733f528946178271bf81d9882688c14",
+          "status": 200
+        },
+        {
+          "file": ".well-known/apple-developer-merchantid-domain-association",
+          "sha256": "8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6",
+          "status": 200
+        },
+        {
+          "file": ".well-known/assetlinks.json",
+          "sha256": "c7dad3b62a0f97ced2482a08d6302f624d37f3963b4442fe618822508c355e5d",
+          "status": 200
+        }
+      ]
+    }
+  ]
+}

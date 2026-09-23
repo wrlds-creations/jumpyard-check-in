@@ -15,7 +15,33 @@ Validation on September 23:
 - CUA browser checks used the real local development preview with synthetic transport and no provider writes: Swedish 390x844 and English 320x740, required empty phone, disabled continuation until contact is complete, preserved values on language change, no horizontal overflow. The preview intercepts payment, so this is form/layout evidence, not payment success.
 - Kiosk verification is recorded in its paired evidence note. Both remote issues now record the September 23 scope and explicit publication authorization, with older requirements preserved as history. Unrelated #396 and kiosk #94 worktrees remain untouched.
 
-Release must coordinate shared Cloud and both clients. Old open no-phone clients will receive required-phone validation from the new backend and need a reload. Existing payment-status/resume routes are unchanged. Review, publication and physical phone/kiosk/provider purchase verification remain outstanding; no restored production behavior is claimed.
+Shared Cloud and both clients are now published; see the observed rollout below. Old open no-phone clients receive required-phone validation from the new backend and need a reload. Existing payment-status/resume routes are unchanged. Physical phone/kiosk/provider purchase verification remains separate.
+
+## Protected restoration rollout — 2026-09-23
+
+[Implementation PR #435](https://github.com/wrlds-creations/jumpyard-check-in/pull/435) merged as `f2fc522539197f9efc304262055c938b178ec5de`. All seven PR checks passed: [CI 35833771044](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/35833771044) and workflow validation `35833771315`. The native PostgreSQL terminal suite passed all 16 cases with zero skips. Main CI `35834109263` and workflow validation `35834109194` also passed. The implementing agent reviewed the diff and checks; no independent human code review is claimed.
+
+Immutable [release 35834109237](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/35834109237) built the merged source once. Artifact `10738905855`, `park-test-release-f2fc522539197f9efc304262055c938b178ec5de`, has digest `sha256:294feecd2613aca402d34fe2a4a404ba88aa26ae78021577d794bd443dd3fe4a`. All 687 files were independently verified; manifest SHA256 `a836296da2930bfa5b9bd080b3091f27ec9e77bcd7527a0af456d4d548ec7662`. Booking source in the artifact exactly matches the merged Git blob; the Windows working copy differs only in line endings.
+
+Actual [Park plan/deployment 35834768020](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/35834768020) was reviewed before delegated protected approval under Love's explicit instruction. The plan identity verified account `376129878018` / `eu-north-1`. Of 208 resources, only `BookingHandler5D1461BB` changes: `Code.S3Key` and `aws:asset:path` metadata. There are no additions, removals, IAM/schema/config/gate changes or migrations; `apply_migrations=false`. All ten WRLDS metadata tags remain, including Client/CostCenter JumpYard. Prior template `f1981878b54225e49cf944bfe128b792d71ec857cce2ff50c6b6b64ae9a2fbd9`; deployed/selected template `6bad56a633e87186155bfef5433a031d58cb7e32d041a670d77386936ae41d29`.
+
+Park succeeded with exact-template equality, `UPDATE_COMPLETE`, `IN_SYNC`, zero alarms in ALARM, empty visible/in-flight queues, all 23 migrations already applied, exact Pages commit identities and HTTP/API/Apple checks. Independent readback matched all six deployed Booking Lambda files byte-for-byte. Its ZIP hash is `Wu8aYQN6389iZuATeOjeoEAQGPhkv4dOHE7XxeWiOwU=`. A synthetic draft request missing phone and containing no items returned `400 customer_required` for `customer.phone`; a synthetic phone lookup returned `400 phone_lookup_disabled`, before provider operations. The first draft probe used an unsupported explicit phone-channel label and was rejected before contact validation; correcting the probe to the existing phone contract (omitted channel) produced the required result. No booking/payment was created.
+
+Reviewed [public promotion 35834923499](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/35834923499) was approved only after Park success and independent runtime/static checks. It succeeded with the same immutable release, without rebuilding. Existing project/domain, CORS, Cognito callback and HTTP/API checks passed. Apple Pay association remains SHA256 `8939b5589a03bdbd9ea38686f90ef45e226f39eac61e131e2c325fbf1a95dcd6`.
+
+| Surface | Deployment | Verified source |
+|---|---|---|
+| Park phone | `6803dd8b-a8ce-4e9a-a476-cdc06eb468e4` | `f2fc522` |
+| Park admin | `14ea9473-5e27-40f5-8bb6-f7fedd27ac7e` | `f2fc522` |
+| Public phone, https://checkin.jumpyard.se | `0639088f-f8b9-4d1f-bc3c-ffce50aab845` | `f2fc522` |
+| Public admin, https://staff-checkin.jumpyard.se | `488dd062-e326-4605-8910-0eeb959819de` | `f2fc522` |
+| Paired kiosk, https://jumpyard-check-in-kiosk.pages.dev | `fd9b4b40-3613-4ff8-a264-fa4ffc396d0a` | `18cfda10d7babe2415c81af8ef54f6a97d991017` |
+
+Independent static readback matched 54 responses across immutable Park and public custom origins (16 phone and 11 admin per pair), including the phone contact chunk. The kiosk's stable/immutable outputs added 34 matching responses. Public phone homepage SHA256 is `800a560543123f6ad3f337559613929c55b0aa8801e74e04857e436526a68feb`. [Readback hashes](gh409-restoration-readback.json) contain no guest data. Kiosk [PR #126](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/pull/126) published after Park success; its separate evidence records keyboard and build verification.
+
+Rollback candidate remains the independently downloaded and validated prior release `35740310293` / `9170e9b6c032aa893f60b06bb63967a7683a382c`, artifact `10699414499`, 687 files, manifest `c2bc78e44d25b6c5b9b3df1efa7dbf4dff04e4702eaf61528ab48453b0bf7e42`. Its template matched live before this release. The prior successful Park/public runs were `35741130608` / `35741671433`; kiosk prior deployment `7f2a2fef-7c5b-4bc7-a8b9-88f5c4f1c9a9` / `b1932003cc0c639fd30674c6b935d506ac30bcb9` is retained. No rollback or re-promotion was performed.
+
+Publication is complete. Keep #409/#100 open for physical/live purchase acceptance and the future supported no-phone/non-overwriting provider contract; neither was represented as proven by this release. Already-open no-phone clients need reload. No real guest transaction, message, APK or native/hardware configuration change occurred. The dependent evidence PR records merged/deployed facts; its documentation-only release is not promoted.
 
 ## Historical September 15 implementation and publication
 
