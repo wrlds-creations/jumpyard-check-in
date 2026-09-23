@@ -4,8 +4,8 @@ Use this file as the short snapshot of what actually exists. Operational work st
 
 ## Snapshot
 
-- Date: 2026-09-22
-- Backend/Park/public: `9170e9b`, immutable release `35740310293`, protected Park `35741130608` and public `35741671433`. [#432 completion](docs/gh432-phone-completion.md#protected-rollout--2026-09-22) publishes the approved kiosk-style phone final screen and session QR/shadow; backend template and migrations are unchanged. [#426 transitions](docs/gh426-flow-rollout.md#follow-up-publication--2026-09-18), [#409 contact policy](docs/gh409-no-phone-contact.md) and [#421 quote reuse](docs/gh421-quote-reuse-rollout.md) remain published. [#327](docs/gh-327-kiosk-terminal-binding.md): V210/P400 paid; Kiosk 2 active. #343 SV/EN video; #403 lookup grant; #345 handout/daily codes/early café; APK accepted (#401). #353 Klarna; #340 diagnostics; #335 alarms; #374 Apple Pay.
+- Date: 2026-09-23
+- Backend/Park/public: `f2fc522`, immutable release `35834109237`, protected Park `35834768020` and public `35834923499`. [#409 restoration](docs/gh409-no-phone-contact.md#protected-restoration-rollout--2026-09-23) requires entered phone and creates drafts without the additional customer match or automatic placeholder; only existing Booking Lambda code changes. Kiosk #100 publishes matching source `18cfda1` as `fd9b4b40`. [#432 completion](docs/gh432-phone-completion.md#protected-rollout--2026-09-22), [#426 transitions](docs/gh426-flow-rollout.md#follow-up-publication--2026-09-18) and [#421 quote reuse](docs/gh421-quote-reuse-rollout.md) remain. [#327](docs/gh-327-kiosk-terminal-binding.md): V210/P400 paid; Kiosk 2 active. #343 SV/EN video; #403 lookup grant; #345 handout/daily codes/early café; APK accepted (#401). #353 Klarna; #340 diagnostics; #335 alarms; #374 Apple Pay.
 - Operations: private [Project](https://github.com/orgs/wrlds-creations/projects/5), shared across all four JumpYard repositories; each new item names its exact Target repository.
 - Runtime: Park has 208 resources, migrations through `0023`, and 28 routes. Daily sync, cached prices, purchase, linked add-on Handoff, PIN/kiosk redemption and late Handoff attachment are proven. Definitive kiosk payment approval returns its provisional session and bounded `safety` hint before ROLLER readback; redemption still requires authoritative synchronization. Physical proof: kiosk #61. Phone/Park expose Weekday Combo `1242135`/`1242136`; guest sends are off.
 - Latest legacy baseline: `T0200`; GitHub Issues and the Project now own current implementation state, and legacy ticket history was not backfilled into the Project.
@@ -28,7 +28,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 ## Current Product Baseline
 
 - Ready phone completion uses the approved kiosk red hero/number and shadowed, enlargeable session QR; completed/missing/kiosk fallbacks and safe reset stay intact. [#432 evidence](docs/gh432-phone-completion.md).
-- Phone/kiosk contact requires name/email only; public phone lookup is disabled. Cloud preserves verified live guest numbers and excludes placeholder variants from SMS. Unverified/new/unindexed contacts stop before payment; a complete and atomic ROLLER preservation contract plus physical acceptance remain open ([#409](docs/gh409-no-phone-contact.md)).
+- Phone/kiosk contact requires name, email and an entered phone, with an empty initial phone field and the kiosk numeric keyboard restored. New/unindexed emails no longer require our extra customer match. ROLLER retains ordinary email matching/contact updates; a different entered number can update an existing guest. Public phone lookup remains disabled and placeholder SMS/ingestion guards remain. Existing payments preserve their identity; open no-phone clients need reload. A supported no-phone/non-overwriting provider contract and physical/live purchase acceptance remain open ([#409](docs/gh409-no-phone-contact.md)).
 
 - Phone prepares safety before receipt (#374/D0209); #331 and #330/D0208 preserved. SV/EN video: #343/D0210/D0219.
 - Catalog refresh precedes booking reads; public failure omits Combo (#339/#341).
@@ -65,7 +65,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 
 ## Validation Baseline
 
-Use TEST_PLAN.md for current checks. [#409 rollout evidence](docs/gh409-no-phone-contact.md#protected-rollout--2026-09-15) records required CI (including native PostgreSQL), immutable-artifact checks, protected deployment and independent runtime/static verification. Prior dated release/run evidence remains in [the pre-upgrade snapshot](docs/history/workflow-0.2-baseline/REPO_CURRENT_STATE.md#validation-baseline).
+Use TEST_PLAN.md for current checks. [#409 restoration evidence](docs/gh409-no-phone-contact.md#protected-restoration-rollout--2026-09-23) records required CI (including native PostgreSQL), immutable-artifact checks, protected deployment and independent runtime/static verification. Prior dated release/run evidence remains in [the pre-upgrade snapshot](docs/history/workflow-0.2-baseline/REPO_CURRENT_STATE.md#validation-baseline).
 
 ## Current Risks And Boundaries
 
