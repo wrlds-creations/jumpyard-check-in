@@ -691,7 +691,8 @@ export async function createDraftBooking(
   idempotencyKey: string,
   requireAvailability = true,
   giftCards: NewBookingGiftCardInput[] = [],
-  discountCodes: NewBookingDiscountCodeInput[] = []
+  discountCodes: NewBookingDiscountCodeInput[] = [],
+  emailMarketingConsent?: import('./emailMarketingConsent').PendingEmailMarketingConsent
 ): Promise<NewBookingDraftResult> {
   let response: Response;
   let body: DraftResponse | null = null;
@@ -706,6 +707,7 @@ export async function createDraftBooking(
       body: JSON.stringify({
         confirmDraft: true,
         correlationId: `phone_draft_${Date.now().toString(36)}`,
+        ...(emailMarketingConsent ? { emailMarketingConsent } : {}),
         customer,
         discountCodes: discountCodes.map((discount) => discount.code),
         giftCards,

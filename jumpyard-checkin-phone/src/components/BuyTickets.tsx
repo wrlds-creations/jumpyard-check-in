@@ -1,4 +1,6 @@
 'use client';
+import { EMAIL_MARKETING_PRIVACY_URL, pendingEmailMarketingConsent } from '../flow/emailMarketingConsent';
+import { EmailMarketingOptIn } from '@/components/EmailMarketingOptIn';
 import { PackageContentRows } from '@/components/PackageContentRows';
 import { scalePackageContents } from '@/flow/packageContents';
 
@@ -709,6 +711,8 @@ export const BuyTickets = ({
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [emailMarketingChecked, setEmailMarketingChecked] = useState(false);
+  const emailInputRef = useRef<HTMLInputElement>(null);
   const [phone, setPhone] = useState('');
   const [giftCardNumber, setGiftCardNumber] = useState('');
   const [clipCardCode, setClipCardCode] = useState('');
@@ -879,6 +883,8 @@ export const BuyTickets = ({
       setFirstName(savedContact.firstName);
       setLastName(savedContact.lastName);
       setEmail(savedContact.email);
+      // Contact recovery is not a fresh marketing choice.
+      setEmailMarketingChecked(false);
       setPhone(savedContact.phone);
 
       if (!savedStartTime) {
@@ -1406,7 +1412,8 @@ export const BuyTickets = ({
         `phone-draft:${selectedProduct.productId}:${selectedProduct.startTime}:${itemKey}:${Date.now().toString(36)}`,
         shouldPrecheckBasketAvailability,
         giftCards,
-        discountCodes
+        discountCodes,
+        pendingEmailMarketingConsent(emailMarketingChecked, lang)
       );
       setDraft(result);
       clearPaymentSyncState();
@@ -2023,15 +2030,36 @@ export const BuyTickets = ({
                   <JumpyardIcon name="email-confirmed" className="w-5 h-5" /> {t.buy.emailLabel}
                 </span>
                 <input
+                  ref={emailInputRef}
                   type="email"
                   value={email}
-                  onChange={(event) => updateContact(setEmail, event.target.value)}
+                  onChange={(event) => {
+                    setEmailMarketingChecked(false);
+                    updateContact(setEmail, event.target.value);
+                  }}
                   placeholder={t.buy.emailPlaceholder}
                   autoComplete="email"
                   disabled={checkoutLocked}
                   className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
                 />
               </label>
+
+              <EmailMarketingOptIn
+                checked={emailMarketingChecked}
+                email={email.trim()}
+                emailValid={isValidEmail(email)}
+                disabled={checkoutLocked}
+                privacyUrl={EMAIL_MARKETING_PRIVACY_URL}
+                copy={{
+                  label: t.buy.emailMarketingLabel,
+                  help: t.buy.emailMarketingHelp,
+                  privacy: t.buy.emailMarketingPrivacy,
+                  active: t.buy.emailMarketingActive,
+                  needEmail: t.buy.emailMarketingNeedEmail,
+                }}
+                onCheckedChange={setEmailMarketingChecked}
+                onNeedEmail={() => emailInputRef.current?.focus()}
+              />
 
               <label className="block">
                 <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider flex items-center gap-1.5 mb-1">

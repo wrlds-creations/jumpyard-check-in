@@ -51,6 +51,7 @@ function loadBooking(environment) {
     exports: module.exports,
     process: { env: { ...environment } },
     require(moduleId) {
+      if (moduleId === './email-marketing-consent') return require('../infra/lambda/booking/email-marketing-consent');
       if (moduleId === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
       if (moduleId === './package-contents') return require(path.join(ROOT, 'infra/lambda/booking/package-contents.js'));
       if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;

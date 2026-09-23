@@ -21,6 +21,7 @@
     "postbuild": "node scripts/verify-production-mock-boundary.mjs",
     "test:payment-options": "node --no-warnings --experimental-strip-types --test src/flow/paymentOptionFeedback.test.mjs",
     "test:phone-contact": "node --no-warnings --experimental-strip-types --test src/flow/phoneContact.test.mjs",
+    "test:email-marketing": "node --no-warnings --experimental-strip-types --test src/flow/emailMarketingConsent.test.mjs",
     "test:flow-transitions": "node --test src/components/FlowTransition.test.mjs src/components/BookingLookup.test.mjs src/components/AddonSkyRider.test.mjs src/app/preview/flow/localTransport.test.mjs",
     "test:completion": "node --test src/components/PhoneCompletion.test.mjs"
   },

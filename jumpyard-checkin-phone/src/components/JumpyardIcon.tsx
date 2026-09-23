@@ -33,6 +33,7 @@ export type JumpyardIconName =
     | 'presentkort'
     | 'profile'
     | 'receipt'
+    | 'reward-gift'
     | 'safe-tricks'
     | 'safety-check'
     | 'scan-frame'
