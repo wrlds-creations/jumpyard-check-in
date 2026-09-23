@@ -36,6 +36,7 @@ import {
   PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL,
   PARK_TEST_POST_PAYMENT_SYNC_APPROVAL,
   PARK_TEST_CONTROLLED_T30_EMAIL_APPROVAL,
+  PHONE_EMAIL_MARKETING_DELIVERY_APPROVAL,
 } from './config';
 
 interface JumpYardCloudStackProps extends StackProps {
@@ -1936,6 +1937,9 @@ exports.handler = async (event) => {
         resources.safetyGates.fullFlowRehearsalVenueId ?? '';
       environment.ENABLE_ROLLER_BOOKING_DRAFT_WRITES = String(
         resources.safetyGates.rollerBookingDraftWritesEnabled,
+      );
+      environment.PHONE_EMAIL_MARKETING_PROVIDER_APPROVED = String(
+        resources.safetyGates.phoneEmailMarketingDeliveryApproval === PHONE_EMAIL_MARKETING_DELIVERY_APPROVAL,
       );
     }
 

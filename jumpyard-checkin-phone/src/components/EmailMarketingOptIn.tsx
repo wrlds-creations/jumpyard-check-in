@@ -16,6 +16,8 @@ export interface EmailMarketingOptInCopy {
 interface EmailMarketingOptInProps {
   checked: boolean;
   email: string;
+  /** Show the choice: the email field is open or already has content. */
+  reveal: boolean;
   emailValid: boolean;
   disabled: boolean;
   privacyUrl: string;
@@ -25,6 +27,15 @@ interface EmailMarketingOptInProps {
 }
 
 type Status = 'active' | 'ask';
+type Phase = 'hidden' | 'opening' | 'open' | 'closing';
+
+// The choice pops in as soon as the guest opens the email field. It leaves only
+// after an empty field has been left for a moment, so a tap on the tile itself
+// (which blurs the field) never collapses it under the finger.
+const SHOW_DELAY_MS = 40;
+const HIDE_DELAY_MS = 650;
+const OPEN_MS = 540;
+const CLOSE_MS = 400;
 
 // "Ja tack! Mejla mig ..." reads as a short answer plus the details. The words and
 // their order stay exactly the approved consent copy; only the type size differs.
@@ -65,11 +76,13 @@ const SHAKE: Keyframe[] = [
 
 const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** Optional marketing choice for the email above it. It starts off, can only be
- * switched on for a complete address and never blocks or changes the booking. */
+/** Optional marketing choice for the email above it. It stays hidden until the
+ * guest opens the email field, starts off, can only be switched on for a
+ * complete address and never blocks or changes the booking. */
 export function EmailMarketingOptIn({
   checked,
   email,
+  reveal,
   emailValid,
   disabled,
   privacyUrl,
@@ -87,6 +100,7 @@ export function EmailMarketingOptIn({
   const sparksRef = useRef<HTMLSpanElement>(null);
   const invited = useRef(false);
   const [askForEmail, setAskForEmail] = useState(false);
+  const [phase, setPhase] = useState<Phase>(reveal ? 'open' : 'hidden');
   const lead = LEAD.exec(copy.label);
 
   const status: Status | null = checked ? 'active' : askForEmail && !emailValid ? 'ask' : null;
@@ -94,17 +108,32 @@ export function EmailMarketingOptIn({
   const [shownStatus, setShownStatus] = useState<Status>('active');
   if (status && status !== shownStatus) setShownStatus(status);
 
-  // One quiet invitation once the guest pauses on a complete address.
   useEffect(() => {
-    if (!emailValid || checked || disabled || invited.current) return;
+    const shown = phase === 'opening' || phase === 'open';
+    if (reveal === shown) return;
+    const timer = window.setTimeout(() => setPhase(reveal ? 'opening' : 'closing'),
+      reveal ? SHOW_DELAY_MS : HIDE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [reveal, phase]);
+
+  useEffect(() => {
+    if (phase !== 'opening' && phase !== 'closing') return;
+    const timer = window.setTimeout(() => setPhase(phase === 'opening' ? 'open' : 'hidden'),
+      phase === 'opening' ? OPEN_MS : CLOSE_MS);
+    return () => window.clearTimeout(timer);
+  }, [phase]);
+
+  // One quiet invitation right after the choice has appeared.
+  useEffect(() => {
+    if (phase !== 'open' || checked || disabled || invited.current) return;
     const timer = window.setTimeout(() => {
       invited.current = true;
       if (prefersReducedMotion()) return;
       iconRef.current?.animate(INVITE_HOP, { duration: 560, easing: 'ease-out' });
       knobRef.current?.animate(KNOB_PEEK, { duration: 560, easing: 'ease-in-out' });
-    }, 700);
+    }, 250);
     return () => window.clearTimeout(timer);
-  }, [email, emailValid, checked, disabled]);
+  }, [phase, checked, disabled]);
 
   const celebrate = () => {
     if (prefersReducedMotion()) return;
@@ -135,54 +164,58 @@ export function EmailMarketingOptIn({
   };
 
   return (
-    <div className={styles.root} data-checked={checked} data-disabled={disabled}>
-      <label ref={tileRef} className={styles.tile}>
-        <input
-          type="checkbox"
-          role="switch"
-          checked={checked}
-          onChange={(event) => toggle(event.target.checked)}
-          disabled={disabled}
-          aria-labelledby={lead ? `${leadId} ${bodyId}` : bodyId}
-          aria-describedby={helpId}
-          data-testid="email-marketing-consent"
-          className={`sr-only ${styles.input}`}
-        />
-        <span className={styles.art} aria-hidden="true">
-          <span ref={iconRef} className={styles.icon}>
-            <JumpyardIcon name="reward-gift" className="h-full w-full" />
-          </span>
-          <span ref={sparksRef} className={styles.sparks}>
-            {SPARK_ANGLES.map((angle) => <i key={angle} />)}
-          </span>
-        </span>
-        {lead && <span id={leadId} className={styles.lead}>{lead[1]}</span>}
-        <span id={bodyId} className={lead ? styles.body : styles.whole}>{lead ? lead[2] : copy.label}</span>
-        <span className={styles.statusWrap} data-open={status !== null} aria-hidden="true">
-          <span className={styles.status}>
-            <span className={styles.statusInner}>
-              {shownStatus === 'active' ? (
-                <>
-                  <span className={styles.chip}><Check size={12} strokeWidth={4} />{copy.active}</span>
-                  <span className={styles.email}>{email}</span>
-                </>
-              ) : (
-                <span className={styles.ask}>{copy.needEmail}</span>
-              )}
+    <div className={styles.reveal} data-phase={phase} inert={phase === 'hidden' || phase === 'closing'}>
+      <div className={styles.revealInner}>
+        <div className={styles.root} data-checked={checked} data-disabled={disabled}>
+          <label ref={tileRef} className={styles.tile}>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={checked}
+              onChange={(event) => toggle(event.target.checked)}
+              disabled={disabled}
+              aria-labelledby={lead ? `${leadId} ${bodyId}` : bodyId}
+              aria-describedby={helpId}
+              data-testid="email-marketing-consent"
+              className={`sr-only ${styles.input}`}
+            />
+            <span className={styles.art} aria-hidden="true">
+              <span ref={iconRef} className={styles.icon}>
+                <JumpyardIcon name="reward-gift" className="h-full w-full" />
+              </span>
+              <span ref={sparksRef} className={styles.sparks}>
+                {SPARK_ANGLES.map((angle) => <i key={angle} />)}
+              </span>
             </span>
-          </span>
-        </span>
-        <span className="sr-only" aria-live="polite">{status === 'ask' ? copy.needEmail : ''}</span>
-        <span className={styles.switch} aria-hidden="true">
-          <span ref={knobRef} className={styles.knob}>
-            <Check size={14} strokeWidth={3.5} />
-          </span>
-        </span>
-      </label>
-      <p id={helpId} className={styles.help}>
-        {copy.help}{' '}
-        <a href={privacyUrl} target="_blank" rel="noopener noreferrer">{copy.privacy}</a>
-      </p>
+            {lead && <span id={leadId} className={styles.lead}>{lead[1]}</span>}
+            <span id={bodyId} className={lead ? styles.body : styles.whole}>{lead ? lead[2] : copy.label}</span>
+            <span className={styles.statusWrap} data-open={status !== null} aria-hidden="true">
+              <span className={styles.status}>
+                <span className={styles.statusInner}>
+                  {shownStatus === 'active' ? (
+                    <>
+                      <span className={styles.chip}><Check size={12} strokeWidth={4} />{copy.active}</span>
+                      <span className={styles.email}>{email}</span>
+                    </>
+                  ) : (
+                    <span className={styles.ask}>{copy.needEmail}</span>
+                  )}
+                </span>
+              </span>
+            </span>
+            <span className="sr-only" aria-live="polite">{status === 'ask' ? copy.needEmail : ''}</span>
+            <span className={styles.switch} aria-hidden="true">
+              <span ref={knobRef} className={styles.knob}>
+                <Check size={14} strokeWidth={3.5} />
+              </span>
+            </span>
+          </label>
+          <p id={helpId} className={styles.help}>
+            {copy.help}{' '}
+            <a href={privacyUrl} target="_blank" rel="noopener noreferrer">{copy.privacy}</a>
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,8 @@ import * as path from 'path';
 
 export const BOOKING_TIME_SMS_CONFIRMED_SEND_APPROVAL = 'I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS';
 export const PARK_TEST_CONTROLLED_T30_EMAIL_APPROVAL = 'T0201_SINGLE_BOOKING_T30_EMAIL_APPROVED';
+// GH-437: lets the Booking worker set email acceptance after authoritative payment.
+export const PHONE_EMAIL_MARKETING_DELIVERY_APPROVAL = 'GH437_PAID_ONLY_EMAIL_MARKETING_APPROVED';
 
 export const REQUIRED_WRLDS_TAGS = [
   'WRLDS:Client',
@@ -155,6 +157,7 @@ export interface JumpYardCloudConfig {
     readonly fullFlowRehearsalAllowedOperatingDates: readonly string[];
     readonly fullFlowRehearsalApproval?: string;
     readonly fullFlowRehearsalVenueId?: string;
+    readonly phoneEmailMarketingDeliveryApproval?: string;
     readonly rollerBookingDraftWritesEnabled: boolean;
     readonly rollerRedeemWritesEnabled: boolean;
     readonly rollerWebhookProcessingEnabled: boolean;
@@ -248,6 +251,7 @@ interface RawConfig {
     readonly fullFlowRehearsalAllowedOperatingDates?: unknown;
     readonly fullFlowRehearsalApproval?: unknown;
     readonly fullFlowRehearsalVenueId?: unknown;
+    readonly phoneEmailMarketingDeliveryApproval?: unknown;
     readonly rollerBookingDraftWritesEnabled?: unknown;
     readonly rollerRedeemWritesEnabled?: unknown;
     readonly rollerWebhookProcessingEnabled?: unknown;
@@ -383,6 +387,13 @@ interface EnvironmentContractInput {
 }
 
 function validateEnvironmentContract(input: EnvironmentContractInput): void {
+  const emailMarketingApproval = input.safetyGates.phoneEmailMarketingDeliveryApproval;
+  if (emailMarketingApproval && emailMarketingApproval !== PHONE_EMAIL_MARKETING_DELIVERY_APPROVAL) {
+    throw new Error(
+      `safetyGates.phoneEmailMarketingDeliveryApproval must be exactly ${PHONE_EMAIL_MARKETING_DELIVERY_APPROVAL} when supplied.`,
+    );
+  }
+
   if (input.deploymentEnvironment === 'dev') {
     if (input.staffIdentity.mode !== 'legacy') {
       throw new Error('dev staffIdentity.mode must remain legacy.');
@@ -1320,6 +1331,11 @@ function readSafetyGatesConfig(raw: RawConfig['safetyGates']): JumpYardCloudConf
       raw?.fullFlowRehearsalVenueId,
       '',
       'safetyGates.fullFlowRehearsalVenueId',
+    ),
+    phoneEmailMarketingDeliveryApproval: readOptionalString(
+      raw?.phoneEmailMarketingDeliveryApproval,
+      '',
+      'safetyGates.phoneEmailMarketingDeliveryApproval',
     ),
     rollerBookingDraftWritesEnabled: readOptionalBoolean(
       raw?.rollerBookingDraftWritesEnabled,

@@ -33,7 +33,13 @@ test('accessible switch defaults and resets unchecked, and locks with payment id
   // It can only be switched on for a complete address, and only from the guest's own toggle.
   assert.match(optIn, /if \(next && !emailValid\) \{[\s\S]*?return;\s*\}/);
   assert.equal(optIn.match(/onCheckedChange\(/g).length, 1);
+  // Hidden until the guest opens the email field (or it already has content);
+  // while hidden it cannot be focused or read.
+  assert.match(component, /reveal=\{emailFocused \|\| email\.trim\(\)\.length > 0\}/);
+  assert.match(optIn, /useState<Phase>\(reveal \? 'open' : 'hidden'\)/);
+  assert.match(optIn, /inert=\{phase === 'hidden' \|\| phase === 'closing'\}/);
   const css = fs.readFileSync(new URL('../components/EmailMarketingOptIn.module.css', import.meta.url), 'utf8');
+  assert.match(css, /\.reveal \{\s*display: grid;\s*grid-template-rows: 0fr;/);
   assert.match(css, /\.tile:has\(\.input:focus-visible\)/);
   assert.match(css, /min-height: 64px/);
   assert.match(css, /prefers-reduced-motion: reduce/);

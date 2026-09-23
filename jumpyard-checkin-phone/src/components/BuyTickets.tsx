@@ -713,6 +713,7 @@ export const BuyTickets = ({
   const [email, setEmail] = useState('');
   const [emailMarketingChecked, setEmailMarketingChecked] = useState(false);
   const emailInputRef = useRef<HTMLInputElement>(null);
+  const [emailFocused, setEmailFocused] = useState(false);
   const [phone, setPhone] = useState('');
   const [giftCardNumber, setGiftCardNumber] = useState('');
   const [clipCardCode, setClipCardCode] = useState('');
@@ -2037,6 +2038,8 @@ export const BuyTickets = ({
                     setEmailMarketingChecked(false);
                     updateContact(setEmail, event.target.value);
                   }}
+                  onFocus={() => setEmailFocused(true)}
+                  onBlur={() => setEmailFocused(false)}
                   placeholder={t.buy.emailPlaceholder}
                   autoComplete="email"
                   disabled={checkoutLocked}
@@ -2047,6 +2050,7 @@ export const BuyTickets = ({
               <EmailMarketingOptIn
                 checked={emailMarketingChecked}
                 email={email.trim()}
+                reveal={emailFocused || email.trim().length > 0}
                 emailValid={isValidEmail(email)}
                 disabled={checkoutLocked}
                 privacyUrl={EMAIL_MARKETING_PRIVACY_URL}
