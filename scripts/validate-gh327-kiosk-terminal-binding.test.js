@@ -124,8 +124,7 @@ function handlerFixture(extra = {}) {
     validateT0176FullFlowOriginalBookingAccess: () => ({ ok: true }), verifyGuestAccessForBooking: async () => ({ ok: true }),
     getBookingReferenceFromPath: () => 'original-fixture',
     resolveOriginalBookingContext: async () => ({ ok: true, venueId: '50871', bookingReference: 'original-fixture', rollerUniqueId: 'original-id', customer: body.customer }),
-    // Terminal tests start with verified contact; GH409 separately exercises live contact resolution.
-    resolvePreservedDraftCustomer: async (_config, _token, customer) => ({ ok: true, customer }),
+    getRollerJson: async () => { throw new Error('Draft creation must not look up a customer'); },
     executeStatement: async (sql, parameters) => {
       calls.push({ sql, parameters });
       const keys = JSON.parse(parameters.find((p) => p.name === 'keys').value.stringValue);
@@ -152,6 +151,8 @@ for (const method of ['handleDraft', 'handleAddProductDraft']) {
     const creation = calls.findIndex((c) => c.endpoint === '/bookings/draft');
     assert.ok(reservation >= 0 && creation > reservation);
     assert.equal(calls[creation].payload.paymentTerminal.terminalId, 'synthetic-terminal-one');
+    assert.equal(calls[creation].payload.customer.phone, body.customer.phone);
+    assert.equal(calls[creation].payload.customer.email, body.customer.email);
     assert.equal(calls.find((c) => c.endpoint === '/bookings/draft/costs').payload.paymentTerminal, undefined);
     const attempt = calls[reservation].parameters.find((p) => p.name === 'attemptId').value.stringValue;
     assert.equal(calls.find((c) => c.saved).saved.reservedPaymentAttemptId, attempt);
@@ -165,13 +166,12 @@ for (const method of ['handleDraft', 'handleAddProductDraft']) {
       assert.equal(calls.length, 0);
     }
   });
-  test(`${method}: unverified contact cannot reserve a terminal or dispatch a provider write`, async () => {
-    const { calls, body, backend } = handlerFixture({
-      resolvePreservedDraftCustomer: async () => ({ ok: false, error: { code: 'customer_phone_preservation_unverified' } }),
-    });
+  test(`${method}: missing phone fails validation before reservations or provider calls`, async () => {
+    const { calls, body, backend } = handlerFixture();
+    delete body.customer.phone;
     const result = await backend[method]({}, body, 'test');
-    assert.equal(result.statusCode, 409);
-    assert.equal(JSON.parse(result.body).error.code, 'customer_phone_preservation_unverified');
+    assert.equal(result.statusCode, 400);
+    assert.equal(JSON.parse(result.body).error.code, 'customer_required');
     assert.deepEqual(calls, []);
   });
   test(`${method}: a busy reservation never dispatches another draft`, async () => {
@@ -185,7 +185,10 @@ for (const method of ['handleDraft', 'handleAddProductDraft']) {
     delete body.channel; delete body.kioskCapability; delete body.kioskInstallationId; delete body.kioskProfileId;
     assert.equal((await backend[method]({}, body, 'test')).statusCode, 201);
     assert.ok(!calls.some((c) => c.sql));
-    assert.equal(calls.find((c) => c.endpoint === '/bookings/draft').payload.paymentTerminal, undefined);
+    const payload = calls.find((c) => c.endpoint === '/bookings/draft').payload;
+    assert.equal(payload.paymentTerminal, undefined);
+    assert.equal(payload.customer.phone, body.customer.phone);
+    assert.equal(payload.customer.email, body.customer.email);
   });
 }
 

@@ -40,116 +40,24 @@ test('SMS refuses placeholders from both fresh and legacy stored destinations', 
   assert.equal(policy.normalizePhoneForSms('070 123 45 67'), '+46701234567');
 });
 
-test('phone is optional internally and defaulted only on the ROLLER payload', () => {
+test('draft contact requires a phone and forwards the supplied value without a default', () => {
   const policy = functions('infra/lambda/booking/index.js', ['isPlaceholderPhone', 'validateCustomer', 'buildRollerBookingPayload']);
   const customer = { firstName: 'Synthetic', lastName: 'Guest', email: 'guest@example.invalid' };
-  assert.equal(policy.validateCustomer(customer), null);
+  assert.equal(policy.validateCustomer(customer).code, 'customer_required');
+  assert.match(policy.validateCustomer(customer).message, /customer.phone/);
   const request = { externalId: 'synthetic', items: [], discounts: [], giftCards: [], companyId: null };
-  const payload = policy.buildRollerBookingPayload(request, { customer, externalIdPrefix: 'JY-D' });
-  assert.equal(payload.customer.phone, '0700000000');
-  assert.equal(payload.customer.acceptMarketingSms, false);
-  assert.equal(customer.phone, undefined);
-  assert.ok(policy.validateCustomer({ ...customer, email: '' }));
-  const real = policy.buildRollerBookingPayload(request, { customer: { ...customer, phone: '+46701234567' } });
-  assert.equal(real.customer.phone, '+46701234567');
-});
-
-function resolver({ local = [], bookings = [], guests = {}, searchOk = true } = {}) {
-  const calls = [];
-  const policy = functions('infra/lambda/booking/index.js', ['resolvePreservedDraftCustomer'], {
-    executeStatement: async (sql, parameters) => { calls.push({ sql, parameters }); return local; },
-    mappedRows: value => value,
-    wait: async () => {},
-    stringParameter: (name, value) => ({ name, value }),
-    normalizeOriginalBookingGuestDetailCustomer: value => value,
-    getRollerJson: async (_config, _token, endpoint) => {
-      calls.push(endpoint);
-      if (endpoint.startsWith('/bookings?')) return { ok: searchOk, body: { bookings } };
-      const guest = guests[endpoint.split('/').pop()];
-      return { ok: Boolean(guest), body: guest };
-    },
-  });
-  return { calls, run: customer => policy.resolvePreservedDraftCustomer({}, {}, customer) };
-}
-
-test('a returning guest keeps the live exact-email phone, ignoring stale local/submitted phone', async () => {
-  const h = resolver({ local: [{ roller_customer_id: '1', phone: 'stale' }], bookings: [{ customerId: 1 }, { customerId: 2 }], guests: {
-    '1': { email: 'Guest@Example.invalid', phone: '+46701234567' },
-    '2': { email: 'another@example.invalid', phone: '+46707654321' },
-  } });
-  const request = { email: 'guest@example.invalid', phone: '0700000000', firstName: 'Guest' };
-  const result = await h.run(request);
-  assert.equal(result.ok, true);
-  assert.equal(result.customer.phone, '+46701234567');
-  assert.equal(request.phone, '0700000000');
-  assert.ok(h.calls.includes('/bookings?keywords=guest%40example.invalid'));
-});
-
-test('an exact known guest with no stored phone can use the placeholder', async () => {
-  const h = resolver({ bookings: [{ customerId: 1 }], guests: { '1': { email: 'guest@example.invalid', phone: null } } });
-  const result = await h.run({ email: 'guest@example.invalid' });
-  assert.equal(result.ok, true);
-  assert.equal(result.customer.phone, null);
-});
-
-test('missing, failed, ambiguous or truncated contact evidence fails closed', async () => {
-  const fixtures = [
-    {}, { searchOk: false },
-    { bookings: [{ customerId: 1 }], guests: {} },
-    { bookings: [{ customerId: 1 }], guests: { '1': { email: 'other@example.invalid', phone: '+46701234567' } } },
-    { bookings: [{ customerId: 1 }, { customerId: 2 }], guests: { '1': { email: 'guest@example.invalid' }, '2': { email: 'guest@example.invalid' } } },
-    { bookings: Array.from({ length: 9 }, (_, i) => ({ customerId: i + 1 })) },
-  ];
-  for (const fixture of fixtures) {
-    const result = await resolver(fixture).run({ email: 'guest@example.invalid' });
-    assert.equal(result.ok, false);
-    assert.equal(result.error.code, 'customer_phone_preservation_unverified');
+  for (const phone of ['0701234567', '+44 7700 900123']) {
+    const supplied = { ...customer, phone };
+    assert.equal(policy.validateCustomer(supplied), null);
+    const payload = policy.buildRollerBookingPayload(request, { customer: supplied, externalIdPrefix: 'JY-D' });
+    assert.equal(payload.customer.phone, phone);
+    assert.equal(payload.customer.acceptMarketingSms, false);
+    assert.equal(supplied.phone, phone);
   }
-});
-
-test('both draft handlers release failed reservations before any provider write on uncertain contact', async () => {
-  for (const handler of ['handleDraft', 'handleAddProductDraft']) {
-    const completed = [];
-    const writes = [];
-    const error = { code: 'customer_phone_preservation_unverified' };
-    const customer = { firstName: 'Synthetic', lastName: 'Guest', email: 'guest@example.invalid' };
-    const request = { customer, items: [], idempotencyKey: 'synthetic', requireAvailability: true };
-    const ok = () => ({ ok: true });
-    const policy = functions('infra/lambda/booking/index.js', [handler], {
-      crypto,
-      normalizeDraftRequest: () => ({ ...request }),
-      normalizeAddProductDraftRequest: () => ({ ...request }),
-      validateDraftRequest: () => null,
-      validateAddProductDraftRequest: () => null,
-      validateT0176FullFlowRequestItemDates: ok,
-      validateT0176FullFlowOriginalBookingAccess: ok,
-      validateT0162AddOnSmokeAccess: ok,
-      verifyGuestAccessForBooking: ok,
-      isNewBookingDraftWriteEnabled: () => true,
-      isAddProductDraftWriteEnabled: () => true,
-      getBookingReferenceFromPath: () => '166797742',
-      resolveOriginalBookingContext: () => ({ ok: true, bookingReference: '166797742' }),
-      resolveAddProductCustomer: () => ({ ok: true, customer }),
-      hashJson: () => 'synthetic-hash',
-      maskCustomerForHash: value => value,
-      hashDiscountsForHash: value => value,
-      hashGiftCardsForHash: value => value,
-      reserveIdempotencyKey: ok,
-      completeIdempotencyKey: async (...args) => completed.push(args),
-      getRollerConfig: async () => ({}),
-      getRollerAccessToken: async () => 'synthetic',
-      resolveKioskPaymentTerminal: () => ({ enabled: true }),
-      validateItemsAvailable: async () => null,
-      resolvePreservedDraftCustomer: async () => ({ ok: false, error }),
-      postRollerJson: async (...args) => { writes.push(args); throw new Error('Unexpected provider write'); },
-      jsonResponse: (statusCode, _correlationId, body) => ({ statusCode, body }),
-    });
-    const result = await policy[handler]({}, {}, 'synthetic');
-    assert.equal(result.statusCode, 409, handler);
-    assert.equal(result.body.error.code, error.code);
-    assert.deepEqual(completed, [['synthetic', 'failed', error.code]]);
-    assert.deepEqual(writes, []);
-  }
+  // The builder must never manufacture contact data, even when used by quotes.
+  const missing = policy.buildRollerBookingPayload(request, { customer, externalIdPrefix: 'JY-D' });
+  assert.equal(missing.customer.phone, undefined);
+  assert.ok(policy.validateCustomer({ ...customer, phone: '0701234567', email: '' }));
 });
 
 function lookupHandler() {

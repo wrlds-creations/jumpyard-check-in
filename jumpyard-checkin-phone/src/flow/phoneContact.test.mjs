@@ -26,30 +26,46 @@ function load(relative, names, globals = {}) {
   return host.result;
 }
 
-test('name and email permit checkout without a phone; missing names or malformed email do not', () => {
-  for (const [firstName, lastName, email, valid] of [
-    ['Guest', 'Test', 'guest@example.invalid', true],
-    ['', 'Test', 'guest@example.invalid', false],
-    ['Guest', '', 'guest@example.invalid', false],
-    ['Guest', 'Test', 'invalid', false],
+test('new checkout needs a phone and sends the entered number', () => {
+  for (const [firstName, lastName, email, phone, valid] of [
+    ['Guest', 'Test', 'guest@example.invalid', '0701234567', true],
+    ['Guest', 'Test', 'guest@example.invalid', '+44 7700 900123', true],
+    ['Guest', 'Test', 'guest@example.invalid', '', false],
+    ['Guest', 'Test', 'guest@example.invalid', '123', false],
+    ['', 'Test', 'guest@example.invalid', '0701234567', false],
+    ['Guest', '', 'guest@example.invalid', '0701234567', false],
+    ['Guest', 'Test', 'invalid', '0701234567', false],
   ]) {
-    const h = load('../components/BuyTickets.tsx', ['isValidEmail', 'customerValid', 'buildCustomer'], {
-      firstName, lastName, email, phone: '',
+    const h = load('../components/BuyTickets.tsx', ['isValidEmail', 'isValidPhone', 'customerValid', 'buildCustomer'], {
+      firstName, lastName, email, phone,
     });
     assert.equal(h.customerValid, valid);
-    assert.equal(h.buildCustomer().phone, undefined);
+    assert.equal(h.buildCustomer().phone, phone);
     assert.equal(h.buildCustomer().email, email);
   }
 });
 
-test('new recovery works without phone, while legacy contact and draft identity remain intact', () => {
-  const h = load('../components/BuyTickets.tsx', ['isValidEmail', 'isValidRecoveredCustomer', 'toRecoveredCustomer', 'getSafeContact']);
+test('unsubmitted no-phone recovery needs contact entry; entered phone survives recovery', () => {
+  const h = load('../components/BuyTickets.tsx', ['isValidEmail', 'isValidPhone', 'isValidRecoveredCustomer', 'toRecoveredCustomer', 'getSafeContact']);
   const fresh = h.getSafeContact({ firstName: 'Guest', lastName: 'Test', email: 'guest@example.invalid' });
-  assert.equal(h.isValidRecoveredCustomer(fresh), true);
-  assert.equal(h.toRecoveredCustomer(fresh).phone, undefined);
+  assert.equal(h.isValidRecoveredCustomer(fresh), false);
   const legacy = h.getSafeContact({ ...fresh, phone: '+46701234567' });
   assert.equal(h.isValidRecoveredCustomer(legacy), true);
   assert.equal(h.toRecoveredCustomer(legacy).phone, '+46701234567');
+});
+
+test('an existing draft resumes its payment without requiring a new phone or creating another draft', async () => {
+  const steps = [];
+  const draft = { draft: { uniqueId: 'existing-draft' }, prepayment: { paymentAttemptId: 'existing-attempt' } };
+  const h = load('../components/BuyTickets.tsx', ['createDraft'], {
+    draft, customerValid: false, phone: '',
+    setStep: step => steps.push(step),
+    createNewBookingDraft: () => { throw new Error('Must not create a replacement draft'); },
+  });
+  await h.createDraft();
+  assert.deepEqual(steps, ['PAYMENT']);
+  assert.equal(draft.draft.uniqueId, 'existing-draft');
+  assert.equal(draft.prepayment.paymentAttemptId, 'existing-attempt');
 });
 
 test('phone searches produce a guest-facing error before any request', async () => {
@@ -66,11 +82,12 @@ test('phone searches produce a guest-facing error before any request', async () 
   assert.equal(h.inferIdentifierType('68b3bbb4-9a46-4379-96ac-bc7157f2fb3e'), 'rollerUniqueId');
 });
 
-test('both languages offer booking/email lookup and explain the safe contact failure', () => {
+test('both languages retain booking/email lookup and restore a labelled phone input', () => {
   const text = fs.readFileSync(new URL('../context/LanguageContext.tsx', import.meta.url), 'utf8');
-  assert.doesNotMatch(text, /bokningsnummer, mejl eller telefonnummer|booking number, email, or phone|namn, telefon eller e-post|Name, phone, or email|phoneLabel:/);
+  assert.doesNotMatch(text, /bokningsnummer, mejl eller telefonnummer|booking number, email, or phone|namn, telefon eller e-post|Name, phone, or email/);
   assert.equal((text.match(/phoneLookupDisabledDesc:/g) || []).length, 2);
-  assert.equal((text.match(/contactVerificationFailed:/g) || []).length, 2);
+  assert.equal((text.match(/phoneLabel:/g) || []).length, 2);
   const component = fs.readFileSync(new URL('../components/BuyTickets.tsx', import.meta.url), 'utf8');
-  assert.doesNotMatch(component, /type="tel"|data-kiosk-contact-field="phone"|phoneInputRef/);
+  assert.match(component, /type="tel"/);
+  assert.match(component, /autoComplete="tel"/);
 });

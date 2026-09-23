@@ -580,13 +580,8 @@ async function handleDraft(event, body, correlationId) {
     });
   }
 
-  const customerResolution = await resolvePreservedDraftCustomer(config, token, request.customer);
-  if (!customerResolution.ok) {
-    await completeIdempotencyKey(request.idempotencyKey, 'failed', customerResolution.error.code);
-    return jsonResponse(409, correlationId, { status: 'blocked', error: customerResolution.error });
-  }
   const payload = buildRollerBookingPayload(request, {
-    customer: customerResolution.customer,
+    customer: request.customer,
     externalIdPrefix: 'JY-D',
   });
   let kioskQuoteResult = null;
@@ -2423,13 +2418,8 @@ async function handleAddProductDraft(event, body, correlationId) {
   request.originalBookingReference = original.bookingReference;
   request.originalRollerUniqueId = original.rollerUniqueId;
 
-  const customerResolution = await resolvePreservedDraftCustomer(config, token, request.customer);
-  if (!customerResolution.ok) {
-    await completeIdempotencyKey(request.idempotencyKey, 'failed', customerResolution.error.code);
-    return jsonResponse(409, correlationId, { status: 'blocked', error: customerResolution.error });
-  }
   const payload = buildRollerBookingPayload(request, {
-    customer: customerResolution.customer,
+    customer: request.customer,
     externalIdPrefix: 'JY-AD',
   });
   let kioskQuoteResult = null;
@@ -3245,7 +3235,7 @@ function validateKioskTerminalBinding(request) {
 }
 
 function validateCustomer(customer) {
-  const requiredFields = ['firstName', 'lastName', 'email'];
+  const requiredFields = ['firstName', 'lastName', 'email', 'phone'];
   const missing = requiredFields.filter((field) => !customer?.[field]);
   if (missing.length > 0) {
     return {
@@ -3328,8 +3318,6 @@ function buildRollerBookingPayload(request, { customer, externalIdPrefix }) {
     name: request.name || 'JumpYard booking',
     customer: {
       ...customer,
-      // Only the ROLLER payload receives the required compatibility value.
-      phone: !customer.phone || isPlaceholderPhone(customer.phone) ? '0700000000' : customer.phone,
       acceptMarketingSms: Boolean(customer.phone && !isPlaceholderPhone(customer.phone) && customer.acceptMarketingSms),
     },
     items: request.items.map((item) => ({
@@ -3359,53 +3347,6 @@ function buildRollerBookingPayload(request, { customer, externalIdPrefix }) {
 function isPlaceholderPhone(value) {
   const digits = String(value ?? '').replace(/\D/g, '').replace(/^00/, '');
   return ['0700000000', '46700000000', '460700000000', '700000000'].includes(digits);
-}
-
-// ROLLER matches booking holders by email and updates supplied contact fields.
-// A cached phone (or a fuzzy booking-search hit) is never proof of the current
-// guest contact. Confirm exact email through the documented guest-detail API.
-async function resolvePreservedDraftCustomer(config, token, customer) {
-  const blocked = () => ({
-    ok: false,
-    error: {
-      code: 'customer_phone_preservation_unverified',
-      message: 'Guest contact could not be safely confirmed. Ask staff for help before creating a booking.',
-    },
-  });
-  try {
-    const email = String(customer.email ?? '').trim().toLowerCase();
-    const local = await executeStatement(
-      `SELECT DISTINCT roller_customer_id
-       FROM jumpyard.guest_profiles
-       WHERE lower(email) = :email AND roller_customer_id IS NOT NULL
-       LIMIT 9`,
-      [stringParameter('email', email)],
-    );
-    await wait(1000);
-    const search = await getRollerJson(config, token, `/bookings?keywords=${encodeURIComponent(email)}`);
-    if (!search.ok || !Array.isArray(search.body?.bookings)) return blocked();
-    const ids = [...new Set([
-      ...mappedRows(local).map((row) => stringOrNull(row.roller_customer_id)),
-      ...search.body.bookings.map((booking) => stringOrNull(booking.customerId)),
-    ].filter(Boolean))];
-    if (ids.length > 8 || ids.some((id) => !/^\d+$/.test(id))) return blocked();
-    const matches = [];
-    for (const id of ids) {
-      await wait(1000);
-      const detail = await getRollerJson(config, token, `/guests/${encodeURIComponent(id)}`);
-      if (!detail.ok) return blocked();
-      const guest = normalizeOriginalBookingGuestDetailCustomer(detail.body);
-      if (String(guest.email ?? '').trim().toLowerCase() === email) matches.push(guest);
-    }
-    // The documented search only returns recent non-cancelled bookings; no result
-    // cannot establish that no guest exists. Do not overwrite an undiscovered
-    // guest's phone. A provider-supported create-without-contact-update contract
-    // is needed to open the genuinely new/unindexed guest case.
-    if (matches.length !== 1) return blocked();
-    return { ok: true, customer: { ...customer, phone: matches[0].phone } };
-  } catch {
-    return blocked();
-  }
 }
 
 function buildQuoteCustomer() {

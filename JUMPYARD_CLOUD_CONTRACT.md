@@ -2,17 +2,18 @@
 
 This file defines the first Sprint 1 contract for the phone-first JumpYard check-in flows. It is a planning and implementation boundary document; it does not create AWS resources and it does not implement Roller writes.
 
-## Approved Visitor Contact Policy (2026-09-15)
+## Approved Visitor Contact Policy (2026-09-23)
 
-Shared Cloud issue [#409](https://github.com/wrlds-creations/jumpyard-check-in/issues/409) and kiosk issue [#100](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/issues/100) remove visitor phone entry. The following contract supersedes the historical required-phone examples below; it is not a deployment claim.
+Love explicitly restored phone entry in phone/shared Cloud issue [#409](https://github.com/wrlds-creations/jumpyard-check-in/issues/409) and kiosk issue [#100](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/issues/100). This supersedes the September 15 name/email-only and extra pre-create customer-matching policy (D0222 / D0035). It describes the approved implementation, not a deployment claim.
 
-- Purchase input requires first name, last name and email. `customer.phone` is optional for compatibility with saved drafts; fresh clients omit it.
-- Cloud must preserve an existing real ROLLER guest phone. A submitted or cached number is not authoritative. The current guarded implementation confirms a candidate's exact email and phone through live guest detail before creating entry or add-product drafts.
-- Only a verified guest without a real phone receives `0700000000` in the provider payload. Equivalent placeholder spellings are missing contact internally, are not SMS-ready and cannot be sent SMS, including legacy stored values. No bulk contact deletion is authorized.
-- Uncertain guest matching returns HTTP 409 `customer_phone_preservation_unverified` before draft creation/payment initiation; the reservation is marked failed. Existing payment identities are not recreated.
-- **Rollout gate:** documented booking search is fuzzy and capped at the 100 most recent non-cancelled bookings. No result cannot establish that an email has no existing guest. New/unindexed, ambiguous and unverifiable customers currently stop for staff help. A supported complete email lookup or atomic create-without-phone-update contract is required before enabling general new/unindexed-guest checkout. A fresh detail read is not an atomic guarantee against concurrent profile edits.
-- Public lookup accepts booking reference, email and supported QR/booking identifiers. Explicit or inferred phone requests return HTTP 400 `phone_lookup_disabled` before provider/cache/access work, regardless of a misleading `identifierType`. Phone keyword search is disabled. Genuine numeric booking references retain their existing behavior.
-- Promote shared Cloud safeguards before either frontend, under reviewed deployment approval; new/unindexed-guest checkout remains gated pending provider-contract validation.
+- New purchases require first name, last name, email and a guest-entered phone. Clients start with an empty phone field. Cloud forwards the supplied number and never inserts a standard phone into draft creation.
+- Remove the extra pre-create email search, local guest-profile query and guest-detail loop. A new or unindexed email can create a draft without being found in advance. ROLLER owns customer matching. Normal updates from explicitly submitted contact fields still apply; preserving an existing different number is not promised.
+- Existing-booking add-ons retain established booking/access/contact resolution, without the extra email-matching loop. Missing original contact still requires staff resolution; no synthetic phone is manufactured.
+- Unsubmitted saved purchases without a phone return to contact entry before a new draft. Active draft/payment recovery keeps its original identity and cannot create another draft merely to add a phone.
+- Public lookup remains booking reference, email and supported QR/booking identifiers. Explicit or inferred phone requests return HTTP 400 `phone_lookup_disabled` before provider/cache/access work, regardless of a misleading `identifierType`. Genuine numeric booking references retain their existing behavior.
+- Equivalent spellings of `0700000000` remain missing contact internally, are not SMS-ready and cannot receive SMS, including legacy stored values. No bulk contact edits are authorized.
+- A future no-phone flow needs a supported ROLLER create-without-contact-overwrite contract. The September 22 controlled Live probe rejected omission and overwrote the existing number when the placeholder was supplied at draft creation, before payment; that number was restored. This does not establish every possible ROLLER API/configuration option.
+- Release the shared Cloud change and phone/kiosk frontends as a coordinated set after review. Old no-phone clients will fail required-phone validation on the new backend; ensure clients reload. Existing payment-status/resume endpoints keep their contracts. Publication and physical end-to-end acceptance remain separate.
 
 ## Source Materials
 
