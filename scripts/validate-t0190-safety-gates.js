@@ -47,6 +47,7 @@ function loadHandler(relativePath, environment, internalNames) {
     exports: module.exports,
     process: { env: { ...environment } },
     require(moduleId) {
+      if (moduleId === './email-marketing-consent') return require('../infra/lambda/booking/email-marketing-consent');
       if (moduleId === './staff-handout') return require('../infra/lambda/shared/staff-handout');
       if (moduleId === './staff-handout-write') return require('../infra/lambda/redeem/staff-handout-write');
       if (moduleId === './staff-board') return require('../infra/lambda/session/staff-board');

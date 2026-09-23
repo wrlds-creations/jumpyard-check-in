@@ -1934,12 +1934,26 @@ async function reconcilePrepaymentDraftFromPaidBooking(booking, source, correlat
 
   await requestKioskAuthoritativeConfirmation(booking, source, correlationId);
 
+  await requestPhoneEmailMarketing(booking, correlationId);
+
   const updatedLinks = await reconcileLinkedAddOnBookingLinks(booking, source);
   for (const link of updatedLinks) {
     await recordBookingLinkPublishedEvent(booking, link, source);
   }
 
   return updatedDrafts;
+}
+
+async function requestPhoneEmailMarketing(booking, correlationId) {
+  const functionName = process.env.PHONE_EMAIL_MARKETING_FUNCTION_NAME;
+  if (!functionName || !booking?.rollerUniqueId) return;
+  try {
+    await hooks.invokeLambda(new InvokeCommand({ FunctionName: functionName, InvocationType: 'Event',
+      Payload: Buffer.from(JSON.stringify({ source: 'jumpyard.phone-email-marketing',
+        detail: { rollerUniqueId: booking.rollerUniqueId, correlationId } })) }));
+  } catch {
+    console.error(JSON.stringify({ event: 'marketing.email_dispatch_failed', correlationId }));
+  }
 }
 
 async function requestKioskAuthoritativeConfirmation(booking, source, correlationId) {

@@ -4,6 +4,10 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #437 Phone Email Marketing (Local Proposal; Not Deployed)
+
+The proposed change reuses Booking, Lookup, WebhookProcessor, existing invoke grants, `idempotency_records` and `event_log`. It adds only a Booking function-name environment reference to Lookup and WebhookProcessor; no new AWS resource, IAM permission, route, schema, secret or scheduled job is proposed. The provider-approval gate remains unset. No AWS state or deployment changed during implementation. Existing Nacka account/region/ownership/tags and protected immutable-artifact promotion remain authoritative. [Data lifecycle, provider gates and verification](docs/gh-437-phone-email-marketing.md).
+
 ### Issue #409 Phone Restoration (Published 2026-09-23)
 
 [PR #435](https://github.com/wrlds-creations/jumpyard-check-in/pull/435), source `f2fc522539197f9efc304262055c938b178ec5de`, produced immutable [release 35834109237](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/35834109237), artifact `10738905855`. All 687 files were independently checksum-verified. Reviewed protected [Park 35834768020](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/35834768020) changed only `BookingHandler5D1461BB.Properties.Code.S3Key` and its asset-path metadata. No resource was added or removed; 208 resources, IAM, schema, 28 routes, Nacka/date scope, gates and all ten WRLDS tags remain. Account `376129878018`, region `eu-north-1`, `WRLDS:Client=JumpYard` and `WRLDS:CostCenter=JumpYard` were verified. Migration apply was false, with all 23 existing migrations applied already.

@@ -963,6 +963,7 @@ exports.handler = async (event) => {
       bookingHandler.functionName,
     );
     bookingHandler.grantInvoke(lookupHandler);
+    lookupHandler.addEnvironment('PHONE_EMAIL_MARKETING_FUNCTION_NAME', bookingHandler.functionName);
     bookingHandler.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['lambda:InvokeFunction'],
@@ -1013,6 +1014,7 @@ exports.handler = async (event) => {
     webhookQueue.grantSendMessages(webhookHandler);
     webhookQueue.grantConsumeMessages(webhookProcessorHandler);
     bookingHandler.grantInvoke(webhookProcessorHandler);
+    webhookProcessorHandler.addEnvironment('PHONE_EMAIL_MARKETING_FUNCTION_NAME', bookingHandler.functionName);
     webhookProcessorHandler.addEventSource(
       new SqsEventSource(webhookQueue, {
         batchSize: 1,

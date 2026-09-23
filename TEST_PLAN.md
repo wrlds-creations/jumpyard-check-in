@@ -1,5 +1,11 @@
 # Test Plan
 
+## Phone email marketing (#437)
+
+`npm run validate:gh437-email-marketing` runs synthetic consent/worker/handler tests and phone choice contracts; `npm run validate` includes it through `prevalidate`. Also run phone payment-option, purchase-preparation, contact and payment-recovery suites, lint, typecheck and production build, plus `npm run infra:check`. Verify the initially-off switch, that it switches on only for a complete email, optional continuation, keyboard focus, email-change reset and separate privacy link at mobile widths in both languages using synthetic preview transport. No provider write or payment is part of these checks.
+
+Local tests do not prove ROLLER omission semantics, paid-only guest-update propagation, suppression protection or concurrent profile preservation. A separately approved September 23 unpaid draft preserved all returned fields for the owned subscribed ROLLER guest when both marketing flags were omitted; immediate and delayed preference readbacks passed. Love's subsequent screenshot confirms unchanged basic Klaviyo channel status; the other provider gates remain outstanding. Use separately approved owned test data for further writes and obtain the connector contract before rollout. The provider gate remains closed until those checks pass. [Detailed evidence and release gates](docs/gh-437-phone-email-marketing.md).
+
 ## Phone completion (#432)
 
 Run `npm --prefix jumpyard-checkin-phone run test:completion` plus the completed-booking/package-content regressions. Check SV/EN, 320–430px, zero-prefixed and long codes, missing/completed sessions, handoff day, Combo/café groups, QR modal focus/close and supplied safe reset. The production export must hide `/preview/completion`; verify rendered QR payload identity using synthetic data. Physical handset/scanner acceptance remains distinct from local browser and static publication checks. See [evidence](docs/gh432-phone-completion.md).

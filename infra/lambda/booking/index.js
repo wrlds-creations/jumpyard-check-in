@@ -3,6 +3,7 @@ const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
+const emailMarketing = require('./email-marketing-consent');
 const { createServerDiagnostics } = require('./server-diagnostics');
 const diagnostics = createServerDiagnostics('booking', (entry) => console.error(JSON.stringify(entry)));
 const { withPackageContents } = require('./package-contents');
@@ -209,12 +210,19 @@ let cachedVenuePaymentConfigExpiresAt = 0;
 exports.handler = async (event) => {
   let correlationId = normalizeCorrelationId(getHeader(event, 'x-correlation-id')) || createCorrelationId();
   let routeKey = 'unknown';
+  const isPhoneEmailMarketingEvent = event?.source === 'jumpyard.phone-email-marketing' &&
+    !event.requestContext && !event.routeKey && !event.rawPath;
 
   try {
     routeKey = event?.routeKey || `${event?.requestContext?.http?.method ?? ''} ${event?.rawPath ?? ''}`.trim();
 
     const body = parseBody(event);
     correlationId = normalizeCorrelationId(body.correlationId) || correlationId;
+
+    if (isPhoneEmailMarketingEvent) {
+      correlationId = normalizeCorrelationId(event?.detail?.correlationId) || correlationId;
+      return await handlePhoneEmailMarketing(event.detail, correlationId);
+    }
 
     if (isKioskReconciliationEvent(event)) {
       correlationId = normalizeCorrelationId(event?.detail?.correlationId) || correlationId;
@@ -267,6 +275,9 @@ exports.handler = async (event) => {
     });
   } catch (error) {
     diagnostics.capture(error);
+    // Asynchronous Lambda invocations must fail, not return an HTTP 500 object,
+    // so a transient read/capture-store failure can be retried before a claim.
+    if (isPhoneEmailMarketingEvent) throw new Error('marketing_email_delivery_failed');
     const safeError = classifyError(error);
     return jsonResponse(safeError.statusCode, correlationId, {
       status: safeError.status,
@@ -534,6 +545,7 @@ async function handleDraft(event, body, correlationId) {
 
   const requestHash = hashJson({
     channel: request.channel,
+    ...(request.emailMarketingConsent ? { emailMarketingConsent: request.emailMarketingConsent } : {}),
     customer: maskCustomerForHash(request.customer),
     discounts: hashDiscountsForHash(request.discounts),
     giftCards: hashGiftCardsForHash(request.giftCards),
@@ -656,6 +668,9 @@ async function handleDraft(event, body, correlationId) {
       });
     }
   }
+  // Store the pending choice against the provider-returned draft identity before
+  // any zero-owing publish. No email grant is sent with the draft itself.
+  await capturePhoneEmailMarketing(request, draft, payload.externalId, config.env, correlationId);
   const giftCards = draft.giftCards;
   const discountCodes = draft.discountCodes;
   let noPaymentPublish = null;
@@ -2590,6 +2605,7 @@ function normalizeQuoteRequest(body) {
 
 function normalizeDraftRequest(event, body) {
   return {
+    emailMarketingConsent: body.emailMarketingConsent,
     capacityReservationId: stringOrNull(body.capacityReservationId),
     channel: body.channel === 'kiosk' ? 'kiosk' : body.channel ? 'unsupported' : null,
     comments: stringOrNull(body.comments),
@@ -3103,6 +3119,11 @@ function safetyGateBlockedResponse(
 }
 
 function validateDraftRequest(request) {
+  const consentError = emailMarketing.validateChoice(request.emailMarketingConsent);
+  if (consentError) return consentError;
+  if (request.emailMarketingConsent && request.channel) {
+    return { code: 'email_marketing_channel_invalid', message: 'Email marketing is supported only for phone purchases.' };
+  }
   if (!request.idempotencyKey) {
     return {
       code: 'idempotency_key_required',
@@ -3332,6 +3353,13 @@ function buildRollerBookingPayload(request, { customer, externalIdPrefix }) {
     sendConfirmations: request.sendConfirmations === true,
     customerPaysFees: request.customerPaysFees === true,
   };
+
+  // Phone purchases must not turn an unchecked choice into a withdrawal, or
+  // activate checked consent before payment. Keep existing kiosk/add-on contracts.
+  if (request.channel !== 'kiosk' && request.flowType !== 'add_product') {
+    delete payload.customer.acceptMarketing;
+    delete payload.customer.acceptMarketingSms;
+  }
 
   if (request.comments) payload.comments = request.comments;
   if (request.capacityReservationId) payload.capacityReservationId = request.capacityReservationId;
@@ -4930,7 +4958,7 @@ async function reserveKioskDraftBinding(selection, request) {
 
 async function reserveIdempotencyKey(operation, idempotencyKey, requestHash) {
   // Keep the server-owned reservation namespace inaccessible to client keys.
-  if (idempotencyKey.startsWith('jykb_')) {
+  if (idempotencyKey.startsWith('jykb_') || idempotencyKey.startsWith('jymc_')) {
     return { ok: false, code: 'idempotency_key_invalid', message: 'The idempotency key is not allowed.' };
   }
   const insertResult = await executeStatement(
@@ -5010,6 +5038,92 @@ async function completeIdempotencyKey(idempotencyKey, status, resultRef) {
       stringParameter('resultRef', resultRef),
     ],
   );
+}
+
+async function capturePhoneEmailMarketing(request, draft, externalId, environment, correlationId) {
+  if (!request.emailMarketingConsent || request.channel || request.flowType === 'add_product') return;
+  try {
+    const grant = emailMarketing.createPendingGrant(request.emailMarketingConsent, request.customer,
+      draft.uniqueId, externalId, environment);
+    await executeStatement(
+      `INSERT INTO jumpyard.idempotency_records
+         (idempotency_key, operation, request_hash, status, result_ref, expires_at)
+       VALUES (:key, 'phone_email_marketing', :emailHash, 'pending', :grant, now() + interval '30 days')
+       ON CONFLICT (idempotency_key) DO NOTHING`,
+      [stringParameter('key', `jymc_${hashString(draft.uniqueId)}`),
+        stringParameter('emailHash', grant.emailHash), stringParameter('grant', JSON.stringify(grant))],
+    );
+    await writeBookingEventLog({ correlationId, eventType: 'marketing.email_choice_captured',
+      subjectRef: draft.uniqueId, summary: 'Pending phone email choice captured; not subscribed.', payload: grant });
+  } catch {
+    // This failure must never turn a booking/payment into an ambiguous retry.
+    console.error(JSON.stringify({ event: 'marketing.email_capture_failed', correlationId }));
+  }
+}
+
+async function handlePhoneEmailMarketing(detail, correlationId) {
+  const uniqueId = stringOrNull(detail?.rollerUniqueId);
+  if (!uniqueId || !/^[a-f0-9-]{36}$/i.test(uniqueId)) return { status: 'ignored' };
+  if (isEmergencyStopEnabled() || !isNewBookingDraftWriteEnabled()) return { status: 'blocked' };
+  // Remains fail-closed until the provider preservation/suppression checks in
+  // GH-437 are complete. A normal deployment must not silently approve them.
+  if (process.env.PHONE_EMAIL_MARKETING_PROVIDER_APPROVED !== 'true') return { status: 'provider_not_approved' };
+  const key = `jymc_${hashString(uniqueId)}`;
+  const row = firstMappedRow(await executeStatement(
+    `SELECT status, result_ref FROM jumpyard.idempotency_records
+     WHERE idempotency_key = :key AND operation = 'phone_email_marketing'
+       AND status = 'pending' AND expires_at > now() LIMIT 1`, [stringParameter('key', key)],
+  ));
+  if (!row) return { status: 'not_pending' };
+  const grant = parseJsonOrNull(row.result_ref);
+  if (grant?.uniqueId !== uniqueId) return { status: 'identity_mismatch' };
+  const config = await getRollerConfig();
+  if (grant.environment !== config.env || (config.env === 'live' && grant.venueId !== '50871')) return { status: 'scope_mismatch' };
+  const token = await getRollerAccessToken(config);
+  const request = async (method, path, payload) => {
+    const response = await fetch(buildRollerUrl(config.baseUrl, path), {
+      method, redirect: 'error', signal: AbortSignal.timeout(10000),
+      headers: { accept: 'application/json', 'content-type': 'application/json',
+        authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}` },
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
+    });
+    if (!response.ok) throw new Error('marketing_provider_request_failed');
+    if (method === 'PUT') return null;
+    return response.json();
+  };
+  try {
+    const status = await emailMarketing.deliverPendingGrant(grant, {
+      getBooking: (id) => request('GET', `/bookings/${encodeURIComponent(id)}`),
+      getGuest: (id) => request('GET', `/guests/${encodeURIComponent(id)}`),
+      putGuest: (id, body) => request('PUT', `/guests/${encodeURIComponent(id)}`, body),
+      claim: async () => {
+        const result = await executeStatement(
+          `UPDATE jumpyard.idempotency_records SET status = 'dispatch_claimed', updated_at = now()
+           WHERE idempotency_key = :key AND operation = 'phone_email_marketing'
+             AND status = 'pending' AND expires_at > now() RETURNING idempotency_key`,
+          [stringParameter('key', key)],
+        );
+        return mappedRows(result).length === 1;
+      },
+      record: async (outcome) => {
+        await executeStatement(
+          `UPDATE jumpyard.idempotency_records SET status = :status, updated_at = now()
+           WHERE idempotency_key = :key AND operation = 'phone_email_marketing'
+             AND status = 'dispatch_claimed'`,
+          [stringParameter('key', key), stringParameter('status', outcome)],
+        );
+        await writeBookingEventLog({ correlationId, eventType: 'marketing.email_delivery_result',
+          subjectRef: uniqueId, summary: 'Phone paid-booking email marketing result.',
+          payload: { outcome, copyVersion: grant.copyVersion, source: grant.source } });
+      },
+    });
+    return { status };
+  } catch {
+    console.error(JSON.stringify({ event: 'marketing.email_delivery_failed', correlationId }));
+    // Safe asynchronous retries may repeat reads. A claimed grant can never
+    // repeat its PUT, including when recording a completed write failed.
+    throw new Error('marketing_email_delivery_failed');
+  }
 }
 
 async function writeBookingEventLog({ correlationId, eventType, payload, subjectRef, summary }) {

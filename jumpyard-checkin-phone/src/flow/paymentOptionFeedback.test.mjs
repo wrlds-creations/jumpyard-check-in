@@ -4,6 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { getPaymentOptionInputState } from './paymentOptionFeedback.ts';
+import { pendingEmailMarketingConsent } from './emailMarketingConsent.ts';
 
 const summary = (amount = 200, errors = []) => ({
   requestedCount: 1, appliedCount: amount > 0 ? 1 : 0, totalApplied: amount, applied: [], errors,
@@ -56,6 +57,7 @@ function deferred() {
 function harness({ provider = async () => quote(), draftAmount = 0 } = {}) {
   const events = [];
   const state = {
+    pendingEmailMarketingConsent, emailMarketingChecked: false, lang: 'sv',
     useCallback: fn => fn,
     PAYMENT_OPTION_CODE_MAX_LENGTH: 32,
     quoteRequestVersionRef: { current: 0 },
@@ -103,6 +105,20 @@ function harness({ provider = async () => quote(), draftAmount = 0 } = {}) {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
   }).outputText, vm.createContext(state));
   return { state, events, ...state.handlers };
+}
+
+for (const checked of [false, true]) {
+  test(`marketing choice ${checked}: draft receives only pending consent and quote receives none`, async () => {
+    const host = harness();
+    host.state.emailMarketingChecked = checked;
+    await host.applyPaymentOptions();
+    await host.createDraft();
+    const quoteCall = host.events.find(([event]) => event === 'request')[1];
+    const draftCall = host.events.find(([event]) => event === 'create')[1];
+    assert.equal(quoteCall.length, 5);
+    assert.equal(draftCall[0].acceptMarketing, undefined);
+    assert.deepEqual(draftCall[6], pendingEmailMarketingConsent(checked, 'sv'));
+  });
 }
 
 for (const kind of ['discountCodes', 'giftCards']) {

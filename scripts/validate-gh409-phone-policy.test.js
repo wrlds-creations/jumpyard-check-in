@@ -51,7 +51,7 @@ test('draft contact requires a phone and forwards the supplied value without a d
     assert.equal(policy.validateCustomer(supplied), null);
     const payload = policy.buildRollerBookingPayload(request, { customer: supplied, externalIdPrefix: 'JY-D' });
     assert.equal(payload.customer.phone, phone);
-    assert.equal(payload.customer.acceptMarketingSms, false);
+    assert.equal(payload.customer.acceptMarketingSms, undefined, 'phone checkout must not issue an SMS preference');
     assert.equal(supplied.phone, phone);
   }
   // The builder must never manufacture contact data, even when used by quotes.

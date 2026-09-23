@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { pendingEmailMarketingConsent } from './emailMarketingConsent.ts';
 import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
@@ -87,6 +88,7 @@ function harness({ recovery = false, zeroPurchase = false, lookup = async () => 
   let saved = structuredClone(snapshot);
   let record = zeroPurchase ? null : { ...payment };
   const state = {
+    pendingEmailMarketingConsent, emailMarketingChecked: false, lang: 'sv',
     AbortController, Error,
     useCallback: fn => fn,
     quoteRequestVersionRef: { current: 0 },

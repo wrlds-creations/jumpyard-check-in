@@ -15,6 +15,12 @@ Love explicitly restored phone entry in phone/shared Cloud issue [#409](https://
 - A future no-phone flow needs a supported ROLLER create-without-contact-overwrite contract. The September 22 controlled Live probe rejected omission and overwrote the existing number when the placeholder was supplied at draft creation, before payment; that number was restored. This does not establish every possible ROLLER API/configuration option.
 - Release the shared Cloud change and phone/kiosk frontends as a coordinated set after review. Old no-phone clients will fail required-phone validation on the new backend; ensure clients reload. Existing payment-status/resume endpoints keep their contracts. Publication and physical end-to-end acceptance remain separate.
 
+## Phone Email Marketing (#437; Provider Verification Required)
+
+Phone new-purchase drafts may carry the optional Cloud-only `emailMarketingConsent` object: `{ granted: true, copyVersion: "phone-email-2026-09-23-v3", locale: "sv" | "en" }`. It is not part of the ROLLER customer or quote. Absence means no new email/SMS instruction. The proposed phone provider payload omits both marketing flags. A separately approved September 23 unpaid draft preserved all returned fields for the owned already-subscribed ROLLER guest; this observation does not establish every guest state, concurrent updates or downstream suppression behavior. Kiosk and existing-booking add-on contracts are unchanged.
+
+The server binds the pending choice, timestamp, email hash and exact copy to the provider-returned draft identity. Existing paid reconciliation can asynchronously request the Booking worker, which independently verifies the same paid booking and current customer, consumes a durable claim, and only then sets email acceptance. It preserves current SMS/contact values and never retries a claimed write. A failed marketing operation does not fail payment. The internal event has no public HTTP route. `PHONE_EMAIL_MARKETING_PROVIDER_APPROVED` remains unset; no active delivery/publication is implied. [Persistence, provider gates and evidence](docs/gh-437-phone-email-marketing.md).
+
 ## Source Materials
 
 - `PROJECT_CONTEXT.md`
