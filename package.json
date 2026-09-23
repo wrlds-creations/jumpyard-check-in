@@ -82,6 +82,6 @@
     "validate:gh403-lookup-audit": "node --test scripts/validate-gh403-lookup-audit.test.js",
     "validate:gh327-kiosk-terminal-binding": "node --test scripts/validate-gh327-kiosk-terminal-binding.test.js",
     "validate:gh407-payment-options": "npm --prefix jumpyard-checkin-phone run test:payment-options",
-    "validate:gh409-phone-policy": "node --test scripts/validate-gh409-phone-policy.test.js && npm --prefix jumpyard-checkin-phone run test:no-phone"
+    "validate:gh409-phone-policy": "node --test scripts/validate-gh409-phone-policy.test.js && npm --prefix jumpyard-checkin-phone run test:phone-contact"
   }
 }

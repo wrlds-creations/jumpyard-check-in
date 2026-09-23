@@ -1,5 +1,26 @@
 # Visitor contact policy — issue #409
 
+## September 23 restoration — current approved behavior
+
+Love explicitly requested phone entry again on both phone and kiosk, with direct draft creation and no extra customer matching beforehand. This supersedes the no-phone/pre-create matching requirement documented below. Branch `codex/gh-409-restore-phone-input` starts at `c7c2c63b88b18b45c9ae5ab90fd9c28d7f3e1bea`. On September 23 Love explicitly authorized commit, push, reviewed merge and deployment to the existing backend, Park and public targets. Deployment evidence follows observed publication; no new resource, migration, provider message or real transaction is included.
+
+The phone form requires a guest-entered number, starts empty, and forwards that number. Both Cloud draft handlers remove the email search/profile/detail preservation loop and the provider-phone fallback. Existing-booking add-ons keep their established booking-access/contact resolution. Old unsubmitted contact without phone must be completed before another draft; active draft/payment recovery preserves its identity. Public phone lookup rejection and placeholder ingestion/SMS protection remain. ROLLER can still update a customer with a different explicitly entered number; this is not a promise of immutable contact data.
+
+The September 22 controlled Live probes established that omitting phone was rejected, and sending the placeholder changed the existing guest phone at draft creation before payment. The baseline number was restored and read back. This is the reason for restoration, not proof that ROLLER has no other supported option. No new provider write was made during this implementation. The previously created unpaid, unpublished diagnostic draft was not completed or deleted. Pabel's September 14 introduction to Matt was answered in a draft on September 23; Love confirmed he sent it himself at 09:21. No email send action was performed by the agent.
+
+Validation on September 23:
+
+- Backend contact/lookup policy: 9 tests; phone contact and existing-draft resume: 5 tests; terminal draft handlers: 15 passing tests, 1 native PostgreSQL test skipped. Handlers create synthetic drafts with supplied contact and no customer reads, while retaining access, terminal reservation and busy-payment protections.
+- Phone payment recovery: 137 tests; payment code/quote behavior: 55 tests. Root `npm run validate`, `npm run infra:check`, phone lint, TypeScript and production build passed. Four existing image lint warnings remain.
+- CUA browser checks used the real local development preview with synthetic transport and no provider writes: Swedish 390x844 and English 320x740, required empty phone, disabled continuation until contact is complete, preserved values on language change, no horizontal overflow. The preview intercepts payment, so this is form/layout evidence, not payment success.
+- Kiosk verification is recorded in its paired evidence note. Both remote issues now record the September 23 scope and explicit publication authorization, with older requirements preserved as history. Unrelated #396 and kiosk #94 worktrees remain untouched.
+
+Release must coordinate shared Cloud and both clients. Old open no-phone clients will receive required-phone validation from the new backend and need a reload. Existing payment-status/resume routes are unchanged. Review, publication and physical phone/kiosk/provider purchase verification remain outstanding; no restored production behavior is claimed.
+
+## Historical September 15 implementation and publication
+
+The remaining sections describe the earlier no-phone policy and its release evidence.
+
 ## Scope and review state
 
 - [Cloud/phone #409](https://github.com/wrlds-creations/jumpyard-check-in/issues/409); dependent [kiosk #100](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/issues/100).

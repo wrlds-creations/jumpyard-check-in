@@ -5,7 +5,7 @@
 - Phone completion (#432) reuses the approved kiosk red hero/number design with an on-screen QR. Only ready, identified phone sessions use it; completed/missing states retain their existing behavior. No automatic phone reset or print action.
 
 - Checkout code application: Continue reuses the current successful Apply quote, preserving the discount/total; changed inputs or an expired quote require a fresh check. The draft still sends the code and owns the final amount. [Contract #421](docs/gh407-code-feedback.md#reuse-on-continue-421).
-- Visitor contact: name/email only; D0222 rejects public phone lookup and stops unverified customers before payment to preserve existing ROLLER numbers.
+- Visitor contact (2026-09-23, #409/#100): new purchases require name, email and a guest-entered phone. Remove the extra pre-create customer match and automatic placeholder. Public phone lookup remains disabled; active payments retain their identity. This supersedes the corresponding D0222 policy; see the current Cloud contact contract. Local implementation is not a release claim.
 
 - Repository: wrlds-creations/jumpyard-check-in; shared JumpYard Next Project #5.
 - Phone/staff-admin and required Cloud/API scope. Kiosk and JumpyBoard remain separate except approved interface contracts.
@@ -56,7 +56,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Roller remains the source of truth for bookings, products, payments, and ticket redemption.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, session status, idempotency, audit events, and guest messaging state.
 - The production booking index uses an approved initial backfill, scheduled morning seed, idempotent webhook updates/reconciliation, and live REST confirmation. Roller remains authoritative; Aurora is the operational cache.
-- The Sprint 3 guest-message target is one transactional email with a secure JumpYard Cloud check-in link 30 minutes before the selected booking time, only after sender, consent, domain, provider, duplicate-suppression, and kill-switch gates pass. SMS is deferred beyond Sprint 3; contact: D0222.
+- The Sprint 3 guest-message target is one transactional email with a secure JumpYard Cloud check-in link 30 minutes before the selected booking time, only after sender, consent, domain, provider, duplicate-suppression, and kill-switch gates pass. SMS is deferred beyond Sprint 3; contact: the current Cloud contact policy (2026-09-23).
 - Check-in is modeled as ticket-level redemption through Roller `POST /redemptions`, not a booking-level flag.
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.
