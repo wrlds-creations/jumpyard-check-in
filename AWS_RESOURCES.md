@@ -4,9 +4,9 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
-### Issue #437 Phone Email Marketing (Park Deployed; Delivery Gate Approved for Park Verification)
+### Issue #437 Phone Email Marketing (Park Deployed; Choice Sent With The Draft)
 
-The change reuses Booking, Lookup, WebhookProcessor, existing invoke grants, `idempotency_records` and `event_log`. It adds only a Booking function-name environment reference to Lookup and WebhookProcessor; no new AWS resource, IAM permission, route, schema, secret or scheduled job is created. PR #439 reached Park through release run 35862200997 and Park run 35862852072 (changed only the Booking, Lookup and both webhook Lambdas; rollback candidate release 35834109237). Under D0224 the release profile also sets `PHONE_EMAIL_MARKETING_PROVIDER_APPROVED=true` on Booking through `safetyGates.phoneEmailMarketingDeliveryApproval`; that environment change takes effect with the next protected Park deployment. Existing Nacka account/region/ownership/tags and protected immutable-artifact promotion remain authoritative. [Data lifecycle, provider gates and verification](docs/gh-437-phone-email-marketing.md).
+The change reuses Booking, Lookup, WebhookProcessor, existing invoke grants, `idempotency_records` and `event_log`. It adds only a Booking function-name environment reference to Lookup and WebhookProcessor; no new AWS resource, IAM permission, route, schema, secret or scheduled job is created. PR #439 reached Park through release run 35862200997 and Park run 35862852072 (changed only the Booking, Lookup and both webhook Lambdas; rollback candidate release 35834109237). PR #440 (release 35871540109, Park run 35872374543) briefly set `PHONE_EMAIL_MARKETING_PROVIDER_APPROVED=true` on Booking under D0224. D0225 removes that approval again, so the next protected Park deployment returns Booking to `false`; a checked choice then travels with the ROLLER draft instead. The ROLLER API key `WRLDS park test Nacka Forum` gained `Update guest detail (PUT)` on 2026-09-23 for the owned-address test; D0225 no longer needs it. Existing Nacka account/region/ownership/tags and protected immutable-artifact promotion remain authoritative. [Data lifecycle, provider gates and verification](docs/gh-437-phone-email-marketing.md).
 
 ### Issue #409 Phone Restoration (Published 2026-09-23)
 

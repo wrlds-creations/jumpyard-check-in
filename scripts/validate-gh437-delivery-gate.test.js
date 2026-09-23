@@ -7,13 +7,14 @@ const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const APPROVAL = 'GH437_PAID_ONLY_EMAIL_MARKETING_APPROVED';
 
-test('only the Nacka release profile approves paid-only phone email delivery', () => {
+// D0225: the choice travels with the draft, so no profile enables the
+// after-payment worker. Re-enabling it needs a new decision.
+test('no profile approves after-payment phone email delivery', () => {
   const configDir = path.join(root, 'infra/config');
   for (const file of fs.readdirSync(configDir).filter((name) => name.endsWith('.json'))) {
     const config = JSON.parse(fs.readFileSync(path.join(configDir, file), 'utf8'));
-    const approval = config.safetyGates?.phoneEmailMarketingDeliveryApproval;
-    if (file === 'park-test-full-flow-rehearsal.json') assert.equal(approval, APPROVAL, file);
-    else assert.equal(approval, undefined, `${file} must keep phone email delivery closed`);
+    assert.equal(config.safetyGates?.phoneEmailMarketingDeliveryApproval, undefined,
+      `${file} must keep after-payment phone email delivery closed`);
   }
 });
 

@@ -86,7 +86,6 @@
     "controlledT30EmailApproval": "T0201_SINGLE_BOOKING_T30_EMAIL_APPROVED",
     "emergencyStop": false,
     "guestMessagingSendsEnabled": false,
-    "phoneEmailMarketingDeliveryApproval": "GH437_PAID_ONLY_EMAIL_MARKETING_APPROVED",
     "rollerBookingDraftWritesEnabled": true,
     "rollerRedeemWritesEnabled": true,
     "rollerWebhookProcessingEnabled": true,

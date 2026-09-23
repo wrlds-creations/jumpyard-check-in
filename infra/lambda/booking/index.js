@@ -595,6 +595,7 @@ async function handleDraft(event, body, correlationId) {
   const payload = buildRollerBookingPayload(request, {
     customer: request.customer,
     externalIdPrefix: 'JY-D',
+    withEmailMarketingChoice: true,
   });
   let kioskQuoteResult = null;
   if (terminalSelection.enabled) {
@@ -668,8 +669,8 @@ async function handleDraft(event, body, correlationId) {
       });
     }
   }
-  // Store the pending choice against the provider-returned draft identity before
-  // any zero-owing publish. No email grant is sent with the draft itself.
+  // Record the choice that travelled with this draft (D0225) against the
+  // provider-returned identity before any zero-owing publish.
   await capturePhoneEmailMarketing(request, draft, payload.externalId, config.env, correlationId);
   const giftCards = draft.giftCards;
   const discountCodes = draft.discountCodes;
@@ -3332,7 +3333,7 @@ function validateItems(items) {
   return null;
 }
 
-function buildRollerBookingPayload(request, { customer, externalIdPrefix }) {
+function buildRollerBookingPayload(request, { customer, externalIdPrefix, withEmailMarketingChoice = false }) {
   const externalId = (request.externalId || createExternalId(externalIdPrefix)).slice(0, 64);
   const payload = {
     externalId,
@@ -3354,11 +3355,17 @@ function buildRollerBookingPayload(request, { customer, externalIdPrefix }) {
     customerPaysFees: request.customerPaysFees === true,
   };
 
-  // Phone purchases must not turn an unchecked choice into a withdrawal, or
-  // activate checked consent before payment. Keep existing kiosk/add-on contracts.
+  // Phone purchases never turn an unchecked choice into a withdrawal and never
+  // touch SMS. GH-437 option A (D0225): a checked choice travels with the draft,
+  // the moment the ROLLER-to-Klaviyo integration honours it; quotes never carry
+  // it. Keep existing kiosk/add-on contracts.
   if (request.channel !== 'kiosk' && request.flowType !== 'add_product') {
     delete payload.customer.acceptMarketing;
     delete payload.customer.acceptMarketingSms;
+    if (withEmailMarketingChoice && request.emailMarketingConsent &&
+        !emailMarketing.validateChoice(request.emailMarketingConsent)) {
+      payload.customer.acceptMarketing = true;
+    }
   }
 
   if (request.comments) payload.comments = request.comments;
@@ -5048,13 +5055,13 @@ async function capturePhoneEmailMarketing(request, draft, externalId, environmen
     await executeStatement(
       `INSERT INTO jumpyard.idempotency_records
          (idempotency_key, operation, request_hash, status, result_ref, expires_at)
-       VALUES (:key, 'phone_email_marketing', :emailHash, 'pending', :grant, now() + interval '30 days')
+       VALUES (:key, 'phone_email_marketing', :emailHash, 'sent_with_draft', :grant, now() + interval '30 days')
        ON CONFLICT (idempotency_key) DO NOTHING`,
       [stringParameter('key', `jymc_${hashString(draft.uniqueId)}`),
         stringParameter('emailHash', grant.emailHash), stringParameter('grant', JSON.stringify(grant))],
     );
     await writeBookingEventLog({ correlationId, eventType: 'marketing.email_choice_captured',
-      subjectRef: draft.uniqueId, summary: 'Pending phone email choice captured; not subscribed.', payload: grant });
+      subjectRef: draft.uniqueId, summary: 'Phone email choice sent with the ROLLER draft.', payload: grant });
   } catch {
     // This failure must never turn a booking/payment into an ambiguous retry.
     console.error(JSON.stringify({ event: 'marketing.email_capture_failed', correlationId }));
