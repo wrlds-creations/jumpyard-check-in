@@ -46,7 +46,23 @@ test('phone provider payload contains neither email nor SMS instruction; kiosk a
   assert.equal(addon.customer.acceptMarketing, true);
 });
 
-test('pending consent capture binds the returned draft and hashes email, without a provider write', async () => {
+test('a checked phone choice travels with the draft only; SMS, quotes and unchecked stay untouched', () => {
+  const h = load();
+  const request = { externalId: 'external-test', items: [], discounts: [], giftCards: [], companyId: null };
+  const build = (extra, options = {}) => h.buildRollerBookingPayload({ ...request, ...extra },
+    { customer, externalIdPrefix: 'JY-D', ...options });
+  const checked = build({ emailMarketingConsent: choice }, { withEmailMarketingChoice: true });
+  assert.equal(checked.customer.acceptMarketing, true);
+  assert.equal(checked.customer.acceptMarketingSms, undefined);
+  assert.equal(build({}, { withEmailMarketingChoice: true }).customer.acceptMarketing, undefined);
+  assert.equal(build({ emailMarketingConsent: choice }).customer.acceptMarketing, undefined);
+  assert.equal(build({ emailMarketingConsent: { ...choice, copyVersion: 'retired' } },
+    { withEmailMarketingChoice: true }).customer.acceptMarketing, undefined);
+  const source = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
+  assert.equal(source.match(/withEmailMarketingChoice: true/g).length, 1, 'only the phone draft may carry the choice');
+});
+
+test('consent capture records the choice sent with the draft and hashes email', async () => {
   const calls = [];
   const h = load({ executeStatement: async (sql, parameters) => { calls.push({ sql, parameters }); return {}; } });
   await h.capturePhoneEmailMarketing({ customer }, { uniqueId: id }, 'external-test', 'playground', 'test');
@@ -54,6 +70,8 @@ test('pending consent capture binds the returned draft and hashes email, without
   await h.capturePhoneEmailMarketing({ customer, emailMarketingConsent: choice }, { uniqueId: id }, 'external-test', 'playground', 'test');
   assert.equal(calls.length, 2);
   assert.match(calls[0].sql, /ON CONFLICT \(idempotency_key\) DO NOTHING/);
+  // Not 'pending': the after-payment worker must never act on a choice already sent.
+  assert.match(calls[0].sql, /'sent_with_draft'/);
   assert.ok(!JSON.stringify(calls).includes(customer.email));
   const grant = JSON.parse(calls[0].parameters.find(p => p.name === 'grant').value.stringValue);
   assert.equal(grant.uniqueId, id);

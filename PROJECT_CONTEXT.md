@@ -2,7 +2,7 @@
 
 ## Must know
 
-- Phone email marketing (#437): optional, default off, granted only after completed payment; unchecked is no instruction. [Gates](docs/gh-437-phone-email-marketing.md).
+- Phone email marketing (#437): optional, default off, sent with the booking draft (D0225); unchecked is no instruction. [Gates](docs/gh-437-phone-email-marketing.md).
 
 - Phone completion (#432) reuses the approved kiosk red hero/number design with an on-screen QR. Only ready, identified phone sessions use it; completed/missing states retain their existing behavior. No automatic phone reset or print action.
 
