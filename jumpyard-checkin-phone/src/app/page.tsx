@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { FlowMotion, FlowTransition, FlowScreen } from '@/components/FlowTransition';
-import { AlertCircle, ArrowLeft, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
 import { BookingSummary } from '@/components/BookingSummary';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { SafetyAttest } from '@/components/SafetyAttest';
@@ -61,6 +61,7 @@ import {
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { ExitFlowDialog } from '@/components/ExitFlowDialog';
 import { LanguageToggle } from '@/components/LanguageToggle';
+import { FlowNav } from '@/components/FlowNav';
 import { getExitFlowMode, hasReachedSafety, isStartState } from '@/flow/exitFlowPolicy';
 import { getFlowBackAction, type AddonBackRule } from '@/flow/addonPaymentNavigation';
 import {
@@ -333,8 +334,8 @@ function BuyRecoveryCard({
     );
 }
 
-// #350: the language control shares the top line with the progress bar; states
-// without a progress bar keep the navigation row clear of it instead.
+// #350: the language control shares the top line with the progress bar. Back/Exit
+// live in the bottom corners since #441.
 function hasProgressBar(state: FlowState) {
     return state !== 'APP_MOBILE' && state !== 'KIOSK_CHOICE' && state !== 'KIOSK_LOOKUP' && state !== 'KIOSK_BUY';
 }
@@ -1402,34 +1403,6 @@ function CheckInFlow() {
                 state={progressState}
                 buyEntryFlow={ctx.buyEntryFlow || showingBuyPaymentRecovery || showingCompletedBuyRecovery}
             />
-
-            <div className={`w-full max-w-md min-w-0 px-4 h-8 items-center justify-between ${state === 'KIOSK_BUY' ? 'hidden' : 'flex'} ${hasProgressBar(progressState) ? '' : 'pr-10'}`}>
-                {flowBackAction && (
-                    <button
-                        onClick={() => {
-                            if (flowBackAction === 'addons') {
-                                setAddonsBackRequest((request) => request + 1);
-                                return;
-                            }
-                            setState(backState!);
-                        }}
-                        className="flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
-                    >
-                        <ArrowLeft size={14} /> {t.common.back}
-                    </button>
-                )}
-                {exitFlowMode === 'confirm' && (
-                    <button
-                        className="ml-auto flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
-                        data-testid="exit-flow-open"
-                        onClick={() => setExitDialogOpen(true)}
-                        type="button"
-                    >
-                        {t.common.exit} <X size={14} />
-                    </button>
-                )}
-            </div>
-
             </>}
 
             <ExitFlowDialog
@@ -1638,6 +1611,20 @@ function CheckInFlow() {
                     )}
                 </>
             </FlowTransition>
+
+            {/* BuyTickets owns its own Back/Exit while buying. */}
+            {!phoneCompletion && state !== 'KIOSK_BUY' && (
+                <FlowNav
+                    onBack={flowBackAction ? () => {
+                        if (flowBackAction === 'addons') {
+                            setAddonsBackRequest((request) => request + 1);
+                            return;
+                        }
+                        setState(backState!);
+                    } : null}
+                    onExit={exitFlowMode === 'confirm' ? () => setExitDialogOpen(true) : null}
+                />
+            )}
         </div>
     );
 }

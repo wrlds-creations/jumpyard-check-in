@@ -79,7 +79,7 @@ test('the add-on offer applies the rule to its own Back handling and reports it 
 
 test('the page hides the shared Back action whenever the offer reports it hidden', () => {
   assert.match(pageSource, /const flowBackAction = getFlowBackAction\(\{ state, backState, addonsBackRule \}\);/);
-  assert.match(pageSource, /\{flowBackAction && \(\s*<button/);
+  assert.match(pageSource, /onBack=\{flowBackAction \? \(\) => \{/);
   assert.match(pageSource, /if \(flowBackAction === 'addons'\) \{\s*setAddonsBackRequest\(\(request\) => request \+ 1\);/);
   assert.match(pageSource, /onBackRuleChange=\{setAddonsBackRule\}/);
   assert.match(pageSource, /if \(state !== 'APP_ADDONS'\) \{\s*setAddonsStep\('SELECT'\);\s*setAddonsBackRule\('page'\);/);
