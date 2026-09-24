@@ -33,14 +33,15 @@ function load(overrides = {}, env = {}) {
   return { ...module.exports.test, handler: module.exports.handler };
 }
 
-test('phone provider payload contains neither email nor SMS instruction; kiosk and add-ons are unchanged', () => {
+test('new phone and kiosk payloads carry no email or SMS instruction; add-ons are unchanged', () => {
   const h = load();
   const request = { externalId: 'external-test', items: [], discounts: [], giftCards: [], companyId: null };
   for (const channel of [null, undefined, 'kiosk']) {
     const payload = h.buildRollerBookingPayload({ ...request, channel }, { customer, externalIdPrefix: 'JY-D' });
     assert.equal(payload.customer.email, customer.email);
-    assert.equal(payload.customer.acceptMarketing, channel === 'kiosk' ? true : undefined);
-    assert.equal(payload.customer.acceptMarketingSms, channel === 'kiosk' ? true : undefined);
+    // #444: kiosk purchases no longer send an explicit false that could overwrite consent.
+    assert.equal(payload.customer.acceptMarketing, undefined);
+    assert.equal(payload.customer.acceptMarketingSms, undefined);
   }
   const addon = h.buildRollerBookingPayload({ ...request, flowType: 'add_product' }, { customer, externalIdPrefix: 'JY-A' });
   assert.equal(addon.customer.acceptMarketing, true);
@@ -58,8 +59,20 @@ test('a checked phone choice travels with the draft only; SMS, quotes and unchec
   assert.equal(build({ emailMarketingConsent: choice }).customer.acceptMarketing, undefined);
   assert.equal(build({ emailMarketingConsent: { ...choice, copyVersion: 'retired' } },
     { withEmailMarketingChoice: true }).customer.acceptMarketing, undefined);
+  const kiosk = build({ channel: 'kiosk', emailMarketingConsent: choice }, { withEmailMarketingChoice: true });
+  assert.equal(kiosk.customer.acceptMarketing, true);
+  assert.equal(kiosk.customer.acceptMarketingSms, undefined);
+  assert.equal(build({ channel: 'kiosk' }, { withEmailMarketingChoice: true }).customer.acceptMarketing, undefined);
   const source = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
-  assert.equal(source.match(/withEmailMarketingChoice: true/g).length, 1, 'only the phone draft may carry the choice');
+  assert.equal(source.match(/withEmailMarketingChoice: true/g).length, 1, 'only the purchase draft may carry the choice');
+});
+
+test('kiosk drafts may carry the choice; other channels are rejected', () => {
+  const h = load();
+  assert.notEqual(h.validateDraftRequest({ emailMarketingConsent: choice, channel: 'kiosk' })?.code, 'email_marketing_channel_invalid');
+  assert.equal(h.validateDraftRequest({ emailMarketingConsent: choice, channel: 'terminal' }).code, 'email_marketing_channel_invalid');
+  assert.equal(h.validateDraftRequest({ emailMarketingConsent: { ...choice, copyVersion: 'retired' }, channel: 'kiosk' }).code,
+    'email_marketing_consent_invalid');
 });
 
 test('consent capture records the choice sent with the draft and hashes email', async () => {
@@ -76,6 +89,15 @@ test('consent capture records the choice sent with the draft and hashes email', 
   const grant = JSON.parse(calls[0].parameters.find(p => p.name === 'grant').value.stringValue);
   assert.equal(grant.uniqueId, id);
   assert.equal(grant.emailHash, marketing.emailHash(customer.email));
+  const phoneGrant = JSON.parse(calls[0].parameters.find(p => p.name === 'grant').value.stringValue);
+  assert.equal(phoneGrant.source, 'phone_new_booking');
+  calls.length = 0;
+  await h.capturePhoneEmailMarketing({ customer, channel: 'kiosk', emailMarketingConsent: choice }, { uniqueId: id }, 'external-test', 'playground', 'test');
+  const kioskGrant = JSON.parse(calls[0].parameters.find(p => p.name === 'grant').value.stringValue);
+  assert.equal(kioskGrant.source, 'kiosk_new_booking');
+  calls.length = 0;
+  await h.capturePhoneEmailMarketing({ customer, channel: 'kiosk', flowType: 'add_product', emailMarketingConsent: choice }, { uniqueId: id }, 'external-test', 'playground', 'test');
+  assert.equal(calls.length, 0);
 });
 
 test('consent capture failure does not fail payment preparation', async () => {

@@ -179,6 +179,11 @@ function kioskCapabilityMatchesInstallationId(capability, installationId) {
 function buildKioskQuotePayload(draftPayload) {
   if (!draftPayload || typeof draftPayload !== 'object' || Array.isArray(draftPayload)) return {};
   const { paymentTerminal: _paymentTerminal, ...quotePayload } = draftPayload;
+  // Cost verification never carries a marketing choice (#444); only the draft does.
+  if (quotePayload.customer && typeof quotePayload.customer === 'object') {
+    const { acceptMarketing: _email, acceptMarketingSms: _sms, ...customer } = quotePayload.customer;
+    return { ...quotePayload, customer };
+  }
   return quotePayload;
 }
 
