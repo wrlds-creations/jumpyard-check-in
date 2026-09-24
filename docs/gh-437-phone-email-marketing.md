@@ -61,6 +61,25 @@ Commands: `npm run validate:gh437-email-marketing`; phone `npm run test:payment-
 - Validation: root consent command/prevalidate, GH409 phone payload expectation, and eight existing VM import allowlists accepting the new local helper.
 - Durable records: `PROJECT_CONTEXT.md`, `DECISIONS.md` (D0223), `TEST_PLAN.md`, `JUMPYARD_CLOUD_CONTRACT.md`, `AWS_RESOURCES.md` and this evidence document. `REPO_CURRENT_STATE.md` is unchanged because nothing is merged.
 
+## Rollout evidence
+
+All three implementation PRs used `Refs #437`. Every deployment reused the immutable release artifact and passed a reviewed protected plan; nothing was rebuilt.
+
+| Change | PR / merge | Release (artifact) | Protected runs | Reviewed plan and result |
+|---|---|---|---|---|
+| Consent pipeline and switch | #439 / `d464cc0` | 35862200997 (`10750458509`) | Park 35862852072 | 208/208; Booking, Lookup, WebhookHandler, WebhookProcessor; delivery flag unset |
+| Field-open reveal, D0224 | #440 / `2dee616` | 35871540109 (`10755637897`) | Park 35872374543 | 208/208; Booking only; delivery flag `true` |
+| Option A, D0225 | #442 / `a03e191` | 35881871355 (`10761063751`) | Park 35970858632, public 35975609844 | Park 208/208, Booking only, delivery flag `false`; public origins `checkin.jumpyard.se` and `staff-checkin.jumpyard.se` |
+
+Readback after the public run: the public phone root references exactly the Park asset list, the switch/reveal and copy chunks are served, the staff origin returns HTTP 200, and Booking has `PHONE_EMAIL_MARKETING_PROVIDER_APPROVED=false`. During the Park-only phases the public root stayed byte-identical to its pre-#437 baseline. Rollback candidates: public frontends release 35834109237 / `f2fc522`; Park release 35871540109 / `2dee616`.
+
+Owned-address checks on the Park origin (Love's own addresses and real purchases; no guest data):
+
+- Under option A on 2026-09-24, a new guest with the choice became Subscribed in Klaviyo within seconds, a new guest without it stayed Never subscribed, and a subscribed guest booking again without it stayed Subscribed.
+- Known gap: a guest first created without consent who books again with the choice is updated in ROLLER (`acceptMarketing:true`, read back), but Klaviyo stays Never subscribed. Love reproduced the same gap through JumpYard's own ROLLER online checkout on 2026-09-24: an existing test guest who ticked the newsletter box there, and a fresh test address first booked without it and then with it, all stayed Never subscribed. The gap is therefore in the ROLLER-to-Klaviyo sync, not specific to the check-in app. On 2026-09-24 Love asked SmartSegments (Jeroen Sijl) how consent changes on existing guests are synced; #437 stays open as Blocked until they answer.
+- Correction: without the choice, a new profile stays Never subscribed rather than suppressed. The 2026-09-23 `User Suppressed` profiles all followed our after-payment `PUT /guests/{id}` updates, so those updates, not the first sync, coincide with the suppression.
+- The ROLLER API key `WRLDS park test Nacka Forum` still has `Update guest detail (PUT)`, which option A does not use; Love may remove it.
+
 ## Rollout gates and next step
 
 ### Local visual refinement — September 23
@@ -93,14 +112,14 @@ Love's Park tests with owned addresses (no real guest involved) showed:
 - jy3 with the choice: paid booking `175721079`. The worker verified payment and identity, then `PUT /guests/{id}` returned 403 `INSUFFICIENT_SCOPE` and was recorded `unknown`. Love added `Update guest detail (PUT)` to the REST scope of the API key `WRLDS park test Nacka Forum` (effective after about a minute; ROLLER checks scope per request and reuses its 7-day token). One approved replay then set `acceptMarketing:true` (HTTP 200, SMS and fields preserved).
 - The Klaviyo profiles for jy3, jy4 and an owned Gmail plus-address alias nevertheless show `Suppressed`. For the Gmail profile the only activity is `Manually Suppressed from Email Marketing` (`User Suppressed`) at 16:57:36; its consent stays `Never subscribed`. Claude never accessed Klaviyo, so the suppression comes from the ROLLER/SmartSegments integration.
 
-Conclusion: the integration suppresses a new profile without marketing acceptance at its first booking sync, and a later guest update does not lift that suppression. The morning's draft-time test became Subscribed directly. Love therefore chose option A (D0225): send the checked choice with the draft and close the after-payment worker. A guest who abandons payment after ticking the choice stays subscribed; they did give consent.
+Conclusion at the time: a later guest update did not make the profile Subscribed, while the morning's draft-time test became Subscribed directly. See Rollout evidence for the corrected source of the suppression. Love therefore chose option A (D0225): send the checked choice with the draft and close the after-payment worker. A guest who abandons payment after ticking the choice stays subscribed; they did give consent.
 
 ### Remaining gates
 
 1. The separately authorized unpaid preservation probe passed in ROLLER for the owned subscribed guest; Love's subsequent screenshot confirms unchanged basic Klaviyo channel status (details above). No repeat draft is needed for that check.
-2. Answered on September 23: an after-payment guest update does not lift the integration's suppression, so option A replaced it (D0225). Verify on the Park origin with fresh owned addresses that a checked draft becomes Subscribed and an unchecked one does not. Do not reset/delete/unsuppress an existing protected profile to make a test pass.
+2. Answered on September 23–24: after-payment guest updates ended as `User Suppressed`, and a later draft consent on an existing guest stays Never subscribed. Option A (D0225) works for new guests; returning guests await SmartSegments. Do not reset/delete/unsuppress an existing protected profile to make a test pass.
 3. Confirm the connector's treatment of manual, bounce/complaint and returning opt-out suppressions, plus optional/concurrent guest fields. The local code alone cannot inspect or guarantee Klaviyo suppression protection. Obtain the missing provider contract or revise the design with explicit authority.
 4. Confirm sender/audience scope (the current connection includes General), copy and evidence ownership. The owned-address results decide public promotion.
 5. Review and merge the issue PR, select its successful immutable release run/full SHA, review the protected Park plan, and promote that same artifact to public phone origins. Do not rebuild or use a local break-glass deployment. Record actual runs, readback and rollback candidate.
 
-Issue #437 remains open. PR #439 (`Refs #437`) reached Park through release run 35862200997 and Park run 35862852072 with delivery disabled. PR #440 added the field-open reveal and briefly approved after-payment delivery (D0224). The option A change (D0225) ships to Park the same way; Love then repeats one checked and one unchecked booking with fresh owned addresses, and public promotion of that release follows only if Klaviyo looks right. No follow-up draft exists yet. Actual runs and readback belong in the rollout evidence.
+Issue #437 stays open with Project status Blocked until SmartSegments answers the returning-guest question. The implementation is live on the Park and public phone origins (see Rollout evidence). No follow-up draft exists yet. Actual runs and readback belong in the rollout evidence.
