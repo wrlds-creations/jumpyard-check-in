@@ -418,3 +418,7 @@ Love explicitly requested restoring phone entry on phone and kiosk after control
 ## Guest Back/Exit are round buttons in the bottom corners — #441 (2026-09-23)
 
 Love found the grey text Tillbaka/Avsluta row ugly on phone and kiosk, compared localhost variants side by side and chose round buttons in the bottom corners, then requested commit/push/merge/deployment coordinated with #437. The phone shows a thick chevron (Back) and the JumpYard house (Exit) in 48 px white discs fixed to the bottom-left/right above a soft fade; an in-flow spacer keeps the last content reachable, and the buttons step aside while a text field has focus or a modal dialog is open. Kiosk #128 uses the same buttons at kiosk size in a bottom grid row. Back/exit rules, the exit confirmation and the hidden states are unchanged. Revisit if a real-device check shows conflicts with browser toolbars or the #438 redesign changes the navigation model.
+
+## A busy Contact button is not a disabled one — #448 (2026-09-24)
+
+Paired with kiosk #135 after Love reported that tapping "Gå till betalning" seemed to do nothing. On the phone the button kept its place but faded to 40 % like the incomplete-form state while the booking was created. While creating, it now stays full color with a spinner and `aria-busy`, and remains non-interactive; the faded look is reserved for missing details or codes being applied. Revisit if the payment step starts before the draft exists.

@@ -6,7 +6,7 @@ import { scalePackageContents } from '@/flow/packageContents';
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlowScreen, StableLoadingRegion, FlowTransitionBoundary } from '@/components/FlowTransition';
-import { AlertCircle, Check, ChevronDown, Minus, Plus, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, Loader2, Minus, Plus, RefreshCw, X } from 'lucide-react';
 import {
   CloudBookingError,
   createDraftBooking,
@@ -2240,6 +2240,7 @@ export const BuyTickets = ({
               <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>
             )}
 
+            {/* #448: while the booking is created the button stays in full color with a spinner, so it reads as busy rather than disabled. */}
             <button
               onClick={() => {
                 if (draft) {
@@ -2250,8 +2251,10 @@ export const BuyTickets = ({
               }}
               data-testid="buy-contact-continue"
               disabled={!customerValid || submitting || applyingCodes}
-              className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center active:scale-[0.98]"
+              aria-busy={submitting}
+              className={`w-full bg-primary hover:bg-primary/90 ${submitting ? 'cursor-wait' : 'disabled:opacity-40 disabled:cursor-not-allowed'} text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]`}
             >
+              {submitting && <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />}
               {submitting ? t.buy.creating : quote && checkoutAmount <= 0 ? t.buy.createDraftFree : t.buy.createDraft}
             </button>
             <PaymentCodeRejectedDialog

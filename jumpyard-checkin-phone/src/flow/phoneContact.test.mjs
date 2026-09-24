@@ -91,3 +91,10 @@ test('both languages retain booking/email lookup and restore a labelled phone in
   assert.match(component, /type="tel"/);
   assert.match(component, /autoComplete="tel"/);
 });
+
+test('#448: the Contact button reads as busy, not disabled, while the booking is created', () => {
+  const buy = fs.readFileSync(new URL('../components/BuyTickets.tsx', import.meta.url), 'utf8');
+  assert.match(buy, /data-testid="buy-contact-continue"\s+disabled=\{!customerValid \|\| submitting \|\| applyingCodes\}\s+aria-busy=\{submitting\}/);
+  assert.match(buy, /\$\{submitting \? 'cursor-wait' : 'disabled:opacity-40 disabled:cursor-not-allowed'\}/);
+  assert.match(buy, /\{submitting && <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" \/>\}/);
+});
