@@ -3122,8 +3122,8 @@ function safetyGateBlockedResponse(
 function validateDraftRequest(request) {
   const consentError = emailMarketing.validateChoice(request.emailMarketingConsent);
   if (consentError) return consentError;
-  if (request.emailMarketingConsent && request.channel) {
-    return { code: 'email_marketing_channel_invalid', message: 'Email marketing is supported only for phone purchases.' };
+  if (request.emailMarketingConsent && request.channel && request.channel !== 'kiosk') {
+    return { code: 'email_marketing_channel_invalid', message: 'Email marketing is supported only for phone and kiosk purchases.' };
   }
   if (!request.idempotencyKey) {
     return {
@@ -3355,11 +3355,11 @@ function buildRollerBookingPayload(request, { customer, externalIdPrefix, withEm
     customerPaysFees: request.customerPaysFees === true,
   };
 
-  // Phone purchases never turn an unchecked choice into a withdrawal and never
-  // touch SMS. GH-437 option A (D0225): a checked choice travels with the draft,
-  // the moment the ROLLER-to-Klaviyo integration honours it; quotes never carry
-  // it. Keep existing kiosk/add-on contracts.
-  if (request.channel !== 'kiosk' && request.flowType !== 'add_product') {
+  // New phone and kiosk purchases never turn an unchecked choice into a
+  // withdrawal and never touch SMS. GH-437 option A (D0225, kiosk #444): a checked
+  // choice travels with the draft, the moment the ROLLER-to-Klaviyo integration
+  // honours it; quotes never carry it. Existing-booking add-ons stay unchanged.
+  if (request.flowType !== 'add_product') {
     delete payload.customer.acceptMarketing;
     delete payload.customer.acceptMarketingSms;
     if (withEmailMarketingChoice && request.emailMarketingConsent &&
@@ -5048,10 +5048,14 @@ async function completeIdempotencyKey(idempotencyKey, status, resultRef) {
 }
 
 async function capturePhoneEmailMarketing(request, draft, externalId, environment, correlationId) {
-  if (!request.emailMarketingConsent || request.channel || request.flowType === 'add_product') return;
+  const kiosk = request.channel === 'kiosk';
+  if (!request.emailMarketingConsent || (request.channel && !kiosk) || request.flowType === 'add_product') return;
   try {
-    const grant = emailMarketing.createPendingGrant(request.emailMarketingConsent, request.customer,
-      draft.uniqueId, externalId, environment);
+    const grant = {
+      ...emailMarketing.createPendingGrant(request.emailMarketingConsent, request.customer,
+        draft.uniqueId, externalId, environment),
+      ...(kiosk ? { source: 'kiosk_new_booking' } : {}),
+    };
     await executeStatement(
       `INSERT INTO jumpyard.idempotency_records
          (idempotency_key, operation, request_hash, status, result_ref, expires_at)

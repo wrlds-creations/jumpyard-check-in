@@ -88,6 +88,12 @@ assert.deepEqual(kioskQuotePayload, {
   items: [{ productId: 'safe-product-reference', quantity: 1 }],
 });
 assert.equal(Object.hasOwn(kioskQuotePayload, 'paymentTerminal'), false);
+// #444: cost verification never carries a marketing choice, only the draft does.
+const kioskQuoteWithCustomer = buildKioskQuotePayload({
+  ...kioskDraftPayload,
+  customer: { email: 'guest@example.invalid', acceptMarketing: true, acceptMarketingSms: false },
+});
+assert.deepEqual(kioskQuoteWithCustomer.customer, { email: 'guest@example.invalid' });
 assert.deepEqual(kioskDraftPayload.paymentTerminal, {
   deviceId: 'server-owned-device',
   terminalId: 'server-owned-terminal',
