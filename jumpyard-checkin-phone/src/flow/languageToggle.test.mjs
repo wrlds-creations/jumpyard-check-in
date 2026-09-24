@@ -109,7 +109,8 @@ test('the control sits once in the top-right corner of the flow, full on start s
   assert.match(page, /<LanguageToggle compact=\{!isStartState\(progressState\)\} className="absolute top-2 right-2 z-20" \/>\s*<ProgressBar/);
   assert.equal((page.match(/<LanguageToggle\b/g) || []).length, 1);
   assert.match(page, /if \(!hasProgressBar\(state\)\) return null;/);
-  assert.match(page, /\$\{hasProgressBar\(progressState\) \? '' : 'pr-10'\}/);
+  // #441: Back/Exit moved to the bottom corners, so no top row has to keep clear of the control.
+  assert.doesNotMatch(page, /pr-10/);
   assert.doesNotMatch(source('components/BuyTickets.tsx'), /LanguageToggle/);
   const policy = load('flow/exitFlowPolicy.ts');
   assert.equal(policy.isStartState('KIOSK_CHOICE'), true);

@@ -22,6 +22,7 @@ export type JumpyardIconName =
     | 'gift-card'
     | 'grip-socks'
     | 'group'
+    | 'home'
     | 'info'
     | 'jump'
     | 'no-edge-bounce'

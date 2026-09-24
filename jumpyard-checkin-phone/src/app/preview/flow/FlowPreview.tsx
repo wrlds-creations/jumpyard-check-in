@@ -13,6 +13,8 @@ import { SafetyAttest } from '@/components/SafetyAttest';
 import { ConfirmationScreen } from '@/components/ConfirmationScreen';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
+import { ExitFlowDialog } from '@/components/ExitFlowDialog';
+import { FlowNav } from '@/components/FlowNav';
 import type { Booking, CheckInSession } from '@/flow/types';
 import { clearBuyFlowRecovery } from '@/flow/buyFlowRecovery';
 import { installLocalTransport } from './localTransport';
@@ -28,12 +30,13 @@ export default function FlowPreview() {
 }
 
 function Preview() {
-    const { lang, setLang, t } = useTranslation();
+    const { lang, setLang } = useTranslation();
     const [screen, setScreen] = useState<Screen>('home');
     const [ready, setReady] = useState(false);
     const [delay, setDelay] = useState(0);
     const [fail, setFail] = useState(false);
     const [full, setFull] = useState(false);
+    const [exitOpen, setExitOpen] = useState(false);
     const [scale, setScale] = useState(0.4);
     const viewport = useRef<HTMLDivElement>(null);
     const frame = useRef<HTMLIFrameElement>(null);
@@ -64,7 +67,7 @@ function Preview() {
             if (typeof event.data.delay === 'number') setDelay(Math.max(0, Math.min(5000, event.data.delay)));
             if (typeof event.data.fail === 'boolean') setFail(event.data.fail);
             if (event.data.lang === 'sv' || event.data.lang === 'en') setLang(event.data.lang);
-            if (event.data.reset) { clearBuyFlowRecovery(); setScreen('home'); setLang('sv'); }
+            if (event.data.reset) { clearBuyFlowRecovery(); setExitOpen(false); setScreen('home'); setLang('sv'); }
         };
         window.addEventListener('message', receive);
         return () => window.removeEventListener('message', receive);
@@ -83,7 +86,7 @@ function Preview() {
         if (frame.current) frame.current.contentWindow?.postMessage({ type: 'local-flow-preview', screen: next }, location.origin);
         else setScreen(next);
     };
-    const reset = () => { clearBuyFlowRecovery(); setScreen('home'); setLang('sv'); frame.current?.contentWindow?.postMessage({ type: 'local-flow-preview', reset: true }, location.origin); };
+    const reset = () => { clearBuyFlowRecovery(); setExitOpen(false); setScreen('home'); setLang('sv'); frame.current?.contentWindow?.postMessage({ type: 'local-flow-preview', reset: true }, location.origin); };
     const capturePayment = (event: MouseEvent) => {
         const button = (event.target as HTMLElement).closest('button');
         if (button?.matches('[data-testid=buy-contact-continue]') && !button.disabled) {
@@ -95,10 +98,6 @@ function Preview() {
     const app = <FlowMotion><main className="phone-flow-shell relative flex min-h-dvh w-full min-w-0 flex-col items-center overflow-x-hidden p-3 pt-3 bg-background text-foreground" onClickCapture={capturePayment}>
         <div className="phone-flow max-w-lg z-10 w-full min-w-0 flex flex-col items-center"  data-preview-screen={screen}>
             <LanguageToggle compact={screen !== 'home'} className="absolute top-2 right-2 z-20" />
-            <div className="flex w-full h-8 items-center justify-between px-4">
-                {!['home','payment','approved','video','rules','ready','buy'].includes(screen) && <button onClick={() => setScreen(screen === 'addons' ? 'booking' : 'home')}>{t.common.back}</button>}
-                {!['home','payment','approved','video','rules','ready','buy'].includes(screen) && <button className="ml-auto" onClick={reset}>{t.common.exit}</button>}
-            </div>
             <FlowTransition resetDocumentScroll variant={screen === 'home' ? 'fade' : 'slide'} screenKey={screen} className="phone-flow-content relative flex w-full max-w-full min-w-0 items-center justify-center">
                 {screen === 'home' && <ParkChoice onSelect={choice => setScreen(choice === 'BUY' ? 'buy' : 'lookup')} />}
                 {screen === 'lookup' && <BookingLookup onBack={reset} onSuccess={async () => {
@@ -107,13 +106,15 @@ function Preview() {
                     setScreen('booking');
                 }} />}
                 {screen === 'booking' && <BookingSummary booking={BOOKING} onContinue={() => setScreen('addons')} />}
-                {screen === 'buy' && <BuyTickets onBack={reset} inlineExitVisible onRequestExit={reset} onBookingReady={async () => () => { setScreen('video'); }} />}
+                {screen === 'buy' && <BuyTickets onBack={reset} inlineExitVisible onRequestExit={() => setExitOpen(true)} onBookingReady={async () => () => { setScreen('video'); }} />}
                 {screen === 'addons' && <AddonsOffer booking={BOOKING} guestCount={2} existingAddons={BOOKING.existingAddons!} onContinue={() => setScreen('video')} onPendingDone={reset} />}
                 {(screen === 'payment' || screen === 'approved') && <PhonePaymentConfirmation preparationState={screen === 'approved' ? 'ready' : 'preparing'} language={lang} amountLabel="200 kr"  onContinueToSafety={() => setScreen('video')} />}
                 {screen === 'video' && <SafetyVideo buyEntryFlow onComplete={() => setScreen('rules')} />}
                 {screen === 'rules' && <SafetyAttest buyEntryFlow onComplete={() => setScreen('ready')} />}
                 {screen === 'ready' && <ConfirmationScreen booking={BOOKING} checkinSession={SESSION} jumperCount={2} selectedAddons={[]} onStartOver={reset} />}
             </FlowTransition>
+            {['lookup','booking','addons'].includes(screen) && <FlowNav onBack={() => setScreen(screen === 'addons' ? 'booking' : 'home')} onExit={() => setExitOpen(true)} />}
+            <ExitFlowDialog open={exitOpen} onClose={() => setExitOpen(false)} onConfirm={reset} />
         </div>
     </main></FlowMotion>;
 
@@ -134,7 +135,7 @@ function Preview() {
             <label><input type="checkbox" checked={fail} onChange={e => setFail(e.target.checked)} /> Simulera nätverksfel</label>
             <button onClick={() => setLang(lang === 'sv' ? 'en' : 'sv')}>Byt språk · {lang.toUpperCase()}</button>
             <a href="?full=1" target="_blank" rel="noreferrer">Öppna utan testpanelen</a>
-            <small>390 × 844 · Tillbaka och Fortsätt används inne i flödet. Testpanelen låter dig hoppa över betalning och filmen. </small>
+            <small>390 × 844 · Tillbaka, Avsluta och Fortsätt används inne i flödet. Testpanelen låter dig hoppa över betalning och filmen. </small>
         </aside>
         <div className={styles.viewport} ref={viewport}><div style={{ width: 390 * scale, height: 844 * scale }}><iframe ref={frame} title="Lokal telefonförhandsvisning" src="?full=1" className={styles.frame} style={{ transform: `scale(${scale})`, border: 0 }} onLoad={() => frame.current?.contentWindow?.postMessage({ type: 'local-flow-preview', delay, fail, lang }, location.origin)} /></div></div>
     </div>;

@@ -1,5 +1,9 @@
 # Test Plan
 
+## Phone Back/Exit (#441)
+
+Run `npm --prefix jumpyard-checkin-phone run test:flow-nav` with `test:exit-flow`, `test:addon-back` and `test:language-toggle`. In the development flow preview check the round Back/Exit buttons at 320-430 px in SV/EN, that the last ticket card scrolls clear of them, that they hide while a text field has focus and behind the exit dialog, and that Exit still opens the confirmation. Check an iPhone in Safari on Park for toolbar and keyboard behavior.
+
 ## Phone email marketing (#437)
 
 Kiosk new purchases follow the same rule (#444): `npm run validate:gh437-email-marketing` also covers kiosk checked/unchecked drafts, kiosk consent acceptance, the kiosk evidence source and add-on isolation, and `validate:kiosk-terminal-backend` checks that the cost payload drops marketing flags.

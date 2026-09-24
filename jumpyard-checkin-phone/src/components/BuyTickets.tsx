@@ -6,7 +6,7 @@ import { scalePackageContents } from '@/flow/packageContents';
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlowScreen, StableLoadingRegion, FlowTransitionBoundary } from '@/components/FlowTransition';
-import { AlertCircle, ArrowLeft, Check, ChevronDown, Minus, Plus, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, Minus, Plus, RefreshCw, X } from 'lucide-react';
 import {
   CloudBookingError,
   createDraftBooking,
@@ -54,6 +54,7 @@ import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
+import { FlowNav } from '@/components/FlowNav';
 import { AddonChoices, type AddonChoicesHandle } from '@/components/AddonChoices';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 import { resolvePurchasePreparation } from '@/flow/purchasePreparation';
@@ -1720,27 +1721,6 @@ export const BuyTickets = ({
     >
       <BuyEntryProgress step={step} />
 
-      <div className="mb-4 flex items-center justify-between">
-        {!backNavigationLocked && (
-          <button
-            onClick={backFromStep}
-            className="flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
-          >
-            <ArrowLeft size={14} /> {t.common.back}
-          </button>
-        )}
-        {inlineExitVisible && onRequestExit && (
-          <button
-            className="ml-auto flex items-center gap-1 text-muted hover:text-foreground text-xs font-bold italic uppercase tracking-wider"
-            data-testid="buy-exit-flow-open"
-            onClick={onRequestExit}
-            type="button"
-          >
-            {t.common.exit} <X size={14} />
-          </button>
-        )}
-      </div>
-
       {step === 'TIMESLOT' && (
         <FlowScreen initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">
@@ -2541,6 +2521,12 @@ export const BuyTickets = ({
           </div>
         </FlowScreen>
       )}
+
+      <FlowNav
+        onBack={backNavigationLocked ? null : backFromStep}
+        onExit={inlineExitVisible && onRequestExit ? onRequestExit : null}
+        exitTestId="buy-exit-flow-open"
+      />
     </FlowScreen>
     </FlowTransitionBoundary>
   );
