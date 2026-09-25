@@ -47,7 +47,12 @@ Branch `codex/gh-392-prearrival-email`. Love approved local preparation on 2026-
   - Each run logs one aggregate line, `gh392_prearrival_email_run`, with the status, page count, `complete` and reason counts. The line has no booking ids, contacts or cursor.
 - **Operator route:** the authenticated route stays read-only planning (`confirmSend` other than `false` returns `prearrival_rollout_not_approved`). Its request and continuation format is unchanged from the 2026-09-08 preparation: `{"messagePolicy":"prearrival_email_v1","confirmSend":false}`, with an optional explicit-offset `now` for planning, plus the returned `cursor`.
 - **Sessions:** new regular and provisional kiosk sessions last four hours from creation, and resuming never extends them. Reopening the email link resumes the same idempotent session and its saved safety state. Link validity stays at 72 hours, and each successful opening grants one hour of guest access.
-- **Email copy:** the #216 template gains one line: "När du kommer fram visar du din QR-kod i entrén så får du armband och det du har köpt."
+- **Email copy:** redesigned on 2026-09-25 after Love's proof review, to raise pre-arrival check-in.
+  - Subject: "Checka in nu – gå direkt in kl. HH:MM". Preheader: "Tar under 2 minuter. Visa QR-koden i entrén så får ni armbanden direkt." The safety video is 15 s.
+  - A compact red hero ("Idag kl. HH:MM", "Checka in hemifrån", time promise) is followed directly by one `CHECKA IN NU` button, above the iPhone fold.
+  - "Så funkar det" lists three steps with library icons (open the booking, safety film and rules, show the QR code at the entrance for wristbands and purchases).
+  - Booking details are on one line. A kiosk reassurance line follows. The personal-link note sits under the button; the help text and fallback link sit in the footer.
+  - The red link warning box and the bordered details table were removed.
 
 ## Infrastructure change
 
