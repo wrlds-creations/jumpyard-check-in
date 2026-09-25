@@ -6,12 +6,13 @@ const path = require('node:path');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
-const { POLICY, ROLLOUT, SUPPORTED_PRODUCTS, PAGE_SIZE, PAGE_QUERY, isRolloutDay, normalizePreparation, classifyCandidate, preparePrearrivalEmailPage, processPrearrivalEmailRun } = require('../infra/lambda/session/prearrival-email');
+const { POLICY, ROLLOUT, SUPPORTED_PRODUCTS, PAGE_SIZE, PAGE_QUERY, isRolloutDay, isRolloutVisit, normalizePreparation, classifyCandidate, preparePrearrivalEmailPage, processPrearrivalEmailRun } = require('../infra/lambda/session/prearrival-email');
 const root = path.resolve(__dirname, '..');
 const asOf = '2026-09-28T10:00:00.000Z'; // 12:00 Stockholm, for a 14:00 booking.
 const row = (overrides = {}) => ({ roller_unique_id: 'anders-booking', booking_customer_id:'owner', venue_id: '50871', roller_env: 'live',
   booking_date: '2026-09-28', start_time: '14:00:00', booking_start_at: '2026-09-28T12:00:00.000Z',
-  email: 'anders@example.com', product_support: 'supported', email_already_sent: false, email_attempt_exists: false, ...overrides });
+  email: 'anders@example.com', product_support: 'supported', own_flow_purchase: false, checkin_started: false,
+  email_already_sent: false, email_attempt_exists: false, ...overrides });
 const context = (r = row(), overrides = {}) => ({ booking: { rollerUniqueId: r.roller_unique_id, venueId: r.venue_id,
   rollerEnv: 'live', bookingDate: r.booking_date, startTime: r.start_time, bookingStatus: 'Active',
   freshnessStatus: 'fresh', isTombstoned: false, ...overrides }, tickets: [] });
@@ -220,7 +221,7 @@ test('Actual email handler confirms Roller, preserves booking-bound link and res
   const testHooks = {};
   const s = loadSession(`
     isPrearrivalEmailRolloutAuthorized = () => true;
-    isPrearrivalRolloutVisitDate = () => true;
+    isPrearrivalRolloutVisit = () => true;
     const observed = [];
     const fixture = ${JSON.stringify(candidate)};
     verifyT0201BookingWithRoller = async (candidate, control) => {
@@ -276,7 +277,7 @@ test('Changed recipient, provider ambiguity and a last-moment stop cannot cause 
     const hooks = { scenario, candidate, context:context(candidate), providerCalls:0, reserved:false, records:[] };
     const s = loadSession(`
       isPrearrivalEmailRolloutAuthorized = () => true;
-      isPrearrivalRolloutVisitDate = () => true;
+      isPrearrivalRolloutVisit = () => true;
       verifyT0201BookingWithRoller = async () => ({ok:true});
       getBookingContext = async () => testHooks.context;
       evaluateStartContext = () => ({canStart:true});
@@ -306,7 +307,8 @@ test('Changed recipient, provider ambiguity and a last-moment stop cannot cause 
 test('Delivery is locked to the Stockholm day 2026-09-28 and to visits on that day', async () => {
   assert.equal(ROLLOUT.visitDate, '2026-09-28');
   for (const [instant, expected] of [['2026-09-27T21:59:59.999Z', false], ['2026-09-27T22:00:00.000Z', true],
-    ['2026-09-28T21:59:59.999Z', true], ['2026-09-28T22:00:00.000Z', false], ['2026-09-29T10:00:00.000Z', false], ['invalid', false]]) {
+    ['2026-09-28T21:59:59.999Z', true], ['2026-09-28T22:00:00.000Z', false], ['2026-09-29T10:00:00.000Z', false], ['invalid', false],
+    ['2026-09-24T21:59:59.999Z', false], ['2026-09-24T22:00:00.000Z', true], ['2026-09-25T21:59:59.999Z', true], ['2026-09-26T10:00:00.000Z', false]]) {
     assert.equal(isRolloutDay(instant), expected, instant);
   }
   let delivered = 0;
@@ -325,7 +327,7 @@ test('Delivery is locked to the Stockholm day 2026-09-28 and to visits on that d
 });
 
 test('Only the flag, park-test, a released stop and the rollout day authorize delivery', () => {
-  const load = (env) => loadLambda('session', 'isPrearrivalEmailRolloutAuthorized, isPrearrivalRolloutVisitDate',
+  const load = (env) => loadLambda('session', 'isPrearrivalEmailRolloutAuthorized, isPrearrivalRolloutVisit',
     'Object.assign(process.env, ' + JSON.stringify(env) + ');');
   const day = Date.parse('2026-09-28T08:00:00Z');
   assert.equal(load({ ENABLE_GH392_PREARRIVAL_EMAIL: 'true' }).isPrearrivalEmailRolloutAuthorized(day), true);
@@ -335,9 +337,12 @@ test('Only the flag, park-test, a released stop and the rollout day authorize de
   assert.equal(load({ ENABLE_GH392_PREARRIVAL_EMAIL: 'TRUE' }).isPrearrivalEmailRolloutAuthorized(day), false);
   assert.equal(load({ ENABLE_GH392_PREARRIVAL_EMAIL: 'true', JUMPYARD_EMERGENCY_STOP: 'true' }).isPrearrivalEmailRolloutAuthorized(day), false);
   assert.equal(load({ ENABLE_GH392_PREARRIVAL_EMAIL: 'true', JUMPYARD_ENVIRONMENT: 'dev' }).isPrearrivalEmailRolloutAuthorized(day), false);
-  const visit = load({}).isPrearrivalRolloutVisitDate;
-  assert.equal(visit('2026-09-28'), true);
-  for (const date of ['2026-09-27', '2026-09-29', '', null, undefined]) assert.equal(visit(date), false);
+  assert.equal(load({ ENABLE_GH392_PREARRIVAL_EMAIL: 'true' }).isPrearrivalEmailRolloutAuthorized(Date.parse('2026-09-25T09:00:00Z')), true);
+  const visit = load({}).isPrearrivalRolloutVisit;
+  assert.equal(visit({ booking_date: '2026-09-28', email: 'anders@example.com' }), true);
+  for (const date of ['2026-09-27', '2026-09-29', '', null, undefined]) assert.equal(visit({ booking_date: date, email: 'love@wrlds.com' }), false);
+  assert.equal(visit({ booking_date: '2026-09-25', email: 'love@wrlds.com' }), true);
+  assert.equal(visit({ booking_date: '2026-09-25', email: 'anders@example.com' }), false);
 });
 
 test('A candidate for another visit date stops before any Roller, reservation or provider call', async () => {
@@ -367,6 +372,52 @@ test('Only bookings with admission and phone/cafe products are eligible (Love, 2
   assert.match(PAGE_QUERY, /bool_and\(/);
   assert.match(PAGE_QUERY, /bool_or\(/);
   assert.match(PAGE_QUERY, /COALESCE\(line\.parent_product_id IN/);
+});
+
+test('The 2026-09-25 proof day reaches only Love\'s own love@ / love+tag@wrlds.com bookings for that day', async () => {
+  assert.equal(ROLLOUT.proofDate, '2026-09-25');
+  for (const email of ['love@wrlds.com', 'LOVE@WRLDS.COM', 'love+website2@wrlds.com', ' love+test.1@wrlds.com ']) {
+    assert.equal(isRolloutVisit('2026-09-25', email), true, email);
+  }
+  for (const email of ['lovely@wrlds.com', 'love@wrlds.com.example.com', 'xlove@wrlds.com', 'love@wrlds.se', 'love+@wrlds.com',
+    'anders@example.com', 'love+a b@wrlds.com', '', null, undefined]) {
+    assert.equal(isRolloutVisit('2026-09-25', email), false, String(email));
+  }
+  assert.equal(isRolloutVisit('2026-09-26', 'love@wrlds.com'), false);
+  assert.equal(isRolloutVisit('2026-09-24', 'love@wrlds.com'), false);
+  const delivered = [];
+  const rows = [
+    row({ roller_unique_id: 'love-proof', email: 'love+proof@wrlds.com', booking_date: '2026-09-25', start_time: '12:30:00', booking_start_at: '2026-09-25T10:30:00.000Z' }),
+    row({ roller_unique_id: 'friday-guest', email: 'anders@example.com', booking_date: '2026-09-25', start_time: '12:30:00', booking_start_at: '2026-09-25T10:30:00.000Z' }),
+  ];
+  const result = await preparePrearrivalEmailPage({ confirmSend: true }, deps(rows, {
+    clock: () => new Date('2026-09-25T09:00:00Z'), authorizeRollout: () => true,
+    deliver: async (r) => { delivered.push(r.roller_unique_id); return 'sent'; },
+  }));
+  assert.deepEqual(delivered, ['love-proof']);
+  assert.deepEqual(result.body.summary.counts, { sent: 1, outside_rollout_date: 1 });
+  const s = loadSession(`
+    isPrearrivalEmailRolloutAuthorized = () => true;
+    verifyT0201BookingWithRoller = reservePrearrivalEmail = sendEmailWithSes = async () => { throw Error('No side effect allowed'); };
+  `);
+  const start = new Date(Date.now() + 60 * 60_000).toISOString();
+  assert.equal(await s.deliverPrearrivalEmail({}, { ...rows[1], booking_start_at: start }, 'test'), 'outside_due_window');
+});
+
+test('Phone/kiosk purchases and bookings with a started check-in never get the email (Love, 2026-09-25)', () => {
+  for (const [overrides, expected] of [
+    [{ own_flow_purchase: true }, 'own_flow_purchase'],
+    [{ own_flow_purchase: undefined }, 'own_flow_purchase'],
+    [{ own_flow_purchase: null }, 'own_flow_purchase'],
+    [{ checkin_started: true }, 'checkin_already_started'],
+    [{ checkin_started: undefined }, 'checkin_already_started'],
+    [{ own_flow_purchase: false, checkin_started: false }, 'eligible_pending_live_checks'],
+  ]) {
+    const r = row(overrides);
+    assert.equal(classifyCandidate(r, context(r), eligible, asOf), expected, JSON.stringify(overrides));
+  }
+  assert.match(PAGE_QUERY, /FROM jumpyard\.prepayment_booking_drafts draft\s+WHERE draft\.roller_draft_unique_id = b\.roller_unique_id\) AS own_flow_purchase/);
+  assert.match(PAGE_QUERY, /FROM jumpyard\.checkin_sessions started\s+WHERE started\.roller_unique_id = b\.roller_unique_id\) AS checkin_started/);
 });
 
 test('A scheduled run walks every page with one clock and defers unsent rows when time runs out', async () => {

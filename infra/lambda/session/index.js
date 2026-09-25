@@ -1453,9 +1453,9 @@ function isPrearrivalEmailRolloutAuthorized(now = Date.now()) {
     && isRolloutDay(now);
 }
 
-function isPrearrivalRolloutVisitDate(visitDate) {
-  const { ROLLOUT } = require('./prearrival-email');
-  return visitDate === ROLLOUT.visitDate;
+function isPrearrivalRolloutVisit(candidate) {
+  const { isRolloutVisit } = require('./prearrival-email');
+  return isRolloutVisit(candidate?.booking_date, candidate?.email);
 }
 
 function prearrivalEmailIdempotencyKey(booking) {
@@ -1498,7 +1498,7 @@ function prearrivalDeliveryTupleMatches(context, destination, candidate) {
 async function deliverPrearrivalEmail(event, candidate, correlationId) {
   const { POLICY } = require('./prearrival-email');
   if (isEmergencyStopEnabled() || !isPrearrivalEmailRolloutAuthorized()) return 'rollout_stopped';
-  if (!isPrearrivalRolloutVisitDate(candidate.booking_date)) return 'outside_due_window';
+  if (!isPrearrivalRolloutVisit(candidate)) return 'outside_due_window';
   if (!candidate.booking_customer_id) return 'booking_changed';
   const start = Date.parse(candidate.booking_start_at);
   if (!Number.isFinite(start) || start <= Date.now() || start > Date.now() + POLICY.leadMinutes * 60_000) return 'outside_due_window';
