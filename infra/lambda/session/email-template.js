@@ -20,6 +20,9 @@ const SWEDISH_MONTHS = [
   'december',
 ];
 
+// GH-392: physical wristbands and purchased products are collected at the park.
+const ARRIVAL_TEXT = 'När du kommer fram visar du din QR-kod i entrén så får du armband och det du har köpt.';
+
 function buildCheckinEmailMessage({ booking = {}, checkinUrl }) {
   const bookingReference = stringOrNull(booking.bookingReference);
   const bookingDate = formatSwedishBookingDate(booking.bookingDate);
@@ -41,6 +44,7 @@ function buildCheckinEmailMessage({ booking = {}, checkinUrl }) {
     '',
     intro,
     'Checka in redan nu så går det snabbare när du kommer fram.',
+    ARRIVAL_TEXT,
     '',
     ...bookingDetailsText,
     '',
@@ -119,6 +123,7 @@ function buildCheckinEmailMessage({ booking = {}, checkinUrl }) {
               <td class="mobile-pad" style="background-color:#ffffff;padding:28px 30px 8px 30px;">
                 <p style="color:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:18px;font-weight:800;line-height:27px;margin:0;">Hej!</p>
                 <p style="color:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:17px;font-weight:450;line-height:27px;margin:8px 0 0 0;">${escapeHtml(intro)} Checka in redan nu så går det snabbare när du kommer fram.</p>
+                <p style="color:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:17px;font-weight:450;line-height:27px;margin:8px 0 0 0;">${escapeHtml(ARRIVAL_TEXT)}</p>
               </td>
             </tr>
             <tr>

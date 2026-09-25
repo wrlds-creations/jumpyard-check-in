@@ -2,6 +2,10 @@
 
 This document is the source of truth for moving JumpYard guest email from controlled dev smoke tests to production-capable unattended booking-time sends. Love chose email-only for Sprint 3 on 2026-07-17; SMS is deferred and does not block the sprint.
 
+## Current T-120 rollout (#392)
+
+D0227/#392 sends one booking-specific email two hours before start, only for Nacka visits on Monday 2026-09-28 and only to bookings with supported products; new check-in sessions last four hours. The park-test release switches the existing five-minute schedule to the code-owned pre-arrival policy. Sending additionally requires the release flag, a released emergency stop, the current Stockholm day 2026-09-28 and a matching visit date, so it closes by itself afterwards. The general guest-send gate and the T0201 single-booking control stay closed. The existing T-30 proof remains historical evidence. See [the #392 contract and evidence](docs/gh-392-prearrival-email.md).
+
 ## Current Dev State
 
 Read-only AWS checks were repeated on 2026-07-17 against account `376129878018`, region `eu-north-1`.

@@ -36,6 +36,7 @@ import {
   PARK_TEST_LIVE_REDEEM_SMOKE_APPROVAL,
   PARK_TEST_POST_PAYMENT_SYNC_APPROVAL,
   PARK_TEST_CONTROLLED_T30_EMAIL_APPROVAL,
+  PARK_TEST_PREARRIVAL_EMAIL_APPROVAL,
   PHONE_EMAIL_MARKETING_DELIVERY_APPROVAL,
 } from './config';
 
@@ -53,6 +54,7 @@ interface HandlerResources {
   readonly checkinEmailReplyToAddresses: readonly string[];
   readonly checkinSmsBaseUrl: string;
   readonly controlledT30EmailEnabled: boolean;
+  readonly prearrivalEmailEnabled: boolean;
   readonly rollerCredentialsSecret: secretsmanager.Secret;
   readonly databaseClusterArn: string;
   readonly databaseAdminSecret: secretsmanager.Secret;
@@ -400,6 +402,11 @@ export class JumpYardCloudStack extends Stack {
     const { config } = props;
     const controlledT30EmailEnabled =
       config.safetyGates.controlledT30EmailApproval === PARK_TEST_CONTROLLED_T30_EMAIL_APPROVAL;
+    // GH-392: reuses the controlled email path; the session code limits delivery to one day.
+    const prearrivalEmailEnabled =
+      config.tags['WRLDS:Environment'] === 'park-test' &&
+      controlledT30EmailEnabled &&
+      config.safetyGates.prearrivalEmailApproval === PARK_TEST_PREARRIVAL_EMAIL_APPROVAL;
     applyRequiredTags(this, config);
 
     const vpc = new ec2.CfnVPC(this, 'Vpc', {
@@ -928,6 +935,7 @@ exports.handler = async (event) => {
       checkinEmailReplyToAddresses: config.guestEmail.replyToAddresses,
       checkinSmsBaseUrl: config.bookingTimeSms.checkinBaseUrl,
       controlledT30EmailEnabled,
+      prearrivalEmailEnabled,
       rollerCredentialsSecret,
       databaseClusterArn,
       databaseAdminSecret: databaseSecret,
@@ -990,7 +998,9 @@ exports.handler = async (event) => {
       environment: {
         ROLLER_LIVE_LOOKUP_FUNCTION_NAME: lookupHandler.functionName,
       },
-      timeout: controlledT30EmailEnabled ? Duration.seconds(30) : undefined,
+      timeout: prearrivalEmailEnabled
+        ? Duration.seconds(60)
+        : controlledT30EmailEnabled ? Duration.seconds(30) : undefined,
     });
     if (controlledT30EmailEnabled) {
       lookupHandler.grantInvoke(sessionHandler);
@@ -1071,7 +1081,12 @@ exports.handler = async (event) => {
           new targets.LambdaFunction(sessionHandler, {
             event: events.RuleTargetInput.fromObject({
               source: 'jumpyard.booking-time-messaging-scheduler',
-              detail: {
+              // The T-120 policy owns its venue, channel, timing and link; no overrides are sent.
+              detail: prearrivalEmailEnabled ? {
+                confirmSend: true,
+                messagePolicy: 'prearrival_email_v1',
+                trigger: 'scheduled_booking_time_messaging',
+              } : {
                 baseUrl: config.bookingTimeSms.checkinBaseUrl,
                 channels: config.bookingTimeSms.channels,
                 confirmSend: config.bookingTimeSms.confirmSend,
@@ -1898,6 +1913,9 @@ exports.handler = async (event) => {
       environment.EMAIL_REPLY_TO_ADDRESSES = resources.checkinEmailReplyToAddresses.join(',');
       environment.ENABLE_GUEST_MESSAGE_SENDS = String(resources.safetyGates.guestMessagingSendsEnabled);
       environment.ENABLE_T0201_CONTROLLED_T30_EMAIL = String(resources.controlledT30EmailEnabled);
+      if (resources.prearrivalEmailEnabled) {
+        environment.ENABLE_GH392_PREARRIVAL_EMAIL = 'true';
+      }
       environment.T0201_CONTROLLED_T30_EMAIL_APPROVAL =
         resources.safetyGates.controlledT30EmailApproval ?? '';
       environment.T0201_CONTROLLED_T30_EMAIL_SECRET_ARN =

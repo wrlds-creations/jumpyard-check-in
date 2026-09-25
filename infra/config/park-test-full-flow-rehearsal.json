@@ -86,6 +86,7 @@
     "controlledT30EmailApproval": "T0201_SINGLE_BOOKING_T30_EMAIL_APPROVED",
     "emergencyStop": false,
     "guestMessagingSendsEnabled": false,
+    "prearrivalEmailApproval": "GH392_NACKA_2026_09_28_PREARRIVAL_EMAIL_APPROVED",
     "rollerBookingDraftWritesEnabled": true,
     "rollerRedeemWritesEnabled": true,
     "rollerWebhookProcessingEnabled": true,

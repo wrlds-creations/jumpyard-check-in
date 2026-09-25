@@ -58,7 +58,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Roller remains the source of truth for bookings, products, payments, and ticket redemption.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, session status, idempotency, audit events, and guest messaging state.
 - The production booking index uses an approved initial backfill, scheduled morning seed, idempotent webhook updates/reconciliation, and live REST confirmation. Roller remains authoritative; Aurora is the operational cache.
-- The Sprint 3 guest-message target is one transactional email with a secure JumpYard Cloud check-in link 30 minutes before the selected booking time, only after sender, consent, domain, provider, duplicate-suppression, and kill-switch gates pass. SMS is deferred beyond Sprint 3; contact: the current Cloud contact policy (2026-09-23).
+- D0227/#392: one transactional email with a booking link two hours before start, only on 2026-09-28 at Nacka and only for bookings with supported products; new sessions last four hours. General sends stay closed. SMS is deferred beyond Sprint 3; contact: the current Cloud contact policy (2026-09-23).
 - Check-in is modeled as ticket-level redemption through Roller `POST /redemptions`, not a booking-level flag.
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
 - Raw payment JWTs are response-only and are not persisted in Aurora or logs.

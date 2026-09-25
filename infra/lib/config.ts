@@ -4,6 +4,8 @@ import * as path from 'path';
 
 export const BOOKING_TIME_SMS_CONFIRMED_SEND_APPROVAL = 'I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS';
 export const PARK_TEST_CONTROLLED_T30_EMAIL_APPROVAL = 'T0201_SINGLE_BOOKING_T30_EMAIL_APPROVED';
+// GH-392: switches the existing schedule to the T-120 policy; the session code locks the day.
+export const PARK_TEST_PREARRIVAL_EMAIL_APPROVAL = 'GH392_NACKA_2026_09_28_PREARRIVAL_EMAIL_APPROVED';
 // GH-437: lets the Booking worker set email acceptance after authoritative payment.
 export const PHONE_EMAIL_MARKETING_DELIVERY_APPROVAL = 'GH437_PAID_ONLY_EMAIL_MARKETING_APPROVED';
 
@@ -139,6 +141,7 @@ export interface JumpYardCloudConfig {
     readonly controlledT30EmailApproval?: string;
     readonly emergencyStop: boolean;
     readonly guestMessagingSendsEnabled: boolean;
+    readonly prearrivalEmailApproval?: string;
     readonly liveAddOnSmokeAllowedIdentifiers: readonly string[];
     readonly liveAddOnSmokeApproval?: string;
     readonly liveLinkedAddOnSettlementAllowedIdentifiers: readonly string[];
@@ -233,6 +236,7 @@ interface RawConfig {
     readonly controlledT30EmailApproval?: unknown;
     readonly emergencyStop?: unknown;
     readonly guestMessagingSendsEnabled?: unknown;
+    readonly prearrivalEmailApproval?: unknown;
     readonly liveAddOnSmokeAllowedIdentifiers?: unknown;
     readonly liveAddOnSmokeApproval?: unknown;
     readonly liveLinkedAddOnSettlementAllowedIdentifiers?: unknown;
@@ -408,6 +412,9 @@ function validateEnvironmentContract(input: EnvironmentContractInput): void {
     }
     if (input.bookingTimeSms.scheduleEnabled) {
       throw new Error('dev bookingTimeSms.scheduleEnabled must remain false while Playground is hibernated.');
+    }
+    if (input.safetyGates.prearrivalEmailApproval) {
+      throw new Error('dev safetyGates.prearrivalEmailApproval must remain empty.');
     }
     if (input.dataSync.scheduleEnabled) {
       throw new Error('dev dataSync.scheduleEnabled must remain false while Playground is hibernated.');
@@ -622,6 +629,16 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     }
   } else if (controlledT30EmailApproved) {
     throw new Error('park-test controlled T-30 email approval must be empty unless confirmed sends are enabled.');
+  }
+
+  if (input.safetyGates.prearrivalEmailApproval) {
+    if (input.safetyGates.prearrivalEmailApproval !== PARK_TEST_PREARRIVAL_EMAIL_APPROVAL) {
+      throw new Error(`park-test safetyGates.prearrivalEmailApproval must be empty or ${PARK_TEST_PREARRIVAL_EMAIL_APPROVAL}.`);
+    }
+    // Reuses the reviewed controlled email path (SES identity, IAM, configuration set).
+    if (!input.bookingTimeSms.confirmSend || !controlledT30EmailApproved) {
+      throw new Error('park-test pre-arrival email requires the confirmed controlled email schedule.');
+    }
   }
 
   const livePaymentSmokeApproved =
@@ -1248,6 +1265,11 @@ function readSafetyGatesConfig(raw: RawConfig['safetyGates']): JumpYardCloudConf
       raw?.guestMessagingSendsEnabled,
       false,
       'safetyGates.guestMessagingSendsEnabled',
+    ),
+    prearrivalEmailApproval: readOptionalString(
+      raw?.prearrivalEmailApproval,
+      '',
+      'safetyGates.prearrivalEmailApproval',
     ),
     liveAddOnSmokeAllowedIdentifiers: readOptionalStringArray(
       raw?.liveAddOnSmokeAllowedIdentifiers,

@@ -175,27 +175,26 @@ function expectNoBookingTimeMessagingSchedule(template: CloudFormationTemplate):
   expect(!hasBookingTimeRule, 'park-test synth must keep booking-time guest messaging schedule disabled.');
 }
 
-function expectControlledT30EmailSchedule(template: CloudFormationTemplate): void {
+function expectPrearrivalEmailSchedule(template: CloudFormationTemplate): void {
   const ruleName = `${PARK_TEST_PREFIX}-booking-time-sms-schedule`;
   expectEventRuleState(template, ruleName, 'ENABLED');
   const rule = findResourceByTypeAndProperty(template, 'AWS::Events::Rule', 'Name', ruleName);
+  expect(rule?.Properties?.ScheduleExpression === 'rate(5 minutes)', 'GH-392 schedule must run every five minutes.');
   const targets = rule?.Properties?.Targets;
-  expect(Array.isArray(targets) && targets.length === 1, 'T0201 must synthesize exactly one schedule target.');
+  expect(Array.isArray(targets) && targets.length === 1, 'GH-392 must synthesize exactly one schedule target.');
   const input = (targets as Array<Record<string, unknown>>)[0]?.Input;
-  expect(typeof input === 'string', 'T0201 schedule target must contain a fixed JSON input.');
+  expect(typeof input === 'string', 'GH-392 schedule target must contain a fixed JSON input.');
   const payload = JSON.parse(input as string) as {
     detail?: Record<string, unknown>;
     source?: string;
   };
-  expect(payload.source === 'jumpyard.booking-time-messaging-scheduler', 'T0201 must use the internal scheduler source.');
+  expect(payload.source === 'jumpyard.booking-time-messaging-scheduler', 'GH-392 must use the internal scheduler source.');
+  // The code-owned policy fixes venue, channel, T-120 timing, link and date; no overrides are sent.
   expect(
-    JSON.stringify(payload.detail?.channels) === JSON.stringify(['email']),
-    'T0201 schedule must be email-only.',
+    JSON.stringify(payload.detail) ===
+      JSON.stringify({ confirmSend: true, messagePolicy: 'prearrival_email_v1', trigger: 'scheduled_booking_time_messaging' }),
+    'GH-392 schedule must send only the fixed pre-arrival policy request.',
   );
-  expect(payload.detail?.confirmSend === true, 'T0201 schedule must enter the guarded confirmed-send path.');
-  expect(payload.detail?.leadMinutes === 30, 'T0201 schedule must target a 30-minute lead.');
-  expect(payload.detail?.windowMinutes === 5, 'T0201 schedule must use a five-minute window.');
-  expect(payload.detail?.windowEndsAtLead === true, 'T0201 window must end at T-30 instead of sending early.');
 }
 
 function expectCanonicalApiAccessLogDestination(
@@ -984,7 +983,14 @@ function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void 
   expectContains(strings, PARK_TEST_PREFIX, 'park-test full-flow rehearsal');
   expectContains(strings, 'https://api.roller.app', 'park-test full-flow rehearsal');
   expectContains(strings, 'live', 'park-test full-flow rehearsal');
-  expectControlledT30EmailSchedule(parkTest.template);
+  expectPrearrivalEmailSchedule(parkTest.template);
+  const sessionFunction = findResourceByTypeAndProperty(
+    parkTest.template,
+    'AWS::Lambda::Function',
+    'FunctionName',
+    `${PARK_TEST_PREFIX}-stack-session`,
+  );
+  expect(sessionFunction?.Properties?.Timeout === 60, 'GH-392 session Lambda must allow the bounded 40-second scheduled run.');
   const emailConfigurationSet = findResourceByTypeAndProperty(
     parkTest.template,
     'AWS::SES::ConfigurationSet',
@@ -1032,6 +1038,7 @@ function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void 
   expectLambdaEnvironment(parkTest.template, `${PARK_TEST_PREFIX}-stack-session`, {
     ENABLE_GUEST_MESSAGE_SENDS: 'false',
     ENABLE_T0201_CONTROLLED_T30_EMAIL: 'true',
+    ENABLE_GH392_PREARRIVAL_EMAIL: 'true',
     ENABLE_STAFF_AUTH: 'true',
     ENABLE_T0166_LIVE_REDEEM_SMOKE: 'false',
     ENABLE_T0176_FRONTEND_REDEEM_REHEARSAL: 'false',
