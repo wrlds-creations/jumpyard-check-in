@@ -11,7 +11,10 @@ const POLICY = Object.freeze({
 });
 // Love confirmed the single Nacka test day on 2026-09-25. Delivery needs both the current
 // Stockholm day and the booking's visit date to equal it; no configuration can widen it.
-const ROLLOUT = Object.freeze({ visitDate: '2026-09-28' });
+// Love also asked for one controlled end-to-end proof on 2026-09-25, limited to bookings
+// whose booking contact is Love's own love@ or love+tag@wrlds.com address.
+const ROLLOUT = Object.freeze({ visitDate: '2026-09-28', proofDate: '2026-09-25' });
+const PROOF_RECIPIENT = /^love(\+[a-z0-9._-]{1,40})?@wrlds\.com$/i;
 // Love, 2026-09-25: only bookings the phone and staff flow can handle. A booking needs one
 // admission line, and every line must be admission, a phone add-on or a café product.
 // Parties, party food, punch cards, gift cards, memberships, groups, PT, extensions and
@@ -34,7 +37,15 @@ const stockholmDay = new Intl.DateTimeFormat('en-CA', { timeZone: POLICY.timezon
 
 function isRolloutDay(instant) {
   const millis = typeof instant === 'number' ? instant : Date.parse(instant);
-  return Number.isFinite(millis) && stockholmDay.format(new Date(millis)) === ROLLOUT.visitDate;
+  if (!Number.isFinite(millis)) return false;
+  const day = stockholmDay.format(new Date(millis));
+  return day === ROLLOUT.visitDate || day === ROLLOUT.proofDate;
+}
+
+// The visit must be on the rollout day; on the proof day only Love's own address qualifies.
+function isRolloutVisit(visitDate, email) {
+  if (visitDate === ROLLOUT.visitDate) return true;
+  return visitDate === ROLLOUT.proofDate && typeof email === 'string' && PROOF_RECIPIENT.test(email.trim());
 }
 
 function parseTimestamp(value) {
@@ -83,6 +94,10 @@ function classifyCandidate(row, context, decision, asOf) {
   if (booking.freshnessStatus !== 'fresh') return 'stale_booking';
   if (!decision?.canStart) return 'booking_not_eligible';
   if (row.product_support !== 'supported') return 'unsupported_products';
+  // Love, 2026-09-25: guests who bought in our phone/kiosk flow or already started
+  // check-in are in the flow; never tell them to check in. Unknown values fail closed.
+  if (row.own_flow_purchase !== false) return 'own_flow_purchase';
+  if (row.checkin_started !== false) return 'checkin_already_started';
   if (row.email_already_sent === true) return 'already_sent';
   // A recorded failed/ambiguous attempt must never become an automatic second message.
   if (row.email_attempt_exists === true) return 'previous_attempt_requires_review';
@@ -123,6 +138,10 @@ SELECT b.roller_unique_id, b.venue_id, b.roller_env,
   b.booking_date::text AS booking_date, b.start_time::text AS start_time,
   b.booking_start_at::text AS booking_start_at, contact.email,
   ${PRODUCT_SUPPORT_SQL} AS product_support,
+  EXISTS (SELECT 1 FROM jumpyard.prepayment_booking_drafts draft
+    WHERE draft.roller_draft_unique_id = b.roller_unique_id) AS own_flow_purchase,
+  EXISTS (SELECT 1 FROM jumpyard.checkin_sessions started
+    WHERE started.roller_unique_id = b.roller_unique_id) AS checkin_started,
   EXISTS (SELECT 1 FROM jumpyard.email_deliveries delivery
     WHERE delivery.roller_unique_id = b.roller_unique_id
       AND delivery.message_template = :messageTemplate AND delivery.dry_run IS FALSE
@@ -167,7 +186,7 @@ async function preparePrearrivalEmailPage(body, dependencies) {
       : context ? classifyCandidate(row, context, decision, request.asOf) : 'booking_not_found';
     if (reason === 'eligible_pending_live_checks' && Date.parse(row.booking_start_at) - Date.parse(request.asOf) < 115 * 60_000) lateEligible++;
     if (request.confirmSend && reason === 'eligible_pending_live_checks') {
-      if (row.booking_date !== ROLLOUT.visitDate) reason = 'outside_rollout_date';
+      if (!isRolloutVisit(row.booking_date, row.email)) reason = 'outside_rollout_date';
       // Unsent rows stay unreserved and are picked up by the next five-minute run.
       else if (dependencies.hasTimeLeft && !dependencies.hasTimeLeft()) reason = 'deferred_to_next_run';
       else if (!dependencies.authorizeRollout()) reason = 'rollout_stopped';
@@ -222,4 +241,4 @@ async function processPrearrivalEmailRun(body, dependencies) {
   return { statusCode: 200, body: { ...rest, pages, complete: !hasMore, summary: { examined, counts: totals, lateEligible } } };
 }
 
-module.exports = { POLICY, ROLLOUT, SUPPORTED_PRODUCTS, PAGE_SIZE, PAGE_QUERY, isRolloutDay, normalizePreparation, classifyCandidate, preparePrearrivalEmailPage, processPrearrivalEmailRun };
+module.exports = { POLICY, ROLLOUT, SUPPORTED_PRODUCTS, PAGE_SIZE, PAGE_QUERY, isRolloutDay, isRolloutVisit, normalizePreparation, classifyCandidate, preparePrearrivalEmailPage, processPrearrivalEmailRun };

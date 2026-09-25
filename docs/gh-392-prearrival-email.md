@@ -21,7 +21,10 @@ Branch `codex/gh-392-prearrival-email`. Love approved local preparation on 2026-
   - At least one line must be Entré or Weekday Combo.
   - Any other line stops the email (`unsupported_products`). This covers parties (MINI/MIDI/MAXI), party food and birthday extras, punch cards (5/10/20/30-Kort, Benify, Epassi, Benefits), gift cards, memberships, PT, school/club groups, JumpSchool, time extensions and merchandise.
   - Those guests use the ordinary kiosk/staff check-in.
+- **Already in our flow:** bookings bought in our phone or kiosk flow (a `prepayment_booking_drafts` row with the same ROLLER id) and bookings with any `checkin_sessions` row get no email (`own_flow_purchase`, `checkin_already_started`; unknown values fail closed). Love chose this on 2026-09-25 after read-only data showed 2–5 own purchases per weekday would otherwise have been emailed minutes after buying. Add-on purchases made during check-in are separate bookings without an Entré line, so they never qualify either. Love chose not to add a minimum-notice rule, so counter sales with an email and last-minute web bookings can still be emailed right up to start.
+- **Controlled proof day:** on 2026-09-25 (Stockholm) the same gate also opens, but only for visits that day whose booking contact is `love@wrlds.com` or `love+tag@wrlds.com`; every other booking counts as `outside_rollout_date`.
 - **Timing:**
+  - New bookings reach the cache through ROLLER webhooks. Over the last seven days, 1,420 `Created` events had a median of 2.9 s and a 95th percentile of 6.1 s. The Data API sync only runs daily at 04:00.
   - The scheduler runs every five minutes and considers bookings that start after "now" and at most 120 minutes ahead.
   - A booking normally gets its email between T-120 and T-115.
   - A booking made or paid later is sent on the next run before its start.
@@ -30,9 +33,9 @@ Branch `codex/gh-392-prearrival-email`. Love approved local preparation on 2026-
   - the release flag `ENABLE_GH392_PREARRIVAL_EMAIL=true`;
   - `JUMPYARD_ENVIRONMENT=park-test`;
   - a released emergency stop;
-  - the current Stockholm day equal to `2026-09-28`;
-  - the candidate's visit date equal to `2026-09-28`.
-  - The lock is checked before any database read, between recipients, before the ROLLER read, and immediately before SES. From 2026-09-29 00:00 Stockholm, every scheduled run returns `prearrival_outside_rollout_date` without reading bookings.
+  - the current Stockholm day equal to `2026-09-28`, or to the `2026-09-25` proof day;
+  - the candidate's visit date equal to `2026-09-28`, or to `2026-09-25` with a love@ / love+tag@wrlds.com booking contact.
+  - The lock is checked before any database read, between recipients, before the ROLLER read, and immediately before SES. Outside 2026-09-25 (proof) and 2026-09-28, every scheduled run returns `409 prearrival_rollout_not_approved` without reading bookings; this was read back on 2026-09-25 at 08:41:47Z before the proof day was added.
 - **Delivery boundary:**
   - An authoritative ROLLER read confirms the booking, venue, start, payment and booking owner.
   - One stable reservation is made per booking and visit before the token or SES call. A failed or ambiguous provider call stays reserved for review and is never sent automatically a second time.
