@@ -315,6 +315,7 @@ async function handleT0201ControlledT30EmailRefresh(event, correlationId) {
 
   const verifiedVenueId = await getVerifiedT0201RollerVenueId(config, token);
   const checks = evaluateT0201ControlledT30RollerBooking(detailResult.body, {
+    ...(detail.expectedBookingCustomerIdSha256 !== undefined ? { expectedBookingCustomerIdSha256: detail.expectedBookingCustomerIdSha256 } : {}),
     expectedBookingDate,
     expectedIdentifierSha256,
     expectedStartTime,
@@ -367,6 +368,10 @@ function evaluateT0201ControlledT30RollerBooking(rollerBooking, expected) {
     paymentIsSettled: isPaymentSettled(booking),
     scheduleMatches,
     venueMatches,
+    ...(expected.expectedBookingCustomerIdSha256 !== undefined ? {
+      bookingContactMatches: /^[a-f0-9]{64}$/.test(expected.expectedBookingCustomerIdSha256)
+        && Boolean(booking.customerId) && hashString(booking.customerId) === expected.expectedBookingCustomerIdSha256,
+    } : {}),
   };
 }
 

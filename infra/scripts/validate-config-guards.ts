@@ -58,6 +58,7 @@ interface TestConfig {
     controlledT30EmailApproval?: string;
     emergencyStop: boolean;
     guestMessagingSendsEnabled: boolean;
+    prearrivalEmailApproval?: string;
     liveAddOnSmokeAllowedIdentifiers?: string[];
     liveAddOnSmokeApproval?: string;
     liveAssistedLookupAllowedOperatingDates?: string[];
@@ -207,6 +208,12 @@ const parkTestControlledT30WithBroadGuestGate = cloneConfig(parkTestControlledT3
 parkTestControlledT30WithBroadGuestGate.safetyGates.guestMessagingSendsEnabled = true;
 const parkTestControlledT30WithEarlyWindow = cloneConfig(parkTestControlledT30);
 parkTestControlledT30WithEarlyWindow.bookingTimeSms.windowEndsAtLead = false;
+const parkTestPrearrivalWrongApproval = cloneConfig(parkTestControlledT30);
+parkTestPrearrivalWrongApproval.safetyGates.prearrivalEmailApproval = 'YES';
+const parkTestPrearrivalWithoutControlledEmail = cloneConfig(parkTestConfig);
+parkTestPrearrivalWithoutControlledEmail.safetyGates.prearrivalEmailApproval = 'GH392_NACKA_2026_09_28_PREARRIVAL_EMAIL_APPROVED';
+const devPrearrivalEmail = cloneConfig(devConfig);
+devPrearrivalEmail.safetyGates.prearrivalEmailApproval = 'GH392_NACKA_2026_09_28_PREARRIVAL_EMAIL_APPROVED';
 
 const parkTestEmergencyStopOff = cloneConfig(parkTestConfig);
 parkTestEmergencyStopOff.safetyGates.emergencyStop = false;
@@ -520,6 +527,21 @@ expectFail(
   /controlledT30EmailApproval/,
 );
 expectPass('approved single-booking park-test T-30 email config passes', parkTestControlledT30, 'park-test');
+expectFail(
+  'GH-392 pre-arrival email rejects an unknown approval value',
+  parkTestPrearrivalWrongApproval,
+  /prearrivalEmailApproval must be empty or GH392_NACKA_2026_09_28_PREARRIVAL_EMAIL_APPROVED/,
+);
+expectFail(
+  'GH-392 pre-arrival email requires the confirmed controlled email schedule',
+  parkTestPrearrivalWithoutControlledEmail,
+  /pre-arrival email requires the confirmed controlled email schedule/,
+);
+expectFail(
+  'GH-392 pre-arrival email is refused in dev',
+  devPrearrivalEmail,
+  /dev safetyGates.prearrivalEmailApproval must remain empty/,
+);
 expectFail(
   'controlled park-test T-30 email rejects SMS',
   parkTestControlledT30WithSms,

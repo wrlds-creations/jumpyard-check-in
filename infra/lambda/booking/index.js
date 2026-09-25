@@ -1030,7 +1030,9 @@ async function ensureProvisionalKioskHandoff(request) {
   if (!draft || draft.payment_attempt_status !== 'approved') return null;
 
   const checkinSessionId = `jycs_${request.paymentAttemptId.replace(/^jytp_/, '')}`;
-  const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+  // GH-392: match the permanent four-hour regular check-in session lifetime.
+  const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+  const guestAccessExpiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
   const venueId =
     stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID) ||
     stringOrNull(process.env.ROLLER_DATA_SYNC_VENUE_ID) ||
@@ -1116,7 +1118,7 @@ async function ensureProvisionalKioskHandoff(request) {
       stringParameter('tokenHash', hashString(request.paymentAttemptId)),
       stringParameter('rollerDraftUniqueId', draft.roller_draft_unique_id),
       stringParameter('guestAccessChannel', GUEST_ACCESS_CHANNEL),
-      stringParameter('expiresAt', expiresAt),
+      stringParameter('expiresAt', guestAccessExpiresAt),
     ],
   );
 
@@ -1150,7 +1152,6 @@ async function ensureProvisionalKioskHandoff(request) {
        CAST(:sessionSummary AS jsonb)
      )
      ON CONFLICT (checkin_session_id) DO UPDATE SET
-       expires_at = GREATEST(jumpyard.checkin_sessions.expires_at, EXCLUDED.expires_at),
        updated_at = now(),
        session_summary = jumpyard.checkin_sessions.session_summary || EXCLUDED.session_summary
     RETURNING checkin_session_id`,

@@ -19,7 +19,10 @@ const ACTIVE_SESSION_STATUSES = ['guest_in_progress', 'ready_for_staff', 'staff_
 const CHECKIN_LINK_DEV_TOKEN_HEADERS = ['x-jumpyard-link-token', 'authorization'];
 const CHECKIN_LINK_CHANNELS = new Set(['sms', 'email', 'manual', 'dev']);
 const STAFF_AUTH_HEADERS = ['x-jumpyard-staff-token', 'authorization'];
-const DEFAULT_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+// GH-392: permanent lifetime for new sessions; saved expirations are not extended on resume.
+const DEFAULT_SESSION_TTL_MS = 4 * 60 * 60 * 1000;
+// GH-392: the scheduled run stops starting new pages/sends well before the 60 s Lambda timeout.
+const PREARRIVAL_SCHEDULED_RUN_BUDGET_MS = 40 * 1000;
 const DEFAULT_CHECKIN_LINK_TTL_MINUTES = 72 * 60;
 const DEFAULT_GUEST_ACCESS_TTL_MINUTES = 60;
 const LINK_OPEN_AUDIT_REFRESH_MINUTES = 5;
@@ -1181,6 +1184,9 @@ async function handleSendSessionLinkEmail(event, body, correlationId, options = 
     }
   }
 
+  if (options.prearrivalEmail && (isEmergencyStopEnabled() || !isPrearrivalEmailRolloutAuthorized())) {
+    return safetyGateBlockedResponse(correlationId, 'prearrival_rollout_not_approved', 'Pre-arrival email rollout is not approved.');
+  }
   const request = normalizeSessionLinkEmailRequest(event, body);
   const validationError = validateSessionLinkEmailRequest(request);
   if (validationError) {
@@ -1193,7 +1199,8 @@ async function handleSendSessionLinkEmail(event, body, correlationId, options = 
   if (
     !request.dryRun &&
     !isGuestMessagingSendEnabled() &&
-    !isT0201ControlledT30EmailDeliveryAuthorized(options)
+    !isT0201ControlledT30EmailDeliveryAuthorized(options) &&
+    !(options.prearrivalEmail && isPrearrivalEmailRolloutAuthorized())
   ) {
     return safetyGateBlockedResponse(correlationId, 'guest_message_sends_disabled', 'Guest message sends are disabled for this JumpYard Cloud environment.');
   }
@@ -1209,7 +1216,9 @@ async function handleSendSessionLinkEmail(event, body, correlationId, options = 
     });
   }
 
-  const destination = request.email
+  const destination = options.prearrivalEmail
+    ? await findPrearrivalBookingContact(context.booking.rollerUniqueId)
+    : request.email
     ? buildEmailDestination(request.email, 'request')
     : await findEmailDestinationForBooking(context.booking.rollerUniqueId);
   if (!destination) {
@@ -1242,7 +1251,12 @@ async function handleSendSessionLinkEmail(event, body, correlationId, options = 
     operation: 'checkin_email_send',
     ttlMinutes: request.ttlMinutes,
   });
-  const idempotency = await reserveIdempotencyKey('checkin_email_send', request.idempotencyKey, requestHash);
+  if (options.prearrivalEmail && !prearrivalDeliveryTupleMatches(context, destination, options.prearrivalCandidate)) {
+    return safetyGateBlockedResponse(correlationId, 'prearrival_booking_changed', 'Booking eligibility changed before delivery.');
+  }
+  const idempotency = options.prearrivalEmail
+    ? await reservePrearrivalEmail(context.booking, request.idempotencyKey, requestHash)
+    : await reserveIdempotencyKey('checkin_email_send', request.idempotencyKey, requestHash);
   if (!idempotency.ok || idempotency.replayed) {
     return jsonResponse(409, correlationId, {
       status: 'blocked',
@@ -1314,6 +1328,10 @@ async function handleSendSessionLinkEmail(event, body, correlationId, options = 
   }
 
   try {
+    if (options.prearrivalEmail && (isEmergencyStopEnabled() || !isPrearrivalEmailRolloutAuthorized()
+      || !prearrivalDeliveryTupleMatches(context, destination, options.prearrivalCandidate))) {
+      throw Object.assign(new Error('Pre-arrival rollout stopped before provider delivery.'), { code: 'prearrival_rollout_stopped' });
+    }
     const providerMessageId = await sendEmailWithSes({
       destinationEmail: destination.email,
       html: emailMessage.html,
@@ -1425,6 +1443,91 @@ async function handleSendDueSessionLinkSms(event, body, correlationId, options =
   });
 }
 
+// GH-392: the reviewed park-test release sets the flag; the code-owned date lock limits
+// delivery to the single approved Stockholm day. No request field can activate it.
+function isPrearrivalEmailRolloutAuthorized(now = Date.now()) {
+  const { isRolloutDay } = require('./prearrival-email');
+  return process.env.JUMPYARD_ENVIRONMENT === 'park-test'
+    && process.env.ENABLE_GH392_PREARRIVAL_EMAIL === 'true'
+    && !isEmergencyStopEnabled()
+    && isRolloutDay(now);
+}
+
+function isPrearrivalRolloutVisitDate(visitDate) {
+  const { ROLLOUT } = require('./prearrival-email');
+  return visitDate === ROLLOUT.visitDate;
+}
+
+function prearrivalEmailIdempotencyKey(booking) {
+  // One message per booking/visit, independent of recipient changes, rescheduling and scheduler retries.
+  return `prearrival-email:${hashJson({ template: CHECKIN_EMAIL_TEMPLATE, booking: booking.rollerUniqueId, visitDate: booking.bookingDate })}`;
+}
+
+async function reservePrearrivalEmail(booking, idempotencyKey, requestHash) {
+  if (idempotencyKey !== prearrivalEmailIdempotencyKey(booking)) return { ok: false };
+  const result = await executeStatement(
+    `INSERT INTO jumpyard.idempotency_records (idempotency_key, operation, request_hash, status, expires_at)
+     VALUES (:idempotencyKey, 'checkin_prearrival_email_send', :requestHash, 'started',
+       ((CAST(:visitDate AS date) + 2)::timestamp AT TIME ZONE 'Europe/Stockholm'))
+     ON CONFLICT (idempotency_key) DO NOTHING RETURNING idempotency_key`,
+    [stringParameter('idempotencyKey', idempotencyKey), stringParameter('requestHash', requestHash), stringParameter('visitDate', booking.bookingDate)],
+  );
+  // Never reuse a reservation after a timeout/provider ambiguity, even if its TTL elapsed.
+  return { ok: true, replayed: !firstMappedRow(result) };
+}
+
+async function findPrearrivalBookingContact(rollerUniqueId) {
+  const result = await executeStatement(
+    `SELECT contact.email FROM jumpyard.roller_bookings booking
+     INNER JOIN jumpyard.guest_profiles contact
+       ON contact.roller_customer_id = booking.normalized_summary ->> 'bookingCustomerId'
+     WHERE booking.roller_unique_id = :rollerUniqueId`,
+    [stringParameter('rollerUniqueId', rollerUniqueId)],
+  );
+  return buildEmailDestination(firstMappedRow(result)?.email, 'booking_contact');
+}
+
+function prearrivalDeliveryTupleMatches(context, destination, candidate) {
+  if (!candidate || !destination) return false;
+  const { classifyCandidate } = require('./prearrival-email');
+  const decision = evaluateStartContext(context, { expectedDate: candidate.booking_date, ticketIds: [] });
+  return classifyCandidate(candidate, context, decision, new Date().toISOString()) === 'eligible_pending_live_checks'
+    && normalizeEmailAddress(candidate.email) === destination.email;
+}
+
+async function deliverPrearrivalEmail(event, candidate, correlationId) {
+  const { POLICY } = require('./prearrival-email');
+  if (isEmergencyStopEnabled() || !isPrearrivalEmailRolloutAuthorized()) return 'rollout_stopped';
+  if (!isPrearrivalRolloutVisitDate(candidate.booking_date)) return 'outside_due_window';
+  if (!candidate.booking_customer_id) return 'booking_changed';
+  const start = Date.parse(candidate.booking_start_at);
+  if (!Number.isFinite(start) || start <= Date.now() || start > Date.now() + POLICY.leadMinutes * 60_000) return 'outside_due_window';
+  // Reuse the existing authoritative Nacka refresh boundary; no provider business write.
+  const verified = await verifyT0201BookingWithRoller({
+    rollerUniqueId: candidate.roller_unique_id,
+    bookingDate: candidate.booking_date,
+    startTime: candidate.start_time,
+  }, {
+    venueId: POLICY.venueId, bookingIdentifierSha256: hashString(candidate.roller_unique_id),
+    bookingCustomerIdSha256: candidate.booking_customer_id ? hashString(candidate.booking_customer_id) : null,
+  });
+  if (!verified.ok) return 'booking_changed';
+  const booking = { rollerUniqueId: candidate.roller_unique_id, bookingDate: candidate.booking_date };
+  const response = await handleSendSessionLinkEmail(event, {
+    rollerUniqueId: candidate.roller_unique_id,
+    confirmSend: true,
+    dryRun: false,
+    baseUrl: POLICY.checkinBaseUrl,
+    idempotencyKey: prearrivalEmailIdempotencyKey(booking),
+  }, correlationId, { trustedScheduler: true, prearrivalEmail: true, prearrivalCandidate: candidate });
+  const body = JSON.parse(response.body);
+  if (response.statusCode === 200 && body.status === 'email_sent') return 'sent';
+  if (body.error?.code === 'idempotency_key_replayed') return 'already_attempted';
+  if (body.error?.code === 'prearrival_booking_changed') return 'booking_changed';
+  if (body.error?.code === 'prearrival_rollout_not_approved') return 'rollout_stopped';
+  return 'delivery_requires_review';
+}
+
 async function handleSendDueSessionLinkMessages(event, body, correlationId, options = {}) {
   if (!options.trustedScheduler) {
     const auth = await verifyCheckinLinkDevToken(event);
@@ -1437,6 +1540,35 @@ async function handleSendDueSessionLinkMessages(event, body, correlationId, opti
         },
       });
     }
+  }
+
+  if (body.messagePolicy === 'prearrival_email_v1') {
+    // Only the scheduler may deliver; the operator route stays read-only planning.
+    if (!options.trustedScheduler && body.confirmSend !== undefined && body.confirmSend !== false) {
+      return jsonResponse(409, correlationId, { status: 'blocked', error: { code: 'prearrival_rollout_not_approved' } });
+    }
+    const { preparePrearrivalEmailPage, processPrearrivalEmailRun } = require('./prearrival-email');
+    const deadline = Date.now() + PREARRIVAL_SCHEDULED_RUN_BUDGET_MS;
+    const dependencies = {
+      environment: process.env.JUMPYARD_ENVIRONMENT,
+      executeStatement,
+      mappedRows,
+      getBookingContext,
+      evaluateStartContext,
+      authorizeRollout: () => !isEmergencyStopEnabled() && isPrearrivalEmailRolloutAuthorized(),
+      deliver: candidate => deliverPrearrivalEmail(event, candidate, correlationId),
+      hasTimeLeft: () => Date.now() < deadline,
+    };
+    const result = options.trustedScheduler
+      ? await processPrearrivalEmailRun(body, dependencies)
+      : await preparePrearrivalEmailPage(body, dependencies);
+    if (options.trustedScheduler) {
+      // Aggregate counts only: no booking ids, contacts or cursor in logs.
+      console.info(JSON.stringify({ event: 'gh392_prearrival_email_run', correlationId, statusCode: result.statusCode,
+        status: result.body.status, error: result.body.error?.code ?? null, pages: result.body.pages ?? 0,
+        complete: result.body.complete ?? null, summary: result.body.summary ?? null }));
+    }
+    return jsonResponse(result.statusCode, correlationId, result.body);
   }
 
   const request = normalizeDueSessionLinkMessagingRequest(body, options.channels || null);
@@ -4494,6 +4626,11 @@ function isScheduledDueSessionLinkMessagingEvent(event) {
 function normalizeScheduledDueSessionLinkMessagingBody(event) {
   const detail = event?.detail ?? {};
 
+  // Preserve the new policy's strict flags and overrides. Never fall back to legacy sending.
+  if (detail.messagePolicy === 'prearrival_email_v1') {
+    return { ...detail, correlationId: stringOrNull(event?.id) ? `eventbridge:${event.id}` : null };
+  }
+
   return {
     baseUrl: stringOrNull(detail.baseUrl) || DEFAULT_SMS_BASE_URL,
     channels: detail.channels,
@@ -4766,6 +4903,7 @@ async function verifyT0201BookingWithRoller(candidate, control) {
               expectedIdentifierSha256: control.bookingIdentifierSha256,
               expectedStartTime: candidate.startTime,
               expectedVenueId: control.venueId,
+              ...(control.bookingCustomerIdSha256 ? { expectedBookingCustomerIdSha256: control.bookingCustomerIdSha256 } : {}),
               identifier: candidate.rollerUniqueId,
               trigger: 'authoritative_booking_refresh',
             },
