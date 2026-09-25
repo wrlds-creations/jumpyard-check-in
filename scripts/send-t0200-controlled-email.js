@@ -337,8 +337,8 @@ function selfTest() {
     ),
   );
   const message = buildControlledMessage();
-  assert.strictEqual(message.subject, 'Dags att checka in inför ditt besök hos JumpYard Nacka');
-  assert.strictEqual((message.html.match(/>CHECKA IN<\/a>/g) || []).length, 1);
+  assert.strictEqual(message.subject, 'Checka in nu – gå direkt in kl. 14:30');
+  assert.strictEqual((message.html.match(/>CHECKA IN NU<\/a>/g) || []).length, 1);
   assert.ok(message.html.includes('T0200-TEST'));
   assert.ok(message.html.includes('t0200-preview-only-not-a-real-token'));
   return {

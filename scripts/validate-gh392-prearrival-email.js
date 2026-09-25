@@ -473,12 +473,31 @@ test('The authenticated operator route stays read-only even on the rollout day',
   }
 });
 
-test('The check-in email says wristbands and purchases are collected at the entrance', () => {
+test('The check-in email leads with benefit, time and one action; steps end with the entrance handout (Love, 2026-09-25)', () => {
   const { buildCheckinEmailMessage } = require('../infra/lambda/session/email-template');
-  const message = buildCheckinEmailMessage({ booking: { bookingDate: '2026-09-28', startTime: '14:00:00' }, checkinUrl: 'https://checkin.jumpyard.se/?jy_token=synthetic' });
-  const line = 'När du kommer fram visar du din QR-kod i entrén så får du armband och det du har köpt.';
-  assert.ok(message.text.includes(line));
-  assert.ok(message.html.includes(line));
+  const booking = { bookingDate: '2026-09-28', startTime: '14:00:00', bookingReference: 'ABC123' };
+  const checkinUrl = 'https://checkin.jumpyard.se/?jy_token=synthetic';
+  const sameDay = buildCheckinEmailMessage({ booking, checkinUrl, now: new Date('2026-09-28T10:00:00Z') });
+  assert.equal(sameDay.subject, 'Checka in nu – gå direkt in kl. 14:00');
+  assert.ok(sameDay.html.includes('>Idag kl. 14:00</p>'));
+  assert.ok(sameDay.html.includes('Checka in<br>hemifrån'));
+  assert.ok(sameDay.html.includes('Tar under 2 minuter. Sen går ni direkt till entrén.'));
+  assert.equal((sameDay.html.match(/>CHECKA IN NU<\/a>/g) ?? []).length, 1);
+  // The action comes before the steps, and the steps before the details and fallback link.
+  const order = ['CHECKA IN NU', 'Så funkar det', '1. Öppna din bokning', '2. Säkerhetsfilm och regler', '3. Visa QR-koden i entrén',
+    'Måndag 28 september · kl. 14:00 · JumpYard Nacka Forum · Bokning ABC123', 'Hinner du inte?', 'Fungerar inte knappen?']
+    .map(marker => sameDay.html.indexOf(marker));
+  assert.ok(order.every(index => index > 0), JSON.stringify(order));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.ok(sameDay.text.includes('Idag kl. 14:00 hoppar ni på JumpYard Nacka Forum. Checka in hemifrån nu.'));
+  assert.ok(sameDay.text.includes('3. Visa QR-koden i entrén. Då får ni armband och det ni har köpt direkt.'));
+  assert.ok(sameDay.text.includes(`Checka in här: ${checkinUrl}`));
+  for (const icon of ['group.png', 'safety-check.png', 'visitor-wristband.png']) assert.ok(sameDay.html.includes(`/jumpyard-next-icons/${icon}`));
+  assert.ok(!sameDay.html.includes('Din personliga incheckningslänk'), 'The red link warning box is gone');
+  const earlier = buildCheckinEmailMessage({ booking, checkinUrl, now: new Date('2026-09-27T10:00:00Z') });
+  assert.ok(earlier.html.includes('>Måndag 28 september kl. 14:00</p>'));
+  const noTime = buildCheckinEmailMessage({ booking: { bookingDate: '2026-09-28' }, checkinUrl, now: new Date('2026-09-28T10:00:00Z') });
+  assert.equal(noTime.subject, 'Checka in nu – gå direkt in när ni kommer');
 });
 
 function localSql(query) {

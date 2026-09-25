@@ -106,7 +106,7 @@ function validateImplementation() {
   }
 
   for (const expected of [
-    "const subject = 'Dags att checka in inför ditt besök hos JumpYard Nacka'",
+    '`Checka in nu – gå direkt in kl. ${bookingTime}`',
     'Svara på det här mejlet',
     'jumpyard_logo.png',
     'booking-confirmed-on-red-white-calendar.png',
@@ -128,14 +128,14 @@ function validateEmailTemplate() {
     checkinUrl,
   });
 
-  assert.strictEqual(message.subject, 'Dags att checka in inför ditt besök hos JumpYard Nacka');
+  assert.strictEqual(message.subject, 'Checka in nu – gå direkt in kl. 14:30');
   assert.ok(message.text.includes(checkinUrl), 'Text fallback must contain the original check-in URL.');
-  assert.ok(message.text.includes('22 juli 2026'), 'Text fallback must contain the Swedish booking date.');
+  assert.ok(message.text.includes('Onsdag 22 juli'), 'Text fallback must contain the Swedish booking day.');
   assert.ok(message.text.includes('14:30'), 'Text fallback must contain the booking time.');
   assert.ok(message.html.includes('JY-50&lt;&amp;871'), 'HTML must escape the booking reference.');
   assert.ok(message.html.includes('jy_token=preview&amp;source=email'), 'HTML must escape the check-in URL.');
   assert.strictEqual(
-    (message.html.match(/>CHECKA IN<\/a>/g) ?? []).length,
+    (message.html.match(/>CHECKA IN NU<\/a>/g) ?? []).length,
     1,
     'Email HTML must offer one check-in action directly after the greeting.',
   );
