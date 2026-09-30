@@ -13,6 +13,7 @@ const {
   KIOSK_PAYMENT_CURRENCY,
   normalizeDraftFinalizeAction,
   normalizeBookingReadback,
+  normalizeItemsSummary,
   normalizeKioskInstallationMap,
   normalizeKioskProfileMap,
   normalizePaymentTerminalMap,
@@ -39,6 +40,8 @@ const ROLLER_LIVE_BASE_URL = 'https://api.roller.app';
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
 const GUEST_ACCESS_CHANNEL = 'guest_access';
 const GUEST_ACCESS_LINK_WINDOW_MINUTES = 60;
+// GH-458 (D0231): the approved short rules and attestation sentence, shared with the clients.
+const SAFETY_ATTESTATION_COPY_VERSION = 'safety-rules-2026-09-30-v1';
 const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 const KIOSK_RECONCILIATION_SOURCE = 'jumpyard.kiosk-payment-reconciliation';
@@ -227,6 +230,9 @@ exports.handler = async (event) => {
 
     if (isPhoneEmailMarketingEvent) {
       correlationId = normalizeCorrelationId(event?.detail?.correlationId) || correlationId;
+      // GH-458: lookup and webhook send this paid-booking signal (named for #437) for every
+      // settled booking; it also confirms a phone provisional handoff. Never throws.
+      await confirmPhoneProvisionalHandoff(event.detail, correlationId);
       return await handlePhoneEmailMarketing(event.detail, correlationId);
     }
 
@@ -695,6 +701,9 @@ async function handleDraft(event, body, correlationId) {
   // Record the choice that travelled with this draft (D0225) against the
   // provider-returned identity before any zero-owing publish.
   await capturePhoneEmailMarketing(request, draft, payload.externalId, config.env, correlationId);
+  // GH-458: likewise the safety approval given before payment, so a paid session can
+  // become ready with its number without another safety step.
+  await captureSafetyAttestation(request, draft, config.env, correlationId);
   const giftCards = draft.giftCards;
   const discountCodes = draft.discountCodes;
   let noPaymentPublish = null;
@@ -827,6 +836,9 @@ async function handleDraft(event, body, correlationId) {
 }
 
 async function handleDraftFinalize(event, body, correlationId) {
+  // GH-458 (D0231): an approved phone payment whose safety was approved before it gets its
+  // number at once; ROLLER's confirmation follows in the background, as for the kiosk.
+  if (body.action === 'phone_approved') return handlePhoneApprovedPayment(event, body, correlationId);
   const request = {
     action: normalizeDraftFinalizeAction(body.action),
     idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
@@ -2633,6 +2645,7 @@ function normalizeQuoteRequest(body) {
 function normalizeDraftRequest(event, body) {
   return {
     emailMarketingConsent: body.emailMarketingConsent,
+    safetyAttestation: body.safetyAttestation,
     capacityReservationId: stringOrNull(body.capacityReservationId),
     channel: body.channel === 'kiosk' ? 'kiosk' : body.channel ? 'unsupported' : null,
     comments: stringOrNull(body.comments),
@@ -3171,6 +3184,8 @@ function validateDraftRequest(request) {
   if (request.emailMarketingConsent && request.channel && request.channel !== 'kiosk') {
     return { code: 'email_marketing_channel_invalid', message: 'Email marketing is supported only for phone and kiosk purchases.' };
   }
+  const safetyError = validateSafetyAttestation(request.safetyAttestation);
+  if (safetyError) return safetyError;
   if (!request.idempotencyKey) {
     return {
       code: 'idempotency_key_required',
@@ -5070,7 +5085,7 @@ async function reserveKioskDraftBinding(selection, request) {
 
 async function reserveIdempotencyKey(operation, idempotencyKey, requestHash) {
   // Keep the server-owned reservation namespace inaccessible to client keys.
-  if (idempotencyKey.startsWith('jykb_') || idempotencyKey.startsWith('jymc_')) {
+  if (idempotencyKey.startsWith('jykb_') || idempotencyKey.startsWith('jymc_') || idempotencyKey.startsWith('jysa_')) {
     return { ok: false, code: 'idempotency_key_invalid', message: 'The idempotency key is not allowed.' };
   }
   const insertResult = await executeStatement(
@@ -5174,6 +5189,323 @@ async function capturePhoneEmailMarketing(request, draft, externalId, environmen
   } catch {
     // This failure must never turn a booking/payment into an ambiguous retry.
     console.error(JSON.stringify({ event: 'marketing.email_capture_failed', correlationId }));
+  }
+}
+
+// GH-458 (D0231): phone and kiosk guests approve safety before payment. The optional
+// approval is not part of the ROLLER payload or the request hash; absent means the old order.
+function validateSafetyAttestation(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value) ||
+      value.copyVersion !== SAFETY_ATTESTATION_COPY_VERSION || !['sv', 'en'].includes(value.locale) ||
+      typeof value.attestedAt !== 'string' || value.attestedAt.length > 40 ||
+      !Number.isFinite(Date.parse(value.attestedAt))) {
+    return { code: 'safety_attestation_invalid', message: 'The safety approval is invalid.' };
+  }
+  return null;
+}
+
+// Recorded against the provider-returned draft identity, which the paid booking keeps. The
+// Session Lambda reads it when the paid session starts and makes that session ready for staff.
+async function captureSafetyAttestation(request, draft, environment, correlationId) {
+  if (!request.safetyAttestation || request.flowType === 'add_product' || !draft?.uniqueId) return;
+  const record = {
+    attestedAt: new Date(Date.parse(request.safetyAttestation.attestedAt)).toISOString(),
+    channel: request.channel === 'kiosk' ? 'kiosk' : 'phone',
+    copyVersion: SAFETY_ATTESTATION_COPY_VERSION,
+    environment,
+    locale: request.safetyAttestation.locale,
+    recordedAt: new Date().toISOString(),
+    uniqueId: draft.uniqueId,
+  };
+  try {
+    await executeStatement(
+      `INSERT INTO jumpyard.idempotency_records
+         (idempotency_key, operation, request_hash, status, result_ref, expires_at)
+       VALUES (:key, 'safety_attestation', :copyVersion, 'recorded', :record, now() + interval '2 days')
+       ON CONFLICT (idempotency_key) DO NOTHING`,
+      [stringParameter('key', `jysa_${hashString(draft.uniqueId)}`),
+        stringParameter('copyVersion', SAFETY_ATTESTATION_COPY_VERSION),
+        stringParameter('record', JSON.stringify(record))],
+    );
+    await writeBookingEventLog({ correlationId, eventType: 'checkin.safety_attested_before_payment',
+      subjectRef: draft.uniqueId, summary: 'Safety approval recorded with the draft before payment.',
+      payload: { channel: record.channel, copyVersion: record.copyVersion, locale: record.locale } });
+  } catch {
+    // Never turn a booking/payment into an ambiguous retry. The client keeps the approval
+    // and can still mark the paid session ready itself.
+    console.error(JSON.stringify({ event: 'checkin.safety_attestation_capture_failed', correlationId }));
+  }
+}
+
+// GH-458 (D0231): Love wants a guest to be done the moment the phone payment is approved. ROLLER
+// marks an ecommerce booking paid seconds to a minute later, so, as for the kiosk (D0022), Cloud
+// gives the purchase a provisional booking, guest access and session at approval. The phone then
+// marks that session ready for staff (number and QR). The session stays `bookingSyncStatus:
+// pending`, so staff cannot hand out or redeem until ROLLER's paid booking is attached to it.
+// Only purchases whose safety approval travelled with the draft qualify.
+async function handlePhoneApprovedPayment(event, body, correlationId) {
+  const request = {
+    prepaymentDraftId: stringOrNull(body.prepaymentDraftId),
+    rollerDraftUniqueId: stringOrNull(body.rollerDraftUniqueId),
+  };
+  if (!/^jypd_[a-f0-9]{18}$/.test(request.prepaymentDraftId ?? '')) {
+    return jsonResponse(400, correlationId, { status: 'invalid_request',
+      error: { code: 'prepayment_draft_id_invalid', message: 'A valid prepayment draft id is required.' } });
+  }
+  if (!request.rollerDraftUniqueId || request.rollerDraftUniqueId.length > 128) {
+    return jsonResponse(400, correlationId, { status: 'invalid_request',
+      error: { code: 'roller_draft_id_invalid', message: 'A valid ROLLER draft id is required.' } });
+  }
+
+  const draft = await findPhoneApprovedDraft(request);
+  if (!draft) {
+    return jsonResponse(404, correlationId, { status: 'blocked',
+      error: { code: 'phone_payment_draft_not_found', message: 'The phone purchase was not found.' } });
+  }
+  if (!(await findRecordedSafetyAttestation(draft.roller_draft_unique_id))) {
+    return jsonResponse(409, correlationId, { status: 'blocked',
+      error: { code: 'safety_attestation_missing', message: 'This purchase has no safety approval from before payment.' } });
+  }
+
+  const handoff = await ensurePhoneProvisionalHandoff(draft);
+  if (!handoff) {
+    return jsonResponse(409, correlationId, { status: 'blocked',
+      error: { code: 'phone_provisional_handoff_unavailable', message: 'The provisional check-in could not be prepared.' } });
+  }
+  // ROLLER may already have confirmed the payment (a fast webhook or lookup); attach it now.
+  await confirmPhoneProvisionalHandoff({ rollerUniqueId: draft.roller_draft_unique_id }, correlationId);
+  await writeBookingEventLog({
+    correlationId,
+    eventType: 'booking.phone_provisional_handoff_created',
+    payload: { checkinSessionId: handoff.session.checkinSessionId, paymentChannel: 'ecommerce' },
+    subjectRef: request.prepaymentDraftId,
+    summary: 'Approved phone payment received a provisional handoff session.',
+  });
+  return jsonResponse(200, correlationId, { status: 'provisional_handoff', provisionalHandoff: handoff });
+}
+
+async function findPhoneApprovedDraft(request) {
+  const result = await executeStatement(
+    `SELECT prepayment_draft_id, roller_draft_unique_id, roller_env, status,
+       booking_date::text AS booking_date, start_time::text AS start_time, total_cents, currency,
+       customer_first_name, customer_last_name, items_summary::text AS items_summary
+     FROM jumpyard.prepayment_booking_drafts
+     WHERE prepayment_draft_id = :prepaymentDraftId
+       AND roller_draft_unique_id = :rollerDraftUniqueId
+       AND payment_channel = 'ecommerce'
+       AND flow_type = 'new_booking'
+       AND status IN ('payment_pending', 'published')
+       AND created_at > now() - interval '6 hours'
+     LIMIT 1`,
+    [
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('rollerDraftUniqueId', request.rollerDraftUniqueId),
+    ],
+  );
+  return firstMappedRow(result) ?? null;
+}
+
+async function findRecordedSafetyAttestation(rollerUniqueId) {
+  const row = firstMappedRow(await executeStatement(
+    `SELECT result_ref
+       FROM jumpyard.idempotency_records
+      WHERE idempotency_key = :key
+        AND operation = 'safety_attestation'
+        AND expires_at > now()
+      LIMIT 1`,
+    [stringParameter('key', `jysa_${hashString(rollerUniqueId)}`)],
+  ));
+  const record = parseJsonOrNull(row?.result_ref);
+  return record?.uniqueId === rollerUniqueId && record?.copyVersion === SAFETY_ATTESTATION_COPY_VERSION ? record : null;
+}
+
+async function ensurePhoneProvisionalHandoff(draft) {
+  const uniqueId = draft.roller_draft_unique_id;
+  const checkinSessionId = `jycs_${draft.prepayment_draft_id.replace(/^jypd_/, '')}`;
+  // GH-392: the permanent four-hour session lifetime; guest access matches the kiosk's two hours.
+  const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+  const guestAccessExpiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+  const guestAccessToken = crypto.randomBytes(32).toString('base64url');
+  const venueId =
+    stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID) ||
+    stringOrNull(process.env.ROLLER_DATA_SYNC_VENUE_ID) ||
+    stringOrNull(process.env.STAFF_IDENTITY_VENUE_ID);
+  const attestation = await findRecordedSafetyAttestation(uniqueId);
+
+  // Never replaces ROLLER data a lookup or webhook already stored for this booking.
+  await executeStatement(
+    `INSERT INTO jumpyard.roller_bookings (
+         roller_unique_id, booking_reference, roller_env, venue_id, booking_status, payment_status,
+         amount_owing_cents, total_cents, currency, booking_date, start_time, source_last_updated_by,
+         freshness_status, normalized_summary
+       )
+       VALUES (
+         :rollerDraftUniqueId, :rollerDraftUniqueId, :rollerEnv, :venueId, 'payment_approved_booking_syncing', 'paid',
+         0, :totalCents, :currency, CAST(:bookingDate AS date), CAST(:startTime AS time), 'phone_payment_approved',
+         'stale', CAST(:bookingSummary AS jsonb)
+       )
+       ON CONFLICT (roller_unique_id) DO NOTHING`,
+    [
+      stringParameter('rollerDraftUniqueId', uniqueId),
+      stringParameter('rollerEnv', draft.roller_env),
+      stringParameter('venueId', venueId),
+      integerParameter('totalCents', Number(draft.total_cents ?? 0)),
+      stringParameter('currency', draft.currency || KIOSK_PAYMENT_CURRENCY),
+      stringParameter('bookingDate', draft.booking_date),
+      stringParameter('startTime', draft.start_time),
+      stringParameter('bookingSummary', JSON.stringify({
+        bookingSyncStatus: 'pending',
+        customerFirstName: draft.customer_first_name,
+        customerLastName: draft.customer_last_name,
+        items: Array.isArray(parseJsonOrNull(draft.items_summary)) ? parseJsonOrNull(draft.items_summary) : [],
+        prepaymentDraftId: draft.prepayment_draft_id,
+      })),
+    ],
+  );
+
+  await executeStatement(
+    `INSERT INTO jumpyard.checkin_tokens (token_hash, roller_unique_id, channel, expires_at)
+     VALUES (:tokenHash, :rollerDraftUniqueId, :guestAccessChannel, CAST(:expiresAt AS timestamptz))`,
+    [
+      stringParameter('tokenHash', hashString(guestAccessToken)),
+      stringParameter('rollerDraftUniqueId', uniqueId),
+      stringParameter('guestAccessChannel', GUEST_ACCESS_CHANNEL),
+      stringParameter('expiresAt', guestAccessExpiresAt),
+    ],
+  );
+
+  // One active session per booking and visit day: a retry, or a session another path already
+  // started, conflicts and is reused below.
+  await executeStatement(
+    `INSERT INTO jumpyard.checkin_sessions (
+       checkin_session_id, roller_unique_id, booking_reference, visit_date, status, safety_status,
+       handoff_status, selected_ticket_ids, source_lookup_ref, idempotency_key, expires_at, session_summary
+     )
+     VALUES (
+       :checkinSessionId, :rollerDraftUniqueId, :rollerDraftUniqueId, CAST(:bookingDate AS date), 'guest_in_progress',
+       'completed', 'not_ready', '[]'::jsonb, :prepaymentDraftId, :sessionIdempotencyKey, CAST(:expiresAt AS timestamptz),
+       CAST(:sessionSummary AS jsonb)
+     )
+     ON CONFLICT DO NOTHING`,
+    [
+      stringParameter('checkinSessionId', checkinSessionId),
+      stringParameter('rollerDraftUniqueId', uniqueId),
+      stringParameter('bookingDate', draft.booking_date),
+      stringParameter('prepaymentDraftId', draft.prepayment_draft_id),
+      stringParameter('sessionIdempotencyKey', `phone-provisional-session:${draft.prepayment_draft_id}`),
+      stringParameter('expiresAt', expiresAt),
+      stringParameter('sessionSummary', JSON.stringify({
+        bookingSyncStatus: 'pending',
+        paymentStatus: 'approved',
+        prepaymentDraftId: draft.prepayment_draft_id,
+        ...(attestation ? { safetyAttestedAt: attestation.attestedAt } : {}),
+        source: 'phone_payment_approved',
+      })),
+    ],
+  );
+
+  const session = firstMappedRow(await executeStatement(
+    `SELECT checkin_session_id, status, safety_status, handoff_code, handoff_status,
+       expires_at::text AS expires_at,
+       COALESCE(session_summary ->> 'bookingSyncStatus', 'confirmed') AS booking_sync_status
+     FROM jumpyard.checkin_sessions
+     WHERE roller_unique_id = :rollerDraftUniqueId
+       AND visit_date IS NOT DISTINCT FROM CAST(:bookingDate AS date)
+       AND status IN ('guest_in_progress', 'ready_for_staff', 'staff_in_progress', 'redeemed')
+       AND expires_at > now()
+     ORDER BY (checkin_session_id = :checkinSessionId) DESC, created_at DESC
+     LIMIT 1`,
+    [
+      stringParameter('rollerDraftUniqueId', uniqueId),
+      stringParameter('bookingDate', draft.booking_date),
+      stringParameter('checkinSessionId', checkinSessionId),
+    ],
+  ));
+  if (!session) return null;
+  return publicPhoneProvisionalHandoff(draft, session, { expiresAt: guestAccessExpiresAt, token: guestAccessToken });
+}
+
+function publicPhoneProvisionalHandoff(draft, session, guestAccess) {
+  return {
+    booking: {
+      amountOwing: 0,
+      bookingReference: draft.roller_draft_unique_id,
+      customer: {
+        firstName: stringOrNull(draft.customer_first_name),
+        lastName: stringOrNull(draft.customer_last_name),
+      },
+      items: normalizeItemsSummary(draft.items_summary),
+      paymentStatus: 'paid',
+      rollerUniqueId: draft.roller_draft_unique_id,
+      status: 'payment_approved_booking_syncing',
+    },
+    guestAccess,
+    session: {
+      bookingSyncStatus: stringOrNull(session.booking_sync_status) || 'pending',
+      checkinSessionId: stringOrNull(session.checkin_session_id),
+      expiresAt: stringOrNull(session.expires_at),
+      handoffCode: stringOrNull(session.handoff_code),
+      handoffStatus: stringOrNull(session.handoff_status),
+      safetyStatus: stringOrNull(session.safety_status),
+      status: stringOrNull(session.status),
+    },
+  };
+}
+
+// The phone provisional session gets ROLLER's booking reference and tickets once lookup or
+// webhook has stored the fresh, fully paid booking. Staff can then hand out and redeem.
+async function confirmPhoneProvisionalHandoff(detail, correlationId) {
+  const uniqueId = stringOrNull(detail?.rollerUniqueId);
+  if (!uniqueId || uniqueId.length > 128) return { status: 'ignored' };
+  try {
+    const attached = mappedRows(await executeStatement(
+      `WITH booking AS (
+         SELECT b.roller_unique_id, b.booking_reference, b.booking_date,
+           COALESCE((
+             SELECT jsonb_agg(ticket.ticket_id ORDER BY ticket.ticket_id)
+             FROM jumpyard.roller_booking_tickets AS ticket
+             WHERE ticket.roller_unique_id = b.roller_unique_id
+           ), '[]'::jsonb) AS ticket_ids
+         FROM jumpyard.roller_bookings AS b
+         WHERE b.roller_unique_id = :rollerUniqueId
+           AND b.freshness_status = 'fresh'
+           AND b.is_tombstoned IS NOT TRUE
+           AND b.amount_owing_cents = 0
+           AND b.source_last_updated_by IN ('roller_live_lookup', 'roller_webhook_enrichment')
+           AND b.payment_status IS NOT NULL
+           AND concat_ws(' ', b.payment_status, b.booking_status) !~* '(pending|unpaid|partial|cancel|fail|draft)'
+       )
+       UPDATE jumpyard.checkin_sessions AS cs
+          SET booking_reference = booking.booking_reference,
+              selected_ticket_ids = booking.ticket_ids,
+              updated_at = now(),
+              session_summary = cs.session_summary || jsonb_build_object(
+                'bookingSyncStatus', 'confirmed',
+                'rollerBookingReference', booking.booking_reference,
+                'ticketCount', jsonb_array_length(booking.ticket_ids))
+         FROM booking
+        WHERE cs.roller_unique_id = booking.roller_unique_id
+          AND cs.session_summary ->> 'source' = 'phone_payment_approved'
+          AND cs.session_summary ->> 'bookingSyncStatus' = 'pending'
+          AND cs.visit_date IS NOT DISTINCT FROM booking.booking_date
+          AND jsonb_array_length(booking.ticket_ids) > 0
+       RETURNING cs.checkin_session_id`,
+      [stringParameter('rollerUniqueId', uniqueId)],
+    ));
+    if (attached.length === 0) return { status: 'not_pending' };
+    await writeBookingEventLog({
+      correlationId,
+      eventType: 'booking.phone_handoff_confirmed',
+      payload: { paymentChannel: 'ecommerce', sessionCount: attached.length },
+      subjectRef: uniqueId,
+      summary: 'ROLLER\'s paid booking was attached to its phone provisional handoff session.',
+    });
+    return { status: 'confirmed' };
+  } catch {
+    // A later lookup or webhook retries; the guest already has the number.
+    console.error(JSON.stringify({ event: 'booking.phone_handoff_confirmation_failed', correlationId }));
+    return { status: 'failed' };
   }
 }
 

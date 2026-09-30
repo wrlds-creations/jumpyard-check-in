@@ -15,6 +15,9 @@
 .amount { margin: 22px 0 0; color: #147b51; font-size: 48px; font-weight: 900; font-style: italic; line-height: 1.2; }
 .receipt { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 12px 0 0; font-size: 16px; line-height: 1.4; text-wrap: balance; }
 .receiptIcon { flex: none; width: 34px; height: 34px; }
+/* #458: calm wait after approval; no action, the number appears when ROLLER has confirmed. */
+.confirming { display: flex; align-items: flex-start; gap: 12px; margin: 32px 0 0; border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; background: white; font-size: 15px; font-weight: 700; line-height: 1.45; text-align: left; text-wrap: pretty; }
+.inlineSpinner { width: 22px; height: 22px; margin: 1px 0 0; border-width: 3px; }
 .continueButton {
   display: flex;
   align-items: center;
@@ -47,7 +50,7 @@
 @media (max-height: 650px) {
   .confirmation { padding-block: 12px; }
   .icon { width: 64px; height: 64px; margin-bottom: 20px; }
-  .spinner:not(.buttonSpinner) { width: 56px; height: 56px; margin-bottom: 20px; }
+  .spinner:not(.buttonSpinner):not(.inlineSpinner) { width: 56px; height: 56px; margin-bottom: 20px; }
   .amount { margin-top: 16px; font-size: 42px; }
   .continueButton { margin-top: 24px; }
 }
@@ -55,7 +58,7 @@
 @media (max-height: 600px) {
   .confirmation { padding-block: 8px; }
   .icon { width: 56px; height: 56px; margin-bottom: 16px; }
-  .spinner:not(.buttonSpinner) { width: 48px; height: 48px; margin-bottom: 16px; }
+  .spinner:not(.buttonSpinner):not(.inlineSpinner) { width: 48px; height: 48px; margin-bottom: 16px; }
   .continueButton { margin-top: 20px; }
 }
 

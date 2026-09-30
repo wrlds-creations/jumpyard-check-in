@@ -58,6 +58,8 @@ function harness({ provider = async () => quote(), draftAmount = 0 } = {}) {
   const events = [];
   const state = {
     pendingEmailMarketingConsent, emailMarketingChecked: false, lang: 'sv',
+    // #458: the safety approval travels as the eighth draft argument; none here.
+    draftSafetyAttestation: undefined,
     useCallback: fn => fn,
     PAYMENT_OPTION_CODE_MAX_LENGTH: 32,
     quoteRequestVersionRef: { current: 0 },

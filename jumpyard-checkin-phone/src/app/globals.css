@@ -305,3 +305,38 @@ body:has(.addon-shop-total) [data-testid="flow-nav"] > [aria-hidden="true"] { di
 .phone-flow-shell:has([data-phone-completion="true"]) { padding: 0; }
 .phone-flow:has([data-phone-completion="true"]) { max-width: 32rem; }
 .phone-flow-content:has([data-phone-completion="true"]) { align-items: stretch; }
+
+/* #458: the one safety screen fills the space between the progress bar and Back/Exit, so the film
+   and its approval share one screen. Only transform and opacity animate; the layout never moves. */
+.phone-flow-shell:has(.safety-screen) {
+  height: 100dvh;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+}
+/* The purchase or add-on screen that hosts the safety step (or the page itself) fills the height. */
+.phone-flow-shell:has(.safety-screen) > .phone-flow,
+.phone-flow:has(.safety-screen) > .phone-flow-content,
+.phone-flow-content > :has(> .safety-screen),
+.phone-buy-flow:has(> .safety-screen) {
+  flex: 1;
+  min-height: 0;
+}
+.phone-flow-content:has(.safety-screen) { align-items: stretch; }
+.phone-flow-content > :has(> .safety-screen),
+.phone-buy-flow:has(> .safety-screen) { display: flex; flex-direction: column; }
+.phone-flow:has(.safety-screen) > :not(.phone-flow-content),
+.phone-flow-content > :has(> .safety-screen) > :not(.safety-screen),
+.phone-buy-flow:has(> .safety-screen) > :not(.safety-screen) { flex-shrink: 0; }
+.safety-screen { flex: 1; }
+/* Safety net: outside the flex chain the stage keeps a usable size instead of collapsing. */
+.safety-stage { min-height: 240px; }
+.safety-film {
+  transform-origin: 50% 0;
+  transition: transform 560ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+.safety-approval { transition: opacity 320ms ease-out, transform 460ms cubic-bezier(0.22, 0.61, 0.36, 1); }
+.safety-approval[data-visible="false"] { opacity: 0; transform: translateY(16px); pointer-events: none; }
+.safety-approval[data-visible="true"] { transition-delay: 180ms; }
+@media (prefers-reduced-motion: reduce) {
+  .safety-film, .safety-approval { transition: none; }
+}

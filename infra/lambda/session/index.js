@@ -21,6 +21,8 @@ const CHECKIN_LINK_CHANNELS = new Set(['sms', 'email', 'manual', 'dev']);
 const STAFF_AUTH_HEADERS = ['x-jumpyard-staff-token', 'authorization'];
 // GH-392: permanent lifetime for new sessions; saved expirations are not extended on resume.
 const DEFAULT_SESSION_TTL_MS = 4 * 60 * 60 * 1000;
+// GH-458 (D0231): must match the Booking Lambda and the phone/kiosk clients.
+const SAFETY_ATTESTATION_COPY_VERSION = 'safety-rules-2026-09-30-v1';
 // GH-392: the scheduled run stops starting new pages/sends well before the 60 s Lambda timeout.
 const PREARRIVAL_SCHEDULED_RUN_BUDGET_MS = 40 * 1000;
 const DEFAULT_CHECKIN_LINK_TTL_MINUTES = 72 * 60;
@@ -325,11 +327,12 @@ async function handleStartSession(event, body, correlationId, options = {}) {
         summary: 'Check-in session resumed.',
       });
     }
+    const readyResumedSession = await readyAttestedPurchaseSession(resumedSession, correlationId);
     const issuedGuestAccess = options.guestAccess || null;
 
     return jsonResponse(200, correlationId, {
       status: 'session_resumed',
-      session: resumedSession,
+      session: readyResumedSession,
       ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
       ...(bookingResponse ? bookingResponse : {}),
     });
@@ -354,13 +357,14 @@ async function handleStartSession(event, body, correlationId, options = {}) {
     },
     summary: 'Check-in session started.',
   });
+  const startedSession = await readyAttestedPurchaseSession(session, correlationId);
 
   const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
   const issuedGuestAccess = options.guestAccess || null;
 
   return jsonResponse(201, correlationId, {
     status: 'session_started',
-    session,
+    session: startedSession,
     ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
     ...(bookingResponse ? bookingResponse : {}),
   });
@@ -463,6 +467,52 @@ async function handleReadyForStaff(event, body, correlationId) {
     status: 'ready_for_staff',
     session: updatedSession,
   });
+}
+
+// GH-458 (D0231): phone and kiosk guests approve safety before payment, and the Booking
+// Lambda records that approval with the draft. The first active session for the paid
+// booking therefore becomes ready for staff (number and QR) here, without a second safety
+// step. Aurora only, no ROLLER call. A failure leaves the ordinary session for the client.
+async function readyAttestedPurchaseSession(session, correlationId) {
+  if (!session || session.status !== 'guest_in_progress' || isExpired(session.expiresAt)) return session;
+  try {
+    if (!(await findSafetyAttestation(session.rollerUniqueId))) return session;
+    const readySession = await markSessionReadyForStaff(session.checkinSessionId, { safetyStatus: 'completed' });
+    if (!readySession || readySession.status !== 'ready_for_staff') return readySession || session;
+    await writeEventLog({
+      booking: readySession,
+      correlationId,
+      eventType: 'checkin.session_ready_for_staff',
+      payload: {
+        checkinSessionId: readySession.checkinSessionId,
+        handoffCode: readySession.handoffCode,
+        source: 'safety_attested_before_payment',
+        ticketCount: readySession.selectedTicketIds.length,
+      },
+      summary: 'Check-in session marked ready for staff; safety was approved before payment.',
+    });
+    return readySession;
+  } catch {
+    console.error(JSON.stringify({ event: 'checkin.attested_ready_failed', correlationId }));
+    return session;
+  }
+}
+
+async function findSafetyAttestation(rollerUniqueId) {
+  if (!rollerUniqueId) return null;
+  const row = firstMappedRow(await executeStatement(
+    `SELECT result_ref
+       FROM jumpyard.idempotency_records
+      WHERE idempotency_key = :key
+        AND operation = 'safety_attestation'
+        AND expires_at > now()
+      LIMIT 1`,
+    [stringParameter('key', `jysa_${hashString(rollerUniqueId)}`)],
+  ));
+  const record = parseJsonObject(row?.result_ref);
+  return record.uniqueId === rollerUniqueId && record.copyVersion === SAFETY_ATTESTATION_COPY_VERSION
+    ? record
+    : null;
 }
 
 async function handleStaffSessionList(event, correlationId) {

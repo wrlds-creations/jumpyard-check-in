@@ -6,7 +6,6 @@ import { FlowMotion, FlowTransition, FlowScreen } from '@/components/FlowTransit
 import { AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
 import { BookingSummary } from '@/components/BookingSummary';
 import { SafetyVideo } from '@/components/SafetyVideo';
-import { SafetyAttest } from '@/components/SafetyAttest';
 import {
     AddonsOffer,
     type AddonsAvailabilityPrefetch,
@@ -109,6 +108,41 @@ function getStepIndex(state: FlowState): number {
     return idx === -1 ? 0 : idx;
 }
 
+// #458: safety before payment swaps the Safety and Payment columns in both paths. On an existing
+// booking the add-on flow's own safety and payment steps light up their columns on APP_ADDONS.
+const SAFETY_FIRST_STEP_ICONS: JumpyardIconName[] = [
+    'booking-card',
+    'addons-bag',
+    'safety-check',
+    'payment-card',
+    'success-check',
+];
+
+const SAFETY_FIRST_BUY_ENTRY_STEP_ICONS: JumpyardIconName[] = [
+    'admission-ticket',
+    'addons-bag',
+    'safety-check',
+    'payment-card',
+    'success-check',
+];
+
+function getSafetyFirstStepIndex(state: FlowState, addonsStep: AddonsOfferStep): number {
+    if (state === 'APP_CONFIRM' || state === 'APP_PRESENT') return 4;
+    if (state === 'APP_PAYMENT') return 3;
+    if (state === 'APP_ADDONS' && (addonsStep === 'PAYMENT' || addonsStep === 'APPROVED' || addonsStep === 'PENDING')) return 3;
+    if (state === 'APP_SAFETY_VIDEO' || state === 'APP_SAFETY_ATTEST') return 2;
+    if (state === 'APP_ADDONS' && addonsStep === 'SAFETY') return 2;
+    if (state === 'APP_ADDONS' || state === 'APP_SKYRIDER_ATTEST' || state === 'APP_CONNECTED') return 1;
+    return 0;
+}
+
+function getSafetyFirstBuyEntryStepIndex(state: FlowState): number {
+    if (state === 'APP_CONFIRM' || state === 'APP_PRESENT') return 4;
+    if (state === 'APP_PAYMENT') return 3;
+    if (state === 'APP_SAFETY_VIDEO' || state === 'APP_SAFETY_ATTEST') return 2;
+    return 0;
+}
+
 function getBuyEntryStepIndex(state: FlowState): number {
     if (state === 'APP_CONFIRM' || state === 'APP_PRESENT') return 4;
     if (state === 'APP_SAFETY_VIDEO' || state === 'APP_SAFETY_ATTEST') return 3;
@@ -144,6 +178,8 @@ type BuyRecoveryStatus = 'checking' | 'failed' | 'unsafe'
     | 'completed-unavailable'
     | 'payment-return' | 'payment-unknown' | 'payment-checking' | 'payment-failed' | 'payment-approved';
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
+// #458 (D0231): in both phone paths the safety film and its approval come before payment.
+const SAFETY_BEFORE_PAYMENT = true;
 
 function recoveryMatchesBooking(record: PaymentRecoveryRecord, snapshot: BuyFlowRecoverySnapshot | null) {
     return record.kind === 'new_booking' && Boolean(snapshot && [
@@ -249,6 +285,7 @@ function writeSafetyRecovery(state: FlowState, ctx: FlowContext, alreadyCheckedI
             unitPrice: ctx.baseUnitPrice || null,
         },
         selectedStartTime: ctx.booking.time,
+        ...(ctx.safetyAttestedAt ? { safetyAttestedAt: ctx.safetyAttestedAt } : {}),
     });
 }
 
@@ -340,21 +377,28 @@ function hasProgressBar(state: FlowState) {
     return state !== 'APP_MOBILE' && state !== 'KIOSK_CHOICE' && state !== 'KIOSK_LOOKUP' && state !== 'KIOSK_BUY';
 }
 
-function ProgressBar({ state, buyEntryFlow }: { state: FlowState; buyEntryFlow: boolean }) {
+function ProgressBar({ state, buyEntryFlow, addonsStep, safetyFirst }: {
+    state: FlowState;
+    buyEntryFlow: boolean;
+    addonsStep: AddonsOfferStep;
+    safetyFirst: boolean;
+}) {
     const { t } = useTranslation();
     if (!hasProgressBar(state)) return null;
 
     const labels = buyEntryFlow
-        ? [
-            t.buyProgress.entry,
-            t.buyProgress.addons,
-            t.buyProgress.payment,
-            t.buyProgress.safety,
-            t.buyProgress.done,
-        ]
-        : [t.progress.booking, t.progress.extras, t.progress.payment, t.progress.safety, t.progress.done];
-    const icons = buyEntryFlow ? BUY_ENTRY_STEP_ICONS : STEP_ICONS;
-    const current = buyEntryFlow ? getBuyEntryStepIndex(state) : getStepIndex(state);
+        ? safetyFirst
+            ? [t.buyProgress.entry, t.buyProgress.addons, t.buyProgress.safety, t.buyProgress.payment, t.buyProgress.done]
+            : [t.buyProgress.entry, t.buyProgress.addons, t.buyProgress.payment, t.buyProgress.safety, t.buyProgress.done]
+        : safetyFirst
+            ? [t.progress.booking, t.progress.extras, t.progress.safety, t.progress.payment, t.progress.done]
+            : [t.progress.booking, t.progress.extras, t.progress.payment, t.progress.safety, t.progress.done];
+    const icons = buyEntryFlow
+        ? safetyFirst ? SAFETY_FIRST_BUY_ENTRY_STEP_ICONS : BUY_ENTRY_STEP_ICONS
+        : safetyFirst ? SAFETY_FIRST_STEP_ICONS : STEP_ICONS;
+    const current = buyEntryFlow
+        ? safetyFirst ? getSafetyFirstBuyEntryStepIndex(state) : getBuyEntryStepIndex(state)
+        : safetyFirst ? getSafetyFirstStepIndex(state, addonsStep) : getStepIndex(state);
     const pct = labels.length > 1 ? (current / (labels.length - 1)) * 100 : 0;
     const gridTemplateColumns = `repeat(${labels.length}, minmax(0, 1fr))`;
 
@@ -587,12 +631,16 @@ function CheckInFlow() {
     const preparePaidNewBooking = async (
         booking: Booking,
         recoveryTargetState: FlowState | null = null,
-        { paymentApproved = false, preserveRecoveryConfirmation = false, completedRecovery = false, isCurrent = () => true, signal }: {
+        { paymentApproved = false, preserveRecoveryConfirmation = false, completedRecovery = false, isCurrent = () => true, signal, safetyAttestedAt = null, provisionalSession = null }: {
             paymentApproved?: boolean;
             preserveRecoveryConfirmation?: boolean;
             completedRecovery?: boolean;
             isCurrent?: () => boolean;
             signal?: AbortSignal;
+            /** #458: safety was approved before this payment, so no safety step follows it. */
+            safetyAttestedAt?: string | null;
+            /** #458: Cloud's provisional session for an approved payment ROLLER has not confirmed yet. */
+            provisionalSession?: CheckInSession | null;
         } = {}
     ): Promise<() => void> => {
         if (!isCurrent()) return () => undefined;
@@ -625,6 +673,7 @@ function CheckInFlow() {
             baseUnitPrice: 0,
             baseQuantity: booking.jumpers,
             baseTotal: 0,
+            ...(safetyAttestedAt ? { safetyAttestedAt } : {}),
         };
 
         setAlreadyCheckedIn(false);
@@ -642,6 +691,8 @@ function CheckInFlow() {
         };
 
         if (completedRecovery && !booking.paid) throw new Error('The completed booking could not be restored');
+        // #458: an attested purchase never re-enters safety; its caller waits for ROLLER instead.
+        if (!booking.paid && paymentApproved && safetyAttestedAt) throw new Error('The approved payment is not confirmed yet');
         if (!booking.paid) {
             if (paymentApproved) return continueIntoSafetyAwaitingConfirmation();
 
@@ -652,13 +703,21 @@ function CheckInFlow() {
         }
 
         try {
-            const checkinSession = paymentApproved
+            const startedSession = provisionalSession ?? (paymentApproved
                 ? await runPurchasePreparationRequest(
                     (requestSignal) => startCheckInSession(booking, 'safety', { signal: requestSignal }),
                     { signal, isCurrent, timeoutMs: 35_000 },
                 )
-                : await startCheckInSession(booking, 'safety');
+                : await startCheckInSession(booking, 'safety'));
             if (!isCurrent()) return () => undefined;
+            // #458 (D0231): a provisional session from an approved payment is marked ready here, so
+            // the guest gets the number at once. Cloud readies a paid, attested session by itself
+            // when it starts; this also covers an approval Cloud could not record with the draft.
+            const readySession = safetyAttestedAt && !isReadyForStaffSession(startedSession) && !isCompletedSession(startedSession)
+                ? await markSessionReadyForStaff(startedSession, 'completed')
+                : startedSession;
+            if (!isCurrent()) return () => undefined;
+            const checkinSession = readySession;
             const resumeState = getResumeState(checkinSession);
             if (completedRecovery && resumeState !== 'APP_CONFIRM' && resumeState !== 'APP_PRESENT') {
                 throw new Error('The completed handoff could not be restored');
@@ -677,7 +736,8 @@ function CheckInFlow() {
                 return continuePreparedPurchase('APP_PRESENT');
             }
 
-            if (completedRecovery) throw error;
+            // #458: an attested purchase shows its calm wait and retry instead of safety.
+            if (completedRecovery || safetyAttestedAt) throw error;
             // An approved purchase keeps its safety path; the session is retried before the handoff.
             if (paymentApproved) return continueIntoSafetyAwaitingConfirmation();
 
@@ -723,6 +783,29 @@ function CheckInFlow() {
                     guestResumeStepWriteRef.current = null;
                 }
             });
+    };
+
+    // #458 (D0231): safety was approved before the add-on payment (or the guest then dropped the
+    // add-ons), so the visit becomes ready for staff with its number without another safety step.
+    // A failure rejects, which keeps AddonsOffer's calm wait with its single retry.
+    const completeAttestedAddons = async (result: AddonsOfferResult) => {
+        const patch = { ...getAddonsFlowPatch(result), safetyAttestedAt: result.safetyAttestedAt ?? null };
+        const session = ctx.checkinSession;
+        if (!session) {
+            advance(patch);
+            return;
+        }
+        try {
+            const checkinSession = await markSessionReadyForStaff(session, 'completed');
+            setCtx((current) => ({ ...current, ...patch, checkinSession }));
+            setState('APP_CONFIRM');
+        } catch (error) {
+            if (error instanceof CloudSessionError && error.reason === 'already_redeemed') {
+                routeAlreadyCheckedIn(patch);
+                return;
+            }
+            throw error;
+        }
     };
 
     const recoveryStillCurrent = (record: PaymentRecoveryRecord | null, snapshot: BuyFlowRecoverySnapshot) => {
@@ -791,9 +874,17 @@ function CheckInFlow() {
                 preserveRecoveryConfirmation: true,
                 isCurrent: current,
                 signal: preparation.signal,
+                safetyAttestedAt: snapshot.safetyAttestedAt ?? null,
             });
             if (!current()) return;
             recoveryContinuationRef.current = continuation;
+            if (snapshot.safetyAttestedAt) {
+                // #458: no safety step follows this payment, so show the number without another tap.
+                recoveryContinueRequestedRef.current = true;
+                setRecoveryContinuePending(true);
+                void revealRecoveredPurchase(record, snapshot, continuation);
+                return;
+            }
             setRecoveryReadyForSafety(true);
         } catch {
             if (!current()) return;
@@ -961,6 +1052,7 @@ function CheckInFlow() {
                 paymentApproved: snapshot.draftState?.paymentApproved === true,
                 completedRecovery: hasCompletedBuyFlowRecovery(snapshot),
                 isCurrent: current,
+                safetyAttestedAt: snapshot.safetyAttestedAt ?? null,
             });
             if (current()) continuation();
         } catch {
@@ -1319,9 +1411,9 @@ function CheckInFlow() {
     }, [state]);
 
     useEffect(() => {
-        // Leaving the safety attestation cancels any pending paid confirmation so a stale
+        // Leaving the safety screen cancels any pending paid confirmation so a stale
         // check cannot advance the flow later.
-        if (state === 'APP_SAFETY_ATTEST') return;
+        if (state === 'APP_SAFETY_VIDEO' || state === 'APP_SAFETY_ATTEST') return;
         paidConfirmationRunRef.current += 1;
         pendingSafetyAttestedAtRef.current = null;
         setPaidConfirmationState('idle');
@@ -1402,6 +1494,8 @@ function CheckInFlow() {
             <ProgressBar
                 state={progressState}
                 buyEntryFlow={ctx.buyEntryFlow || showingBuyPaymentRecovery || showingCompletedBuyRecovery}
+                addonsStep={addonsStep}
+                safetyFirst={SAFETY_BEFORE_PAYMENT}
             />
             </>}
 
@@ -1503,6 +1597,7 @@ function CheckInFlow() {
                     {state === 'KIOSK_BUY' && (
                         <BuyTickets
                             key="park-buy"
+                            safetyBeforePayment={SAFETY_BEFORE_PAYMENT}
                             recoverySnapshot={
                                 isPrePaymentBuyFlowRecovery(buyRecoverySnapshot) ? buyRecoverySnapshot : null
                             }
@@ -1528,18 +1623,12 @@ function CheckInFlow() {
                         />
                     )}
 
-                    {state === 'APP_SAFETY_VIDEO' && (
+                    {/* #458: one safety screen; a saved legacy APP_SAFETY_ATTEST step shows the same screen. */}
+                    {(state === 'APP_SAFETY_VIDEO' || state === 'APP_SAFETY_ATTEST') && (
                         <SafetyVideo
                             key="safety-video"
                             buyEntryFlow={ctx.buyEntryFlow}
-                            onComplete={seenAt => advance({ safetyVideoSeenAt: seenAt })}
-                        />
-                    )}
-
-                    {state === 'APP_SAFETY_ATTEST' && (
-                        <SafetyAttest
-                            key="safety-attest"
-                            buyEntryFlow={ctx.buyEntryFlow}
+                            onWatched={seenAt => setCtx(current => ({ ...current, safetyVideoSeenAt: seenAt }))}
                             isSubmitting={isMarkingReadyForStaff}
                             submitError={readyForStaffError}
                             statusNotice={
@@ -1558,7 +1647,7 @@ function CheckInFlow() {
                                     }
                                     : null
                             }
-                            onComplete={completeSafetyAndReadyForStaff}
+                            onApprove={completeSafetyAndReadyForStaff}
                         />
                     )}
 
@@ -1567,13 +1656,16 @@ function CheckInFlow() {
                             backRequest={addonsBackRequest}
                             key="addons"
                             booking={ctx.booking}
+                            safetyBeforePayment={SAFETY_BEFORE_PAYMENT}
                             guestCount={ctx.booking.jumpers}
                             existingAddons={ctx.existingAddons}
                             prefetchedAvailability={matchingAddonsPrefetch}
                             onStepChange={setAddonsStep}
                             onBackRuleChange={setAddonsBackRule}
                             onPaymentApproved={preparePaidAddonsForSafety}
-                            onContinue={(result) => advance(getAddonsFlowPatch(result))}
+                            onContinue={(result) => result.safetyAttestedAt
+                                ? completeAttestedAddons(result)
+                                : advance(getAddonsFlowPatch(result))}
                             onPendingDone={() => {
                                 setAlreadyCheckedIn(false);
                                 setCtx({ ...initialContext(effectiveChannel), token: null });

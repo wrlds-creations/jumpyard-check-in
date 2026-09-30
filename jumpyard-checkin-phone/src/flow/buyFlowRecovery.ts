@@ -71,6 +71,8 @@ export interface BuyFlowRecoverySnapshot {
   draftState: BuyFlowRecoveryDraftState | null;
   /** Local evidence of the completed guest flow; current payment guards still take precedence. */
   completion?: BuyFlowRecoveryCompletion | null;
+  /** #458: safety approved before payment; a reload must not ask for it again. */
+  safetyAttestedAt?: string;
 }
 
 const STORAGE_KEY = 'jumpyard.buyFlowRecovery.v1';
@@ -276,9 +278,11 @@ function normalizeSnapshot(value: unknown): BuyFlowRecoverySnapshot | null {
   const observedTime = now - suppliedLastObservedTime >= LAST_OBSERVED_PERSIST_INTERVAL_MS
     ? now
     : suppliedLastObservedTime;
+  const safetyAttestedTime = Date.parse(stringOrNull(value.safetyAttestedAt) ?? '');
 
   return {
     ...readCompletion(value),
+    ...(Number.isFinite(safetyAttestedTime) ? { safetyAttestedAt: new Date(safetyAttestedTime).toISOString() } : {}),
     addonQty: readAddonQty(value.addonQty),
     bookingReference: stringOrNull(value.bookingReference),
     contact: readContact(value.contact),

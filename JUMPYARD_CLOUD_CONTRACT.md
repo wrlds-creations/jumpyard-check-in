@@ -44,6 +44,14 @@ Phone and kiosk (D0226, #444) new-purchase drafts may carry the optional Cloud-o
 
 The server records the choice, timestamp, email hash and exact copy against the provider-returned draft identity as `sent_with_draft`. The after-payment Booking worker (paid-booking recheck, durable claim, guest update) stays in code but is closed: no profile sets `safetyGates.phoneEmailMarketingDeliveryApproval`, so `PHONE_EMAIL_MARKETING_PROVIDER_APPROVED` is false. A failed marketing operation does not fail payment. Public promotion of the switch waits for owned-address verification. [Persistence, provider gates and evidence](docs/gh-437-phone-email-marketing.md).
 
+## Safety Before Payment (#458, kiosk #143)
+
+Under D0231 (kiosk D0043) phone and kiosk guests approve safety before payment. New-purchase drafts may carry the optional Cloud-only `safetyAttestation` object `{ attestedAt, copyVersion: "safety-rules-2026-09-30-v1", locale: "sv" | "en" }`. Any other shape or version returns 400 `safety_attestation_invalid` before provider work. It never reaches ROLLER or the draft idempotency hash. After the ROLLER draft exists, and before any zero-owing publish, Cloud records it against the provider-returned identity in `idempotency_records` (`jysa_` key, two days, no contact data). A failed record never fails the purchase.
+
+The guest is done the moment the payment is approved. After an approved phone payment, the phone calls `POST /v1/bookings/draft/finalize` with `action: "phone_approved"`. Cloud then gives the attested ecommerce purchase a provisional booking, guest access and session with `bookingSyncStatus: pending`, like the kiosk's (D0022), and the phone marks that session ready (number and QR). When lookup or webhook later stores ROLLER's fresh, fully paid booking, the existing paid-booking signal attaches its reference and tickets and sets `confirmed`. Until then staff see "Bokningen bekräftas" and cannot hand out or redeem.
+
+The kiosk marks its provisional session ready right after the durable terminal approval. A session for a paid, attested booking that starts or resumes in `guest_in_progress` is readied by Cloud from Aurora alone, and unpaid bookings still cannot start ordinary sessions. [Behaviour and verification](docs/gh458-safety-before-payment.md).
+
 ## Source Materials
 
 - `PROJECT_CONTEXT.md`
@@ -480,6 +488,7 @@ Session rules:
 - `guestResumeStep` is an optional bounded guest-flow hint. The only accepted value is `safety`; arbitrary client routes are rejected and never persisted.
 - A paid client records `guestResumeStep=safety` when it reaches the safety walkthrough. A later device may use the returned marker to resume at safety without marking safety complete or making the session ready for staff.
 - Ready-for-staff, completed, redeemed, expired, and blocked server state remains authoritative over the resume hint.
+- #458 (D0231): if the booking's draft carried a recorded safety approval, a started or resumed `guest_in_progress` session for the paid booking is returned already ready for staff with its number. The rule reads Aurora only; the response keeps `session_started` or `session_resumed`.
 - The phone app may call this endpoint immediately after a paid lookup to resume an existing active session before showing the booking summary.
 - When `includeBooking=true`, return the existing guest-safe booking shape with original items plus approved linked add-ons. While the separate ROLLER add-on booking is still synchronizing, use only definitively approved/reconciled provisional draft items; replace them with authoritative linked items without duplication after readback.
 - Never include unapproved, failed, cancelled, refused, unknown, or timed-out linked drafts, and never expose linked booking/draft/payment identifiers in the guest response.
@@ -775,6 +784,7 @@ Draft rules:
 - T0031 implemented this in the deployed booking Lambda.
 - `confirmDraft=true` and an idempotency key are required because this creates a Roller Playground draft booking.
 - First name and email are required. Last name and phone are either both supplied (four-field contract) or both omitted (email-first contract, #473); see the visitor contact sections above.
+- The optional `safetyAttestation` (#458) is validated and recorded as described in Safety Before Payment; it is not sent to ROLLER and does not change the request hash.
 - For the phone buy-entry path, `items[]` may contain the core entry product plus selected mapped add-ons so the guest pays once for the combined basket.
 - Draft creation holds capacity through Roller's draft timer.
 - Return the draft unique id, normalized costs, payment config from `GET /venues/me`, and the raw `paymentJwt` only in the API response.
@@ -791,7 +801,9 @@ Records a sanitized ROLLER terminal result for one server-owned kiosk payment at
 
 Required fields are `prepaymentDraftId`, `paymentAttemptId`, `rollerDraftUniqueId`, `outcome`, and an idempotency key. All identifiers must match one `card_present` row with `flow_type='new_booking'` or `flow_type='add_product'`. The endpoint accepts no card data, receipt data, processor reference, terminal id, or raw payment JWT. A late non-approved result cannot downgrade an approved or reconciled attempt.
 
-For `new_booking`, the provisional session is created only after durable payment approval and includes `guestResumeStep=safety`. The kiosk uses that session immediately instead of waiting for the ROLLER booking. Repeated finalize and status requests return the same session and marker. Redemption remains blocked until `bookingSyncStatus=confirmed` and authoritative booking tickets are attached. For `add_product`, confirmation instead publishes the prepayment row and returns the linked add-on booking reference; it must not create a second check-in or Handoff session. The add-on link was already stored before the terminal identity was returned, and the existing lookup/webhook reconciliation owns publication of its `booking_links` status. Stock-only add-on readback may have booking items without tickets, while the new-booking path keeps its ticket-bearing readback requirement.
+For `new_booking`, the provisional session is created only after durable payment approval and includes `guestResumeStep=safety`. The kiosk uses that session immediately instead of waiting for the ROLLER booking. When the guest approved safety before the terminal (#143, D0043), the kiosk marks that session ready for staff at once through the ready-for-staff route. The number therefore never waits for ROLLER publication.
+
+`action: "phone_approved"` (#458, D0231) takes `prepaymentDraftId` and `rollerDraftUniqueId` for one recent `ecommerce` `new_booking` draft whose safety approval travelled with it. It returns the same `provisionalHandoff` shape as the kiosk, with a fresh two-hour guest credential (only its hash is stored). The booking row is written only when none exists, and the session is created once per booking and visit day, so retries return the same session. Drafts without the approval get 409 `safety_attestation_missing`, and unknown or other drafts get 404. Repeated finalize and status requests return the same session and marker. Redemption remains blocked until `bookingSyncStatus=confirmed` and authoritative booking tickets are attached. For `add_product`, confirmation instead publishes the prepayment row and returns the linked add-on booking reference; it must not create a second check-in or Handoff session. The add-on link was already stored before the terminal identity was returned, and the existing lookup/webhook reconciliation owns publication of its `booking_links` status. Stock-only add-on readback may have booking items without tickets, while the new-booking path keeps its ticket-bearing readback requirement.
 
 T0030 discovery result:
 

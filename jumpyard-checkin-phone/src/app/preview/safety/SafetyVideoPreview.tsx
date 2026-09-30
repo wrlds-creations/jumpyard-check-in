@@ -14,8 +14,8 @@ function Preview() {
         <button type="button" onClick={toggleLang}>{lang === 'sv' ? 'EN' : 'SV'}</button>
       </div>
       {completed
-        ? <p role="status" className="p-6">{lang === 'sv' ? 'Videon är sedd. Nästa steg: säkerhetsregler.' : 'Video watched. Next step: safety rules.'}</p>
-        : <SafetyVideo onComplete={() => setCompleted(true)} />}
+        ? <p role="status" className="p-6">{lang === 'sv' ? 'Säkerheten är godkänd.' : 'Safety approved.'}</p>
+        : <SafetyVideo onApprove={() => setCompleted(true)} />}
     </main>
   );
 }

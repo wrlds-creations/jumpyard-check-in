@@ -5,11 +5,24 @@ import { AlertCircle, Loader2, Play, RotateCcw } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 import { createSafetyPlayback, type SafetyPlaybackState } from '@/flow/safetyPlayback';
 import { SAFETY_MEDIA } from '@/flow/safetyMedia';
+import { SafetyApproval, type SafetyApprovalProps } from '@/components/SafetyApproval';
 
-interface SafetyVideoProps {
-    onComplete: (seenAt: string) => void;
+// #458: one safety screen. The film plays first; only a genuine end of playback reveals the single
+// approval on the same screen: the finished film docks to the top and the approval appears under it
+// (variant A, chosen by Love 2026-09-30). The layout is fixed from the first frame and only
+// transform and opacity animate.
+interface SafetyVideoProps extends Omit<SafetyApprovalProps, 'headingRef' | 'onApprove'> {
     buyEntryFlow?: boolean;
+    /** Called once playback has genuinely reached the end. */
+    onWatched?: (videoSeenAt: string) => void;
+    onApprove: (attestedAt: string) => void;
 }
+
+const MAX_VIDEO_WIDTH = 382;
+const PANEL_GAP = 12;
+const MIN_DOCK_SCALE = 0.3;
+// Below this stage height (small phones, or Safari with its toolbars) the approval uses tighter type.
+const COMPACT_STAGE_HEIGHT = 600;
 
 export const SafetyVideo = (props: SafetyVideoProps) => {
     const { lang } = useTranslation();
@@ -18,19 +31,26 @@ export const SafetyVideo = (props: SafetyVideoProps) => {
     return <LocalizedSafetyVideo key={lang} {...props} continuePlaying={continuePlaying} />;
 };
 
-function LocalizedSafetyVideo({ onComplete, buyEntryFlow = false, continuePlaying }: SafetyVideoProps & {
-    continuePlaying: RefObject<boolean>;
-}) {
+function LocalizedSafetyVideo({
+    buyEntryFlow = false,
+    continuePlaying,
+    onWatched,
+    onApprove,
+    ...approvalProps
+}: SafetyVideoProps & { continuePlaying: RefObject<boolean> }) {
     const { t, lang } = useTranslation();
     const videoRef = useRef<HTMLVideoElement>(null);
+    const stageRef = useRef<HTMLDivElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+    const headingRef = useRef<HTMLHeadingElement>(null);
     const playbackRef = useRef<ReturnType<typeof createSafetyPlayback> | null>(null);
+    const onWatchedRef = useRef(onWatched);
     const [playback, setPlayback] = useState<SafetyPlaybackState>({ phase: 'idle', progress: 0 });
+    const [box, setBox] = useState({ width: 0, height: 0, panel: 0 });
     const { phase, progress } = playback;
     const done = phase === 'done';
-    const [videoWidth, setVideoWidth] = useState(320);
     const title = buyEntryFlow ? t.safetyVideo.buyTitle : t.safetyVideo.title;
     const description = buyEntryFlow ? t.safetyVideo.buyDescription : t.safetyVideo.description;
-    const doneLabel = buyEntryFlow ? t.safetyVideo.buyDone : t.safetyVideo.done;
 
     useLayoutEffect(() => {
         const video = videoRef.current;
@@ -39,6 +59,8 @@ function LocalizedSafetyVideo({ onComplete, buyEntryFlow = false, continuePlayin
         if (!video.getAttribute('src')) video.src = SAFETY_MEDIA[lang].src;
         const controller = createSafetyPlayback(video, state => {
             continuePlaying.current = state.phase === 'playing' || state.phase === 'loading';
+            // Only the playback controller's genuine end reveals the approval.
+            if (state.phase === 'done') onWatchedRef.current?.(new Date().toISOString());
             setPlayback(state);
         });
         playbackRef.current = controller;
@@ -55,33 +77,67 @@ function LocalizedSafetyVideo({ onComplete, buyEntryFlow = false, continuePlayin
         };
     }, [continuePlaying, lang]);
 
-    useEffect(() => {
-        const updateVideoSize = () => {
-            const widthLimit = Math.min(window.innerWidth - 24, 382);
-            const heightLimit = window.innerHeight - 122;
-            const widthByHeight = heightLimit * 9 / 16;
-            setVideoWidth(Math.max(220, Math.floor(Math.min(widthLimit, widthByHeight))));
-        };
-
-        updateVideoSize();
-        window.addEventListener('resize', updateVideoSize);
-        return () => window.removeEventListener('resize', updateVideoSize);
+    useLayoutEffect(() => {
+        const stage = stageRef.current;
+        // The approval itself, not its wrapper, so overflow padding never feeds back into the geometry.
+        const panel = panelRef.current?.firstElementChild as HTMLElement | null | undefined;
+        if (!stage || !panel) return;
+        const measure = () => setBox(previous => {
+            const next = { width: stage.clientWidth, height: stage.clientHeight, panel: panel.offsetHeight };
+            return next.width === previous.width && next.height === previous.height && next.panel === previous.panel ? previous : next;
+        });
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(stage);
+        observer.observe(panel);
+        return () => observer.disconnect();
     }, []);
 
+    useEffect(() => {
+        onWatchedRef.current = onWatched;
+    }, [onWatched]);
+
     const handlePlay = () => playbackRef.current?.start();
+    const approve = () => onApprove(new Date().toISOString());
+
+    // The film uses the whole stage while it plays. The approval space is reserved from the start,
+    // so revealing it never moves the layout.
+    const measured = box.height > 0;
+    const width = measured ? Math.max(180, Math.floor(Math.min(box.width, MAX_VIDEO_WIDTH, box.height * 9 / 16))) : 320;
+    const height = Math.round(width * 16 / 9);
+    const playOffset = measured ? Math.max(0, (box.height - height) / 2) : 0;
+    const dockScale = measured
+        ? Math.min(1, Math.max(MIN_DOCK_SCALE, (box.height - box.panel - PANEL_GAP) / height))
+        : 1;
+    // Normally the approval sits at the bottom of the stage. When even the compact approval cannot
+    // share a short stage with the smallest docked film, it starts right under the film and the page
+    // scrolls it into view once.
+    const dockTop = Math.max(box.height - box.panel, Math.ceil(height * dockScale) + PANEL_GAP);
+    const dockOverflows = measured && dockTop + box.panel > box.height;
+    const compact = measured && box.height < COMPACT_STAGE_HEIGHT;
+    const docked = done;
+    // Matching transform lists interpolate cleanly between playing and docked.
+    const frameTransform = docked ? `translateY(0px) scale(${dockScale})` : `translateY(${playOffset}px) scale(1)`;
+
+    useEffect(() => {
+        if (!done) return;
+        headingRef.current?.focus({ preventScroll: true });
+        if (docked && dockOverflows) panelRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    }, [done, docked, dockOverflows]);
 
     return (
         <FlowScreen
-            className="w-full max-w-md mx-auto flex min-h-0 flex-col items-center justify-center px-3 py-1"
-            style={{ minHeight: 'calc(100dvh - 118px)' }}
+            className="safety-screen mx-auto flex w-full max-w-md min-h-0 flex-col pb-1"
             initial={false}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
+            data-safety-phase={phase}
         >
-            <div className="flex w-full flex-1 items-center justify-center">
+            <div ref={stageRef} className="safety-stage relative w-full flex-1">
                 <div
-                    className="relative mx-auto aspect-[9/16] max-w-full overflow-hidden rounded-2xl border border-border bg-black shadow-sm"
-                    style={{ width: `${videoWidth}px` }}
+                    className="safety-film absolute inset-x-0 top-0 z-10 mx-auto overflow-hidden rounded-2xl border border-border bg-black shadow-sm"
+                    style={{ width, height, transform: frameTransform }}
+                    data-docked={String(docked)}
                 >
                     <video
                         ref={videoRef}
@@ -148,24 +204,30 @@ function LocalizedSafetyVideo({ onComplete, buyEntryFlow = false, continuePlayin
                         style={{ width: `${progress}%` }}
                     />
 
-                    {done && (
-                        <div className="absolute inset-0 z-30 flex flex-col justify-end bg-gradient-to-t from-black/75 via-black/20 to-transparent p-4">
-                        <button
-                            type="button"
-                            onClick={() => onComplete(new Date().toISOString())}
-                            className="w-full rounded-2xl border border-transparent bg-primary py-4 text-base font-black italic uppercase text-white shadow-sm transition-all active:scale-[0.98]"
-                        >
-                            {doneLabel}
-                        </button>
+                    {docked && (
                         <button
                             type="button"
                             onClick={handlePlay}
-                            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-white/35 bg-white/95 py-3 text-sm font-black italic uppercase text-foreground transition-all active:scale-[0.98]"
+                            aria-label={t.safetyVideo.replay}
+                            className="absolute inset-0 z-30 flex items-center justify-center bg-black/25"
                         >
-                            <RotateCcw size={16} /> {t.safetyVideo.replay}
+                            <span className="grid h-28 w-28 place-items-center rounded-full bg-white/95 text-foreground shadow-lg">
+                                <RotateCcw size={48} strokeWidth={2.5} aria-hidden="true" />
+                            </span>
                         </button>
-                    </div>
                     )}
+                </div>
+
+                <div
+                    ref={panelRef}
+                    className="safety-approval absolute inset-x-0"
+                    // The overflow padding keeps the approval clear of the Back/Exit buttons after scrolling.
+                    style={docked && dockOverflows ? { top: dockTop, paddingBottom: 112 } : { bottom: 0 }}
+                    data-visible={String(done)}
+                    aria-hidden={!done}
+                    inert={!done}
+                >
+                    <SafetyApproval {...approvalProps} compact={compact} headingRef={headingRef} onApprove={approve} />
                 </div>
             </div>
         </FlowScreen>

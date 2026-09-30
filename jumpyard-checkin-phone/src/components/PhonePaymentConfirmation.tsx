@@ -4,7 +4,8 @@ import { JumpyardIcon } from './JumpyardIcon';
 import styles from './PhonePaymentConfirmation.module.css';
 
 export type PhonePaymentLanguage = 'sv' | 'en';
-export type PhonePaymentPreparationState = 'preparing' | 'ready' | 'delayed';
+// #458: 'confirming' is the calm state after an approved payment while ROLLER confirms the booking.
+export type PhonePaymentPreparationState = 'preparing' | 'ready' | 'delayed' | 'confirming';
 
 const COPY = {
   sv: {
@@ -17,6 +18,7 @@ const COPY = {
     delayed: 'Det tar lite längre tid',
     delayedHelp: 'Bokningen är inte redo ännu. Betala inte igen. Kontrollera igen om en stund eller be personalen om hjälp.',
     retry: 'Kontrollera igen',
+    confirming: 'Vi väntar på att bokningssystemet bekräftar bokningen. Ditt nummer visas här automatiskt, det kan ta upp till någon minut.',
   },
   en: {
     title: 'Payment complete',
@@ -28,6 +30,7 @@ const COPY = {
     delayed: 'This is taking a little longer',
     delayedHelp: 'Your booking is not ready yet. Do not pay again. Check again in a moment or ask a member of staff for help.',
     retry: 'Check again',
+    confirming: 'We are waiting for the booking system to confirm the booking. Your number appears here automatically; it can take up to a minute or so.',
   },
 };
 
@@ -48,7 +51,7 @@ export function PhonePaymentConfirmation({
 }: PhonePaymentConfirmationProps) {
   const copy = COPY[language];
 
-  if (preparationState !== 'ready') {
+  if (preparationState === 'preparing' || preparationState === 'delayed') {
     const preparing = preparationState === 'preparing';
     return (
       <section className={styles.confirmation} lang={language} aria-labelledby="phone-payment-title">
@@ -78,8 +81,14 @@ export function PhonePaymentConfirmation({
           <JumpyardIcon name="receipt" className={styles.receiptIcon} />
           <span>{copy.receipt}</span>
         </p>
+        {preparationState === 'confirming' && (
+          <p className={styles.confirming}>
+            <span className={`${styles.spinner} ${styles.inlineSpinner}`} aria-hidden="true" />
+            <span>{copy.confirming}</span>
+          </p>
+        )}
       </div>
-      <button
+      {preparationState === 'ready' && <button
         type="button"
         className={styles.continueButton}
         disabled={isContinuing}
@@ -88,7 +97,7 @@ export function PhonePaymentConfirmation({
       >
         {isContinuing && <span className={`${styles.spinner} ${styles.buttonSpinner}`} aria-hidden="true" />}
         <span aria-live="polite">{isContinuing ? copy.continuing : copy.continue}</span>
-      </button>
+      </button>}
     </section>
   );
 }

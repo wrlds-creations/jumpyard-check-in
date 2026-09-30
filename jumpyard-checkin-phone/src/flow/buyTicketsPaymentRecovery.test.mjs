@@ -43,6 +43,8 @@ function recoveryHarness({ failure = 'unknown', outcome = failure, lookup = asyn
   const events = [];
   const state = {
     draft,
+    // #458: no safety approval before this payment, so the existing confirmation path runs.
+    draftSafetyAttestation: undefined,
     paymentFailure: failure,
     paymentStatusCheckingRef: { current: false },
     paymentResolutionStartedRef: { current: false },

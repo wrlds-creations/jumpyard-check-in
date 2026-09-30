@@ -25,10 +25,12 @@ import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
+import { SafetyVideo } from '@/components/SafetyVideo';
 import { AddonChoices } from '@/components/AddonChoices';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 import { approvePaymentRecovery, clearPaymentRecoveryAfterCompletion, readPaymentRecovery } from '@/flow/paymentRecovery';
 import { getAddonBackRule, type AddonBackRule } from '@/flow/addonPaymentNavigation';
+import { scheduleRollerConfirmationNudges } from '@/flow/provisionalConfirmation';
 
 export interface AddonsOfferResult {
     selectedAddons: Addon[];
@@ -37,17 +39,26 @@ export interface AddonsOfferResult {
     skyriderHeightConfirmed?: boolean;
     connectedSelected: boolean;
     paymentHandled?: boolean;
+    /** #458: safety was approved before the add-on payment, so completion follows it directly. */
+    safetyAttestedAt?: string | null;
 }
 
 interface AddonsOfferProps {
     backRequest?: number;
     booking: Booking;
+    /**
+     * #458 (D0231): the safety film and its approval come after the add-on review, before the
+     * add-on payment (Love 2026-09-30). Without add-ons, the page's safety step follows directly.
+     * Off keeps the old order (safety after payment).
+     */
+    safetyBeforePayment?: boolean;
     guestCount: number;
     existingAddons: Addon[];
     prefetchedAvailability?: AddonsAvailabilityPrefetch | null;
     onStepChange?: (step: AddonsOfferStep) => void;
     onBackRuleChange?: (rule: AddonBackRule) => void;
-    onContinue: (result: AddonsOfferResult) => void;
+    /** An attested add-on payment resolves once the visit is ready; a rejection keeps the wait. */
+    onContinue: (result: AddonsOfferResult) => void | Promise<void>;
     onPaymentApproved?: (result: AddonsOfferResult) => void;
     onPendingDone: () => void;
 }
@@ -71,7 +82,7 @@ interface CatalogEntry {
     requiresAvailability: boolean;
 }
 
-export type AddonsOfferStep = 'SELECT' | 'SKYRIDER_ATTEST' | 'REVIEW' | 'PAYMENT' | 'APPROVED' | 'PENDING';
+export type AddonsOfferStep = 'SELECT' | 'SKYRIDER_ATTEST' | 'REVIEW' | 'SAFETY' | 'PAYMENT' | 'APPROVED' | 'PENDING';
 
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
 
@@ -186,6 +197,7 @@ function isPricedCatalogEntry(entry: CatalogEntry): entry is CatalogEntry & { pr
 export const AddonsOffer = ({
     backRequest = 0,
     booking,
+    safetyBeforePayment = false,
     guestCount,
     existingAddons,
     prefetchedAvailability = null,
@@ -280,6 +292,10 @@ export const AddonsOffer = ({
     }, [existingAddons]);
 
     const [step, setStep] = useState<AddonsOfferStep>('SELECT');
+    const [safetyApprovedAt, setSafetyApprovedAt] = useState<string | null>(null);
+    // #458: "Vi slutför ditt köp …" while the visit is marked ready after an attested add-on payment.
+    const [paidConfirmState, setPaidConfirmState] = useState<'preparing' | 'delayed'>('preparing');
+    const attestedConfirmInFlightRef = useRef(false);
     const [qty, setQty] = useState<Record<AddonId, number>>(() => getRecommendedAddonQty(minQty));
     const [quote, setQuote] = useState<NewBookingQuote | null>(null);
     const [draft, setDraft] = useState<AddProductDraftResult | null>(null);
@@ -334,9 +350,14 @@ export const AddonsOffer = ({
     useEffect(() => {
         if (backRequest === handledBackRequest.current) return;
         handledBackRequest.current = backRequest;
+        // #458: Back from the safety film (nothing submitted yet) returns to the review it came from.
+        if (step === 'SAFETY') {
+            setStep('REVIEW');
+            return;
+        }
         if (backRule !== 'select') return;
         returnToSelect();
-    }, [backRequest, backRule, returnToSelect]);
+    }, [backRequest, backRule, returnToSelect, step]);
 
     useEffect(() => {
         setQty((current) => {
@@ -428,6 +449,8 @@ export const AddonsOffer = ({
             skyriderHeightConfirmed: addedSkyrider ? skyriderConsentConfirmed : false,
             connectedSelected: qty.connected > 0,
             paymentHandled,
+            // #458: an approval given here stands even if the guest later drops the add-ons.
+            safetyAttestedAt: safetyBeforePayment ? safetyApprovedAt : null,
         });
 
     const completeAddons = async (paymentHandled = false) => {
@@ -436,7 +459,7 @@ export const AddonsOffer = ({
             if (!await clearPaymentRecoveryAfterCompletion(paymentAttemptId)) return;
         }
         if (activePaymentAttemptRef.current !== paymentAttemptId) return;
-        onContinue(getCompletionResult(paymentHandled));
+        await onContinue(getCompletionResult(paymentHandled));
     };
 
     const handlePaymentApproved = () => {
@@ -444,6 +467,29 @@ export const AddonsOffer = ({
         paymentApprovedRef.current = true;
         setStep('APPROVED');
         onPaymentApproved?.(getCompletionResult(true));
+        if (safetyBeforePayment && safetyApprovedAt) void confirmAttestedAddons();
+    };
+
+    // #458 (D0231): safety was approved before this add-on payment, so the guest is done the moment
+    // it is approved (Love 2026-09-30). The visit is marked ready at once; ROLLER's confirmation of
+    // the add-on booking follows in the background. A failure keeps the calm wait and its retry.
+    const confirmAttestedAddons = async () => {
+        const identifier = draft?.draft.uniqueId ?? draft?.draft.bookingReference;
+        if (!paymentAttemptId || attestedConfirmInFlightRef.current) return;
+        const isCurrent = () => activePaymentAttemptRef.current === paymentAttemptId;
+        attestedConfirmInFlightRef.current = true;
+        setPaidConfirmState('preparing');
+        try {
+            await completeAddons(true);
+            if (identifier) scheduleRollerConfirmationNudges(lookupBooking, identifier);
+            return;
+        } catch {
+            if (!isCurrent()) return;
+        } finally {
+            attestedConfirmInFlightRef.current = false;
+        }
+        // Never ask for another payment. The guest can try once more or ask staff.
+        setPaidConfirmState('delayed');
     };
 
     const checkPaymentStatus = async () => {
@@ -529,10 +575,15 @@ export const AddonsOffer = ({
         void goToReview(true);
     };
 
-    const createDraft = async () => {
+    const createDraft = async (approvedAt = safetyApprovedAt) => {
         if (!quote || submitting) return;
         if (needsSkyRiderConsent()) {
             setStep('SKYRIDER_ATTEST');
+            return;
+        }
+        // #458: the add-on payment starts only after the safety approval.
+        if (safetyBeforePayment && !approvedAt) {
+            setStep('SAFETY');
             return;
         }
         setSubmitting(true);
@@ -698,9 +749,18 @@ export const AddonsOffer = ({
                         disabled={submitting}
                         className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
-                        {submitting ? t.buy.creating : t.addons.createDraft}
+                        {submitting ? t.buy.creating : safetyBeforePayment && !safetyApprovedAt ? t.common.continue : t.addons.createDraft}
                     </button>
                 </FlowScreen>
+            )}
+
+            {step === 'SAFETY' && (
+                <SafetyVideo
+                    onApprove={(attestedAt) => {
+                        setSafetyApprovedAt(attestedAt);
+                        void createDraft(attestedAt);
+                    }}
+                />
             )}
 
             {step === 'APPROVED' && (
@@ -713,6 +773,8 @@ export const AddonsOffer = ({
                     <PhonePaymentConfirmation
                         language={lang}
                         amountLabel={formatMoney(draft?.prepayment?.amountOwing ?? draft?.draft.costs.amountOwing)}
+                        preparationState={safetyBeforePayment && safetyApprovedAt ? paidConfirmState : 'ready'}
+                        onRetryPreparation={() => void confirmAttestedAddons()}
                         onContinueToSafety={() => completeAddons(true)}
                     />
                 </FlowScreen>
