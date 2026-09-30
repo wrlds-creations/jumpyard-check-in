@@ -104,8 +104,9 @@ test('payment snapshots retain quantities, add-ons and contact without payment s
   assert.deepEqual(saved.addonQty, previous.addonQty);
   assert.deepEqual(saved.contact, previous.contact);
   assert.equal(saved.skyriderConsentConfirmed, true);
-  assert.equal(saved.alreadyHasApprovedSocks, true);
-  assert.equal(saved.alreadyHasWaterBottle, false);
+  // #457: legacy own-item ticks from older snapshots are not carried forward.
+  assert.equal('alreadyHasApprovedSocks' in saved, false);
+  assert.equal('alreadyHasWaterBottle' in saved, false);
   assert.equal(saved.paymentOptionsHadValues, true);
   assert.equal(saved.draftUniqueId, 'booking-original');
   assert.equal(saved.draftState.paymentApproved, false);

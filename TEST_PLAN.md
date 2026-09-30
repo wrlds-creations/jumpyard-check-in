@@ -1,5 +1,9 @@
 # Test Plan
 
+## Phone add-ons without ticks (#457)
+
+Run `npm run validate:gh318-phone-addon-choices` with `npm --prefix jumpyard-checkin-phone run test:addon-back`, `test:product-visibility`, `test:flow-nav` and `test:payment-recovery`. In the development-only `/preview/addons` check buying for 2 jumpers, a booking with socks included and a family of 4 in SV/EN at 390x844 and 375x667: all five add-ons visible without scrolling, no own-item tick, Continue works with nothing selected, SkyRider still opens its attestation and the total sits between the Back/Exit buttons. The production export must keep `/preview/addons` a not-found page. Check an iPhone in Safari on Park.
+
 ## Phone Back/Exit (#441)
 
 Run `npm --prefix jumpyard-checkin-phone run test:flow-nav` with `test:exit-flow`, `test:addon-back` and `test:language-toggle`. In the development flow preview check the round Back/Exit buttons at 320-430 px in SV/EN, that the last ticket card scrolls clear of them, that they hide while a text field has focus and behind the exit dialog, and that Exit still opens the confirmation. Check an iPhone in Safari on Park for toolbar and keyboard behavior.
