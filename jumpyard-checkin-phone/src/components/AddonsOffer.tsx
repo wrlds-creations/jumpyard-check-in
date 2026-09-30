@@ -25,7 +25,7 @@ import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
-import { AddonChoices, type AddonChoicesHandle } from '@/components/AddonChoices';
+import { AddonChoices } from '@/components/AddonChoices';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 import { approvePaymentRecovery, clearPaymentRecoveryAfterCompletion, readPaymentRecovery } from '@/flow/paymentRecovery';
 import { getAddonBackRule, type AddonBackRule } from '@/flow/addonPaymentNavigation';
@@ -288,9 +288,6 @@ export const AddonsOffer = ({
     const [paymentFailure, setPaymentFailure] = useState<'failed' | 'unknown' | null>(null);
     const [paymentChecking, setPaymentChecking] = useState(false);
     const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
-    const [alreadyHasApprovedSocks, setAlreadyHasApprovedSocks] = useState(false);
-    const [alreadyHasWaterBottle, setAlreadyHasWaterBottle] = useState(false);
-    const addonChoicesRef = useRef<AddonChoicesHandle>(null);
     const handledBackRequest = useRef(backRequest);
     const paymentApprovedRef = useRef(false);
     const paymentNavigationLockedRef = useRef(false);
@@ -363,20 +360,6 @@ export const AddonsOffer = ({
         setDraft(null);
         if (id === 'skyrider') setSkyriderConsentConfirmed(false);
         setQty((current) => ({ ...current, [id]: Math.max(minQty[id], nextQty) }));
-    };
-
-    const setSocksConfirmation = (checked: boolean) => {
-        setAlreadyHasApprovedSocks(checked);
-        setSubmitError(null);
-        setQuote(null);
-        setDraft(null);
-    };
-
-    const setWaterBottleConfirmation = (checked: boolean) => {
-        setAlreadyHasWaterBottle(checked);
-        setSubmitError(null);
-        setQuote(null);
-        setDraft(null);
     };
 
     const selectedAddons: Addon[] = useMemo(
@@ -494,8 +477,7 @@ export const AddonsOffer = ({
             return;
         }
 
-        if (!addonChoicesRef.current?.validate()) return;
-
+        // #457: socks and water are ordinary offers, so nothing on this step blocks Continue.
         if (addedAddons.length === 0) {
             completeAddons(false);
             return;
@@ -631,7 +613,7 @@ export const AddonsOffer = ({
 
             {step === 'SELECT' && (
                 <>
-                    <div className="text-center">
+                    <div className="text-center mb-2">
                         <h1 className="text-xl font-black italic uppercase text-foreground">{t.addons.title}</h1>
                     </div>
 
@@ -646,20 +628,14 @@ export const AddonsOffer = ({
                         {catalogLoading ? (
                             <AddonsLoadingCard label={t.addons.loading} />
                         ) : (
-                            <AddonChoices ref={addonChoicesRef}
+                            <AddonChoices
                                 entries={catalog.map((entry) => ({ ...entry, quantity: qty[entry.id], included: minQty[entry.id],
                                     max: Math.max(minQty[entry.id], 1, guestCount * entry.maxPerGuest), available: isPricedCatalogEntry(entry) }))}
-                                ownSocks={alreadyHasApprovedSocks} ownBottle={alreadyHasWaterBottle}
-                                onQuantity={setOne} onOwnSocks={setSocksConfirmation} onOwnBottle={setWaterBottleConfirmation} />
+                                onQuantity={setOne} />
                         )}
                     </div>
 
                     <div className="addon-shop-footer">
-                        <div className="w-full flex items-center justify-between bg-white border border-border rounded-xl px-4 py-2.5 mb-3">
-                            <p className="text-foreground uppercase text-xs font-bold italic tracking-wider">{t.addons.total}</p>
-                            <p className="text-2xl font-black italic text-primary">{addonsTotal} {t.common.currency}</p>
-                        </div>
-
                         <button
                             data-testid="addons-select-continue"
                             onClick={handleSelectContinue}
@@ -668,6 +644,11 @@ export const AddonsOffer = ({
                         >
                             {catalogLoading ? t.buy.loadingAvailabilityTitle : submitting ? t.buy.quoting : t.common.continue}
                         </button>
+
+                        <p className="addon-shop-total" aria-live="polite" aria-atomic="true">
+                            <span className="addon-shop-total-label">{t.addons.total}</span>
+                            <span key={addonsTotal} className="addon-shop-total-amount">{addonsTotal} {t.common.currency}</span>
+                        </p>
                     </div>
                 </>
             )}

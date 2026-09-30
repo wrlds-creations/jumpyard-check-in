@@ -65,8 +65,6 @@ export interface BuyFlowRecoverySnapshot {
   jumperCount: number | null;
   quantity?: number | null;
   addonQty?: BuyFlowRecoveryAddonQty;
-  alreadyHasApprovedSocks?: boolean;
-  alreadyHasWaterBottle?: boolean;
   skyriderConsentConfirmed?: boolean;
   contact?: BuyFlowRecoveryContact | null;
   paymentOptionsHadValues?: boolean;
@@ -282,8 +280,6 @@ function normalizeSnapshot(value: unknown): BuyFlowRecoverySnapshot | null {
   return {
     ...readCompletion(value),
     addonQty: readAddonQty(value.addonQty),
-    alreadyHasApprovedSocks: value.alreadyHasApprovedSocks === true,
-    alreadyHasWaterBottle: value.alreadyHasWaterBottle === true,
     bookingReference: stringOrNull(value.bookingReference),
     contact: readContact(value.contact),
     currentFlowStep: value.currentFlowStep,

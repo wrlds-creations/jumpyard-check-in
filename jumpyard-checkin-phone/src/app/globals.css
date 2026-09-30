@@ -108,145 +108,186 @@ input {
   scroll-padding-block: 4px;
 }
 
+/* #457 (Hylla): socks and water are compact rows offered first, the optional add-ons a
+   three-tile shelf. Everything is an ordinary offer; nothing has to be ticked. */
 .addon-shop {
   --shop-control: 44px;
+  --shop-line: #f8c9d1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
   color: var(--foreground);
-  padding-block: 8px;
   font-size: 14px;
   line-height: 1.4;
 }
 
-.addon-shop-required,
-.addon-shop-optional {
+.addon-shop-group {
+  margin: 0 0 6px 4px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.addon-shop-group-optional { margin: 10px 0 14px 4px; }
+
+.addon-shop-row,
+.addon-shop-tile {
+  position: relative;
   min-width: 0;
-  padding: 10px;
-  border: 1px solid #f8c9d1;
+  border: 1.5px solid var(--shop-line);
   border-radius: 16px;
   background: #fff;
-  scroll-margin-block: 4px;
 }
 
-.addon-shop-required[data-invalid="true"],
-.addon-shop-optional[data-selected="true"] {
-  border-color: var(--primary);
-}
+.addon-shop-row + .addon-shop-row { margin-top: 8px; }
+.addon-shop-row[data-selected="true"] { border-color: var(--primary); }
+.addon-shop-tile[data-selected="true"] { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
 
-.addon-shop-required:focus-visible,
-.addon-shop button:focus-visible,
-.addon-shop-own:focus-within {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.addon-shop-card-heading {
-  display: flex;
+.addon-shop-row-main {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  column-gap: 10px;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
-  margin-bottom: 6px;
+  min-height: 52px;
+  padding: 4px 10px;
 }
 
-.addon-shop-card-heading > div { min-width: 0; }
+.addon-shop-icon-wrap { position: relative; display: block; width: 36px; height: 36px; }
+.addon-shop-icon { width: 36px; height: 36px; }
+/* A covered offer carries the brand check on the icon corner, which costs no width beside the stepper. */
+.addon-shop-badge { position: absolute; right: -7px; bottom: -5px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+.addon-shop-text { min-width: 0; }
 
 .addon-shop h3 {
-  font-size: 17px;
-  line-height: 1.2;
+  font-size: 15px;
+  line-height: 18px;
   font-weight: 900;
   font-style: italic;
   text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 
-.addon-shop-icon {
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
+.addon-shop-meta { font-size: 12px; line-height: 16px; font-weight: 700; }
+
+.addon-shop-row-note {
+  padding: 7px 10px 8px;
+  border-top: 1px solid var(--shop-line);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
 }
-
-.addon-shop-price { margin-top: 2px; font-weight: 700; }
-.addon-shop-note { font-size: 13px; }
-
-.addon-shop-purchase {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  margin-top: 6px;
-}
-
-.addon-shop-selling-copy {
-  min-width: 0;
-  font-size: 13px;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-
-.addon-shop-own {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: var(--shop-control);
-  padding: 6px 8px;
-  border: 1px solid #f8c9d1;
-  border-radius: 10px;
-  font-weight: 700;
-  line-height: 1.3;
-  text-align: left;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.addon-shop-own { background: #fff; margin-top: 6px; }
-.addon-shop-own[data-checked="true"] { border-color: var(--primary); }
-.addon-shop-own input { width: 22px; height: 22px; flex-shrink: 0; accent-color: var(--primary); }
-.addon-shop-stepper svg { width: 20px; height: 20px; flex-shrink: 0; }
 
 .addon-shop-stepper { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .addon-shop-stepper button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   width: var(--shop-control);
   height: var(--shop-control);
-  border: 1px solid var(--primary);
+  border: 1.5px solid var(--primary);
   border-radius: 50%;
   color: var(--primary);
   background: #fff;
   touch-action: manipulation;
 }
 
+.addon-shop-stepper svg { width: 20px; height: 20px; flex-shrink: 0; }
 .addon-shop-stepper button:active:not(:disabled) { background: var(--primary); color: #fff; transform: scale(0.96); }
 .addon-shop button:disabled { opacity: 0.3; cursor: default; }
-.addon-shop-stepper output { width: 28px; text-align: center; font-size: 22px; font-weight: 900; }
+/* Nothing to remove yet: the minus keeps its slot, so the plus never moves under the thumb. */
+.addon-shop-stepper > button:first-child:disabled { visibility: hidden; }
+.addon-shop-stepper output { width: 24px; text-align: center; font-size: 20px; line-height: 24px; font-weight: 900; font-style: italic; }
+.addon-shop-stepper output[data-active="true"] { color: var(--primary); }
+.addon-shop button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
-.addon-shop-included,
-.addon-shop-error { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-weight: 700; }
-.addon-shop-included { color: #217348; }
-.addon-shop-included svg { width: 20px; height: 20px; flex-shrink: 0; }
-.addon-shop-error { color: #ab0027; }
-.addon-shop-warning-icon { width: 30px; height: 30px; flex-shrink: 0; }
-.addon-shop-unavailable { margin-top: 8px; }
-
-.addon-shop-optional .addon-shop-note { margin-top: 6px; }
-.addon-shop-recommended {
-  display: inline-flex;
-  padding: 4px 7px;
-  border: 1px solid var(--primary);
-  border-radius: 999px;
+.addon-shop-shelf { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: stretch; }
+.addon-shop-tile { display: flex; flex-direction: column; align-items: center; padding: 10px 4px 6px; text-align: center; }
+.addon-shop-tile-icon { width: 32px; height: 32px; }
+.addon-shop-tile h3 { margin-top: 2px; font-size: 13px; line-height: 16px; }
+.addon-shop-tile-fact { display: none; margin-top: 1px; font-size: 11px; line-height: 14px; font-weight: 600; }
+.addon-shop-tile-price { margin-top: 1px; font-size: 11px; line-height: 14px; font-weight: 700; color: var(--primary); white-space: nowrap; }
+.addon-shop-tile-included { display: block; color: var(--foreground); }
+.addon-shop-tile-count { position: absolute; top: 6px; right: 8px; font-size: 16px; line-height: 18px; font-weight: 900; font-style: italic; color: var(--primary); }
+.addon-shop-tile-stepper { gap: 2px; margin-top: auto; padding-top: 6px; }
+/* The Sky Rider recommendation sits on the top border of its tile. */
+.addon-shop-note {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 5px;
   background: #fff;
   color: var(--primary);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
 }
 
+.addon-shop-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Tall screens get air and the tile facts; the 667 px budget stays compact. */
+@media (min-height: 740px) {
+  .addon-shop-row + .addon-shop-row { margin-top: 12px; }
+  .addon-shop-group-optional { margin-top: 20px; }
+  .addon-shop-tile { padding-top: 16px; }
+  .addon-shop-tile-icon { width: 44px; height: 44px; }
+  .addon-shop-tile-fact { display: block; }
+}
+
+@media (max-width: 374px) {
+  .addon-shop-tile { padding-inline: 2px; }
+  .addon-shop-tile-stepper { gap: 0; }
+}
+
+@media (max-width: 359px) {
+  .addon-shop-shelf { gap: 6px; }
+  .addon-shop-tile-stepper button { width: 36px; height: 36px; }
+  .addon-shop-note { font-size: 9px; letter-spacing: 0; }
+}
+
+/* When the list scrolls (small screens), fade its bottom edge; this step hides the FlowNav fade. */
+.addon-shop-scroll[data-overflow="true"] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+}
+
+/* Continue sits above the nav row; the total is boxless text between the Back and Exit discs,
+   level with their centres. */
 .addon-shop-footer { flex-shrink: 0; padding-top: 8px; background: #fff; }
-.addon-shop-footer > div { margin-bottom: 8px; padding: 10px 12px; }
 .addon-shop-footer > button { min-height: 48px; padding-block: 12px; }
-.addon-shop-preview { padding: 4px 8px; border: 1px solid var(--primary); border-radius: 8px; font-size: 12px; }
+.addon-shop-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  height: 48px;
+  margin-top: 8px;
+  padding: 11px 48px 0;
+  margin-bottom: calc(16px + env(safe-area-inset-bottom, 0px) - max(12px, env(safe-area-inset-bottom, 0px)));
+}
+
+.addon-shop-total-label { font-size: 11px; line-height: 14px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+.addon-shop-total-amount { display: inline-block; font-size: 22px; line-height: 26px; font-weight: 900; font-style: italic; color: var(--primary); white-space: nowrap; font-variant-numeric: tabular-nums; animation: addon-shop-bump 160ms ease-out; }
+@keyframes addon-shop-bump { 50% { transform: scale(1.08); } }
+
+@media (max-width: 359px) {
+  .addon-shop-total { flex-direction: column; align-items: center; gap: 0; padding-top: 0; }
+  .addon-shop-total-label { font-size: 10px; line-height: 12px; }
+  .addon-shop-total-amount { font-size: 20px; line-height: 24px; }
+}
+
+@media (min-width: 480px) { .addon-shop-total { padding-inline: 60px; } }
+@media (prefers-reduced-motion: reduce) { .addon-shop-total-amount { animation: none; } }
+
+/* This step only: FlowNav keeps its discs, but its spacer and fade go (only the list scrolls). */
+.phone-flow-shell:has(.addon-shop-total) [data-testid="flow-nav-spacer"] { display: none; }
+body:has(.addon-shop-total) [data-testid="flow-nav"] > [aria-hidden="true"] { display: none; }
+.addon-shop-preview { margin-bottom: 8px; padding: 4px 8px; border: 1px solid var(--primary); border-radius: 8px; font-size: 12px; }
 
 /* The retiring view is a visual copy only, never a second active screen. */
 .flow-transition-snapshot, .flow-transition-snapshot * {
