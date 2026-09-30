@@ -28,7 +28,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 ## Current Product Baseline
 
 - Ready phone completion uses the approved kiosk red hero/number and shadowed, enlargeable session QR; completed/missing/kiosk fallbacks and safe reset stay intact. [#432 evidence](docs/gh432-phone-completion.md).
-- Phone/kiosk contact requires name, email and an entered phone, with an empty initial phone field and the kiosk numeric keyboard restored. New/unindexed emails no longer require our extra customer match. ROLLER retains ordinary email matching/contact updates; a different entered number can update an existing guest. Public phone lookup remains disabled and placeholder SMS/ingestion guards remain. Existing payments preserve their identity; open no-phone clients need reload. A supported no-phone/non-overwriting provider contract and physical/live purchase acceptance remain open ([#409](docs/gh409-no-phone-contact.md)).
+- Phone contact (D0234, #473, live 2026-09-30): first name + email. Cloud fills known customers from an exact Klaviyo lookup (Profiles:Read key in `/jumpyard-check-in-park-test/klaviyo/profiles-read`), unknown guests get `Gäst`/`0700000000`, and an uncertain lookup asks for last name + phone. The kiosk sends four fields until kiosk #150. Public phone lookup remains disabled and placeholder SMS/ingestion guards remain. Existing payments preserve their identity. [Evidence](docs/gh473-email-first-name-klaviyo.md#rollout-evidence).
 
 - Phone prepares safety before receipt (#374/D0209); #331 and #330/D0208 preserved. SV/EN video: #343/D0210/D0219.
 - Catalog refresh precedes booking reads; public failure omits Combo (#339/#341).

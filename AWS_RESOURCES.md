@@ -4,6 +4,12 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #473 Klaviyo Contact Lookup Secret (Deployed 2026-09-30)
+
+Release 36733819783 / `63f2ee0` (Park run [36734773707](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36734773707)) added `KlaviyoProfilesReadSecret`, named `/jumpyard-check-in-park-test/klaviyo/profiles-read`: created empty, `DeletionPolicy: Retain`, all ten WRLDS tags. It also added one Booking role statement (`secretsmanager:GetSecretValue` and `DescribeSecret` on that secret only), and three Booking variables: `ENABLE_GH473_KLAVIYO_CONTACT_LOOKUP=true`, `GH473_KLAVIYO_LOOKUP_TIMEOUT_MS=1500` and `KLAVIYO_PROFILES_READ_SECRET_ARN`.
+
+Resources went from 208 to 209, with nothing removed and no migrations. Love stored the Profiles:Read key value at 15:19:53Z. Agents never read it. #458's release `057340d` (Park run 36735979010, verification green) carries the same infrastructure. [Evidence](docs/gh473-email-first-name-klaviyo.md#rollout-evidence).
+
 ### Issue #473 Klaviyo Profiles:Read Secret (Proposed In Code; Not Deployed)
 
 Every park-test profile gains one retained Secrets Manager secret, `/jumpyard-check-in-park-test/klaviyo/profiles-read`:

@@ -4,9 +4,8 @@ Issue: https://github.com/wrlds-creations/jumpyard-check-in/issues/473. Decision
 
 ## Status
 
-- Implemented and verified locally. Nothing is committed, deployed or created in AWS.
-- No Klaviyo, ROLLER, AWS or Cloudflare call was made; all tests use synthetic data.
-- The Cloud contract is in [JUMPYARD_CLOUD_CONTRACT.md](../JUMPYARD_CLOUD_CONTRACT.md#email-first-new-purchase-contact-473-d0234-implemented-not-yet-released), the secret in [AWS_RESOURCES.md](../AWS_RESOURCES.md) and the checks in [TEST_PLAN.md](../TEST_PLAN.md).
+- **Live since 2026-09-30.** The code is in Park Booking, the Park phone and checkin.jumpyard.se. See [Rollout evidence](#rollout-evidence).
+- **References.** The Cloud contract is in [JUMPYARD_CLOUD_CONTRACT.md](../JUMPYARD_CLOUD_CONTRACT.md#email-first-new-purchase-contact-473-d0234-released-2026-09-30), the secret in [AWS_RESOURCES.md](../AWS_RESOURCES.md) and the checks in [TEST_PLAN.md](../TEST_PLAN.md).
 
 ## What changes
 
@@ -56,13 +55,23 @@ Local synth compared with untouched `origin/main`:
 - **Payment token.** ROLLER's payment JWT is returned to the browser as before. Check its payload keys once in Park for customer fields.
 - **Not found overwrites.** An email that ROLLER knows but Klaviyo does not still gets placeholders (accepted in D0234).
 
-## Rollout
+## Rollout evidence
 
-1. Love reviews `/preview/contact` on localhost.
-2. Reviewed PR (`Refs #473`), then the immutable release.
-3. Protected Park plan: only the secret, the Booking policy and Booking.
-4. Love stores the key.
-5. Park acceptance with owned aliases, including the risks above and the lookup latency from `booking.contact_lookup` logs.
-6. Public promotion.
+- **Merge.** PR #475 merged as `63f2ee0` (Love approved the preview, then said "kör"). Before merging, the Park address mapping was limited to `zip` → `postcode` and the copy became "Vi behöver lite fler uppgifter".
+- **Release and Park.** Release [36733819783](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36733819783) went to Park run [36734773707](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36734773707).
+  - The reviewed plan went from 208 to 209 resources: `KlaviyoProfilesReadSecret` added (empty, Retain, 10 WRLDS tags); `BookingHandler` (code plus the three variables), its role policy (one statement, `GetSecretValue`/`DescribeSecret` on that secret only) and `CDKMetadata` changed. Nothing was removed and there were no migrations.
+  - An independent synth comparison matched the plan.
+  - The deploy succeeded. Verification stopped only because `webhook-processor-lambda-throttles` was in ALARM from 15:11:18Z to 15:16:18Z. Booking readback showed the lookup enabled with a 1500 ms timeout, and the open-ended date window was intact.
+- **Superseding release.** #458's release 36735226042 (`057340d`, which contains #473) passed Park verification in run 36735979010. Public run 36736885751 then promoted both phone changes to checkin.jumpyard.se. Do not redeploy `63f2ee0` over it.
+- **Key.** Love stored the Profiles:Read key with `aws secretsmanager put-secret-value --secret-string file://…`, giving `AWSCURRENT` at 15:19:53Z. No agent read the stored value.
+- **Acceptance.** Love's owned aliases on checkin.jumpyard.se, each draft abandoned at payment:
 
-At closeout, `PROJECT_CONTEXT.md` Must know and `REPO_CURRENT_STATE.md` need the released facts. `PROJECT_CONTEXT.md` has only about 37 characters of headroom.
+  | Case | `booking.contact_lookup` | ROLLER | Klaviyo |
+  |---|---|---|---|
+  | Known test alias (Anna Testsson, fiction number, no postcode) | `found`, 266 ms | every guest field unchanged | unchanged |
+  | New alias, typed first name | `not_found`, 231 ms | new guest with the typed first name, `Gäst`, `0700000000` | new profile with the same values |
+  | Love's web-shop profile (postcode only, no street or city) | `found`, 233 ms | Love confirmed in Venue Manager that name and postcode are unchanged | name, phone and `zip` still present |
+
+  The log lines contained no PII.
+- **Not observed live.** The uncertain fallback in production is covered by tests only. A guest with a full ROLLER address (street and city) has not been tested; ROLLER might clear those fields when only `postcode` is sent.
+- **Testing note.** The Claude app's built-in browser pane blocks the Park API (`ERR_BLOCKED_BY_CLIENT`) and shows "Could not reach JumpYard Cloud". Test in a normal browser.
