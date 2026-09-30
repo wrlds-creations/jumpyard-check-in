@@ -474,6 +474,7 @@ module.exports = {
   KIOSK_PAYMENT_CURRENCY,
   normalizeDraftFinalizeAction,
   normalizeBookingReadback,
+  normalizeItemsSummary,
   normalizeKioskInstallationMap,
   normalizeKioskProfileMap,
   normalizePaymentTerminalMap,

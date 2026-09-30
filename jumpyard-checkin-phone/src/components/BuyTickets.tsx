@@ -10,6 +10,7 @@ import { AlertCircle, Check, ChevronDown, Loader2, Minus, Plus, RefreshCw, X } f
 import {
   CloudBookingError,
   createDraftBooking,
+  finalizePhonePayment,
   getNewBookingAvailability,
   lookupBooking,
   quoteNewBooking,
@@ -30,9 +31,11 @@ import {
   toNewBookingCustomer,
 } from '@/flow/contactDetails';
 import { PaymentCodeRejectedDialog } from '@/components/PaymentCodeRejectedDialog';
-import type { Addon, AddonId, Booking } from '@/flow/types';
+import type { Addon, AddonId, Booking, CheckInSession } from '@/flow/types';
 import { ADDON_CATALOG_CONFIG, BUY_ENTRY_ADDON_IDS } from '@/flow/addonCatalog';
-import { resolvePaidConfirmation } from '@/flow/paidBookingConfirmation';
+import { getPaidConfirmationRetryDelay, resolvePaidConfirmation } from '@/flow/paidBookingConfirmation';
+import { buildSafetyAttestation } from '@/flow/safetyAttestation';
+import { scheduleRollerConfirmationNudges } from '@/flow/provisionalConfirmation';
 import {
   findRecoveredBookingProduct,
   getMaxBookingProductQuantity,
@@ -63,24 +66,47 @@ import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { FlowNav } from '@/components/FlowNav';
 import { AddonChoices } from '@/components/AddonChoices';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
+import { SafetyVideo } from '@/components/SafetyVideo';
 import { resolvePurchasePreparation } from '@/flow/purchasePreparation';
 
 interface BuyTicketsProps {
   recoverySnapshot?: BuyFlowRecoverySnapshot | null;
   inlineExitVisible?: boolean;
+  /**
+   * #458 (D0231): the safety film and its approval come between the order review and contact,
+   * before payment. The approval travels with the draft, and an approved payment goes straight
+   * to completion once ROLLER confirms it. Off keeps the old order (safety after payment).
+   */
+  safetyBeforePayment?: boolean;
   onBack: () => void;
-  onBookingReady: (booking: Booking, preparation?: { signal: AbortSignal; isCurrent: () => boolean }) => Promise<() => void | Promise<void>>;
+  onBookingReady: (
+    booking: Booking,
+    preparation?: {
+      signal: AbortSignal;
+      isCurrent: () => boolean;
+      safetyAttestedAt?: string | null;
+      provisionalSession?: CheckInSession | null;
+    },
+  ) => Promise<() => void | Promise<void>>;
   onRequestExit?: () => void;
   onStepChange?: (step: BuyTicketsStep) => void;
 }
 
-export type BuyTicketsStep = BuyFlowRecoveryBuyStep | 'PAYMENT' | 'APPROVED' | 'PENDING';
+export type BuyTicketsStep = BuyFlowRecoveryBuyStep | 'SAFETY' | 'PAYMENT' | 'APPROVED' | 'PENDING';
 
 const BUY_PROGRESS_ICONS: JumpyardIconName[] = [
   'admission-ticket',
   'addons-bag',
   'payment-card',
   'safety-check',
+  'success-check',
+];
+
+const SAFETY_FIRST_PROGRESS_ICONS: JumpyardIconName[] = [
+  'admission-ticket',
+  'addons-bag',
+  'safety-check',
+  'payment-card',
   'success-check',
 ];
 
@@ -277,6 +303,7 @@ function writeDraftRecovery(
     },
     selectedStartTime: selectedTime,
     skyriderConsentConfirmed: previous?.skyriderConsentConfirmed,
+    ...(previous?.safetyAttestedAt ? { safetyAttestedAt: previous.safetyAttestedAt } : {}),
   });
 }
 
@@ -578,14 +605,21 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function getBuyProgressIndex(step: BuyTicketsStep) {
+function getBuyProgressIndex(step: BuyTicketsStep, safetyFirst = false) {
+  if (safetyFirst) {
+    if (step === 'ADDONS' || step === 'SKYRIDER_ATTEST' || step === 'REVIEW') return 1;
+    if (step === 'SAFETY') return 2;
+    if (step === 'CONTACT' || step === 'PAYMENT' || step === 'APPROVED' || step === 'PENDING') return 3;
+    return 0;
+  }
   if (step === 'ADDONS' || step === 'SKYRIDER_ATTEST') return 1;
   if (step === 'CONTACT' || step === 'REVIEW' || step === 'PAYMENT' || step === 'APPROVED' || step === 'PENDING') return 2;
   return 0;
 }
 
+// A reload during safety resumes at the review; the film is watched again before approval.
 function isBuyStep(step: BuyTicketsStep): step is BuyFlowRecoveryBuyStep {
-  return step !== 'PAYMENT' && step !== 'APPROVED' && step !== 'PENDING';
+  return step !== 'SAFETY' && step !== 'PAYMENT' && step !== 'APPROVED' && step !== 'PENDING';
 }
 
 function toRecoveryAddonQty(addonQty: AddonQuantityMap): BuyFlowRecoveryAddonQty {
@@ -622,16 +656,19 @@ function AvailabilityLoadingCard({ selectedTime }: { selectedTime: string | null
   );
 }
 
-function BuyEntryProgress({ step }: { step: BuyTicketsStep }) {
+function BuyEntryProgress({ step, safetyFirst = false }: { step: BuyTicketsStep; safetyFirst?: boolean }) {
   const { t } = useTranslation();
-  const labels = [
+  const labels = safetyFirst
+    ? [t.buyProgress.entry, t.buyProgress.addons, t.buyProgress.safety, t.buyProgress.payment, t.buyProgress.done]
+    : [
     t.buyProgress.entry,
     t.buyProgress.addons,
     t.buyProgress.payment,
     t.buyProgress.safety,
     t.buyProgress.done,
   ];
-  const current = getBuyProgressIndex(step);
+  const icons = safetyFirst ? SAFETY_FIRST_PROGRESS_ICONS : BUY_PROGRESS_ICONS;
+  const current = getBuyProgressIndex(step, safetyFirst);
   const pct = labels.length > 1 ? (current / (labels.length - 1)) * 100 : 0;
   const gridTemplateColumns = `repeat(${labels.length}, minmax(0, 1fr))`;
 
@@ -655,7 +692,7 @@ function BuyEntryProgress({ step }: { step: BuyTicketsStep }) {
                       : 'bg-surface border-border opacity-45'
                 }`}
               >
-                <JumpyardIcon name={BUY_PROGRESS_ICONS[index]} className="w-6 h-6" />
+                <JumpyardIcon name={icons[index]} className="w-6 h-6" />
               </div>
               <span
                 className={`w-full whitespace-nowrap text-center text-[8px] font-bold italic uppercase leading-tight transition-colors ${
@@ -675,6 +712,7 @@ function BuyEntryProgress({ step }: { step: BuyTicketsStep }) {
 export const BuyTickets = ({
   recoverySnapshot = null,
   inlineExitVisible = false,
+  safetyBeforePayment = false,
   onBack,
   onBookingReady,
   onRequestExit,
@@ -690,6 +728,12 @@ export const BuyTickets = ({
   );
 
   const [step, setStep] = useState<BuyTicketsStep>('TIMESLOT');
+  const [safetyApprovedAt, setSafetyApprovedAt] = useState<string | null>(null);
+  // #458: the approval that travels with the draft; undefined keeps the old order.
+  const draftSafetyAttestation = useMemo(
+    () => (safetyBeforePayment ? buildSafetyAttestation(safetyApprovedAt, lang) : undefined),
+    [lang, safetyApprovedAt, safetyBeforePayment]
+  );
   const [availability, setAvailability] = useState<NewBookingAvailability | null>(null);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
@@ -727,6 +771,9 @@ export const BuyTickets = ({
   const [paymentNavigationLocked, setPaymentNavigationLocked] = useState(false);
   const [paymentContinuePending, setPaymentContinuePending] = useState(false);
   const [paymentReadyForSafety, setPaymentReadyForSafety] = useState(false);
+  // #458: "Vi slutför ditt köp …" while Cloud's provisional number is fetched; the calm wait
+  // (D0199 schedule) and the delayed state appear only if Cloud cannot give it.
+  const [paidConfirmState, setPaidConfirmState] = useState<'preparing' | 'confirming' | 'delayed'>('preparing');
   const [paymentFailure, setPaymentFailure] = useState<'failed' | 'unknown' | null>(null);
   const [paymentStatusChecking, setPaymentStatusChecking] = useState(false);
   const paymentStatusCheckingRef = useRef(false);
@@ -880,6 +927,8 @@ export const BuyTickets = ({
       setEmailMarketingChecked(false);
       setPhone(savedContact.phone);
       setContactDetailsRequired(hasSavedContactDetails(savedContact));
+      // #458: an approval given before the reload still stands for this purchase.
+      setSafetyApprovedAt(recoverySnapshot.safetyAttestedAt ?? null);
 
       if (!savedStartTime) {
         setSelectedTime(null);
@@ -1061,10 +1110,12 @@ export const BuyTickets = ({
       selectedProduct: selectedProduct ? toRecoveryProduct(selectedProduct) : null,
       selectedStartTime: selectedTime,
       skyriderConsentConfirmed,
+      ...(draftSafetyAttestation ? { safetyAttestedAt: draftSafetyAttestation.attestedAt } : {}),
     });
   }, [
     addonQty,
     draft,
+    draftSafetyAttestation,
     email,
     firstName,
     jumperCount,
@@ -1362,7 +1413,8 @@ export const BuyTickets = ({
         shouldPrecheckBasketAvailability,
         giftCards,
         discountCodes,
-        pendingEmailMarketingConsent(emailMarketingChecked, lang)
+        pendingEmailMarketingConsent(emailMarketingChecked, lang),
+        draftSafetyAttestation
       );
       setDraft(result);
       clearPaymentSyncState();
@@ -1491,6 +1543,77 @@ export const BuyTickets = ({
     }
   };
 
+  // #458 (D0231): safety was approved before payment and travelled with the draft, so the guest
+  // is done the moment the payment is approved (Love 2026-09-30). Cloud gives the purchase a
+  // provisional session at once, the page marks it ready (number and QR), and ROLLER's
+  // confirmation is attached in the background. Only if Cloud cannot do that does the calm wait
+  // with the sparse D0199 schedule run (one check, then 15/30/60 s; a manual retry is one check).
+  const confirmAttestedPurchase = async (manualRetry = false, confirmedBooking?: Booking) => {
+    const activeDraft = draft;
+    const identifier = activeDraft?.draft.uniqueId ?? activeDraft?.draft.bookingReference;
+    const safetyAttestedAt = draftSafetyAttestation?.attestedAt;
+    if (!identifier || !safetyAttestedAt || paymentResolutionStartedRef.current) return;
+
+    paymentResolutionStartedRef.current = true;
+    paymentPreparationAbortRef.current?.abort();
+    const preparation = new AbortController();
+    paymentPreparationAbortRef.current = preparation;
+    const attemptId = getDraftPaymentAttemptId(activeDraft);
+    const isCurrent = () => !preparation.signal.aborted && activePaymentAttemptRef.current === attemptId;
+    setPaymentSyncError(null);
+    setPaidConfirmState('preparing');
+    try {
+      const prepaymentDraftId = activeDraft?.prepayment?.prepaymentDraftId;
+      const rollerDraftUniqueId = activeDraft?.draft.uniqueId;
+      const provisional = prepaymentDraftId && rollerDraftUniqueId
+        ? await finalizePhonePayment(prepaymentDraftId, rollerDraftUniqueId).catch(() => null)
+        : null;
+      if (!isCurrent()) return;
+      if (provisional) {
+        const completeApprovedPurchase = await onBookingReady(provisional.booking, {
+          signal: preparation.signal,
+          isCurrent,
+          safetyAttestedAt,
+          provisionalSession: provisional.checkinSession,
+        });
+        if (!isCurrent()) return;
+        writeDraftRecovery('APP_CONFIRM', activeDraft, selectedProduct, selectedTime, jumperCount, true);
+        await completeApprovedPurchase();
+        scheduleRollerConfirmationNudges(lookupBooking, identifier);
+        return;
+      }
+      setPaidConfirmState('confirming');
+      for (let retryIndex = 0; ; retryIndex += 1) {
+        const confirmation = confirmedBooking?.paid === true && retryIndex === 0
+          ? { status: 'paid' as const, booking: confirmedBooking }
+          : await resolvePaidConfirmation(lookupBooking, identifier, { wait });
+        if (!isCurrent()) return;
+        if (confirmation.status === 'paid') {
+          const completeApprovedPurchase = await onBookingReady(confirmation.booking, {
+            signal: preparation.signal,
+            isCurrent,
+            safetyAttestedAt,
+          });
+          if (!isCurrent()) return;
+          writeDraftRecovery('APP_CONFIRM', activeDraft, selectedProduct, selectedTime, jumperCount, true);
+          await completeApprovedPurchase();
+          return;
+        }
+        const retryDelay = confirmation.status === 'unavailable' || manualRetry
+          ? null
+          : getPaidConfirmationRetryDelay(retryIndex);
+        if (retryDelay === null) break;
+        await wait(retryDelay);
+        if (!isCurrent()) return;
+      }
+    } catch {
+      if (!isCurrent()) return;
+    }
+    // Still unconfirmed: never ask for another payment. The guest can check once more or ask staff.
+    paymentResolutionStartedRef.current = false;
+    setPaidConfirmState('delayed');
+  };
+
   const clearConfirmedFailedPayment = async (beforeClear?: () => void) => {
     const attemptId = getDraftPaymentAttemptId(draft);
     if (paymentFailure !== 'failed' || !attemptId) return false;
@@ -1547,7 +1670,8 @@ export const BuyTickets = ({
       setPaymentFailure(null);
       setPaymentApprovedForSync(true);
       setStep('APPROVED');
-      await resolvePaidDraftBooking(undefined, true, booking);
+      if (draftSafetyAttestation) await confirmAttestedPurchase(false, booking);
+      else await resolvePaidDraftBooking(undefined, true, booking);
     } catch {
       // An unavailable lookup leaves the original purchase unresolved and recoverable.
     } finally {
@@ -1573,7 +1697,7 @@ export const BuyTickets = ({
       return;
     }
     if (step === 'REVIEW') setStep('ADDONS');
-    else if (step === 'CONTACT') setStep('REVIEW');
+    else if (step === 'SAFETY' || step === 'CONTACT') setStep('REVIEW');
     else if (step === 'SKYRIDER_ATTEST') setStep('ADDONS');
     else if (step === 'ADDONS') setStep('QUANTITY');
     else if (step === 'QUANTITY') setStep('PRODUCT');
@@ -1683,7 +1807,7 @@ export const BuyTickets = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
     >
-      <BuyEntryProgress step={step} />
+      <BuyEntryProgress step={step} safetyFirst={safetyBeforePayment} />
 
       {step === 'TIMESLOT' && (
         <FlowScreen initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -2234,6 +2358,11 @@ export const BuyTickets = ({
                   setStep('PAYMENT');
                   return;
                 }
+                // #458: no purchase is created before the safety approval, also after a restored contact step.
+                if (safetyBeforePayment && !safetyApprovedAt) {
+                  setStep('SAFETY');
+                  return;
+                }
                 void createDraft();
               }}
               data-testid="buy-contact-continue"
@@ -2319,7 +2448,7 @@ export const BuyTickets = ({
             <button
               onClick={() => {
                 setSubmitError(null);
-                setStep('CONTACT');
+                setStep(safetyBeforePayment && !safetyApprovedAt ? 'SAFETY' : 'CONTACT');
               }}
               className="w-full rounded-2xl bg-primary py-4 text-lg font-black italic uppercase text-white transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -2327,6 +2456,16 @@ export const BuyTickets = ({
             </button>
           </div>
         </FlowScreen>
+      )}
+
+      {step === 'SAFETY' && (
+        <SafetyVideo
+          buyEntryFlow
+          onApprove={(attestedAt) => {
+            setSafetyApprovedAt(attestedAt);
+            setStep('CONTACT');
+          }}
+        />
       )}
 
       {step === 'PAYMENT' && draft && (
@@ -2394,7 +2533,7 @@ export const BuyTickets = ({
                       setPaymentFailure(null);
                       setPaymentApprovedForSync(true);
                       setStep('APPROVED');
-                      void resolvePaidDraftBooking(undefined, true);
+                      void (draftSafetyAttestation ? confirmAttestedPurchase() : resolvePaidDraftBooking(undefined, true));
                     }}
                     onFailed={(result) => setPaymentFailure(result.status === 'failed' ? 'failed' : 'unknown')}
                   />
@@ -2449,8 +2588,12 @@ export const BuyTickets = ({
             <PhonePaymentConfirmation
               language={lang}
               amountLabel={formatMoney(draftAmountOwing)}
-              preparationState={paymentSyncError ? 'delayed' : paymentReadyForSafety ? 'ready' : 'preparing'}
-              onRetryPreparation={() => void resolvePaidDraftBooking(undefined, true)}
+              preparationState={draftSafetyAttestation
+                ? paidConfirmState
+                : paymentSyncError ? 'delayed' : paymentReadyForSafety ? 'ready' : 'preparing'}
+              onRetryPreparation={() => void (draftSafetyAttestation
+                ? confirmAttestedPurchase(true)
+                : resolvePaidDraftBooking(undefined, true))}
               isContinuing={paymentContinuePending}
               onContinueToSafety={continueAfterApprovedPayment}
             />

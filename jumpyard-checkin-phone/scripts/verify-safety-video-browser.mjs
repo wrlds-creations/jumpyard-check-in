@@ -33,7 +33,7 @@ function Fixture() {
   return <main><header className="flex justify-end p-3"><LanguageToggle compact /></header>
     {!open ? <button onClick={() => setOpen(true)}>Open safety video</button>
       : done ? <p role="status">Safety rules reached</p>
-      : <SafetyVideo onComplete={() => setDone(true)} />}</main>;
+      : <SafetyVideo onApprove={() => setDone(true)} />}</main>;
 }
 createRoot(document.getElementById('root')!).render(<StrictMode><LanguageProvider><Fixture /></LanguageProvider></StrictMode>);`);
 for (const mode of ['production', 'development']) {
@@ -172,16 +172,16 @@ try {
     for (let i = 0; i < 10; i++) await switchTo(page, i % 2 ? 'sv' : 'en');
     await onlyActive(page, 'sv');
     await page.waitForFunction(() => document.querySelector('video').currentTime > 0.2);
-    assert.ok(!(await page.getByRole('button', { name: 'Bekräfta säkerhetsreglerna' }).isVisible()));
+    assert.ok(!(await page.getByRole('button', { name: /^Jag intygar/ }).isVisible()));
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({ path: path.join(output, `swedish-${width}.png`) });
-    await page.getByRole('button', { name: 'Bekräfta säkerhetsreglerna' }).waitFor({ timeout: 20000 });
+    await page.getByRole('button', { name: /^Jag intygar/ }).waitFor({ timeout: 20000 });
     await switchTo(page, 'en');
-    assert.ok(!(await page.getByRole('button', { name: 'Confirm safety rules' }).isVisible()));
+    assert.ok(!(await page.getByRole('button', { name: /^I confirm/ }).isVisible()));
     await play(page);
     await page.waitForFunction(() => document.querySelector('video').currentTime > 4);
     await page.screenshot({ path: path.join(output, `english-${width}.png`) });
-    await page.getByRole('button', { name: 'Confirm safety rules' }).click({ timeout: 20000 });
+    await page.getByRole('button', { name: /^I confirm/ }).click({ timeout: 20000 });
     await page.getByText('Safety rules reached').waitFor();
     await onlyActiveAfterCompletion(page);
     report.scenarios.push(`idle, pause, 10 rapid switches, full viewing, completed-language reset, continuation and layout at ${width}px`);
@@ -205,7 +205,7 @@ try {
     await page.evaluate(() => { window.rejectOld(new DOMException('Late failure', 'NotAllowedError')); window.elementsSeen[0].dispatchEvent(new Event('ended')); });
     await page.waitForFunction(() => !document.querySelector('video').paused && document.querySelector('video').currentTime > 0.2);
     await onlyActive(page, 'en');
-    assert.ok(!(await page.getByRole('button', { name: 'Confirm safety rules' }).isVisible()));
+    assert.ok(!(await page.getByRole('button', { name: /^I confirm/ }).isVisible()));
     report.scenarios.push('language switch during pending play; stale rejection and completion ignored');
     await context.close();
   }

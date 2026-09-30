@@ -15,7 +15,8 @@ import {
 const read = (relative) => fs.readFileSync(new URL(relative, import.meta.url), 'utf8');
 const buySource = read('../components/BuyTickets.tsx');
 const pageSource = read('../app/page.tsx');
-const attestSource = read('../components/SafetyAttest.tsx');
+// #458: the D0199 notice and retry now sit in the approval under the safety film.
+const attestSource = read('../components/SafetyApproval.tsx');
 const languageSource = read('../context/LanguageContext.tsx');
 
 const booking = (paid, overrides = {}) => ({
@@ -127,13 +128,27 @@ test('the staff handoff confirms the paid state once more with sparse retries an
   assert.match(pageSource, /markSessionReadyForStaff\(checkinSession, 'completed'\)/);
   assert.match(pageSource, /setPaidConfirmationState\('delayed'\)/);
   assert.doesNotMatch(pageSource, /setInterval/);
-  assert.match(pageSource, /if \(state === 'APP_SAFETY_ATTEST'\) return;\s*paidConfirmationRunRef\.current \+= 1;/);
+  assert.match(pageSource, /if \(state === 'APP_SAFETY_VIDEO' \|\| state === 'APP_SAFETY_ATTEST'\) return;\s*paidConfirmationRunRef\.current \+= 1;/);
   assert.match(attestSource, /paid-confirmation-notice/);
   assert.match(attestSource, /paid-confirmation-retry/);
-  assert.match(attestSource, /disabled=\{!allChecked \|\| isSubmitting \|\| retryAction !== null\}/);
+  assert.match(attestSource, /disabled=\{isSubmitting \|\| retryAction !== null\}/);
   for (const key of ['paymentConfirmationWaiting', 'paymentConfirmationDelayed', 'paymentConfirmationRetry']) {
     assert.equal((languageSource.match(new RegExp(`\\b${key}:`, 'g')) ?? []).length, 2, key);
   }
   assert.match(languageSource, /Betala inte igen\./);
   assert.match(languageSource, /Do not pay again\./);
+});
+
+test('#458 (D0231): after safety before payment, the same sparse schedule runs on the receipt instead of in safety', () => {
+  // D0231 replaces D0199's ordering for purchases that approved safety before payment. The
+  // schedule, the single manual check, the staff path and "never pay again" are unchanged.
+  const confirmAttested = buySource.slice(buySource.indexOf('const confirmAttestedPurchase = async'),
+    buySource.indexOf('const clearConfirmedFailedPayment'));
+  assert.ok(confirmAttested.length > 0);
+  assert.match(confirmAttested, /resolvePaidConfirmation\(lookupBooking, identifier, \{ wait \}\)/);
+  assert.match(confirmAttested, /confirmation\.status === 'unavailable' \|\| manualRetry\s*\? null\s*: getPaidConfirmationRetryDelay\(retryIndex\)/);
+  assert.match(confirmAttested, /setPaidConfirmState\('delayed'\)/);
+  assert.doesNotMatch(confirmAttested, /APP_SAFETY_VIDEO|createDraft|setInterval/);
+  assert.match(pageSource, /if \(!booking\.paid && paymentApproved && safetyAttestedAt\) throw/);
+  assert.match(pageSource, /if \(completedRecovery \|\| safetyAttestedAt\) throw error;/);
 });

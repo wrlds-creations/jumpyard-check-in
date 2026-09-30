@@ -77,18 +77,38 @@ const snapshot = {
   quantity: 2, selectedStartTime: '10:00',
 };
 const payment = { attemptId: 'attempt-original', bookingIdentifier: 'booking-original', kind: 'new_booking', outcome: 'approved', createdAt: 1 };
+const attestedAt = '2026-09-30T08:15:00.000Z';
+const readySession = { ...session, status: 'ready_for_staff', handoffStatus: 'ready_for_staff', handoffCode: '0042' };
+const provisionalSession = { checkinSessionId: 'jycs_provisional', status: 'guest_in_progress', handoffStatus: 'not_ready', guestAccessToken: 'synthetic-provisional' };
 
 // Execute production handlers and JSX callback expressions together, including
 // BuyTickets -> page preparation. Only network, storage and React state setters
 // are hosted here; the actual bounded lookup helper runs with injected no-wait
 // retry delays. A synthetic draft API is added only for the zero-payment test;
 // approved purchase recovery never receives a new-payment or new-draft API.
-function harness({ recovery = false, zeroPurchase = false, lookup = async () => booking, startSession = async () => session, clearPayment } = {}) {
+function harness({ recovery = false, zeroPurchase = false, attested = false, lookup = async () => booking, startSession = async () => session, clearPayment,
+  finalize = async () => ({ booking: { ...booking, paid: true }, checkinSession: provisionalSession }) } = {}) {
   const events = [];
+  const waits = [];
   let saved = structuredClone(snapshot);
+  // #458: safety approved before payment travels with the draft and the saved purchase.
+  if (attested) saved.safetyAttestedAt = attestedAt;
   let record = zeroPurchase ? null : { ...payment };
   const state = {
     pendingEmailMarketingConsent, emailMarketingChecked: false, lang: 'sv',
+    // #458: without an approval before payment the existing path runs.
+    draftSafetyAttestation: attested ? { attestedAt, copyVersion: 'safety-rules-2026-09-30-v1', locale: 'sv' } : undefined,
+    paidConfirmState: 'confirming',
+    getPaidConfirmationRetryDelay: paidConfirmation.getPaidConfirmationRetryDelay,
+    finalizePhonePayment: async (prepaymentDraftId, rollerDraftUniqueId) => {
+      events.push(['finalize', prepaymentDraftId, rollerDraftUniqueId]);
+      return finalize(prepaymentDraftId, rollerDraftUniqueId);
+    },
+    scheduleRollerConfirmationNudges: (_lookup, identifier) => { events.push(['nudges', identifier]); },
+    markSessionReadyForStaff: async (value, status) => {
+      events.push(['ready', value.checkinSessionId, status]);
+      return { ...value, status: 'ready_for_staff', handoffStatus: 'ready_for_staff', handoffCode: '0042' };
+    },
     AbortController, Error,
     useCallback: fn => fn,
     quoteRequestVersionRef: { current: 0 },
@@ -125,9 +145,9 @@ function harness({ recovery = false, zeroPurchase = false, lookup = async () => 
       ...options, wait: async delay => { events.push(['backoff', delay]); },
     }),
     runPurchasePreparationRequest: preparation.runPurchasePreparationRequest,
-    resolvePaidConfirmation: zeroPurchase ? paidConfirmation.resolvePaidConfirmation
+    resolvePaidConfirmation: zeroPurchase || attested ? paidConfirmation.resolvePaidConfirmation
       : () => assert.fail('Approved preparation must not enter the old payment confirmation wait'),
-    wait: async () => undefined,
+    wait: async (ms) => { waits.push(ms); },
     scrollToTop: () => events.push(['scroll']),
     CloudSessionError: class CloudSessionError extends Error {},
   };
@@ -136,7 +156,7 @@ function harness({ recovery = false, zeroPurchase = false, lookup = async () => 
     'setPaymentSyncError', 'setPaymentContinuePending', 'setCtx', 'setState', 'setAlreadyCheckedIn', 'setSessionStartError',
     'setBuyRecoveryStatus', 'setRecoveryContinuePending', 'setRecoverySyncFailed', 'setRecoveryReadyForSafety',
     'setRecoveryReturnRecord', 'setBuyRecoverySnapshot', 'setDraft', 'setQuote', 'setSubmitting',
-    'setSubmitError', 'setGiftCardInputDirty', 'setClipCardInputDirty', 'setPaymentNavigationLocked',
+    'setSubmitError', 'setGiftCardInputDirty', 'setClipCardInputDirty', 'setPaymentNavigationLocked', 'setPaidConfirmState',
   ]) state[name] = value => {
     const key = name.charAt(3).toLowerCase() + name.slice(4);
     state[key] = typeof value === 'function' ? value(state[key]) : value;
@@ -167,7 +187,7 @@ function harness({ recovery = false, zeroPurchase = false, lookup = async () => 
     'globalThis.handlers = { prepareRecoveredPurchase, showApprovedRecovery, handlePaymentReturnResult, continueRecoveredPurchase, preparationState, retry, setupLifetime };',
   ] : [
     ...['getDraftAmountOwing', 'getDraftPaymentAttemptId', 'writeDraftRecovery',
-      'resolvePaidDraftBooking', 'continueAfterApprovedPayment'].map(name => declaration('buy', name)),
+      'resolvePaidDraftBooking', 'continueAfterApprovedPayment', 'confirmAttestedPurchase'].map(name => declaration('buy', name)),
     ...(zeroPurchase ? ['invalidateQuote', 'createDraft', 'clearPaymentSyncState'].map(name => declaration('buy', name)) : []),
     `const onBookingReady = ${prop('page', 'BuyTickets', 'onBookingReady')};`,
     `const approve = ${prop('buy', 'RollerPaymentDropIn', 'onApproved')};`,
@@ -175,13 +195,13 @@ function harness({ recovery = false, zeroPurchase = false, lookup = async () => 
     `const preparationState = () => (${prop('buy', 'PhonePaymentConfirmation', 'preparationState')});`,
     `const setupDraftTracking = ${lifetime('buy', 'activePaymentAttemptRef.current = getDraftPaymentAttemptId(draft)')};`,
     `const setupLifetime = ${lifetime('buy', 'paymentPreparationAbortRef.current?.abort()')};`,
-    `globalThis.handlers = { resolvePaidDraftBooking, continueAfterApprovedPayment, approve, retry, preparationState, setupDraftTracking, setupLifetime${zeroPurchase ? ', createDraft' : ''} };`,
+    `globalThis.handlers = { resolvePaidDraftBooking, continueAfterApprovedPayment, confirmAttestedPurchase, approve, retry, preparationState, setupDraftTracking, setupLifetime${zeroPurchase ? ', createDraft' : ''} };`,
   ];
   compile([...shared, ...specific].join('\n'), state);
   const cleanup = state.handlers.setupLifetime();
   let cleanupDraft = state.handlers.setupDraftTracking?.();
   return {
-    ...state.handlers, state, events,
+    ...state.handlers, state, events, waits,
     cleanup: () => { cleanupDraft?.(); cleanup(); },
     flushDraftEffect: () => { cleanupDraft?.(); cleanupDraft = state.handlers.setupDraftTracking(); },
     replace: () => {
@@ -478,4 +498,92 @@ test('recovery unmount cancels session preparation and ignores a late session', 
   assert.equal(host.preparationState(), 'preparing');
   assert.equal(host.state.ctx.booking, undefined);
   assert.deepEqual(host.navigation(), []);
+});
+
+// #458 (D0231): safety was approved before payment, so the guest is done the moment the payment is
+// approved (Love 2026-09-30). Cloud gives a provisional session at once; ROLLER confirms later.
+test('attested purchase: an approved payment opens completion at once with the provisional number', async () => {
+  const provisional = deferred();
+  const host = harness({ attested: true, finalize: () => provisional.promise });
+  host.approve();
+  assert.equal(host.state.step, 'APPROVED');
+  assert.equal(host.preparationState(), 'preparing', '"Vi slutför ditt köp …" while the number is fetched');
+  await settleUntil(() => host.events.some(event => event[0] === 'finalize'));
+  host.approve();
+  host.retry();
+  assert.equal(host.events.filter(event => event[0] === 'finalize').length, 1, 'repeated taps start nothing new');
+  assert.deepEqual(host.events.find(event => event[0] === 'finalize'), ['finalize', 'attempt-original', 'booking-original']);
+  provisional.resolve({ booking: { ...booking, paid: true }, checkinSession: provisionalSession });
+  await settleUntil(() => host.navigation().length === 1);
+  assert.deepEqual(host.navigation(), [['state', 'APP_CONFIRM']]);
+  assert.deepEqual(host.events.filter(event => event[0] === 'ready'), [['ready', 'jycs_provisional', 'completed']]);
+  assert.equal(host.state.ctx.checkinSession.handoffCode, '0042');
+  assert.equal(host.state.ctx.safetyAttestedAt, attestedAt);
+  assert.deepEqual(host.lookups(), [], 'nothing waits for ROLLER');
+  assert.ok(!host.events.some(event => event[0] === 'session'), 'the provisional session is used as is');
+  assert.deepEqual(host.waits, []);
+  assert.deepEqual(host.events.filter(event => event[0] === 'nudges'), [['nudges', 'booking-original']]);
+  assert.equal(host.readSnapshot().currentFlowStep, 'APP_CONFIRM');
+  assert.equal(host.readSnapshot().safetyAttestedAt, attestedAt);
+  assert.equal(host.readPayment(), null);
+  host.cleanup();
+});
+
+test('attested purchase: without a provisional session from Cloud the calm wait waits 15 s once, then completes', async () => {
+  let checks = 0;
+  const host = harness({ attested: true, finalize: async () => { throw new Error('Cloud unavailable'); },
+    lookup: async () => ({ ...booking, paid: ++checks > 1 }) });
+  host.approve();
+  await settleUntil(() => host.navigation().length === 1);
+  assert.deepEqual(host.waits, [15_000]);
+  assert.equal(host.lookups().length, 2);
+  assert.deepEqual(host.events.filter(event => event[0] === 'ready'), [['ready', 'session-original', 'completed']]);
+  assert.deepEqual(host.navigation(), [['state', 'APP_CONFIRM']]);
+  assert.ok(!host.events.some(event => event[0] === 'state' && event[1] === 'APP_SAFETY_VIDEO'));
+  host.cleanup();
+});
+
+test('attested purchase: if both fail the delayed state appears; one manual check completes the same purchase', async () => {
+  let paid = false;
+  const host = harness({ attested: true, finalize: async () => { throw new Error('Cloud unavailable'); },
+    lookup: async () => ({ ...booking, paid }), startSession: async () => readySession });
+  host.approve();
+  await settleUntil(() => host.preparationState() === 'delayed');
+  assert.deepEqual(host.waits, [15_000, 30_000, 60_000]);
+  assert.equal(host.lookups().length, 4);
+  assert.deepEqual(host.navigation(), []);
+  assert.equal(host.readPayment().attemptId, 'attempt-original', 'the approved payment stays recoverable');
+  assert.ok(!host.events.some(event => event[0] === 'session'), 'an unpaid booking starts no session');
+  host.retry();
+  assert.equal(host.preparationState(), 'preparing', 'a manual check asks Cloud first');
+  await settleUntil(() => host.lookups().length === 5 && host.preparationState() === 'delayed');
+  assert.deepEqual(host.navigation(), [], 'a manual check that is still unpaid is one check only');
+  paid = true;
+  host.retry();
+  await settleUntil(() => host.navigation().length === 1);
+  assert.equal(host.lookups().length, 6);
+  assert.equal(host.events.filter(event => event[0] === 'finalize').length, 3, 'each attempt asks Cloud first');
+  assert.deepEqual(host.waits, [15_000, 30_000, 60_000]);
+  assert.deepEqual(host.navigation(), [['state', 'APP_CONFIRM']]);
+  host.cleanup();
+});
+
+test('attested recovery: a reload after payment opens completion without another safety step or tap', async () => {
+  const host = harness({ recovery: true, attested: true, startSession: async () => readySession });
+  host.showApprovedRecovery(host.readPayment(), host.readSnapshot());
+  await settleUntil(() => host.navigation().length === 1);
+  assert.deepEqual(host.navigation(), [['state', 'APP_CONFIRM']]);
+  assert.equal(host.events.filter(event => event[0] === 'retire').length, 1);
+  assert.equal(host.state.ctx.safetyAttestedAt, attestedAt);
+  host.cleanup();
+});
+
+test('attested recovery: a still-unpaid booking shows the delayed state instead of safety', async () => {
+  const host = harness({ recovery: true, attested: true, lookup: async () => ({ ...booking, paid: false }) });
+  host.showApprovedRecovery(host.readPayment(), host.readSnapshot());
+  await settleUntil(() => host.preparationState() === 'delayed');
+  assert.deepEqual(host.navigation(), []);
+  assert.ok(!host.events.some(event => event[0] === 'session'));
+  assert.equal(host.readPayment().attemptId, 'attempt-original');
+  host.cleanup();
 });

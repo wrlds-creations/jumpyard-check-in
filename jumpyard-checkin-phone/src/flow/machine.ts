@@ -99,9 +99,9 @@ export function nextState(
       // Retained as a progress identifier, not a standalone payment operation.
       return 'APP_ADDONS';
 
+    // #458: the approval sits on the safety video screen; there is no separate rules step.
+    // APP_SAFETY_ATTEST remains only for saved sessions from before the change.
     case 'APP_SAFETY_VIDEO':
-      return 'APP_SAFETY_ATTEST';
-
     case 'APP_SAFETY_ATTEST':
       return 'APP_CONFIRM';
 

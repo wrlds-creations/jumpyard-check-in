@@ -132,6 +132,8 @@ function draftHarness(answers) {
     contactDetailsAsked: false,
     useCallback: fn => fn,
     pendingEmailMarketingConsent: () => undefined, emailMarketingChecked: false, lang: 'sv',
+    // #458: no safety approval travels with these drafts.
+    draftSafetyAttestation: undefined,
     quoteRequestVersionRef: { current: 0 }, appliedQuoteRef: { current: null }, quoteOperationInFlightRef: { current: false },
     contactDetailsFocusPendingRef: { current: false },
     draft: null, submitting: false, step: 'CONTACT', error: null, quote: null, codeRejectedDialogOpen: false,

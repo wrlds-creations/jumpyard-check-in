@@ -694,7 +694,9 @@ export async function createDraftBooking(
   requireAvailability = true,
   giftCards: NewBookingGiftCardInput[] = [],
   discountCodes: NewBookingDiscountCodeInput[] = [],
-  emailMarketingConsent?: import('./emailMarketingConsent').PendingEmailMarketingConsent
+  emailMarketingConsent?: import('./emailMarketingConsent').PendingEmailMarketingConsent,
+  // #458: the safety approval given before payment; Cloud records it with the draft.
+  safetyAttestation?: import('./safetyAttestation').SafetyAttestation
 ): Promise<NewBookingDraftResult> {
   let response: Response;
   let body: DraftResponse | null = null;
@@ -710,6 +712,7 @@ export async function createDraftBooking(
         confirmDraft: true,
         correlationId: `phone_draft_${Date.now().toString(36)}`,
         ...(emailMarketingConsent ? { emailMarketingConsent } : {}),
+        ...(safetyAttestation ? { safetyAttestation } : {}),
         customer,
         discountCodes: discountCodes.map((discount) => discount.code),
         giftCards,
@@ -739,6 +742,66 @@ export async function createDraftBooking(
       jwtSummary: body.paymentSession.jwtSummary,
     },
     prepayment: body.prepayment,
+  };
+}
+
+interface PhoneApprovedResponse {
+  status?: string;
+  error?: { code?: string; message?: string };
+  provisionalHandoff?: {
+    booking: CloudBooking;
+    guestAccess: CloudGuestAccess;
+    session: CloudSession & { bookingSyncStatus?: string | null };
+  };
+}
+
+/**
+ * #458 (D0231): after an approved payment the guest is done at once. Cloud gives the attested
+ * purchase a provisional booking and session, like the kiosk's (D0022); ROLLER's confirmation is
+ * attached in the background. The caller marks the session ready for staff to get the number.
+ */
+export async function finalizePhonePayment(
+  prepaymentDraftId: string,
+  rollerDraftUniqueId: string,
+): Promise<{ booking: Booking; checkinSession: CheckInSession }> {
+  let response: Response;
+  let body: PhoneApprovedResponse | null = null;
+  const idempotencyKey = `phone-approved:${prepaymentDraftId}`;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/v1/bookings/draft/finalize`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-idempotency-key': idempotencyKey,
+      },
+      body: JSON.stringify({
+        action: 'phone_approved',
+        correlationId: `phone_approved_${Date.now().toString(36)}`,
+        idempotencyKey,
+        prepaymentDraftId,
+        rollerDraftUniqueId,
+      }),
+    });
+    body = await parseBookingResponse<PhoneApprovedResponse>(response);
+  } catch (error) {
+    if (error instanceof CloudBookingError) throw error;
+    throw new CloudBookingError('network_error', 'Could not reach JumpYard Cloud.');
+  }
+
+  const provisional = body?.provisionalHandoff;
+  if (!response.ok || body?.status !== 'provisional_handoff' || !provisional?.session?.checkinSessionId) {
+    throw createBookingError(body, response.status);
+  }
+
+  return {
+    booking: toBooking(
+      provisional.booking,
+      'ready',
+      { system: 'jumpyard-cloud', freshnessStatus: provisional.session.bookingSyncStatus ?? 'pending' },
+      provisional.guestAccess,
+    ),
+    checkinSession: toCheckInSession(provisional.session, provisional.guestAccess),
   };
 }
 
