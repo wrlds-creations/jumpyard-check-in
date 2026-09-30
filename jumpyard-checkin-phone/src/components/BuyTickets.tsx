@@ -55,7 +55,7 @@ import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { FlowNav } from '@/components/FlowNav';
-import { AddonChoices, type AddonChoicesHandle } from '@/components/AddonChoices';
+import { AddonChoices } from '@/components/AddonChoices';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 import { resolvePurchasePreparation } from '@/flow/purchasePreparation';
 
@@ -244,8 +244,6 @@ function writeDraftRecovery(
 
   writeBuyFlowRecovery({
     addonQty: previous?.addonQty,
-    alreadyHasApprovedSocks: previous?.alreadyHasApprovedSocks,
-    alreadyHasWaterBottle: previous?.alreadyHasWaterBottle,
     bookingReference,
     contact: previous?.contact,
     currentFlowStep,
@@ -723,9 +721,6 @@ export const BuyTickets = ({
   const [paymentOptionsOpen, setPaymentOptionsOpen] = useState(false);
   const [checkoutBreakdownOpen, setCheckoutBreakdownOpen] = useState(false);
   const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
-  const [alreadyHasApprovedSocks, setAlreadyHasApprovedSocks] = useState(false);
-  const [alreadyHasWaterBottle, setAlreadyHasWaterBottle] = useState(false);
-  const addonChoicesRef = useRef<AddonChoicesHandle>(null);
   const [quote, setQuote] = useState<NewBookingQuote | null>(null);
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -894,8 +889,6 @@ export const BuyTickets = ({
         setSelectedProduct(null);
         setQuantity(1);
         setAddonQty(createEmptyAddonQty());
-        setAlreadyHasApprovedSocks(false);
-        setAlreadyHasWaterBottle(false);
         setSkyriderConsentConfirmed(false);
         setLoadingAvailability(false);
         restoringPrePaymentRef.current = false;
@@ -916,8 +909,6 @@ export const BuyTickets = ({
           setSelectedProduct(null);
           setQuantity(1);
           setAddonQty(createEmptyAddonQty());
-          setAlreadyHasApprovedSocks(false);
-          setAlreadyHasWaterBottle(false);
           setSkyriderConsentConfirmed(false);
           setStep('TIMESLOT');
           return;
@@ -928,8 +919,6 @@ export const BuyTickets = ({
           setSelectedProduct(null);
           setQuantity(1);
           setAddonQty(createEmptyAddonQty());
-          setAlreadyHasApprovedSocks(false);
-          setAlreadyHasWaterBottle(false);
           setSkyriderConsentConfirmed(false);
           setStep(recoverySnapshot.currentFlowStep === 'TIMESLOT' ? 'TIMESLOT' : 'PRODUCT');
           return;
@@ -958,18 +947,12 @@ export const BuyTickets = ({
         );
         const recoveredSkyRiderSelected = recoveredSelectedAddons.some((addon) => addon.id === 'skyrider');
         const recoveredSkyRiderConsent = recoveredSkyRiderSelected && recoverySnapshot.skyriderConsentConfirmed === true;
-        const recoveredAlreadyHasSocks =
-          recoverySnapshot.alreadyHasApprovedSocks === true;
-        const recoveredAlreadyHasWaterBottle =
-          recoverySnapshot.alreadyHasWaterBottle === true;
         const recoveredCustomerValid = isValidRecoveredCustomer(savedContact);
         const needsRecoveredSkyRiderConsent = recoveredSkyRiderSelected && !recoveredSkyRiderConsent;
 
         setSelectedProduct(recoveredProduct);
         setQuantity(recoveredQuantity);
         setAddonQty(recoveredAddonQty);
-        setAlreadyHasApprovedSocks(recoveredAlreadyHasSocks);
-        setAlreadyHasWaterBottle(recoveredAlreadyHasWaterBottle);
         setSkyriderConsentConfirmed(recoveredSkyRiderConsent);
 
         if (recoverySnapshot.currentFlowStep === 'TIMESLOT') {
@@ -1040,8 +1023,6 @@ export const BuyTickets = ({
         setSelectedProduct(null);
         setQuantity(1);
         setAddonQty(createEmptyAddonQty());
-        setAlreadyHasApprovedSocks(false);
-        setAlreadyHasWaterBottle(false);
         setSkyriderConsentConfirmed(false);
         setStep('TIMESLOT');
       } finally {
@@ -1067,8 +1048,6 @@ export const BuyTickets = ({
 
     writeBuyFlowRecovery({
       addonQty: toRecoveryAddonQty(addonQty),
-      alreadyHasApprovedSocks,
-      alreadyHasWaterBottle,
       bookingReference: null,
       contact: {
         email,
@@ -1088,8 +1067,6 @@ export const BuyTickets = ({
     });
   }, [
     addonQty,
-    alreadyHasApprovedSocks,
-    alreadyHasWaterBottle,
     draft,
     email,
     firstName,
@@ -1198,8 +1175,6 @@ export const BuyTickets = ({
     setPaymentOptionType('discount');
     setPaymentOptionsOpen(false);
     setSkyriderConsentConfirmed(false);
-    setAlreadyHasApprovedSocks(false);
-    setAlreadyHasWaterBottle(false);
   };
 
   const handleProductSelect = (product: NewBookingProduct) => {
@@ -1212,8 +1187,6 @@ export const BuyTickets = ({
     setDraft(null);
     clearPaymentSyncState();
     setSkyriderConsentConfirmed(false);
-    setAlreadyHasApprovedSocks(false);
-    setAlreadyHasWaterBottle(false);
     setStep('QUANTITY');
   };
 
@@ -1283,26 +1256,10 @@ export const BuyTickets = ({
     setAddonQty((current) => ({ ...current, [id]: Math.max(0, Math.min(max, nextQty)) }));
   };
 
-  const setSocksConfirmation = (checked: boolean) => {
-    setAlreadyHasApprovedSocks(checked);
-    setSubmitError(null);
-    invalidateQuote();
-    setDraft(null);
-    clearPaymentSyncState();
-  };
-
-  const setWaterBottleConfirmation = (checked: boolean) => {
-    setAlreadyHasWaterBottle(checked);
-    setSubmitError(null);
-    invalidateQuote();
-    setDraft(null);
-    clearPaymentSyncState();
-  };
-
   const needsSkyRiderConsent = () => skyriderSelected && !skyriderConsentConfirmed;
 
+  // #457: socks and water are ordinary offers, so nothing on this step blocks Continue.
   const continueFromAddons = () => {
-    if (!addonChoicesRef.current?.validate()) return;
     if (needsSkyRiderConsent()) {
       setStep('SKYRIDER_ATTEST');
       return;
@@ -1930,20 +1887,14 @@ export const BuyTickets = ({
           </div>
 
           <div className="addon-shop-scroll">
-            <AddonChoices ref={addonChoicesRef}
+            <AddonChoices
               entries={buyAddons.filter((addon) => addon.id === 'socks' || addon.id === 'water_bottle' || (isPricedAddon(addon) && getBuyAddonMax(addon) > 0))
                 .map((addon) => ({ ...addon, description: '', quantity: addonQty[addon.id], included: 0,
                   max: getBuyAddonMax(addon), available: isPricedAddon(addon) && getBuyAddonMax(addon) > 0 }))}
-              ownSocks={alreadyHasApprovedSocks} ownBottle={alreadyHasWaterBottle}
-              onQuantity={setOneAddon} onOwnSocks={setSocksConfirmation} onOwnBottle={setWaterBottleConfirmation} />
+              onQuantity={setOneAddon} />
           </div>
 
           <div className="addon-shop-footer">
-            <div className="bg-white border border-border p-4 rounded-2xl mb-4 flex justify-between items-center px-5">
-              <span className="text-foreground text-sm font-black italic uppercase">{t.buy.total}</span>
-              <span className="text-xl font-black italic text-primary">{formatMoney(basketEstimateTotal)}</span>
-            </div>
-
             <button
               data-testid="buy-addons-continue"
               onClick={continueFromAddons}
@@ -1951,6 +1902,11 @@ export const BuyTickets = ({
             >
               {t.common.continue}
             </button>
+
+            <p className="addon-shop-total" aria-live="polite" aria-atomic="true">
+              <span className="addon-shop-total-label">{t.buy.total}</span>
+              <span key={basketEstimateTotal} className="addon-shop-total-amount">{formatMoney(basketEstimateTotal)}</span>
+            </p>
           </div>
         </FlowScreen>
       )}

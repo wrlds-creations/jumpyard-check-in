@@ -177,7 +177,8 @@ function expectNoBookingTimeMessagingSchedule(template: CloudFormationTemplate):
 
 function expectPrearrivalEmailSchedule(template: CloudFormationTemplate): void {
   const ruleName = `${PARK_TEST_PREFIX}-booking-time-sms-schedule`;
-  expectEventRuleState(template, ruleName, 'ENABLED');
+  // GH-392/D0237: Love paused the schedule on 2026-09-29; the rule stays defined but DISABLED.
+  expectEventRuleState(template, ruleName, 'DISABLED');
   const rule = findResourceByTypeAndProperty(template, 'AWS::Events::Rule', 'Name', ruleName);
   expect(rule?.Properties?.ScheduleExpression === 'rate(5 minutes)', 'GH-392 schedule must run every five minutes.');
   const targets = rule?.Properties?.Targets;
@@ -259,6 +260,25 @@ function expectLambdaEnvironment(
     expect(
       variables[name] === expectedValue,
       `Expected ${functionName} environment ${name}=${expectedValue}, got ${JSON.stringify(variables[name])}.`,
+    );
+  }
+}
+
+// GH-463: only Booking, Lookup and Redeem receive the open-ended window start.
+function expectOpenEndedWindowEnvironment(template: CloudFormationTemplate, prefix: string, expectedValue: string): void {
+  const dateGatedFunctions = ['booking', 'lookup', 'redeem'].map((handler) => `${prefix}-stack-${handler}`);
+  for (const functionName of dateGatedFunctions) {
+    expectLambdaEnvironment(template, functionName, { T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE: expectedValue });
+  }
+
+  for (const resource of Object.values(getResources(template))) {
+    if (resource.Type !== 'AWS::Lambda::Function') continue;
+    const functionName = String(resource.Properties?.FunctionName ?? '');
+    if (dateGatedFunctions.includes(functionName)) continue;
+    const environment = resource.Properties?.Environment as { Variables?: Record<string, unknown> } | undefined;
+    expect(
+      environment?.Variables?.T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE === undefined,
+      `${functionName || 'An unnamed Lambda'} must not receive T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE.`,
     );
   }
 }
@@ -348,6 +368,7 @@ function validateDevTemplate(dev: SynthResult): void {
     JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'dev',
   });
+  expectOpenEndedWindowEnvironment(dev.template, DEV_PREFIX, '');
 
   console.log('[pass] dev synth keeps Playground resource names');
 }
@@ -537,6 +558,7 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
+  expectOpenEndedWindowEnvironment(parkTest.template, PARK_TEST_PREFIX, '');
 
   console.log('[pass] park-test synth uses separate names, tags, and Live config');
 }
@@ -751,6 +773,7 @@ function validateParkTestAssistedLookupTemplate(parkTest: SynthResult): void {
     JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
+  expectOpenEndedWindowEnvironment(parkTest.template, PARK_TEST_PREFIX, '');
 
   console.log('[pass] park-test assisted lookup synth opens only Nacka/date-scoped lookup');
 }
@@ -1087,8 +1110,10 @@ function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void 
     WEBHOOK_AUTH_HEADER: 'x-roller-apikey',
     WEBHOOK_RUNTIME_MODE: 'processor',
   });
+  expectOpenEndedWindowEnvironment(parkTest.template, PARK_TEST_PREFIX, '2026-06-29');
 
   console.log('[pass] park-test full-flow rehearsal synth preserves the visitor flow and opens exact T0197 webhook processing');
+  console.log('[pass] GH-463 full-flow synth opens Nacka dates from 2026-06-29 on Booking, Lookup and Redeem only');
 }
 
 const dev = synthConfig('config/dev.json');

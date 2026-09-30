@@ -194,6 +194,8 @@ function main() {
         venueId: config.safetyGates.fullFlowRehearsalVenueId,
         firstOperatingDate: config.safetyGates.fullFlowRehearsalAllowedOperatingDates?.[0],
         lastOperatingDate: config.safetyGates.fullFlowRehearsalAllowedOperatingDates?.at(-1),
+        // GH-463: every operating date from here on is open (no end date); null when closed.
+        openEndedFromDate: config.safetyGates.fullFlowRehearsalOpenEndedFromDate || null,
       },
     },
     components: {

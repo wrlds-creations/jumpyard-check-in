@@ -62,6 +62,7 @@
       "email"
     ],
     "scheduleEnabled": true,
+    "schedulePaused": true,
     "confirmSend": true,
     "confirmedSendApproval": "I_APPROVE_CONFIRMED_SCHEDULED_SMS_SENDS",
     "checkinBaseUrl": "https://jumpyard-check-in-park-test.pages.dev/",
@@ -188,6 +189,7 @@
       "2026-09-29",
       "2026-09-30"
     ],
+    "fullFlowRehearsalOpenEndedFromDate": "2026-06-29",
     "fullFlowRehearsalVenueId": "50871"
   },
   "tags": {

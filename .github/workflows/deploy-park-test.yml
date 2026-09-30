@@ -240,7 +240,8 @@ jobs:
           set -euo pipefail
           sha="${{ needs.plan.outputs.release_sha }}"
           status="$(aws cloudformation describe-stacks --stack-name "$PARK_TEST_STACK" --query 'Stacks[0].StackStatus' --output text)"
-          [[ "$status" == "UPDATE_COMPLETE" || "$status" == "CREATE_COMPLETE" ]]
+          [[ "$status" == "UPDATE_COMPLETE" || "$status" == "CREATE_COMPLETE" ]] \
+            || { echo "::error::Stack status is $status, expected UPDATE_COMPLETE or CREATE_COMPLETE."; exit 1; }
 
           aws cloudformation get-template \
             --stack-name "$PARK_TEST_STACK" \
@@ -256,7 +257,8 @@ jobs:
             (.resources.changed | length) == 0 and
             (.resources.removed | length) == 0 and
             ([.sections[] | length] | add) == 0
-          ' post-deploy-plan.json > /dev/null
+          ' post-deploy-plan.json > /dev/null \
+            || { echo "::error::The deployed template differs from the selected release."; cat post-deploy-plan.md; exit 1; }
 
           detection_id="$(aws cloudformation detect-stack-drift --stack-name "$PARK_TEST_STACK" --query StackDriftDetectionId --output text)"
           for attempt in {1..60}; do
@@ -265,23 +267,36 @@ jobs:
             [[ "$drift_status" == "DETECTION_IN_PROGRESS" ]] || break
             sleep 10
           done
-          [[ "$drift_status" == "DETECTION_COMPLETE" ]]
+          [[ "$drift_status" == "DETECTION_COMPLETE" ]] \
+            || { echo "::error::Stack drift detection did not complete (status $drift_status)."; exit 1; }
           stack_drift="$(aws cloudformation describe-stack-drift-detection-status \
             --stack-drift-detection-id "$detection_id" --query StackDriftStatus --output text)"
-          [[ "$stack_drift" == "IN_SYNC" ]]
+          if [[ "$stack_drift" != "IN_SYNC" ]]; then
+            echo "::error::Stack drift is $stack_drift; a resource was changed outside CloudFormation."
+            aws cloudformation describe-stack-resource-drifts --stack-name "$PARK_TEST_STACK" \
+              --stack-resource-drift-status-filters MODIFIED DELETED \
+              --query 'StackResourceDrifts[].[LogicalResourceId,StackResourceDriftStatus]' --output text || true
+            exit 1
+          fi
 
           alarm_count="$(aws cloudwatch describe-alarms \
             --alarm-name-prefix jumpyard-check-in-park-test \
             --state-value ALARM \
             --query 'length(MetricAlarms)' --output text)"
-          [[ "$alarm_count" == "0" ]]
+          if [[ "$alarm_count" != "0" ]]; then
+            echo "::error::$alarm_count Park alarm(s) are in ALARM."
+            aws cloudwatch describe-alarms --alarm-name-prefix jumpyard-check-in-park-test --state-value ALARM \
+              --query 'MetricAlarms[].AlarmName' --output text || true
+            exit 1
+          fi
 
           aws sqs list-queues --queue-name-prefix jumpyard-check-in-park-test --output json \
             | jq -r '.QueueUrls[]?' | while read -r queue_url; do
                 attrs="$(aws sqs get-queue-attributes --queue-url "$queue_url" \
                   --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible --output json)"
                 jq -e '(.Attributes.ApproximateNumberOfMessages | tonumber) == 0 and (.Attributes.ApproximateNumberOfMessagesNotVisible | tonumber) == 0' \
-                  <<< "$attrs" > /dev/null
+                  <<< "$attrs" > /dev/null \
+                  || { echo "::error::Queue ${queue_url##*/} is not empty: $(jq -c .Attributes <<< "$attrs")"; exit 1; }
               done
 
           for project in "$PARK_TEST_PHONE_PROJECT" "$PARK_TEST_ADMIN_PROJECT"; do
@@ -293,7 +308,8 @@ jobs:
                   .result[0].environment == "production" and
                   .result[0].deployment_trigger.metadata.commit_hash == $sha and
                   .result[0].latest_stage.status == "success"
-                ' > /dev/null
+                ' > /dev/null \
+              || { echo "::error::Cloudflare Pages production deployment for $project is not a successful build of $sha."; exit 1; }
           done
           node tooling/scripts/verify-public-park-test.js
 

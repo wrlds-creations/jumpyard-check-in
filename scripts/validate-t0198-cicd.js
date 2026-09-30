@@ -160,6 +160,8 @@ function main() {
   assert.equal(config.safetyGates.staffAuthEnabled, true);
   assert.equal(config.safetyGates.fullFlowRehearsalVenueId, '50871');
   assert.equal(config.safetyGates.fullFlowRehearsalAllowedOperatingDates.at(-1), '2026-09-30');
+  // GH-463/D0236: no end date; only a reviewed change that removes this setting closes the window.
+  assert.equal(config.safetyGates.fullFlowRehearsalOpenEndedFromDate, '2026-06-29');
 
   for (const relativePath of [
     'AGENTS.md',

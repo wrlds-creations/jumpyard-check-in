@@ -102,3 +102,9 @@ The 2026-09-08 preparation evidence still applies. It ran 20 focused tests, thre
 ## #345 integration
 
 #345 (daily numbers and staff handout) is merged and live. This change touches only the session messaging and lifetime code, and uses the same guest QR/number for entrance handout. The Monday walkthrough should confirm that a home-prepared booking reopens with the same safety state and number, and that handout works without duplicate collection.
+
+## Schedule pause codified (2026-09-30, D0237)
+
+On Love's order, `jumpyard-check-in-park-test-booking-time-sms-schedule` was disabled manually at 2026-09-29T02:57:18Z. The Park stack then reported drift for that rule alone (`State`: expected `ENABLED`, actual `DISABLED`), and the protected Park verification failed in runs 36677089648 and 36678528495. `bookingTimeSms.schedulePaused: true` now synthesizes the same rule as `DISABLED`, so a deployment keeps it off and drift detection returns `IN_SYNC`. Nothing is sent. The code date lock remains 2026-09-28. Resuming sends requires Love's explicit request and a reviewed change.
+
+Deployed with #463 in Park run 36707872129 (release 36707276078 / `d636be6`). Verification re-run 36708753741 passed with the rule `DISABLED` and drift `IN_SYNC`. No message was sent.

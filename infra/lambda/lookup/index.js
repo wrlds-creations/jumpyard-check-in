@@ -1327,9 +1327,9 @@ async function validateParkTestLookupAccess(request) {
 
   if (isT0171AssistedLookupEnabled()) {
     const lookupDate = normalizeDate(request.expectedDate) || getVenueToday();
-    const allowedDates = getT0171AssistedLookupAllowedOperatingDates();
+    const dateWindow = getT0171AssistedLookupDateWindow();
 
-    if (allowedDates.length === 0) {
+    if (!dateWindow.valid) {
       return {
         ok: false,
         statusCode: 500,
@@ -1338,7 +1338,7 @@ async function validateParkTestLookupAccess(request) {
       };
     }
 
-    if (!lookupDate || !allowedDates.includes(lookupDate)) {
+    if (!lookupDate || !isT0171AssistedLookupDateAllowed(dateWindow, lookupDate)) {
       return {
         ok: false,
         statusCode: 403,
@@ -1389,11 +1389,11 @@ function validateParkTestBookingScope(access, request, rollerBooking, booking, v
     return { ok: true, venueId: request.venueId };
   }
 
-  const allowedDates = getT0171AssistedLookupAllowedOperatingDates();
+  const dateWindow = getT0171AssistedLookupDateWindow();
   const bookingDates = getBookingOperatingDates(booking);
   const lookupDate = access.lookupDate || normalizeDate(request.expectedDate) || getVenueToday();
 
-  if (allowedDates.length === 0) {
+  if (!dateWindow.valid) {
     return {
       ok: false,
       statusCode: 500,
@@ -1402,7 +1402,7 @@ function validateParkTestBookingScope(access, request, rollerBooking, booking, v
     };
   }
 
-  if (!lookupDate || !allowedDates.includes(lookupDate)) {
+  if (!lookupDate || !isT0171AssistedLookupDateAllowed(dateWindow, lookupDate)) {
     return {
       ok: false,
       statusCode: 403,
@@ -1493,6 +1493,31 @@ function getT0171AssistedLookupAllowedOperatingDates() {
     .split(',')
     .map((value) => normalizeDate(value))
     .filter(Boolean);
+}
+
+// GH-463/D0236: the stack sets T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE only for the approved
+// full-flow profile. It adds every operating date on or after it (no end date) to the list.
+function getT0171AssistedLookupDateWindow() {
+  const dates = getT0171AssistedLookupAllowedOperatingDates();
+  const openEndedFromDate = String(process.env.T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE || '').trim() || null;
+  const valid =
+    (dates.length > 0 || openEndedFromDate !== null) &&
+    (openEndedFromDate === null || isIsoCalendarDate(openEndedFromDate));
+  return { dates, openEndedFromDate, valid };
+}
+
+function isT0171AssistedLookupDateAllowed(dateWindow, date) {
+  if (!dateWindow.valid || !isIsoCalendarDate(date)) return false;
+  return (
+    dateWindow.dates.includes(date) ||
+    (dateWindow.openEndedFromDate !== null && date >= dateWindow.openEndedFromDate)
+  );
+}
+
+function isIsoCalendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value ?? ''))) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 function getT0171AssistedLookupVenueId() {

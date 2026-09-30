@@ -4,6 +4,16 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issues #463/#466 Open-Ended Nacka Window And Paused #392 Schedule (Deployed 2026-09-30)
+
+Release [36707276078](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36707276078) / `d636be6` (artifact `11092582797`) went through protected [Park 36707872129](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36707872129) and a no-change verification re-run, [36708753741](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36708753741), which passed every check.
+
+Of 208 resources, only four changed:
+- `BookingHandler`, `LookupHandler` and `RedeemHandler` got code plus `T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE=2026-06-29` (D0236). The Nacka window stays open with no end date until Love closes it.
+- `BookingTimeSmsScheduleRule` changed `State` to `DISABLED` (D0237). This codifies the manual #392 stop of 2026-09-29, which had left the stack `DRIFTED` and failed every Park verification.
+
+No resources were added or removed, and there were no migrations, IAM, route or tag changes. Account `376129878018`/`eu-north-1`. Drift is `IN_SYNC`. The Park verify step now names the failing check. [Evidence](docs/gh-463-open-ended-window.md#rollout-evidence).
+
 ### Issue #437 Phone Email Marketing (Deployed; Choice Sent With The Draft)
 
 The change reuses Booking, Lookup, WebhookProcessor, existing invoke grants, `idempotency_records` and `event_log`. It adds only a Booking function-name environment reference to Lookup and WebhookProcessor; no new AWS resource, IAM permission, route, schema, secret or scheduled job is created. PR #439 reached Park through release run 35862200997 and Park run 35862852072 (changed only the Booking, Lookup and both webhook Lambdas; rollback candidate release 35834109237). PR #440 (release 35871540109, Park run 35872374543) briefly set `PHONE_EMAIL_MARKETING_PROVIDER_APPROVED=true` on Booking under D0224. D0225 removed that approval again: Park run 35970858632 returned Booking to `false`, and frontend-only public run 35975609844 promoted the same release to `checkin.jumpyard.se` without an AWS mutation. A checked choice now travels with the ROLLER draft. The ROLLER API key `WRLDS park test Nacka Forum` gained `Update guest detail (PUT)` on 2026-09-23 for the owned-address test; D0225 no longer needs it. Existing Nacka account/region/ownership/tags and protected immutable-artifact promotion remain authoritative. [Data lifecycle, provider gates and verification](docs/gh-437-phone-email-marketing.md).
