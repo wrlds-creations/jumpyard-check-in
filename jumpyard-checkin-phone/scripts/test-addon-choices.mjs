@@ -200,3 +200,16 @@ test('both entry paths retain native scrolling without the discarded more-add-on
   assert.equal(existsSync(new URL('../src/components/AddonShopScroll.tsx', import.meta.url)), false);
   assert.equal(existsSync(new URL('../src/flow/addonScroll.ts', import.meta.url)), false);
 });
+
+test('#470: SkyRider needs 125 cm and grip socks are required for everyone in the park', () => {
+  const copy = source('context/LanguageContext.tsx');
+  assert.doesNotMatch(copy, /100 cm/);
+  for (const line of [
+    "requirementTitle: 'Minst 125 cm'",
+    "requirementTitle: 'Minimum 125 cm'",
+    "confirmCheckbox: 'Jag bekräftar att alla SkyRider-åkare är minst 125 cm.'",
+    "confirmCheckbox: 'I confirm that all SkyRider riders are at least 125 cm.'",
+    "socksBenefit: 'Bra grepp. Krävs för alla som vistas i parken.'",
+    "socksBenefit: 'Great grip. Required for everyone in the park.'",
+  ]) assert.ok(copy.includes(line), line);
+});
