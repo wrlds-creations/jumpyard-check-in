@@ -44,6 +44,25 @@ Love, 2026-09-29 (found during #460): "förläng 30/9 tills för alltid och att 
 - **Environment size** (literal bytes plus 160 bytes per CloudFormation reference): Booking about 2.4 KB, Redeem 2.6 KB and Lookup 2.9 KB of 4 KB; each grows by 46 bytes.
 - **Release tooling:** a local end-to-end run of the builder and validator with a placeholder bundle accepted a #463 release, a release without the setting and a pre-#463 manifest. It rejected another start date and any mismatch between manifest and copied config.
 
-## Deployment
+## Rollout evidence
 
-Not started. Commit, PR, merge, release and the protected promotion wait for Love's explicit go; the change must be live before the first guests arrive on 2026-10-01. After deployment, record the run IDs and the Lambda environment readback in `AWS_RESOURCES.md` and `REPO_CURRENT_STATE.md`.
+The Park deployment on 2026-09-30 carried #463 together with #466 (D0237), which codified the paused #392 schedule that had left the stack drifted.
+
+- **Source.** PR #464 merged as `cf1f972`, then PR #468 as `d636be6`.
+- **Release.** Run [36707276078](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36707276078), artifact `11092582797`, digest `sha256:8bce175e4d3ef72d0ce7565dc53df6a1982e5de3a05431bd40f85efec95840b4`, manifest `4f107aac6f103420abd1b9238d03095a60e48effdbfad082fe6520bb87b65458`.
+- **Earlier attempt.** A first Park run for release 36680198177 (`cf1f972`, run 36680952997) was rejected at the approval gate, because Love chose to fix the drift first.
+- **Park run [36707872129](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36707872129).**
+  - The reviewed plan went from template `50ce5078` to `555c59d4`, with 208 resources before and after, nothing added or removed, and no migrations.
+  - Changed resources were `BookingHandler5D1461BB`, `LookupHandler5950B7B5` and `RedeemHandler3A94EE00` (code plus `T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE=2026-06-29`), and `BookingTimeSmsScheduleRuleA6AE02D4` (`State` ENABLED → DISABLED only).
+  - An independent comparison of the deployed and synthesized templates confirmed exactly those differences.
+  - The deploy succeeded. Verification then stopped on one in-flight message in `webhook-events.fifo`, a transient condition during park hours that the new #466 message named.
+- **Verification re-run [36708753741](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36708753741).** It re-promoted the same artifact with identical templates and `Changed: None`. Every check passed: stack, template, drift `IN_SYNC`, alarms, queues, Pages, public checks and migrations.
+- **Independent readback.**
+  - The stack is `UPDATE_COMPLETE`, with drift `IN_SYNC` at 11:25:14Z.
+  - All three functions carry `2026-06-29` with `LastUpdateStatus` Successful.
+  - The rule is `DISABLED`, and no alarms are in ALARM.
+- **Public probe (Park API lookup, synthetic address).**
+  - expectedDate `2026-10-01` returns `404 booking_not_found`, so the date gate is passed.
+  - `2026-06-28` still returns `403 live_lookup_not_allowed`.
+- **Rollback.** Any release built before #463 closes Nacka for visits from 2026-10-01. Release 36680198177 (`cf1f972`) keeps #463 but would re-enable the paused #392 rule.
+- **Not deployed.** No new AWS resource, migration, frontend change, provider write or guest message.
