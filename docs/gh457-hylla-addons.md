@@ -25,4 +25,4 @@ Continue never asks for a tick: the own-item checkboxes, `validate()`, the inlin
 - Public run 36680207854 succeeded with every verification step green. `checkin.jumpyard.se`, `jumpyard-check-in-production.pages.dev` and `jumpyard-check-in-park-test.pages.dev` serve the Hylla shelf and "Ta med egna eller köp här"; the own-item copy and styles are gone, and `/preview/addons` returns the not-found page.
 - Rollback: public frontends release 36016708607 (`4c6d730`). Park follows #463 (`cf1f972`, open-ended Nacka window), which contains this change, so no Park rollback may select an older release.
 
-Not yet verified: a physical iPhone on `checkin.jumpyard.se`.
+Physical check: Love confirmed the new add-on step on an iPhone on `checkin.jumpyard.se` on 2026-09-30 ("grönt på iphone och kiosk!").
