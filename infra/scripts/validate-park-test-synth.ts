@@ -177,7 +177,8 @@ function expectNoBookingTimeMessagingSchedule(template: CloudFormationTemplate):
 
 function expectPrearrivalEmailSchedule(template: CloudFormationTemplate): void {
   const ruleName = `${PARK_TEST_PREFIX}-booking-time-sms-schedule`;
-  expectEventRuleState(template, ruleName, 'ENABLED');
+  // GH-392/D0237: Love paused the schedule on 2026-09-29; the rule stays defined but DISABLED.
+  expectEventRuleState(template, ruleName, 'DISABLED');
   const rule = findResourceByTypeAndProperty(template, 'AWS::Events::Rule', 'Name', ruleName);
   expect(rule?.Properties?.ScheduleExpression === 'rate(5 minutes)', 'GH-392 schedule must run every five minutes.');
   const targets = rule?.Properties?.Targets;

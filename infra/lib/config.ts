@@ -101,6 +101,7 @@ export interface JumpYardCloudConfig {
     readonly limit: number;
     readonly rateMinutes: number;
     readonly scheduleEnabled: boolean;
+    readonly schedulePaused: boolean;
     readonly windowEndsAtLead: boolean;
     readonly windowMinutes: number;
   };
@@ -197,6 +198,7 @@ interface RawConfig {
     readonly limit?: unknown;
     readonly rateMinutes?: unknown;
     readonly scheduleEnabled?: unknown;
+    readonly schedulePaused?: unknown;
     readonly windowEndsAtLead?: unknown;
     readonly windowMinutes?: unknown;
   };
@@ -1167,6 +1169,8 @@ function readBookingTimeSmsConfig(raw: RawConfig['bookingTimeSms']): JumpYardClo
     limit: readOptionalInteger(raw?.limit, 10, 1, 10, 'bookingTimeSms.limit'),
     rateMinutes: readOptionalInteger(raw?.rateMinutes, 5, 1, 60, 'bookingTimeSms.rateMinutes'),
     scheduleEnabled: readOptionalBoolean(raw?.scheduleEnabled, false, 'bookingTimeSms.scheduleEnabled'),
+    // GH-392/D0237: keeps the existing rule but synthesizes it DISABLED (Love's 2026-09-29 pause).
+    schedulePaused: readOptionalBoolean(raw?.schedulePaused, false, 'bookingTimeSms.schedulePaused'),
     windowEndsAtLead: readOptionalBoolean(raw?.windowEndsAtLead, false, 'bookingTimeSms.windowEndsAtLead'),
     windowMinutes: readOptionalInteger(raw?.windowMinutes, 10, 1, 180, 'bookingTimeSms.windowMinutes'),
   };
