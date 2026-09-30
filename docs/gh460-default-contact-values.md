@@ -43,26 +43,30 @@ What guests and staff saw after step 3:
 
 New guest B did not tick the email choice and abandoned the draft at payment. B was nevertheless `User Suppressed` in Klaviyo within seconds, with no guest update from us. This differs from the #437 note that a new guest without the choice stays Never subscribed. The cause is still open: either the abandoned draft or the phone shared with A. Such a guest cannot become a subscriber later without manual unsuppression.
 
-## Recommendation and pending decision
+## Decision (D0234, 2026-09-30)
 
-Do not send default values without knowing the real ones: for a returning guest they replace real data in ROLLER and Klaviyo. Until a lookup is approved, keep asking for all four fields on phone and kiosk.
+Default values must not be sent without first knowing the real ones. Love and Gustav (JumpYard) approved using Klaviyo data in checkout, and the lookup is binary:
 
-**Love's preferred follow-up (not approved yet; Love will discuss it with Gustav on 2026-09-30).** The guest enters only email, and Cloud looks up the exact email in Klaviyo with a key that has only Profiles: Read.
-- Found: send the found name and phone.
-- Not found: send a placeholder ("Gäst" / "JumpYard" / `0700000000`).
+- **Found (exactly one Klaviyo profile).** Send Klaviyo's first name, last name, phone and `location.zip` as `customer.address.postcode`. A field missing from the profile gets its placeholder only. Nothing changes for a known customer.
+- **Not found.** Send the guest's typed first name, last name `Gäst` and phone `0700000000`, with no address.
+- **Uncertain.** More than one profile, an error, a 1.5 s timeout or a missing key: ask the guest for last name and phone. Never guess.
 
-Residual risk: a guest who exists in ROLLER but not in Klaviyo gets overwritten. That can happen after an old unsynced or deleted profile, or during sync lag. Two mitigations:
-- measure Klaviyo coverage of recent ROLLER customers first;
-- search ROLLER bookings before falling back to the placeholder.
+Klaviyo values are never shown to the guest or logged. The remaining risk is a customer who exists in ROLLER but not in Klaviyo.
 
-The change also needs:
-- JumpYard's approval to use Klaviyo data in checkout;
-- a new secret;
-- found values never shown on screen.
+Measurements behind the decision (read-only, Love's Profiles:Read key):
+- **Exact match.** An exact-email lookup of alias A returned the same first name, last name and phone as ROLLER. The profile has no ROLLER guest id.
+- **Postcode.** Love's own web-shop profile has `location.zip` (Swedish format), so the ROLLER postcode reaches Klaviyo.
+- **Latency.** Twenty sequential calls from Sweden: found p50 256 ms, max 459 ms (first call); not found p50 251 ms, max 279 ms.
+
+Follow-up issues:
+- **wrlds-creations/jumpyard-check-in#473.** Cloud lookup, placeholders, postcode, an empty Secrets Manager secret that Love populates, and the phone form.
+- **wrlds-creations/jumpyard-check-in-kiosk#150.** The kiosk form, after Cloud #473.
+
+The #437 side finding (a new, unticked, abandoned guest suppressed in Klaviyo) belongs to #437.
 
 ## Provider requests and cleanup
 
-The agent made 22 ROLLER Live calls:
+The agent made 22 ROLLER Live calls and 22 Klaviyo reads (1 lookup of alias A, 1 postcode check, 20 latency samples):
 - 7 token requests;
 - 1 venue read;
 - 5 booking reads;
