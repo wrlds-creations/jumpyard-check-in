@@ -159,6 +159,7 @@ export interface JumpYardCloudConfig {
     readonly frontendRedeemRehearsalApproval?: string;
     readonly fullFlowRehearsalAllowedOperatingDates: readonly string[];
     readonly fullFlowRehearsalApproval?: string;
+    readonly fullFlowRehearsalOpenEndedFromDate?: string;
     readonly fullFlowRehearsalVenueId?: string;
     readonly phoneEmailMarketingDeliveryApproval?: string;
     readonly rollerBookingDraftWritesEnabled: boolean;
@@ -254,6 +255,7 @@ interface RawConfig {
     readonly frontendRedeemRehearsalApproval?: unknown;
     readonly fullFlowRehearsalAllowedOperatingDates?: unknown;
     readonly fullFlowRehearsalApproval?: unknown;
+    readonly fullFlowRehearsalOpenEndedFromDate?: unknown;
     readonly fullFlowRehearsalVenueId?: unknown;
     readonly phoneEmailMarketingDeliveryApproval?: unknown;
     readonly rollerBookingDraftWritesEnabled?: unknown;
@@ -415,6 +417,9 @@ function validateEnvironmentContract(input: EnvironmentContractInput): void {
     }
     if (input.safetyGates.prearrivalEmailApproval) {
       throw new Error('dev safetyGates.prearrivalEmailApproval must remain empty.');
+    }
+    if (input.safetyGates.fullFlowRehearsalOpenEndedFromDate) {
+      throw new Error('dev safetyGates.fullFlowRehearsalOpenEndedFromDate must remain empty.');
     }
     if (input.dataSync.scheduleEnabled) {
       throw new Error('dev dataSync.scheduleEnabled must remain false while Playground is hibernated.');
@@ -823,6 +828,19 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     throw new Error(
       'park-test safetyGates.fullFlowRehearsalAllowedOperatingDates must stay empty until a scoped full-flow ticket enables it.',
     );
+  }
+
+  // GH-463/D0236: every operating date on or after this ISO date is also allowed (no end date).
+  // Closing it is an explicit, reviewed config change.
+  const fullFlowOpenEndedFromDate = input.safetyGates.fullFlowRehearsalOpenEndedFromDate ?? '';
+  if (fullFlowOpenEndedFromDate && !fullFlowRehearsalApproved) {
+    throw new Error(
+      'park-test safetyGates.fullFlowRehearsalOpenEndedFromDate must stay empty until a scoped full-flow ticket enables it.',
+    );
+  }
+
+  if (fullFlowOpenEndedFromDate && !isIsoCalendarDate(fullFlowOpenEndedFromDate)) {
+    throw new Error('park-test safetyGates.fullFlowRehearsalOpenEndedFromDate must be a valid YYYY-MM-DD date.');
   }
 
   if (fullFlowRehearsalApproved && !input.safetyGates.fullFlowRehearsalVenueId) {
@@ -1349,6 +1367,11 @@ function readSafetyGatesConfig(raw: RawConfig['safetyGates']): JumpYardCloudConf
       '',
       'safetyGates.fullFlowRehearsalApproval',
     ),
+    fullFlowRehearsalOpenEndedFromDate: readOptionalString(
+      raw?.fullFlowRehearsalOpenEndedFromDate,
+      '',
+      'safetyGates.fullFlowRehearsalOpenEndedFromDate',
+    ),
     fullFlowRehearsalVenueId: readOptionalString(
       raw?.fullFlowRehearsalVenueId,
       '',
@@ -1521,6 +1544,12 @@ function readOptionalAuroraCapacity(value: unknown, fallback: number, fieldName:
 
 function isEmailLike(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function isIsoCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function isSafeCheckinBaseUrl(value: string): boolean {

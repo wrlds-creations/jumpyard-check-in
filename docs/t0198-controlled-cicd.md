@@ -4,7 +4,7 @@
 
 The technically named Park environment uses GitHub as the routine release control plane. A reviewed commit is built once, stored as one hashed artifact, planned against the current AWS target with a read-only identity, approved through the protected `park-test` environment, and deployed to AWS plus both Park verification Pages projects without rebuilding.
 
-D0189/issue #264 later approved this same environment as Nacka pilot production without renaming it. The existing Nacka `50871` profile and dates through `2026-09-30` remain the only deployable backend posture. `.github/workflows/deploy-checkin-domain-test.yml` separately promotes the same phone/admin outputs to the two public pilot Pages projects after Park verification; new multi-park infrastructure is not represented.
+D0189/issue #264 later approved this same environment as Nacka pilot production without renaming it. The existing Nacka `50871` profile, open from `2026-06-29` with no end date (D0236), remains the only deployable backend posture. `.github/workflows/deploy-checkin-domain-test.yml` separately promotes the same phone/admin outputs to the two public pilot Pages projects after Park verification; new multi-park infrastructure is not represented.
 
 ## Control Flow
 
@@ -49,7 +49,7 @@ Rollback is the same lower half of the flow with an earlier successful artifact.
 | Public admin Pages project | `jumpyard-checkin-admin-production` |
 | Cloudflare account | `dc0a3855bc8a0b1db8fc27ee62bf7d40` |
 
-The manifest validator fails closed if any value, approved gate, Nacka venue, or full-flow end date differs. The artifact contains the CDK cloud assembly and Lambda assets, phone/admin static outputs, exact migration runner/config/SQL, `manifest.json`, and a checksum for every file. Hidden output such as the Apple Pay association directory is included. GitHub retains the artifact for 90 days.
+The manifest validator fails closed if any value, approved gate, Nacka venue, or full-flow list end date differs. The #463 open-ended start must be `2026-06-29`, or absent in older artifacts, and must match the copied config. The artifact contains the CDK cloud assembly and Lambda assets, phone/admin static outputs, exact migration runner/config/SQL, `manifest.json`, and a checksum for every file. Hidden output such as the Apple Pay association directory is included. GitHub retains the artifact for 90 days.
 
 ## Workflows
 

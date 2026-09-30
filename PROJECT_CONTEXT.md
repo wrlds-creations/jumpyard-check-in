@@ -69,7 +69,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Park work requires an approved Issue and explicit scope. Its technical identity remains `WRLDS:Environment=park-test` in `376129878018`/`eu-north-1`, namespace `jumpyard-check-in-park-test`, with server-side Roller Live Nacka. Pilot production is a business role, not a rename or wider venue authority.
 - `infra/config/park-test.json` is the normal closed config; approved Issue-specific configs open reviewed gates.
 - Park-test resources and gates are recorded in [AWS_RESOURCES.md](AWS_RESOURCES.md) and [the gate runbook](docs/t0170-park-test-gate-runbook.md); runtime variables stay ticket-numbered until scoped migration.
-- The Nacka `50871` full-flow window for `2026-06-29` through `2026-09-30` remains open until Love asks to close it; Issue/PR closeout is not a close-window deploy.
+- The Nacka `50871` full-flow window is open from `2026-06-29` with no end date until Love asks to close it (D0236); Issue/PR closeout is not a close-window deploy.
 - Park-test phone PWA builds must set `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL` to the park-test API, or the app falls back to dev.
 - Park-test post-payment sync only refreshes a recent local `new_booking` prepayment draft.
 - Deployed gates fail closed, require Nacka `50871` plus allowed dates, and reject invalid request items before side effects. The 28 routes use six IAM, four Cognito JWT, and eighteen Lambda-auth boundaries; shared-IP-safe route limits passed the 120-guest/20-minute and 40-device burst models.

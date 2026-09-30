@@ -3007,9 +3007,9 @@ function validateT0162AddOnSmokeAccess(identifier) {
 function validateT0176FullFlowOriginalBookingAccess(original) {
   if (!isT0176FullFlowRehearsalEnabled()) return { ok: true };
 
-  const allowedDates = parseCsvValues(process.env.T0176_FULL_FLOW_ALLOWED_OPERATING_DATES);
+  const dateWindow = getT0176FullFlowDateWindow();
   const bookingDate = normalizeDate(original?.bookingDate);
-  if (allowedDates.length === 0 || !bookingDate || !allowedDates.includes(bookingDate)) {
+  if (!bookingDate || !isT0176FullFlowDateAllowed(dateWindow, bookingDate)) {
     return {
       ok: false,
       code: 't0176_full_flow_booking_not_allowed',
@@ -3044,8 +3044,8 @@ function validateT0176FullFlowOriginalBookingAccess(original) {
 function validateT0176FullFlowRequestItemDates(items) {
   if (!isT0176FullFlowRehearsalEnabled()) return { ok: true };
 
-  const allowedDates = parseCsvValues(process.env.T0176_FULL_FLOW_ALLOWED_OPERATING_DATES);
-  if (allowedDates.length === 0 || allowedDates.some((date) => !isIsoDate(date))) {
+  const dateWindow = getT0176FullFlowDateWindow();
+  if (!dateWindow.valid) {
     return {
       ok: false,
       code: 't0176_full_flow_config_error',
@@ -3057,7 +3057,7 @@ function validateT0176FullFlowRequestItemDates(items) {
   if (
     !Array.isArray(items) ||
     items.length === 0 ||
-    items.some((item) => !isIsoDate(item?.bookingDate) || !allowedDates.includes(item.bookingDate))
+    items.some((item) => !isT0176FullFlowDateAllowed(dateWindow, item?.bookingDate))
   ) {
     return {
       ok: false,
@@ -3068,6 +3068,26 @@ function validateT0176FullFlowRequestItemDates(items) {
   }
 
   return { ok: true };
+}
+
+// GH-463/D0236: the approved window is the explicit date list plus, when set, every operating
+// date on or after T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE (no end date). Invalid config allows nothing.
+function getT0176FullFlowDateWindow() {
+  const dates = parseCsvValues(process.env.T0176_FULL_FLOW_ALLOWED_OPERATING_DATES);
+  const openEndedFromDate = String(process.env.T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE || '').trim() || null;
+  const valid =
+    (dates.length > 0 || openEndedFromDate !== null) &&
+    dates.every((date) => isIsoDate(date)) &&
+    (openEndedFromDate === null || isIsoDate(openEndedFromDate));
+  return { dates, openEndedFromDate, valid };
+}
+
+function isT0176FullFlowDateAllowed(dateWindow, date) {
+  if (!dateWindow.valid || !isIsoDate(date)) return false;
+  return (
+    dateWindow.dates.includes(date) ||
+    (dateWindow.openEndedFromDate !== null && date >= dateWindow.openEndedFromDate)
+  );
 }
 
 function parseCsvValues(value) {

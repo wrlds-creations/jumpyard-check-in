@@ -7,6 +7,11 @@ const vm = require('node:vm');
 const ROOT = path.resolve(__dirname, '..');
 const APPROVED_DATE = '2026-07-10';
 const APPROVED_VENUE = '50871';
+// GH-463: open-ended window start and Nacka dates after the explicit list.
+const OPEN_ENDED_FROM_DATE = '2026-06-29';
+const BEFORE_OPEN_ENDED_DATE = '2026-06-28';
+const OPEN_ENDED_DATES = ['2026-10-01', '2027-06-01'];
+const OTHER_VENUE = '99999';
 
 function fakeAwsModule() {
   return new Proxy(
@@ -477,6 +482,158 @@ async function validateReleasedStopStillNeedsNarrowGates() {
   assert.equal(activeWebhook.isRollerWebhookProcessingEnabled(), true);
 }
 
+function loadGh463Gates(environment) {
+  return {
+    booking: loadHandler('infra/lambda/booking/index.js', environment, [
+      'isAddProductDraftWriteEnabled',
+      'isNewBookingDraftWriteEnabled',
+      'validateT0176FullFlowOriginalBookingAccess',
+    ]).gates,
+    lookup: loadHandler('infra/lambda/lookup/index.js', environment, [
+      'validateParkTestBookingScope',
+      'validateParkTestLookupAccess',
+    ]).gates,
+    redeem: loadHandler('infra/lambda/redeem/index.js', environment, ['evaluateRedeemWriteGate']).gates,
+  };
+}
+
+function gh463LookupRequest(date) {
+  return { expectedDate: date, identifier: '123456', identifierType: 'bookingReference' };
+}
+
+function gh463RedeemContext(date, venueId, ticketDate = date) {
+  return {
+    booking: { bookingDate: date, bookingReference: '123456', rollerUniqueId: 'booking-uuid', venueId },
+    tickets: [{ bookingDate: ticketDate, ticketId: 'ticket-1' }],
+  };
+}
+
+function gh463RedeemRequest(date) {
+  return { bookingReference: '123456', expectedDate: date, identifier: '123456', rollerUniqueId: 'booking-uuid' };
+}
+
+// GH-463: with the open-ended start, Booking add-on access, Lookup, and Redeem accept Nacka dates
+// after the explicit list and still reject other venues, earlier dates, bad config, and the stop.
+async function validateGh463OpenEndedWindow() {
+  const decision = { selectedTicketIds: ['ticket-1'] };
+  const open = loadGh463Gates(fullFlowEnvironment({ T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE: OPEN_ENDED_FROM_DATE }));
+
+  for (const date of OPEN_ENDED_DATES) {
+    const nackaAddOn = open.booking.validateT0176FullFlowOriginalBookingAccess({ bookingDate: date, venueId: APPROVED_VENUE });
+    assert.equal(nackaAddOn.ok, true, `Add-on access must allow Nacka on ${date}.`);
+    const otherAddOn = open.booking.validateT0176FullFlowOriginalBookingAccess({ bookingDate: date, venueId: OTHER_VENUE });
+    assert.equal(otherAddOn.ok, false, `Add-on access must reject another venue on ${date}.`);
+
+    const access = await open.lookup.validateParkTestLookupAccess(gh463LookupRequest(date));
+    assert.equal(access.ok, true, `Lookup must allow ${date}.`);
+    assert.equal(access.lookupDate, date);
+    const lookupRequest = { expectedDate: date, venueId: null };
+    const nackaScope = open.lookup.validateParkTestBookingScope(access, lookupRequest, { venueId: APPROVED_VENUE }, {
+      items: [{ bookingDate: date }],
+      venueId: APPROVED_VENUE,
+    });
+    assert.equal(nackaScope.ok, true, `Lookup must allow a Nacka booking on ${date}.`);
+    const otherScope = open.lookup.validateParkTestBookingScope(access, lookupRequest, { venueId: OTHER_VENUE }, {
+      items: [{ bookingDate: date }],
+      venueId: OTHER_VENUE,
+    });
+    assert.equal(otherScope.ok, false, `Lookup must reject another venue on ${date}.`);
+
+    const nackaRedeem = open.redeem.evaluateRedeemWriteGate(
+      gh463RedeemContext(date, APPROVED_VENUE),
+      gh463RedeemRequest(date),
+      decision,
+    );
+    assert.equal(nackaRedeem.enabled, true, `Redeem must allow Nacka on ${date}.`);
+    const otherRedeem = open.redeem.evaluateRedeemWriteGate(
+      gh463RedeemContext(date, OTHER_VENUE),
+      gh463RedeemRequest(date),
+      decision,
+    );
+    assert.equal(otherRedeem.enabled, false, `Redeem must reject another venue on ${date}.`);
+  }
+
+  const early = BEFORE_OPEN_ENDED_DATE;
+  assert.equal(
+    open.booking.validateT0176FullFlowOriginalBookingAccess({ bookingDate: early, venueId: APPROVED_VENUE }).ok,
+    false,
+    'Add-on access must reject a date before the open-ended start.',
+  );
+  const earlyLookup = await open.lookup.validateParkTestLookupAccess(gh463LookupRequest(early));
+  assert.equal(earlyLookup.code, 'live_lookup_not_allowed', 'Lookup must reject a date before the open-ended start.');
+  assert.equal(
+    open.redeem.evaluateRedeemWriteGate(gh463RedeemContext(early, APPROVED_VENUE), gh463RedeemRequest(early), decision)
+      .enabled,
+    false,
+    'Redeem must reject a date before the open-ended start.',
+  );
+  const [afterList] = OPEN_ENDED_DATES;
+  assert.equal(
+    open.redeem.evaluateRedeemWriteGate(
+      gh463RedeemContext(afterList, APPROVED_VENUE, early),
+      gh463RedeemRequest(afterList),
+      decision,
+    ).enabled,
+    false,
+    'Redeem must reject a ticket dated before the open-ended start.',
+  );
+
+  // Without the open-ended start, the explicit list still ends the window (pre-#463 behavior).
+  const listOnly = loadGh463Gates(fullFlowEnvironment());
+  assert.equal(
+    listOnly.booking.validateT0176FullFlowOriginalBookingAccess({ bookingDate: afterList, venueId: APPROVED_VENUE }).ok,
+    false,
+  );
+  assert.equal(
+    (await listOnly.lookup.validateParkTestLookupAccess(gh463LookupRequest(afterList))).code,
+    'live_lookup_not_allowed',
+  );
+  assert.equal(
+    listOnly.redeem.evaluateRedeemWriteGate(
+      gh463RedeemContext(afterList, APPROVED_VENUE),
+      gh463RedeemRequest(afterList),
+      decision,
+    ).enabled,
+    false,
+  );
+
+  // A malformed open-ended start fails closed, even for listed dates.
+  const malformed = loadGh463Gates(fullFlowEnvironment({ T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE: '2026-13-01' }));
+  assert.equal(
+    malformed.booking.validateT0176FullFlowOriginalBookingAccess({ bookingDate: APPROVED_DATE, venueId: APPROVED_VENUE })
+      .ok,
+    false,
+  );
+  assert.equal(
+    (await malformed.lookup.validateParkTestLookupAccess(gh463LookupRequest(APPROVED_DATE))).code,
+    'lookup_config_error',
+  );
+  assert.equal(
+    malformed.redeem.evaluateRedeemWriteGate(redeemContext(APPROVED_VENUE), gh463RedeemRequest(APPROVED_DATE), decision)
+      .enabled,
+    false,
+  );
+
+  // The emergency stop still overrides the open-ended window.
+  const stopped = loadGh463Gates(
+    fullFlowEnvironment({ JUMPYARD_EMERGENCY_STOP: 'true', T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE: OPEN_ENDED_FROM_DATE }),
+  );
+  assert.equal(
+    (await stopped.lookup.validateParkTestLookupAccess(gh463LookupRequest(afterList))).code,
+    'emergency_stop_active',
+  );
+  assert.equal(
+    stopped.redeem.evaluateRedeemWriteGate(
+      gh463RedeemContext(afterList, APPROVED_VENUE),
+      gh463RedeemRequest(afterList),
+      decision,
+    ).reason,
+    'emergency_stop_active',
+  );
+  assert.equal(stopped.booking.isNewBookingDraftWriteEnabled(), false);
+  assert.equal(stopped.booking.isAddProductDraftWriteEnabled(), false);
+}
+
 function validateDevBehaviorRemainsIndependent() {
   const devEnvironment = {
     ENABLE_GUEST_MESSAGE_SENDS: 'true',
@@ -524,10 +681,13 @@ async function main() {
   await validateEmergencyStopPrecedence();
   await validateReleasedStopStillNeedsNarrowGates();
   validateDevBehaviorRemainsIndependent();
+  await validateGh463OpenEndedWindow();
   console.log('[pass] T0190 venue evidence fails closed across lookup, add-on, and redeem gates');
   console.log('[pass] T0190 emergency stop overrides lookup, booking, staff, messaging, webhook, and redeem gates');
   console.log('[pass] T0190 released stop still requires the approved narrow park-test gate');
   console.log('[pass] T0190 preserves normal dev base-gate behavior when its stop is released');
+  console.log('[pass] GH-463 add-on access, lookup, and redeem accept Nacka on 2026-10-01 and 2027-06-01 and reject another venue');
+  console.log('[pass] GH-463 dates before 2026-06-29, list-only config, a malformed start, and the emergency stop stay closed');
 }
 
 main().catch((error) => {
