@@ -8,7 +8,7 @@
 - Phone completion (#432) reuses the approved kiosk red hero/number design with an on-screen QR. Only ready, identified phone sessions use it; completed/missing states retain their existing behavior. No automatic phone reset or print action.
 
 - Checkout code application: Continue reuses the current successful Apply quote, preserving the discount/total; changed inputs or an expired quote require a fresh check. The draft still sends the code and owns the final amount. [Contract #421](docs/gh407-code-feedback.md#reuse-on-continue-421).
-- Visitor contact (published 2026-09-23, #409/#100): new purchases require name, email and a guest-entered phone. The extra pre-create customer match and automatic placeholder are removed. Public phone lookup remains disabled; active payments retain their identity. This supersedes the corresponding D0222 policy; see the current Cloud contact contract and [restoration rollout](docs/gh409-no-phone-contact.md#protected-restoration-rollout--2026-09-23). Already-open no-phone clients need reload.
+- Visitor contact (D0234, #473, 2026-09-30): phone purchases ask first name + email. An exact Klaviyo email lookup fills known customers; unknown guests get `Gäst`/`0700000000`; an uncertain lookup asks last name + phone. Four-field requests (kiosk until #150, fallback) keep the #409 path. Public phone lookup stays disabled; placeholders are never SMS-ready. [Contract](JUMPYARD_CLOUD_CONTRACT.md#email-first-new-purchase-contact-473-d0234-released-2026-09-30).
 
 - Repository: wrlds-creations/jumpyard-check-in; shared JumpYard Next Project #5.
 - Phone/staff-admin and required Cloud/API scope. Kiosk and JumpyBoard remain separate except approved interface contracts.
