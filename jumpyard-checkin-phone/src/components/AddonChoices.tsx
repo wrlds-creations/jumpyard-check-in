@@ -1,15 +1,11 @@
 'use client';
 
-import { useImperativeHandle, useRef, useState, type Ref } from 'react';
-import { Check, Minus, Plus } from 'lucide-react';
+import { useEffect, useId, useRef, type RefObject } from 'react';
+import { Minus, Plus } from 'lucide-react';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { useTranslation } from '@/context/LanguageContext';
 import type { AddonId } from '@/flow/types';
-import {
-  getMissingAddonChoices,
-  hasAddonPurchase,
-  type RequiredAddon,
-} from '@/flow/addonChoices';
+import { hasAddonPurchase } from '@/flow/addonChoices';
 
 export interface AddonChoice {
   id: AddonId;
@@ -24,47 +20,82 @@ export interface AddonChoice {
   available: boolean;
 }
 
-export interface AddonChoicesHandle {
-  validate: () => boolean;
-}
-
 interface Props {
-  ref?: Ref<AddonChoicesHandle>;
   entries: AddonChoice[];
-  ownSocks: boolean;
-  ownBottle: boolean;
   onQuantity: (id: AddonId, quantity: number) => void;
-  onOwnSocks: (checked: boolean) => void;
-  onOwnBottle: (checked: boolean) => void;
 }
 
-export function AddonChoices({ ref, entries, ownSocks, ownBottle, onQuantity, onOwnSocks, onOwnBottle }: Props) {
+// #457 (Hylla): socks and water come first as compact rows, the optional add-ons follow as a
+// three-tile shelf. Every item is an ordinary offer, so Continue never asks for a tick.
+const SHELF_ORDER: AddonId[] = ['skyrider', 'lock', 'coffee'];
+
+function shelfEntries(entries: readonly AddonChoice[]) {
+  const optional = entries.filter((entry) => entry.id !== 'socks' && entry.id !== 'water_bottle');
+  return [
+    ...SHELF_ORDER.flatMap((id) => optional.filter((entry) => entry.id === id)),
+    ...optional.filter((entry) => !SHELF_ORDER.includes(entry.id)),
+  ];
+}
+
+/** Fades the bottom edge of the list while more of it sits below the fold. */
+function useScrollFade(root: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const list = root.current;
+    const scroller = list?.closest<HTMLElement>('.addon-shop-scroll');
+    if (!list || !scroller) return;
+    const update = () => {
+      if (scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 1) scroller.dataset.overflow = 'true';
+      else delete scroller.dataset.overflow;
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(scroller);
+    observer.observe(list);
+    scroller.addEventListener('scroll', update, { passive: true });
+    return () => {
+      observer.disconnect();
+      scroller.removeEventListener('scroll', update);
+      delete scroller.dataset.overflow;
+    };
+  }, [root]);
+}
+
+export function AddonChoices({ entries, onQuantity }: Props) {
   const { t, lang } = useTranslation();
   const copy = t.addons.choices;
-  const [attempted, setAttempted] = useState(false);
-  const cards = useRef<Partial<Record<RequiredAddon, HTMLElement | null>>>({});
-  const missing = getMissingAddonChoices(entries, { socks: ownSocks, water_bottle: ownBottle });
-  const money = (value: number) => `${new Intl.NumberFormat(lang === 'sv' ? 'sv-SE' : 'en-GB', { maximumFractionDigits: 2 }).format(value)} ${t.common.currency}`;
-  const countText = (text: string, count: number) => text.replace('{count}', String(count));
+  const uid = useId();
+  const root = useRef<HTMLDivElement>(null);
+  useScrollFade(root);
+  const money = (value: number) => `${new Intl.NumberFormat(lang === 'sv' ? 'sv-SE' : 'en-GB', { maximumFractionDigits: 2 }).format(value)}\u00a0${t.common.currency}`;
+  const fill = (text: string, values: Record<string, string | number>) =>
+    text.replace(/\{(\w+)\}/g, (match, key: string) => (key in values ? String(values[key]) : match));
+  const sellable = (entry: AddonChoice) => entry.available && entry.price !== null;
 
-  useImperativeHandle(ref, () => ({
-    validate() {
-      setAttempted(true);
-      if (!missing.length) return true;
-      cards.current[missing[0]]?.focus();
-      return false;
-    },
-  }));
+  const unitPrice = (entry: AddonChoice) => {
+    const price = money(entry.price ?? 0);
+    if (entry.id === 'socks') return fill(copy.perPair, { price });
+    if (entry.unit === t.addons.perJumper) return fill(copy.perJumper, { price });
+    if (entry.unit === t.addons.each) return fill(copy.perEach, { price });
+    return `${price} ${entry.unit}`;
+  };
 
-  const stepper = (entry: AddonChoice) => (
-    <div className="addon-shop-stepper" role="group" aria-label={`${copy.quantity}: ${entry.label}`}>
+  // Rows show the price and what the booking already includes; the stepper shows what is added now.
+  const rowMeta = (entry: AddonChoice) => [
+    ...(entry.included > 0 ? [fill(copy.included, { count: entry.included })] : []),
+    ...(!sellable(entry) ? [] : entry.included > 0 ? [fill(copy.extraPrice, { price: unitPrice(entry) })] : [unitPrice(entry)]),
+  ];
+
+  const stepper = (entry: AddonChoice, className = 'addon-shop-stepper', showCount = true) => (
+    <div className={className} role="group" aria-label={`${copy.quantity}: ${entry.label}`}>
       <button type="button" aria-label={`${copy.remove}: ${entry.label}`}
         data-testid={`addon-choice-${entry.id}-decrement`}
         disabled={entry.quantity <= entry.included}
         onClick={() => onQuantity(entry.id, Math.max(entry.included, entry.quantity - 1))}>
         <Minus aria-hidden="true" />
       </button>
-      <output aria-label={`${copy.quantity}: ${entry.label}`}>{Math.max(0, entry.quantity - entry.included)}</output>
+      {showCount && <output aria-label={`${copy.quantity}: ${entry.label}`} data-active={entry.quantity > entry.included}>
+        {Math.max(0, entry.quantity - entry.included)}
+      </output>}
       <button type="button" aria-label={`${copy.add}: ${entry.label}`}
         data-testid={`addon-choice-${entry.id}-increment`}
         disabled={!entry.available || entry.quantity >= entry.max}
@@ -74,76 +105,70 @@ export function AddonChoices({ ref, entries, ownSocks, ownBottle, onQuantity, on
     </div>
   );
 
-  const included = (entry: AddonChoice) => entry.included > 0 && (
-    <p className="addon-shop-included"><Check aria-hidden="true" />{countText(copy.included, entry.included)}</p>
-  );
-
   return (
-    <div className="addon-shop" data-testid="addon-choice-choices">
+    <div ref={root} className="addon-shop" data-testid="addon-choice-choices">
       {process.env.NEXT_PUBLIC_PHONE_ADDON_PREVIEW === 'true' && <p className="addon-shop-preview">{copy.preview}</p>}
+      <h2 className="addon-shop-group">{copy.firstGroup}</h2>
       {(['socks', 'water_bottle'] as const).map((id) => {
         const socks = id === 'socks';
-        // Keep the decision visible even when the catalog cannot sell this item.
+        // Keep the offer visible even when the catalog cannot sell this item.
         const entry = entries.find((item) => item.id === id) ?? {
           id, label: socks ? t.addons.products.socksLabel : t.addons.products.waterBottleLabel,
           icon: socks ? 'grip-socks' : 'water-bottle', price: null,
           description: '', unit: t.addons.each, quantity: 0, included: 0, max: 0, available: false,
         } satisfies AddonChoice;
-        const own = socks ? ownSocks : ownBottle;
-        const confirm = socks ? onOwnSocks : onOwnBottle;
-        const hasError = attempted && missing.includes(id);
-        const resolved = !missing.includes(id);
-        const errorId = `addon-choice-${id}-error`;
+        const meta = rowMeta(entry);
+        const titleId = `${uid}-${id}-title`;
+        const noteId = `${uid}-${id}-note`;
         return (
-          <section key={id} ref={(node) => { cards.current[id] = node; }} tabIndex={-1}
-            aria-labelledby={`addon-choice-${id}-title`} aria-describedby={hasError ? errorId : undefined}
-            className="addon-shop-required" data-invalid={hasError} data-resolved={resolved}
-            data-testid={`addon-choice-${id}`}>
-            <header className="addon-shop-card-heading">
-              <JumpyardIcon name={entry.icon} className="addon-shop-icon" />
-              <div>
-                <h3 id={`addon-choice-${id}-title`}>{socks ? copy.socksTitle : copy.bottleTitle}</h3>
-                {entry.price !== null && entry.available && <p className="addon-shop-price">{money(entry.price)} {socks ? copy.perPair : t.addons.eachLong}</p>}
-              </div>
-            </header>
-            <div className="addon-shop-purchase">
-              <div className="addon-shop-selling-copy">
-                <p className="addon-shop-description">{socks ? copy.socksBenefit : copy.bottleEnvironment}</p>
+          <section key={id} className="addon-shop-row" data-selected={hasAddonPurchase(entry)}
+            aria-labelledby={titleId} aria-describedby={noteId} data-testid={`addon-choice-${id}`}>
+            <div className="addon-shop-row-main">
+              <span className="addon-shop-icon-wrap">
+                <JumpyardIcon name={entry.icon} className="addon-shop-icon" />
+                {hasAddonPurchase(entry) && <JumpyardIcon name="success-check" className="addon-shop-badge" />}
+              </span>
+              <div className="addon-shop-text">
+                <h3 id={titleId}>{socks ? copy.socksTitle : copy.bottleTitle}</h3>
+                {meta.map((line) => <p key={line} className="addon-shop-meta">{line}</p>)}
               </div>
               {stepper(entry)}
             </div>
-            {included(entry)}
-            {!entry.available && <p className="addon-shop-unavailable">{copy.unavailableRequired}</p>}
-            {!hasAddonPurchase(entry) && <label className="addon-shop-own" data-checked={own}>
-              <input type="checkbox" checked={own} onChange={(event) => confirm(event.target.checked)} />
-              <span>{socks ? copy.ownSocks : copy.ownBottle}</span>
-            </label>}
-            {hasError && <p id={errorId} role="alert" className="addon-shop-error"><JumpyardIcon name="warning-transparent" className="addon-shop-warning-icon" />{socks ? copy.socksRequired : copy.bottleRequired}</p>}
+            <p id={noteId} className="addon-shop-row-note">
+              {!entry.available ? copy.unavailableRequired : socks ? copy.socksBenefit : copy.bottleEnvironment}
+            </p>
           </section>
         );
       })}
-      {entries.filter((entry) => entry.id !== 'socks' && entry.id !== 'water_bottle').map((entry) => (
-        <section key={entry.id} className="addon-shop-optional" data-selected={entry.quantity > entry.included}
-          aria-label={entry.label} data-testid={`addon-choice-${entry.id}`}>
-          <header className="addon-shop-card-heading">
-            <JumpyardIcon name={entry.icon} className="addon-shop-icon" />
-            <div>
-              <h3>{entry.label}</h3>
-              <p className="addon-shop-price">{entry.available && entry.price !== null ? `${money(entry.price)} ${entry.unit === t.addons.each ? t.addons.eachLong : entry.unit}` : t.addons.unsupported}</p>
-            </div>
-          </header>
-          <div className="addon-shop-purchase">
-            <div className="addon-shop-selling-copy">
-              <p className="addon-shop-description">{entry.id === 'lock' ? copy.lockBenefit : entry.id === 'coffee' ? copy.coffeeBenefit : entry.id === 'skyrider' ? copy.skyRiderBenefit : entry.description}</p>
-            </div>
-            {stepper(entry)}
-          </div>
-          {entry.id === 'skyrider' && entry.available && <p className="addon-shop-note">
-            <span className="addon-shop-recommended">{copy.recommended}</span>
-          </p>}
-          {included(entry)}
-        </section>
-      ))}
+      <h2 className="addon-shop-group addon-shop-group-optional">{copy.optionalGroup}</h2>
+      <div className="addon-shop-shelf">
+        {shelfEntries(entries).map((entry) => {
+          const added = Math.max(0, entry.quantity - entry.included);
+          const sell = entry.id === 'lock' ? copy.lockBenefit : entry.id === 'coffee' ? copy.coffeeBenefit : entry.id === 'skyrider' ? copy.skyRiderBenefit : entry.description;
+          const fact = entry.id === 'lock' ? copy.lockFact : entry.id === 'coffee' ? copy.coffeeFact : entry.id === 'skyrider' ? copy.skyRiderFact : '';
+          const nameId = `${uid}-${entry.id}-name`;
+          const sellId = `${uid}-${entry.id}-sell`;
+          return (
+            <section key={entry.id} className="addon-shop-tile" data-selected={entry.quantity > entry.included}
+              aria-labelledby={nameId} aria-describedby={sell ? sellId : undefined} data-testid={`addon-choice-${entry.id}`}>
+              {entry.id === 'skyrider' && entry.available && <span className="addon-shop-note">{copy.recommended}</span>}
+              {added > 0 && <span className="addon-shop-tile-count">
+                <span aria-hidden="true">×{added}</span>
+                <span className="addon-shop-sr">{fill(copy.chosen, { count: added })}</span>
+              </span>}
+              <JumpyardIcon name={entry.icon} className="addon-shop-tile-icon" />
+              <h3 id={nameId}>{entry.label}</h3>
+              {fact && <p className="addon-shop-tile-fact">{fact}</p>}
+              <p className="addon-shop-tile-price">
+                {sellable(entry) ? unitPrice(entry) : t.addons.unsupported}
+                {entry.included > 0 && <span className="addon-shop-tile-included">{fill(copy.included, { count: entry.included })}</span>}
+              </p>
+              {stepper(entry, 'addon-shop-stepper addon-shop-tile-stepper', false)}
+              {sell && <p id={sellId} className="addon-shop-sr">{sell}</p>}
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -1,43 +1,37 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
-import { getMissingAddonChoices, hasAddonPurchase } from '../src/flow/addonChoices.ts';
+import { hasAddonPurchase } from '../src/flow/addonChoices.ts';
 import { previewHosts, previewResponse } from './preview-phone-addons.mjs';
 
-const noOwn = { socks: false, water_bottle: false };
 const initial = ['socks', 'water_bottle'].map(id => ({ id, quantity: 0, included: 0, available: true }));
 const source = name => readFileSync(new URL('../src/' + name, import.meta.url), 'utf8');
 
-test('each decision is explicit, in socks then water order', () => {
-  assert.deepEqual(getMissingAddonChoices(initial, noOwn), ['socks', 'water_bottle']);
-  assert.deepEqual(getMissingAddonChoices(initial, { socks: true, water_bottle: false }), ['water_bottle']);
-  assert.deepEqual(getMissingAddonChoices(initial, { socks: false, water_bottle: true }), ['socks']);
-  assert.deepEqual(getMissingAddonChoices(initial, { socks: true, water_bottle: true }), []);
+test('#457: Continue never asks for a socks or water tick on either path', () => {
+  const code = source('components/AddonChoices.tsx');
+  assert.doesNotMatch(code, /type="checkbox"|ownSocks|ownBottle|onOwn|validate|attempted|role="alert"|useImperativeHandle/);
+  for (const file of ['BuyTickets', 'AddonsOffer']) {
+    const path = source('components/' + file + '.tsx');
+    assert.match(path, /<AddonChoices\s+entries=\{/);
+    assert.doesNotMatch(path, /addonChoicesRef|AddonChoicesHandle|\.validate\(\)|alreadyHas|AlreadyHas|SocksConfirmation|WaterBottleConfirmation/);
+    assert.doesNotMatch(path, /disabled=\{[^}]*RequirementMet/);
+  }
+  const copy = source('context/LanguageContext.tsx');
+  assert.doesNotMatch(copy, /ownSocks:|ownBottle:|socksRequired:|bottleRequired:/);
+  assert.doesNotMatch(source('flow/buyFlowRecovery.ts'), /alreadyHas/);
 });
 
-test('positive purchases satisfy the decision, not a mandatory quantity per guest', () => {
-  assert.deepEqual(getMissingAddonChoices(initial.map(e => ({ ...e, quantity: 1 })), noOwn), []);
-  assert.deepEqual(getMissingAddonChoices([{ ...initial[0], quantity: 1 }, initial[1]], { ...noOwn, water_bottle: true }), []);
-});
-
-test('included paid products count even if the current catalog cannot sell them', () => {
-  assert.deepEqual(getMissingAddonChoices(initial.map(e => ({ ...e, included: 1, quantity: 1, available: false })), noOwn), []);
-});
-
-test('missing or unpriced products never silently count as purchases', () => {
-  assert.deepEqual(getMissingAddonChoices([], noOwn), ['socks', 'water_bottle']);
-  assert.deepEqual(getMissingAddonChoices(initial.map(e => ({ ...e, available: false, quantity: 2 })), noOwn), ['socks', 'water_bottle']);
-});
-
-test('own-item choice hides on purchase and returns when the last new item is removed', () => {
+test('a purchase or an included item marks the offer as covered, nothing else does', () => {
   for (const e of initial) {
     assert.equal(hasAddonPurchase(e), false);
     assert.equal(hasAddonPurchase({ ...e, quantity: 1 }), true);
-    assert.equal(hasAddonPurchase({ ...e, quantity: 0 }), false);
     assert.equal(hasAddonPurchase({ ...e, included: 1, quantity: 1, available: false }), true);
+    assert.equal(hasAddonPurchase({ ...e, available: false, quantity: 2 }), false);
   }
   assert.equal(hasAddonPurchase(undefined), false);
-  assert.match(source('components/AddonChoices.tsx'), /!hasAddonPurchase\(entry\) && <label/);
+  const code = source('components/AddonChoices.tsx');
+  assert.match(code, /className="addon-shop-row" data-selected=\{hasAddonPurchase\(entry\)\}/);
+  assert.match(code, /\{hasAddonPurchase\(entry\) && <JumpyardIcon name="success-check" className="addon-shop-badge" \/>\}/);
 });
 
 test('plus and minus are the only purchase buttons and adjust one item at a time', () => {
@@ -48,33 +42,22 @@ test('plus and minus are the only purchase buttons and adjust one item at a time
   assert.doesNotMatch(code, /guestCount|getRecommendedSocksToAdd|copy\.addSocks|copy\.addBottle/);
 });
 
-test('both entry paths use the same validator and ownership cannot mutate quantities', () => {
-  for (const file of ['BuyTickets', 'AddonsOffer']) {
-    const code = source('components/' + file + '.tsx');
-    assert.match(code, /<AddonChoices ref=\{addonChoicesRef\}/);
-    assert.match(code, /if \(!addonChoicesRef.current\?\.validate\(\)\) return;/);
-    assert.doesNotMatch(code, /disabled=\{[^}]*RequirementMet/);
-    for (const name of ['setSocksConfirmation', 'setWaterBottleConfirmation']) {
-      const handler = code.split('const ' + name + ' =')[1]?.split('\n  };')[0]?.split('\n    };')[0];
-      assert.ok(handler);
-      assert.doesNotMatch(handler, /setAddonQty|setQty/);
-    }
-    assert.doesNotMatch(code, /nextQty.*setAlreadyHas/);
-  }
-  const buy = source('components/BuyTickets.tsx');
-  assert.match(buy, /const recoveredAlreadyHasSocks =\s+recoverySnapshot.alreadyHasApprovedSocks === true/);
-  assert.match(buy, /const recoveredAlreadyHasWaterBottle =\s+recoverySnapshot.alreadyHasWaterBottle === true/);
+test('Hylla: socks and water come first as rows, the optional add-ons follow on a three-tile shelf', () => {
+  const code = source('components/AddonChoices.tsx');
+  const css = source('app/globals.css');
+  assert.match(code, /copy\.firstGroup[\s\S]*\(\['socks', 'water_bottle'\] as const\)\.map[\s\S]*copy\.optionalGroup[\s\S]*className="addon-shop-shelf"/);
+  assert.match(code, /const SHELF_ORDER: AddonId\[\] = \['skyrider', 'lock', 'coffee'\];/);
+  assert.match(css, /\.addon-shop-row-main \{\s+display: grid;\s+grid-template-columns: 36px minmax\(0, 1fr\) auto;/);
+  assert.match(css, /\.addon-shop-shelf \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
+  // Socks keep their offer even when the catalog cannot sell them.
+  assert.match(code, /Keep the offer visible even when the catalog cannot sell this item\./);
+  assert.match(code, /!entry\.available \? copy\.unavailableRequired : socks \? copy\.socksBenefit : copy\.bottleEnvironment/);
 });
 
-test('warnings are only activated by Continue and focus the first missing choice', () => {
+test('#457 leaves sock sizes out', () => {
   const code = source('components/AddonChoices.tsx');
-  assert.match(code, /\[attempted, setAttempted\] = useState\(false\)/);
-  assert.match(code, /validate\(\) \{\s+setAttempted\(true\)/);
-  assert.equal((code.match(/setAttempted\(/g) || []).length, 1);
-  assert.match(code, /const hasError = attempted && missing.includes\(id\)/);
-  assert.match(code, /cards.current\[missing\[0\]\]\?\.focus\(\)/);
-  assert.match(code, /aria-describedby=\{hasError \? errorId : undefined\}/);
-  assert.match(code, /\{hasError && <p id=\{errorId\} role="alert"/);
+  assert.doesNotMatch(code, /sockSizes|SizeSheet|storlek|\bsizes?\b/i);
+  assert.equal(existsSync(new URL('../src/components/addonlook', import.meta.url)), false);
 });
 
 test('paid quantity is locked; displayed new quantity and purchase callbacks are bounded', () => {
@@ -83,21 +66,18 @@ test('paid quantity is locked; displayed new quantity and purchase callbacks are
   assert.match(code, /Math.max\(entry.included, entry.quantity - 1\)/);
   assert.match(code, /Math.min\(entry.max, entry.quantity \+ 1\)/);
   assert.match(code, /Math.max\(0, entry.quantity - entry.included\)/);
-  assert.match(code, /countText\(copy.included, entry.included\)/);
+  assert.match(code, /fill\(copy.included, \{ count: entry.included \}\)/);
 });
 
-test('mobile keeps approved concise bilingual benefits and transparent branded warning', () => {
+test('mobile keeps approved concise bilingual benefits and the Sky Rider note', () => {
   const code = source('components/AddonChoices.tsx');
   const copy = source('context/LanguageContext.tsx');
   assert.doesNotMatch(code, /copy\.(intro|optionalTitle|purchaseKept)/);
-  assert.match(code, /name="warning-transparent"/);
   assert.match(copy, /skyRiderBenefit: 'Se parken från ovan i vår höghöjdsbana\.'/);
   assert.match(copy, /skyRiderBenefit: 'See the park from above on our high ropes course\.'/);
   assert.match(copy, /bottleEnvironment: 'Inga engångsmuggar av miljöskäl\.'/);
   assert.match(copy, /bottleEnvironment: 'No disposable cups, to reduce waste\.'/);
-  assert.match(code, /entry.id === 'skyrider' && entry.available && <p className="addon-shop-note"/);
-  const png = readFileSync(new URL('../public/jumpyard-next-icons/warning-transparent.png', import.meta.url));
-  assert.equal(png[25], 6, 'approved asset must retain its RGBA alpha channel');
+  assert.match(code, /entry.id === 'skyrider' && entry.available && <span className="addon-shop-note"/);
 });
 
 test('component does not fetch prices, use kiosk dimensions or expose purchase-removing controls', () => {
@@ -106,7 +86,7 @@ test('component does not fetch prices, use kiosk dimensions or expose purchase-r
   const css = source('app/globals.css');
   assert.match(css, /--shop-control: 44px/);
   assert.match(css, /\.addon-shop-scroll \{[\s\S]*?min-height: 0;[\s\S]*?overflow-y: auto;/);
-  assert.match(css, /\.addon-shop-purchase \{\s+display: grid;\s+grid-template-columns: minmax\(0, 1fr\) auto;/);
+  assert.match(css, /\.addon-shop-stepper button \{[\s\S]*?width: var\(--shop-control\);\s+height: var\(--shop-control\);/);
   assert.match(css, /\.addon-shop-footer \{ flex-shrink: 0;/);
 });
 
@@ -141,28 +121,24 @@ test('same-WiFi preview requires explicit opt-in to an assigned private address'
   }
 });
 
-test('compact cards keep readable copy and full touch targets while sharing rows', () => {
+test('compact rows keep readable copy and full touch targets beside the name and price', () => {
   const code = source('components/AddonChoices.tsx');
   const css = source('app/globals.css');
   const copy = source('context/LanguageContext.tsx');
-  assert.match(code, /className="addon-shop-purchase"/);
-  assert.doesNotMatch(code, /addon-shop-purchase-copy/);
+  assert.match(code, /<div className="addon-shop-row-main">[\s\S]*?<h3 id=\{titleId\}>[\s\S]*?\{stepper\(entry\)\}\s*<\/div>/);
   assert.match(css, /--shop-control: 44px/);
   assert.match(css, /font-size: 14px/);
-  assert.match(css, /\.addon-shop-selling-copy \{\s+min-width: 0;\s+font-size: 13px;\s+line-height: 1.35;\s+overflow-wrap: anywhere;/);
+  assert.match(css, /\.addon-shop-row-note \{[\s\S]*?font-size: 12px;/);
   assert.doesNotMatch(copy, /bottleBenefit|Fyll på din flaska vid vattenstationen|Refill your bottle at the water station/);
-  assert.match(copy, /bottleEnvironment: 'Inga engångsmuggar av miljöskäl\.'/);
   assert.doesNotMatch(css, /line-clamp|text-overflow:\s*ellipsis/);
 });
 
-test('every card keeps selling copy beside the full-size quantity controls', () => {
+test('every tile keeps its selling copy as its description and full-size controls', () => {
   const code = source('components/AddonChoices.tsx');
-  const rows = code.match(/<div className="addon-shop-purchase">\s*<div className="addon-shop-selling-copy">[\s\S]*?<\/div>\s*\{stepper\(entry\)\}\s*<\/div>/g) || [];
-  assert.equal(rows.length, 2, 'required and optional products must share the same side-by-side row');
-  assert.match(rows[0], /copy\.socksBenefit[\s\S]*copy\.bottleEnvironment/);
-  assert.match(rows[1], /copy\.lockBenefit[\s\S]*copy\.coffeeBenefit[\s\S]*copy\.skyRiderBenefit/);
+  assert.match(code, /entry.id === 'lock' \? copy.lockBenefit : entry.id === 'coffee' \? copy.coffeeBenefit : entry.id === 'skyrider' \? copy.skyRiderBenefit : entry.description/);
+  assert.match(code, /aria-describedby=\{sell \? sellId : undefined\}/);
+  assert.match(code, /\{stepper\(entry, 'addon-shop-stepper addon-shop-tile-stepper', false\)\}/);
   const css = source('app/globals.css');
-  assert.match(css, /--shop-control: 44px/);
   assert.doesNotMatch(css, /\.addon-shop-optional > \.addon-shop-stepper|grid-row:/);
 });
 
@@ -189,6 +165,16 @@ test('both add-on paths share the remaining viewport without fixed header-height
   assert.match(buy, /step === 'ADDONS'[\s\S]*?className="addon-shop-screen /);
   assert.match(existing, /step === 'SELECT' \? 'addon-shop-screen pt-3' : 'py-3'/);
   assert.match(existing, /style=\{step === 'SELECT' \? undefined : \{ maxHeight:/);
+});
+
+test('Continue sits above the nav row and the total sits between the Back and Exit discs', () => {
+  const css = source('app/globals.css');
+  for (const [file, label] of [['BuyTickets', 't.buy.total'], ['AddonsOffer', 't.addons.total']]) {
+    const code = source('components/' + file + '.tsx');
+    assert.match(code, new RegExp('<div className="addon-shop-footer">\\s*<button[\\s\\S]*?</button>\\s*<p className="addon-shop-total" aria-live="polite" aria-atomic="true">\\s*<span className="addon-shop-total-label">\\{' + label.replaceAll('.', '\\.') + '\\}</span>'));
+  }
+  assert.match(css, /margin-bottom: calc\(16px \+ env\(safe-area-inset-bottom, 0px\) - max\(12px, env\(safe-area-inset-bottom, 0px\)\)\);/);
+  assert.match(css, /\.phone-flow-shell:has\(\.addon-shop-total\) \[data-testid="flow-nav-spacer"\] \{ display: none; \}/);
 });
 
 test('coffee is labelled as brewed coffee and the removed Sky Rider sentence stays out of the list', () => {
