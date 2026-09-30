@@ -110,6 +110,10 @@ function main() {
   assertEqual(manifest.target?.configPath, EXPECTED.configPath, 'Config path');
   assertEqual(manifest.target?.fullFlow?.venueId, '50871', 'Full-flow venue');
   assertEqual(manifest.target?.fullFlow?.lastOperatingDate, '2026-09-30', 'Full-flow end date');
+  // GH-463/D0236: #463 releases stay open from 2026-06-29 with no end date. Older artifacts carry
+  // no open-ended start and remain valid rollback targets, but they close new Nacka dates after 2026-09-30.
+  const openEndedFromDate = manifest.target?.fullFlow?.openEndedFromDate ?? null;
+  if (openEndedFromDate !== null) assertEqual(openEndedFromDate, '2026-06-29', 'Full-flow open-ended start');
 
   const expectedGates = {
     emergencyStop: false,
@@ -162,6 +166,11 @@ function main() {
   for (const [key, expected] of Object.entries(expectedGates)) {
     assertEqual(copiedConfig.safetyGates?.[key], expected, `Copied config gate ${key}`);
   }
+  assertEqual(
+    copiedConfig.safetyGates?.fullFlowRehearsalOpenEndedFromDate || null,
+    openEndedFromDate,
+    'Copied config open-ended start',
+  );
 
   const assembly = JSON.parse(fs.readFileSync(path.join(assemblyRoot, 'manifest.json'), 'utf8'));
   const stackArtifact = assembly.artifacts?.[EXPECTED.stackName];

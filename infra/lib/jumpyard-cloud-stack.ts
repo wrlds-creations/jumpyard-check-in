@@ -1951,6 +1951,10 @@ exports.handler = async (event) => {
       environment.ENABLE_T0176_FULL_FLOW_REHEARSAL = String(fullFlowRehearsalEnabled);
       environment.T0176_FULL_FLOW_ALLOWED_OPERATING_DATES =
         resources.safetyGates.fullFlowRehearsalAllowedOperatingDates.join(',');
+      // GH-463: open-ended window start; empty unless the full-flow approval is active.
+      environment.T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE = fullFlowRehearsalEnabled
+        ? (resources.safetyGates.fullFlowRehearsalOpenEndedFromDate ?? '')
+        : '';
       environment.T0176_FULL_FLOW_VENUE_ID =
         resources.safetyGates.fullFlowRehearsalVenueId ?? '';
       environment.ENABLE_ROLLER_BOOKING_DRAFT_WRITES = String(
@@ -1987,6 +1991,10 @@ exports.handler = async (event) => {
           ? resources.safetyGates.fullFlowRehearsalAllowedOperatingDates
           : resources.safetyGates.liveAssistedLookupAllowedOperatingDates
         ).join(',');
+      // GH-463: only the full-flow profile extends assisted lookup past its explicit dates.
+      environment.T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE = fullFlowRehearsalEnabled
+        ? (resources.safetyGates.fullFlowRehearsalOpenEndedFromDate ?? '')
+        : '';
       environment.T0171_ASSISTED_LOOKUP_VENUE_ID =
         (fullFlowRehearsalEnabled
           ? resources.safetyGates.fullFlowRehearsalVenueId
@@ -2004,6 +2012,10 @@ exports.handler = async (event) => {
       environment.ENABLE_T0176_FULL_FLOW_REHEARSAL = String(fullFlowRehearsalEnabled);
       environment.T0176_FULL_FLOW_ALLOWED_OPERATING_DATES =
         resources.safetyGates.fullFlowRehearsalAllowedOperatingDates.join(',');
+      // GH-463: open-ended window start; empty unless the full-flow approval is active.
+      environment.T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE = fullFlowRehearsalEnabled
+        ? (resources.safetyGates.fullFlowRehearsalOpenEndedFromDate ?? '')
+        : '';
       environment.T0176_FULL_FLOW_VENUE_ID =
         resources.safetyGates.fullFlowRehearsalVenueId ?? '';
       environment.REDEEM_DEV_TOKEN_SECRET_ARN = resources.redeemDevTokenSecret.secretArn;

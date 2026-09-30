@@ -8,6 +8,10 @@ const ROOT = path.resolve(__dirname, '..');
 const APPROVED_DATE = '2026-07-13';
 const SECOND_APPROVED_DATE = '2026-07-14';
 const OUTSIDE_DATE = '2026-10-01';
+// GH-463: the open-ended window start and dates around it.
+const OPEN_ENDED_FROM_DATE = '2026-06-29';
+const BEFORE_OPEN_ENDED_DATE = '2026-06-28';
+const LATER_OPEN_ENDED_DATE = '2027-06-01';
 
 function loadBooking(environment) {
   const counters = { awsCalls: 0, networkCalls: 0 };
@@ -153,8 +157,77 @@ function validatePureGate() {
   assert.equal(dev.gate([item(OUTSIDE_DATE)]).ok, true, 'Dev must remain controlled by its normal validation and gates.');
 }
 
-async function validateRouteGate({ body, rawPath, routeKey }) {
-  const booking = loadBooking(fullFlowEnvironment());
+// GH-463: with the open-ended start, later Nacka item dates pass without an end date, while
+// earlier, invalid, and mixed dates still fail and a malformed start fails closed.
+function validateOpenEndedWindow() {
+  const openEnded = loadBooking(fullFlowEnvironment({ T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE: OPEN_ENDED_FROM_DATE }));
+
+  for (const date of [OPEN_ENDED_FROM_DATE, APPROVED_DATE, OUTSIDE_DATE, LATER_OPEN_ENDED_DATE]) {
+    assert.equal(openEnded.gate([item(date)]).ok, true, `${date} must pass inside the open-ended window.`);
+  }
+  assert.equal(
+    openEnded.gate([item(APPROVED_DATE), item(OUTSIDE_DATE), item(LATER_OPEN_ENDED_DATE)]).ok,
+    true,
+    'Listed and open-ended item dates may be combined.',
+  );
+  assertBlockedGate(openEnded.gate([item(BEFORE_OPEN_ENDED_DATE)]));
+  assertBlockedGate(openEnded.gate([item(OUTSIDE_DATE), item(BEFORE_OPEN_ENDED_DATE)]));
+  assertBlockedGate(openEnded.gate([item('2026-13-01')]));
+  assertBlockedGate(openEnded.gate([item('2027-02-30')]));
+  assertBlockedGate(openEnded.gate([{ ...item(OUTSIDE_DATE), bookingDate: null }]));
+  assertBlockedGate(openEnded.gate([]));
+
+  const openEndedOnly = loadBooking(
+    fullFlowEnvironment({
+      T0176_FULL_FLOW_ALLOWED_OPERATING_DATES: '',
+      T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE: OPEN_ENDED_FROM_DATE,
+    }),
+  );
+  assert.equal(openEndedOnly.gate([item(OUTSIDE_DATE)]).ok, true, 'The open-ended start alone is a valid window.');
+  assertBlockedGate(openEndedOnly.gate([item(BEFORE_OPEN_ENDED_DATE)]));
+
+  for (const malformed of ['2026-6-29', '2026-02-30', 'forever']) {
+    const booking = loadBooking(fullFlowEnvironment({ T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE: malformed }));
+    assertBlockedGate(booking.gate([item(APPROVED_DATE)]), 't0176_full_flow_config_error');
+  }
+
+  const listOnly = loadBooking(fullFlowEnvironment({ T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE: '' }));
+  assertBlockedGate(listOnly.gate([item(OUTSIDE_DATE)]));
+}
+
+async function validateOpenEndedRoutes() {
+  const openEnded = { T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE: OPEN_ENDED_FROM_DATE };
+  await validateHandlersBlockBeforeSideEffects(BEFORE_OPEN_ENDED_DATE, openEnded);
+
+  const booking = loadBooking(
+    fullFlowEnvironment({
+      ...openEnded,
+      ROLLER_BASE_URL_PARAMETER_NAME: '/t0192/roller/base-url',
+      ROLLER_CREDENTIALS_SECRET_ARN: 'arn:aws:secretsmanager:eu-north-1:000000000000:secret:t0192',
+      ROLLER_ENV_PARAMETER_NAME: '/t0192/roller/env',
+    }),
+  );
+  // The stubbed AWS read makes the quote end as a configuration error; keep that expected log quiet.
+  const diagnostics = [];
+  const originalConsoleError = console.error;
+  console.error = (...args) => diagnostics.push(args.join(' '));
+  let response;
+  try {
+    response = await booking.handler(
+      event('POST /v1/bookings/quote', '/v1/bookings/quote', { items: [item(LATER_OPEN_ENDED_DATE)] }),
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
+  const details = `status ${response.statusCode}; diagnostics: ${diagnostics.join(' | ')}`;
+  assert.notEqual(response.statusCode, 403, `An open-ended item date must pass the date gate (${details}).`);
+  assert.notEqual(responseBody(response).error?.code, 't0176_full_flow_item_date_not_allowed', details);
+  assert.ok(booking.counters.awsCalls > 0, `The quote must continue to the Roller configuration read (${details}).`);
+  assert.equal(booking.counters.networkCalls, 0);
+}
+
+async function validateRouteGate({ body, rawPath, routeKey }, environmentOverrides = {}) {
+  const booking = loadBooking(fullFlowEnvironment(environmentOverrides));
   const response = await booking.handler(event(routeKey, rawPath, body));
   const parsed = responseBody(response);
 
@@ -165,8 +238,8 @@ async function validateRouteGate({ body, rawPath, routeKey }) {
   assert.equal(booking.counters.networkCalls, 0, `${routeKey} must block before any Roller call.`);
 }
 
-async function validateHandlersBlockBeforeSideEffects() {
-  const quoteBody = { items: [item(OUTSIDE_DATE)] };
+async function validateHandlersBlockBeforeSideEffects(blockedDate = OUTSIDE_DATE, environmentOverrides = {}) {
+  const quoteBody = { items: [item(blockedDate)] };
   const draftBody = {
     confirmDraft: true,
     customer: {
@@ -176,34 +249,34 @@ async function validateHandlersBlockBeforeSideEffects() {
       phone: '+46700000000',
     },
     idempotencyKey: 't0192-new-draft',
-    items: [item(OUTSIDE_DATE)],
+    items: [item(blockedDate)],
   };
   const addOnDraftBody = {
     confirmDraft: true,
     idempotencyKey: 't0192-addon-draft',
-    items: [item(OUTSIDE_DATE)],
+    items: [item(blockedDate)],
   };
 
   await validateRouteGate({
     body: quoteBody,
     rawPath: '/v1/bookings/quote',
     routeKey: 'POST /v1/bookings/quote',
-  });
+  }, environmentOverrides);
   await validateRouteGate({
     body: draftBody,
     rawPath: '/v1/bookings/draft',
     routeKey: 'POST /v1/bookings/draft',
-  });
+  }, environmentOverrides);
   await validateRouteGate({
     body: quoteBody,
     rawPath: '/v1/bookings/123456/add-products/quote',
     routeKey: 'POST /v1/bookings/{bookingReference}/add-products/quote',
-  });
+  }, environmentOverrides);
   await validateRouteGate({
     body: addOnDraftBody,
     rawPath: '/v1/bookings/123456/add-products',
     routeKey: 'POST /v1/bookings/{bookingReference}/add-products',
-  });
+  }, environmentOverrides);
 }
 
 async function validateMalformedHandlerInputStillFailsClosed() {
@@ -223,10 +296,14 @@ async function main() {
   validatePureGate();
   await validateHandlersBlockBeforeSideEffects();
   await validateMalformedHandlerInputStillFailsClosed();
+  validateOpenEndedWindow();
+  await validateOpenEndedRoutes();
   console.log('[pass] T0192 request-item dates require the exact approved full-flow operating-date allowlist');
   console.log('[pass] T0192 rejects mixed, missing, malformed, and out-of-window item dates fail closed');
   console.log('[pass] T0192 blocks all four quote/draft routes before AWS, Roller, or idempotency side effects');
   console.log('[pass] T0192 preserves non-full-flow park-test smoke and dev behavior');
+  console.log('[pass] GH-463 open-ended window accepts 2026-10-01 and 2027-06-01 item dates and still rejects earlier or invalid dates');
+  console.log('[pass] GH-463 malformed open-ended start fails closed; earlier dates still block all four routes before side effects');
 }
 
 main().catch((error) => {

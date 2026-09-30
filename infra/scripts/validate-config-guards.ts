@@ -76,6 +76,7 @@ interface TestConfig {
     frontendRedeemRehearsalApproval?: string;
     fullFlowRehearsalAllowedOperatingDates?: string[];
     fullFlowRehearsalApproval?: string;
+    fullFlowRehearsalOpenEndedFromDate?: unknown;
     fullFlowRehearsalVenueId?: string;
     rollerBookingDraftWritesEnabled: boolean;
     rollerRedeemWritesEnabled: boolean;
@@ -137,6 +138,15 @@ function expectFail(name: string, config: TestConfig, expectedMessage: RegExp): 
   }
 
   throw new Error(`${name}: expected config validation to fail.`);
+}
+
+function expectOpenEndedFromDate(name: string, config: TestConfig, expected: string): void {
+  const actual = loadConfig(config).safetyGates.fullFlowRehearsalOpenEndedFromDate ?? '';
+  if (actual !== expected) {
+    throw new Error(`${name}: expected fullFlowRehearsalOpenEndedFromDate ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}.`);
+  }
+
+  console.log(`[pass] ${name}`);
 }
 
 const devConfig = readConfig('config/dev.json');
@@ -476,6 +486,31 @@ const parkTestFullFlowWithPaymentSmoke = cloneConfig(parkTestApprovedFullFlowReh
 parkTestFullFlowWithPaymentSmoke.safetyGates.livePaymentSmokeApproval =
   'T0159_INTERNAL_LIVE_PAYMENT_SMOKE_APPROVED';
 
+// GH-463: open-ended full-flow window start.
+const parkTestOpenEndedFullFlow = cloneConfig(parkTestApprovedFullFlowRehearsal);
+parkTestOpenEndedFullFlow.safetyGates.fullFlowRehearsalOpenEndedFromDate = '2026-06-29';
+
+const parkTestClosedWithOpenEndedWindow = cloneConfig(parkTestConfig);
+parkTestClosedWithOpenEndedWindow.safetyGates.fullFlowRehearsalOpenEndedFromDate = '2026-06-29';
+
+const parkTestAssistedLookupWithOpenEndedWindow = cloneConfig(parkTestApprovedAssistedLookup);
+parkTestAssistedLookupWithOpenEndedWindow.safetyGates.fullFlowRehearsalOpenEndedFromDate = '2026-06-29';
+
+const parkTestOpenEndedWrongFormat = cloneConfig(parkTestOpenEndedFullFlow);
+parkTestOpenEndedWrongFormat.safetyGates.fullFlowRehearsalOpenEndedFromDate = '2026-6-29';
+
+const parkTestOpenEndedImpossibleDate = cloneConfig(parkTestOpenEndedFullFlow);
+parkTestOpenEndedImpossibleDate.safetyGates.fullFlowRehearsalOpenEndedFromDate = '2026-02-30';
+
+const parkTestOpenEndedWord = cloneConfig(parkTestOpenEndedFullFlow);
+parkTestOpenEndedWord.safetyGates.fullFlowRehearsalOpenEndedFromDate = 'forever';
+
+const parkTestOpenEndedNumber = cloneConfig(parkTestOpenEndedFullFlow);
+parkTestOpenEndedNumber.safetyGates.fullFlowRehearsalOpenEndedFromDate = 20260629;
+
+const devWithOpenEndedWindow = cloneConfig(devConfig);
+devWithOpenEndedWindow.safetyGates.fullFlowRehearsalOpenEndedFromDate = '2026-06-29';
+
 expectPass('dev Playground config passes', devConfig, 'dev');
 expectFail('unsafe dev-to-Live config fails', unsafeDevLiveConfig, /dev config must use Roller Playground/);
 expectFail('dev continuous Aurora config fails closed', devWithContinuousAurora, /only valid when minCapacity is 0/);
@@ -806,6 +841,49 @@ expectFail(
   'park-test full-flow rehearsal does not combine with payment smoke',
   parkTestFullFlowWithPaymentSmoke,
   /must not be combined/,
+);
+expectOpenEndedFromDate(
+  'GH-463 reviewed release config keeps the Nacka window open from 2026-06-29',
+  parkTestControlledT30,
+  '2026-06-29',
+);
+expectOpenEndedFromDate('GH-463 closed park-test config has no open-ended window', parkTestConfig, '');
+expectOpenEndedFromDate('GH-463 dev config has no open-ended window', devConfig, '');
+expectPass('GH-463 approved full-flow config accepts an open-ended start', parkTestOpenEndedFullFlow, 'park-test');
+expectFail(
+  'GH-463 open-ended start is refused in the closed park-test config',
+  parkTestClosedWithOpenEndedWindow,
+  /fullFlowRehearsalOpenEndedFromDate must stay empty/,
+);
+expectFail(
+  'GH-463 open-ended start cannot extend an assisted-lookup-only approval',
+  parkTestAssistedLookupWithOpenEndedWindow,
+  /fullFlowRehearsalOpenEndedFromDate must stay empty/,
+);
+expectFail(
+  'GH-463 open-ended start rejects a non-ISO date',
+  parkTestOpenEndedWrongFormat,
+  /fullFlowRehearsalOpenEndedFromDate must be a valid YYYY-MM-DD date/,
+);
+expectFail(
+  'GH-463 open-ended start rejects an impossible calendar date',
+  parkTestOpenEndedImpossibleDate,
+  /fullFlowRehearsalOpenEndedFromDate must be a valid YYYY-MM-DD date/,
+);
+expectFail(
+  'GH-463 open-ended start rejects a word',
+  parkTestOpenEndedWord,
+  /fullFlowRehearsalOpenEndedFromDate must be a valid YYYY-MM-DD date/,
+);
+expectFail(
+  'GH-463 open-ended start rejects a non-string value',
+  parkTestOpenEndedNumber,
+  /fullFlowRehearsalOpenEndedFromDate must be a string/,
+);
+expectFail(
+  'GH-463 open-ended start is refused in dev',
+  devWithOpenEndedWindow,
+  /dev safetyGates.fullFlowRehearsalOpenEndedFromDate must remain empty/,
 );
 
 console.log('Config guard validation passed.');

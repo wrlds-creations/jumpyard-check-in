@@ -263,6 +263,25 @@ function expectLambdaEnvironment(
   }
 }
 
+// GH-463: only Booking, Lookup and Redeem receive the open-ended window start.
+function expectOpenEndedWindowEnvironment(template: CloudFormationTemplate, prefix: string, expectedValue: string): void {
+  const dateGatedFunctions = ['booking', 'lookup', 'redeem'].map((handler) => `${prefix}-stack-${handler}`);
+  for (const functionName of dateGatedFunctions) {
+    expectLambdaEnvironment(template, functionName, { T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE: expectedValue });
+  }
+
+  for (const resource of Object.values(getResources(template))) {
+    if (resource.Type !== 'AWS::Lambda::Function') continue;
+    const functionName = String(resource.Properties?.FunctionName ?? '');
+    if (dateGatedFunctions.includes(functionName)) continue;
+    const environment = resource.Properties?.Environment as { Variables?: Record<string, unknown> } | undefined;
+    expect(
+      environment?.Variables?.T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE === undefined,
+      `${functionName || 'An unnamed Lambda'} must not receive T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE.`,
+    );
+  }
+}
+
 function expectBookingSelfInvokePolicy(template: CloudFormationTemplate, account: string, region: string, stackName: string): void {
   const policy = Object.values(getResources(template)).find(
     (resource) =>
@@ -348,6 +367,7 @@ function validateDevTemplate(dev: SynthResult): void {
     JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'dev',
   });
+  expectOpenEndedWindowEnvironment(dev.template, DEV_PREFIX, '');
 
   console.log('[pass] dev synth keeps Playground resource names');
 }
@@ -537,6 +557,7 @@ function validateParkTestTemplate(parkTest: SynthResult): void {
     JUMPYARD_EMERGENCY_STOP: 'true',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
+  expectOpenEndedWindowEnvironment(parkTest.template, PARK_TEST_PREFIX, '');
 
   console.log('[pass] park-test synth uses separate names, tags, and Live config');
 }
@@ -751,6 +772,7 @@ function validateParkTestAssistedLookupTemplate(parkTest: SynthResult): void {
     JUMPYARD_EMERGENCY_STOP: 'false',
     JUMPYARD_ENVIRONMENT: 'park-test',
   });
+  expectOpenEndedWindowEnvironment(parkTest.template, PARK_TEST_PREFIX, '');
 
   console.log('[pass] park-test assisted lookup synth opens only Nacka/date-scoped lookup');
 }
@@ -1087,8 +1109,10 @@ function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void 
     WEBHOOK_AUTH_HEADER: 'x-roller-apikey',
     WEBHOOK_RUNTIME_MODE: 'processor',
   });
+  expectOpenEndedWindowEnvironment(parkTest.template, PARK_TEST_PREFIX, '2026-06-29');
 
   console.log('[pass] park-test full-flow rehearsal synth preserves the visitor flow and opens exact T0197 webhook processing');
+  console.log('[pass] GH-463 full-flow synth opens Nacka dates from 2026-06-29 on Booking, Lookup and Redeem only');
 }
 
 const dev = synthConfig('config/dev.json');

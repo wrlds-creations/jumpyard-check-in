@@ -1508,14 +1508,19 @@ function isT0176FullFlowRehearsalEnabled() {
 }
 
 function isT0176FullFlowRedeemAllowed(context, request) {
-  const allowedDates = getT0176FullFlowAllowedOperatingDates();
-  if (allowedDates.length === 0) return false;
+  const dateWindow = getT0176FullFlowDateWindow();
+  if (!dateWindow.valid) return false;
 
   const requestedDate = normalizeDate(request?.expectedDate);
   const bookingDate = normalizeDate(context?.booking?.bookingDate);
   const ticketDates = (context?.tickets ?? []).map((ticket) => normalizeDate(ticket?.bookingDate)).filter(Boolean);
   const candidateDates = Array.from(new Set([requestedDate, bookingDate, ...ticketDates].filter(Boolean)));
-  if (candidateDates.length === 0 || candidateDates.some((date) => !allowedDates.includes(date))) return false;
+  if (
+    candidateDates.length === 0 ||
+    candidateDates.some((date) => !isT0176FullFlowDateAllowed(dateWindow, date))
+  ) {
+    return false;
+  }
 
   const approvedVenueId = stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID);
   const bookingVenueId = stringOrNull(context?.booking?.venueId);
@@ -1539,6 +1544,31 @@ function getT0176FullFlowAllowedOperatingDates() {
     .split(',')
     .map((value) => normalizeDate(value))
     .filter(Boolean);
+}
+
+// GH-463/D0236: the approved window is the explicit date list plus, when set, every operating
+// date on or after T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE (no end date). Invalid config allows nothing.
+function getT0176FullFlowDateWindow() {
+  const dates = getT0176FullFlowAllowedOperatingDates();
+  const openEndedFromDate = String(process.env.T0176_FULL_FLOW_OPEN_ENDED_FROM_DATE || '').trim() || null;
+  const valid =
+    (dates.length > 0 || openEndedFromDate !== null) &&
+    (openEndedFromDate === null || isIsoCalendarDate(openEndedFromDate));
+  return { dates, openEndedFromDate, valid };
+}
+
+function isT0176FullFlowDateAllowed(dateWindow, date) {
+  if (!dateWindow.valid || !isIsoCalendarDate(date)) return false;
+  return (
+    dateWindow.dates.includes(date) ||
+    (dateWindow.openEndedFromDate !== null && date >= dateWindow.openEndedFromDate)
+  );
+}
+
+function isIsoCalendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value ?? ''))) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 function isT0166LiveRedeemAllowed(context, request, decision) {
