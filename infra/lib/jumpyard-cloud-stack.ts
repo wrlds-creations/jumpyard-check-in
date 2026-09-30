@@ -1076,6 +1076,8 @@ exports.handler = async (event) => {
         ruleName: `${config.resourcePrefix}-booking-time-sms-schedule`,
         description:
           'Runs the bounded booking-time messaging trigger. Park-test sends additionally require the T0201 hash-only single-booking control tuple.',
+        // GH-392/D0237: a paused schedule stays defined but DISABLED, matching the manual stop.
+        enabled: !config.bookingTimeSms.schedulePaused,
         schedule: events.Schedule.rate(Duration.minutes(config.bookingTimeSms.rateMinutes)),
         targets: [
           new targets.LambdaFunction(sessionHandler, {
