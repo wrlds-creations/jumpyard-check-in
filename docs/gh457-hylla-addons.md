@@ -18,4 +18,11 @@ Continue never asks for a tick: the own-item checkboxes, `validate()`, the inlin
 - TypeScript clean, ESLint 0 errors (existing `<img>` warnings), `next build --webpack` and the production mock boundary check, which now includes `/preview/addons`, passed; `git diff --check` clean.
 - Headless Edge on the development-only `/preview/addons` (fixture transport; every request stayed on 127.0.0.1): buying for 2 jumpers, a booking with 2 pairs of socks included and a family of 4, in SV and EN. All five add-ons are visible without scrolling at 390x844 and 375x667 (tightest: the English booking at 375x667 with 10 px spare), the total is level with the Back/Exit buttons, and nothing overflows sideways. Continue with nothing selected reaches the basket summary (buy) or the next step (booking); SkyRider still opens its attestation and a booking add-on still reaches review.
 
-Not yet verified: a physical iPhone or Android browser on Park.
+## Rollout evidence — 2026-09-30
+
+- PR #465 merged as `406bda894bb17a54affe7d16ee08a3b281332d8b`; release run 36675905107, artifact 11080001519 (`sha256:b0c3de854ece5ebf5c948a284337b53b50fa55f15cc972272744a790f03afcba`).
+- Park runs 36677089648 and 36678528495: the plan was unchanged (template `50ce5078`, 208/208 resources, no migrations), and CDK and Cloudflare deployed `406bda8`. The post-deploy verification failed only on stack drift from the EventBridge rule `jumpyard-check-in-park-test-booking-time-sms-schedule`, which was disabled manually on 2026-09-29 as the #392 messaging stop (follow-up #466). No alarm was in ALARM. Love kept the rule disabled and approved the public promotion.
+- Public run 36680207854 succeeded with every verification step green. `checkin.jumpyard.se`, `jumpyard-check-in-production.pages.dev` and `jumpyard-check-in-park-test.pages.dev` serve the Hylla shelf and "Ta med egna eller köp här"; the own-item copy and styles are gone, and `/preview/addons` returns the not-found page.
+- Rollback: public frontends release 36016708607 (`4c6d730`). Park follows #463 (`cf1f972`, open-ended Nacka window), which contains this change, so no Park rollback may select an older release.
+
+Not yet verified: a physical iPhone on `checkin.jumpyard.se`.
