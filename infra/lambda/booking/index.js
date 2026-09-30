@@ -3,6 +3,7 @@ const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
+const contactLookup = require('./contact-lookup');
 const emailMarketing = require('./email-marketing-consent');
 const { createServerDiagnostics } = require('./server-diagnostics');
 const diagnostics = createServerDiagnostics('booking', (entry) => console.error(JSON.stringify(entry)));
@@ -206,6 +207,11 @@ let cachedRollerConfigExpiresAt = 0;
 let cachedToken = null;
 let cachedVenuePaymentConfig = null;
 let cachedVenuePaymentConfigExpiresAt = 0;
+// GH-473: the Klaviyo Profiles:Read key is read once per container and cache period, never logged.
+const klaviyoApiKeys = contactLookup.createApiKeyProvider({
+  secretId: () => process.env.KLAVIYO_PROFILES_READ_SECRET_ARN,
+  readSecretString: (secretId) => readSecretString(secretId),
+});
 
 exports.handler = async (event) => {
   let correlationId = normalizeCorrelationId(getHeader(event, 'x-correlation-id')) || createCorrelationId();
@@ -450,8 +456,9 @@ async function handleQuote(event, body, correlationId) {
     });
   }
 
+  // GH-473: never price with a partial customer. An email-first contact uses the quote customer.
   const payload = buildRollerBookingPayload(request, {
-    customer: request.customer || buildQuoteCustomer(),
+    customer: hasCompleteCustomer(request.customer) ? request.customer : buildQuoteCustomer(),
     externalIdPrefix: 'JY-Q',
   });
   const rollerResult = await postRollerJson(config, token, '/bookings/draft/costs', payload);
@@ -572,6 +579,22 @@ async function handleDraft(event, body, correlationId) {
     });
   }
 
+  // GH-473/D0234: an email-first contact is resolved before any ROLLER call. An uncertain answer
+  // creates nothing, and the client asks for last name and phone before a new attempt.
+  const contact = await resolveDraftContact(request);
+  if (!contact.ok) {
+    await completeIdempotencyKey(request.idempotencyKey, 'failed', contactLookup.CONTACT_DETAILS_REQUIRED);
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: {
+        code: contactLookup.CONTACT_DETAILS_REQUIRED,
+        message: 'Last name and phone are required to complete this purchase.',
+      },
+    });
+  }
+  // The request hash above keeps the submitted contact; the draft and its record use the resolved one.
+  request.customer = contact.customer;
+
   const config = await getRollerConfig();
   const terminalSelection = resolveKioskPaymentTerminal(config, request);
   if (terminalSelection.error) {
@@ -638,7 +661,7 @@ async function handleDraft(event, body, correlationId) {
       },
       roller: {
         statusCode: rollerResult.status,
-        error: summarizeRollerError(rollerResult.body, request),
+        error: summarizeDraftRollerError(rollerResult.body, request, contact),
       },
     });
   }
@@ -705,7 +728,7 @@ async function handleDraft(event, body, correlationId) {
         },
         roller: {
           statusCode: noPaymentPublish.status,
-          error: summarizeRollerError(noPaymentPublish.body, request),
+          error: summarizeDraftRollerError(noPaymentPublish.body, request, contact),
         },
       });
     }
@@ -755,6 +778,8 @@ async function handleDraft(event, body, correlationId) {
     eventType: 'booking.draft_succeeded',
     payload: {
       endpoint: 'POST /bookings/draft',
+      contactLookup: contact.outcome,
+      contactMode: contact.mode,
       discountCodeAppliedCount: discountCodes.appliedCount,
       discountCodeErrorCount: discountCodes.errors.length,
       discountCodeRequestedCount: discountCodes.requestedCount,
@@ -3170,7 +3195,11 @@ function validateDraftRequest(request) {
   const kioskBindingError = validateKioskTerminalBinding(request);
   if (kioskBindingError) return kioskBindingError;
 
-  const customerError = validateCustomer(request.customer);
+  // GH-473/D0234: first name plus email alone is the email-first contract; every other shape
+  // keeps the four-field validation.
+  const customerError = contactLookup.draftContactMode(request.customer) === 'email_first'
+    ? validateEmailFirstCustomer(request.customer)
+    : validateCustomer(request.customer);
   if (customerError) return customerError;
 
   return validateItems(request.items);
@@ -3295,6 +3324,22 @@ function validateCustomer(customer) {
   }
 
   return null;
+}
+
+// GH-473: the first name is present by definition; Cloud resolves last name and phone later.
+function validateEmailFirstCustomer(customer) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email)) {
+    return {
+      code: 'customer_email_invalid',
+      message: 'customer.email must be a valid email address.',
+    };
+  }
+
+  return null;
+}
+
+function hasCompleteCustomer(customer) {
+  return ['firstName', 'lastName', 'email', 'phone'].every((field) => Boolean(stringOrNull(customer?.[field])));
 }
 
 function validateItems(items) {
@@ -3471,6 +3516,45 @@ async function readSecret(secretId) {
   }
 
   return JSON.parse(secretString);
+}
+
+async function readSecretString(secretId) {
+  const response = await secretsClient.send(new GetSecretValueCommand({ SecretId: secretId }));
+  return typeof response.SecretString === 'string' ? response.SecretString : null;
+}
+
+// GH-473: the lookup runs only where the reviewed Park profile enables it; elsewhere it is uncertain.
+function getContactLookupSettings() {
+  const timeoutMs = Number(process.env.GH473_KLAVIYO_LOOKUP_TIMEOUT_MS);
+  return {
+    enabled: process.env.ENABLE_GH473_KLAVIYO_CONTACT_LOOKUP === 'true',
+    timeoutMs: Number.isInteger(timeoutMs) && timeoutMs >= 500 && timeoutMs <= 3000
+      ? timeoutMs
+      : contactLookup.DEFAULT_TIMEOUT_MS,
+  };
+}
+
+// GH-473/D0234: a four-field contact is used exactly as submitted. An email-first contact is resolved
+// through Klaviyo; only the outcome class and latency are logged, never a contact value.
+async function resolveDraftContact(request) {
+  if (contactLookup.draftContactMode(request.customer) !== 'email_first') {
+    return { ok: true, customer: request.customer, mode: 'full', outcome: null };
+  }
+
+  const settings = getContactLookupSettings();
+  const result = await contactLookup.resolveEmailFirstCustomer(request.customer, {
+    apiKeys: klaviyoApiKeys,
+    enabled: settings.enabled,
+    fetchImpl: (url, init) => fetch(url, init),
+    timeoutMs: settings.timeoutMs,
+  });
+  console.log(JSON.stringify({
+    event: 'booking.contact_lookup',
+    outcome: contactLookup.describeOutcome(result),
+    latencyMs: result.latencyMs,
+    ...diagnostics.ids(),
+  }));
+  return { ...result, mode: 'email_first' };
 }
 
 function validateRollerConfig(config) {
@@ -5356,6 +5440,17 @@ function summarizeRollerError(body, requestOrGiftCards = []) {
     code: stringOrNull(body.code ?? body.errorCode),
     message: redactPaymentInputSecrets(stringOrNull(body.message ?? body.error ?? body.title), requestOrGiftCards),
     errors,
+  };
+}
+
+// GH-473: a provider message could echo a resolved contact value, so email-first drafts return codes only.
+function summarizeDraftRollerError(body, request, contact) {
+  const summary = summarizeRollerError(body, request);
+  if (contact?.mode !== 'email_first') return summary;
+  return {
+    code: summary.code,
+    message: null,
+    errors: (summary.errors ?? []).map((error) => ({ code: error.code, message: null, name: error.name })),
   };
 }
 

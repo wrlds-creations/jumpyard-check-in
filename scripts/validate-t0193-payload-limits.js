@@ -129,6 +129,7 @@ function loadLambda(testCase) {
     exports: module.exports,
     process: { env: { ...(testCase.environment ?? {}) } },
     require(moduleId) {
+      if (moduleId === './contact-lookup') return require('../infra/lambda/booking/contact-lookup');
       if (moduleId === './email-marketing-consent') return require('../infra/lambda/booking/email-marketing-consent');
       if (moduleId === './staff-handout') return require('../infra/lambda/shared/staff-handout');
       if (moduleId === './staff-handout-write') return require('../infra/lambda/redeem/staff-handout-write');

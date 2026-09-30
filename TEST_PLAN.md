@@ -1,5 +1,20 @@
 # Test Plan
 
+## Phone email-first contact (#473)
+
+Run `npm run validate:gh473-contact-lookup`. It covers the Cloud lookup outcomes, the exact Klaviyo request, exact ROLLER payloads, idempotency, logs and responses without contact values, and the quote customer. On the phone it covers the form, the fallback, recovery and the client payloads. Also run `validate:gh409-phone-policy`, `validate:gh437-email-marketing`, `validate:gh327-kiosk-terminal-binding`, the phone payment-recovery and payment-options suites, lint, typecheck, the production build with its mock-boundary verifier, and `npm run infra:check`.
+
+In the development-only `/preview/contact`, check both states in SV/EN at 390x844 and 375x667:
+- By default the form shows first name and email only.
+- After the synthetic `contact_details_required` answer, the notice, last name (focused) and phone appear. Email, basket and codes stay, and Continue needs both new fields.
+- The production export keeps `/preview/contact` a not-found page.
+
+Park acceptance follows the protected release and Love storing the key. Use owned aliases and synthetic values only:
+- A known alias keeps its ROLLER and Klaviyo name, phone and postcode. Compare the full ROLLER address before and after, because ROLLER may replace address fields that the partial `address` does not carry.
+- A new alias gets `Gäst` and `0700000000`.
+- No key, a wrong key or a forced timeout shows the full form.
+- Record the `booking.contact_lookup` latency from CloudWatch Logs, and check that the payment JWT payload keys carry no customer fields.
+
 ## Phone add-ons without ticks (#457)
 
 Run `npm run validate:gh318-phone-addon-choices` with `npm --prefix jumpyard-checkin-phone run test:addon-back`, `test:product-visibility`, `test:flow-nav` and `test:payment-recovery`. In the development-only `/preview/addons` check buying for 2 jumpers, a booking with socks included and a family of 4 in SV/EN at 390x844 and 375x667: all five add-ons visible without scrolling, no own-item tick, Continue works with nothing selected, SkyRider still opens its attestation and the total sits between the Back/Exit buttons. The production export must keep `/preview/addons` a not-found page. Check an iPhone in Safari on Park.
@@ -36,7 +51,7 @@ Use this file to define active validation for the current project or milestone. 
 
 | Command | Purpose | Expected Result |
 |---|---|---|
-| `npm run validate:gh409-phone-policy` | Test required phone, supplied contact payload, placeholder ingestion/SMS refusal and phone lookup rejection; verify phone form/recovery/copy. Paired `validate-gh327-kiosk-terminal-binding.test.js` verifies direct draft creation without customer reads and retained payment reservations. | Synthetic-only pass. [Provider and browser limits](docs/gh409-no-phone-contact.md) remain explicit. |
+| `npm run validate:gh409-phone-policy` | Test required phone on the four-field draft path, supplied contact payload, placeholder ingestion/SMS refusal and phone lookup rejection; verify phone form/recovery/copy (email-first since #473). Paired `validate-gh327-kiosk-terminal-binding.test.js` verifies direct draft creation without customer reads and retained payment reservations. | Synthetic-only pass. [Provider and browser limits](docs/gh409-no-phone-contact.md) remain explicit. |
 | `npm run validate:gh392-prearrival-email` | T-120/late-booking planning, the 2026-09-28 Stockholm date lock and the 2026-09-25 Love-only proof day, supported-product filter, own phone/kiosk purchase and started check-in exclusion, multi-page scheduled runs with time budget, read-only operator route, booking-bound links, four-hour sessions, arrival copy and delivery reservation. Optional `GH392_PSQL` runs only against the disposable local cluster on port 55492. | Deterministic synthetic checks pass; the product SQL was also run read-only against the Park cache. Real delivery is observed on 2026-09-28. |
 | `npm run validate:gh353-klarna-policy` | Exercise the real phone component and installed Roller SDK offline: both purchase kinds exclude Klarna in fresh session requests, preserve device exclusions and old payment returns, and reject replacement attempts while payment is unresolved. | 13 tests pass; provider-side exclusion and handset visibility still need post-promotion verification. |
 | `node scripts/validate-current-ticket.js` | Confirm `CODEX_TASK.md` is a static resolver for `codex/gh-<issue>-<slug>` and the workflow requires `gh issue view`. | Passes locally without network access. |

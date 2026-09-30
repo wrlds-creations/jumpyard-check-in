@@ -158,3 +158,37 @@ test('payment, safety and completion previews remain explicitly development-only
     assert.equal(renderRouteBoundary(entry, 'development').result, 'preview');
   }
 });
+
+// Async previews import their harness only inside the development branch, so production
+// chunks never contain it. The export itself is checked by scripts/verify-production-mock-boundary.mjs.
+async function renderAsyncRouteBoundary(filename, environment) {
+  const exports = {};
+  const notFound = Symbol('not-found');
+  const imported = [];
+  vm.runInNewContext(compile(filename), {
+    exports, Promise, process: { env: { NODE_ENV: environment } },
+    require: name => {
+      if (name === 'next/navigation') return { notFound: () => { throw notFound; } };
+      if (name === 'react/jsx-runtime') return { jsx: () => 'preview' };
+      imported.push(name);
+      return { default: () => null };
+    },
+  });
+  try { return { result: await exports.default(), imported }; }
+  catch (error) {
+    if (error !== notFound) throw error;
+    return { result: 'not-found', imported };
+  }
+}
+
+test('addons and contact previews stay development-only and never load their harness in production', async () => {
+  for (const preview of ['addons', 'contact']) {
+    const entry = path.join(sourceRoot, `app/preview/${preview}/page.tsx`);
+    for (const environment of ['production', 'test', undefined]) {
+      assert.deepEqual(await renderAsyncRouteBoundary(entry, environment), { result: 'not-found', imported: [] }, `${preview} ${environment}`);
+    }
+    const development = await renderAsyncRouteBoundary(entry, 'development');
+    assert.equal(development.result, 'preview');
+    assert.equal(development.imported.length, 1, `${preview} loads exactly its preview component`);
+  }
+});
