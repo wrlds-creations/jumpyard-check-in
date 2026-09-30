@@ -105,6 +105,12 @@ export interface JumpYardCloudConfig {
     readonly windowEndsAtLead: boolean;
     readonly windowMinutes: number;
   };
+  // GH-473/D0234: exact-email Klaviyo lookup for email-first new purchases. Off unless the reviewed
+  // full-flow profile enables it; off means every email-first draft asks for last name and phone.
+  readonly contactLookup: {
+    readonly klaviyoEnabled: boolean;
+    readonly timeoutMs: number;
+  };
   readonly dataSync: {
     readonly bookingRetentionDays: number;
     readonly liveApproval: string;
@@ -202,6 +208,10 @@ interface RawConfig {
     readonly windowEndsAtLead?: unknown;
     readonly windowMinutes?: unknown;
   };
+  readonly contactLookup?: {
+    readonly klaviyoEnabled?: unknown;
+    readonly timeoutMs?: unknown;
+  };
   readonly dataSync?: {
     readonly bookingRetentionDays?: unknown;
     readonly liveApproval?: unknown;
@@ -297,6 +307,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   const deploymentEnvironment = readDeploymentEnvironment(tags['WRLDS:Environment']);
   const auroraServerless = readAuroraServerlessConfig(raw.auroraServerless, deploymentEnvironment);
   const bookingTimeSms = readBookingTimeSmsConfig(raw.bookingTimeSms);
+  const contactLookup = readContactLookupConfig(raw.contactLookup);
   const guestEmail = readGuestEmailConfig(raw.guestEmail);
   const resourcePrefix = readString(raw.resourcePrefix, 'resourcePrefix');
   const rollerEnvironment = readString(raw.roller?.environment, 'roller.environment');
@@ -343,6 +354,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     awsRegion,
     auroraServerless,
     bookingTimeSms,
+    contactLookup,
     dataSync,
     deploymentEnvironment,
     guestEmail,
@@ -362,6 +374,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     awsRegion,
     auroraServerless,
     bookingTimeSms,
+    contactLookup,
     dataSync,
     guestEmail,
     resourcePrefix,
@@ -382,6 +395,7 @@ interface EnvironmentContractInput {
   readonly awsRegion: string;
   readonly auroraServerless: JumpYardCloudConfig['auroraServerless'];
   readonly bookingTimeSms: JumpYardCloudConfig['bookingTimeSms'];
+  readonly contactLookup: JumpYardCloudConfig['contactLookup'];
   readonly dataSync: JumpYardCloudConfig['dataSync'];
   readonly deploymentEnvironment: DeploymentEnvironment;
   readonly guestEmail: JumpYardCloudConfig['guestEmail'];
@@ -422,6 +436,9 @@ function validateEnvironmentContract(input: EnvironmentContractInput): void {
     }
     if (input.safetyGates.fullFlowRehearsalOpenEndedFromDate) {
       throw new Error('dev safetyGates.fullFlowRehearsalOpenEndedFromDate must remain empty.');
+    }
+    if (input.contactLookup.klaviyoEnabled) {
+      throw new Error('dev contactLookup.klaviyoEnabled must remain false.');
     }
     if (input.dataSync.scheduleEnabled) {
       throw new Error('dev dataSync.scheduleEnabled must remain false while Playground is hibernated.');
@@ -859,6 +876,16 @@ function validateParkTestContract(input: EnvironmentContractInput): void {
     throw new Error('park-test full-flow rehearsal approval requires safetyGates.staffAuthEnabled=true.');
   }
 
+  // GH-473/D0234: the Klaviyo lookup serves only the reviewed full-flow new-purchase path.
+  if (
+    input.contactLookup.klaviyoEnabled &&
+    (!fullFlowRehearsalApproved || !input.safetyGates.rollerBookingDraftWritesEnabled)
+  ) {
+    throw new Error(
+      'park-test contactLookup.klaviyoEnabled requires the approved full-flow rehearsal with draft writes.',
+    );
+  }
+
   if (fullFlowRehearsalApproved && !input.safetyGates.rollerRedeemWritesEnabled) {
     throw new Error('park-test full-flow rehearsal approval requires safetyGates.rollerRedeemWritesEnabled=true.');
   }
@@ -1192,6 +1219,17 @@ function readBookingTimeSmsConfig(raw: RawConfig['bookingTimeSms']): JumpYardClo
   }
 
   return config;
+}
+
+function readContactLookupConfig(raw: RawConfig['contactLookup']): JumpYardCloudConfig['contactLookup'] {
+  if (raw !== undefined && (raw === null || typeof raw !== 'object' || Array.isArray(raw))) {
+    throw new Error('Config field contactLookup must be an object when supplied.');
+  }
+
+  return {
+    klaviyoEnabled: readOptionalBoolean(raw?.klaviyoEnabled, false, 'contactLookup.klaviyoEnabled'),
+    timeoutMs: readOptionalInteger(raw?.timeoutMs, 1500, 500, 3000, 'contactLookup.timeoutMs'),
+  };
 }
 
 function readAlarmNotificationsConfig(

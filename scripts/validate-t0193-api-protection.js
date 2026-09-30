@@ -171,8 +171,15 @@ function validateRouteSettings(template, routesByKey) {
 function validateApprovedProtectionResources(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    208,
-    'The T0193 boundary must remain intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the GH-224 terminal route, and the #335 alarm topic, subscription and sustained Roller alarm.',
+    209,
+    'The T0193 boundary must remain intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the GH-224 terminal route, the #335 alarm topic, subscription and sustained Roller alarm, and the GH-473 Klaviyo key secret.',
+  );
+  assert.equal(
+    resourcesOfType(template, 'AWS::SecretsManager::Secret').filter(
+      ([, secret]) => secret.Properties.Name === '/jumpyard-check-in-park-test/klaviyo/profiles-read',
+    ).length,
+    1,
+    'GH-473 must add exactly one Klaviyo profiles-read secret.',
   );
   assert.equal(resourcesOfType(template, 'AWS::SES::ConfigurationSet').length, 1);
   assert.equal(resourcesOfType(template, 'AWS::SES::ConfigurationSetEventDestination').length, 1);

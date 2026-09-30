@@ -304,6 +304,68 @@ function expectBookingSelfInvokePolicy(template: CloudFormationTemplate, account
   );
 }
 
+// GH-473/D0234: every park-test profile keeps one retained, initially empty Klaviyo key secret.
+// Only the Booking role of the profile with the lookup enabled may read it.
+function expectKlaviyoContactLookup(template: CloudFormationTemplate, enabled: boolean, context: string): void {
+  const secretName = `/${PARK_TEST_PREFIX}/klaviyo/profiles-read`;
+  const bookingFunctionName = `${PARK_TEST_PREFIX}-stack-booking`;
+  const secrets = Object.entries(getResources(template)).filter(
+    ([, resource]) => resource.Type === 'AWS::SecretsManager::Secret' && resource.Properties?.Name === secretName,
+  );
+  expect(secrets.length === 1, `${context}: expected exactly one ${secretName} secret.`);
+  const [secretId, secret] = secrets[0];
+  expect(secret.DeletionPolicy === 'Retain', `${context}: ${secretName} must be retained.`);
+  expect(
+    secret.Properties?.SecretString === undefined && secret.Properties?.GenerateSecretString === undefined,
+    `${context}: ${secretName} must start empty; the key is stored in AWS only.`,
+  );
+
+  const readers = Object.entries(getResources(template))
+    .filter(([, resource]) => resource.Type === 'AWS::IAM::Policy' && JSON.stringify(resource.Properties).includes(secretId))
+    .map(([logicalId, resource]) => ({ logicalId, resource }));
+  const variables = getLambdaEnvironment(template, bookingFunctionName);
+  expectLambdaEnvironment(template, bookingFunctionName, {
+    ENABLE_GH473_KLAVIYO_CONTACT_LOOKUP: String(enabled),
+    GH473_KLAVIYO_LOOKUP_TIMEOUT_MS: '1500',
+  });
+  if (enabled) {
+    expect(
+      readers.length === 1 && readers[0].logicalId.startsWith('BookingHandlerServiceRoleDefaultPolicy'),
+      `${context}: only the Booking role may read the Klaviyo key.`,
+    );
+    const statements = (readers[0].resource.Properties?.PolicyDocument as { Statement?: unknown[] } | undefined)?.Statement ?? [];
+    const grants = statements.filter((statement) => JSON.stringify(statement).includes(secretId));
+    expect(
+      JSON.stringify(grants) ===
+        JSON.stringify([{
+          Action: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
+          Effect: 'Allow',
+          Resource: { Ref: secretId },
+        }]),
+      `${context}: the Booking role may only read and describe the Klaviyo key.`,
+    );
+    expect(
+      JSON.stringify(variables.KLAVIYO_PROFILES_READ_SECRET_ARN) === JSON.stringify({ Ref: secretId }),
+      `${context}: Booking must receive the Klaviyo secret reference.`,
+    );
+  } else {
+    expect(readers.length === 0, `${context}: a profile without the lookup must not grant the Klaviyo key.`);
+    expect(variables.KLAVIYO_PROFILES_READ_SECRET_ARN === '', `${context}: Booking must not receive the Klaviyo secret.`);
+  }
+
+  for (const resource of Object.values(getResources(template))) {
+    if (resource.Type !== 'AWS::Lambda::Function') continue;
+    const functionName = String(resource.Properties?.FunctionName ?? '');
+    if (functionName === bookingFunctionName) continue;
+    const environment = resource.Properties?.Environment as { Variables?: Record<string, unknown> } | undefined;
+    expect(
+      environment?.Variables?.KLAVIYO_PROFILES_READ_SECRET_ARN === undefined &&
+        environment?.Variables?.ENABLE_GH473_KLAVIYO_CONTACT_LOOKUP === undefined,
+      `${context}: ${functionName || 'an unnamed Lambda'} must not receive the GH-473 lookup settings.`,
+    );
+  }
+}
+
 function validateDevTemplate(dev: SynthResult): void {
   const strings = collectStrings(dev.template);
 
@@ -369,6 +431,19 @@ function validateDevTemplate(dev: SynthResult): void {
     JUMPYARD_ENVIRONMENT: 'dev',
   });
   expectOpenEndedWindowEnvironment(dev.template, DEV_PREFIX, '');
+  // GH-473: dev has no Klaviyo key and its Booking lookup stays off.
+  expect(
+    !Object.values(getResources(dev.template)).some(
+      (resource) =>
+        resource.Type === 'AWS::SecretsManager::Secret' &&
+        String(resource.Properties?.Name ?? '').includes('/klaviyo/'),
+    ),
+    'Dev must not create a Klaviyo secret.',
+  );
+  expectLambdaEnvironment(dev.template, `${DEV_PREFIX}-stack-booking`, {
+    ENABLE_GH473_KLAVIYO_CONTACT_LOOKUP: 'false',
+    KLAVIYO_PROFILES_READ_SECRET_ARN: '',
+  });
 
   console.log('[pass] dev synth keeps Playground resource names');
 }
@@ -1139,5 +1214,21 @@ validateParkTestPaymentSyncSmokeTemplate(parkTestPaymentSyncSmoke);
 validateParkTestRedeemSmokeTemplate(parkTestRedeemSmoke);
 validateParkTestFrontendRedeemRehearsalTemplate(parkTestFrontendRedeemRehearsal);
 validateParkTestFullFlowRehearsalTemplate(parkTestFullFlowRehearsal);
+
+for (const [name, synthResult, enabled] of [
+  ['park-test', parkTest, false],
+  ['park-test add-on smoke', parkTestAddOnSmoke, false],
+  ['park-test add-on settlement smoke', parkTestAddOnSettlementSmoke, false],
+  ['park-test assisted lookup', parkTestAssistedLookup, false],
+  ['park-test lookup smoke', parkTestLookupSmoke, false],
+  ['park-test payment smoke', parkTestPaymentSmoke, false],
+  ['park-test payment sync smoke', parkTestPaymentSyncSmoke, false],
+  ['park-test redeem smoke', parkTestRedeemSmoke, false],
+  ['park-test frontend redeem rehearsal', parkTestFrontendRedeemRehearsal, false],
+  ['park-test full-flow rehearsal', parkTestFullFlowRehearsal, true],
+] as const) {
+  expectKlaviyoContactLookup(synthResult.template, enabled, name);
+}
+console.log('[pass] GH-473 park-test keeps one empty retained Klaviyo key; only the full-flow Booking role may read it');
 
 console.log('Park-test synth validation passed.');

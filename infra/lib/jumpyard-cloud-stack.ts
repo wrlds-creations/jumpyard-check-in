@@ -53,7 +53,9 @@ interface HandlerResources {
   readonly checkinEmailIdentityDomain: string;
   readonly checkinEmailReplyToAddresses: readonly string[];
   readonly checkinSmsBaseUrl: string;
+  readonly contactLookup: JumpYardCloudConfig['contactLookup'];
   readonly controlledT30EmailEnabled: boolean;
+  readonly klaviyoProfilesReadSecret?: secretsmanager.Secret;
   readonly prearrivalEmailEnabled: boolean;
   readonly rollerCredentialsSecret: secretsmanager.Secret;
   readonly databaseClusterArn: string;
@@ -561,6 +563,27 @@ export class JumpYardCloudStack extends Stack {
       retainedSecret.applyRemovalPolicy(RemovalPolicy.RETAIN);
     }
 
+    // GH-473/D0234: every park-test profile keeps this retained, fixed-name secret, so switching the
+    // lookup on or off never orphans it. It starts empty; Love stores the Profiles:Read key in AWS
+    // after deployment. Only the Booking Lambda of a profile with the lookup enabled may read it.
+    const klaviyoProfilesReadSecret = config.tags['WRLDS:Environment'] === 'park-test'
+      ? new secretsmanager.Secret(this, 'KlaviyoProfilesReadSecret', {
+          secretName: `/${config.resourcePrefix}/klaviyo/profiles-read`,
+          description:
+            'Klaviyo private API key with Profiles:Read only, for the GH-473 exact-email contact lookup. Set the value in AWS only.',
+        })
+      : undefined;
+    if (klaviyoProfilesReadSecret) {
+      // Without SecretString or GenerateSecretString, CloudFormation creates the secret with no value.
+      (klaviyoProfilesReadSecret.node.defaultChild as secretsmanager.CfnSecret).addPropertyDeletionOverride(
+        'GenerateSecretString',
+      );
+      klaviyoProfilesReadSecret.applyRemovalPolicy(RemovalPolicy.RETAIN);
+    }
+    if (config.contactLookup.klaviyoEnabled && !klaviyoProfilesReadSecret) {
+      throw new Error('contactLookup.klaviyoEnabled requires the park-test Klaviyo profiles-read secret.');
+    }
+
     const restrictedDatabaseAccessRequired = config.tags['WRLDS:Environment'] !== 'dev';
     const databaseRuntimeSecrets = restrictedDatabaseAccessRequired
       ? (Object.fromEntries(
@@ -934,7 +957,9 @@ exports.handler = async (event) => {
       checkinEmailIdentityDomain: config.guestEmail.identityDomain,
       checkinEmailReplyToAddresses: config.guestEmail.replyToAddresses,
       checkinSmsBaseUrl: config.bookingTimeSms.checkinBaseUrl,
+      contactLookup: config.contactLookup,
       controlledT30EmailEnabled,
+      klaviyoProfilesReadSecret,
       prearrivalEmailEnabled,
       rollerCredentialsSecret,
       databaseClusterArn,
@@ -1965,6 +1990,14 @@ exports.handler = async (event) => {
       environment.PHONE_EMAIL_MARKETING_PROVIDER_APPROVED = String(
         resources.safetyGates.phoneEmailMarketingDeliveryApproval === PHONE_EMAIL_MARKETING_DELIVERY_APPROVAL,
       );
+      // GH-473/D0234: without the gate every email-first draft returns contact_details_required.
+      const contactLookupEnabled = resources.contactLookup.klaviyoEnabled;
+      environment.ENABLE_GH473_KLAVIYO_CONTACT_LOOKUP = String(contactLookupEnabled);
+      environment.GH473_KLAVIYO_LOOKUP_TIMEOUT_MS = String(resources.contactLookup.timeoutMs);
+      environment.KLAVIYO_PROFILES_READ_SECRET_ARN =
+        contactLookupEnabled && resources.klaviyoProfilesReadSecret
+          ? resources.klaviyoProfilesReadSecret.secretArn
+          : '';
     }
 
     if (handlerName === 'lookup') {
@@ -2060,6 +2093,9 @@ exports.handler = async () => ({
     }
     if (handlerName === 'redeem') {
       resources.redeemDevTokenSecret.grantRead(fn);
+    }
+    if (handlerName === 'booking' && resources.contactLookup.klaviyoEnabled && resources.klaviyoProfilesReadSecret) {
+      resources.klaviyoProfilesReadSecret.grantRead(fn);
     }
     if (handlerName === 'session') {
       resources.checkinLinkDevTokenSecret.grantRead(fn);

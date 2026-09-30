@@ -192,6 +192,10 @@
     "fullFlowRehearsalOpenEndedFromDate": "2026-06-29",
     "fullFlowRehearsalVenueId": "50871"
   },
+  "contactLookup": {
+    "klaviyoEnabled": true,
+    "timeoutMs": 1500
+  },
   "tags": {
     "WRLDS:Client": "JumpYard",
     "WRLDS:Project": "jumpyard-check-in",

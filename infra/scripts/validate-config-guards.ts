@@ -30,6 +30,7 @@ interface TestConfig {
     windowEndsAtLead?: boolean;
     windowMinutes: number;
   };
+  contactLookup?: unknown;
   dataSync?: {
     bookingRetentionDays: number;
     liveApproval: string;
@@ -511,6 +512,35 @@ parkTestOpenEndedNumber.safetyGates.fullFlowRehearsalOpenEndedFromDate = 2026062
 const devWithOpenEndedWindow = cloneConfig(devConfig);
 devWithOpenEndedWindow.safetyGates.fullFlowRehearsalOpenEndedFromDate = '2026-06-29';
 
+// GH-473/D0234: the Klaviyo contact lookup opens only with the reviewed full-flow profile.
+const parkTestFullFlowWithContactLookup = cloneConfig(parkTestApprovedFullFlowRehearsal);
+parkTestFullFlowWithContactLookup.contactLookup = { klaviyoEnabled: true, timeoutMs: 1500 };
+const parkTestClosedWithContactLookup = cloneConfig(parkTestConfig);
+parkTestClosedWithContactLookup.contactLookup = { klaviyoEnabled: true };
+const parkTestAssistedLookupWithContactLookup = cloneConfig(parkTestApprovedAssistedLookup);
+parkTestAssistedLookupWithContactLookup.contactLookup = { klaviyoEnabled: true };
+const parkTestPaymentSmokeWithContactLookup = cloneConfig(parkTestApprovedPaymentSmoke);
+parkTestPaymentSmokeWithContactLookup.contactLookup = { klaviyoEnabled: true };
+const devWithContactLookup = cloneConfig(devConfig);
+devWithContactLookup.contactLookup = { klaviyoEnabled: true };
+const parkTestContactLookupStringFlag = cloneConfig(parkTestFullFlowWithContactLookup);
+parkTestContactLookupStringFlag.contactLookup = { klaviyoEnabled: 'true' };
+const parkTestContactLookupFastTimeout = cloneConfig(parkTestFullFlowWithContactLookup);
+parkTestContactLookupFastTimeout.contactLookup = { klaviyoEnabled: true, timeoutMs: 100 };
+const parkTestContactLookupSlowTimeout = cloneConfig(parkTestFullFlowWithContactLookup);
+parkTestContactLookupSlowTimeout.contactLookup = { klaviyoEnabled: true, timeoutMs: 10000 };
+const parkTestContactLookupNotObject = cloneConfig(parkTestFullFlowWithContactLookup);
+parkTestContactLookupNotObject.contactLookup = true;
+
+function expectContactLookup(name: string, config: TestConfig, expected: { klaviyoEnabled: boolean; timeoutMs: number }): void {
+  const actual = loadConfig(config).contactLookup;
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`${name}: expected contactLookup ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}.`);
+  }
+
+  console.log(`[pass] ${name}`);
+}
+
 expectPass('dev Playground config passes', devConfig, 'dev');
 expectFail('unsafe dev-to-Live config fails', unsafeDevLiveConfig, /dev config must use Roller Playground/);
 expectFail('dev continuous Aurora config fails closed', devWithContinuousAurora, /only valid when minCapacity is 0/);
@@ -885,5 +915,33 @@ expectFail(
   devWithOpenEndedWindow,
   /dev safetyGates.fullFlowRehearsalOpenEndedFromDate must remain empty/,
 );
+expectContactLookup(
+  'GH-473 reviewed release config enables the Klaviyo contact lookup with a 1.5 s timeout',
+  parkTestControlledT30,
+  { klaviyoEnabled: true, timeoutMs: 1500 },
+);
+expectContactLookup('GH-473 closed park-test config keeps the lookup off', parkTestConfig, { klaviyoEnabled: false, timeoutMs: 1500 });
+expectContactLookup('GH-473 dev config keeps the lookup off', devConfig, { klaviyoEnabled: false, timeoutMs: 1500 });
+expectPass('GH-473 approved full-flow config accepts the lookup', parkTestFullFlowWithContactLookup, 'park-test');
+expectFail(
+  'GH-473 lookup is refused in the closed park-test config',
+  parkTestClosedWithContactLookup,
+  /contactLookup.klaviyoEnabled requires the approved full-flow rehearsal/,
+);
+expectFail(
+  'GH-473 lookup cannot ride on an assisted-lookup-only approval',
+  parkTestAssistedLookupWithContactLookup,
+  /contactLookup.klaviyoEnabled requires the approved full-flow rehearsal/,
+);
+expectFail(
+  'GH-473 lookup cannot ride on the payment smoke approval',
+  parkTestPaymentSmokeWithContactLookup,
+  /contactLookup.klaviyoEnabled requires the approved full-flow rehearsal/,
+);
+expectFail('GH-473 lookup is refused in dev', devWithContactLookup, /dev contactLookup.klaviyoEnabled must remain false/);
+expectFail('GH-473 lookup flag must be a boolean', parkTestContactLookupStringFlag, /contactLookup.klaviyoEnabled must be a boolean/);
+expectFail('GH-473 lookup timeout has a floor', parkTestContactLookupFastTimeout, /contactLookup.timeoutMs must be an integer between 500 and 3000/);
+expectFail('GH-473 lookup timeout has a ceiling', parkTestContactLookupSlowTimeout, /contactLookup.timeoutMs must be an integer between 500 and 3000/);
+expectFail('GH-473 contactLookup must be an object', parkTestContactLookupNotObject, /contactLookup must be an object/);
 
 console.log('Config guard validation passed.');

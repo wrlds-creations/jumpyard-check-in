@@ -4,6 +4,16 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #473 Klaviyo Profiles:Read Secret (Proposed In Code; Not Deployed)
+
+Every park-test profile gains one retained Secrets Manager secret, `/jumpyard-check-in-park-test/klaviyo/profiles-read`:
+- It is created empty (no `SecretString`, no generated value) with `DeletionPolicy`/`UpdateReplacePolicy: Retain`, the stack's ten WRLDS tags and the default AWS-managed key. Switching the lookup off never removes it.
+- Only the Booking role of the full-flow release profile receives `secretsmanager:GetSecretValue` and `secretsmanager:DescribeSecret` on it. Booking also gets `ENABLE_GH473_KLAVIYO_CONTACT_LOOKUP=true`, `GH473_KLAVIYO_LOOKUP_TIMEOUT_MS=1500` and `KLAVIYO_PROFILES_READ_SECRET_ARN`.
+- The local synth of the release profile goes from 208 to 209 resources: the new secret, one added Booking policy statement and the Booking code and environment. Nothing else changes: no route, schema, alarm, tag or other function. The closed profile adds the secret without a grant; dev adds no secret.
+- Nothing has been deployed or created. After the protected Park release, Love stores the key value in the AWS console, as `pk_…` or `{"apiKey":"pk_…"}`. Until then every email-first purchase shows the full form. The secret costs about USD 0.40 a month plus API calls.
+
+[Contract](JUMPYARD_CLOUD_CONTRACT.md#email-first-new-purchase-contact-473-d0234-implemented-not-yet-released) and [evidence](docs/gh473-email-first-name-klaviyo.md).
+
 ### Issues #463/#466 Open-Ended Nacka Window And Paused #392 Schedule (Deployed 2026-09-30)
 
 Release [36707276078](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36707276078) / `d636be6` (artifact `11092582797`) went through protected [Park 36707872129](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36707872129) and a no-change verification re-run, [36708753741](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36708753741), which passed every check.
@@ -1463,6 +1473,7 @@ T0007 created schema `jumpyard` in database `jumpyard_cloud`. Park-test is appli
 | JumpYard Cloud API | API Gateway HTTP API | `dev`; existing technical `park-test` as Nacka pilot production | Phone/admin entrypoint for server-owned contracts. | Deployed; no duplicate pilot-production API is planned |
 | JumpYard Cloud handlers | Lambda | `dev`; existing technical `park-test` as Nacka pilot production | Lookup, session, availability, quote, draft booking, add-product, redeem, webhook handlers. | Implemented and deployed; future multi-park shape is deferred |
 | Roller credentials | Secrets Manager | Per technical environment | Store Roller client id and client secret server-side. | Deployed to `dev` and Park; future parks/tenants require separate approval |
+| Klaviyo Profiles:Read key | Secrets Manager | existing `park-test` | #473 exact-email contact lookup for email-first new purchases; read by the Booking Lambda only. | Proposed in #473, not deployed; Love stores the value in AWS after the Park release |
 | Roller non-secret config | SSM Parameter Store | Per technical environment | Store Roller environment and base URL. | Deployed to `dev` and Park; future parks/tenants require separate approval |
 | JumpYard operational database | Aurora PostgreSQL Serverless v2 | Per technical environment | Roller snapshot, operational state, check-in attempts, idempotency, handoff state, webhook events, event log. | Deployed to `dev` and Park; Park data remains the Nacka pilot-production state |
 | Restricted diagnostic storage | S3 | Per technical environment | Private versioned storage with 30-day lifecycle; application policy prohibits persisting raw Roller/webhook payloads, payment JWTs, access tokens, PINs, secrets, or unmasked credentials. | Deployed to `dev` and Park; no #264 object or bucket change |

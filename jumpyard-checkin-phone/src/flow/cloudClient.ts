@@ -188,7 +188,8 @@ export interface NewBookingAvailability {
 
 export interface NewBookingCustomer {
   firstName: string;
-  lastName: string;
+  // GH-473: an email-first purchase sends neither; Cloud resolves them before the draft.
+  lastName?: string;
   email: string;
   phone?: string;
 }
@@ -655,6 +656,7 @@ export async function quoteNewBooking(
 ): Promise<NewBookingQuote> {
   let response: Response;
   let body: QuoteResponse | null = null;
+  const quoteCustomer = getCompleteQuoteCustomer(customer);
 
   try {
     response = await fetch(`${getApiBaseUrl()}/v1/bookings/quote`, {
@@ -664,11 +666,11 @@ export async function quoteNewBooking(
       },
       body: JSON.stringify({
         correlationId: `phone_quote_${Date.now().toString(36)}`,
-        customer,
+        ...(quoteCustomer ? { customer: quoteCustomer } : {}),
         discountCodes: discountCodes.map((discount) => discount.code),
         giftCards,
         items,
-        name: `${customer.firstName} ${customer.lastName}`.trim() || 'JumpYard booking',
+        name: getNewBookingName(customer),
         requireAvailability,
       }),
     });
@@ -713,7 +715,7 @@ export async function createDraftBooking(
         giftCards,
         idempotencyKey,
         items,
-        name: `${customer.firstName} ${customer.lastName}`.trim() || 'JumpYard booking',
+        name: getNewBookingName(customer),
         requireAvailability,
         sendConfirmations: true,
       }),
@@ -859,6 +861,18 @@ export async function createAddProductDraft(
 function getApiBaseUrl() {
   const configured = process.env.NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL || DEFAULT_CLOUD_API_BASE_URL;
   return configured.replace(/\/+$/, '');
+}
+
+/** GH-473: the booking name never invents a last name; an email-first purchase uses the first name. */
+function getNewBookingName(customer: NewBookingCustomer) {
+  return [customer.firstName, customer.lastName].map((part) => part?.trim()).filter(Boolean).join(' ') || 'JumpYard booking';
+}
+
+/** GH-473: a quote carries only a complete customer; otherwise Cloud prices with its own quote customer. */
+function getCompleteQuoteCustomer(customer: NewBookingCustomer) {
+  return [customer.firstName, customer.lastName, customer.email, customer.phone].every((field) => Boolean(field?.trim()))
+    ? customer
+    : null;
 }
 
 function getExpectedDate() {

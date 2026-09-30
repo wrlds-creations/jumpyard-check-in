@@ -10,7 +10,7 @@ This file defines the first Sprint 1 contract for the phone-first JumpYard check
 
 ## Approved Visitor Contact Policy (2026-09-23)
 
-Love explicitly restored phone entry in phone/shared Cloud issue [#409](https://github.com/wrlds-creations/jumpyard-check-in/issues/409) and kiosk issue [#100](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/issues/100). This supersedes the September 15 name/email-only and extra pre-create customer-matching policy (D0222 / D0035). It describes the approved implementation, not a deployment claim.
+Love explicitly restored phone entry in phone/shared Cloud issue [#409](https://github.com/wrlds-creations/jumpyard-check-in/issues/409) and kiosk issue [#100](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/issues/100). This supersedes the September 15 name/email-only and extra pre-create customer-matching policy (D0222 / D0035). It describes the approved implementation, not a deployment claim. Once #473 is released, the email-first contract in the next section replaces the first bullet for new purchases that send only a first name and email; the four-field path keeps this policy.
 
 - New purchases require first name, last name, email and a guest-entered phone. Clients start with an empty phone field. Cloud forwards the supplied number and never inserts a standard phone into draft creation.
 - Remove the extra pre-create email search, local guest-profile query and guest-detail loop. A new or unindexed email can create a draft without being found in advance. ROLLER owns customer matching. Normal updates from explicitly submitted contact fields still apply; preserving an existing different number is not promised.
@@ -20,6 +20,22 @@ Love explicitly restored phone entry in phone/shared Cloud issue [#409](https://
 - Equivalent spellings of `0700000000` remain missing contact internally, are not SMS-ready and cannot receive SMS, including legacy stored values. No bulk contact edits are authorized.
 - A future no-phone flow needs a supported ROLLER create-without-contact-overwrite contract. The September 22 controlled Live probe rejected omission and overwrote the existing number when the placeholder was supplied at draft creation, before payment; that number was restored. This does not establish every possible ROLLER API/configuration option.
 - Release the shared Cloud change and phone/kiosk frontends as a coordinated set after review. Old no-phone clients will fail required-phone validation on the new backend; ensure clients reload. Existing payment-status/resume endpoints keep their contracts. Publication and physical end-to-end acceptance remain separate.
+
+## Email-First New-Purchase Contact (#473, D0234; Implemented, Not Yet Released)
+
+`POST /v1/bookings/draft` accepts two customer shapes. First name, last name, email and phone keep the four-field path above exactly: no lookup, and the submitted values reach ROLLER. Only `firstName` and `email`, with neither `lastName` nor `phone` (empty strings count as absent), is email-first. Any other partial shape still returns `400 customer_required`. Quotes and existing-booking add-ons never look anything up.
+
+- **Lookup.** After the idempotency reservation and before any ROLLER call, Cloud sends `GET https://a.klaviyo.com/api/profiles?filter=equals(email,"<lower-case email>")&fields[profile]=email,first_name,last_name,phone_number,location` with `Authorization: Klaviyo-API-Key <key>`, `revision: 2026-07-15` and `accept: application/vnd.api+json`. Redirects are refused, and one 1.5 s timeout covers the whole exchange. Node's global fetch keeps the connection alive in a warm container.
+- **Exactly one profile with the same email.** ROLLER receives Klaviyo's `first_name` (else the typed first name), `last_name` (else `Gäst`) and `phone_number` (else `0700000000`). A `+46` number is sent in the national `0…` form; other countries keep E.164. `address` holds only `zip`→`postcode` (D0234) and is omitted without it. Other location fields (street, city, country, IP, coordinates, region, timezone) are never read, because Klaviyo can derive some of them from IP.
+- **No profile.** The typed first name, last name `Gäst` and phone `0700000000`, without an address.
+- **Uncertain.** This covers more than one profile or a further result page, any non-2xx answer, a timeout or network error, an unexpected shape or type, a different profile email, an email the filter cannot express safely, a missing, empty, unreadable or invalid key, and a disabled lookup. Cloud contacts no ROLLER endpoint, marks the reservation `failed` with `contact_details_required` and returns `409 {status: "blocked", error: {code: "contact_details_required"}}`. The client shows last name and phone and resubmits all four fields with a new idempotency key.
+- **Guards.** Placeholders keep the #409 rules: `0700000000` is never SMS-ready, `acceptMarketingSms` is never sent, and ingestion treats it as missing contact. The email choice (D0225) travels unchanged. The idempotency hash uses the submitted contact, so it does not depend on Klaviyo's answer. The prepayment record stores the contact sent to ROLLER, with a placeholder phone stored as null.
+- **Privacy.** Klaviyo values never appear in a response: the draft response is unchanged, and a ROLLER rejection of an email-first draft returns only error codes and field names. Logs hold one `booking.contact_lookup` line with `found`, `not_found` or `uncertain:<reason>` and `latencyMs`. `booking.draft_succeeded` adds `contactMode` and `contactLookup`.
+- **Quotes.** `POST /v1/bookings/quote` never sends a partial customer to Booking Costs; a customer without all four fields is replaced by the synthetic quote customer.
+- **Configuration and key.** `contactLookup.klaviyoEnabled` and `timeoutMs` (500–3000 ms, default 1500) are enabled only in the reviewed full-flow profile. Booking receives `ENABLE_GH473_KLAVIYO_CONTACT_LOOKUP`, `GH473_KLAVIYO_LOOKUP_TIMEOUT_MS` and `KLAVIYO_PROFILES_READ_SECRET_ARN`. The key is stored in the retained, initially empty secret `/jumpyard-check-in-park-test/klaviyo/profiles-read`, as `pk_…` or `{"apiKey":"pk_…"}`. It is read once per container and cached for five minutes; a missing key is re-read after a minute, and a 401/403 answer drops the cache. Until Love stores the key, every email-first draft is uncertain and the phone shows the full form.
+- **Kiosk.** Kiosk #150 can use the same contract. The kiosk sends four fields today and is unchanged.
+
+[Evidence, validation and acceptance](docs/gh473-email-first-name-klaviyo.md).
 
 ## Phone Email Marketing (#437; Choice Sent With The Draft)
 
@@ -757,7 +773,7 @@ Draft rules:
 - Use Roller `POST /bookings/draft`.
 - T0031 implemented this in the deployed booking Lambda.
 - `confirmDraft=true` and an idempotency key are required because this creates a Roller Playground draft booking.
-- First name, last name and email are required; phone follows the approved visitor contact policy above.
+- First name and email are required. Last name and phone are either both supplied (four-field contract) or both omitted (email-first contract, #473); see the visitor contact sections above.
 - For the phone buy-entry path, `items[]` may contain the core entry product plus selected mapped add-ons so the guest pays once for the combined basket.
 - Draft creation holds capacity through Roller's draft timer.
 - Return the draft unique id, normalized costs, payment config from `GET /venues/me`, and the raw `paymentJwt` only in the API response.
@@ -973,6 +989,7 @@ Rules:
 | `roller_rate_limited` | Roller API call could not run within rate limit. | Retry or show staff handoff. |
 | `roller_unavailable` | Roller API timeout/error. | Show staff handoff. |
 | `unsafe_environment` | Roller config is not Playground-safe in dev. | Block operation. |
+| `contact_details_required` | An email-first new-purchase draft could not be resolved safely (#473, D0234); nothing was created. | Show last name and phone, then resubmit all four fields with a new idempotency key. |
 
 ## Proposed AWS Target
 

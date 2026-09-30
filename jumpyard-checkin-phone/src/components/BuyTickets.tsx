@@ -23,6 +23,12 @@ import {
   type NewBookingQuote,
 } from '@/flow/cloudClient';
 import { getPaymentOptionInputState, type PaymentOptionInputState } from '@/flow/paymentOptionFeedback';
+import {
+  hasSavedContactDetails,
+  isContactReady,
+  isValidEmail,
+  toNewBookingCustomer,
+} from '@/flow/contactDetails';
 import { PaymentCodeRejectedDialog } from '@/components/PaymentCodeRejectedDialog';
 import type { Addon, AddonId, Booking } from '@/flow/types';
 import { ADDON_CATALOG_CONFIG, BUY_ENTRY_ADDON_IDS } from '@/flow/addonCatalog';
@@ -361,14 +367,6 @@ function getAddonMaxQuantity(
   return Math.max(0, Math.min(baseMax, addonAvailability.capacityRemaining));
 }
 
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
-function isValidPhone(value: string) {
-  return value.replace(/\D/g, '').length >= 6;
-}
-
 function canStartPayment(draft: NewBookingDraftResult) {
   const config = draft.paymentSession.config;
   return Boolean(
@@ -566,22 +564,14 @@ function getSafeContact(contact: BuyFlowRecoveryContact | null | undefined): Buy
   };
 }
 
+// GH-473: a saved purchase may hold only first name and email. Once it holds a last name or a
+// phone it is a four-field contact again and needs both before a new draft.
 function isValidRecoveredCustomer(contact: BuyFlowRecoveryContact) {
-  return (
-    contact.firstName.trim().length > 0 &&
-    contact.lastName.trim().length > 0 &&
-    isValidEmail(contact.email) &&
-    isValidPhone(contact.phone)
-  );
+  return isContactReady(contact, hasSavedContactDetails(contact));
 }
 
 function toRecoveredCustomer(contact: BuyFlowRecoveryContact): NewBookingCustomer {
-  return {
-    email: contact.email.trim(),
-    firstName: contact.firstName.trim(),
-    lastName: contact.lastName.trim(),
-    phone: contact.phone.trim(),
-  };
+  return toNewBookingCustomer(contact, hasSavedContactDetails(contact));
 }
 
 function wait(ms: number) {
@@ -714,6 +704,12 @@ export const BuyTickets = ({
   const emailInputRef = useRef<HTMLInputElement>(null);
   const [emailFocused, setEmailFocused] = useState(false);
   const [phone, setPhone] = useState('');
+  // GH-473: last name and phone stay hidden until Cloud asks for them (contact_details_required).
+  // A restored four-field contact shows them too, but only Cloud's request shows the notice.
+  const [contactDetailsRequired, setContactDetailsRequired] = useState(false);
+  const [contactDetailsAsked, setContactDetailsAsked] = useState(false);
+  const lastNameInputRef = useRef<HTMLInputElement>(null);
+  const contactDetailsFocusPendingRef = useRef(false);
   const [giftCardNumber, setGiftCardNumber] = useState('');
   const [clipCardCode, setClipCardCode] = useState('');
   const [paymentOptionType, setPaymentOptionType] = useState<PaymentOptionType>('discount');
@@ -883,6 +879,7 @@ export const BuyTickets = ({
       // Contact recovery is not a fresh marketing choice.
       setEmailMarketingChecked(false);
       setPhone(savedContact.phone);
+      setContactDetailsRequired(hasSavedContactDetails(savedContact));
 
       if (!savedStartTime) {
         setSelectedTime(null);
@@ -1113,11 +1110,7 @@ export const BuyTickets = ({
       icon: buyAddons.find((entry) => entry.id === addon.id)?.icon ?? ('addons-bag' as JumpyardIconName),
     })),
   ];
-  const customerValid =
-    firstName.trim().length > 0 &&
-    lastName.trim().length > 0 &&
-    isValidEmail(email) &&
-    isValidPhone(phone);
+  const customerValid = isContactReady({ firstName, lastName, email, phone }, contactDetailsRequired);
   const paymentOptionStatus =
     paymentOptionState === 'applied'
       ? {
@@ -1268,12 +1261,9 @@ export const BuyTickets = ({
     setStep('REVIEW');
   };
 
-  const buildCustomer = (): NewBookingCustomer => ({
-    email: email.trim(),
-    firstName: firstName.trim(),
-    lastName: lastName.trim(),
-    phone: phone.trim(),
-  });
+  // GH-473: email-first sends first name and email only; never an invented last name or phone.
+  const buildCustomer = (): NewBookingCustomer =>
+    toNewBookingCustomer({ firstName, lastName, email, phone }, contactDetailsRequired);
 
   const buildItems = (): NewBookingItemRequest[] => {
     if (!selectedProduct || !availability) return [];
@@ -1383,12 +1373,29 @@ export const BuyTickets = ({
       }
       setStep(canStartPayment(result) ? 'PAYMENT' : 'PENDING');
     } catch (error) {
-      if (quoteIsCurrent()) setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.draftFailed));
+      if (!quoteIsCurrent()) return;
+      // GH-473: Cloud could not decide safely and created nothing. Ask for last name and phone;
+      // email, basket and codes stay as they are for the next Continue. A Cloud without #473
+      // (for example after a rollback) answers the same email-first request with customer_required.
+      const code = (error as { code?: unknown } | null)?.code;
+      if (code === 'contact_details_required' || (code === 'customer_required' && !contactDetailsRequired)) {
+        contactDetailsFocusPendingRef.current = true;
+        setContactDetailsAsked(true);
+        setContactDetailsRequired(true);
+        return;
+      }
+      setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.draftFailed));
     } finally {
       quoteOperationInFlightRef.current = false;
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!contactDetailsRequired || !contactDetailsFocusPendingRef.current) return;
+    contactDetailsFocusPendingRef.current = false;
+    lastNameInputRef.current?.focus();
+  }, [contactDetailsRequired]);
 
   const continueWithoutCode = () => {
     setCodeRejectedDialogOpen(false);
@@ -1932,8 +1939,27 @@ export const BuyTickets = ({
               {t.buy.contactTitle}
             </h2>
 
-            <section className="mb-4 rounded-2xl border border-border bg-white p-4">
-              <div className="grid grid-cols-2 gap-3 mb-3">
+            {/* GH-473: first name and email; last name and phone appear only when Cloud asks for them. */}
+            <section
+              className={`mb-4 rounded-2xl border border-border bg-white p-4 ${contactDetailsRequired ? '' : 'pb-1'}`}
+              data-contact-mode={contactDetailsRequired ? 'details' : 'email-first'}
+            >
+              {contactDetailsRequired && contactDetailsAsked && (
+                <div
+                  role="status"
+                  data-testid="buy-contact-details-required"
+                  className="mb-3 flex items-start gap-2.5 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5"
+                >
+                  <JumpyardIcon name="info" className="h-6 w-6 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-black italic uppercase leading-tight text-foreground">
+                      {t.buy.contactDetailsRequiredTitle}
+                    </p>
+                    <p className="mt-0.5 text-xs font-bold text-foreground">{t.buy.contactDetailsRequiredDesc}</p>
+                  </div>
+                </div>
+              )}
+              <div className={`grid ${contactDetailsRequired ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mb-3`}>
                 <label>
                   <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider block mb-1">
                     {t.buy.firstNameLabel}
@@ -1947,19 +1973,22 @@ export const BuyTickets = ({
                     className="w-full bg-white border border-border rounded-xl px-3 py-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
                   />
                 </label>
-                <label>
-                  <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider block mb-1">
-                    {t.buy.lastNameLabel}
-                  </span>
-                  <input
-                    type="text"
-                    value={lastName}
-                    onChange={(event) => updateContact(setLastName, event.target.value)}
-                    autoComplete="family-name"
-                    disabled={checkoutLocked}
-                    className="w-full bg-white border border-border rounded-xl px-3 py-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
-                  />
-                </label>
+                {contactDetailsRequired && (
+                  <label>
+                    <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider block mb-1">
+                      {t.buy.lastNameLabel}
+                    </span>
+                    <input
+                      ref={lastNameInputRef}
+                      type="text"
+                      value={lastName}
+                      onChange={(event) => updateContact(setLastName, event.target.value)}
+                      autoComplete="family-name"
+                      disabled={checkoutLocked}
+                      className="w-full bg-white border border-border rounded-xl px-3 py-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
+                    />
+                  </label>
+                )}
               </div>
 
               <label className="block mb-3">
@@ -2001,20 +2030,22 @@ export const BuyTickets = ({
                 onNeedEmail={() => emailInputRef.current?.focus()}
               />
 
-              <label className="block">
-                <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider flex items-center gap-1.5 mb-1">
-                  <JumpyardIcon name="phone" className="h-5 w-5" /> {t.buy.phoneLabel}
-                </span>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(event) => updateContact(setPhone, event.target.value)}
-                  placeholder={t.buy.phonePlaceholder}
-                  autoComplete="tel"
-                  disabled={checkoutLocked}
-                  className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
-                />
-              </label>
+              {contactDetailsRequired && (
+                <label className="block">
+                  <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider flex items-center gap-1.5 mb-1">
+                    <JumpyardIcon name="phone" className="h-5 w-5" /> {t.buy.phoneLabel}
+                  </span>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(event) => updateContact(setPhone, event.target.value)}
+                    placeholder={t.buy.phonePlaceholder}
+                    autoComplete="tel"
+                    disabled={checkoutLocked}
+                    className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
+                  />
+                </label>
+              )}
             </section>
 
             <section className="mb-4 rounded-2xl border-2 border-primary/25 bg-white px-4 shadow-sm">
