@@ -4,13 +4,14 @@ import { FlowScreen } from '@/components/FlowTransition';
 import { AlertCircle, Loader2, Play, RotateCcw } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
 import { createSafetyPlayback, type SafetyPlaybackState } from '@/flow/safetyPlayback';
-import { SAFETY_MEDIA } from '@/flow/safetyMedia';
+import { SAFETY_COVER, SAFETY_MEDIA } from '@/flow/safetyMedia';
 import { SafetyApproval, type SafetyApprovalProps } from '@/components/SafetyApproval';
 
 // #458: one safety screen. The film plays first; only a genuine end of playback reveals the single
 // approval on the same screen: the finished film docks to the top and the approval appears under it
 // (variant A, chosen by Love 2026-09-30). The layout is fixed from the first frame and only
-// transform and opacity animate.
+// transform and opacity animate. Before and after playback a blurred still covers the film's own
+// captions, with the title at the foot of the film like a poster (variant B, Love 2026-10-01).
 interface SafetyVideoProps extends Omit<SafetyApprovalProps, 'headingRef' | 'onApprove'> {
     buyEntryFlow?: boolean;
     /** Called once playback has genuinely reached the end. */
@@ -51,6 +52,9 @@ function LocalizedSafetyVideo({
     const done = phase === 'done';
     const title = buyEntryFlow ? t.safetyVideo.buyTitle : t.safetyVideo.title;
     const description = buyEntryFlow ? t.safetyVideo.buyDescription : t.safetyVideo.description;
+    const durationLabel = t.safetyVideo.durationBadge.replace('{seconds}', String(SAFETY_MEDIA[lang].durationSeconds));
+    // The Swedish compound breaks after "Säkerhets" on a narrow film instead of being clipped.
+    const coverTitle = title.replace('Säkerhetsgenomgång', 'Säkerhets\u00ADgenomgång');
 
     useLayoutEffect(() => {
         const video = videoRef.current;
@@ -116,6 +120,10 @@ function LocalizedSafetyVideo({
     const dockOverflows = measured && dockTop + box.panel > box.height;
     const compact = measured && box.height < COMPACT_STAGE_HEIGHT;
     const docked = done;
+    // The blurred still covers the film's own captions wherever our controls sit on top of it.
+    const coverVisible = phase === 'idle' || phase === 'loading' || done;
+    // The poster title follows the film width so its longest line never clips on small phones.
+    const coverTitleSize = Math.max(16, Math.min(30, Math.floor((width - 40) / 8.2)));
     // Matching transform lists interpolate cleanly between playing and docked.
     const frameTransform = docked ? `translateY(0px) scale(${dockScale})` : `translateY(${playOffset}px) scale(1)`;
 
@@ -135,7 +143,7 @@ function LocalizedSafetyVideo({
         >
             <div ref={stageRef} className="safety-stage relative w-full flex-1">
                 <div
-                    className="safety-film absolute inset-x-0 top-0 z-10 mx-auto overflow-hidden rounded-2xl border border-border bg-black shadow-sm"
+                    className="safety-film absolute inset-x-0 top-0 z-10 mx-auto overflow-hidden rounded-2xl bg-black shadow-[0_16px_36px_-16px_rgba(0,0,0,0.6)]"
                     style={{ width, height, transform: frameTransform }}
                     data-docked={String(docked)}
                 >
@@ -149,6 +157,14 @@ function LocalizedSafetyVideo({
                         className="absolute inset-0 w-full h-full object-cover"
                     />
 
+                    <img
+                        src={SAFETY_COVER}
+                        alt=""
+                        aria-hidden="true"
+                        className="safety-cover absolute inset-0 h-full w-full object-cover"
+                        data-visible={String(coverVisible)}
+                    />
+
                     {/* Flame mark — top-left corner */}
                     <img
                         src="/jumpyard_logo_splash.png"
@@ -157,24 +173,22 @@ function LocalizedSafetyVideo({
                     />
 
                     {phase === 'idle' && (
-                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/55 px-5 text-center">
-                            <h1 className="text-2xl font-black italic uppercase leading-tight text-primary">
-                                {title}
-                            </h1>
-                            <span className="mt-3 rounded-full bg-white px-3 py-1 text-[11px] font-black italic uppercase tracking-wider text-primary">
-                                {t.safetyVideo.durationBadge.replace('{seconds}', String(SAFETY_MEDIA[lang].durationSeconds))}
+                        <div className="absolute inset-0 z-20 flex flex-col bg-gradient-to-t from-black/75 via-black/15 to-transparent px-5 pb-6 pt-3 text-left">
+                            <span className="self-end rounded-full bg-white px-2.5 py-1 text-[10px] font-black italic uppercase tracking-wider text-primary">
+                                {durationLabel}
                             </span>
-                            <p className="mt-2 max-w-[17rem] text-sm font-black italic uppercase leading-tight text-white">
-                                {description}
-                            </p>
-                            <button
-                                type="button"
-                                onClick={handlePlay}
-                                aria-label={t.safetyVideo.play}
-                                className="mt-5 flex h-16 w-16 items-center justify-center rounded-full border border-transparent bg-primary text-white shadow-md transition-all active:scale-[0.96]"
-                            >
-                                <Play size={32} className="ml-0.5" />
-                            </button>
+                            <div className="flex flex-1 items-center justify-center">
+                                <button
+                                    type="button"
+                                    onClick={handlePlay}
+                                    aria-label={t.safetyVideo.play}
+                                    className="flex h-20 w-20 items-center justify-center rounded-full bg-white text-primary shadow-lg transition-transform active:scale-[0.96]"
+                                >
+                                    <Play size={34} fill="currentColor" className="ml-1" />
+                                </button>
+                            </div>
+                            <h1 className="font-black italic uppercase leading-[0.95] text-white" style={{ fontSize: coverTitleSize }}>{coverTitle}</h1>
+                            <p className="mt-2 max-w-[16rem] text-[13px] font-bold italic leading-snug text-white/90">{description}</p>
                         </div>
                     )}
 

@@ -5,3 +5,7 @@
 /media/safety-*.mp4
   Content-Type: video/mp4
   Cache-Control: public, max-age=31536000, immutable
+
+/media/safety-cover-*.jpg
+  Content-Type: image/jpeg
+  Cache-Control: public, max-age=31536000, immutable

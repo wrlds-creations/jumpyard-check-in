@@ -337,6 +337,8 @@ body:has(.addon-shop-total) [data-testid="flow-nav"] > [aria-hidden="true"] { di
 .safety-approval { transition: opacity 320ms ease-out, transform 460ms cubic-bezier(0.22, 0.61, 0.36, 1); }
 .safety-approval[data-visible="false"] { opacity: 0; transform: translateY(16px); pointer-events: none; }
 .safety-approval[data-visible="true"] { transition-delay: 180ms; }
+.safety-cover { transition: opacity 360ms ease-out; }
+.safety-cover[data-visible="false"] { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
-  .safety-film, .safety-approval { transition: none; }
+  .safety-film, .safety-approval, .safety-cover { transition: none; }
 }

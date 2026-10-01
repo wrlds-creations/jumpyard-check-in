@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import test from 'node:test';
-import { SAFETY_MEDIA } from './safetyMedia.ts';
+import { SAFETY_COVER, SAFETY_MEDIA } from './safetyMedia.ts';
 
 test('each language ships its own complete, versioned MP4 inside the media budget', () => {
   assert.notEqual(SAFETY_MEDIA.sv.src, SAFETY_MEDIA.en.src);
@@ -22,4 +22,14 @@ test('each language ships its own complete, versioned MP4 inside the media budge
     }
     assert.ok(atoms.indexOf('moov') >= 0 && atoms.indexOf('moov') < atoms.indexOf('mdat'));
   }
+});
+
+test('the start-screen cover is one small, versioned JPEG cached like the films', () => {
+  const bytes = fs.readFileSync(new URL('../../public' + SAFETY_COVER, import.meta.url));
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  assert.equal(SAFETY_COVER, `/media/safety-cover-${hash.slice(0, 12)}.jpg`);
+  assert.equal(bytes.readUInt16BE(0), 0xffd8, 'JPEG');
+  assert.ok(bytes.length < 40_000, 'the cover stays a small still');
+  const headers = fs.readFileSync(new URL('../../public/_headers', import.meta.url), 'utf8');
+  assert.match(headers, /\/media\/safety-cover-\*\.jpg\r?\n\s+Content-Type: image\/jpeg\r?\n\s+Cache-Control: public, max-age=31536000, immutable/);
 });

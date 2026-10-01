@@ -16,6 +16,8 @@ Workshop points 2 and 3 (2026-09-28) asked for fewer questions. Love decided on 
 
 `SafetyVideo` keeps the genuine-end rule (D0210/D0219): only the playback controller's real end reveals the approval. The approval (`SafetyApproval`) is in the layout from the start, hidden and inert, and the finished film docks with a transform, so nothing moves the layout. Replay and failure help stay. `SafetyAttest` and its six checkboxes are removed; a saved `APP_SAFETY_ATTEST` step from before the change shows the same screen and still completes.
 
+**Start screen (variant B, Love 2026-10-01).** On the first Park test, the film's burned-in captions (from the first frame) collided with the title and play button, and the title was clipped. The start and replay screens now show a blurred still of the first frame (`SAFETY_COVER`, about 8 KB, shared by both languages) and fade it out only while the film plays. The duration chip sits top-right, the white play button in the middle, and the title and line at the foot of the film. The title size follows the film width, and the Swedish compound breaks after "Säkerhets". The kiosk uses the same cover.
+
 ## Cloud
 
 - **Approval with the purchase.** `POST /v1/bookings/draft` accepts an optional `safetyAttestation: { attestedAt, copyVersion: "safety-rules-2026-09-30-v1", locale: "sv" | "en" }` on phone and kiosk new purchases.
