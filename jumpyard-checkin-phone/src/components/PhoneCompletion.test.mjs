@@ -106,12 +106,12 @@ test('ready phone shows the band colour with a swatch and its Swedish or English
     const coloured = { ...booking, time: '11:30', durationMinutes: 90, productLabel: '90 min entré', jumpers: 3,
         bandColours: [cloudBand('11:30', 90, 3)] };
     const sv = render({ booking: coloured, jumperCount: 3 });
-    for (const value of ['data-testid="band-colours"', 'data-band-colour="morkbla"', 'background:#1F3A93', '>Mörkblå<', 'Bandfärg']) {
+    for (const value of ['data-testid="band-colours"', 'data-band-colour="morkbla"', 'background:#1F3A93', '>Mörkblå<', '>Armbandsfärg:<']) {
         assert.ok(sv.includes(value), value);
     }
     assert.doesNotMatch(sv, / × /, 'one colour for the whole row needs no count');
     const en = render({ booking: coloured, jumperCount: 3 }, 'en');
-    assert.ok(en.includes('>Dark blue<') && en.includes('Band colour'));
+    assert.ok(en.includes('>Dark blue<') && en.includes('>Wristband colour:<'));
     assert.equal((en.match(/data-band-colour=/g) ?? []).length, 1);
 });
 
