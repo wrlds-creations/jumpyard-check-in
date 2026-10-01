@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
+import type { StaffBandColour } from "@/lib/adminApi";
 
 export type IconName =
   | "addons-bag"
@@ -35,6 +36,21 @@ export function Icon({ name, className = "h-8 w-8" }: { name: IconName | string;
       aria-hidden="true"
       className={`shrink-0 origin-center scale-125 object-contain ${className}`}
     />
+  );
+}
+
+const HEX_COLOUR = /^#[0-9a-f]{6}$/i;
+
+/** GH-459: Cloud's band colour as a small wristband swatch and its Swedish name. */
+export function BandChip({ colour, count }: { colour: StaffBandColour; count?: number }) {
+  const swatch = Array.isArray(colour?.swatch) ? colour.swatch.filter((hex) => HEX_COLOUR.test(hex)).slice(0, 2) : [];
+  if (!swatch.length || !colour.name?.sv) return null;
+  const background = swatch.length === 2 ? `linear-gradient(90deg, ${swatch[0]} 50%, ${swatch[1]} 50%)` : swatch[0];
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-bold" data-band-colour={colour.id}>
+      <span aria-hidden="true" className="h-2.5 w-6 shrink-0 rounded-full shadow-[inset_0_0_0_1px_#0000002e]" style={{ background }} />
+      <span className="sr-only">Bandfärg </span>{count ? `${count} × ` : ""}{colour.name.sv}
+    </span>
   );
 }
 

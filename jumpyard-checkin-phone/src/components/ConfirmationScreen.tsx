@@ -6,7 +6,8 @@ import { QrCode } from '@/components/QrCode';
 import type { Addon, Booking, Channel, CheckInSession } from '@/flow/types';
 import { getBookingContentRows, packageContentCopy } from '@/flow/packageContents';
 import { isPhoneCompletionReady } from '@/flow/phoneCompletion';
-import { PhoneCompletion } from './PhoneCompletion';
+import { BandColours } from './BandColours';
+import { PhoneCompletion, type CompletionItem } from './PhoneCompletion';
 
 interface ConfirmationScreenProps {
     booking: Booking;
@@ -57,9 +58,10 @@ export const ConfirmationScreen = ({
     const entryTicketLabel = getEntryTicketLabel(booking, t.confirm.entryTicketFallback);
 
     const contentRows = getBookingContentRows(booking, entryTicketLabel, jumperCount, lang);
-    const handoutItems: { detail?: string; icon: JumpyardIconName; label: string; qty: number; testId?: string }[] = contentRows
+    const handoutItems: CompletionItem[] = contentRows
         .filter((item) => item.collection === 'checkin')
-        .map((item) => ({ icon: 'visitor-wristband', label: item.label, qty: item.quantity, detail: item.detail, testId: 'ready-entry-ticket-type' }));
+        .map((item) => ({ icon: 'visitor-wristband', label: item.label, qty: item.quantity, detail: item.detail, testId: 'ready-entry-ticket-type',
+            bandColours: item.bandColours }));
     for (const addon of selectedAddons) {
         if (HANDOUT_IDS.has(addon.id)) {
             const label = addon.id === 'connected' ? t.confirm.connectedBands : addon.label;
@@ -171,6 +173,7 @@ export const ConfirmationScreen = ({
                                                     {item.detail}
                                                 </span>
                                             )}
+                                            <BandColours colours={item.bandColours} lang={lang} total={item.qty} />
                                         </span>
                                     </div>
                                     <span className="shrink-0 text-xl font-black text-primary">{item.qty}</span>

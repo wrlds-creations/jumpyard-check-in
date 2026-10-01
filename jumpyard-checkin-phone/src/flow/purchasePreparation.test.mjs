@@ -191,8 +191,9 @@ function loadCloudClient(fetch) {
     fetch,
     process: { env: { NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL: 'https://cloud.invalid', NEXT_PUBLIC_JUMPYARD_LOOKUP_EXPECTED_DATE: '2026-09-04' } },
     require: id => {
-      assert.equal(id, './packageContents');
-      return { getPackageAdmissionQuantity: () => { throw new Error('No booking body should finish in this abort test'); } };
+      assert.ok(['./packageContents', './bandColours'].includes(id), id);
+      const unexpected = () => { throw new Error('No booking body should finish in this abort test'); };
+      return { getPackageAdmissionQuantity: unexpected, groupBandColours: unexpected, normalizeBandColour: unexpected };
     },
   });
   return exports;

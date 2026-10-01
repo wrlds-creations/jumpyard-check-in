@@ -1,11 +1,46 @@
 'use client';
 
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { JumpyardIcon } from '@/components/JumpyardIcon';
 import { ConfirmationScreen } from '@/components/ConfirmationScreen';
 import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import type { Booking, CheckInSession } from '@/flow/types';
+import { PREVIEW_BAND_COLOURS as BAND, PREVIEW_PHONE_COMBO_PURCHASE } from './bandFixtures';
 import styles from './completion.module.css';
+
+// GH-459: example bookings with the band colours Cloud sends for their end times.
+const EXAMPLES = [
+    { id: 'standard', label: '1 × 60 min kl 14:00 med strumpor och vattenflaska (Svart/Röd)' },
+    { id: 'combo', label: 'Combo kl 14:00: 2 entréer och 1 pizza (Svart/Röd)' },
+    { id: 'buy-combo', label: 'Combo köpt i mobilen kl 12:00: 2 band och 1 pizza (Mörkblå)' },
+    { id: 'b90', label: '3 × 90 min kl 11:30, slutar 13:00 (Mörkblå)' },
+    { id: 'b120', label: '2 × 120 min kl 13:30, slutar 15:30 (Gul)' },
+    { id: 'mixed', label: '2 × 90 min + 1 × 60 min kl 11:30 (Mörkblå och Röd)' },
+    { id: 'none', label: '1 × 60 min kl 19:30, slutar 20:30 (ingen färg)' },
+] as const;
+type Example = typeof EXAMPLES[number]['id'];
+
+function exampleBooking(example: Example, entry: (minutes: number) => string): Booking {
+    const base = { id: 'DESIGN-PREVIEW', products: 1, paid: true, productType: 'entry' as const };
+    switch (example) {
+        case 'buy-combo': return { ...base, ...PREVIEW_PHONE_COMBO_PURCHASE };
+        case 'combo': return { ...base, jumpers: 2, time: '14:00', endTime: '15:00', durationMinutes: 60, productLabel: 'Weekday Combo',
+            productType: 'combo', bandColours: [{ ...BAND['15:00'], quantity: 2 }],
+            admissionItems: [{ label: 'Weekday Combo', quantity: 1, bandColour: BAND['15:00'], packageContents: [
+                { kind: 'admission', quantity: 2, collection: 'checkin', durationMinutes: 60 },
+                { kind: 'pizza', quantity: 1, collection: 'later' },
+            ] }] };
+        case 'b90': return { ...base, jumpers: 3, time: '11:30', endTime: '13:00', durationMinutes: 90, productLabel: entry(90),
+            bandColours: [{ ...BAND['13:00'], quantity: 3 }] };
+        case 'b120': return { ...base, jumpers: 2, time: '13:30', endTime: '15:30', durationMinutes: 120, productLabel: entry(120),
+            bandColours: [{ ...BAND['15:30'], quantity: 2 }] };
+        case 'mixed': return { ...base, jumpers: 3, time: '11:30', endTime: '13:00', durationMinutes: 90, productLabel: entry(90),
+            bandColours: [{ ...BAND['13:00'], quantity: 2 }, { ...BAND['12:30'], quantity: 1 }] };
+        case 'none': return { ...base, jumpers: 1, time: '19:30', endTime: '20:30', durationMinutes: 60, productLabel: entry(60) };
+        default: return { ...base, jumpers: 1, time: '14:00', endTime: '15:00', durationMinutes: 60, productLabel: entry(60),
+            bandColours: [{ ...BAND['15:00'], quantity: 1 }] };
+    }
+}
 
 const COPY = {
     sv: {
@@ -35,16 +70,18 @@ export default function CompletionPreview() { return <LanguageProvider><Preview 
 function Preview() {
     const { lang } = useTranslation();
     const [width, setWidth] = useState(390);
-    const [combo, setCombo] = useState(false);
+    const [example, setExample] = useState<Example>('standard');
     const [home, setHome] = useState(false);
     const [variant, setVariant] = useState('ready');
     const t = COPY[lang];
-    const booking: Booking = { id: 'DESIGN-PREVIEW', jumpers: combo ? 2 : 1, time: '14:00', endTime: '15:00', products: 1,
-        paid: true, durationMinutes: 60, productLabel: t.entry, productType: combo ? 'combo' : 'entry',
-        admissionItems: combo ? [{ label: 'Weekday Combo', quantity: 1, packageContents: [
-            { kind: 'admission', quantity: 2, collection: 'checkin', durationMinutes: 60 },
-            { kind: 'pizza', quantity: 1, collection: 'later' },
-        ] }] : undefined };
+    // A link such as ?example=b90 opens one example directly.
+    useEffect(() => {
+        const requested = new URLSearchParams(window.location.search).get('example');
+        const match = EXAMPLES.find((candidate) => candidate.id === requested);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- The preview query is read once on the client.
+        if (match) setExample(match.id);
+    }, []);
+    const booking = exampleBooking(example, (minutes) => lang === 'sv' ? `${minutes} min entré` : `${minutes} min entry`);
     const session: CheckInSession = { checkinSessionId: 'local-design-preview-not-a-real-session', status: variant === 'completed' ? 'completed' : 'ready_for_staff',
         handoffStatus: variant === 'completed' ? 'completed' : 'ready_for_staff', handoffCode: variant === 'missing' ? '' : variant === 'legacy' ? 'ABCDEFGHIJKLMN0123456789' : '0001',
         handoffDay: variant === 'dated' ? '2026-09-22' : undefined };
@@ -57,9 +94,8 @@ function Preview() {
             <fieldset><legend>Telefonbredd</legend><div className={styles.widths}>
                 {[320, 390, 430].map(value => <button type="button" key={value} aria-pressed={width === value} onClick={() => setWidth(value)}>{value} px</button>)}
             </div></fieldset>
-            <label className={styles.selectLabel}>Exempelbokning<select value={combo ? 'combo' : 'standard'} onChange={event => setCombo(event.target.value === 'combo')}>
-                <option value="standard">1 entré, strumpor och vattenflaska</option>
-                <option value="combo">Combo: 2 entréer och 1 pizza</option>
+            <label className={styles.selectLabel}>Exempelbokning<select value={example} onChange={event => setExample(event.target.value as Example)}>
+                {EXAMPLES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
             </select></label>
             <label className={styles.selectLabel}>Session<select value={variant} onChange={event => setVariant(event.target.value)}>
                 <option value="ready">Redo</option><option value="dated">Med utfärdandedatum</option><option value="legacy">Äldre lång kod</option>
@@ -74,7 +110,7 @@ function Preview() {
                 <h1>{t.homeTitle}</h1><p>{t.homeNote}</p>
                 <button type="button" onClick={() => setHome(false)}>{t.back}</button>
             </section> : <ConfirmationScreen booking={booking} checkinSession={session} jumperCount={booking.jumpers}
-                selectedAddons={combo ? [] : [{ id: 'socks', label: t.socks, qty: 1, price: 45 }, { id: 'water_bottle', label: t.water, qty: 1, price: 20 }]}
+                selectedAddons={example !== 'standard' ? [] : [{ id: 'socks', label: t.socks, qty: 1, price: 45 }, { id: 'water_bottle', label: t.water, qty: 1, price: 20 }]}
                 channel={variant === 'sms' ? 'sms' : 'park-qr'} onStartOver={variant === 'sms' ? undefined : () => setHome(true)} />}
 
         </div>

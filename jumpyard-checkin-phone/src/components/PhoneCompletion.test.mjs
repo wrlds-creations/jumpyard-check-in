@@ -96,6 +96,61 @@ test('Combo uses two bands and one later pizza, keeping package detail and no in
     assert.doesNotMatch(html, /Strumpor|Vattenflaska/);
 });
 
+// GH-459: band colours come from JumpYard Cloud's scheme; the phone only shows them.
+const { bandColourForAdmission, bandColourForEndTime } = require('../../../infra/lambda/shared/band-colours.js');
+const { normalizeBandColour } = load('flow/bandColours.ts');
+const cloudBand = (startTime, durationMinutes, quantity) => ({
+    ...normalizeBandColour(bandColourForAdmission({ startTime, durationMinutes })), quantity });
+
+test('ready phone shows the band colour with a swatch and its Swedish or English name', () => {
+    const coloured = { ...booking, time: '11:30', durationMinutes: 90, productLabel: '90 min entré', jumpers: 3,
+        bandColours: [cloudBand('11:30', 90, 3)] };
+    const sv = render({ booking: coloured, jumperCount: 3 });
+    for (const value of ['data-testid="band-colours"', 'data-band-colour="morkbla"', 'background:#1F3A93', '>Mörkblå<', 'Bandfärg']) {
+        assert.ok(sv.includes(value), value);
+    }
+    assert.doesNotMatch(sv, / × /, 'one colour for the whole row needs no count');
+    const en = render({ booking: coloured, jumperCount: 3 }, 'en');
+    assert.ok(en.includes('>Dark blue<') && en.includes('Band colour'));
+    assert.equal((en.match(/data-band-colour=/g) ?? []).length, 1);
+});
+
+test('two-tone bands draw both colours; the 120-minute example shows Gul', () => {
+    const twoTone = render({ booking: { ...booking, bandColours: [cloudBand('14:00', 60, 1)] } });
+    assert.ok(twoTone.includes('linear-gradient(90deg, #141414 50%, #E2231A 50%)'));
+    assert.ok(twoTone.includes('>Svart/Röd<'));
+    const gul = render({ booking: { ...booking, jumpers: 2, bandColours: [cloudBand('13:30', 120, 2)] }, jumperCount: 2 });
+    assert.ok(gul.includes('data-band-colour="gul"') && gul.includes('>Gul<'));
+});
+
+test('mixed durations count each colour; a Combo shows its colour on the bands, never on the pizza', () => {
+    const mixed = render({ booking: { ...booking, jumpers: 3, bandColours: [cloudBand('11:30', 90, 2), cloudBand('11:30', 60, 1)] }, jumperCount: 3 });
+    assert.ok(mixed.includes('>2 × Mörkblå<') && mixed.includes('>1 × Röd<'));
+    const combo = render({ booking: { ...booking, admissionItems: [{ label: 'Weekday Combo', quantity: 1,
+        bandColour: normalizeBandColour(bandColourForAdmission({ startTime: '12:00', durationMinutes: 60 })), packageContents: [
+            { kind: 'admission', quantity: 2, durationMinutes: 60, collection: 'checkin' },
+            { kind: 'pizza', quantity: 1, collection: 'later' },
+        ] }] } });
+    const [handout, later] = combo.split('data-testid="confirmation-later"');
+    assert.ok(handout.includes('data-band-colour="morkbla"'));
+    assert.doesNotMatch(later, /data-band-colour/);
+});
+
+test('no colour is shown when Cloud sends none, or sends something malformed', () => {
+    assert.doesNotMatch(render(), /band-colours|data-band-colour/);
+    assert.equal(bandColourForAdmission({ startTime: '19:30', durationMinutes: 60 }), null, '20:30 is not on the chart');
+    for (const value of [null, {}, { id: 'x', name: { sv: 'X' }, swatch: ['#000000'] },
+        { id: 'x', name: { sv: 'X', en: 'X' }, swatch: ['red'] }, { id: 'x', name: { sv: 'X', en: 'X' }, swatch: ['#000000;x'] },
+        { id: 'x', name: { sv: 'X', en: 'X' }, swatch: ['#000000', '#111111', '#222222'] }]) assert.equal(normalizeBandColour(value), undefined);
+});
+
+test('the local completion preview uses exactly the colours Cloud sends', () => {
+    const { PREVIEW_BAND_COLOURS } = load('app/preview/completion/bandFixtures.ts');
+    for (const [endTime, colour] of Object.entries(PREVIEW_BAND_COLOURS)) {
+        assert.deepEqual(colour, normalizeBandColour(bandColourForEndTime(endTime)), endTime);
+    }
+});
+
 test('English and remote arrival copy are retained without introducing a reset callback', () => {
     const html = render({ channel: 'sms' }, 'en');
     for (const value of ['You are checked in', 'Your number', 'arrive at the park', 'Enlarge QR code']) assert.ok(html.includes(value), value);

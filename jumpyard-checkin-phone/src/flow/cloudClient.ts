@@ -1,5 +1,6 @@
 import type { Addon, AddonId, Booking, BookingPaymentState, CheckInSession, LookupSource, PackageContent } from '@/flow/types';
 import { getPackageAdmissionQuantity } from './packageContents';
+import { groupBandColours, normalizeBandColour } from './bandColours';
 
 const DEFAULT_CLOUD_API_BASE_URL = 'https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com';
 const VENUE_TIME_ZONE = 'Europe/Stockholm';
@@ -143,6 +144,8 @@ interface CloudBooking {
 }
 
 interface CloudBookingItem {
+  /** GH-459: Cloud's band colour for an admission item; absent when the scheme has none. */
+  bandColour?: unknown;
   packageContents?: PackageContent[];
   productName: string | null;
   parentProductName: string | null;
@@ -1078,6 +1081,13 @@ function toBooking(
   const sessionItem = primaryItems[0] ?? booking.items[0] ?? null;
   const existingAddons = getExistingAddons(booking.items);
   const guestName = getBookingGuestName(booking);
+  const admissionQuantity = (item: CloudBookingItem) =>
+    getPackageAdmissionQuantity(item.packageContents) ?? Math.max(0, item.quantity ?? item.tickets.length);
+  // GH-459: Cloud computes each admission's band colour; the phone only groups it for display.
+  const bandColours = groupBandColours(primaryItems.flatMap((item) => {
+    const bandColour = normalizeBandColour(item.bandColour);
+    return bandColour ? [{ bandColour, quantity: admissionQuantity(item) }] : [];
+  }));
 
   return {
     id: booking.bookingReference ?? booking.rollerUniqueId ?? '',
@@ -1103,13 +1113,18 @@ function toBooking(
     productLabel: getProductLabel(sessionItem),
     productType: sessionItem?.packageContents?.length ? 'combo' : 'entry',
     admissionItems: primaryItems.some((item) => item.packageContents?.length)
-      ? primaryItems.map((item) => ({
-          label: getProductLabel(item),
-          quantity: getPackageAdmissionQuantity(item.packageContents) ?? Math.max(0, item.quantity ?? item.tickets.length),
-          durationMinutes: getDurationMinutes(item.startTime, item.endTime),
-          packageContents: item.packageContents,
-        }))
+      ? primaryItems.map((item) => {
+          const bandColour = normalizeBandColour(item.bandColour);
+          return {
+            label: getProductLabel(item),
+            quantity: admissionQuantity(item),
+            durationMinutes: getDurationMinutes(item.startTime, item.endTime),
+            packageContents: item.packageContents,
+            ...(bandColour ? { bandColour } : {}),
+          };
+        })
       : undefined,
+    ...(bandColours.length ? { bandColours } : {}),
     lookupSource: normalizeLookupSource(source),
   };
 }

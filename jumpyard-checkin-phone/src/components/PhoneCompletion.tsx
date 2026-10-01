@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { BandColours } from './BandColours';
 import { JumpyardIcon, type JumpyardIconName } from './JumpyardIcon';
 import { QrCode } from './QrCode';
 import type { Language } from '@/context/LanguageContext';
-import type { Channel } from '@/flow/types';
+import type { BandColourCount, Channel } from '@/flow/types';
 import styles from './PhoneCompletion.module.css';
 
 export interface CompletionItem {
@@ -13,6 +14,8 @@ export interface CompletionItem {
     qty: number;
     detail?: string;
     testId?: string;
+    /** GH-459: which band colour(s) to take for this row. */
+    bandColours?: BandColourCount[];
 }
 export interface CompletionGroup { key: string; title: string; items: CompletionItem[] }
 export interface PhoneCompletionProps {
@@ -59,7 +62,8 @@ export function PhoneCompletion({ lang, onLanguageChange, handoffCode, handoffPa
     const renderItems = (rows: CompletionItem[]) => rows.map((item, index) => <li key={`${item.label}-${index}`}>
         <JumpyardIcon name={item.icon} className={styles.itemIcon} />
         <span className={styles.itemLabel}><span data-testid={item.testId}>{item.label}</span>
-            {item.detail && <span className={styles.itemDetail}>{item.detail}</span>}</span>
+            {item.detail && <span className={styles.itemDetail}>{item.detail}</span>}
+            <BandColours colours={item.bandColours} lang={lang} total={item.qty} /></span>
         <strong className={styles.quantity}>{item.qty}</strong>
     </li>);
 

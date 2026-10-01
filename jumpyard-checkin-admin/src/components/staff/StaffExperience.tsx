@@ -5,7 +5,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { Check, ChevronDown, LoaderCircle, Minus, Plus, RefreshCcw, ScanLine, Search, X } from "lucide-react";
 import type { HandoutArea, HandoutItem, HandoutRequest, HandoutSelection, StaffAuthSession, StaffSessionDetail, StaffSessionSummary } from "@/lib/adminApi";
 import { activeClaim, clock, itemIcon, nextPass, stageOf, stockholmDay, type Stage } from "./flow";
-import { Icon, cls } from "./ui";
+import { BandChip, Icon, cls } from "./ui";
 import type { HandoutDraft } from "./selection";
 
 const stages: { id: Stage; label: string }[] = [
@@ -51,6 +51,9 @@ function BookingRow({ session, area, actorId, selected, onOpen }: {
       : stage === "completed" ? `Incheckad ${clock(session.completedAt)}${session.checkedInBy?.displayName ? ` · ${session.checkedInBy.displayName}` : ""}`
       : session.bookingSyncStatus !== "confirmed" ? "Bekräftas" : session.isExpired ? "Gått ut"
         : stages.find((item) => item.id === stage)?.label;
+  // GH-459: entrance staff see which bands to take; a count shows when the group has several colours.
+  const bands = area === "entrance" ? session.bandColours ?? [] : [];
+  const counted = bands.length > 1 || bands.reduce((sum, band) => sum + band.quantity, 0) !== session.counts.admission;
   return <button type="button" onClick={onOpen} aria-pressed={selected}
     className={`w-full min-w-0 rounded-2xl border px-3 py-3 text-left shadow-sm transition active:scale-[0.99] ${selected ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "border-border bg-white hover:border-primary"}`}>
     <span className="flex items-center justify-between gap-3">
@@ -58,8 +61,9 @@ function BookingRow({ session, area, actorId, selected, onOpen }: {
       {session.handoffCode && <span className="shrink-0 text-lg font-black tabular-nums leading-none">{session.handoffCode}</span>}
     </span>
     <span className="mt-2 flex flex-wrap items-center justify-between gap-2">
-      <span className="flex items-center gap-3 text-xs font-bold">
+      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold">
         <AdmissionCount count={session.counts.admission} />
+        {bands.map((band) => <BandChip key={band.id} colour={band} count={counted ? band.quantity : undefined} />)}
         <span className="flex items-center gap-1"><Icon name="time" className="h-5 w-5" />{clock(session.booking.startTime)}</span>
       </span>
       <span className={`text-xs font-bold ${claim ? "text-primary" : stage === "ready" || stage === "completed" ? "text-success" : ""}`}>{status}</span>
@@ -74,11 +78,15 @@ function ProductRow({ item, quantity, disabled, readOnly = false, onQuantity }: 
   const done = remaining === 0 && item.collected > 0;
   const partial = item.area === "cafe";
   const duration = !done && item.kind === "admission" ? item.detail?.match(/\b\d+\s*min\b/)?.[0] : null;
-  const label = done ? `${item.name}, utlämnat` : `${item.name}, ${remaining} kvar`;
+  // GH-459: the band colour comes from Cloud's scheme; nothing shows when it has none.
+  const band = item.kind === "admission" ? item.bandColour : undefined;
+  const name = band?.name?.sv ? `${item.name} ${band.name.sv}` : item.name;
+  const label = done ? `${name}, utlämnat` : `${name}, ${remaining} kvar`;
   const content = <>
       <Icon name={itemIcon[item.kind] || "addons-bag"} className="h-10 w-10" />
       <span className="min-w-0"><span className="block text-sm font-black italic uppercase leading-tight">{item.name}</span>
-        {duration && <span className="mt-1 block text-xs font-medium">{duration}</span>}</span>
+        {(duration || band) && <span className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium">
+          {duration}{band && <BandChip colour={band} />}</span>}</span>
       {!done && <span className="text-2xl font-black italic tabular-nums">{remaining || item.quantity}</span>}
       {done ? <span className="col-start-4 grid h-7 w-7 place-items-center text-success"><Check size={23} strokeWidth={3} /></span> : !readOnly && <span aria-hidden="true"
         className={`grid h-7 w-7 place-items-center rounded-full border-2 ${quantity > 0 ? "border-success text-success" : "border-border"}`}>

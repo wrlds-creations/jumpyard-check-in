@@ -45,11 +45,26 @@ export interface PackageContent {
   durationMinutes?: number;
 }
 
+// GH-459: a wristband colour from JumpYard Cloud's fixed scheme. Display only; Cloud owns
+// the mapping and sends nothing when an admission's end time is not on the scheme.
+export interface BandColour {
+  id: string;
+  name: { sv: string; en: string };
+  /** One colour, or two for a two-tone band. Validated #RRGGBB values. */
+  swatch: string[];
+  endTime?: string;
+}
+
+export interface BandColourCount extends BandColour {
+  quantity: number;
+}
+
 export interface BookingAdmissionItem {
   label?: string;
   quantity: number;
   durationMinutes?: number;
   packageContents?: PackageContent[];
+  bandColour?: BandColour;
 }
 
 export interface LookupSource {
@@ -98,6 +113,8 @@ export interface Booking {
   productLabel?: string;
   productType?: 'entry' | 'family' | 'combo';
   admissionItems?: BookingAdmissionItem[];
+  /** GH-459: band colours of the booking's admissions, one entry per colour. */
+  bandColours?: BandColourCount[];
   lookupSource?: LookupSource;
 }
 

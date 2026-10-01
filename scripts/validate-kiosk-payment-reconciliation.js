@@ -79,6 +79,9 @@ assert.deepEqual(provisionalStatus.provisionalHandoff.booking.items[0], {
   quantity: 1,
   startTime: '10:00',
   tickets: [],
+  // GH-459: 10:00 + 60 min ends at 11:00, Grön on JumpYard's band scheme.
+  bandColour: { id: 'gron', name: { sv: 'Grön', en: 'Green' }, swatch: ['#00A651'], endTime: '11:00',
+    schemeVersion: 'nacka-2026-09-30' },
 });
 assert.deepEqual(
   publicKioskPaymentStatus({

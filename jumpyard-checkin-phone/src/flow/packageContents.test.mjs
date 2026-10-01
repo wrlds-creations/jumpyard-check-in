@@ -148,6 +148,75 @@ test('booking summary and purchase breakdown render each included item with pack
   assert.match(purchase, />x2<\/span>/);
 });
 
+// GH-459: Cloud's real guest projection (contents and band colour) through the phone mapping.
+const { withGuestItemDetails } = require('../../../infra/lambda/shared/package-contents.js');
+const entry = (overrides = {}) => withGuestItemDetails({ ...baseItem, productId: 'entry-90', parentProductId: '1189823',
+  productName: 'Biljetter', parentProductName: 'Entré 90 min', quantity: 2, startTime: '11:30', endTime: '13:00', ...overrides });
+
+test('Cloud band colours reach the entry row through lookup and session-link resume', async () => {
+  for (const resume of [false, true]) {
+    const booking = await fromCloud([entry()], resume);
+    assert.equal(booking.admissionItems, undefined, 'an ordinary entry keeps its single row');
+    assert.deepEqual(booking.bandColours, [{ id: 'morkbla', name: { sv: 'Mörkblå', en: 'Dark blue' }, swatch: ['#1F3A93'], endTime: '13:00', quantity: 2 }]);
+    const [row] = projection.getBookingContentRows(booking, 'Entry', booking.jumpers, 'sv');
+    assert.deepEqual(row.bandColours, booking.bandColours);
+  }
+});
+
+test('mixed durations keep one colour per item group; a Combo row carries its own 60-minute colour', async () => {
+  const mixed = await fromCloud([entry(), entry({ productId: 'entry-60', parentProductName: 'Entré 60 min', quantity: 1, endTime: '12:30' }),
+    entry({ productId: 'socks', parentProductName: 'JumpSocks', productType: 'addon', quantity: 3 })]);
+  assert.deepEqual(mixed.bandColours.map(({ id, quantity }) => [id, quantity]), [['morkbla', 2], ['rod', 1]]);
+  const comboBooking = await fromCloud([withGuestItemDetails(item(1, { startTime: '14:00', endTime: '16:00' })), entry()]);
+  const rows = projection.getBookingContentRows(comboBooking, 'Entry', comboBooking.jumpers, 'sv');
+  assert.deepEqual(rows.map((row) => [row.kind, row.quantity, row.bandColours?.map(({ id, quantity }) => [id, quantity]) ?? null]), [
+    ['admission', 2, [['svart-rod', 2]]], ['pizza', 1, null], ['admission', 2, [['morkbla', 2]]],
+  ]);
+});
+
+test('a Weekday Combo bought on the phone shows two coloured bands and the pizza for later, not "Weekday Combo ×1"', async () => {
+  // As Cloud stores the paid draft's item (normalizeItemsSummary) and projects it for the provisional handoff.
+  const purchased = { bookingDate: '2026-10-01', durationMinutes: 60, endTime: '13:00', parentProductId: '1242135',
+    parentProductName: 'Weekday Combo', parentType: null, productId: '1242136', productName: 'Weekday Combo',
+    productSubType: null, productType: 'combo', quantity: 1, startTime: '12:00', tickets: [] };
+  const answer = { status: 'provisional_handoff', provisionalHandoff: {
+    booking: { amountOwing: 0, bookingReference: 'preview-draft', customer: { firstName: 'Alex', lastName: 'Gäst' },
+      items: [withGuestItemDetails(purchased)], paymentStatus: 'paid', rollerUniqueId: 'preview-draft',
+      status: 'payment_approved_booking_syncing' },
+    guestAccess: { token: 'preview-only', expiresAt: null },
+    session: { bookingSyncStatus: 'pending', checkinSessionId: 'preview-session', status: 'ready_for_staff',
+      handoffStatus: 'ready_for_staff', handoffCode: '0001' },
+  } };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify(answer) });
+  let purchase;
+  try { purchase = await cloud.finalizePhonePayment('jypd_000000000000000000', 'preview-draft'); }
+  finally { globalThis.fetch = originalFetch; }
+  const { booking, checkinSession } = purchase;
+  const { PREVIEW_PHONE_COMBO_PURCHASE } = load('app/preview/completion/bandFixtures.ts');
+  for (const [key, value] of Object.entries(PREVIEW_PHONE_COMBO_PURCHASE)) assert.deepEqual(booking[key], value, `preview ${key}`);
+  for (const lang of ['sv', 'en']) {
+    const markup = render(ConfirmationScreen, { booking, checkinSession, jumperCount: booking.jumpers, selectedAddons: [] }, lang);
+    assert.match(markup, /data-phone-completion="true"/);
+    const [handout, later] = markup.split('data-testid="confirmation-later"');
+    assert.ok(handout.includes(lang === 'sv' ? 'Besöksband 60 min' : 'Wristband 60 min'));
+    assert.ok(handout.includes('data-band-colour="morkbla"') && handout.includes(lang === 'sv' ? '>Mörkblå<' : '>Dark blue<'));
+    assert.match(handout, /class="quantity">2<\/strong>/);
+    assert.doesNotMatch(handout, /Pizza|class="quantity">1<\/strong>/);
+    assert.ok(later.includes(lang === 'sv' ? 'Pizza att dela' : 'Pizza to share'));
+    assert.match(later, /class="quantity">1<\/strong>/);
+    assert.doesNotMatch(later, /data-band-colour/);
+  }
+});
+
+test('no or malformed Cloud colour leaves the rows without a colour', async () => {
+  for (const items of [[entry({ startTime: '19:30', endTime: '20:30' })], [{ ...entry(), bandColour: { id: 'x', name: { sv: 'X', en: 'X' }, swatch: ['url(x)'] } }]]) {
+    const booking = await fromCloud(items);
+    assert.equal(booking.bandColours, undefined);
+    assert.equal(projection.getBookingContentRows(booking, 'Entry', booking.jumpers, 'sv')[0].bandColours, undefined);
+  }
+});
+
 test('package display never enters booking purchase requests', async () => {
   const contents = item().packageContents;
   const original = structuredClone(contents);

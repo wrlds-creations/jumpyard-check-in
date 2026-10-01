@@ -1,5 +1,6 @@
 'use strict';
 const { buildManifest, paidBookingSql } = require('./staff-handout');
+const { groupBandColours } = require('./band-colours');
 
 function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSession }) {
   const p = stringParameter;
@@ -28,6 +29,7 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
         COALESCE((SELECT jsonb_agg(jsonb_build_object('rollerUniqueId', i.roller_unique_id, 'bookingItemId', i.booking_item_id,
           'productId', i.product_id, 'parentProductId', i.parent_product_id, 'productName', i.product_name,
           'parentProductName', i.parent_product_name, 'quantity', i.quantity, 'bookingDate', i.booking_date,
+          'startTime', i.start_time::text, 'endTime', i.end_time::text,
           'selectedUnits', CASE WHEN cs.checkin_session_id IS NULL THEN NULL ELSE
             (SELECT count(*) FROM jumpyard.roller_booking_tickets t WHERE t.roller_unique_id = b.roller_unique_id
               AND (t.booking_item_id = i.booking_item_id OR t.booking_item_key = i.booking_item_key)
@@ -100,10 +102,13 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
     return { sessions: rows.slice(0, 100).map((row) => {
       const manifest = buildManifest(parse(row.handout_catalog, []), row.visit_date);
       const items = manifest.filter((item) => item.area === 'cafe');
+      const admission = manifest.filter((item) => item.kind === 'admission');
       const collected = parse(row.collected_items, {});
       const session = mapSession(row);
       return { ...session, counts: { ...session.counts,
-        admission: manifest.filter((item) => item.kind === 'admission').reduce((sum, item) => sum + (item.sessionLimit ?? item.quantity), 0) },
+        admission: admission.reduce((sum, item) => sum + (item.sessionLimit ?? item.quantity), 0) },
+        // GH-459: one entry per band colour, counted like the admission total.
+        bandColours: groupBandColours(admission),
         cafeQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
         cafeRemaining: items.reduce((sum, item) => sum + Math.max(0, item.quantity - (collected[item.id] || 0)), 0),
         cafeSession: parse(row.cafe_session, null),

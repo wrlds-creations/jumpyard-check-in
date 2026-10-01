@@ -152,6 +152,43 @@ test('Queue and detail label actual admissions and never substitute product tick
   }
 });
 
+// GH-459: band colours come from JumpYard Cloud's scheme; the staff app only shows them.
+const { bandColourForAdmission } = require('../../../infra/lambda/shared/band-colours.js');
+const cloudBand = (startTime, durationMinutes) => bandColourForAdmission({ startTime, durationMinutes });
+const bandChips = (tree) => nodes(tree, (node) => Boolean(node.props?.['data-band-colour']));
+
+test('Entrance rows and the band product row show the Cloud band colour; café rows and other goods never do', () => {
+  const morkbla = cloudBand('11:30', 90);
+  const detail = session({ bandColours: [{ ...morkbla, quantity: 3 }],
+    handout: { items: [{ ...band, detail: '90 min · Entré 90 min', bandColour: morkbla }, { ...coffee, bandColour: morkbla }], claims: [], receipts: [] } });
+  const row = BookingRow({ session: detail, area: 'entrance' });
+  assert.deepEqual(bandChips(row).map((chip) => [chip.props['data-band-colour'], text(chip)]), [['morkbla', 'Bandfärg Mörkblå']]);
+  assert.equal(nodes(row, (node) => node.props?.style?.background === '#1F3A93').length, 1);
+  assert.equal(bandChips(BookingRow({ session: detail, area: 'cafe' })).length, 0);
+  const tree = Detail({ props: props(detail), area: 'entrance' });
+  const bandButton = buttons(tree).find((button) => button.props['aria-label'] === 'Besöksband Mörkblå, 3 kvar');
+  assert.ok(bandButton, 'the band row names its colour');
+  assert.deepEqual(bandChips(bandButton).map(text), ['Bandfärg Mörkblå']);
+  assert.ok(text(bandButton).includes('90 min'));
+  assert.equal(bandChips(tree).length, 1, 'coffee never shows a band colour');
+});
+
+test('Several colours are counted, two-tone bands draw both halves, and nothing shows without a valid colour', () => {
+  const mixed = session({ counts: { admission: 3 }, bandColours: [{ ...cloudBand('11:30', 90), quantity: 2 }, { ...cloudBand('11:30', 60), quantity: 1 }] });
+  assert.deepEqual(bandChips(BookingRow({ session: mixed, area: 'entrance' })).map(text), ['Bandfärg 2 × Mörkblå', 'Bandfärg 1 × Röd']);
+  const twoTone = session({ counts: { admission: 1 }, bandColours: [{ ...cloudBand('14:00', 60), quantity: 1 }] });
+  const row = BookingRow({ session: twoTone, area: 'entrance' });
+  assert.equal(nodes(row, (node) => node.props?.style?.background === 'linear-gradient(90deg, #141414 50%, #E2231A 50%)').length, 1);
+  assert.deepEqual(bandChips(row).map(text), ['Bandfärg Svart/Röd']);
+  for (const bandColours of [undefined, [], [{ id: 'x', name: { sv: 'X', en: 'X' }, swatch: ['red'], quantity: 3 }]]) {
+    assert.equal(bandChips(BookingRow({ session: session({ bandColours }), area: 'entrance' })).length, 0);
+  }
+  assert.equal(cloudBand('19:30', 60), null, 'an end time off the chart has no colour');
+  const plain = ProductRow({ item: band, quantity: 0, disabled: false, onQuantity() {} });
+  assert.equal(bandChips(plain).length, 0);
+  assert.equal(buttons(plain)[0].props['aria-label'], 'Besöksband, 3 kvar');
+});
+
 test('Stage order follows the guest journey while Ready remains the operational default', () => {
   const tree = StaffExperience(props(session()));
   const tabs = buttons(tree).filter(button => /^(Kommande|Påbörjade|Redo|Incheckade)\d+$/.test(text(button)));

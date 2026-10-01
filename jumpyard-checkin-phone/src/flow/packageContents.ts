@@ -1,4 +1,4 @@
-import type { Booking, PackageContent } from './types';
+import type { BandColourCount, Booking, PackageContent } from './types';
 
 export const packageContentCopy = {
   sv: { included: 'Det här ingår', wristband: 'Besöksband', pizza: 'Pizza att dela', later: 'Hämtas efter hoppet' },
@@ -22,6 +22,8 @@ export interface BookingContentRow {
   collection: 'checkin' | 'later';
   label: string;
   detail?: string;
+  /** GH-459: the band colour(s) of this admission row, from JumpYard Cloud. */
+  bandColours?: BandColourCount[];
 }
 
 export function getPackageContentLabel(content: PackageContent, lang: 'sv' | 'en') {
@@ -31,17 +33,21 @@ export function getPackageContentLabel(content: PackageContent, lang: 'sv' | 'en
 
 export function getBookingContentRows(booking: Booking, fallbackLabel: string, jumperCount: number, lang: 'sv' | 'en'): BookingContentRow[] {
   if (!booking.admissionItems?.length) {
-    return [{ key: 'entry', kind: 'admission', quantity: jumperCount, collection: 'checkin', label: fallbackLabel }];
+    return [{ key: 'entry', kind: 'admission', quantity: jumperCount, collection: 'checkin', label: fallbackLabel,
+      ...(booking.bandColours?.length ? { bandColours: booking.bandColours } : {}) }];
   }
   return booking.admissionItems.flatMap((item, index): BookingContentRow[] => {
+    const bands = (quantity: number) => item.bandColour ? { bandColours: [{ ...item.bandColour, quantity }] } : {};
     if (item.packageContents?.length) {
       return item.packageContents.map((content) => ({
         ...content,
         key: `${index}-${content.kind}`,
         label: getPackageContentLabel(content, lang),
         detail: item.label,
+        ...(content.kind === 'admission' ? bands(content.quantity) : {}),
       }));
     }
-    return [{ key: `${index}-entry`, kind: 'admission', quantity: item.quantity, collection: 'checkin', label: item.label || fallbackLabel }];
+    return [{ key: `${index}-entry`, kind: 'admission', quantity: item.quantity, collection: 'checkin', label: item.label || fallbackLabel,
+      ...bands(item.quantity) }];
   });
 }

@@ -114,6 +114,27 @@ Lookup and guest/staff booking-item responses may include `packageContents` with
 
 Booking-item quantities in this array are totals for the purchased packages. Availability-product arrays are **per unit** and are scaled by the chosen package quantity for presentation. Unknown or conflicting product identities and invalid quantities do not receive inferred contents. These response-only rows are not persisted provider items, purchase requests, add-ons or redeemable tickets. Existing ticket selection and redemption remain authoritative. Pizza collection follows Love's deferred-collection requirement; no drinks or socks are inferred. See [evidence and validation](docs/gh-367-combo-contents.md).
 
+## Band Colour For Display (#459, D0233)
+
+JumpYard's fixed wristband scheme for Nacka lives in one versioned Cloud config (`infra/lambda/shared/band-colours.js`, version `nacka-2026-09-30`, venue `50871`, from the Nacka desk chart). The colour follows the admission's **end** time, `start + duration`: a ten-colour cycle every half hour from 10:00 to 20:00. A Weekday Combo admits 60 minutes (D0207); other admission products use their own duration or item end time. Admission means verified Combo contents, the staff handout's admission product types or, for purchases before ROLLER confirms them, Cloud's own entry and family definitions. Before 10:00, after 20:00 or off the :00/:30 grid there is no colour; Cloud never guesses. The scheme is Nacka's only; the venue is not checked per booking because every flow that reaches it is gated to Nacka (D0233).
+
+`bandColour` is sent on admission booking items, and a Weekday Combo item also carries its `packageContents` (bands now, pizza later):
+
+| Response | Field |
+|---|---|
+| `POST /v1/check-in/lookup` (phone and kiosk) | `booking.items[].bandColour` |
+| `POST /v1/check-in/session-links/resolve` | `booking.items[].bandColour` |
+| `POST /v1/bookings/draft/finalize`, phone `action: "phone_approved"` | `provisionalHandoff.booking.items[].bandColour` |
+| `POST /v1/bookings/draft/finalize`, kiosk `action: "result"` or `"status"` | `provisionalHandoff.booking.items[].bandColour` (while `provisionalHandoff` is present) |
+| `GET /v1/staff/check-in/sessions/{checkinSessionId}` and handout replies | `handout.items[].bandColour` (admission rows) |
+| `GET /v1/staff/check-in/sessions?view=board` | `sessions[].bandColours[]`, one entry per colour with `quantity` counted like `counts.admission` |
+
+```json
+{ "id": "morkbla", "name": { "sv": "Mörkblå", "en": "Dark blue" }, "swatch": ["#1F3A93"], "endTime": "13:00", "schemeVersion": "nacka-2026-09-30" }
+```
+
+`swatch` holds one `#RRGGBB` value, or two for the two-tone Svart/Röd and Rosa/Lila bands. For a Combo the number of bands is the admission content's `quantity`, not the package `quantity`. Clients show what Cloud sends and nothing when it is absent or malformed. The field contains no guest or staff PII and changes no item, ticket, payment or redemption authority. Handout receipts keep it with the item snapshot, like `name` and `detail`. The phone shows it on the completion view and the staff app on entrance rows and band rows; the kiosk display is kiosk issue #154.
+
 ## Booking Data Ingestion Strategy
 
 Implementation-ready ingestion detail is documented in `BOOKING_INDEX_INGESTION_CONTRACT.md`.
