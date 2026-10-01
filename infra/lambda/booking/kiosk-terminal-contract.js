@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { withGuestItemDetails } = require('./package-contents');
 
 const KIOSK_PAYMENT_CURRENCY = 'SEK';
 const KIOSK_CAPABILITY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -285,7 +286,8 @@ function publicKioskPaymentStatus(row) {
             firstName: stringOrNull(row?.customer_first_name),
             lastName: stringOrNull(row?.customer_last_name),
           },
-          items: normalizeItemsSummary(row?.items_summary),
+          // GH-459: the same item details as a kiosk lookup: band colour and Combo contents.
+          items: normalizeItemsSummary(row?.items_summary).map((item) => withGuestItemDetails(item)),
           paymentStatus: 'paid',
           rollerUniqueId: confirmed
             ? stringOrNull(row?.confirmed_roller_unique_id)

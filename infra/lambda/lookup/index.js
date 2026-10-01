@@ -5,7 +5,7 @@ const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
 const { createServerDiagnostics } = require('./server-diagnostics');
 const diagnostics = createServerDiagnostics('lookup', (entry) => console.error(JSON.stringify(entry)));
-const { withBookingPackageContents } = require('./package-contents');
+const { withGuestBookingDetails } = require('./package-contents');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const PRODUCTION_URL_MARKER = /(^|[.\-_/])(prod|production|live)([.\-_/]|$)/i;
@@ -98,7 +98,7 @@ exports.handler = async (event) => {
 
       return jsonResponse(200, correlationId, {
         status: 'found',
-        booking: withBookingPackageContents(scopedBooking),
+        booking: withGuestBookingDetails(scopedBooking),
         eligibility,
         guestAccess,
         source: {
@@ -240,7 +240,7 @@ exports.handler = async (event) => {
 
     return jsonResponse(200, correlationId, {
       status: 'found',
-      booking: withBookingPackageContents(scopedBooking),
+      booking: withGuestBookingDetails(scopedBooking),
       eligibility,
       guestAccess,
       source: {

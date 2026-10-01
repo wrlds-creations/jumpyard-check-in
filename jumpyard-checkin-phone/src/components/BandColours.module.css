@@ -1,0 +1,4 @@
+.bands { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; }
+.band { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; line-height: 1.25; font-weight: 800; font-style: italic; text-transform: uppercase; letter-spacing: .01em; color: #1c1c1e; }
+.swatch { width: 30px; height: 12px; flex: none; border-radius: 999px; box-shadow: inset 0 0 0 1px #0000002e; }
+.hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

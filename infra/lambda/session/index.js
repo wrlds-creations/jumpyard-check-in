@@ -10,7 +10,7 @@ const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client
 const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
 const { buildCheckinEmailMessage, buildCheckinEmailPreview } = require('./email-template');
-const { withPackageContents } = require('./package-contents');
+const { withGuestItemDetails, withPackageContents } = require('./package-contents');
 const { createHandoutStore } = require('./staff-handout');
 const { createStaffBoard } = require('./staff-board');
 
@@ -4080,7 +4080,7 @@ async function findGuestLinkedAddOnPhoneItems(rollerUniqueId, venueId = null) {
 }
 
 function toGuestLinkedAddOnPhoneItem(item) {
-  return withPackageContents({
+  return withGuestItemDetails({
     bookingDate: item.bookingDate,
     bookingItemId: null,
     endTime: item.endTime,
@@ -4142,7 +4142,7 @@ async function findPhoneBookingItems(rollerUniqueId) {
     [stringParameter('rollerUniqueId', rollerUniqueId)],
   );
 
-  return mappedRows(result).map((row) => withPackageContents({
+  return mappedRows(result).map((row) => withGuestItemDetails({
     bookingDate: stringOrNull(row.booking_date),
     bookingItemId: stringOrNull(row.booking_item_id),
     endTime: stringOrNull(row.end_time),

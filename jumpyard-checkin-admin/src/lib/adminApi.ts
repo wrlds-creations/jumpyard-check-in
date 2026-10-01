@@ -25,6 +25,20 @@ export interface StaffGuestIdentity {
   phoneMasked: string | null;
 }
 
+/** GH-459: a wristband colour from JumpYard Cloud's fixed scheme (display only). */
+export interface StaffBandColour {
+  id: string;
+  name: { sv: string; en: string };
+  /** One colour, or two for a two-tone band, as #RRGGBB. */
+  swatch: string[];
+  endTime?: string;
+  schemeVersion?: string;
+}
+
+export interface StaffBandColourCount extends StaffBandColour {
+  quantity: number;
+}
+
 export interface StaffSessionSummary {
   booking: StaffBookingSummary;
   bookingReference: string | null;
@@ -42,6 +56,8 @@ export interface StaffSessionSummary {
   cafeQuantity?: number;
   cafeRemaining?: number;
   cafeSession?: Pick<StaffSessionSummary, "checkinSessionId" | "handoffCode" | "handoffDay" | "completedAt" | "checkedInBy" | "status" | "handoffStatus"> | null;
+  /** GH-459: the group's band colours, counted like `counts.admission`. */
+  bandColours?: StaffBandColourCount[];
   handoffStatus: string | null;
   isExpired: boolean;
   readyForStaffAt: string | null;
@@ -110,6 +126,8 @@ export interface HandoutItem extends HandoutSelection {
   detail: string | null;
   collected: number;
   available?: number;
+  /** GH-459: admission rows only; absent when the end time is not on the scheme. */
+  bandColour?: StaffBandColour;
 }
 export interface HandoutClaim {
   area: HandoutArea;

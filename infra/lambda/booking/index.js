@@ -7,7 +7,7 @@ const contactLookup = require('./contact-lookup');
 const emailMarketing = require('./email-marketing-consent');
 const { createServerDiagnostics } = require('./server-diagnostics');
 const diagnostics = createServerDiagnostics('booking', (entry) => console.error(JSON.stringify(entry)));
-const { withPackageContents } = require('./package-contents');
+const { withGuestItemDetails, withPackageContents } = require('./package-contents');
 const {
   buildKioskQuotePayload,
   KIOSK_PAYMENT_CURRENCY,
@@ -5435,7 +5435,9 @@ function publicPhoneProvisionalHandoff(draft, session, guestAccess) {
         firstName: stringOrNull(draft.customer_first_name),
         lastName: stringOrNull(draft.customer_last_name),
       },
-      items: normalizeItemsSummary(draft.items_summary),
+      // GH-459: like a looked-up booking, each admission carries its band colour and the
+      // Weekday Combo its contents (bands now, pizza later; D0207).
+      items: normalizeItemsSummary(draft.items_summary).map((item) => withGuestItemDetails(item)),
       paymentStatus: 'paid',
       rollerUniqueId: draft.roller_draft_unique_id,
       status: 'payment_approved_booking_syncing',

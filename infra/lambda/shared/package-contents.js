@@ -1,5 +1,7 @@
 'use strict';
 
+const { bandColourForItem } = require('./band-colours');
+
 // GH-367: response-only contents for the verified Nacka Weekday Combo.
 // Each Lambda is deployed as an isolated directory. Keep its packaged copy byte-identical
 // to this source; package-contents.test.js checks that boundary without changing CDK.
@@ -30,4 +32,26 @@ function withBookingPackageContents(booking) {
   };
 }
 
-module.exports = { withBookingPackageContents, withPackageContents };
+// GH-459: response-only band colour of an admission item (band-colours.js). The Combo's
+// own admission duration is used without adding contents; unmapped items are unchanged.
+function withBandColour(item) {
+  const bandColour = bandColourForItem(withPackageContents(item));
+  return bandColour ? { ...item, bandColour } : item;
+}
+
+// Guest booking responses: verified package contents and band colours.
+function withGuestItemDetails(item) {
+  return withBandColour(withPackageContents(item));
+}
+
+function withGuestBookingDetails(booking) {
+  return { ...booking, items: booking.items.map((item) => withGuestItemDetails(item)) };
+}
+
+module.exports = {
+  withBandColour,
+  withBookingPackageContents,
+  withGuestBookingDetails,
+  withGuestItemDetails,
+  withPackageContents,
+};

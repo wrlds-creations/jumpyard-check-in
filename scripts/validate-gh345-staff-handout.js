@@ -48,8 +48,20 @@ test('Live quantity variants use their product name; purchased pizza and drink w
   assert.equal(pizza.quantity, 2);
   assert.equal(buildManifest([item({ productName: 'Bryggkaffe' })], day)[0].name, 'Bryggkaffe');
 });
+test('GH-459: entrance band rows carry the colour of their end time; other goods never do', () => {
+  const [entry] = buildManifest([item({ productId: 'entry', productName: 'Entré 90 min', quantity: 3,
+    summary: { productType: 'sessionpass' }, startTime: '11:30:00', endTime: '13:00:00' })], day);
+  assert.deepEqual([entry.kind, entry.bandColour.id, entry.bandColour.name.sv], ['admission', 'morkbla', 'Mörkblå']);
+  const combo = buildManifest([item({ productId: '1242136', parentProductId: '1242135', productName: 'Weekday Combo',
+    quantity: 1, startTime: '12:00:00', endTime: '14:30:00' })], day);
+  assert.equal(combo[0].bandColour.endTime, '13:00', 'the Combo admits 60 minutes (D0207)');
+  assert.equal(combo[1].bandColour, undefined, 'pizza has no band');
+  assert.equal(buildManifest([item({ startTime: '11:30:00', endTime: '13:00:00' })], day)[0].bandColour, undefined);
+  assert.equal(buildManifest([item({ productId: 'entry', summary: { productType: 'sessionpass' },
+    startTime: '11:15:00', endTime: '12:15:00' })], day)[0].bandColour, undefined, 'unmapped end time');
+});
 test('Deployed shared modules are byte-identical to their canonical source', () => {
-  for (const name of ['staff-handout.js', 'package-contents.js']) for (const target of ['session', 'redeem']) {
+  for (const name of ['staff-handout.js', 'package-contents.js', 'band-colours.js']) for (const target of ['session', 'redeem']) {
     assert.equal(fs.readFileSync(path.join(root, 'infra/lambda', target, name), 'utf8'), fs.readFileSync(path.join(root, 'infra/lambda/shared', name), 'utf8'));
   }
 });

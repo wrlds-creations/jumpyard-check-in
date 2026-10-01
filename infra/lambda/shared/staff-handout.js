@@ -1,10 +1,9 @@
 'use strict';
 
 const { withPackageContents } = require('./package-contents');
-const key = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-const admissionTypes = new Set(['membership', 'partypackage', 'pass', 'recurringpass',
-  'recurringsession', 'recurringsessions', 'sessionpass', 'standardpass']);
-const nonPhysicalTypes = new Set(['fee', 'giftcard']);
+// GH-459: guest band colours use this same admission classification.
+const { ADMISSION_PRODUCT_TYPES: admissionTypes, NON_PHYSICAL_PRODUCT_TYPES: nonPhysicalTypes,
+  bandColourForAdmission, productTypeKey: key } = require('./band-colours');
 // Match GH-338's exact payment classification for both original and linked goods.
 // In particular, a zero balance cannot override an explicit Unpaid/PartiallyPaid.
 function paidBookingSql(alias) {
@@ -73,8 +72,16 @@ function buildManifest(items, visitDate) {
       quantity: part.quantity,
       ...(part.kind === 'admission' && Number.isSafeInteger(raw.selectedUnits)
         ? { sessionLimit: Math.min(part.quantity, raw.selectedUnits * (item.packageContents ? 2 : 1)) } : {}),
+      ...bandColourOf(part, item),
     }));
   });
+}
+
+// GH-459: an admission row's band follows its end time; the Combo admits 60 minutes (D0207).
+function bandColourOf(part, item) {
+  const bandColour = part.kind === 'admission' ? bandColourForAdmission({ startTime: item.startTime,
+    durationMinutes: part.durationMinutes, endTime: item.endTime }) : null;
+  return bandColour ? { bandColour } : {};
 }
 
 function createHandoutStore({ executeStatement, mappedRows, stringParameter }) {
@@ -89,6 +96,7 @@ function createHandoutStore({ executeStatement, mappedRows, stringParameter }) {
       COALESCE(item.product_name, catalog.summary ->> 'name') AS product_name,
       COALESCE(item.parent_product_name, catalog.summary ->> 'parentProductName') AS parent_product_name,
       item.quantity, item.booking_date::text AS booking_date,
+      item.start_time::text AS start_time, item.end_time::text AS end_time,
       (SELECT count(*) FROM jumpyard.roller_booking_tickets ticket
         WHERE ticket.roller_unique_id = :bookingId
           AND (ticket.booking_item_id = item.booking_item_id OR ticket.booking_item_key = item.booking_item_key)
@@ -108,6 +116,7 @@ function createHandoutStore({ executeStatement, mappedRows, stringParameter }) {
       productId: row.product_id, parentProductId: row.parent_product_id,
       productName: row.product_name, parentProductName: row.parent_product_name,
       quantity: Number(row.quantity), bookingDate: row.booking_date, summary: json(row.summary, {}),
+      startTime: row.start_time, endTime: row.end_time,
       selectedUnits: Number(row.selected_units),
     })), session.visitDate);
   }
