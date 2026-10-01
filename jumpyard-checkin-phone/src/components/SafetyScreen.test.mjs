@@ -79,6 +79,19 @@ test('only the playback controller\'s genuine end reveals the approval; the layo
   assert.doesNotMatch(css.slice(css.indexOf('#458')), /transition:[^;]*\b(height|max-height|top)\b/);
 });
 
+test('a blurred still covers the film\'s own captions before and after playback (variant B)', () => {
+  const video = source('components/SafetyVideo.tsx');
+  // Love 2026-10-01: the burned-in captions start on the first frame and collided with the title.
+  assert.match(video, /const coverVisible = phase === 'idle' \|\| phase === 'loading' \|\| done;/);
+  assert.match(video, /src=\{SAFETY_COVER\}[\s\S]*?data-visible=\{String\(coverVisible\)\}/);
+  // The title is never clipped: its size follows the film width and the Swedish compound can break.
+  assert.match(video, /style=\{\{ fontSize: coverTitleSize \}\}/);
+  assert.match(video, /'Säkerhets\\u00ADgenomgång'/);
+  const css = source('app/globals.css');
+  assert.match(css, /\.safety-cover \{ transition: opacity 360ms ease-out; \}/);
+  assert.match(css, /\.safety-cover\[data-visible="false"\] \{ opacity: 0; \}/);
+});
+
 test('the separate rules screen is gone and the flow goes from the film to completion', async () => {
   assert.equal(fs.existsSync(new URL('./SafetyAttest.tsx', import.meta.url)), false);
   const { nextState, initialContext } = await import('../flow/machine.ts');
