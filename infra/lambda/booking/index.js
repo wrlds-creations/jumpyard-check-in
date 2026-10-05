@@ -11,6 +11,7 @@ const { withGuestItemDetails, withPackageContents } = require('./package-content
 const {
   buildKioskQuotePayload,
   KIOSK_PAYMENT_CURRENCY,
+  kioskTerminalPublishPayment,
   normalizeDraftFinalizeAction,
   normalizeBookingReadback,
   normalizeItemsSummary,
@@ -18,6 +19,7 @@ const {
   normalizeKioskProfileMap,
   normalizePaymentTerminalMap,
   normalizeTerminalOutcome,
+  normalizeTerminalTransactionRef,
   publicKioskPaymentStatus,
   redactPaymentTerminalValues,
   resolveKioskPaymentTerminal,
@@ -46,17 +48,6 @@ const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 const KIOSK_RECONCILIATION_SOURCE = 'jumpyard.kiosk-payment-reconciliation';
 const KIOSK_AUTHORITATIVE_CONFIRMATION_SOURCE = 'jumpyard.kiosk-authoritative-confirmation';
-const KIOSK_PUBLISH_SETTLEMENT_DELAY_MS = 10_000;
-const KIOSK_PUBLISH_RETRY_OFFSETS_MS = [
-  10_000,
-  15_000,
-  20_000,
-  25_000,
-  30_000,
-  35_000,
-  40_000,
-  45_000,
-];
 const KIOSK_RECONCILIATION_OFFSETS_MS = [
   0,
   5_000,
@@ -611,6 +602,8 @@ async function handleDraft(event, body, correlationId) {
     });
   }
   request.paymentTerminal = terminalSelection.paymentTerminal;
+  // GH-481 (D0238): only an installation proven by its capability may later publish its payment.
+  request.verifiedKioskInstallationId = terminalSelection.installationId ?? null;
   const token = await getRollerAccessToken(config);
   const availabilityError = request.requireAvailability ? await validateItemsAvailable(config, token, request.items) : null;
   if (availabilityError) {
@@ -847,6 +840,11 @@ async function handleDraftFinalize(event, body, correlationId) {
     prepaymentDraftId: stringOrNull(body.prepaymentDraftId),
     rollerDraftUniqueId: stringOrNull(body.rollerDraftUniqueId),
   };
+  // GH-481 (D0238): only an approval carries the terminal's transaction id, and a missing or
+  // malformed one never blocks recording it.
+  request.terminalTransactionRef = request.outcome === 'approved'
+    ? normalizeTerminalTransactionRef(body.terminalTransactionId)
+    : null;
   const validationError = validateDraftFinalizeRequest(request);
   if (validationError) {
     return jsonResponse(400, correlationId, { status: 'invalid_request', error: validationError });
@@ -1271,6 +1269,8 @@ async function recordKioskTerminalOutcome(request, outcome) {
     : outcome === 'unknown'
       ? 'needs_staff'
       : 'failed';
+  // GH-481 (D0238): an approval keeps the first transaction id it reports, and only for an
+  // attempt created by an authorized kiosk installation that is not yet booked.
   const result = await executeStatement(
     `WITH updated_draft AS (
        UPDATE jumpyard.prepayment_booking_drafts
@@ -1292,6 +1292,15 @@ async function recordKioskTerminalOutcome(request, outcome) {
            payment_approved_at = CASE
              WHEN :outcome = 'approved' THEN COALESCE(payment_approved_at, now())
              ELSE payment_approved_at
+           END,
+           terminal_transaction_ref = CASE
+             WHEN :outcome = 'approved'
+               AND terminal_transaction_ref IS NULL
+               AND kiosk_installation_id IS NOT NULL
+               AND status <> 'published'
+               AND payment_attempt_status IS DISTINCT FROM 'reconciled'
+               THEN CAST(:terminalTransactionRef AS text)
+             ELSE terminal_transaction_ref
            END,
            updated_at = now()
        WHERE prepayment_draft_id = :prepaymentDraftId
@@ -1328,6 +1337,7 @@ async function recordKioskTerminalOutcome(request, outcome) {
       stringParameter('outcome', outcome),
       stringParameter('status', status),
       stringParameter('confirmationStatus', confirmationStatus),
+      stringParameter('terminalTransactionRef', outcome === 'approved' ? request.terminalTransactionRef ?? null : null),
       stringParameter('prepaymentDraftId', request.prepaymentDraftId),
       stringParameter('paymentAttemptId', request.paymentAttemptId),
     ],
@@ -1427,8 +1437,12 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
   }
   const readbackIdentifiers = [claimed.roller_draft_unique_id];
   let publishReadback = null;
-  let publishSequenceClaimed = false;
-  let publishRetryAllowed = false;
+  // GH-481 (D0238): an approval that carries its terminal payment is published once, at once.
+  // Without the payment ROLLER rejects a card-present draft (409, amount owing) and creates the
+  // booking only from its own payment notification about a minute later, so nothing else is
+  // ever published here; readback alone waits for that notification.
+  const terminalPayment = kioskTerminalPublishPayment(claimed);
+  let publishPending = Boolean(terminalPayment);
 
   for (let index = 0; index < KIOSK_RECONCILIATION_OFFSETS_MS.length; index += 1) {
     const offsetMs = KIOSK_RECONCILIATION_OFFSETS_MS[index];
@@ -1447,46 +1461,38 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
       return { status: publicKioskPaymentStatus(current).status };
     }
 
-    // Claim one bounded publish sequence immediately before its first provider
-    // write. A duplicate worker can never start another sequence for the same
-    // approved payment attempt.
-    if (!publishSequenceClaimed && offsetMs >= KIOSK_PUBLISH_SETTLEMENT_DELAY_MS) {
-      publishSequenceClaimed = true;
-      publishRetryAllowed = await claimKioskPublishAttempt(request);
-    }
-
-    // A definitive HTTP 409 means ROLLER rejected the publish while the
-    // terminal payment was still settling. Retry only that explicit conflict;
-    // a transport-ambiguous response or any other status permanently stops
-    // provider writes and leaves the worker on authoritative readback.
-    if (publishRetryAllowed && KIOSK_PUBLISH_RETRY_OFFSETS_MS.includes(offsetMs)) {
-      try {
-        const publishResult = await publishNoPaymentDraft(config, token, claimed.roller_draft_unique_id);
-        const retryableConflict = publishResult.status === 409;
-        const resultCode = publishResult.ok
-          ? 'accepted'
-          : retryableConflict
-            ? 'provider_conflict_retryable'
-            : 'provider_rejected';
-        publishRetryAllowed = retryableConflict;
-        await recordKioskPublishResult(request, publishResult.status, resultCode);
-        emitKioskPublishMetric(publishResult.status, resultCode);
-        if (publishResult.ok) {
-          const candidate = normalizeBookingReadback(publishResult.body, {
-            requireTickets: existing.flow_type !== 'add_product',
-          });
-          if (candidate?.rollerUniqueId && !readbackIdentifiers.includes(candidate.rollerUniqueId)) {
-            readbackIdentifiers.push(candidate.rollerUniqueId);
+    // The durable claim admits one publish per approved attempt, even across duplicate
+    // workers, so the payment can never be recorded twice. Any response or a transport
+    // ambiguity ends provider writes and leaves the worker on authoritative readback.
+    if (publishPending) {
+      publishPending = false;
+      if (await claimKioskPublishAttempt(request)) {
+        try {
+          const publishResult = await publishDraftWithTerminalPayment(
+            config,
+            token,
+            claimed.roller_draft_unique_id,
+            terminalPayment,
+          );
+          const resultCode = publishResult.ok ? 'accepted' : 'provider_rejected';
+          await recordKioskPublishResult(request, publishResult.status, resultCode);
+          emitKioskPublishMetric(publishResult.status, resultCode);
+          if (publishResult.ok) {
+            const candidate = normalizeBookingReadback(publishResult.body, {
+              requireTickets: existing.flow_type !== 'add_product',
+            });
+            if (candidate?.rollerUniqueId && !readbackIdentifiers.includes(candidate.rollerUniqueId)) {
+              readbackIdentifiers.push(candidate.rollerUniqueId);
+            }
+            if (candidate?.bookingReference && !readbackIdentifiers.includes(candidate.bookingReference)) {
+              readbackIdentifiers.push(candidate.bookingReference);
+            }
+            if (candidate?.confirmed) publishReadback = candidate;
           }
-          if (candidate?.bookingReference && !readbackIdentifiers.includes(candidate.bookingReference)) {
-            readbackIdentifiers.push(candidate.bookingReference);
-          }
-          if (candidate?.confirmed) publishReadback = candidate;
+        } catch {
+          await recordKioskPublishResult(request, 0, 'transport_unknown');
+          emitKioskPublishMetric(0, 'transport_unknown');
         }
-      } catch {
-        publishRetryAllowed = false;
-        await recordKioskPublishResult(request, 0, 'transport_unknown');
-        emitKioskPublishMetric(0, 'transport_unknown');
       }
     }
 
@@ -1780,7 +1786,12 @@ async function claimKioskReconciliation(request) {
          reconciliation_claimed_at IS NULL
          OR reconciliation_claimed_at < now() - interval '3 minutes'
        )
-     RETURNING roller_draft_unique_id, payment_approved_at::text AS payment_approved_at`,
+     RETURNING
+       roller_draft_unique_id,
+       payment_approved_at::text AS payment_approved_at,
+       amount_owing_cents,
+       kiosk_installation_id,
+       terminal_transaction_ref`,
     [
       stringParameter('prepaymentDraftId', request.prepaymentDraftId),
       stringParameter('paymentAttemptId', request.paymentAttemptId),
@@ -2457,6 +2468,8 @@ async function handleAddProductDraft(event, body, correlationId) {
     });
   }
   request.paymentTerminal = terminalSelection.paymentTerminal;
+  // GH-481 (D0238): only an installation proven by its capability may later publish its payment.
+  request.verifiedKioskInstallationId = terminalSelection.installationId ?? null;
 
   const availabilityError = request.requireAvailability ? await validateItemsAvailable(config, token, request.items) : null;
   if (availabilityError) {
@@ -3709,6 +3722,23 @@ async function publishNoPaymentDraft(config, token, rollerDraftUniqueId) {
   });
 }
 
+// GH-481 (D0238): ROLLER's PaymentCreate model inside the publish, as ROLLER support
+// prescribed for terminal payments; the draft is published, and gone, at once.
+async function publishDraftWithTerminalPayment(config, token, rollerDraftUniqueId, payment) {
+  if (!rollerDraftUniqueId || !payment) {
+    return {
+      body: null,
+      ok: false,
+      status: 400,
+    };
+  }
+
+  return postRollerJson(config, token, '/bookings/draft/publish', {
+    uniqueId: rollerDraftUniqueId,
+    payment,
+  });
+}
+
 async function getRollerJson(config, token, endpointPath) {
   const response = await fetch(buildRollerUrl(config.baseUrl, endpointPath), {
     method: 'GET',
@@ -4818,6 +4848,9 @@ async function persistPrepaymentDraft({
   const paymentAttemptId = paymentChannel === 'card_present'
     ? request.reservedPaymentAttemptId || `jytp_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`
     : null;
+  const kioskInstallationId = paymentChannel === 'card_present'
+    ? stringOrNull(request.verifiedKioskInstallationId)
+    : null;
   const totalCents = centsFromAmount(draft.costs.total);
   const amountOwingCents = centsFromAmount(draft.costs.amountOwing);
   const email = request.customer.email;
@@ -4840,6 +4873,7 @@ async function persistPrepaymentDraft({
        payment_attempt_id,
        payment_attempt_status,
        booking_confirmation_status,
+       kiosk_installation_id,
        roller_env,
        booking_date,
        start_time,
@@ -4875,6 +4909,7 @@ async function persistPrepaymentDraft({
        :paymentAttemptId,
        :paymentAttemptStatus,
        :bookingConfirmationStatus,
+       :kioskInstallationId,
        :rollerEnv,
        CAST(:bookingDate AS date),
        CAST(:startTime AS time),
@@ -4910,6 +4945,10 @@ async function persistPrepaymentDraft({
          jumpyard.prepayment_booking_drafts.booking_confirmation_status,
          EXCLUDED.booking_confirmation_status
        ),
+       kiosk_installation_id = COALESCE(
+         jumpyard.prepayment_booking_drafts.kiosk_installation_id,
+         EXCLUDED.kiosk_installation_id
+       ),
        total_cents = EXCLUDED.total_cents,
        amount_owing_cents = EXCLUDED.amount_owing_cents,
        customer_first_name = EXCLUDED.customer_first_name,
@@ -4934,6 +4973,7 @@ async function persistPrepaymentDraft({
       stringParameter('paymentAttemptId', paymentAttemptId),
       stringParameter('paymentAttemptStatus', paymentAttemptId ? 'created' : null),
       stringParameter('bookingConfirmationStatus', paymentAttemptId ? 'pending' : null),
+      stringParameter('kioskInstallationId', kioskInstallationId),
       stringParameter('rollerEnv', config.env),
       stringParameter('bookingDate', firstItem.bookingDate),
       stringParameter('startTime', firstItem.startTime),

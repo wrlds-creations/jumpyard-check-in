@@ -1,5 +1,7 @@
 # Issue #239 — Kiosk Payment Reconciliation
 
+> Publication superseded by [#481](gh-481-kiosk-publish-with-payment.md) (D0238): ROLLER publishes a card-present draft only together with its payment. The 10 s settlement wait (step 2) and the no-payment 409 retries (step 4) are removed; the single claimed publish now carries the payment at once. The durable approval, readback window and states remain.
+
 ## Outcome
 
 A definitive P400 approval becomes durable JumpYard Cloud state before ROLLER booking publication or readback. The kiosk receives `pending` immediately and may continue to safety. Booking confirmation continues in the existing Booking Lambda even if the browser or APK closes.

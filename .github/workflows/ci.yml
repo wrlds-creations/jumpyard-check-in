@@ -78,6 +78,11 @@ jobs:
           GH327_DATABASE_TEST: 'true'
           GH327_PGPORT: '55435'
         run: npm run validate:gh327-kiosk-terminal-binding
+      - name: Test kiosk terminal payment publish state against PostgreSQL
+        env:
+          GH481_DATABASE_TEST: 'true'
+          GH481_PGPORT: '55435'
+        run: npm run validate:gh481-kiosk-publish-with-payment
 
   repository:
     name: Repository
