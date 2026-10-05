@@ -6,6 +6,9 @@ const KIOSK_CAPABILITY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const KIOSK_INSTALLATION_ID_PATTERN = /^ki_[a-f0-9]{24}$/;
 const KIOSK_PROFILE_IDS = new Set(['nacka-forum-kiosk-1', 'nacka-forum-kiosk-2']);
 const KIOSK_TERMINAL_LOCK_ID_PATTERN = /^kt_[a-f0-9]{32}$/;
+// GH-481 (D0238): the provider transaction id (Adyen PSP reference) of an approved terminal payment.
+const KIOSK_TERMINAL_TRANSACTION_REF_PATTERN = /^[A-Za-z0-9]{8,64}$/;
+const KIOSK_TERMINAL_PAYMENT_TYPE = 'CreditCard';
 
 function normalizePaymentTerminalMap(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -250,6 +253,26 @@ function normalizeDraftFinalizeAction(value) {
   return ['result', 'status'].includes(value) ? value : null;
 }
 
+// A malformed reference is dropped, never rejected: it only disables the immediate publish,
+// and the approval itself must always be recorded.
+function normalizeTerminalTransactionRef(value) {
+  const ref = typeof value === 'string' ? value.trim() : '';
+  return KIOSK_TERMINAL_TRANSACTION_REF_PATTERN.test(ref) ? ref : null;
+}
+
+// GH-481 (D0238): ROLLER publishes a card-present draft at once only when the publish carries
+// the approved payment (its PaymentCreate model); without it ROLLER answers 409 while an amount
+// is owing and creates the booking from its own notification about a minute later. Only an
+// installation-bound attempt with a stored reference qualifies, and the amount is the amount
+// owing verified at draft creation, never a client value.
+function kioskTerminalPublishPayment(row) {
+  const id = normalizeTerminalTransactionRef(row?.terminal_transaction_ref);
+  const amountOwingCents = Number(row?.amount_owing_cents);
+  if (!id || !KIOSK_INSTALLATION_ID_PATTERN.test(stringOrNull(row?.kiosk_installation_id) ?? '')) return null;
+  if (!Number.isSafeInteger(amountOwingCents) || amountOwingCents <= 0) return null;
+  return { id, paymentType: KIOSK_TERMINAL_PAYMENT_TYPE, amount: amountOwingCents / 100 };
+}
+
 function publicKioskPaymentStatus(row) {
   const paymentStatus = stringOrNull(row?.payment_attempt_status);
   const storedConfirmationStatus = stringOrNull(row?.booking_confirmation_status);
@@ -474,6 +497,7 @@ function stringOrNull(value) {
 module.exports = {
   buildKioskQuotePayload,
   KIOSK_PAYMENT_CURRENCY,
+  kioskTerminalPublishPayment,
   normalizeDraftFinalizeAction,
   normalizeBookingReadback,
   normalizeItemsSummary,
@@ -481,6 +505,7 @@ module.exports = {
   normalizeKioskProfileMap,
   normalizePaymentTerminalMap,
   normalizeTerminalOutcome,
+  normalizeTerminalTransactionRef,
   publicKioskPaymentStatus,
   redactPaymentTerminalValues,
   resolveKioskPaymentTerminal,

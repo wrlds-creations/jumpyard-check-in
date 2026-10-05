@@ -3,7 +3,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
+  kioskTerminalPublishPayment,
   normalizeDraftFinalizeAction,
+  normalizeTerminalTransactionRef,
   publicKioskPaymentStatus,
 } = require('../infra/lambda/booking/kiosk-terminal-contract');
 
@@ -15,6 +17,7 @@ const webhookSource = read('infra', 'lambda', 'webhook', 'index.js');
 const stackSource = read('infra', 'lib', 'jumpyard-cloud-stack.ts');
 const migrationSource = read('infra', 'migrations', '0019_kiosk_payment_reconciliation.sql');
 const provisionalMigrationSource = read('infra', 'migrations', '0020_provisional_kiosk_handoff.sql');
+const publishMigrationSource = read('infra', 'migrations', '0024_kiosk_terminal_payment_publish.sql');
 
 assert.equal(normalizeDraftFinalizeAction(undefined), 'result');
 assert.equal(normalizeDraftFinalizeAction('result'), 'result');
@@ -111,12 +114,9 @@ for (const outcome of ['failed', 'cancelled']) {
   );
 }
 
-assert.match(bookingSource, /KIOSK_PUBLISH_SETTLEMENT_DELAY_MS = 10_000/);
-const publishRetryOffsetsSource = bookingSource.match(/KIOSK_PUBLISH_RETRY_OFFSETS_MS = \[([\s\S]*?)\];/)?.[1] ?? '';
-const publishRetryOffsets = [...publishRetryOffsetsSource.matchAll(/\b\d[\d_]*\b/g)].map((match) =>
-  Number(match[0].replaceAll('_', '')),
-);
-assert.deepEqual(publishRetryOffsets, [10_000, 15_000, 20_000, 25_000, 30_000, 35_000, 40_000, 45_000]);
+// GH-481 (D0238): ROLLER publishes a card-present draft only together with its payment, so the
+// former settlement wait and the no-payment 409 retries are gone.
+assert.doesNotMatch(bookingSource, /KIOSK_PUBLISH_SETTLEMENT_DELAY_MS|KIOSK_PUBLISH_RETRY_OFFSETS_MS/);
 assert.match(bookingSource, /KIOSK_RECONCILIATION_OFFSETS_MS = \[[\s\S]*75_000,[\s\S]*\]/);
 assert.match(bookingSource, /const waitMs = startedAt \+ offsetMs - Date\.now\(\)/);
 assert.doesNotMatch(bookingSource, /await wait\(offsetMs\)/);
@@ -152,27 +152,52 @@ assert.ok(
   bookingSource.indexOf('recordKioskPublishResult') < bookingSource.indexOf('await recordKioskReconciliationAttempt'),
   'a rejected, conflicting, or ambiguous publish must still continue into bounded booking readback',
 );
+const workerSource = bookingSource.slice(
+  bookingSource.indexOf('async function handleKioskPaymentReconciliation('),
+  bookingSource.indexOf('async function handleKioskAuthoritativeConfirmation('),
+);
+assert.match(workerSource, /const terminalPayment = kioskTerminalPublishPayment\(claimed\)/);
+assert.match(workerSource, /let publishPending = Boolean\(terminalPayment\)/);
 assert.ok(
-  bookingSource.indexOf('publishRetryAllowed = await claimKioskPublishAttempt(request)') <
-    bookingSource.indexOf(
-      'publishNoPaymentDraft(config, token',
-      bookingSource.indexOf('publishRetryAllowed = await claimKioskPublishAttempt(request)'),
-    ),
-  'the durable publish-sequence claim must execute before the first provider publish call',
+  workerSource.indexOf('publishPending = false;') < workerSource.indexOf('await claimKioskPublishAttempt(request)') &&
+    workerSource.indexOf('await claimKioskPublishAttempt(request)') <
+      workerSource.indexOf('publishDraftWithTerminalPayment('),
+  'one publish per worker, and the durable claim must execute before the provider publish call',
 );
-assert.ok(
-  bookingSource.indexOf('offsetMs >= KIOSK_PUBLISH_SETTLEMENT_DELAY_MS') <
-    bookingSource.indexOf('publishNoPaymentDraft(config, token', bookingSource.indexOf('offsetMs >= KIOSK_PUBLISH_SETTLEMENT_DELAY_MS')),
-  'the first provider publish must wait for the bounded terminal-payment settlement window',
-);
-assert.match(
-  bookingSource,
-  /publishRetryAllowed && KIOSK_PUBLISH_RETRY_OFFSETS_MS\.includes\(offsetMs\)/,
-);
-assert.match(bookingSource, /const retryableConflict = publishResult\.status === 409/);
-assert.match(bookingSource, /publishRetryAllowed = retryableConflict/);
-assert.match(bookingSource, /catch \{[\s\S]*publishRetryAllowed = false;[\s\S]*'transport_unknown'/);
-assert.doesNotMatch(bookingSource, /retryableConflict\s*=\s*publishResult\.status\s*>=/);
+assert.doesNotMatch(workerSource, /publishNoPaymentDraft\(/, 'a card-present draft is never published without its payment');
+assert.match(workerSource, /const resultCode = publishResult\.ok \? 'accepted' : 'provider_rejected'/);
+assert.match(workerSource, /catch \{\s*await recordKioskPublishResult\(request, 0, 'transport_unknown'\)/);
+assert.match(bookingSource, /'\/bookings\/draft\/publish', \{\s*uniqueId: rollerDraftUniqueId,\s*payment,\s*\}/);
+assert.match(bookingSource, /request\.verifiedKioskInstallationId = terminalSelection\.installationId \?\? null/);
+assert.match(bookingSource, /terminal_transaction_ref = CASE\s*WHEN :outcome = 'approved'\s*AND terminal_transaction_ref IS NULL\s*AND kiosk_installation_id IS NOT NULL/);
+assert.match(bookingSource, /RETURNING[\s\S]*?amount_owing_cents,\s*kiosk_installation_id,\s*terminal_transaction_ref`/);
+
+const installationId = `ki_${'a'.repeat(24)}`;
+const approvedRow = { amount_owing_cents: 20_000, kiosk_installation_id: installationId, terminal_transaction_ref: 'PSP1234567890ABC' };
+assert.deepEqual(kioskTerminalPublishPayment(approvedRow), { id: 'PSP1234567890ABC', paymentType: 'CreditCard', amount: 200 });
+assert.deepEqual(kioskTerminalPublishPayment({ ...approvedRow, amount_owing_cents: '19950' }).amount, 199.5);
+for (const change of [
+  { terminal_transaction_ref: null },
+  { terminal_transaction_ref: 'short' },
+  { terminal_transaction_ref: 'has space 123456' },
+  { kiosk_installation_id: null },
+  { kiosk_installation_id: 'primary' },
+  { amount_owing_cents: 0 },
+  { amount_owing_cents: null },
+  { amount_owing_cents: -100 },
+  { amount_owing_cents: 12.5 },
+]) {
+  assert.equal(kioskTerminalPublishPayment({ ...approvedRow, ...change }), null, JSON.stringify(change));
+}
+assert.equal(normalizeTerminalTransactionRef(' 8816178952380553 '), '8816178952380553');
+for (const value of [undefined, null, '', 42, 'x'.repeat(65), 'abc-123456', 'abc.1234567']) {
+  assert.equal(normalizeTerminalTransactionRef(value), null, String(value));
+}
+
+assert.match(publishMigrationSource, /ADD COLUMN IF NOT EXISTS kiosk_installation_id text/);
+assert.match(publishMigrationSource, /ADD COLUMN IF NOT EXISTS terminal_transaction_ref text/);
+assert.match(publishMigrationSource, /kiosk_installation_id ~ '\^ki_\[a-f0-9\]\{24\}\$'/);
+assert.match(publishMigrationSource, /terminal_transaction_ref ~ '\^\[A-Za-z0-9\]\{8,64\}\$'/);
 assert.ok(
   bookingSource.indexOf("WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved'") > -1,
   'late cancelled/failed/unknown callbacks must not regress an approved attempt',

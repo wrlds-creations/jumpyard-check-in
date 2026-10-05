@@ -204,6 +204,9 @@ assert.ok(
 
 assert.match(runner, /customer_email = NULL/);
 assert.match(runner, /customer_phone = NULL/);
+// GH-481: the terminal's provider transaction id leaves with the other provider identifiers.
+assert.match(runner, /OR draft\.terminal_transaction_ref IS NOT NULL/);
+assert.match(runner, /terminal_transaction_ref = NULL/);
 assert.match(runner, /roller_draft_unique_id = CASE/);
 assert.match(runner, /roller_capacity_reservation_id = CASE/);
 assert.match(runner, /external_id = CASE/);

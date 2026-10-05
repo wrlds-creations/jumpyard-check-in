@@ -43,6 +43,10 @@ Run `npm --prefix jumpyard-checkin-phone run test:completion` plus the completed
 
 Run `npm run validate:gh327-kiosk-terminal-binding` for both draft handlers and profile authorization. Set `GH327_DATABASE_TEST=true` for the disposable PostgreSQL concurrency/role test (local port 55327, CI port 55435). [Contract, rollout and physical acceptance](docs/gh-327-kiosk-terminal-binding.md) distinguish automated checks from the completed attended V210/P400 payment and reset evidence.
 
+## Kiosk publish with the terminal payment (#481)
+
+Run `npm run validate:gh481-kiosk-publish-with-payment` and `npm run validate:kiosk-payment-reconciliation`. Set `GH481_DATABASE_TEST=true` for the disposable PostgreSQL case (local port 55481, CI port 55435). Physical acceptance is a supervised P400 purchase on Park: the booking is confirmed within seconds, and at least 2 minutes later the ROLLER booking has exactly one payment and nothing owing. See [the note](docs/gh-481-kiosk-publish-with-payment.md).
+
 Use this file to define active validation for the current project or milestone. Historical validation evidence was moved to [docs/history/validation-log.md](docs/history/validation-log.md) during T0128.
 
 ## Current Root Validation
