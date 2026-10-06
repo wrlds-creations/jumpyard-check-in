@@ -1,0 +1,199 @@
+'use strict';
+
+// GH-484 (D0240): when a kiosk check-in gets its number, Cloud mints a check-in link that the kiosk
+// shows as a small QR ("Lappen i mobilen"). These checks drive the real Session Lambda with a
+// scripted Aurora Data API and read the Booking Lambda's reconciliation statement.
+
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+
+const ROOT = path.resolve(__dirname, '..');
+const SESSION_DIR = path.join(ROOT, 'infra', 'lambda', 'session');
+const SESSION_PATH = path.join(SESSION_DIR, 'index.js');
+const BOOKING_PATH = path.join(ROOT, 'infra', 'lambda', 'booking', 'index.js');
+const BOOKING_ID = 'roller-booking-484';
+const SESSION = {
+  checkinSessionId: 'jycs_484', rollerUniqueId: BOOKING_ID, bookingReference: '484001', handoffCode: '0484',
+  status: 'ready_for_staff', selectedTicketIds: ['484001-1'],
+};
+
+function rdsResult(rows, numberOfRecordsUpdated = 0) {
+  if (!rows || rows.length === 0) return { columnMetadata: [], numberOfRecordsUpdated, records: [] };
+  const columns = Object.keys(rows[0]);
+  return {
+    columnMetadata: columns.map((name) => ({ name })),
+    numberOfRecordsUpdated,
+    records: rows.map((row) => columns.map((name) => {
+      const value = row[name];
+      if (value === null || value === undefined) return { isNull: true };
+      if (typeof value === 'number') return { longValue: value };
+      return { stringValue: String(value) };
+    })),
+  };
+}
+
+const parameterValue = (parameters, name) => (parameters ?? []).find((parameter) => parameter.name === name)?.value?.stringValue ?? null;
+
+function createDatabase(script = {}) {
+  const calls = [];
+  const execute = async (sql, parameters) => {
+    calls.push({ sql, parameters });
+    if (/SELECT count\(\*\)::int AS link_count/.test(sql)) return rdsResult([{ link_count: script.existingLinks ?? 0 }]);
+    if (/INSERT INTO jumpyard\.checkin_tokens/.test(sql)) {
+      if (script.insertFails) throw new Error('synthetic insert failure');
+      return rdsResult([{ token_hash: parameterValue(parameters, 'tokenHash'), expires_at: parameterValue(parameters, 'expiresAt') }], 1);
+    }
+    if (/INSERT INTO jumpyard\.event_log/.test(sql)) return rdsResult([], 1);
+    if (/FROM jumpyard\.checkin_tokens AS ct\s+LEFT JOIN jumpyard\.roller_bookings AS b\s+ON b\.roller_unique_id = ct\.roller_unique_id\s+WHERE ct\.token_hash = :tokenHash\s+LIMIT 1/.test(sql)) {
+      return rdsResult([{ token_hash: 'hash', roller_unique_id: BOOKING_ID, channel: script.channel ?? 'kiosk_phone',
+        expires_at: '2000-01-01T00:00:00.000Z', opened_at: null, consumed_at: null, booking_reference: '484001' }]);
+    }
+    throw new Error(`Unexpected SQL during GH-484 validation: ${sql.slice(0, 90)}`);
+  };
+  return { calls, execute };
+}
+
+function fakeAws(handleCommand) {
+  return new Proxy({}, {
+    get(_target, property) {
+      return class FakeAwsClientOrCommand {
+        constructor(input) { this.input = input; this.name = String(property); }
+        async send(command) { return handleCommand(command); }
+      };
+    },
+  });
+}
+
+function loadSession(database) {
+  const source = fs.readFileSync(SESSION_PATH, 'utf8');
+  const module = { exports: {} };
+  const errors = [];
+  const aws = fakeAws(async (command) => {
+    if (command.name === 'ExecuteStatementCommand') return database.execute(command.input.sql, command.input.parameters ?? []);
+    throw new Error(`Unexpected AWS command ${command.name} during GH-484 validation.`);
+  });
+  vm.runInNewContext(`${source}\nmodule.exports.__gh484 = { createKioskPhoneLink, handleResolveSessionLink, normalizeReadyRequest };`, {
+    AbortSignal, Buffer, TextDecoder, TextEncoder, URL, URLSearchParams, clearTimeout, setTimeout,
+    console: { error: (message) => errors.push(String(message)), info() {}, log() {}, warn() {} },
+    exports: module.exports, module,
+    process: { env: { DATABASE_CLUSTER_ARN: 'arn:synthetic', DATABASE_SECRET_ARN: 'arn:synthetic' } },
+    require(moduleId) {
+      if (moduleId.startsWith('./')) return require(path.join(SESSION_DIR, moduleId));
+      if (moduleId === 'crypto' || moduleId === 'node:crypto') return crypto;
+      if (moduleId.startsWith('@aws-sdk/')) return aws;
+      throw new Error(`Unexpected require(${JSON.stringify(moduleId)}) during GH-484 validation.`);
+    },
+  }, { filename: SESSION_PATH });
+  return { errors, internals: module.exports.__gh484 };
+}
+
+const sqlCalls = (calls, pattern) => calls.filter((call) => pattern.test(call.sql));
+
+async function validateLinkIsMintedForTheKioskGuest() {
+  const database = createDatabase();
+  const { internals } = loadSession(database);
+  const link = await internals.createKioskPhoneLink(SESSION, 'jy_gh484');
+  assert.ok(link, 'a link is returned');
+  const url = new URL(link.url);
+  assert.equal(`${url.origin}/`, 'https://checkin.jumpyard.se/', 'the public Nacka check-in origin');
+  assert.match(url.searchParams.get('jy_token'), /^[A-Za-z0-9_-]{43}$/, 'a 32-byte base64url token the phone already resolves');
+  assert.equal([...url.searchParams.keys()].join(','), 'jy_token');
+
+  const insert = sqlCalls(database.calls, /INSERT INTO jumpyard\.checkin_tokens/)[0];
+  assert.equal(parameterValue(insert.parameters, 'channel'), 'kiosk_phone');
+  assert.equal(parameterValue(insert.parameters, 'rollerUniqueId'), BOOKING_ID);
+  assert.equal(parameterValue(insert.parameters, 'tokenHash'),
+    crypto.createHash('sha256').update(url.searchParams.get('jy_token')).digest('hex'), 'only the hash is stored');
+  const expiresAt = new Date(parameterValue(insert.parameters, 'expiresAt'));
+  const minutesLeft = (expiresAt.getTime() - Date.now()) / 60000;
+  assert.ok(minutesLeft >= 29 && minutesLeft <= 1441, 'valid until midnight of the visit day (at least 30 minutes)');
+  const midnight = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit',
+    hourCycle: 'h23' }).format(expiresAt);
+  assert.ok(minutesLeft < 31 || midnight === '00:00' || midnight === '23:59', `expires at Stockholm midnight, got ${midnight}`);
+
+  const event = sqlCalls(database.calls, /INSERT INTO jumpyard\.event_log/)[0];
+  assert.equal(parameterValue(event.parameters, 'eventType'), 'checkin.kiosk_phone_link_created');
+  for (const call of database.calls) {
+    for (const parameter of call.parameters ?? []) {
+      assert.ok(!String(parameter.value?.stringValue ?? '').includes(url.searchParams.get('jy_token')),
+        'the raw token is never written to Aurora');
+    }
+  }
+  console.log('[pass] a kiosk check-in gets a checkin.jumpyard.se link with a hashed kiosk_phone token until midnight');
+}
+
+async function validateLinksAreBoundedAndOptional() {
+  const capped = createDatabase({ existingLinks: 5 });
+  assert.equal(await loadSession(capped).internals.createKioskPhoneLink(SESSION, 'jy_gh484'), null);
+  assert.equal(sqlCalls(capped.calls, /INSERT INTO jumpyard\.checkin_tokens/).length, 0, 'no more than five links per booking and day');
+
+  const failing = createDatabase({ insertFails: true });
+  const loaded = loadSession(failing);
+  assert.equal(await loaded.internals.createKioskPhoneLink(SESSION, 'jy_gh484'), null, 'a failure only leaves the QR out');
+  assert.ok(loaded.errors.some((message) => message.includes('checkin.kiosk_phone_link_failed')));
+
+  const { internals } = loadSession(createDatabase());
+  assert.equal(internals.normalizeReadyRequest({}, { phoneLink: true }).phoneLink, true);
+  assert.equal(internals.normalizeReadyRequest({}, { phoneLink: 'yes' }).phoneLink, false, 'only an explicit true asks for a link');
+  assert.equal(internals.normalizeReadyRequest({}, {}).phoneLink, false);
+  console.log('[pass] links are capped per booking and day, optional, and never block the ready answer');
+}
+
+async function validatePhoneLinksResolveLikeOtherLinks() {
+  const kiosk = createDatabase({ channel: 'kiosk_phone' });
+  const accepted = await loadSession(kiosk).internals.handleResolveSessionLink({ headers: {} }, { token: 'x'.repeat(43) }, 'jy_gh484');
+  assert.equal(JSON.parse(accepted.body).error.code, 'checkin_link_expired', 'a kiosk_phone token passes the channel check');
+
+  const guestAccess = createDatabase({ channel: 'guest_access' });
+  const refused = await loadSession(guestAccess).internals.handleResolveSessionLink({ headers: {} }, { token: 'x'.repeat(43) }, 'jy_gh484');
+  assert.equal(JSON.parse(refused.body).error.code, 'checkin_link_not_found', 'other token kinds still do not resolve as links');
+  console.log('[pass] kiosk_phone links resolve through the ordinary check-in link route');
+}
+
+function validateSourceContracts() {
+  const session = fs.readFileSync(SESSION_PATH, 'utf8');
+  const booking = fs.readFileSync(BOOKING_PATH, 'utf8');
+  const contract = fs.readFileSync(path.join(ROOT, 'JUMPYARD_CLOUD_CONTRACT.md'), 'utf8');
+  const packageJson = fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8');
+  const slice = (text, start, end) => text.slice(text.indexOf(start), text.indexOf(end, text.indexOf(start)));
+
+  const ready = slice(session, 'async function handleReadyForStaff(', 'async function createKioskPhoneLink(');
+  assert.match(ready, /const checkinLink = request\.phoneLink \? await createKioskPhoneLink\(updatedSession, correlationId\) : null;/);
+  assert.match(ready, /\.\.\.\(checkinLink \? \{ checkinLink \} : \{\}\)/);
+  assert.ok(ready.indexOf("requestAutoCheckin(updatedSession.checkinSessionId, 'ready_for_staff'") < ready.indexOf('createKioskPhoneLink('),
+    'automatic check-in is requested before the link');
+  assert.match(slice(session, 'async function verifyGuestAccessToken(', 'function getGuestAccessCredential('),
+    /ct\.channel IN \('sms', 'email', 'manual', 'dev', 'kiosk_phone'\)/);
+  assert.match(slice(session, 'async function markSessionLinkOpened(', 'async function markSessionLinkSent('),
+    /AND channel IN \('sms', 'email', 'manual', 'dev', 'kiosk_phone'\)/);
+  assert.match(slice(session, 'async function handleResolveSessionLink(', 'if (tokenRecord.consumedAt)'),
+    /RESOLVABLE_LINK_CHANNELS\.has\(tokenRecord\.channel\)/);
+  assert.match(session, /if \(!CHECKIN_LINK_CHANNELS\.has\(request\.channel\)\) \{/, 'the development link route still cannot mint kiosk_phone');
+
+  const reconciliation = slice(booking, 'async function confirmKioskReconciliation(', 'async function confirmKioskAddProductReconciliation(');
+  assert.match(reconciliation, /attached_phone_links AS \(\s*-- GH-484[\s\S]*?WHERE channel = 'kiosk_phone'\s+AND roller_unique_id IN \(\s*SELECT draft_session\.roller_unique_id[\s\S]*?AND EXISTS \(SELECT 1 FROM confirmed\)/);
+  assert.ok(reconciliation.indexOf('attached_phone_links') < reconciliation.indexOf("'kiosk_booking_confirmed'"),
+    'links move in the same statement, before the automatic check-in trigger');
+
+  for (const term of ['phoneLink', 'checkinLink', 'kiosk_phone']) {
+    assert.ok(contract.includes(term), `JUMPYARD_CLOUD_CONTRACT.md documents ${term}`);
+  }
+  assert.match(packageJson, /validate:gh484-kiosk-phone-link/);
+  console.log('[pass] ready-for-staff, resolution, guest access, reconciliation and the contract carry the kiosk phone link');
+}
+
+async function main() {
+  await validateLinkIsMintedForTheKioskGuest();
+  await validateLinksAreBoundedAndOptional();
+  await validatePhoneLinksResolveLikeOtherLinks();
+  validateSourceContracts();
+  console.log('GH-484 kiosk phone link validation passed.');
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

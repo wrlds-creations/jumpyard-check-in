@@ -25,7 +25,7 @@ function declaration(name) {
   function visit(node) {
     const effectMarker = name === 'persistSafetyRecovery' ? 'writeSafetyRecovery(state, ctx, alreadyCheckedIn)'
       : name === 'initialRecoveryGate' ? 'setRecoveryGateReady(true)'
-      : name === 'initialLinkResolution' ? 'resolveCheckInSessionLink(linkToken)' : null;
+      : name === 'initialLinkResolution' ? 'resolveCheckInSessionLink(linkToken' : null;
     if (effectMarker && ts.isCallExpression(node) && node.expression.getText(sourceFile) === 'useEffect'
       && node.arguments[0]?.getText(sourceFile).includes(effectMarker)) {
       result = `const ${name} = ${node.arguments[0].getText(sourceFile)};`;
@@ -81,6 +81,9 @@ function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () 
     ctx: flowMachine.initialContext('park-qr'), isMarkingReadyForStaff: false, alreadyCheckedIn: false,
     readPaymentRecovery: () => record,
     readBuyFlowRecovery: () => saved,
+    // GH-453: these recovery cases have no saved checked-in visit.
+    readSavedVisit: () => null,
+    restoreSavedVisit: (...args) => events.push(['restore-visit', ...args]),
     clearPaymentRecoveryAfterCompletion: async (id, beforeClear) => {
       if (beforeClear?.() === false) return false;
       events.push(['clear-payment', id]); record = null; return true;
@@ -110,7 +113,7 @@ function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () 
     'setRecoveryContinuePending', 'setRecoverySyncFailed', 'setRecoveryReadyForSafety', 'setBuyRecoverySnapshot',
     'setAlreadyCheckedIn', 'setSessionStartError', 'setReadyForStaffError', 'setIsStartingSession',
     'setIsMarkingReadyForStaff', 'setPaidConfirmationState', 'setAddonsStep', 'setAddonsBackRequest',
-    'setBuyStep', 'setSafetyExitLocked', 'setAddonsAvailabilityPrefetch', 'setCtx',
+    'setBuyStep', 'setSafetyExitLocked', 'setAddonsAvailabilityPrefetch', 'setCtx', 'setWaitingForLinkedBooking',
   ]) state[name] = value => {
     events.push([name, value]);
     if (renderState) pendingState.set(name.charAt(3).toLowerCase() + name.slice(4), value);

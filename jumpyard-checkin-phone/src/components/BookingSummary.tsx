@@ -4,6 +4,7 @@ import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import type { SessionIssue } from '@/flow/cloudClient';
 import type { Addon, Booking } from '@/flow/types';
+import { getJumpTime } from '@/flow/jumpTime';
 import { getBookingContentRows, packageContentCopy } from '@/flow/packageContents';
 
 interface BookingSummaryProps {
@@ -24,6 +25,7 @@ const ADDON_ICONS: Record<Addon['id'], JumpyardIconName> = {
 };
 
 export const BookingSummary = ({ booking, onContinue, isStartingSession = false, sessionStartError = null }: BookingSummaryProps) => {
+    const windowIssue = sessionStartError === 'checkin_too_early' || sessionStartError === 'checkin_too_late';
     const { t, lang } = useTranslation();
 
     const existingAddons: Addon[] = booking?.existingAddons ?? [];
@@ -34,13 +36,10 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
     const productLabel = getBookingProductLabel(booking, t.booking.product);
     const contentRows = getBookingContentRows(booking, productLabel, productQuantity, lang);
 
-    const timeDisplay = booking?.endTime
-        ? `${booking.time}–${booking.endTime}`
-        : booking?.time || '14:00';
-
-    const durationDisplay = booking?.durationMinutes
-        ? `${booking.durationMinutes} min`
-        : null;
+    // D0241: the jump itself, so a Weekday Combo reads 14:00–15:00 and 60 min, not ROLLER's package span.
+    const jumpTime = getJumpTime(booking, contentRows);
+    const timeDisplay = jumpTime?.time || '14:00';
+    const durationDisplay = jumpTime?.minutes ? `${jumpTime.minutes} min` : null;
 
     const guestDisplay = [booking?.guestName, booking?.lastName].filter(Boolean).join(' ');
 
@@ -132,11 +131,27 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
                 </div>
             </div>
 
-            {canStartCheckIn && (
+            {/* GH-456 (D0230): outside the check-in window there is nothing to start; say when instead. */}
+            {windowIssue && (
+                <div data-testid="booking-window-notice" data-window={sessionStartError}
+                    className="booking-window-notice flex min-w-0 items-center gap-4 rounded-2xl bg-[#18181b] p-5 text-left text-white">
+                    <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-white">
+                        <JumpyardIcon name={sessionStartError === 'checkin_too_early' ? 'time' : 'info'} className="h-10 w-10" />
+                    </span>
+                    <span className="flex min-w-0 flex-col">
+                        <strong className="text-2xl font-black italic uppercase leading-none">{getSessionStartErrorText(sessionStartError, t, booking)}</strong>
+                        <span className="mt-1.5 text-base font-bold italic leading-snug">
+                            {sessionStartError === 'checkin_too_early' ? t.booking.sessionTooEarlyHint : t.booking.sessionTooLateHint}
+                        </span>
+                    </span>
+                </div>
+            )}
+
+            {canStartCheckIn && !windowIssue && (
                 <p className="mb-2 text-center text-xs font-bold italic text-foreground">{t.booking.subtitle}</p>
             )}
 
-            <button
+            {!windowIssue && <button
                 data-testid="booking-start-checkin"
                 data-session-start-state={isStartingSession ? 'starting' : sessionStartError ? 'error' : 'idle'}
                 onClick={onContinue}
@@ -150,10 +165,10 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
                         : checkInAtRegister
                             ? t.booking.checkInAtRegisterCta
                             : t.booking.paymentRequiredCta}
-            </button>
-            {sessionStartError && (
+            </button>}
+            {sessionStartError && !windowIssue && (
                 <p data-testid="booking-start-error" className="text-amber-700 text-[11px] text-center mt-2">
-                    {getSessionStartErrorText(sessionStartError, t)}
+                    {getSessionStartErrorText(sessionStartError, t, booking)}
                 </p>
             )}
             {!canStartCheckIn && (
@@ -165,12 +180,25 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
     );
 };
 
-function getSessionStartErrorText(error: SessionIssue, t: ReturnType<typeof useTranslation>['t']) {
+function getSessionStartErrorText(error: SessionIssue, t: ReturnType<typeof useTranslation>['t'], booking: Booking) {
+    if (error === 'checkin_too_early') {
+        const opensAt = getCheckInOpensAt(booking.time);
+        return opensAt ? t.booking.sessionTooEarly.replace('{time}', opensAt) : t.booking.sessionTooEarlyNoTime;
+    }
+    if (error === 'checkin_too_late') return t.booking.sessionTooLate;
     if (error === 'payment_required') return t.booking.sessionPaymentRequired;
     if (error === 'wrong_date') return t.booking.sessionWrongDate;
     if (error === 'already_redeemed') return t.booking.sessionAlreadyRedeemed;
     if (error === 'booking_not_fresh') return t.booking.sessionNotFresh;
     return t.booking.sessionStartFailed;
+}
+
+// GH-456 (D0230): Cloud opens check-in 120 minutes before the booked start.
+function getCheckInOpensAt(time: string | undefined) {
+    const match = /^(\d{1,2}):(\d{2})/.exec(time ?? '');
+    if (!match) return null;
+    const minutes = Math.max(0, Number(match[1]) * 60 + Number(match[2]) - 120);
+    return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
 function getBookingProductLabel(booking: Booking, fallback: string) {

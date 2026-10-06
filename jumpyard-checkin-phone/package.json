@@ -24,7 +24,7 @@
     "test:contact-details": "node --no-warnings --experimental-strip-types --test src/flow/contactDetails.test.mjs src/flow/phoneContact.test.mjs",
     "test:email-marketing": "node --no-warnings --experimental-strip-types --test src/flow/emailMarketingConsent.test.mjs",
     "test:flow-transitions": "node --test src/components/FlowTransition.test.mjs src/components/BookingLookup.test.mjs src/components/AddonSkyRider.test.mjs src/app/preview/flow/localTransport.test.mjs",
-    "test:completion": "node --test src/components/PhoneCompletion.test.mjs",
+    "test:completion": "node --test src/components/PhoneCompletion.test.mjs src/flow/savedVisit.test.mjs src/flow/kioskPhoneLink.test.mjs",
     "test:flow-nav": "node --no-warnings --test src/components/FlowNav.test.mjs"
   },
   "dependencies": {

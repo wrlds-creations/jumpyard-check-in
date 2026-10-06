@@ -49,6 +49,7 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
           WHERE op.roller_unique_id = b.roller_unique_id AND op.visit_date = b.booking_date AND op.status = 'completed'
           GROUP BY item ->> 'id') totals), '{}'::jsonb)::text AS collected_items,
         (cs.session_summary -> 'staffActor')::text AS checked_in_by,
+        (cs.session_summary -> 'autoCheckin')::text AS auto_checkin,
         (SELECT jsonb_build_object('checkinSessionId', done.checkin_session_id,
           'handoffCode', done.handoff_code, 'handoffDay', done.handoff_day,
           'completedAt', done.completed_at, 'checkedInBy', done.session_summary -> 'staffActor',
@@ -112,6 +113,7 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
         cafeQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
         cafeRemaining: items.reduce((sum, item) => sum + Math.max(0, item.quantity - (collected[item.id] || 0)), 0),
         cafeSession: parse(row.cafe_session, null),
+        autoCheckin: parse(row.auto_checkin, null),
         checkedInBy: parse(row.checked_in_by, null), claims: parse(row.claims, []) };
     }),
       nextCursor: rows.length > 100 ? rows[99].board_cursor : null,

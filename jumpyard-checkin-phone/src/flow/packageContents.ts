@@ -24,6 +24,8 @@ export interface BookingContentRow {
   detail?: string;
   /** GH-459: the band colour(s) of this admission row, from JumpYard Cloud. */
   bandColours?: BandColourCount[];
+  /** D0241: the admission's own length, for the jump time (flow/jumpTime.ts). */
+  durationMinutes?: number;
 }
 
 export function getPackageContentLabel(content: PackageContent, lang: 'sv' | 'en') {
@@ -48,6 +50,6 @@ export function getBookingContentRows(booking: Booking, fallbackLabel: string, j
       }));
     }
     return [{ key: `${index}-entry`, kind: 'admission', quantity: item.quantity, collection: 'checkin', label: item.label || fallbackLabel,
-      ...bands(item.quantity) }];
+      ...(item.durationMinutes ? { durationMinutes: item.durationMinutes } : {}), ...bands(item.quantity) }];
   });
 }

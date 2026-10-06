@@ -52,6 +52,8 @@ export interface StaffSessionSummary {
   handoffCode: string | null;
   handoffDay?: string | null;
   checkedInBy?: { actorId?: string; displayName?: string } | null;
+  /** GH-456: set when Cloud's automatic check-in failed and staff must check the group in. */
+  autoCheckin?: { status?: "retrying" | "needs_staff"; reason?: string; attempts?: number } | null;
   claims?: HandoutClaim[];
   cafeQuantity?: number;
   cafeRemaining?: number;

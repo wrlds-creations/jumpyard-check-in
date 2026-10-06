@@ -13,6 +13,7 @@ const sv = {
     skip: 'Hoppa över',
     processing: 'Behandlar…',
     loading: 'Laddar…',
+    fetchingSlip: 'Vi hämtar din lapp…',
     currency: 'kr',
     done: 'Klart',
     yes: 'Ja',
@@ -261,6 +262,13 @@ const sv = {
     sessionWrongDate: 'Bokningen gäller ett annat datum. Hämta personal så kontrollerar vi bokningen.',
     sessionAlreadyRedeemed: 'Biljetterna verkar redan vara använda. Hämta personal så kontrollerar vi bokningen.',
     sessionNotFresh: 'Vi behöver uppdatera bokningen innan incheckning. Hämta personal tills vidare.',
+    // GH-456 (D0230): check-in opens two hours before the booked start and closes when the session ends.
+    // Love, 2026-10-06: a short title that jumps out and one line that says what to do.
+    sessionTooEarly: 'Incheckningen öppnar {time}',
+    sessionTooEarlyNoTime: 'För tidigt att checka in',
+    sessionTooEarlyHint: 'Två timmar före ert pass.',
+    sessionTooLate: 'Er hopptid är slut',
+    sessionTooLateHint: 'Gå till kassan så hjälper vi er.',
     timeHint: 'Tar ca 1–2 min. Nästa steg: säkerhetsvideo.',
   },
   safetyVideo: {
@@ -481,6 +489,7 @@ const en: typeof sv = {
     skip: 'Skip',
     processing: 'Processing…',
     loading: 'Loading…',
+    fetchingSlip: 'Fetching your slip…',
     currency: 'kr',
     done: 'Done',
     yes: 'Yes',
@@ -729,6 +738,11 @@ const en: typeof sv = {
     sessionWrongDate: 'This booking is for another date. Please call staff so we can check it.',
     sessionAlreadyRedeemed: 'These tickets already look used. Please call staff so we can check the booking.',
     sessionNotFresh: 'We need to update this booking before check-in. Please call staff for now.',
+    sessionTooEarly: 'You can check in from {time}',
+    sessionTooEarlyNoTime: 'Too early to check in',
+    sessionTooEarlyHint: 'Two hours before your session.',
+    sessionTooLate: 'Your jump time has ended',
+    sessionTooLateHint: 'Go to the front desk and we will help you.',
     timeHint: 'Takes about 1–2 min. Next: safety video.',
   },
   safetyVideo: {

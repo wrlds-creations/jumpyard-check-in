@@ -110,14 +110,15 @@ test('unknown combo names, legacy products, family and normal entry do not acqui
 test('actual Swedish/English QR screen separates bands from deferred pizza and coffee', async () => {
   const booking = await fromCloud([item()]);
   for (const [lang, band, pizza, later] of [
-    ['sv', 'Besöksband 60 min', 'Pizza att dela', 'Hämtas efter hoppet'],
-    ['en', 'Wristband 60 min', 'Pizza to share', 'Collect after jumping'],
+    ['sv', 'Besöksband 60 min', 'Pizza att dela', 'Hämta i caféet'],
+    ['en', 'Wristband 60 min', 'Pizza to share', 'Collect at the café'],
   ]) {
     const markup = render(ConfirmationScreen, {
       booking, jumperCount: booking.jumpers, checkinSession: { checkinSessionId: 'preview-only', status: 'ready_for_staff', handoffCode: 'DEMO' },
       selectedAddons: [{ id: 'coffee', label: 'Coffee', qty: 1, price: 0 }, { id: 'socks', label: 'Socks', qty: 2, price: 0 }],
     }, lang);
-    assert.match(markup, /data-qr-value="JY_HANDOFF:DEMO:preview-only"/);
+    assert.match(markup, /data-handoff-code="DEMO"/);
+    assert.doesNotMatch(markup, /data-qr-value=/, 'GH-456: the phone shows the number, not a QR code');
     const [handout, deferred] = markup.split('data-testid="confirmation-later"');
     assert.ok(handout.includes(band));
     assert.ok(handout.includes('Socks'));
@@ -226,4 +227,16 @@ test('package display never enters booking purchase requests', async () => {
   const buildItems = source.slice(source.indexOf('const buildItems ='), source.indexOf('const buildItems =') + 1200);
   assert.doesNotMatch(buildItems, /packageContents|admissionItems|pizza/);
   assert.equal((source.match(/<PackageContentRows contents=\{selectedPackageContents\}/g) || []).length, 3);
+});
+
+test('the booking page shows the jump, not ROLLER’s package span: a 14:00 Weekday Combo reads 14:00–15:00 and 60 min (D0241)', async () => {
+  const booking = await fromCloud([item(1, { startTime: '14:00', endTime: '16:00' })]);
+  assert.equal(booking.endTime, '16:00', 'ROLLER spans the whole package');
+  const summary = render(BookingSummary, { booking, onContinue() {} });
+  assert.ok(summary.includes('14:00–15:00'));
+  assert.match(summary, />60 min<\/p>/);
+  assert.doesNotMatch(summary, /14:00–16:00|>120 min</);
+  const plain = render(BookingSummary, { booking: await fromCloud([entry()]), onContinue() {} });
+  assert.ok(plain.includes('11:30–13:00'), 'an ordinary entry keeps its booked times');
+  assert.match(plain, />90 min<\/p>/);
 });

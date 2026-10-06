@@ -61,7 +61,7 @@ test('GH-459: entrance band rows carry the colour of their end time; other goods
     startTime: '11:15:00', endTime: '12:15:00' })], day)[0].bandColour, undefined, 'unmapped end time');
 });
 test('Deployed shared modules are byte-identical to their canonical source', () => {
-  for (const name of ['staff-handout.js', 'package-contents.js', 'band-colours.js']) for (const target of ['session', 'redeem']) {
+  for (const name of ['staff-handout.js', 'package-contents.js', 'band-colours.js', 'checkin-window.js']) for (const target of ['session', 'redeem']) {
     assert.equal(fs.readFileSync(path.join(root, 'infra/lambda', target, name), 'utf8'), fs.readFileSync(path.join(root, 'infra/lambda/shared', name), 'utf8'));
   }
 });

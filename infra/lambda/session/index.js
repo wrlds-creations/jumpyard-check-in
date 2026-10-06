@@ -13,11 +13,19 @@ const { buildCheckinEmailMessage, buildCheckinEmailPreview } = require('./email-
 const { withGuestItemDetails, withPackageContents } = require('./package-contents');
 const { createHandoutStore } = require('./staff-handout');
 const { createStaffBoard } = require('./staff-board');
+const { evaluateCheckinWindow, stockholmNow } = require('./checkin-window');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const ACTIVE_SESSION_STATUSES = ['guest_in_progress', 'ready_for_staff', 'staff_in_progress'];
 const CHECKIN_LINK_DEV_TOKEN_HEADERS = ['x-jumpyard-link-token', 'authorization'];
 const CHECKIN_LINK_CHANNELS = new Set(['sms', 'email', 'manual', 'dev']);
+// GH-484 (D0240): the phone link a kiosk check-in shows as a small QR. It resolves like the other
+// check-in links but is only minted by ready-for-staff for the guest at the kiosk, never through
+// the development link route. It opens the public Nacka check-in origin.
+const KIOSK_PHONE_LINK_CHANNEL = 'kiosk_phone';
+const RESOLVABLE_LINK_CHANNELS = new Set([...CHECKIN_LINK_CHANNELS, KIOSK_PHONE_LINK_CHANNEL]);
+const KIOSK_PHONE_LINK_BASE_URL = 'https://checkin.jumpyard.se/';
+const KIOSK_PHONE_LINKS_PER_BOOKING_DAY = 5;
 const STAFF_AUTH_HEADERS = ['x-jumpyard-staff-token', 'authorization'];
 // GH-392: permanent lifetime for new sessions; saved expirations are not extended on resume.
 const DEFAULT_SESSION_TTL_MS = 4 * 60 * 60 * 1000;
@@ -267,6 +275,22 @@ async function handleStartSession(event, body, correlationId, options = {}) {
 
   const decision = evaluateStartContext(context, request);
   if (!decision.canStart) {
+    // GH-453 (D0229): after admission the visit day keeps its number. Reopening returns the
+    // completed session instead of a dead end; other days and unknown sessions stay blocked.
+    if (decision.reason === 'already_redeemed' && decision.visitDate === stockholmNow().date) {
+      const completedSession = await findCompletedSessionForDay(context.booking.rollerUniqueId, decision.visitDate);
+      if (completedSession) {
+        const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
+        const issuedGuestAccess = options.guestAccess || null;
+        return jsonResponse(200, correlationId, {
+          status: 'session_completed',
+          session: completedSession,
+          visit: await buildGuestVisit(completedSession, context.booking.venueId),
+          ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
+          ...(bookingResponse ? bookingResponse : {}),
+        });
+      }
+    }
     const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
     await writeEventLog({
       booking: context.booking,
@@ -288,6 +312,45 @@ async function handleStartSession(event, body, correlationId, options = {}) {
       sessionPlan: buildSessionPlan(context, decision),
       ...(bookingResponse ? bookingResponse : {}),
     });
+  }
+
+  // GH-456 (D0230): a new check-in opens 120 minutes before the booked start and closes when the
+  // booked session ends. A visit that is already ready for its number keeps working all day.
+  const checkinWindow = evaluateCheckinWindow({
+    endTime: context.booking.endTime,
+    startTime: context.booking.startTime,
+    visitDate: decision.visitDate,
+  });
+  if (checkinWindow.state !== 'open') {
+    const readySession = await findActiveSession(context.booking.rollerUniqueId, decision.visitDate);
+    if (readySession?.status !== 'ready_for_staff') {
+      const reason = checkinWindow.state === 'too_early' ? 'checkin_too_early' : 'checkin_too_late';
+      const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
+      await writeEventLog({
+        booking: context.booking,
+        correlationId,
+        eventType: 'checkin.session_blocked',
+        payload: { reason, ticketCount: decision.selectedTicketIds.length },
+        summary: `Check-in session blocked: ${reason}`,
+      });
+      return jsonResponse(409, correlationId, {
+        status: 'blocked',
+        error: {
+          code: reason,
+          message: reason === 'checkin_too_early'
+            ? 'Check-in opens 120 minutes before the booked start.'
+            : 'The booked session has ended; the guest needs help at the front desk.',
+        },
+        checkinWindow: {
+          closesAt: checkinWindow.closesAt,
+          opensAt: checkinWindow.opensAt,
+          startTime: checkinWindow.startTime,
+          visitDate: checkinWindow.visitDate,
+        },
+        sessionPlan: buildSessionPlan(context, { ...decision, canStart: false, reason }),
+        ...(bookingResponse ? bookingResponse : {}),
+      });
+    }
   }
 
   const requestHash = hashJson({
@@ -333,6 +396,7 @@ async function handleStartSession(event, body, correlationId, options = {}) {
     return jsonResponse(200, correlationId, {
       status: 'session_resumed',
       session: readyResumedSession,
+      visit: await buildGuestVisit(readyResumedSession, context.booking.venueId),
       ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
       ...(bookingResponse ? bookingResponse : {}),
     });
@@ -365,6 +429,7 @@ async function handleStartSession(event, body, correlationId, options = {}) {
   return jsonResponse(201, correlationId, {
     status: 'session_started',
     session: startedSession,
+    visit: await buildGuestVisit(startedSession, context.booking.venueId),
     ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
     ...(bookingResponse ? bookingResponse : {}),
   });
@@ -462,11 +527,52 @@ async function handleReadyForStaff(event, body, correlationId) {
     },
     summary: 'Check-in session marked ready for staff.',
   });
+  await requestAutoCheckin(updatedSession.checkinSessionId, 'ready_for_staff', correlationId);
+  const checkinLink = request.phoneLink ? await createKioskPhoneLink(updatedSession, correlationId) : null;
 
   return jsonResponse(200, correlationId, {
     status: 'ready_for_staff',
     session: updatedSession,
+    visit: await buildGuestVisit(updatedSession, await findBookingVenueId(updatedSession.rollerUniqueId)),
+    ...(checkinLink ? { checkinLink } : {}),
   });
+}
+
+// GH-484 (D0240): the kiosk shows this link as a small QR ("Lappen i mobilen"), so the guest gets
+// the same completion on the phone. It is minted with the number, lives until midnight of the
+// visit day in Stockholm, is capped per booking and day, and a failure only leaves the QR out.
+// A kiosk purchase starts on its temporary draft booking; reconciliation moves the link along.
+async function createKioskPhoneLink(session, correlationId) {
+  try {
+    const recent = firstMappedRow(await executeStatement(
+      `SELECT count(*)::int AS link_count
+         FROM jumpyard.checkin_tokens
+        WHERE roller_unique_id = :rollerUniqueId
+          AND channel = :channel
+          AND created_at > now() - INTERVAL '24 hours'`,
+      [
+        stringParameter('rollerUniqueId', session.rollerUniqueId),
+        stringParameter('channel', KIOSK_PHONE_LINK_CHANNEL),
+      ],
+    ));
+    if (Number(recent?.link_count ?? 0) >= KIOSK_PHONE_LINKS_PER_BOOKING_DAY) return null;
+    const link = await createSessionLinkToken({
+      channel: KIOSK_PHONE_LINK_CHANNEL,
+      context: { booking: { rollerUniqueId: session.rollerUniqueId } },
+      ttlMinutes: Math.max(30, 1440 - stockholmNow().minutes),
+    });
+    await writeEventLog({
+      booking: session,
+      correlationId,
+      eventType: 'checkin.kiosk_phone_link_created',
+      payload: { checkinSessionId: session.checkinSessionId, expiresAt: link.expiresAt },
+      summary: 'Phone link created for a kiosk check-in.',
+    });
+    return { expiresAt: link.expiresAt, url: buildCheckinUrl(KIOSK_PHONE_LINK_BASE_URL, link.token) };
+  } catch {
+    console.error(JSON.stringify({ event: 'checkin.kiosk_phone_link_failed', correlationId }));
+    return null;
+  }
 }
 
 // GH-458 (D0231): phone and kiosk guests approve safety before payment, and the Booking
@@ -491,6 +597,7 @@ async function readyAttestedPurchaseSession(session, correlationId) {
       },
       summary: 'Check-in session marked ready for staff; safety was approved before payment.',
     });
+    await requestAutoCheckin(readySession.checkinSessionId, 'safety_attested_ready', correlationId);
     return readySession;
   } catch {
     console.error(JSON.stringify({ event: 'checkin.attested_ready_failed', correlationId }));
@@ -1739,7 +1846,7 @@ async function handleResolveSessionLink(event, body, correlationId) {
 
   const tokenHash = hashString(request.token);
   const tokenRecord = await findSessionLinkToken(tokenHash);
-  if (!tokenRecord || !CHECKIN_LINK_CHANNELS.has(tokenRecord.channel)) {
+  if (!tokenRecord || !RESOLVABLE_LINK_CHANNELS.has(tokenRecord.channel)) {
     return jsonResponse(404, correlationId, {
       status: 'not_found',
       error: {
@@ -1861,6 +1968,7 @@ function normalizeReadyRequest(event, body) {
       extractSessionIdFromPath(event?.rawPath) ||
       stringOrNull(body.checkinSessionId),
     idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
+    phoneLink: body.phoneLink === true,
     safetyStatus: normalizeSafetyStatus(body.safetyStatus),
   };
 }
@@ -2951,6 +3059,7 @@ async function findStaffSessionDetail(checkinSessionId, staffVenueId = null) {
        cs.ready_for_staff_at::text AS ready_for_staff_at,
        cs.completed_at::text AS completed_at,
        (cs.session_summary -> 'staffActor')::text AS checked_in_by,
+       (cs.session_summary -> 'autoCheckin')::text AS auto_checkin,
        cs.created_at::text AS created_at,
        cs.updated_at::text AS updated_at,
        b.booking_status,
@@ -3486,7 +3595,7 @@ async function verifyGuestAccessToken(event) {
        AND (
          ct.channel = :channel
          OR (
-           ct.channel IN ('sms', 'email', 'manual', 'dev')
+           ct.channel IN ('sms', 'email', 'manual', 'dev', 'kiosk_phone')
            AND ct.opened_at > now() - INTERVAL '${DEFAULT_GUEST_ACCESS_TTL_MINUTES} minutes'
          )
        )
@@ -3579,7 +3688,7 @@ async function markSessionLinkOpened(tokenHash) {
     `UPDATE jumpyard.checkin_tokens
      SET opened_at = now()
      WHERE token_hash = :tokenHash
-       AND channel IN ('sms', 'email', 'manual', 'dev')
+       AND channel IN ('sms', 'email', 'manual', 'dev', 'kiosk_phone')
        AND consumed_at IS NULL
        AND expires_at > now()
        AND (opened_at IS NULL OR opened_at <= now() - INTERVAL '${LINK_RESOLVE_COOLDOWN_SECONDS} seconds')
@@ -4207,6 +4316,94 @@ async function findActiveSession(rollerUniqueId, visitDate) {
   return mapSessionRow(firstMappedRow(result));
 }
 
+// GH-453 (D0229): the latest admitted session of the visit day, so a reopened page keeps its number.
+async function findCompletedSessionForDay(rollerUniqueId, visitDate) {
+  if (!rollerUniqueId || !visitDate) return null;
+  const result = await executeStatement(
+    `SELECT
+       checkin_session_id,
+       roller_unique_id,
+       booking_reference,
+       visit_date::text AS visit_date,
+       status,
+       safety_status,
+       session_summary ->> 'guestResumeStep' AS guest_resume_step,
+       handoff_code,
+       handoff_day::text AS handoff_day,
+       handoff_status,
+       selected_ticket_ids::text AS selected_ticket_ids,
+       expires_at::text AS expires_at,
+       ready_for_staff_at::text AS ready_for_staff_at,
+       completed_at::text AS completed_at,
+       created_at::text AS created_at,
+       updated_at::text AS updated_at
+     FROM jumpyard.checkin_sessions
+     WHERE roller_unique_id = :rollerUniqueId
+       AND visit_date = CAST(:visitDate AS date)
+       AND status = 'redeemed'
+       AND handoff_code IS NOT NULL
+     ORDER BY completed_at DESC NULLS LAST, created_at DESC
+     LIMIT 1`,
+    [stringParameter('rollerUniqueId', rollerUniqueId), stringParameter('visitDate', visitDate)],
+  );
+
+  return mapSessionRow(firstMappedRow(result));
+}
+
+async function findBookingVenueId(rollerUniqueId) {
+  if (!rollerUniqueId) return null;
+  const row = firstMappedRow(await executeStatement(
+    `SELECT venue_id FROM jumpyard.roller_bookings WHERE roller_unique_id = :rollerUniqueId LIMIT 1`,
+    [stringParameter('rollerUniqueId', rollerUniqueId)],
+  ));
+  return stringOrNull(row?.venue_id);
+}
+
+// GH-453 (D0229): what the guest still collects at the café, from the staff manifest and the
+// staff receipts. Guest-safe: no claims, staff names or receipts leave Cloud.
+async function buildGuestVisit(session, venueId) {
+  if (!session || !venueId || !['ready_for_staff', 'redeemed'].includes(session.status)) return null;
+  try {
+    const store = createHandoutStore({ executeStatement, mappedRows, stringParameter });
+    const state = await store.readState(session, venueId);
+    return {
+      cafe: state.items.filter((item) => item.area === 'cafe').map((item) => ({
+        collected: item.collected,
+        detail: item.detail || null,
+        id: item.id,
+        kind: item.kind,
+        name: item.name,
+        quantity: item.quantity,
+        remaining: Math.max(0, item.quantity - item.collected),
+      })),
+      checkedInAt: session.completedAt || session.readyForStaffAt || null,
+    };
+  } catch {
+    console.error(JSON.stringify({ event: 'checkin.guest_visit_failed' }));
+    return null;
+  }
+}
+
+// GH-456 (D0230): ask the Redeem Lambda to admit a ready session automatically. It checks the
+// booking sync, the visit day and the window itself; a lost dispatch leaves the session ready
+// for the next trigger or for staff.
+async function requestAutoCheckin(checkinSessionId, trigger, correlationId) {
+  const functionName = process.env.AUTO_CHECKIN_FUNCTION_NAME;
+  if (!functionName || !checkinSessionId) return;
+  try {
+    await lambdaClient.send(new InvokeCommand({
+      FunctionName: functionName,
+      InvocationType: 'Event',
+      Payload: Buffer.from(JSON.stringify({
+        source: 'jumpyard.auto-checkin',
+        detail: { checkinSessionId, correlationId, trigger },
+      })),
+    }), { abortSignal: AbortSignal.timeout(1000) });
+  } catch {
+    console.error(JSON.stringify({ event: 'checkin.auto_checkin_dispatch_failed', correlationId, trigger }));
+  }
+}
+
 async function findSessionById(checkinSessionId) {
   const result = await executeStatement(
     `SELECT
@@ -4254,6 +4451,7 @@ function mapStaffSessionSummaryRow(row) {
     },
     bookingReference: stringOrNull(row.booking_reference),
     bookingSyncStatus: stringOrNull(row.booking_sync_status) || 'confirmed',
+    autoCheckin: parseJsonObject(row.auto_checkin),
     checkedInBy: parseJsonObject(row.checked_in_by),
     checkinSessionId: stringOrNull(row.checkin_session_id),
     completedAt: stringOrNull(row.completed_at),

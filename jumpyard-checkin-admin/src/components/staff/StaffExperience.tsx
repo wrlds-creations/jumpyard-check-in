@@ -49,6 +49,8 @@ function BookingRow({ session, area, actorId, selected, onOpen }: {
   const status = claim ? claim.actorId === actorId ? "Du hjälper" : `${claim.actorName} hjälper`
     : area === "cafe" ? session.cafeRemaining ? `${session.cafeRemaining} kvar att hämta` : "Utlämnat"
       : stage === "completed" ? `Incheckad ${clock(session.completedAt)}${session.checkedInBy?.displayName ? ` · ${session.checkedInBy.displayName}` : ""}`
+      // GH-456: an automatic check-in that failed hands the group to staff.
+      : session.autoCheckin?.status === "needs_staff" ? "Behöver personal"
       : session.bookingSyncStatus !== "confirmed" ? "Bekräftas" : session.isExpired ? "Gått ut"
         : stages.find((item) => item.id === stage)?.label;
   // GH-459: entrance staff see which bands to take; a count shows when the group has several colours.

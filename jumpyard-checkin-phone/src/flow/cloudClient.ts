@@ -1,4 +1,4 @@
-import type { Addon, AddonId, Booking, BookingPaymentState, CheckInSession, LookupSource, PackageContent } from '@/flow/types';
+import type { Addon, AddonId, Booking, BookingPaymentState, CheckInSession, GuestCafeItem, LookupSource, PackageContent } from '@/flow/types';
 import { getPackageAdmissionQuantity } from './packageContents';
 import { groupBandColours, normalizeBandColour } from './bandColours';
 
@@ -24,6 +24,8 @@ export type SessionIssue =
   | 'booking_not_fresh'
   | 'session_expired'
   | 'session_not_active'
+  | 'checkin_too_early'
+  | 'checkin_too_late'
   | 'session_failed'
   | 'network_error';
 
@@ -42,12 +44,15 @@ export class CloudLookupError extends Error {
 export class CloudSessionError extends Error {
   readonly reason: SessionIssue;
   readonly httpStatus?: number;
+  /** GH-456: the booking Cloud answered with when check-in is outside its window. */
+  readonly booking?: Booking;
 
-  constructor(reason: SessionIssue, message: string, httpStatus?: number) {
+  constructor(reason: SessionIssue, message: string, httpStatus?: number, booking?: Booking) {
     super(message);
     this.name = 'CloudSessionError';
     this.reason = reason;
     this.httpStatus = httpStatus;
+    this.booking = booking;
   }
 }
 
@@ -84,6 +89,7 @@ interface CloudSessionResponse {
   status:
     | 'session_started'
     | 'session_resumed'
+    | 'session_completed'
     | 'ready_for_staff'
     | 'blocked'
     | 'not_found'
@@ -92,6 +98,8 @@ interface CloudSessionResponse {
     | 'forbidden'
     | 'internal_error';
   session?: CloudSession;
+  /** GH-453: check-in time and the café lines still to collect. */
+  visit?: CloudVisit | null;
   guestAccess?: CloudGuestAccess;
   retryAfterSeconds?: number;
   error?: {
@@ -107,6 +115,11 @@ interface CloudGuestAccess {
   expiresAt: string | null;
 }
 
+interface CloudVisit {
+  checkedInAt?: string | null;
+  cafe?: Array<Partial<GuestCafeItem>> | null;
+}
+
 interface CloudSession {
   checkinSessionId: string;
   status: string;
@@ -116,6 +129,7 @@ interface CloudSession {
   handoffDay?: string | null;
   safetyStatus?: string | null;
   completedAt?: string | null;
+  readyForStaffAt?: string | null;
   expiresAt?: string | null;
 }
 
@@ -434,7 +448,15 @@ export async function lookupBooking(code: string, options: { signal?: AbortSigna
   return toBooking(body.booking, body.eligibility.reason, body.source, body.guestAccess, body.eligibility.paymentState);
 }
 
-export async function resolveCheckInSessionLink(token: string): Promise<CheckInSessionLinkResult> {
+// GH-484 (D0240): a kiosk purchase's phone link exists from the number, but its booking is
+// confirmed by ROLLER a few seconds later. Until then Cloud answers booking_not_fresh, so the
+// phone waits (about a minute in all) instead of showing an error.
+const BOOKING_SYNC_RETRY_DELAYS_MS = [3000, 5000, 8000, 12000, 15000, 15000];
+
+export async function resolveCheckInSessionLink(
+  token: string,
+  options: { onWaitingForBooking?: () => void; retryDelaysMs?: number[] } = {},
+): Promise<CheckInSessionLinkResult> {
   const rawToken = token.trim();
   if (!rawToken) {
     throw new CloudSessionError('session_failed', 'A check-in link token is required.');
@@ -460,6 +482,13 @@ export async function resolveCheckInSessionLink(token: string): Promise<CheckInS
       await delay(retryAfterSeconds * 1000);
       result = await requestSessionLinkResolve(rawToken);
     }
+
+    for (const waitMs of options.retryDelaysMs ?? BOOKING_SYNC_RETRY_DELAYS_MS) {
+      if (result.response.status !== 409 || result.body?.error?.code !== 'booking_not_fresh') break;
+      options.onWaitingForBooking?.();
+      await delay(waitMs);
+      result = await requestSessionLinkResolve(rawToken);
+    }
   } catch (error) {
     if (error instanceof CloudSessionError) throw error;
     throw new CloudSessionError('network_error', 'Could not reach JumpYard Cloud.');
@@ -482,17 +511,21 @@ export async function resolveCheckInSessionLink(token: string): Promise<CheckInS
     };
   }
 
+  if (!response.ok && isWindowIssue(body?.error?.code) && body?.booking) {
+    throw createSessionError(body, response.status, toBooking(body.booking, 'ready', body.source, body.guestAccess));
+  }
+
   if (!response.ok || !body?.session || !body.booking || !body.guestAccess?.token) {
     throw createSessionError(body, response.status);
   }
 
-  if (body.status !== 'session_started' && body.status !== 'session_resumed') {
+  if (!isSessionSuccess(body.status)) {
     throw createSessionError(body, response.status);
   }
 
   return {
     booking: toBooking(body.booking, 'ready', body.source, body.guestAccess),
-    checkinSession: toCheckInSession(body.session, body.guestAccess),
+    checkinSession: toCheckInSession(body.session, body.guestAccess, body.visit),
   };
 }
 
@@ -542,14 +575,14 @@ export async function startCheckInSession(
     throw createSessionError(body, response.status);
   }
 
-  if (body.status !== 'session_started' && body.status !== 'session_resumed') {
+  if (!isSessionSuccess(body.status)) {
     throw createSessionError(body, response.status);
   }
 
   return toCheckInSession(body.session, {
     expiresAt: booking.guestAccessExpiresAt ?? null,
     token: guestAccessToken,
-  });
+  }, body.visit);
 }
 
 async function requestSessionLinkResolve(rawToken: string) {
@@ -618,7 +651,7 @@ export async function markSessionReadyForStaff(
   return toCheckInSession(body.session, {
     expiresAt: session.guestAccessExpiresAt ?? null,
     token: guestAccessToken,
-  });
+  }, body.visit);
 }
 
 export async function getNewBookingAvailability(startTimes: string[], date = getExpectedDate()): Promise<NewBookingAvailability> {
@@ -1031,7 +1064,16 @@ function createLookupError(body: CloudLookupResponse | null, httpStatus?: number
   return new CloudLookupError('lookup_failed', body?.error?.message ?? 'JumpYard Cloud lookup failed.', httpStatus);
 }
 
-function createSessionError(body: CloudSessionResponse | null, httpStatus?: number) {
+// GH-453: an admitted visit of today comes back as `session_completed` with its number.
+function isSessionSuccess(status: CloudSessionResponse['status'] | undefined) {
+  return status === 'session_started' || status === 'session_resumed' || status === 'session_completed';
+}
+
+function isWindowIssue(code?: string) {
+  return code === 'checkin_too_early' || code === 'checkin_too_late';
+}
+
+function createSessionError(body: CloudSessionResponse | null, httpStatus?: number, booking?: Booking) {
   if (
     body?.status === 'not_found' ||
     body?.error?.code === 'booking_not_found' ||
@@ -1042,7 +1084,7 @@ function createSessionError(body: CloudSessionResponse | null, httpStatus?: numb
 
   const code = body?.error?.code;
   if (isSessionIssue(code)) {
-    return new CloudSessionError(code, body?.error?.message ?? 'Check-in session could not start.', httpStatus);
+    return new CloudSessionError(code, body?.error?.message ?? 'Check-in session could not start.', httpStatus, booking);
   }
 
   return new CloudSessionError('session_failed', body?.error?.message ?? 'Check-in session could not start.', httpStatus);
@@ -1065,7 +1107,9 @@ function isSessionIssue(value?: string): value is SessionIssue {
     value === 'booking_not_active' ||
     value === 'booking_not_fresh' ||
     value === 'session_expired' ||
-    value === 'session_not_active'
+    value === 'session_not_active' ||
+    value === 'checkin_too_early' ||
+    value === 'checkin_too_late'
   );
 }
 
@@ -1167,8 +1211,10 @@ function getReadyForStaffIdempotencyKey(session: CheckInSession, safetyStatus: s
   return `phone-ready-for-staff:${session.checkinSessionId}:${safetyStatus}`;
 }
 
-function toCheckInSession(session: CloudSession, guestAccess?: CloudGuestAccess): CheckInSession {
+function toCheckInSession(session: CloudSession, guestAccess?: CloudGuestAccess, visit?: CloudVisit | null): CheckInSession {
   return {
+    checkedInAt: visit?.checkedInAt ?? session.completedAt ?? session.readyForStaffAt ?? null,
+    cafe: Array.isArray(visit?.cafe) ? visit.cafe.map(toGuestCafeItem).filter((item): item is GuestCafeItem => Boolean(item)) : null,
     checkinSessionId: session.checkinSessionId,
     status: session.status,
     guestResumeStep: session.guestResumeStep === 'safety' ? 'safety' : null,
@@ -1180,6 +1226,20 @@ function toCheckInSession(session: CloudSession, guestAccess?: CloudGuestAccess)
     safetyStatus: session.safetyStatus ?? null,
     completedAt: session.completedAt ?? null,
     expiresAt: session.expiresAt ?? null,
+  };
+}
+
+function toGuestCafeItem(item: Partial<GuestCafeItem>): GuestCafeItem | null {
+  const id = normalizeOptionalString(item.id);
+  const name = normalizeOptionalString(item.name);
+  const quantity = Number(item.quantity);
+  if (!id || !name || !Number.isSafeInteger(quantity) || quantity < 1) return null;
+  const collected = Math.max(0, Math.min(quantity, Number.isSafeInteger(Number(item.collected)) ? Number(item.collected) : 0));
+  return {
+    id, name, quantity, collected,
+    kind: normalizeOptionalString(item.kind) ?? 'cafe',
+    detail: normalizeOptionalString(item.detail) ?? null,
+    remaining: quantity - collected,
   };
 }
 

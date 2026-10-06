@@ -16,6 +16,7 @@ import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { ConnectedProfiles } from '@/components/ConnectedProfiles';
 import { ConfirmationScreen } from '@/components/ConfirmationScreen';
 import { isPhoneCompletionReady } from '@/flow/phoneCompletion';
+import { clearSavedVisit, readSavedVisit, saveVisit, type SavedVisit } from '@/flow/savedVisit';
 import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import { detectChannel, initialContext, initialState, nextState } from '@/flow/machine';
 import type { Branch } from '@/flow/machine';
@@ -457,6 +458,8 @@ function CheckInFlow() {
     const [ctx, setCtx] = useState<FlowContext>(() => ({ ...initialContext(effectiveChannel), token }));
     const [isStartingSession, setIsStartingSession] = useState(false);
     const [sessionStartError, setSessionStartError] = useState<SessionIssue | null>(null);
+    // GH-484: a kiosk phone link opened before ROLLER confirmed the purchase waits a moment.
+    const [waitingForLinkedBooking, setWaitingForLinkedBooking] = useState(false);
     const [isMarkingReadyForStaff, setIsMarkingReadyForStaff] = useState(false);
     const [readyForStaffError, setReadyForStaffError] = useState<SessionIssue | null>(null);
     const [paidConfirmationState, setPaidConfirmationState] = useState<PaidConfirmationUiState>('idle');
@@ -622,6 +625,10 @@ function CheckInFlow() {
             if (error instanceof CloudSessionError && error.reason === 'already_redeemed') {
                 routeAlreadyCheckedIn(bookingPatch);
                 return;
+            }
+            // GH-456 (D0230): outside the check-in window the booking page says when to come back.
+            if (error instanceof CloudSessionError && isCheckInWindowIssue(error.reason)) {
+                setSessionStartError(error.reason);
             }
 
             advance(bookingPatch);
@@ -1283,6 +1290,24 @@ function CheckInFlow() {
     };
 
 
+    // GH-453 (D0229): show the saved visit at once, then refresh status and café quantities through
+    // the guest's own booking lookup. The saved number stays if the refresh fails.
+    const restoreSavedVisit = (visit: SavedVisit) => {
+        const bookingAddons = visit.booking.existingAddons ?? [];
+        setAlreadyCheckedIn(false);
+        setCtx((current) => ({ ...current, booking: visit.booking, checkinSession: visit.session,
+            existingAddons: bookingAddons, selectedAddons: bookingAddons }));
+        setState('APP_PRESENT');
+        void lookupBooking(visit.identifier)
+            .then((booking) => startCheckInSession(booking).then((checkinSession) => ({ booking, checkinSession })))
+            .then(({ booking, checkinSession }) => {
+                if (checkinSession.checkinSessionId !== visit.session.checkinSessionId || !checkinSession.handoffCode) return;
+                setCtx((current) => current.checkinSession?.checkinSessionId === visit.session.checkinSessionId
+                    ? { ...current, booking, checkinSession } : current);
+            })
+            .catch(() => undefined);
+    };
+
     useEffect(() => {
         if (recoveryGateReady && state !== 'KIOSK_CHOICE') return;
         if (buyRecoveryStatus !== null) return;
@@ -1351,7 +1376,13 @@ function CheckInFlow() {
             return;
         }
 
-        if (state !== 'KIOSK_CHOICE' || linkToken || !snapshot) return;
+        if (state !== 'KIOSK_CHOICE' || linkToken) return;
+        if (!snapshot) {
+            // GH-453 (D0229): a reload on the visit day goes straight back to the saved number.
+            const visit = readSavedVisit();
+            if (visit) restoreSavedVisit(visit);
+            return;
+        }
         // Legacy payment snapshots cannot prove a declined payment. Preserve their
         // original identifier for a later paid-status check instead of offering a new purchase.
         if (snapshot.currentFlowStep === 'PAYMENT' || snapshot.currentFlowStep === 'PENDING') {
@@ -1435,7 +1466,7 @@ function CheckInFlow() {
         }
 
         setSessionStartError(null);
-        resolveCheckInSessionLink(linkToken)
+        resolveCheckInSessionLink(linkToken, { onWaitingForBooking: () => { if (alive) setWaitingForLinkedBooking(true); } })
             .then(({ booking, checkinSession }) => {
                 if (!alive) return;
                 setAlreadyCheckedIn(false);
@@ -1450,6 +1481,14 @@ function CheckInFlow() {
             .catch(error => {
                 if (!alive) return;
                 setSessionStartError(error instanceof CloudSessionError ? error.reason : 'session_failed');
+                // GH-456 (D0230): a link opened outside the window shows its booking and when to come back.
+                if (error instanceof CloudSessionError && error.booking && isCheckInWindowIssue(error.reason)) {
+                    const bookingAddons = error.booking.existingAddons ?? [];
+                    setCtx((current) => ({ ...current, booking: error.booking!, checkinSession: null,
+                        existingAddons: bookingAddons, selectedAddons: bookingAddons }));
+                    setState('APP_BOOKING');
+                    return;
+                }
                 setState('KIOSK_LOOKUP');
             });
         return () => {
@@ -1470,6 +1509,10 @@ function CheckInFlow() {
         && !recoveryReturnRecord && hasCompletedBuyFlowRecovery(buyRecoverySnapshot);
     const phoneCompletion = Boolean((state === 'APP_CONFIRM' || state === 'APP_PRESENT') && ctx.booking
         && isPhoneCompletionReady(ctx.checkinSession, ctx.channel, alreadyCheckedIn));
+    // GH-453 (D0229): keep today's number for a reload or a reopened page.
+    useEffect(() => {
+        if (phoneCompletion && ctx.booking && ctx.checkinSession) saveVisit(ctx.booking, ctx.checkinSession);
+    }, [phoneCompletion, ctx.booking, ctx.checkinSession]);
     const progressState: FlowState = showingCompletedBuyRecovery ? 'APP_CONFIRM' : showingBuyPaymentRecovery ? 'APP_PAYMENT' : state;
     const exitFlowMode = getExitFlowMode({
         addonsStep,
@@ -1533,8 +1576,8 @@ function CheckInFlow() {
                         >
                             <img src="/jumpyard_logo.png" alt="JumpYard" className="w-40 mb-6" />
                             <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3"></div>
-                            <p className="text-muted text-sm">
-                                {t.common.loading}
+                            <p className="text-muted text-sm" data-testid="link-loading">
+                                {waitingForLinkedBooking ? t.common.fetchingSlip : t.common.loading}
                             </p>
                         </FlowScreen>
                     )}
@@ -1698,7 +1741,7 @@ function CheckInFlow() {
                             selectedAddons={ctx.selectedAddons}
                             channel={ctx.channel}
                             alreadyCheckedIn={alreadyCheckedIn}
-                            onStartOver={ctx.channel === 'park-qr' ? resetToStart : undefined}
+                            onStartOver={ctx.channel === 'park-qr' ? () => { clearSavedVisit(); resetToStart(); } : undefined}
                         />
                     )}
                 </>
@@ -1719,6 +1762,10 @@ function CheckInFlow() {
             )}
         </div>
     );
+}
+
+function isCheckInWindowIssue(reason: string) {
+    return reason === 'checkin_too_early' || reason === 'checkin_too_late';
 }
 
 function getResumeState(session: CheckInSession): FlowState | null {

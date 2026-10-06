@@ -30,9 +30,11 @@ function load(name) {
 }
 const { ConfirmationScreen } = load('components/ConfirmationScreen.tsx');
 const { LanguageProvider } = load('context/LanguageContext.tsx');
-const { isPhoneCompletionReady } = load('flow/phoneCompletion.ts');
+const { isPhoneCompletionReady, isVisitDayOver, stockholmToday } = load('flow/phoneCompletion.ts');
 const booking = { id: 'SYNTHETIC', jumpers: 1, time: '14:00', durationMinutes: 60, products: 1, paid: true, productLabel: '60 min entré' };
-const session = { checkinSessionId: 'synthetic-session', status: 'ready_for_staff', handoffStatus: 'ready_for_staff', handoffCode: '0001', handoffDay: '2026-09-22' };
+// GH-453: the completion view belongs to today's visit; another day says the visit is over.
+const TODAY = stockholmToday();
+const session = { checkinSessionId: 'synthetic-session', status: 'ready_for_staff', handoffStatus: 'ready_for_staff', handoffCode: '0001', handoffDay: TODAY };
 function render(overrides = {}, lang = 'sv') {
     globalThis.window = { localStorage: { getItem: () => lang } };
     try { return renderToStaticMarkup(React.createElement(LanguageProvider, null, React.createElement(ConfirmationScreen, {
@@ -40,11 +42,13 @@ function render(overrides = {}, lang = 'sv') {
     }))); } finally { delete globalThis.window; }
 }
 
-test('ready phone keeps server number, full session-bound payload, day and quantity one', () => {
+test('ready phone keeps the server number, day and quantity one, and shows no QR code (GH-456)', () => {
     const html = render({ selectedAddons: [{ id: 'socks', label: 'Strumpor', price: 45, qty: 1 }] });
-    for (const value of ['data-phone-completion="true"', 'Du är incheckad', '>0001</strong>',
-        'JY_HANDOFF:0001:synthetic-session', 'Nummer från', '2026-09-22', '60 min entré', 'Strumpor']) assert.ok(html.includes(value), value);
+    for (const value of ['data-phone-completion="true"', 'Du är incheckad', '>0001</strong>', 'data-handoff-code="0001"',
+        'Nummer från', `data-day="${TODAY}"`, '60 min entré', 'Strumpor']) assert.ok(html.includes(value), value);
+    assert.doesNotMatch(html.replace(/<[^>]+>/g, ' '), /Numret gäller hela dagen|station/i, 'Love, 2026-10-06: no "all day" line and no "stationen"');
     assert.equal((html.match(/class="quantity">1<\/strong>/g) ?? []).length, 2);
+    assert.doesNotMatch(html, /ready-entry-handoff-qr|JY_HANDOFF|Förstora QR-kod/, 'the number is enough; the QR stays in the backend');
     assert.doesNotMatch(html, /Ny besökare|Skriv ut|NOT_A_VALID|DESIGN_PREVIEW/);
 });
 
@@ -60,8 +64,6 @@ for (const [label, changes] of [
     ['missing session id', { checkinSession: { ...session, checkinSessionId: '' } }],
     ['missing number', { checkinSession: { ...session, handoffCode: '' } }],
     ['not ready', { checkinSession: { ...session, status: 'active', handoffStatus: 'not_ready' } }],
-    ['redeemed', { checkinSession: { ...session, status: 'redeemed' } }],
-    ['completed handoff', { checkinSession: { ...session, handoffStatus: 'completed' } }],
     ['already checked in', { alreadyCheckedIn: true }],
     ['kiosk channel', { channel: 'kiosk' }],
 ]) test(`${label}: does not claim a new ready phone handoff`, () => {
@@ -71,11 +73,32 @@ for (const [label, changes] of [
         changes.channel ?? 'park-qr', changes.alreadyCheckedIn), false);
 });
 
-test('completed view retains booking identity and QR for café use', () => {
-    const html = render({ checkinSession: { ...session, status: 'completed' } });
+// GH-453 (D0229): after admission the same visit day keeps its number instead of a dead end.
+for (const [label, changes] of [
+    ['redeemed', { status: 'redeemed' }],
+    ['completed handoff', { handoffStatus: 'completed' }],
+    ['completed', { status: 'completed' }],
+]) test(`${label} today: keeps the number and says checked in`, () => {
+    const admitted = { ...session, ...changes, completedAt: `${TODAY}T11:45:00.000Z` };
+    assert.equal(isPhoneCompletionReady(admitted, 'park-qr', true), true);
+    const html = render({ checkinSession: admitted, alreadyCheckedIn: true });
+    for (const value of ['data-presence="arrived"', 'Du är incheckad', '>0001</strong>', 'Sedan 13:45']) assert.ok(html.includes(value), value);
+    assert.doesNotMatch(html, /Redan incheckad/);
+});
+
+test('a session of an earlier day says the visit is over and shows no list', () => {
+    const old = { ...session, status: 'redeemed', handoffDay: '2026-09-22' };
+    assert.equal(isVisitDayOver(old), true);
+    assert.equal(isVisitDayOver(session), false);
+    const html = render({ checkinSession: old });
+    for (const value of ['data-presence="ended"', 'Besöket är avslutat', 'Nummer 0001 gällde bara tisdag 22 september.']) assert.ok(html.includes(value), value);
+    assert.doesNotMatch(html, /Hämta på plats|Hämta i caféet|step-station|number-issued/);
+});
+
+test('a redemption without our session (for example at kassan) still shows the generic already-checked-in view', () => {
+    const html = render({ checkinSession: null, alreadyCheckedIn: true });
     assert.match(html, /Redan incheckad/);
     assert.match(html, /SYNTHETIC/);
-    assert.match(html, /JY_HANDOFF:0001:synthetic-session/);
 });
 
 test('long legacy code is unchanged and uses wrapping treatment', () => {
@@ -83,7 +106,6 @@ test('long legacy code is unchanged and uses wrapping treatment', () => {
     const html = render({ checkinSession: { ...session, handoffCode: code } });
     assert.match(html, /data-long="true"/);
     assert.ok(html.includes(`>${code}</strong>`));
-    assert.ok(html.includes(`JY_HANDOFF:${code}:synthetic-session`));
 });
 
 test('Combo uses two bands and one later pizza, keeping package detail and no invented extras', () => {
@@ -151,9 +173,67 @@ test('the local completion preview uses exactly the colours Cloud sends', () => 
     }
 });
 
-test('English and remote arrival copy are retained without introducing a reset callback', () => {
+test('a home check-in through the email link is checked in too, without a reset callback (GH-456)', () => {
     const html = render({ channel: 'sms' }, 'en');
-    for (const value of ['You are checked in', 'Your number', 'arrive at the park', 'Enlarge QR code']) assert.ok(html.includes(value), value);
+    for (const value of ['You are checked in', 'Your number', 'Collect on site', 'Number from', 'data-presence="arrived"']) {
+        assert.ok(html.includes(value), value);
+    }
+    assert.doesNotMatch(html, /scan the sign|You are all set|Enlarge QR code/);
     assert.doesNotMatch(html, /confirmation-start-over/);
     assert.match(render({ onStartOver() { assert.fail('Render must never reset'); } }), /confirmation-start-over/);
+});
+
+test('Cloud café lines replace the phone grouping and show what is left (GH-453)', () => {
+    const withCafe = { ...session, cafe: [
+        { id: 'pizza-1', kind: 'pizza', name: 'Pizza', detail: 'Weekday Combo', quantity: 1, collected: 1, remaining: 0 },
+        { id: 'coffee-1', kind: 'coffee', name: 'Kaffe', detail: null, quantity: 2, collected: 0, remaining: 2 },
+    ] };
+    const html = render({ checkinSession: withCafe, selectedAddons: [{ id: 'coffee', label: 'Coffee', qty: 9, price: 0 }] });
+    for (const value of ['Kvar i caféet', 'Kaffe', 'combo-pizza.png', 'data-collected="true"']) assert.ok(html.includes(value), value);
+    assert.doesNotMatch(html, /class="quantity">9<\/strong>/, 'the phone no longer counts café items itself when Cloud answered');
+    const none = render({ checkinSession: { ...session, cafe: [] }, selectedAddons: [{ id: 'coffee', label: 'Coffee', qty: 1, price: 0 }] });
+    assert.doesNotMatch(none, /confirmation-later/, 'an empty Cloud list means nothing to collect at the café');
+});
+
+// GH-453/GH-456: day states of the completion view.
+const { PhoneCompletion } = load('components/PhoneCompletion.tsx');
+const station = [{ icon: 'visitor-wristband', label: 'Besöksband 60 min', qty: 2 }, { icon: 'grip-socks', label: 'Strumpor', qty: 2 }];
+const cafe = (pizza, coffee) => [{ key: 'later', title: '', items: [
+    { icon: 'combo-pizza', label: 'Pizza att dela', qty: 1 - pizza, collected: pizza },
+    { icon: 'drink-cup', label: 'Kaffe', qty: 2 - coffee, collected: coffee },
+] }];
+function day(props, lang = 'sv') {
+    return renderToStaticMarkup(React.createElement(PhoneCompletion, { lang, onLanguageChange() {}, handoffCode: '0427',
+        handoffPayload: 'JY_HANDOFF:0427:synthetic-session', sessionId: 'synthetic-session', items: station, groups: cafe(0, 0), ...props }));
+}
+
+test('arrived shows the check-in time and one banner per step: the station, then the café', () => {
+    const html = day({ presence: 'arrived', checkedInAt: '13:45' });
+    for (const value of ['Du är incheckad', 'Sedan 13:45', 'data-presence="arrived"']) assert.ok(html.includes(value), value);
+    assert.match(html, /data-tone="station" data-testid="step-station">[\s\S]*>Hämta på plats<\/span><span class="stepHint">Innan ni hoppar:</);
+    assert.match(html, /data-tone="cafe" data-testid="step-cafe">[\s\S]*>Hämta i caféet<\/span><span class="stepHint">Efter hoppet\. Visa numret\.</);
+    // Love, 2026-10-06: short sentences without dashes.
+    assert.doesNotMatch(html, /[–—]/);
+    const en = day({ presence: 'arrived', checkedInAt: '13:45' }, 'en');
+    for (const value of ['Collect on site', 'Before you jump:', 'Collect at the café', 'After jumping. Show your number.'])
+        assert.ok(en.includes(value), value);
+    assert.match(day({ presence: 'arrived', checkedInAt: '2026-10-17T11:45:00.000Z' }), /Sedan 13:45/, 'ISO times show in Nacka time');
+});
+
+test('café rows show what is left, what was collected, and when everything is collected', () => {
+    const partial = day({ presence: 'arrived', groups: cafe(1, 0) });
+    assert.ok(partial.includes('Kvar i caféet'));
+    assert.ok(partial.includes('data-collected="true"'));
+    assert.ok(partial.includes('Hämtat'));
+    const done = day({ presence: 'arrived', groups: cafe(1, 2) });
+    assert.ok(done.includes('Allt i caféet är hämtat'));
+    assert.match(done, /data-tone="done"/);
+    assert.doesNotMatch(done, /Visa numret\./, 'nothing left to show the number for');
+});
+
+test('after the visit day there is no QR code and no café list', () => {
+    const html = day({ presence: 'ended', visitDayLabel: 'lördag 17 oktober' });
+    assert.ok(html.includes('Besöket är avslutat'));
+    assert.ok(html.includes('Nummer 0427 gällde bara lördag 17 oktober.'));
+    assert.doesNotMatch(html, /ready-entry-handoff-qr|JY_HANDOFF|Hämta i caféet|Hämta på plats|number-issued/);
 });
