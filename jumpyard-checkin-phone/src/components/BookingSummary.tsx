@@ -4,6 +4,7 @@ import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import type { SessionIssue } from '@/flow/cloudClient';
 import type { Addon, Booking } from '@/flow/types';
+import { getJumpTime } from '@/flow/jumpTime';
 import { getBookingContentRows, packageContentCopy } from '@/flow/packageContents';
 
 interface BookingSummaryProps {
@@ -35,13 +36,10 @@ export const BookingSummary = ({ booking, onContinue, isStartingSession = false,
     const productLabel = getBookingProductLabel(booking, t.booking.product);
     const contentRows = getBookingContentRows(booking, productLabel, productQuantity, lang);
 
-    const timeDisplay = booking?.endTime
-        ? `${booking.time}–${booking.endTime}`
-        : booking?.time || '14:00';
-
-    const durationDisplay = booking?.durationMinutes
-        ? `${booking.durationMinutes} min`
-        : null;
+    // D0241: the jump itself, so a Weekday Combo reads 14:00–15:00 and 60 min, not ROLLER's package span.
+    const jumpTime = getJumpTime(booking, contentRows);
+    const timeDisplay = jumpTime?.time || '14:00';
+    const durationDisplay = jumpTime?.minutes ? `${jumpTime.minutes} min` : null;
 
     const guestDisplay = [booking?.guestName, booking?.lastName].filter(Boolean).join(' ');
 

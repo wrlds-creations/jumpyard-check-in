@@ -46,19 +46,22 @@ Short words that say exactly what to do, each next step a banner the guest canno
 
 | Place | Swedish | English |
 |---|---|---|
-| Under the number | Numret gäller hela dagen. | Your number works all day. |
-| Black banner | GÅ TILL STATIONEN / Ta det här: | GO TO THE STATION / Take this: |
+| Black banner | HÄMTA PÅ PLATS / Innan ni hoppar: | COLLECT ON SITE / Before you jump: |
 | Red banner | HÄMTA I CAFÉET / Efter hoppet. Visa numret. | COLLECT AT THE CAFÉ / After jumping. Show your number. |
 | Red banner, something collected | KVAR I CAFÉET / Visa numret. | LEFT AT THE CAFÉ / Show your number. |
 | Grey banner | ALLT I CAFÉET ÄR HÄMTAT | EVERYTHING AT THE CAFÉ IS COLLECTED |
 | Too early (black box) | INCHECKNINGEN ÖPPNAR 12:00 / Två timmar före ert pass. | YOU CAN CHECK IN FROM 12:00 / Two hours before your session. |
 | Too late (black box) | ER HOPPTID ÄR SLUT / Gå till kassan så hjälper vi er. | YOUR JUMP TIME HAS ENDED / Go to the front desk and we will help you. |
+| Very bottom, small | NUMMER FRÅN LÖRDAG 17 OKTOBER | NUMBER FROM SATURDAY 17 OCTOBER |
 
-The email's third step reads "Klart! Ni är incheckade". The time range ("14:00–15:00") keeps its en dash, because it is a range, not a sentence.
+- "På plats" tells a guest who checked in at home that things are collected on arrival. Nobody calls the place "stationen", so no text names it.
+- The email's third step reads "Klart! Ni är incheckade / Hämta band och strumpor på plats när ni kommer."
+- The booking page shows the jump itself, the start plus the longest admission length (`flow/jumpTime.ts`). A Weekday Combo reads 14:00–15:00 and 60 min, not ROLLER's 14:00–16:00 package span.
+- The time range ("14:00–15:00") keeps its en dash, because it is a range, not a sentence.
 
 ## Phone
 
-- The completion view shows the number large, the check-in time, the station banner with what to take, and the café banner with Cloud's café lines: what is collected and what is left.
+- The completion view shows the number large, the check-in time, the "Hämta på plats" banner with what to take, and the café banner with Cloud's café lines: what is collected and what is left.
 - The saved visit `jumpyard.savedVisit.v1` holds today's booking reference, number and booking snapshot, never the guest access token. A reload goes straight to the number, then refreshes through the ordinary lookup. The next day the saved visit is dropped.
 - Window answers show a notice on the booking page instead of a start button.
 
@@ -69,7 +72,7 @@ When a kiosk check-in gets its number, the kiosk asks ready-for-staff for a phon
 - **The link.** `https://checkin.jumpyard.se/?jy_token=<token>`, channel `kiosk_phone`, stored as a hash.
   - Valid until midnight of the visit day.
   - At most five per booking and day.
-  - It resolves, and grants guest access, like the email link, so the phone opens the same completion: the number all day, the station and the café.
+  - It resolves, and grants guest access, like the email link, so the phone opens the same completion: the number all day, what to collect on site and at the café.
   - Add-ons can be bought on the phone.
 - **Purchases.** The link is minted on the temporary draft booking. `confirmKioskReconciliation` moves it to the real booking in the same statement, before the automatic check-in trigger. A scan in between gets `booking_not_fresh`, and the phone shows "Vi hämtar din lapp…" for up to about a minute.
 - **Exposure.** The QR is only on the kiosk screen, for about a minute, and only for the guest. The printed slip has no link (kiosk D0047/D0048).

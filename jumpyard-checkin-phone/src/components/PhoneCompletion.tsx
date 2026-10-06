@@ -47,12 +47,13 @@ export interface PhoneCompletionProps {
 export const SHOW_PHONE_QR = false;
 
 // Love, 2026-10-06: short words that say exactly what to do, in steps that jump out; no dashes.
+// Things are collected "på plats", so a guest who checked in at home knows it happens on arrival;
+// nobody calls it "stationen". The number's day sits small at the very bottom.
 const COPY = {
     sv: {
         arrived: 'Du är incheckad', ended: 'Besöket är avslutat', since: 'Sedan', number: 'Ditt nummer',
-        instruction: 'Numret gäller hela dagen.',
         endedText: (code: string, day: string) => `Nummer ${code} gällde bara ${day}.`,
-        station: 'Gå till stationen', stationHint: 'Ta det här:',
+        station: 'Hämta på plats', stationHint: 'Innan ni hoppar:',
         cafeLater: 'Hämta i caféet', cafeLaterHint: 'Efter hoppet. Visa numret.',
         cafeLeft: 'Kvar i caféet', cafeLeftHint: 'Visa numret.',
         cafeDone: 'Allt i caféet är hämtat', collected: 'Hämtat',
@@ -60,13 +61,12 @@ const COPY = {
     },
     en: {
         arrived: 'You are checked in', ended: 'Your visit is over', since: 'Since', number: 'Your number',
-        instruction: 'Your number works all day.',
         endedText: (code: string, day: string) => `Number ${code} was only valid on ${day}.`,
-        station: 'Go to the station', stationHint: 'Take this:',
+        station: 'Collect on site', stationHint: 'Before you jump:',
         cafeLater: 'Collect at the café', cafeLaterHint: 'After jumping. Show your number.',
         cafeLeft: 'Left at the café', cafeLeftHint: 'Show your number.',
         cafeDone: 'Everything at the café is collected', collected: 'Collected',
-        another: 'Make a new booking', qr: 'Enlarge QR code', close: 'Close', enlarged: 'Show to our staff', issued: 'Number issued',
+        another: 'Make a new booking', qr: 'Enlarge QR code', close: 'Close', enlarged: 'Show to our staff', issued: 'Number from',
     },
 };
 
@@ -80,6 +80,14 @@ export function formatCheckedInAt(value?: string | null) {
     return Number.isNaN(time.getTime()) ? null : STOCKHOLM_CLOCK.format(time);
 }
 
+/** "lördag 17 oktober" for the visit day "2026-10-17"; null for anything else. */
+export function formatNumberDay(day: string | null | undefined, lang: Language) {
+    if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+    const date = new Date(`${day}T12:00:00Z`);
+    return Number.isNaN(date.getTime()) ? null : new Intl.DateTimeFormat(lang === 'sv' ? 'sv-SE' : 'en-GB',
+        { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Stockholm' }).format(date);
+}
+
 /** Render only after the existing session is ready. This view never redeems or resets automatically. */
 export function PhoneCompletion({ lang, onLanguageChange, handoffCode, handoffPayload, handoffDay, sessionId,
     handoffStatus, channel = 'park-qr', presence = 'arrived', checkedInAt, visitDayLabel, items, groups, onStartOver }: PhoneCompletionProps) {
@@ -88,6 +96,7 @@ export function PhoneCompletion({ lang, onLanguageChange, handoffCode, handoffPa
     const dialogTitle = useId();
     const t = COPY[lang];
     const since = formatCheckedInAt(checkedInAt);
+    const numberDay = presence === 'arrived' ? formatNumberDay(handoffDay, lang) : null;
     useEffect(() => {
         if (largeQr && dialog.current && !dialog.current.open) dialog.current.showModal();
     }, [largeQr]);
@@ -133,14 +142,11 @@ export function PhoneCompletion({ lang, onLanguageChange, handoffCode, handoffPa
         {presence === 'ended' ? <section className={styles.ended} data-testid="visit-ended">
             <p>{t.endedText(handoffCode, visitDayLabel ?? handoffDay ?? '')}</p>
         </section> : <>
-            <section className={styles.handoff} aria-label={t.enlarged} data-testid="ready-entry-handoff-card"
-                data-qr={SHOW_PHONE_QR ? undefined : 'false'}>
-                {SHOW_PHONE_QR && <button type="button" className={styles.qrButton} onClick={() => setLargeQr(true)} aria-label={t.qr} aria-haspopup="dialog">
+            {SHOW_PHONE_QR && <section className={styles.handoff} aria-label={t.enlarged} data-testid="ready-entry-handoff-card">
+                <button type="button" className={styles.qrButton} onClick={() => setLargeQr(true)} aria-label={t.qr} aria-haspopup="dialog">
                     <QrCode value={handoffPayload} className={styles.qr} testId="ready-entry-handoff-qr" />
-                </button>}
-                <p className={styles.instruction} data-testid="confirmation-subtitle">{t.instruction}</p>
-                {handoffDay && <p className={styles.issued}>{t.issued} {handoffDay}</p>}
-            </section>
+                </button>
+            </section>}
             <section className={styles.pickup} aria-label={t.station}>
                 {step('addons-bag', t.station, t.stationHint, 'station', 'step-station')}
                 <ul>{renderItems(items)}</ul>
@@ -154,8 +160,10 @@ export function PhoneCompletion({ lang, onLanguageChange, handoffCode, handoffPa
                 })}
             </section>
         </>}
-        {onStartOver && <footer className={styles.footer}><button type="button" onClick={onStartOver}
-            data-testid="confirmation-start-over">{t.another}</button></footer>}
+        {(onStartOver || numberDay) && <footer className={styles.footer}>
+            {onStartOver && <button type="button" onClick={onStartOver} data-testid="confirmation-start-over">{t.another}</button>}
+            {numberDay && <p className={styles.issued} data-testid="number-issued" data-day={handoffDay ?? undefined}>{t.issued} {numberDay}</p>}
+        </footer>}
         {SHOW_PHONE_QR && largeQr && <dialog className={styles.dialog} ref={dialog} aria-labelledby={dialogTitle}
             onClose={() => setLargeQr(false)} onCancel={() => setLargeQr(false)}>
             <h2 id={dialogTitle}>{t.enlarged}</h2><strong data-long={handoffCode.length > 4}>{handoffCode}</strong>

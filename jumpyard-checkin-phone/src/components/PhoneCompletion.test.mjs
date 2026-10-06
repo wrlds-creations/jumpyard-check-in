@@ -45,7 +45,8 @@ function render(overrides = {}, lang = 'sv') {
 test('ready phone keeps the server number, day and quantity one, and shows no QR code (GH-456)', () => {
     const html = render({ selectedAddons: [{ id: 'socks', label: 'Strumpor', price: 45, qty: 1 }] });
     for (const value of ['data-phone-completion="true"', 'Du är incheckad', '>0001</strong>', 'data-handoff-code="0001"',
-        'Nummer från', TODAY, '60 min entré', 'Strumpor', 'Numret gäller hela dagen.']) assert.ok(html.includes(value), value);
+        'Nummer från', `data-day="${TODAY}"`, '60 min entré', 'Strumpor']) assert.ok(html.includes(value), value);
+    assert.doesNotMatch(html.replace(/<[^>]+>/g, ' '), /Numret gäller hela dagen|station/i, 'Love, 2026-10-06: no "all day" line and no "stationen"');
     assert.equal((html.match(/class="quantity">1<\/strong>/g) ?? []).length, 2);
     assert.doesNotMatch(html, /ready-entry-handoff-qr|JY_HANDOFF|Förstora QR-kod/, 'the number is enough; the QR stays in the backend');
     assert.doesNotMatch(html, /Ny besökare|Skriv ut|NOT_A_VALID|DESIGN_PREVIEW/);
@@ -91,7 +92,7 @@ test('a session of an earlier day says the visit is over and shows no list', () 
     assert.equal(isVisitDayOver(session), false);
     const html = render({ checkinSession: old });
     for (const value of ['data-presence="ended"', 'Besöket är avslutat', 'Nummer 0001 gällde bara tisdag 22 september.']) assert.ok(html.includes(value), value);
-    assert.doesNotMatch(html, /Gå till stationen|Hämta i caféet|step-station/);
+    assert.doesNotMatch(html, /Hämta på plats|Hämta i caféet|step-station|number-issued/);
 });
 
 test('a redemption without our session (for example at kassan) still shows the generic already-checked-in view', () => {
@@ -174,7 +175,7 @@ test('the local completion preview uses exactly the colours Cloud sends', () => 
 
 test('a home check-in through the email link is checked in too, without a reset callback (GH-456)', () => {
     const html = render({ channel: 'sms' }, 'en');
-    for (const value of ['You are checked in', 'Your number', 'Your number works all day.', 'data-presence="arrived"']) {
+    for (const value of ['You are checked in', 'Your number', 'Collect on site', 'Number from', 'data-presence="arrived"']) {
         assert.ok(html.includes(value), value);
     }
     assert.doesNotMatch(html, /scan the sign|You are all set|Enlarge QR code/);
@@ -208,13 +209,13 @@ function day(props, lang = 'sv') {
 
 test('arrived shows the check-in time and one banner per step: the station, then the café', () => {
     const html = day({ presence: 'arrived', checkedInAt: '13:45' });
-    for (const value of ['Du är incheckad', 'Sedan 13:45', 'Numret gäller hela dagen.', 'data-presence="arrived"']) assert.ok(html.includes(value), value);
-    assert.match(html, /data-tone="station" data-testid="step-station">[\s\S]*>Gå till stationen<\/span><span class="stepHint">Ta det här:</);
+    for (const value of ['Du är incheckad', 'Sedan 13:45', 'data-presence="arrived"']) assert.ok(html.includes(value), value);
+    assert.match(html, /data-tone="station" data-testid="step-station">[\s\S]*>Hämta på plats<\/span><span class="stepHint">Innan ni hoppar:</);
     assert.match(html, /data-tone="cafe" data-testid="step-cafe">[\s\S]*>Hämta i caféet<\/span><span class="stepHint">Efter hoppet\. Visa numret\.</);
     // Love, 2026-10-06: short sentences without dashes.
     assert.doesNotMatch(html, /[–—]/);
     const en = day({ presence: 'arrived', checkedInAt: '13:45' }, 'en');
-    for (const value of ['Your number works all day.', 'Go to the station', 'Take this:', 'Collect at the café', 'After jumping. Show your number.'])
+    for (const value of ['Collect on site', 'Before you jump:', 'Collect at the café', 'After jumping. Show your number.'])
         assert.ok(en.includes(value), value);
     assert.match(day({ presence: 'arrived', checkedInAt: '2026-10-17T11:45:00.000Z' }), /Sedan 13:45/, 'ISO times show in Nacka time');
 });
@@ -234,5 +235,5 @@ test('after the visit day there is no QR code and no café list', () => {
     const html = day({ presence: 'ended', visitDayLabel: 'lördag 17 oktober' });
     assert.ok(html.includes('Besöket är avslutat'));
     assert.ok(html.includes('Nummer 0427 gällde bara lördag 17 oktober.'));
-    assert.doesNotMatch(html, /ready-entry-handoff-qr|JY_HANDOFF|Hämta i caféet|Gå till stationen/);
+    assert.doesNotMatch(html, /ready-entry-handoff-qr|JY_HANDOFF|Hämta i caféet|Hämta på plats|number-issued/);
 });

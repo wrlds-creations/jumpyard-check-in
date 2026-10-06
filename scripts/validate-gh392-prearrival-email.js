@@ -482,7 +482,7 @@ test('The check-in email leads with benefit, time and one action; steps end chec
   assert.ok(sameDay.html.includes('>Idag kl. 14:00</p>'));
   assert.ok(sameDay.html.includes('Checka in<br>hemifrån'));
   // GH-456 (D0230): checked in at home, then straight to the self-service station.
-  assert.ok(sameDay.html.includes('Tar under 2 minuter. Sen går ni direkt till stationen.'));
+  assert.ok(sameDay.html.includes('Tar under 2 minuter. Sen hämtar ni allt direkt på plats.'));
   assert.equal((sameDay.html.match(/>CHECKA IN NU<\/a>/g) ?? []).length, 1);
   // The action comes before the steps, and the steps before the details and fallback link.
   const order = ['CHECKA IN NU', 'Så funkar det', '1. Öppna din bokning', '2. Säkerhetsfilm och regler', '3. Klart! Ni är incheckade',
@@ -491,7 +491,8 @@ test('The check-in email leads with benefit, time and one action; steps end chec
   assert.ok(order.every(index => index > 0), JSON.stringify(order));
   assert.deepEqual([...order].sort((a, b) => a - b), order);
   assert.ok(sameDay.text.includes('Idag kl. 14:00 hoppar ni på JumpYard Nacka Forum. Checka in hemifrån nu.'));
-  assert.ok(sameDay.text.includes('3. Klart! Ni är incheckade. Ta band och strumpor vid stationen när ni kommer. Numret gäller hela dagen.'));
+  assert.ok(sameDay.text.includes('3. Klart! Ni är incheckade. Hämta band och strumpor på plats när ni kommer.'));
+  assert.doesNotMatch(sameDay.html + sameDay.text, /station/i, 'Love, 2026-10-06: nobody calls it "stationen"');
   assert.ok(sameDay.text.includes(`Checka in här: ${checkinUrl}`));
   for (const icon of ['group.png', 'safety-check.png', 'visitor-wristband.png']) assert.ok(sameDay.html.includes(`/jumpyard-next-icons/${icon}`));
   assert.ok(!sameDay.html.includes('Din personliga incheckningslänk'), 'The red link warning box is gone');

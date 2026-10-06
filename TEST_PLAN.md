@@ -42,7 +42,7 @@ Run `npm run validate:gh456-auto-checkin` and `npm --prefix jumpyard-checkin-pho
 - **Window:** check the window edges (start − 120, session end, another day), and that missing times never block.
 - **Automatic admission:** check admission once with the staff key and the `automatiskt` actor, and that nothing is admitted while the booking sync is pending, staff hold a claim, the session is not ready or it is another day.
 - **Failures and kill switches:** outages retry at most three times; a rejection or the last failure marks needs-staff; `AUTO_CHECKIN_REDEEM=off` and the emergency stop block admission. The Park config deploys `autoCheckin.redeem: true` (D0242).
-- **Texts (D0241):** the station and café banners, the window boxes and the email's step 3 have the agreed words and no dashes in sentences (SV and EN).
+- **Texts (D0241):** the on-site and café banners, the window boxes, the number's day at the bottom and the email's step 3 have the agreed words, no dashes in sentences and no "stationen" (SV and EN). A Weekday Combo's booking page reads 14:00–15:00 and 60 min.
 - **Same number all day:** a reopen after admission returns `session_completed` the same day. The phone shows the number with no QR code, Cloud's café lines and what is left, the ended day, and the window notices in SV and EN.
 - **Saved visit:** it keeps no guest access token and is dropped the next day.
 
