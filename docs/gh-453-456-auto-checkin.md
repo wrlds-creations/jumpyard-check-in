@@ -74,7 +74,9 @@ When a kiosk check-in gets its number, the kiosk asks ready-for-staff for a phon
   - At most five per booking and day.
   - It resolves, and grants guest access, like the email link, so the phone opens the same completion: the number all day, what to collect on site and at the café.
   - Add-ons can be bought on the phone.
-- **Purchases.** The link is minted on the temporary draft booking. `confirmKioskReconciliation` moves it to the real booking in the same statement, before the automatic check-in trigger. A scan in between gets `booking_not_fresh`, and the phone shows "Vi hämtar din lapp…" for up to about a minute.
+- **Purchases.** The link is minted on the temporary draft booking. `confirmKioskReconciliation` moves it to the real booking in the same statement, before the automatic check-in trigger. A scan in between opens the kiosk's ready session and number at once: Cloud answers `session_resumed` for a `kiosk_phone` link while the booking is still the provisional one.
+  - **Live test 2026-10-06.** ROLLER confirmed a kiosk purchase about 80 seconds after the payment (no publish with payment, see #481). The first scan got `booking_not_fresh`, the phone's retry after 3 seconds hit the 5-second per-link cooldown (429), and the phone fell back to "Hitta din bokning".
+  - **Now.** The phone waits longer than the cooldown, treats `checkin_link_rate_limited` as wait and retry, and waits up to about two minutes on `booking_not_fresh` for other links.
 - **Exposure.** The QR is only on the kiosk screen, for about a minute, and only for the guest. The printed slip has no link (kiosk D0047/D0048).
 
 ## Open items
