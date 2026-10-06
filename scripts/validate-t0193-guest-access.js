@@ -94,6 +94,7 @@ function loadLambda(relativePath, options = {}) {
       if (moduleId === './contact-lookup') return require('../infra/lambda/booking/contact-lookup');
       if (moduleId === './email-marketing-consent') return require('../infra/lambda/booking/email-marketing-consent');
       if (moduleId === './staff-handout') return require('../infra/lambda/shared/staff-handout');
+      if (moduleId === './checkin-window') return require('../infra/lambda/shared/checkin-window');
       if (moduleId === './staff-handout-write') return require('../infra/lambda/redeem/staff-handout-write');
       if (moduleId === './staff-board') return require('../infra/lambda/session/staff-board');
       if (moduleId === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
@@ -228,7 +229,7 @@ async function validateSessionLinkReusesOpenedProof() {
     internalNames: ['getLinkGuestAccessExpiresAt', 'shouldAuditSessionLinkOpen', 'verifyGuestAccessToken'],
     onRdsSend(input) {
       assert.match(input.sql, /ct\.channel = :channel/);
-      assert.match(input.sql, /ct\.channel IN \('sms', 'email', 'manual', 'dev'\)/);
+      assert.match(input.sql, /ct\.channel IN \('sms', 'email', 'manual', 'dev', 'kiosk_phone'\)/); // GH-484 adds the kiosk phone link
       assert.match(input.sql, /ct\.opened_at > now\(\) - INTERVAL '60 minutes'/);
       assert.match(input.sql, /ct\.expires_at > now\(\)/);
       return rowResult({ booking_reference: '123456', roller_unique_id: 'roller-link-1' });
@@ -256,7 +257,7 @@ async function validateSessionLinkReusesOpenedProof() {
   assert.match(loaded.source, /SET opened_at = now\(\)/);
   assert.match(loaded.source, /LINK_RESOLVE_COOLDOWN_SECONDS = 5/);
   assert.match(loaded.source, /opened_at <= now\(\) - INTERVAL '\$\{LINK_RESOLVE_COOLDOWN_SECONDS\} seconds'/);
-  assert.match(loaded.source, /AND channel IN \('sms', 'email', 'manual', 'dev'\)/);
+  assert.match(loaded.source, /AND channel IN \('sms', 'email', 'manual', 'dev', 'kiosk_phone'\)/); // GH-484
   assert.match(loaded.source, /AND consumed_at IS NULL/);
   assert.match(loaded.source, /AND expires_at > now\(\)/);
   assert.match(resolveSource, /checkin_link_rate_limited/);
@@ -497,7 +498,7 @@ async function validateAddProductGuardsRunBeforeRoller() {
   const mismatch = loadLambda('infra/lambda/booking/index.js', {
     onRdsSend(input) {
       assert.match(input.sql, /FROM jumpyard\.checkin_tokens/);
-      assert.match(input.sql, /ct\.channel IN \('sms', 'email', 'manual', 'dev'\)/);
+      assert.match(input.sql, /ct\.channel IN \('sms', 'email', 'manual', 'dev', 'kiosk_phone'\)/); // GH-484 adds the kiosk phone link
       assert.match(input.sql, /ct\.opened_at > now\(\) - INTERVAL '60 minutes'/);
       return rowResult({ booking_reference: '999999', roller_unique_id: 'roller-9' });
     },

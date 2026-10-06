@@ -5,7 +5,7 @@
 - Safety before payment (D0231).
 - Phone email marketing (#437): optional, default off, sent with the booking draft (D0225); unchecked is no instruction. [Gates](docs/gh-437-phone-email-marketing.md).
 
-- Phone completion (#432) reuses the approved kiosk red hero/number design with an on-screen QR. Only ready, identified phone sessions use it; completed/missing states retain their existing behavior. No automatic phone reset or print action.
+- Phone completion (#432) uses the kiosk red hero/number design, number only (D0229). Ready and same-day admitted sessions use it; Cloud admits completed check-ins itself (D0230). No phone reset or print.
 
 - Checkout code application: Continue reuses the current successful Apply quote, preserving the discount/total; changed inputs or an expired quote require a fresh check. The draft still sends the code and owns the final amount. [Contract #421](docs/gh407-code-feedback.md#reuse-on-continue-421).
 - Visitor contact (D0234, #473, 2026-09-30): phone purchases ask first name + email. An exact Klaviyo email lookup fills known customers; unknown guests get `Gäst`/`0700000000`; an uncertain lookup asks last name + phone. Four-field requests (kiosk until #150, fallback) keep the #409 path. Public phone lookup stays disabled; placeholders are never SMS-ready. [Contract](JUMPYARD_CLOUD_CONTRACT.md#email-first-new-purchase-contact-473-d0234-released-2026-09-30).

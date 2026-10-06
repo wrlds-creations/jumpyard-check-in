@@ -87,6 +87,21 @@ export interface CheckInSession {
   safetyStatus?: string | null;
   completedAt?: string | null;
   expiresAt?: string | null;
+  /** GH-453: when the guest became checked in (ready or admitted), from Cloud. */
+  checkedInAt?: string | null;
+  /** GH-453: what the guest still collects at the café, from Cloud (null = not provided). */
+  cafe?: GuestCafeItem[] | null;
+}
+
+/** GH-453 (D0229): one café line from Cloud's staff manifest, guest-safe. */
+export interface GuestCafeItem {
+  id: string;
+  kind: string;
+  name: string;
+  detail: string | null;
+  quantity: number;
+  collected: number;
+  remaining: number;
 }
 
 // GH-338: exact payment state reported by JumpYard Cloud lookup eligibility.

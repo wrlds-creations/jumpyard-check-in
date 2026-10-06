@@ -3,11 +3,11 @@ import { FlowScreen } from '@/components/FlowTransition';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
 import { QrCode } from '@/components/QrCode';
-import type { Addon, Booking, Channel, CheckInSession } from '@/flow/types';
+import type { Addon, Booking, Channel, CheckInSession, GuestCafeItem } from '@/flow/types';
 import { getBookingContentRows, packageContentCopy } from '@/flow/packageContents';
-import { isPhoneCompletionReady } from '@/flow/phoneCompletion';
+import { isPhoneCompletionReady, isVisitDayOver } from '@/flow/phoneCompletion';
 import { BandColours } from './BandColours';
-import { PhoneCompletion, type CompletionItem } from './PhoneCompletion';
+import { PhoneCompletion, type CompletionGroup, type CompletionItem } from './PhoneCompletion';
 
 interface ConfirmationScreenProps {
     booking: Booking;
@@ -89,10 +89,21 @@ export const ConfirmationScreen = ({
     ].filter((group) => group.items.length > 0);
 
     if (isPhoneCompletionReady(checkinSession, channel, alreadyCheckedIn)) {
+        // GH-453 (D0229): Cloud's café lines (with what is already collected) replace the phone's own grouping.
+        const cloudCafe = Array.isArray(checkinSession?.cafe) ? checkinSession.cafe : null;
+        const completionGroups: CompletionGroup[] = cloudCafe
+            ? [
+                ...(cloudCafe.length ? [{ key: 'later', title: packageContentCopy[lang].later, items: cloudCafe.map(toCafeRow) }] : []),
+                ...experienceGroups.filter((group) => group.key !== 'later'),
+            ]
+            : experienceGroups;
         return <PhoneCompletion key={checkinSession!.checkinSessionId} lang={lang} onLanguageChange={setLang}
             handoffCode={handoffCode} handoffPayload={handoffQrValue} handoffDay={checkinSession?.handoffDay}
             sessionId={checkinSession?.checkinSessionId} handoffStatus={checkinSession?.handoffStatus} channel={channel}
-            items={handoutItems} groups={experienceGroups} onStartOver={onStartOver} />;
+            presence={isVisitDayOver(checkinSession) ? 'ended' : 'arrived'}
+            checkedInAt={checkinSession?.checkedInAt ?? checkinSession?.completedAt ?? null}
+            visitDayLabel={formatVisitDay(checkinSession?.handoffDay, lang)}
+            items={handoutItems} groups={completionGroups} onStartOver={onStartOver} />;
     }
 
     return (
@@ -219,6 +230,20 @@ export const ConfirmationScreen = ({
         </FlowScreen>
     );
 };
+
+const CAFE_ICONS: Record<string, JumpyardIconName> = { coffee: 'drink-cup', pizza: 'combo-pizza' };
+
+function toCafeRow(item: GuestCafeItem): CompletionItem {
+    return { icon: CAFE_ICONS[item.kind] ?? 'drink-cup', label: item.name, qty: item.remaining, collected: item.collected,
+        detail: item.detail ?? undefined };
+}
+
+function formatVisitDay(day: string | null | undefined, lang: 'sv' | 'en') {
+    if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+    return new Intl.DateTimeFormat(lang === 'sv' ? 'sv-SE' : 'en-GB', {
+        weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC',
+    }).format(new Date(`${day}T12:00:00Z`));
+}
 
 function isCompletedSession(session: CheckInSession | null) {
     const status = `${session?.status ?? ''}`.toLowerCase();

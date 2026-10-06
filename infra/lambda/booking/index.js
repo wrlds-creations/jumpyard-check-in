@@ -1907,11 +1907,27 @@ async function confirmKioskReconciliation(request, readback) {
         WHERE token_hash = :guestAccessTokenHash
           AND EXISTS (SELECT 1 FROM confirmed)
         RETURNING token_hash
+     ), attached_phone_links AS (
+       -- GH-484 (D0240): the kiosk's phone links were minted on the temporary draft booking with
+       -- the number; they follow the session to the real booking (same statement snapshot).
+       UPDATE jumpyard.checkin_tokens
+        SET roller_unique_id = :rollerUniqueId
+        WHERE channel = 'kiosk_phone'
+          AND roller_unique_id IN (
+            SELECT draft_session.roller_unique_id
+            FROM jumpyard.checkin_sessions AS draft_session
+            WHERE draft_session.source_lookup_ref = :prepaymentDraftId
+              AND draft_session.session_summary ->> 'paymentAttemptId' = :paymentAttemptId
+          )
+          AND EXISTS (SELECT 1 FROM confirmed)
+        RETURNING token_hash
      )
      SELECT
        reconciliation_attempt_count,
        (SELECT count(*) FROM attached_session) AS attached_session_count,
-       (SELECT count(*) FROM attached_guest_access) AS attached_token_count
+       (SELECT jsonb_agg(checkin_session_id) FROM attached_session)::text AS attached_session_ids,
+       (SELECT count(*) FROM attached_guest_access) AS attached_token_count,
+       (SELECT count(*) FROM attached_phone_links) AS attached_phone_link_count
      FROM confirmed`,
     [
       stringParameter('bookingReference', readback.bookingReference),
@@ -1928,7 +1944,12 @@ async function confirmKioskReconciliation(request, readback) {
       stringParameter('paymentAttemptId', request.paymentAttemptId),
     ],
   );
-  return firstMappedRow(result) ?? null;
+  const confirmed = firstMappedRow(result) ?? null;
+  if (confirmed) {
+    await requestAutoCheckin(parseJsonArraySafe(confirmed.attached_session_ids), 'kiosk_booking_confirmed',
+      request.correlationId);
+  }
+  return confirmed;
 }
 
 async function confirmKioskAddProductReconciliation(request, readback) {
@@ -5536,6 +5557,7 @@ async function confirmPhoneProvisionalHandoff(detail, correlationId) {
       [stringParameter('rollerUniqueId', uniqueId)],
     ));
     if (attached.length === 0) return { status: 'not_pending' };
+    await requestAutoCheckin(attached.map((row) => row.checkin_session_id), 'phone_booking_confirmed', correlationId);
     await writeBookingEventLog({
       correlationId,
       eventType: 'booking.phone_handoff_confirmed',
@@ -5548,6 +5570,37 @@ async function confirmPhoneProvisionalHandoff(detail, correlationId) {
     // A later lookup or webhook retries; the guest already has the number.
     console.error(JSON.stringify({ event: 'booking.phone_handoff_confirmation_failed', correlationId }));
     return { status: 'failed' };
+  }
+}
+
+// GH-456 (D0230): ROLLER confirmed the paid booking. The Redeem Lambda admits each ready session
+// automatically (or waits for its ready-for-staff trigger). Never blocks the confirmation.
+async function requestAutoCheckin(checkinSessionIds, trigger, correlationId) {
+  const functionName = process.env.AUTO_CHECKIN_FUNCTION_NAME;
+  const ids = [...new Set((Array.isArray(checkinSessionIds) ? checkinSessionIds : []).map(stringOrNull).filter(Boolean))];
+  if (!functionName || ids.length === 0) return;
+  await Promise.all(ids.slice(0, 10).map(async (checkinSessionId) => {
+    try {
+      await lambdaClient.send(new InvokeCommand({
+        FunctionName: functionName,
+        InvocationType: 'Event',
+        Payload: Buffer.from(JSON.stringify({
+          source: 'jumpyard.auto-checkin',
+          detail: { checkinSessionId, correlationId: correlationId || null, trigger },
+        })),
+      }), { abortSignal: AbortSignal.timeout(1000) });
+    } catch {
+      console.error(JSON.stringify({ event: 'booking.auto_checkin_dispatch_failed', correlationId, trigger }));
+    }
+  }));
+}
+
+function parseJsonArraySafe(value) {
+  try {
+    const parsed = JSON.parse(value ?? '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
   }
 }
 
@@ -5668,7 +5721,7 @@ async function verifyGuestAccessForBooking(event, bookingReference) {
        AND (
          ct.channel = :channel
          OR (
-           ct.channel IN ('sms', 'email', 'manual', 'dev')
+           ct.channel IN ('sms', 'email', 'manual', 'dev', 'kiosk_phone') -- GH-484: like the email link
            AND ct.opened_at > now() - INTERVAL '${GUEST_ACCESS_LINK_WINDOW_MINUTES} minutes'
          )
        )

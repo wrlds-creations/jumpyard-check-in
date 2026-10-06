@@ -63,6 +63,7 @@ function loadInternals(name, names) {
     },
     require(moduleId) {
       if (moduleId === './staff-handout') return require('../infra/lambda/shared/staff-handout');
+      if (moduleId === './checkin-window') return require('../infra/lambda/shared/checkin-window');
       if (moduleId === './staff-handout-write') return require('../infra/lambda/redeem/staff-handout-write');
       if (moduleId === './staff-board') return require('../infra/lambda/session/staff-board');
       if (moduleId === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');

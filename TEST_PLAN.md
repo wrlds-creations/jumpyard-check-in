@@ -35,6 +35,34 @@ Kiosk new purchases follow the same rule (#444): `npm run validate:gh437-email-m
 
 Local tests do not prove ROLLER omission semantics, paid-only guest-update propagation, suppression protection or concurrent profile preservation. A separately approved September 23 unpaid draft preserved all returned fields for the owned subscribed ROLLER guest when both marketing flags were omitted; immediate and delayed preference readbacks passed. Love's subsequent screenshot confirms unchanged basic Klaviyo channel status; the other provider gates remain outstanding. Use separately approved owned test data for further writes and obtain the connector contract before rollout. Under D0225 a checked choice travels with the draft and no profile approves the after-payment worker (locked by `scripts/validate-gh437-delivery-gate.test.js`). Before public promotion, verify with fresh owned addresses on the Park phone origin that checked becomes Subscribed and unchecked stays unsubscribed. [Detailed evidence and release gates](docs/gh-437-phone-email-marketing.md).
 
+## Automatic check-in and one number all day (#453, #456)
+
+Run `npm run validate:gh456-auto-checkin` and `npm --prefix jumpyard-checkin-phone run test:completion`, plus `infra:synth`, the full phone suite, the gh333, gh345 and gh392 validators, and admin `tsc`.
+
+- **Window:** check the window edges (start − 120, session end, another day), and that missing times never block.
+- **Automatic admission:** check admission once with the staff key and the `automatiskt` actor, and that nothing is admitted while the booking sync is pending, staff hold a claim, the session is not ready or it is another day.
+- **Failures and kill switches:** outages retry at most three times; a rejection or the last failure marks needs-staff; `AUTO_CHECKIN_REDEEM=off` and the emergency stop block admission. The Park config deploys `autoCheckin.redeem: true` (D0242).
+- **Texts (D0241):** the station and café banners, the window boxes and the email's step 3 have the agreed words and no dashes in sentences (SV and EN).
+- **Same number all day:** a reopen after admission returns `session_completed` the same day. The phone shows the number with no QR code, Cloud's café lines and what is left, the ended day, and the window notices in SV and EN.
+- **Saved visit:** it keeps no guest access token and is dropped the next day.
+
+Park, with a real same-day booking:
+1. Check in at home via the email link inside the window. The board shows "Incheckad HH:MM · automatiskt".
+2. Buy at the kiosk and on the phone. Both are admitted after ROLLER confirms.
+3. Try to check in too early, and late within the session.
+4. Reload after admission. The same number shows.
+5. Make a partial café pickup, reload, and check the remaining quantity.
+
+See [behaviour and verification](docs/gh-453-456-auto-checkin.md).
+
+**Kiosk phone link (#484, D0240).** Run `npm run validate:gh484-kiosk-phone-link` and `test:completion` (`kioskPhoneLink.test.mjs`). It checks:
+- the link is minted only with `phoneLink: true`, is hashed, opens `checkin.jumpyard.se`, expires at midnight and is capped;
+- it resolves like the email link;
+- reconciliation moves a purchase's link;
+- the phone waits on `booking_not_fresh`.
+
+On Park, scan the kiosk QR after a kiosk check-in and after a kiosk purchase. The phone shows the same number.
+
 ## Phone completion (#432)
 
 Run `npm --prefix jumpyard-checkin-phone run test:completion` plus the completed-booking/package-content regressions. Check SV/EN, 320–430px, zero-prefixed and long codes, missing/completed sessions, handoff day, Combo/café groups, QR modal focus/close and supplied safe reset. The production export must hide `/preview/completion`; verify rendered QR payload identity using synthetic data. Physical handset/scanner acceptance remains distinct from local browser and static publication checks. See [evidence](docs/gh432-phone-completion.md).

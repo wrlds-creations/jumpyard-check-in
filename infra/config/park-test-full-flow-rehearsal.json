@@ -57,6 +57,9 @@
     "maxRecoveryAttempts": 5,
     "recoveryLimit": 10
   },
+  "autoCheckin": {
+    "redeem": true
+  },
   "bookingTimeSms": {
     "channels": [
       "email"

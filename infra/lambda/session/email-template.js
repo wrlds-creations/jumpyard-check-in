@@ -43,10 +43,11 @@ const CHECKIN_STEPS = [
     text: 'Titta på den korta filmen och godkänn reglerna i lugn och ro hemma.',
     title: 'Säkerhetsfilm och regler',
   },
+  // GH-456 (D0230): a check-in at home counts as checked in; nobody scans a QR code on arrival.
   {
     icon: 'stepWristband',
-    text: 'Då får ni armband och det ni har köpt direkt.',
-    title: 'Visa QR-koden i entrén',
+    text: 'Ta band och strumpor vid stationen när ni kommer. Numret gäller hela dagen.',
+    title: 'Klart! Ni är incheckade',
   },
 ];
 
@@ -66,8 +67,8 @@ function buildCheckinEmailMessage({ booking = {}, checkinUrl, now = new Date() }
   const subject = bookingTime
     ? `Checka in nu – gå direkt in kl. ${bookingTime}`
     : 'Checka in nu – gå direkt in när ni kommer';
-  const preheader = 'Tar under 2 minuter. Visa QR-koden i entrén så får ni armbanden direkt.';
-  const lead = 'Tar under 2 minuter. Sen går ni direkt till entrén.';
+  const preheader = 'Tar under 2 minuter. Sen är ni incheckade och går direkt till stationen.';
+  const lead = 'Tar under 2 minuter. Sen går ni direkt till stationen.';
   const detailsLine = [
     capitalize(visitDay),
     bookingTime ? `kl. ${bookingTime}` : null,

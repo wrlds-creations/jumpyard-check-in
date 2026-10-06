@@ -1030,6 +1030,14 @@ exports.handler = async (event) => {
     if (controlledT30EmailEnabled) {
       lookupHandler.grantInvoke(sessionHandler);
     }
+    // GH-456 (D0230): the Session and Booking Lambdas ask the Redeem Lambda to admit ready, paid
+    // sessions automatically (asynchronous invoke; the Redeem Lambda checks every precondition).
+    sessionHandler.addEnvironment('AUTO_CHECKIN_FUNCTION_NAME', redeemHandler.functionName);
+    redeemHandler.grantInvoke(sessionHandler);
+    bookingHandler.addEnvironment('AUTO_CHECKIN_FUNCTION_NAME', redeemHandler.functionName);
+    redeemHandler.grantInvoke(bookingHandler);
+    // The reviewed config, not a manual Lambda edit, turns automatic admission on or off.
+    redeemHandler.addEnvironment('AUTO_CHECKIN_REDEEM', config.autoCheckin.redeem ? 'on' : 'off');
     const webhookHandler = this.createHandler('WebhookHandler', 'webhook', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'webhook')),
       environment: {

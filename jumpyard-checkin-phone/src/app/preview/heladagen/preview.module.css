@@ -1,0 +1,22 @@
+.page { min-height: 100dvh; padding: 28px; background: #ededf0; color: #1c1c1e; }
+.header { max-width: 980px; margin: 0 auto 28px; }
+.kicker { margin: 0 0 10px; font-size: 10px; font-weight: 800; letter-spacing: .12em; color: #71717a; }
+.header h1 { font-size: 28px; line-height: 1.15; font-weight: 800; letter-spacing: -.03em; margin: 0; }
+.header > p:not(.kicker) { font-size: 14px; line-height: 1.6; margin: 12px 0 0; color: #5c5c65; max-width: 720px; }
+.controls { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 18px; }
+.controls div { display: flex; gap: 6px; }
+.controls button { background: white; border: 1px solid #d4d4d8; padding: 8px 12px; border-radius: 8px; min-height: 40px; font-size: 12px; cursor: pointer; }
+.controls button[aria-pressed='true'] { background: #1c1c1e; color: white; border-color: #1c1c1e; }
+.grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 36px 28px; }
+.frame { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.frame figcaption { max-width: var(--phone-width, 390px); font-size: 13px; font-weight: 700; line-height: 1.35; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.step { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #1c1c1e; color: white; font-size: 11px; }
+.tags { display: inline-flex; gap: 4px; }
+.tags span { font-size: 10px; font-weight: 700; color: #5c5c65; border: 1px solid #c4c4cc; border-radius: 999px; padding: 1px 7px; }
+.viewport { width: var(--phone-width); height: 780px; max-width: 100%; overflow: auto; scrollbar-width: none; background: white; box-shadow: 0 8px 40px #18181b12; border-radius: 18px; container-type: inline-size; }
+.viewport::-webkit-scrollbar { display: none; }
+.page[data-full='true'] { padding: 0; background: white; }
+.page[data-full='true'] .grid { display: block; }
+.page[data-full='true'] .frame { width: 100%; margin-bottom: 0; }
+.page[data-full='true'] .viewport { width: 100%; height: auto; min-height: 100dvh; border-radius: 0; box-shadow: none; }
+@media (max-width: 760px) { .page { padding: 16px 0; } .header { padding-inline: 16px; } .grid { display: block; } .frame { width: 100%; margin-bottom: 32px; } .frame figcaption { padding-inline: 16px; } .viewport { width: 100%; height: auto; border-radius: 0; } }

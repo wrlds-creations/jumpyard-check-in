@@ -536,6 +536,7 @@ Rules:
 - Does not call Roller.
 - Does not redeem tickets.
 - Records an event-log row for audit.
+- **Kiosk phone link (#484, D0240).** With `{ "phoneLink": true }` the answer also carries `checkinLink { url, expiresAt }`. `url` is `https://checkin.jumpyard.se/?jy_token=<token>`. The token is a `checkin_tokens` row with channel `kiosk_phone`, stored only as its hash, valid until midnight of the visit day in Stockholm (at least 30 minutes), and capped at five per booking and day. It resolves through `POST /v1/check-in/session-links/resolve` like the email link and opens the same completion (number, station and café). A failure, or the cap, only leaves `checkinLink` out. A kiosk purchase mints it on the temporary draft booking; `confirmKioskReconciliation` moves `kiosk_phone` tokens to the real booking in the same statement. Until then the resolve answers `booking_not_fresh`, and the phone waits briefly ("Vi hämtar din lapp…"). The development link route cannot mint this channel.
 
 ### `POST /v1/staff/auth/login`
 
@@ -1015,6 +1016,23 @@ Rules:
 - T0054 confirms the public payment package can complete at least Swish in Roller Playground. Booking `5063382` was returned as `Paid`/`canCheckIn=true` by JumpYard Cloud after the public Swish smoke.
 - Card collection must remain inside Roller's approved payment package. The current Playground custom-checkout configuration does not expose a `scheme`/card method, so JumpYard must not add its own card form. Roller/Adyen configuration must expose `scheme` before the Adyen Visa test card ending `1142` can be tested.
 
+## Automatic Check-In And One Number All Day (#456 D0230, #453 D0229)
+
+Decided with JumpYard's product owner on 2026-10-06: a completed check-in counts as checked in, wherever it happened (home email link, phone on site, kiosk). Staff no longer check guests in; a staff phone at the entrance is for overview only, and kassan is the backup.
+
+- **Window.** A new check-in of an existing booking can start from the booked start minus 120 minutes (when the pre-arrival email arrives) until the booked session ends, on the visit day in Europe/Stockholm. `POST /v1/check-in/sessions` (and the session-link resolve) answers `409` with `checkin_too_early` or `checkin_too_late` plus `checkinWindow { opensAt, closesAt, startTime, visitDate }`. A session that is already ready is never blocked, and missing times never block. Late guests inside the session keep their band colour.
+- **One number all day.** When the tickets are already redeemed and a redeemed session of today exists, the same routes return `200` with status `session_completed` and that session (number, `completedAt`) instead of `already_redeemed`. Another day, or a redemption without a Cloud session (for example at kassan), stays `already_redeemed`.
+- **`visit`.** Started, resumed and completed sessions, and the ready-for-staff answer, include `visit { checkedInAt, cafe: [{ id, kind, name, detail, quantity, collected, remaining }] }` for a ready or redeemed session. It is guest-safe: built from the staff manifest and staff receipts, with no claims, receipts or staff names.
+- **Automatic admission.** After ready-for-staff (and after a safety-attested ready) the Session Lambda, and after the phone or kiosk booking confirmation the Booking Lambda, invoke the Redeem Lambda asynchronously with `{ source: "jumpyard.auto-checkin", detail: { checkinSessionId, correlationId, trigger } }` (environment `AUTO_CHECKIN_FUNCTION_NAME`). Whichever comes last admits.
+  - The Redeem Lambda admits only a `ready_for_staff` session with completed safety, `bookingSyncStatus = confirmed` and no active staff claim, on the visit day, until the session end plus 30 minutes.
+  - It uses the internal redeem route with key `staff-redeem:<checkinSessionId>` and actor `system:auto-checkin` (display name `automatiskt`), so staff and the system can never redeem twice, and the #333 receipts apply. The staff board shows "Incheckad HH:MM · automatiskt".
+  - A ROLLER outage (5xx or 429) throws so Lambda retries asynchronously, three attempts at most. A rejection or the last failure records `session_summary.autoCheckin { status: "needs_staff", reason, attempts }`, and the board shows "Behöver personal".
+  - Redeem write gates and the emergency stop block it as they block staff. `AUTO_CHECKIN_REDEEM=off` turns it off.
+- **Phone.** The phone shows the number, not the QR code. The `JY_HANDOFF:<code>:<sessionId>` payload stays valid for the staff app and the kiosk slip.
+- **Phone purchases** offer only sessions that start within the next two hours, so every phone purchase falls inside the window.
+
+[Behaviour and verification](docs/gh-453-456-auto-checkin.md).
+
 ## Error Contract
 
 | Code | Meaning | Phone Behavior |
@@ -1023,6 +1041,8 @@ Rules:
 | `wrong_date_or_time` | Booking does not match expected session. | Show staff handoff. |
 | `payment_required` | Booking is not settled: amount remains owing, or the exact payment state is `partially_paid`, `pending` or `unpaid` (see `eligibility.paymentState`). | Route to payment or staff depending flow; `partially_paid` is checked in at the register. |
 | `already_redeemed` | Tickets are already used or invalid. | Show staff handoff. |
+| `checkin_too_early` | A new check-in before the window; `checkinWindow.opensAt` says when it opens (#456). | Show "Du kan checka in från HH:MM". |
+| `checkin_too_late` | The booked session has ended (#456). | Send the guest to kassan. |
 | `partial_group_not_supported` | Guest selected a partial group in v1. | Show staff handoff. |
 | `redeem_confirmation_required` | Guest-side session is ready but final redeem requires staff/server confirmation. | Show staff handoff or staff-ready state. |
 | `roller_rate_limited` | Roller API call could not run within rate limit. | Retry or show staff handoff. |

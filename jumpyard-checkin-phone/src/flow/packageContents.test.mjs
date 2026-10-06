@@ -110,14 +110,15 @@ test('unknown combo names, legacy products, family and normal entry do not acqui
 test('actual Swedish/English QR screen separates bands from deferred pizza and coffee', async () => {
   const booking = await fromCloud([item()]);
   for (const [lang, band, pizza, later] of [
-    ['sv', 'Besöksband 60 min', 'Pizza att dela', 'Hämtas efter hoppet'],
-    ['en', 'Wristband 60 min', 'Pizza to share', 'Collect after jumping'],
+    ['sv', 'Besöksband 60 min', 'Pizza att dela', 'Hämta i caféet'],
+    ['en', 'Wristband 60 min', 'Pizza to share', 'Collect at the café'],
   ]) {
     const markup = render(ConfirmationScreen, {
       booking, jumperCount: booking.jumpers, checkinSession: { checkinSessionId: 'preview-only', status: 'ready_for_staff', handoffCode: 'DEMO' },
       selectedAddons: [{ id: 'coffee', label: 'Coffee', qty: 1, price: 0 }, { id: 'socks', label: 'Socks', qty: 2, price: 0 }],
     }, lang);
-    assert.match(markup, /data-qr-value="JY_HANDOFF:DEMO:preview-only"/);
+    assert.match(markup, /data-handoff-code="DEMO"/);
+    assert.doesNotMatch(markup, /data-qr-value=/, 'GH-456: the phone shows the number, not a QR code');
     const [handout, deferred] = markup.split('data-testid="confirmation-later"');
     assert.ok(handout.includes(band));
     assert.ok(handout.includes('Socks'));

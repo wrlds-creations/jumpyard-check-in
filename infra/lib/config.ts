@@ -92,6 +92,11 @@ export interface JumpYardCloudConfig {
     readonly minCapacity: number;
     readonly secondsUntilAutoPause?: number;
   };
+  // GH-456 (D0230): automatic admission of completed check-ins. The reviewed config turns it on or off
+  // (Redeem Lambda AUTO_CHECKIN_REDEEM), never a manual Lambda edit, so Park never drifts.
+  readonly autoCheckin: {
+    readonly redeem: boolean;
+  };
   readonly bookingTimeSms: {
     readonly channels: readonly ('sms' | 'email')[];
     readonly checkinBaseUrl: string;
@@ -194,6 +199,9 @@ interface RawConfig {
     readonly maxCapacity?: unknown;
     readonly minCapacity?: unknown;
     readonly secondsUntilAutoPause?: unknown;
+  };
+  readonly autoCheckin?: {
+    readonly redeem?: unknown;
   };
   readonly bookingTimeSms?: {
     readonly channels?: unknown;
@@ -306,6 +314,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   const awsRegion = readString(raw.awsRegion, 'awsRegion');
   const deploymentEnvironment = readDeploymentEnvironment(tags['WRLDS:Environment']);
   const auroraServerless = readAuroraServerlessConfig(raw.auroraServerless, deploymentEnvironment);
+  const autoCheckin = readAutoCheckinConfig(raw.autoCheckin);
   const bookingTimeSms = readBookingTimeSmsConfig(raw.bookingTimeSms);
   const contactLookup = readContactLookupConfig(raw.contactLookup);
   const guestEmail = readGuestEmailConfig(raw.guestEmail);
@@ -373,6 +382,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     awsAccount,
     awsRegion,
     auroraServerless,
+    autoCheckin,
     bookingTimeSms,
     contactLookup,
     dataSync,
@@ -1219,6 +1229,16 @@ function readBookingTimeSmsConfig(raw: RawConfig['bookingTimeSms']): JumpYardClo
   }
 
   return config;
+}
+
+function readAutoCheckinConfig(raw: RawConfig['autoCheckin']): JumpYardCloudConfig['autoCheckin'] {
+  if (raw !== undefined && (raw === null || typeof raw !== 'object' || Array.isArray(raw))) {
+    throw new Error('Config field autoCheckin must be an object when supplied.');
+  }
+
+  return {
+    redeem: readOptionalBoolean(raw?.redeem, true, 'autoCheckin.redeem'),
+  };
 }
 
 function readContactLookupConfig(raw: RawConfig['contactLookup']): JumpYardCloudConfig['contactLookup'] {

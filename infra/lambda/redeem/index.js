@@ -4,6 +4,7 @@ const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-
 const crypto = require('crypto');
 const { createHandoutStore } = require('./staff-handout-write');
 const { createServerDiagnostics } = require('./server-diagnostics');
+const { canAutoRedeemNow } = require('./checkin-window');
 const diagnostics = createServerDiagnostics('redeem',
   (entry) => console.error(JSON.stringify(entry)),
   (entry) => console.warn(JSON.stringify(entry)));
@@ -48,6 +49,10 @@ const STAFF_IDENTITY_PROVIDER_COGNITO = 'cognito';
 const STAFF_IDENTITY_PROVIDER_PIN = 'local_pin';
 const STAFF_PIN_CLIENT_ID = 'jumpyard-pin-v1';
 const STAFF_ROLE_OPERATOR = 'staff_operator';
+// GH-456 (D0230): the board shows "Incheckad HH:MM · automatiskt" for this actor.
+const AUTO_CHECKIN_ACTOR = Object.freeze({ actorId: 'system:auto-checkin', displayName: 'automatiskt', role: 'system' });
+// The first try plus Lambda's two asynchronous retries.
+const AUTO_CHECKIN_MAX_ATTEMPTS = 3;
 const STAFF_REDEEM_PERMISSION = 'staff:sessions:redeem';
 const STAFF_SESSION_IDLE_MINUTES = 15;
 const STAFF_SESSION_ABSOLUTE_HOURS = 8;
@@ -81,6 +86,8 @@ let hooks = {
 };
 
 exports.handler = async (event) => {
+  // Internal asynchronous invoke only: API Gateway events never carry a top-level source.
+  if (event?.source === 'jumpyard.auto-checkin') return handleAutoCheckin(event.detail || {});
   let correlationId = normalizeCorrelationId(getHeader(event, 'x-correlation-id')) || createCorrelationId();
   const trustedStaffActor = event?.__jumpyardTrustedStaffRedeem === true
     ? event.__jumpyardTrustedStaffActor
@@ -444,6 +451,135 @@ exports.handler = async (event) => {
     });
   }
 };
+
+// GH-456 (D0230): Cloud admits a ready, paid session of today automatically, through the same
+// path and idempotency key as staff "Checka in", so the two can never redeem twice (#333
+// recovery included). The Session and Booking Lambdas invoke this asynchronously after
+// ready-for-staff and after ROLLER confirms the booking; whichever comes last admits. A
+// retryable failure throws so Lambda retries; the last failure marks the group as needing staff.
+async function handleAutoCheckin(detail) {
+  const correlationId = normalizeCorrelationId(detail.correlationId) || createCorrelationId();
+  const checkinSessionId = stringOrNull(detail.checkinSessionId);
+  const trigger = stringOrNull(detail.trigger)?.slice(0, 64) || null;
+  if (!checkinSessionId || checkinSessionId.length > 128) return { status: 'ignored' };
+  if (process.env.AUTO_CHECKIN_REDEEM === 'off') return { status: 'disabled' };
+  if (isEmergencyStopEnabled()) return { status: 'emergency_stop' };
+
+  const session = await getStaffRedeemSession(checkinSessionId);
+  if (!session) return { status: 'session_not_found' };
+  if (session.status === 'redeemed' || session.handoffStatus === 'completed') return { status: 'already_completed' };
+  // Not ready yet, or ROLLER has not confirmed the paid booking: the other trigger admits later.
+  if (session.status !== 'ready_for_staff' || session.handoffStatus !== 'ready_for_staff' ||
+      session.safetyStatus !== 'completed') return { status: 'not_ready' };
+  if (session.bookingSyncStatus !== 'confirmed') return { status: 'booking_sync_pending' };
+  // A colleague is mid-handout on this group; staff finish it.
+  if (session.handoutClaim) return { status: 'staff_claimed' };
+
+  const context = await getRedeemContext(session.rollerUniqueId);
+  if (!context) return { status: 'booking_not_found' };
+  if (!canAutoRedeemNow({ endTime: context.booking.endTime, startTime: context.booking.startTime,
+    visitDate: session.visitDate })) return { status: 'outside_window' };
+
+  const actor = { ...AUTO_CHECKIN_ACTOR, venueId: stringOrNull(context.booking.venueId) };
+  const idempotencyKey = `staff-redeem:${checkinSessionId}`;
+  const completed = async (extra = {}) => {
+    await writeEventLog({
+      booking: session,
+      correlationId,
+      eventType: 'checkin.auto_checkin_completed',
+      payload: { ...staffAuditPayload(actor), checkinSessionId, ticketCount: session.selectedTicketIds.length,
+        trigger, ...extra },
+      summary: 'Check-in session admitted automatically.',
+    });
+    return { status: 'redeemed', ...extra };
+  };
+
+  const receipt = await findSucceededRedeemReceipt({ idempotencyKey, ticketIds: session.selectedTicketIds });
+  if (receipt) {
+    await finalizeRedeemLocally({ actor, checkinSessionId, idempotencyKey,
+      resultRef: `recovered:${receipt.source}:${session.bookingReference}`, ticketIds: session.selectedTicketIds });
+    return completed({ recovered: receipt.source });
+  }
+
+  const response = await exports.handler({
+    body: JSON.stringify({
+      bookingReference: session.bookingReference,
+      confirmRedeem: true,
+      correlationId,
+      expectedDate: session.visitDate,
+      idempotencyKey,
+      rollerUniqueId: session.rollerUniqueId,
+      ticketIds: session.selectedTicketIds,
+    }),
+    headers: { 'x-correlation-id': correlationId },
+    __jumpyardTrustedStaffActor: actor,
+    __jumpyardTrustedStaffRedeem: true,
+    __jumpyardTrustedStaffSessionId: checkinSessionId,
+    pathParameters: {},
+    rawPath: '/v1/check-in/redeem',
+    routeKey: 'POST /v1/check-in/redeem',
+  });
+  const body = parseJsonOrNull(response.body) ?? {};
+  if (response.statusCode === 200 && body.status === 'redeemed') {
+    if (body.session?.status !== 'redeemed') {
+      await markStaffSessionRedeemed({ actor, checkinSessionId,
+        redeemedTicketIds: body.redeemedTicketIds ?? session.selectedTicketIds });
+    }
+    return completed(body.recovered ? { recovered: body.recovered } : {});
+  }
+
+  const reason = stringOrNull(body?.error?.code) || stringOrNull(body.status) || `http_${response.statusCode}`;
+  // Another trigger is redeeming this session right now; a retry only confirms the result.
+  if (reason === 'redeem_in_progress') throw autoCheckinRetry(reason);
+  // Gates that block staff as well (writes disabled, rehearsal limits): nothing to hand over.
+  if (/disabled|not_allowed|rehearsal|emergency|not_enabled/.test(reason)) {
+    await writeEventLog({ booking: session, correlationId, eventType: 'checkin.auto_checkin_blocked',
+      payload: { checkinSessionId, reason, trigger }, summary: `Automatic check-in blocked: ${reason}` });
+    return { status: 'blocked', reason };
+  }
+  const retryable = response.statusCode >= 500 || response.statusCode === 429;
+  const attempts = await recordAutoCheckinFailure(checkinSessionId, reason, retryable);
+  await writeEventLog({ booking: session, correlationId, eventType: 'checkin.auto_checkin_failed',
+    payload: { attempts, checkinSessionId, reason, retryable, trigger },
+    summary: `Automatic check-in failed: ${reason}` });
+  if (retryable && attempts < AUTO_CHECKIN_MAX_ATTEMPTS) throw autoCheckinRetry(reason);
+  return { status: 'needs_staff', reason };
+}
+
+function autoCheckinRetry(reason) {
+  const error = new Error(`auto_checkin_retry:${reason}`);
+  error.code = 'auto_checkin_retry';
+  return error;
+}
+
+// Counts automatic attempts on the session; the last one hands the group to staff on the board.
+async function recordAutoCheckinFailure(checkinSessionId, reason, retryable) {
+  const result = await executeStatement(
+    `WITH previous AS (
+       SELECT COALESCE((session_summary -> 'autoCheckin' ->> 'attempts')::int, 0) + 1 AS attempts
+       FROM jumpyard.checkin_sessions
+       WHERE checkin_session_id = :checkinSessionId
+     )
+     UPDATE jumpyard.checkin_sessions
+     SET session_summary = session_summary || jsonb_build_object('autoCheckin', jsonb_build_object(
+           'attempts', (SELECT attempts FROM previous),
+           'reason', CAST(:reason AS text),
+           'status', CASE WHEN CAST(:retryable AS boolean) AND (SELECT attempts FROM previous) < CAST(:maxAttempts AS int)
+             THEN 'retrying' ELSE 'needs_staff' END,
+           'updatedAt', to_jsonb(now()))),
+         updated_at = now()
+     WHERE checkin_session_id = :checkinSessionId
+       AND status = 'ready_for_staff'
+     RETURNING (session_summary -> 'autoCheckin' ->> 'attempts')::int AS attempts`,
+    [
+      stringParameter('checkinSessionId', checkinSessionId),
+      stringParameter('reason', String(reason).slice(0, 120)),
+      stringParameter('retryable', retryable ? 'true' : 'false'),
+      stringParameter('maxAttempts', String(AUTO_CHECKIN_MAX_ATTEMPTS)),
+    ],
+  );
+  return Number(firstMappedRow(result)?.attempts ?? AUTO_CHECKIN_MAX_ATTEMPTS);
+}
 
 function isStaffHandoutRoute(event) {
   return event?.routeKey === 'POST /v1/staff/check-in/sessions/{checkinSessionId}/handout' ||

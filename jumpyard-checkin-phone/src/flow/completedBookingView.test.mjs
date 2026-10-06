@@ -109,10 +109,12 @@ test('ready and completed confirmation screens render and invoke the supplied Ne
       assert.equal(buttons[0].props.onClick, onStartOver);
       buttons[0].props.onClick();
       assert.equal(clicks, 1);
-      assert.equal(content(nodes(tree, node => node.type === 'h1')[0]), state === 'ready' ? (lang === 'sv' ? 'Du är incheckad' : 'You are checked in') : t.confirm.alreadyCheckedInTitle);
-      // The same session QR remains available after admission for café collection.
-      assert.equal(markup.includes('data-testid="ready-entry-handoff-qr"'), state !== 'already-checked-in');
-      assert.equal(markup.includes('data-testid="already-checked-in-card"'), state !== 'ready');
+      // GH-453 (D0229): an admitted session keeps its number and says checked in all visit day.
+      assert.equal(content(nodes(tree, node => node.type === 'h1')[0]), state !== 'already-checked-in' ? (lang === 'sv' ? 'Du är incheckad' : 'You are checked in') : t.confirm.alreadyCheckedInTitle);
+      assert.equal(markup.includes('data-testid="ready-entry-number"'), state !== 'already-checked-in');
+      // GH-456: the number is enough; the phone shows no QR code.
+      assert.equal(markup.includes('data-testid="ready-entry-handoff-qr"'), false);
+      assert.equal(markup.includes('data-testid="already-checked-in-card"'), state === 'already-checked-in');
     }
   }
 });

@@ -42,6 +42,7 @@ function load(filePath, overrides = {}, names = []) {
       if (moduleId.startsWith('@aws-sdk/')) return aws;
       if (moduleId === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
       if (moduleId === './staff-handout') return require('../infra/lambda/shared/staff-handout');
+      if (moduleId === './checkin-window') return require('../infra/lambda/shared/checkin-window');
       if (moduleId === './staff-handout-write') return require('../infra/lambda/redeem/staff-handout-write');
       if (moduleId.startsWith('./')) return require(path.join(localDirectory, moduleId));
       throw new Error(`Unexpected require(${JSON.stringify(moduleId)}) during GH-458 validation.`);
@@ -272,11 +273,16 @@ test('session: no approval, a foreign or retired record, or a non-active session
   assert.equal(await s.readyAttestedPurchaseSession(session, 'gh458'), session, 'a failed allocation leaves the ordinary session');
 });
 
+// GH-456 (D0230): a new check-in can only start on the visit day, inside its window.
+const START_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Stockholm', year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(new Date());
+
 function startContext({ paid = true } = {}) {
   return {
     booking: {
       amountOwingCents: paid ? 0 : 26000,
-      bookingDate: '2026-09-30',
+      bookingDate: START_DAY,
       bookingReference: 'synthetic-booking',
       bookingStatus: 'confirmed',
       freshnessStatus: 'fresh',
@@ -285,7 +291,7 @@ function startContext({ paid = true } = {}) {
       rollerUniqueId: DRAFT_ID,
       totalCents: 26000,
     },
-    tickets: [{ ticketId: 'synthetic-ticket', bookingDate: '2026-09-30', productName: 'Entré',
+    tickets: [{ ticketId: 'synthetic-ticket', bookingDate: START_DAY, productName: 'Entré',
       ticketProductType: 'sessionpass', redeemStatusLastSeen: null }],
   };
 }
