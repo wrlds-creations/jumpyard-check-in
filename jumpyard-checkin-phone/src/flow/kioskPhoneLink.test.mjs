@@ -70,6 +70,33 @@ test('the wait is bounded and ends in the ordinary error', async () => {
   assert.equal(outcome.calls(), 3, 'one try and two retries');
 });
 
+// Live test 2026-10-06: the first scan got booking_not_fresh, the retry after 3 s hit Cloud's 5-second
+// cooldown (429) and the phone fell back to "Hitta din bokning".
+const justOpened = { status: 'blocked', retryAfterSeconds: 1, error: { code: 'checkin_link_rate_limited', message: 'cooldown' } };
+
+test('a "just opened" answer while waiting means wait and try again, not the lookup page', async () => {
+  const outcome = await withAnswers([[409, notFresh], [429, justOpened], [200, resumed]],
+    () => cloud.resolveCheckInSessionLink('kiosk-token', { retryDelaysMs: [0, 0, 0] }));
+  assert.equal(outcome.error, undefined);
+  assert.equal(outcome.result.checkinSession.handoffCode, '0484');
+  assert.equal(outcome.calls(), 3);
+});
+
+test('repeated cooldown answers are bounded', async () => {
+  const outcome = await withAnswers([[429, justOpened]],
+    () => cloud.resolveCheckInSessionLink('kiosk-token', { retryDelaysMs: [0] }));
+  assert.ok(outcome.error instanceof cloud.CloudSessionError);
+  assert.equal(outcome.calls(), 4, 'one try and three cooldown retries');
+});
+
+test('every default wait is longer than the 5-second link cooldown in Cloud', () => {
+  const source = fs.readFileSync(new URL('../flow/cloudClient.ts', import.meta.url), 'utf8');
+  const delays = /const BOOKING_SYNC_RETRY_DELAYS_MS = \[([^\]]+)\]/.exec(source)[1].split(',').map(Number);
+  assert.ok(delays.length >= 6);
+  assert.ok(delays.every((ms) => ms > 5000), delays.join(', '));
+  assert.ok(delays.reduce((sum, ms) => sum + ms, 0) >= 100000, 'covers a ROLLER confirmation of up to about two minutes');
+});
+
 test('other link answers never wait', async () => {
   const outcome = await withAnswers([[200, resumed]],
     () => cloud.resolveCheckInSessionLink('kiosk-token', { onWaitingForBooking: () => assert.fail('no wait'), retryDelaysMs: [0, 0] }));

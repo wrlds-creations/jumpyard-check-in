@@ -448,10 +448,12 @@ export async function lookupBooking(code: string, options: { signal?: AbortSigna
   return toBooking(body.booking, body.eligibility.reason, body.source, body.guestAccess, body.eligibility.paymentState);
 }
 
-// GH-484 (D0240): a kiosk purchase's phone link exists from the number, but its booking is
-// confirmed by ROLLER a few seconds later. Until then Cloud answers booking_not_fresh, so the
-// phone waits (about a minute in all) instead of showing an error.
-const BOOKING_SYNC_RETRY_DELAYS_MS = [3000, 5000, 8000, 12000, 15000, 15000];
+// GH-484 (D0240): Cloud opens a kiosk link's visit at once. When it still answers booking_not_fresh
+// (an ordinary link before ROLLER confirms), the phone waits up to about two minutes instead of
+// showing an error. Cloud lets one link open every 5 seconds, so every wait is longer than that, and a
+// "just opened" answer means wait and try again, never give up (live test 2026-10-06).
+const BOOKING_SYNC_RETRY_DELAYS_MS = [6000, 6000, 8000, 10000, 15000, 20000, 25000, 30000];
+const LINK_RATE_LIMIT_RETRIES = 3;
 
 export async function resolveCheckInSessionLink(
   token: string,
@@ -477,14 +479,20 @@ export async function resolveCheckInSessionLink(
       result = await requestSessionLinkResolve(rawToken);
     }
 
-    if (result.response.status === 429 && result.body?.error?.code === 'checkin_link_rate_limited') {
-      const retryAfterSeconds = Math.min(10, Math.max(1, result.body.retryAfterSeconds ?? 5));
-      await delay(retryAfterSeconds * 1000);
-      result = await requestSessionLinkResolve(rawToken);
-    }
-
-    for (const waitMs of options.retryDelaysMs ?? BOOKING_SYNC_RETRY_DELAYS_MS) {
+    const waits = [...(options.retryDelaysMs ?? BOOKING_SYNC_RETRY_DELAYS_MS)];
+    let rateLimitRetries = 0;
+    for (;;) {
+      if (result.response.status === 429 && result.body?.error?.code === 'checkin_link_rate_limited') {
+        if (rateLimitRetries >= LINK_RATE_LIMIT_RETRIES) break;
+        rateLimitRetries += 1;
+        const retryAfterSeconds = Math.min(10, Math.max(1, result.body.retryAfterSeconds ?? 5));
+        await delay(retryAfterSeconds * 1000 + 500);
+        result = await requestSessionLinkResolve(rawToken);
+        continue;
+      }
       if (result.response.status !== 409 || result.body?.error?.code !== 'booking_not_fresh') break;
+      const waitMs = waits.shift();
+      if (waitMs === undefined) break;
       options.onWaitingForBooking?.();
       await delay(waitMs);
       result = await requestSessionLinkResolve(rawToken);

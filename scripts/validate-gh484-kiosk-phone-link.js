@@ -30,6 +30,7 @@ function rdsResult(rows, numberOfRecordsUpdated = 0) {
       const value = row[name];
       if (value === null || value === undefined) return { isNull: true };
       if (typeof value === 'number') return { longValue: value };
+      if (typeof value === 'boolean') return { booleanValue: value };
       return { stringValue: String(value) };
     })),
   };
@@ -91,6 +92,80 @@ function loadSession(database) {
 }
 
 const sqlCalls = (calls, pattern) => calls.filter((call) => pattern.test(call.sql));
+
+const TODAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Stockholm', year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(new Date());
+
+// The provisional booking a kiosk payment creates before ROLLER confirms it (booking runtime, GH-249).
+function provisionalBookingRow() {
+  return {
+    roller_unique_id: BOOKING_ID, booking_reference: BOOKING_ID, roller_env: 'live', booking_status: 'payment_approved_booking_syncing',
+    payment_status: 'paid', amount_owing_cents: 0, total_cents: 25000, booking_date: TODAY, venue_id: '50871',
+    start_time: '00:00:00', end_time: '23:59:00', freshness_status: 'stale', is_tombstoned: false,
+    last_seen_from_roller_at: null, tickets_json: '[]',
+  };
+}
+
+function readyKioskSessionRow() {
+  return {
+    checkin_session_id: SESSION.checkinSessionId, roller_unique_id: BOOKING_ID, booking_reference: BOOKING_ID,
+    visit_date: TODAY, status: 'ready_for_staff', safety_status: 'completed', guest_resume_step: null,
+    handoff_code: SESSION.handoffCode, handoff_day: TODAY, handoff_status: 'ready_for_staff', selected_ticket_ids: '[]',
+    expires_at: '2999-01-01T00:00:00.000Z', ready_for_staff_at: `${TODAY}T13:09:06.000Z`, completed_at: null,
+    created_at: `${TODAY}T13:09:05.000Z`, updated_at: `${TODAY}T13:09:06.000Z`,
+  };
+}
+
+function createResolveDatabase(script = {}) {
+  const calls = [];
+  const execute = async (sql, parameters) => {
+    calls.push({ sql, parameters });
+    if (/FROM jumpyard\.checkin_tokens AS ct\s+LEFT JOIN jumpyard\.roller_bookings AS b\s+ON b\.roller_unique_id = ct\.roller_unique_id\s+WHERE ct\.token_hash = :tokenHash\s+LIMIT 1/.test(sql)) {
+      return rdsResult([{ token_hash: 'hash', roller_unique_id: BOOKING_ID, channel: script.channel ?? 'kiosk_phone',
+        expires_at: '2999-01-01T00:00:00.000Z', opened_at: null, consumed_at: null, booking_reference: BOOKING_ID }]);
+    }
+    if (/UPDATE jumpyard\.checkin_tokens\s+SET opened_at = now\(\)/.test(sql)) return rdsResult([{ opened_at: `${TODAY}T13:09:08.000Z` }], 1);
+    if (/INSERT INTO jumpyard\.event_log/.test(sql)) return rdsResult([], 1);
+    if (/FROM jumpyard\.roller_bookings AS b\s+LEFT JOIN jumpyard\.roller_booking_tickets AS t/.test(sql)) return rdsResult([provisionalBookingRow()]);
+    if (/AND status IN \('guest_in_progress', 'ready_for_staff', 'staff_in_progress'\)\s+AND expires_at > now\(\)/.test(sql)) {
+      return rdsResult(script.readySession === false ? [] : [readyKioskSessionRow()]);
+    }
+    if (/FROM jumpyard\.roller_booking_items AS item\s+LEFT JOIN jumpyard\.roller_booking_tickets AS ticket/.test(sql)) return rdsResult([]);
+    if (/WITH source_bookings AS MATERIALIZED/.test(sql)) return rdsResult([]);
+    if (/FROM jumpyard\.booking_links AS link\s+INNER JOIN jumpyard\.prepayment_booking_drafts AS draft/.test(sql)) return rdsResult([]);
+    if (/WITH staff_items AS \(/.test(sql)) return rdsResult([]);
+    if (/FROM jumpyard\.staff_handout_claims c/.test(sql)) return rdsResult([{ claims: '[]', receipts: '[]' }]);
+    throw new Error(`Unexpected SQL during GH-484 resolve validation: ${sql.replace(/s+/g, " ").slice(0, 160)}`);
+  };
+  return { calls, execute };
+}
+
+async function resolveLink(script) {
+  const database = createResolveDatabase(script);
+  const response = await loadSession(database).internals.handleResolveSessionLink({ headers: {} },
+    { token: 'k'.repeat(43), expectedDate: TODAY }, 'jy_gh484_resolve');
+  return { body: JSON.parse(response.body), calls: database.calls, statusCode: response.statusCode };
+}
+
+async function validateKioskLinkOpensTheVisitBeforeRollerConfirms() {
+  const opened = await resolveLink({});
+  assert.equal(opened.statusCode, 200, 'a scan right after a kiosk purchase opens the visit');
+  assert.equal(opened.body.status, 'session_resumed');
+  assert.equal(opened.body.session.handoffCode, SESSION.handoffCode, 'the same number as the kiosk');
+  assert.equal(opened.body.session.status, 'ready_for_staff');
+  assert.equal(opened.body.guestAccess.token, 'k'.repeat(43), 'the phone keeps the link as its guest access');
+  assert.equal(sqlCalls(opened.calls, /INSERT INTO jumpyard\.checkin_sessions/).length, 0, 'no second session is created');
+
+  const notReady = await resolveLink({ readySession: false });
+  assert.equal(notReady.statusCode, 409, 'without a ready kiosk session the phone still waits');
+  assert.equal(notReady.body.error.code, 'booking_not_fresh');
+
+  const email = await resolveLink({ channel: 'email' });
+  assert.equal(email.statusCode, 409, 'an email link keeps the ordinary freshness rule');
+  assert.equal(email.body.error.code, 'booking_not_fresh');
+  console.log('[pass] a kiosk QR scanned before ROLLER confirms the purchase opens the same ready visit at once');
+}
 
 async function validateLinkIsMintedForTheKioskGuest() {
   const database = createDatabase();
@@ -186,6 +261,7 @@ function validateSourceContracts() {
 }
 
 async function main() {
+  await validateKioskLinkOpensTheVisitBeforeRollerConfirms();
   await validateLinkIsMintedForTheKioskGuest();
   await validateLinksAreBoundedAndOptional();
   await validatePhoneLinksResolveLikeOtherLinks();

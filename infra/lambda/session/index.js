@@ -291,6 +291,24 @@ async function handleStartSession(event, body, correlationId, options = {}) {
         });
       }
     }
+    // GH-484 (Love, 2026-10-06): the kiosk QR opens the visit at once. Right after a kiosk purchase the
+    // booking is the provisional one until ROLLER confirms it (booking_not_fresh, about a minute when
+    // ROLLER waits for its own payment notice). The kiosk already shows that visit's number, so the
+    // phone gets the same ready session instead of waiting; reconciliation later moves the link.
+    if (options.kioskPhoneLink && decision.reason === 'booking_not_fresh' && decision.visitDate === stockholmNow().date) {
+      const readySession = await findActiveSession(context.booking.rollerUniqueId, decision.visitDate);
+      if (readySession?.status === 'ready_for_staff' && readySession.handoffCode) {
+        const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
+        const issuedGuestAccess = options.guestAccess || null;
+        return jsonResponse(200, correlationId, {
+          status: 'session_resumed',
+          session: readySession,
+          visit: await buildGuestVisit(readySession, context.booking.venueId),
+          ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
+          ...(bookingResponse ? bookingResponse : {}),
+        });
+      }
+    }
     const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
     await writeEventLog({
       booking: context.booking,
@@ -1921,6 +1939,7 @@ async function handleResolveSessionLink(event, body, correlationId) {
         expiresAt: getLinkGuestAccessExpiresAt(tokenRecord.expiresAt, linkOpen.openedAt || tokenRecord.openedAt),
         token: request.token,
       },
+      kioskPhoneLink: tokenRecord.channel === KIOSK_PHONE_LINK_CHANNEL,
       trustedGuestAccess: true,
     },
   );

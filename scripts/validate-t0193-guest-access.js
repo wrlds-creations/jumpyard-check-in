@@ -529,7 +529,7 @@ function validatePhonePropagation() {
   assert.match(client, /checkin_link_rate_limited/);
   assert.match(client, /catch \{\s*await delay\(500\)/);
   assert.match(client, /result\.response\.status >= 500/);
-  assert.match(client, /await delay\(retryAfterSeconds \* 1000\)/);
+  assert.match(client, /await delay\(retryAfterSeconds \* 1000( \+ \d+)?\)/);
   assert.equal((types.match(/guestAccessToken\?: string;/g) ?? []).length, 2);
   assert.match(page, /url\.searchParams\.delete\('jy_token'\)/);
   assert.match(page, /url\.searchParams\.delete\('token'\)/);
