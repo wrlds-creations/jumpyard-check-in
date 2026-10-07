@@ -76,6 +76,7 @@ When a kiosk check-in gets its number, the kiosk asks ready-for-staff for a phon
   - Add-ons can be bought on the phone.
 - **Purchases.** The link is minted on the temporary draft booking. `confirmKioskReconciliation` moves it to the real booking in the same statement, before the automatic check-in trigger. A scan in between opens the kiosk's ready session and number at once: Cloud answers `session_resumed` for a `kiosk_phone` link while the booking is still the provisional one.
   - **Live test 2026-10-06.** ROLLER confirmed a kiosk purchase about 80 seconds after the payment (no publish with payment, see #481). The first scan got `booking_not_fresh`, the phone's retry after 3 seconds hit the 5-second per-link cooldown (429), and the phone fell back to "Hitta din bokning".
+  - **Live test 2026-10-07.** The QR opened the number at once, but before ROLLER confirmed, the phone listed a generic "Entré": the provisional booking has no items. Cloud now sends the approved draft's items (like the phone's own provisional handoff) and leaves the café list out until ROLLER's items exist.
   - **Now.** The phone waits longer than the cooldown, treats `checkin_link_rate_limited` as wait and retry, and waits up to about two minutes on `booking_not_fresh` for other links.
 - **Exposure.** The QR is only on the kiosk screen, for about a minute, and only for the guest. The printed slip has no link (kiosk D0047/D0048).
 

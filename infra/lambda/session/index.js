@@ -300,10 +300,13 @@ async function handleStartSession(event, body, correlationId, options = {}) {
       if (readySession?.status === 'ready_for_staff' && readySession.handoffCode) {
         const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
         const issuedGuestAccess = options.guestAccess || null;
+        // Café lines come from ROLLER's items, which do not exist yet, so the visit leaves `cafe` out and
+        // the phone groups the draft's items itself (pizza and coffee after the jump).
+        const visit = await buildGuestVisit(readySession, context.booking.venueId);
         return jsonResponse(200, correlationId, {
           status: 'session_resumed',
           session: readySession,
-          visit: await buildGuestVisit(readySession, context.booking.venueId),
+          visit: visit ? { checkedInAt: visit.checkedInAt } : null,
           ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
           ...(bookingResponse ? bookingResponse : {}),
         });
@@ -4171,7 +4174,11 @@ async function buildPhoneSessionBookingResponse(context) {
     findPhoneBookingItems(context.booking.rollerUniqueId),
     findGuestLinkedAddOnPhoneItems(context.booking.rollerUniqueId, context.booking.venueId),
   ]);
-  const items = [...baseItems, ...linkedAddOnItems];
+  // GH-484 (live test 2026-10-07): a kiosk purchase opened from the QR before ROLLER confirms it has
+  // no booking items yet, so the phone showed a generic entry. The approved draft's items show what
+  // was bought instead, exactly like the phone's own provisional handoff (booking runtime).
+  const provisionalItems = baseItems.length === 0 ? await findProvisionalPhoneBookingItems(context.booking.rollerUniqueId) : [];
+  const items = [...baseItems, ...provisionalItems, ...linkedAddOnItems];
   const fallbackItem = fallbackPhoneBookingItem(context);
 
   return {
@@ -4187,10 +4194,40 @@ async function buildPhoneSessionBookingResponse(context) {
       environment: context.booking.rollerEnv,
       freshnessStatus: context.booking.freshnessStatus,
       lookupPath: 'checkin_link',
+      ...(provisionalItems.length > 0 ? { provisionalItems: true } : {}),
       refreshedFromRoller: false,
       system: 'jumpyard_cloud',
     },
   };
+}
+
+async function findProvisionalPhoneBookingItems(rollerUniqueId) {
+  if (!rollerUniqueId) return [];
+  const result = await executeStatement(
+    `SELECT draft.items_summary::text AS items_summary
+     FROM jumpyard.prepayment_booking_drafts AS draft
+     WHERE draft.roller_draft_unique_id = :rollerUniqueId
+     LIMIT 1`,
+    [stringParameter('rollerUniqueId', rollerUniqueId)],
+  );
+  return parseJsonArray(firstMappedRow(result)?.items_summary)
+    .filter((item) => item && typeof item === 'object' && stringOrNull(item.productId))
+    .map((item) => withGuestItemDetails({
+      bookingDate: stringOrNull(item.bookingDate),
+      bookingItemId: null,
+      durationMinutes: numberOrNull(item.durationMinutes),
+      endTime: stringOrNull(item.endTime),
+      parentProductId: stringOrNull(item.parentProductId),
+      parentProductName: stringOrNull(item.parentProductName),
+      parentType: stringOrNull(item.parentType),
+      productId: stringOrNull(item.productId),
+      productName: stringOrNull(item.productName),
+      productSubType: stringOrNull(item.productSubType),
+      productType: stringOrNull(item.productType),
+      quantity: numberOrNull(item.quantity) ?? 1,
+      startTime: stringOrNull(item.startTime),
+      tickets: [],
+    }));
 }
 
 async function findGuestLinkedAddOnPhoneItems(rollerUniqueId, venueId = null) {

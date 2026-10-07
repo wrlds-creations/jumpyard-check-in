@@ -251,7 +251,7 @@ async function main() {
   await validateProvisionalCompositionAndGuards();
   await validateNoLinkedAddOnsIsUnchanged();
 
-  assert.match(sessionSource, /const items = \[\.\.\.baseItems, \.\.\.linkedAddOnItems\]/);
+  assert.match(sessionSource, /const items = \[\.\.\.baseItems, (\.\.\.provisionalItems, )?\.\.\.linkedAddOnItems\]/);
   assert.match(sessionSource, /authoritativeItems\.filter\(\(item\) => item\.fulfillmentSource === 'linked_add_on'\)/);
   assert.match(sessionSource, /bookingItemId: null/);
   assert.match(contractSource, /includeBooking=true/);
