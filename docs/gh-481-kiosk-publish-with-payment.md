@@ -10,6 +10,17 @@ An approved P400 payment becomes a confirmed ROLLER booking within seconds. Jump
 - `POST /bookings/draft/publish` without a payment returns 409: a draft can only be published when nothing is owing. The 2026-08-17 trace for #239 showed eight such 409s between +10 and +45 s, and `GET /bookings/{id}` returned 404 until ROLLER's own booking appeared at +50.6 s.
 - Including `payment` (ROLLER's PaymentCreate model: required `id`, `paymentType`, `amount`) publishes the draft at once. The published draft no longer exists, so the later notification does not create a second booking.
 
+## Refund fix (2026-10-07)
+
+The supervised P400 purchase on 2026-10-06 confirmed booking 176778138 1.25 s after approval. The booking could not be refunded through ROLLER's gateway, though: "Refund via gateway (Adyen)" offered no payment and said "Refund payment does not exist". The kiosk side was paused the same day (kiosk #165).
+
+ROLLER support (2026-10-07) prescribed adding `MerchantId` to the publish `payment`, echoed unchanged from the terminal response's `PaymentResult.PaymentAcquirerData.MerchantID`. That field links the payment to its gateway transaction.
+
+- The kiosk sends `terminalMerchantId` with the approved finalize, next to `terminalTransactionId`. ROLLER's terminal package already exposes it as `merchantId`.
+- Cloud stores it as `terminal_merchant_id` (migration `0026`), under the same first-value and installation-bound rules.
+- The fast path requires both values. Without the merchant account, Cloud keeps the old readback path, so a refundable booking is never traded for speed.
+- Acceptance: a P400 purchase is confirmed within seconds and can then be refunded through "Refund via gateway (Adyen)" in Venue Manager.
+
 ## Flow
 
 ```text
@@ -18,7 +29,7 @@ kiosk -> POST /v1/bookings/draft/finalize { outcome: approved, terminalTransacti
 Cloud  -> store approval; keep the first transaction id if the draft is installation-bound
        -> HTTP 202 pending (provisional handoff as before)
 worker -> claim the single publish for this attempt
-       -> POST /bookings/draft/publish { uniqueId, payment: { id, paymentType: "CreditCard", amount } }
+       -> POST /bookings/draft/publish { uniqueId, payment: { id, paymentType: "CreditCard", amount, MerchantId } }
        -> readback GET /bookings/{id} -> confirmed
        any other answer or transport ambiguity: no further provider writes; readback continues
        until ROLLER's notification creates the booking, or needs_staff after 75 s

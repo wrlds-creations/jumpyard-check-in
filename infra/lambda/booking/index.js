@@ -27,6 +27,7 @@ const {
   normalizeKioskProfileMap,
   normalizePaymentTerminalMap,
   normalizePaymentTerminalNameMap,
+  normalizeTerminalMerchantId,
   normalizeTerminalOutcome,
   normalizeTerminalTransactionRef,
   publicKioskPaymentStatus,
@@ -863,10 +864,13 @@ async function handleDraftFinalize(event, body, correlationId) {
     prepaymentDraftId: stringOrNull(body.prepaymentDraftId),
     rollerDraftUniqueId: stringOrNull(body.rollerDraftUniqueId),
   };
-  // GH-481 (D0238): only an approval carries the terminal's transaction id, and a missing or
-  // malformed one never blocks recording it.
+  // GH-481 (D0238): only an approval carries the terminal's transaction id and merchant account,
+  // and a missing or malformed value never blocks recording it.
   request.terminalTransactionRef = request.outcome === 'approved'
     ? normalizeTerminalTransactionRef(body.terminalTransactionId)
+    : null;
+  request.terminalMerchantId = request.outcome === 'approved'
+    ? normalizeTerminalMerchantId(body.terminalMerchantId)
     : null;
   const validationError = validateDraftFinalizeRequest(request);
   if (validationError) {
@@ -1292,8 +1296,8 @@ async function recordKioskTerminalOutcome(request, outcome) {
     : outcome === 'unknown'
       ? 'needs_staff'
       : 'failed';
-  // GH-481 (D0238): an approval keeps the first transaction id it reports, and only for an
-  // attempt created by an authorized kiosk installation that is not yet booked.
+  // GH-481 (D0238): an approval keeps the first transaction id and merchant account it reports,
+  // and only for an attempt created by an authorized kiosk installation that is not yet booked.
   const result = await executeStatement(
     `WITH updated_draft AS (
        UPDATE jumpyard.prepayment_booking_drafts
@@ -1324,6 +1328,15 @@ async function recordKioskTerminalOutcome(request, outcome) {
                AND payment_attempt_status IS DISTINCT FROM 'reconciled'
                THEN CAST(:terminalTransactionRef AS text)
              ELSE terminal_transaction_ref
+           END,
+           terminal_merchant_id = CASE
+             WHEN :outcome = 'approved'
+               AND terminal_merchant_id IS NULL
+               AND kiosk_installation_id IS NOT NULL
+               AND status <> 'published'
+               AND payment_attempt_status IS DISTINCT FROM 'reconciled'
+               THEN CAST(:terminalMerchantId AS text)
+             ELSE terminal_merchant_id
            END,
            updated_at = now()
        WHERE prepayment_draft_id = :prepaymentDraftId
@@ -1361,6 +1374,7 @@ async function recordKioskTerminalOutcome(request, outcome) {
       stringParameter('status', status),
       stringParameter('confirmationStatus', confirmationStatus),
       stringParameter('terminalTransactionRef', outcome === 'approved' ? request.terminalTransactionRef ?? null : null),
+      stringParameter('terminalMerchantId', outcome === 'approved' ? request.terminalMerchantId ?? null : null),
       stringParameter('prepaymentDraftId', request.prepaymentDraftId),
       stringParameter('paymentAttemptId', request.paymentAttemptId),
     ],
@@ -1814,7 +1828,8 @@ async function claimKioskReconciliation(request) {
        payment_approved_at::text AS payment_approved_at,
        amount_owing_cents,
        kiosk_installation_id,
-       terminal_transaction_ref`,
+       terminal_transaction_ref,
+       terminal_merchant_id`,
     [
       stringParameter('prepaymentDraftId', request.prepaymentDraftId),
       stringParameter('paymentAttemptId', request.paymentAttemptId),
@@ -3773,8 +3788,9 @@ async function publishNoPaymentDraft(config, token, rollerDraftUniqueId) {
   });
 }
 
-// GH-481 (D0238): ROLLER's PaymentCreate model inside the publish, as ROLLER support
-// prescribed for terminal payments; the draft is published, and gone, at once.
+// GH-481 (D0238): ROLLER's PaymentCreate model inside the publish, plus the terminal's
+// `MerchantId`, as ROLLER support prescribed for terminal payments (2026-10-05 and 2026-10-07);
+// the draft is published, and gone, at once, and its payment stays refundable through the gateway.
 async function publishDraftWithTerminalPayment(config, token, rollerDraftUniqueId, payment) {
   if (!rollerDraftUniqueId || !payment) {
     return {

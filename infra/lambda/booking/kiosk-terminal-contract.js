@@ -8,6 +8,9 @@ const KIOSK_PROFILE_IDS = new Set(['nacka-forum-kiosk-1', 'nacka-forum-kiosk-2']
 const KIOSK_TERMINAL_LOCK_ID_PATTERN = /^kt_[a-f0-9]{32}$/;
 // GH-481 (D0238): the provider transaction id (Adyen PSP reference) of an approved terminal payment.
 const KIOSK_TERMINAL_TRANSACTION_REF_PATTERN = /^[A-Za-z0-9]{8,64}$/;
+// GH-481: the Adyen merchant account (PaymentAcquirerData.MerchantID) of the same approval, which
+// ROLLER needs to link the published payment to its gateway transaction for refunds.
+const KIOSK_TERMINAL_MERCHANT_ID_PATTERN = /^[A-Za-z0-9_.-]{1,80}$/;
 const KIOSK_TERMINAL_PAYMENT_TYPE = 'CreditCard';
 // GH-488 (D0243): server-owned kiosk names (Nacka K1 → Nacka T1 …) that a kiosk installation
 // claims after an allowlisted staff PIN proof. Names and display labels are not secret; the
@@ -454,17 +457,26 @@ function normalizeTerminalTransactionRef(value) {
   return KIOSK_TERMINAL_TRANSACTION_REF_PATTERN.test(ref) ? ref : null;
 }
 
+function normalizeTerminalMerchantId(value) {
+  const merchantId = typeof value === 'string' ? value.trim() : '';
+  return KIOSK_TERMINAL_MERCHANT_ID_PATTERN.test(merchantId) ? merchantId : null;
+}
+
 // GH-481 (D0238): ROLLER publishes a card-present draft at once only when the publish carries
 // the approved payment (its PaymentCreate model); without it ROLLER answers 409 while an amount
 // is owing and creates the booking from its own notification about a minute later. Only an
-// installation-bound attempt with a stored reference qualifies, and the amount is the amount
-// owing verified at draft creation, never a client value.
+// installation-bound attempt with a stored reference and merchant account qualifies: ROLLER
+// links the payment to its Adyen transaction through `MerchantId`, and without that link the
+// payment cannot be refunded through the gateway. The amount is the amount owing verified at
+// draft creation, never a client value.
 function kioskTerminalPublishPayment(row) {
   const id = normalizeTerminalTransactionRef(row?.terminal_transaction_ref);
+  const merchantId = normalizeTerminalMerchantId(row?.terminal_merchant_id);
   const amountOwingCents = Number(row?.amount_owing_cents);
-  if (!id || !KIOSK_INSTALLATION_ID_PATTERN.test(stringOrNull(row?.kiosk_installation_id) ?? '')) return null;
+  if (!id || !merchantId) return null;
+  if (!KIOSK_INSTALLATION_ID_PATTERN.test(stringOrNull(row?.kiosk_installation_id) ?? '')) return null;
   if (!Number.isSafeInteger(amountOwingCents) || amountOwingCents <= 0) return null;
-  return { id, paymentType: KIOSK_TERMINAL_PAYMENT_TYPE, amount: amountOwingCents / 100 };
+  return { id, paymentType: KIOSK_TERMINAL_PAYMENT_TYPE, amount: amountOwingCents / 100, MerchantId: merchantId };
 }
 
 function publicKioskPaymentStatus(row) {
@@ -708,6 +720,7 @@ module.exports = {
   normalizePaymentTerminalMap,
   normalizePaymentTerminalNameMap,
   normalizeTerminalOutcome,
+  normalizeTerminalMerchantId,
   normalizeTerminalTransactionRef,
   publicKioskPaymentStatus,
   redactPaymentTerminalValues,

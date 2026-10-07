@@ -5,6 +5,7 @@ const path = require('node:path');
 const {
   kioskTerminalPublishPayment,
   normalizeDraftFinalizeAction,
+  normalizeTerminalMerchantId,
   normalizeTerminalTransactionRef,
   publicKioskPaymentStatus,
 } = require('../infra/lambda/booking/kiosk-terminal-contract');
@@ -18,6 +19,7 @@ const stackSource = read('infra', 'lib', 'jumpyard-cloud-stack.ts');
 const migrationSource = read('infra', 'migrations', '0019_kiosk_payment_reconciliation.sql');
 const provisionalMigrationSource = read('infra', 'migrations', '0020_provisional_kiosk_handoff.sql');
 const publishMigrationSource = read('infra', 'migrations', '0024_kiosk_terminal_payment_publish.sql');
+const merchantMigrationSource = read('infra', 'migrations', '0026_kiosk_terminal_merchant_id.sql');
 
 assert.equal(normalizeDraftFinalizeAction(undefined), 'result');
 assert.equal(normalizeDraftFinalizeAction('result'), 'result');
@@ -170,16 +172,29 @@ assert.match(workerSource, /catch \{\s*await recordKioskPublishResult\(request, 
 assert.match(bookingSource, /'\/bookings\/draft\/publish', \{\s*uniqueId: rollerDraftUniqueId,\s*payment,\s*\}/);
 assert.match(bookingSource, /request\.verifiedKioskInstallationId = terminalSelection\.installationId \?\? null/);
 assert.match(bookingSource, /terminal_transaction_ref = CASE\s*WHEN :outcome = 'approved'\s*AND terminal_transaction_ref IS NULL\s*AND kiosk_installation_id IS NOT NULL/);
-assert.match(bookingSource, /RETURNING[\s\S]*?amount_owing_cents,\s*kiosk_installation_id,\s*terminal_transaction_ref`/);
+assert.match(bookingSource, /terminal_merchant_id = CASE\s*WHEN :outcome = 'approved'\s*AND terminal_merchant_id IS NULL\s*AND kiosk_installation_id IS NOT NULL/);
+assert.match(bookingSource, /RETURNING[\s\S]*?amount_owing_cents,\s*kiosk_installation_id,\s*terminal_transaction_ref,\s*terminal_merchant_id`/);
 
 const installationId = `ki_${'a'.repeat(24)}`;
-const approvedRow = { amount_owing_cents: 20_000, kiosk_installation_id: installationId, terminal_transaction_ref: 'PSP1234567890ABC' };
-assert.deepEqual(kioskTerminalPublishPayment(approvedRow), { id: 'PSP1234567890ABC', paymentType: 'CreditCard', amount: 200 });
+const approvedRow = {
+  amount_owing_cents: 20_000,
+  kiosk_installation_id: installationId,
+  terminal_merchant_id: 'RollerPay_JumpYardNacka',
+  terminal_transaction_ref: 'PSP1234567890ABC',
+};
+// ROLLER (2026-10-07): `MerchantId` links the published payment to its gateway transaction.
+assert.deepEqual(kioskTerminalPublishPayment(approvedRow), {
+  id: 'PSP1234567890ABC', paymentType: 'CreditCard', amount: 200, MerchantId: 'RollerPay_JumpYardNacka',
+});
 assert.deepEqual(kioskTerminalPublishPayment({ ...approvedRow, amount_owing_cents: '19950' }).amount, 199.5);
 for (const change of [
   { terminal_transaction_ref: null },
   { terminal_transaction_ref: 'short' },
   { terminal_transaction_ref: 'has space 123456' },
+  { terminal_merchant_id: null },
+  { terminal_merchant_id: '' },
+  { terminal_merchant_id: 'has space' },
+  { terminal_merchant_id: 'x'.repeat(81) },
   { kiosk_installation_id: null },
   { kiosk_installation_id: 'primary' },
   { amount_owing_cents: 0 },
@@ -193,11 +208,17 @@ assert.equal(normalizeTerminalTransactionRef(' 8816178952380553 '), '88161789523
 for (const value of [undefined, null, '', 42, 'x'.repeat(65), 'abc-123456', 'abc.1234567']) {
   assert.equal(normalizeTerminalTransactionRef(value), null, String(value));
 }
+assert.equal(normalizeTerminalMerchantId(' RollerPay_JumpYard.Nacka-1 '), 'RollerPay_JumpYard.Nacka-1');
+for (const value of [undefined, null, '', 42, 'x'.repeat(81), 'has space', 'semi;colon', 'quote"']) {
+  assert.equal(normalizeTerminalMerchantId(value), null, String(value));
+}
 
 assert.match(publishMigrationSource, /ADD COLUMN IF NOT EXISTS kiosk_installation_id text/);
 assert.match(publishMigrationSource, /ADD COLUMN IF NOT EXISTS terminal_transaction_ref text/);
 assert.match(publishMigrationSource, /kiosk_installation_id ~ '\^ki_\[a-f0-9\]\{24\}\$'/);
 assert.match(publishMigrationSource, /terminal_transaction_ref ~ '\^\[A-Za-z0-9\]\{8,64\}\$'/);
+assert.match(merchantMigrationSource, /ADD COLUMN IF NOT EXISTS terminal_merchant_id text/);
+assert.match(merchantMigrationSource, /terminal_merchant_id ~ '\^\[A-Za-z0-9_\.-\]\{1,80\}\$'/);
 assert.ok(
   bookingSource.indexOf("WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved'") > -1,
   'late cancelled/failed/unknown callbacks must not regress an approved attempt',
