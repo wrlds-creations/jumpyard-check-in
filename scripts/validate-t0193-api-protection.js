@@ -14,6 +14,7 @@ const EXPECTED_ROUTES = [
   ['POST /v1/check-in/lookup', 'NONE', 'lookup', 'guest_public', 'lookup'],
   ['POST /v1/staff/auth/login', 'NONE', 'session', 'staff_auth_entry', 'staff_login'],
   ['POST /v1/staff/auth/session', 'NONE', 'session', 'staff_identity_session', 'staff_login'],
+  ['POST /v1/staff/kiosk-pairing', 'NONE', 'session', 'kiosk_staff_pairing', 'kiosk_pairing'],
   ['POST /v1/check-in/session-links', 'AWS_IAM', 'session', 'internal_ops', 'internal_session_link'],
   ['POST /v1/check-in/session-links/send-sms', 'AWS_IAM', 'session', 'internal_ops', 'internal_send_sms'],
   ['POST /v1/check-in/session-links/send-email', 'AWS_IAM', 'session', 'internal_ops', 'internal_send_email'],
@@ -33,6 +34,7 @@ const EXPECTED_ROUTES = [
   ['POST /v1/bookings/availability', 'NONE', 'booking', 'guest_public', 'availability'],
   ['POST /v1/bookings/{bookingReference}/add-products/quote', 'NONE', 'booking', 'guest_token', 'addon_quote'],
   ['POST /v1/bookings/{bookingReference}/add-products', 'NONE', 'booking', 'guest_write', 'addon_draft'],
+  ['POST /v1/kiosk/status', 'NONE', 'booking', 'kiosk_installation', 'kiosk_status'],
   ['POST /v1/roller/webhooks/bookings', 'NONE', 'webhook', 'roller_webhook', 'webhook_bookings'],
   ['POST /v1/roller/webhooks/redemptions', 'NONE', 'webhook', 'roller_webhook', 'webhook_redemptions'],
   ['POST /v1/admin/auth/session', 'JWT', 'session', 'staff_admin_session', 'staff_login'],
@@ -91,7 +93,7 @@ function resourcesOfType(template, resourceType) {
 
 function validateRouteCatalog(template) {
   const routeEntries = resourcesOfType(template, 'AWS::ApiGatewayV2::Route');
-  assert.equal(routeEntries.length, EXPECTED_ROUTES.length, 'The HTTP API must synthesize exactly 28 routes.');
+  assert.equal(routeEntries.length, EXPECTED_ROUTES.length, 'The HTTP API must synthesize exactly 30 routes.');
 
   const routesByKey = new Map(
     routeEntries.map(([logicalId, resource]) => [resource.Properties.RouteKey, { logicalId, resource }]),
@@ -171,8 +173,8 @@ function validateRouteSettings(template, routesByKey) {
 function validateApprovedProtectionResources(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    209,
-    'The T0193 boundary must remain intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the GH-224 terminal route, the #335 alarm topic, subscription and sustained Roller alarm, and the GH-473 Klaviyo key secret.',
+    215,
+    'The T0193 boundary must remain intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the GH-224 terminal route, the #335 alarm topic, subscription and sustained Roller alarm, the GH-473 Klaviyo key secret, and the GH-488 kiosk status and pairing routes.',
   );
   assert.equal(
     resourcesOfType(template, 'AWS::SecretsManager::Secret').filter(

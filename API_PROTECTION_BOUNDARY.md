@@ -23,6 +23,8 @@ This file is the source of truth for the route trust boundary first designed in 
 | `guest_write` | Guest write route. Requires strict validation and idempotency; existing-booking writes also require bound guest proof. |
 | `staff_auth_entry` | Temporary staff login entry. Public at Gateway, isolated low route bucket, safe logs, and server-side passcode verification; T0194 replaces the shared identity model. |
 | `staff_protected` | Requires the short-lived server-verified staff token before protected reads or redeem work. |
+| `kiosk_installation` | GH-488 kiosk status. Requires the installation id and the capability it was derived from; returns only the installation's own pairing and the venue's kiosk names, writes last-seen data only for a paired installation, and never calls ROLLER. |
+| `kiosk_staff_pairing` | GH-488 kiosk pairing. Requires the installation proof plus an allowlisted staff member's personal PIN, verified per request with the T0194 login limiter. Creates no staff session; the Booking Lambda checks the allowlist, the offered name and unresolved payment claims before an audited write. |
 | `internal_ops` | Requires AWS IAM signing at Gateway and the existing service token in Lambda. Not callable as a normal browser endpoint. |
 | `roller_webhook` | Public only so Roller can deliver. Requires the exact registered `x-roller-apikey` token, persists/enqueues safe metadata before HTTP `200`, and performs authoritative reconciliation asynchronously. |
 | `legacy_dev_only` | Lower-level direct redeem route. Requires AWS IAM plus the existing service/dev token; normal product flow does not use it. |
@@ -35,6 +37,7 @@ Rates are requests per second followed by burst capacity. They are aggregate per
 |---|---|---|---|---:|
 | `POST /v1/check-in/lookup` | `guest_public` | `NONE` | Scoped identifier/date/venue validation; successful lookup issues hash-only stored guest proof | 25 / 80 |
 | `POST /v1/staff/auth/login` | `staff_auth_entry` | `NONE` | Existing AWS-stored passcode, safe correlation/logging | 2 / 10 |
+| `POST /v1/staff/kiosk-pairing` | `kiosk_staff_pairing` | `NONE` | PIN mode only (GH-488): kiosk installation proof, allowlisted staff PIN with the shared login limiter, no ROLLER call, audited guarded writes | 1 / 5 |
 | `POST /v1/check-in/session-links` | `internal_ops` | `AWS_IAM` | Check-in-link service token | 1 / 5 |
 | `POST /v1/check-in/session-links/send-sms` | `internal_ops` | `AWS_IAM` | Service token plus existing send confirmation/provider gates | 1 / 5 |
 | `POST /v1/check-in/session-links/send-email` | `internal_ops` | `AWS_IAM` | Service token plus existing send confirmation/provider gates | 1 / 5 |
@@ -52,6 +55,7 @@ Rates are requests per second followed by burst capacity. They are aggregate per
 | `POST /v1/bookings/availability` | `guest_public` | `NONE` | Strict request/date/venue validation; no write | 20 / 60 |
 | `POST /v1/bookings/{bookingReference}/add-products/quote` | `guest_token` | `NONE` | Bearer guest proof bound to path booking plus strict validation | 10 / 40 |
 | `POST /v1/bookings/{bookingReference}/add-products` | `guest_write` | `NONE` | Bound guest proof, strict validation, confirm flag, idempotency | 5 / 20 |
+| `POST /v1/kiosk/status` | `kiosk_installation` | `NONE` | Kiosk installation proof (GH-488); read-only toward ROLLER; last-seen write only for a paired installation | 2 / 10 |
 | `POST /v1/roller/webhooks/bookings` | `roller_webhook` | `NONE` | Exact registered Roller token; safe metadata dedupe plus durable FIFO enqueue; async Live/Nacka reconciliation | 10 / 50 |
 | `POST /v1/roller/webhooks/redemptions` | `roller_webhook` | `NONE` | Registered token and safe acknowledgement; T0197 accepts only supported booking signals, so redemption events are not enriched | 10 / 50 |
 

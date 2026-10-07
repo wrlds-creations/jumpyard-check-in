@@ -111,6 +111,8 @@ const T0201_CONTROLLED_VENUE_ID = '50871';
 const BOOKING_TIME_MESSAGE_CHANNELS = new Set(['sms', 'email']);
 const GUEST_ACCESS_CHANNEL = 'guest_access';
 const TOKEN_BYTES = 32;
+// GH-488 (D0243): the Booking Lambda owns kiosk pairings; this Lambda only proves the staff member.
+const KIOSK_PAIRING_SOURCE = 'jumpyard.kiosk-pairing';
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
@@ -148,7 +150,8 @@ exports.handler = async (event) => {
         isAdminStaffCollectionRoute(routeKey, event) ||
         isAdminStaffItemRoute(routeKey, event) ||
         isStaffSessionListRoute(routeKey, event) ||
-        isStaffSessionDetailRoute(routeKey, event))
+        isStaffSessionDetailRoute(routeKey, event) ||
+        isKioskStaffPairingRoute(routeKey, event))
     ) {
       return safetyGateBlockedResponse(
         correlationId,
@@ -183,6 +186,10 @@ exports.handler = async (event) => {
 
     if (isStaffSessionDetailRoute(routeKey, event)) {
       return await handleStaffSessionDetail(event, correlationId);
+    }
+
+    if (isKioskStaffPairingRoute(routeKey, event)) {
+      return await handleKioskStaffPairing(event, body, correlationId);
     }
 
     if (isCreateSessionLinkRoute(routeKey, event)) {
@@ -4985,6 +4992,10 @@ function isStaffAuthLoginRoute(routeKey, event) {
   return routeKey === 'POST /v1/staff/auth/login' || event?.rawPath === '/v1/staff/auth/login';
 }
 
+function isKioskStaffPairingRoute(routeKey, event) {
+  return routeKey === 'POST /v1/staff/kiosk-pairing' || event?.rawPath === '/v1/staff/kiosk-pairing';
+}
+
 function isStaffAuthSessionRoute(routeKey, event) {
   return routeKey === 'POST /v1/staff/auth/session' || event?.rawPath === '/v1/staff/auth/session';
 }
@@ -5787,40 +5798,9 @@ async function handlePinStaffAuthLogin(event, body, correlationId) {
     });
   }
 
-  const pepper = await getStaffPinPepper();
-  const sourceHash = staffPinSourceHash(pepper.value, readStaffSourceAddress(event));
-  const limit = await readStaffPinAuthLimit(gate, sourceHash);
-  if (limit.blocked) return staffPinRateLimitedResponse(correlationId, limit.retryAfterSeconds);
-
-  if (isTrivialStaffPin(pin)) {
-    const failed = await recordStaffPinAuthFailure(gate, sourceHash);
-    return failed.blocked
-      ? staffPinRateLimitedResponse(correlationId, failed.retryAfterSeconds)
-      : staffPinInvalidResponse(correlationId);
-  }
-
-  const lookupHash = staffPinLookupHash(pepper.value, gate.environment, gate.venueId, pin);
-  const identity = await findLocalPinIdentity(lookupHash, pepper.version, gate);
-  const verified = await verifyStaffPin(
-    pin,
-    identity?.pinVerifier ?? null,
-    pepper.value,
-    gate.environment,
-    gate.venueId,
-  );
-  if (
-    !verified ||
-    !identity ||
-    identity.active !== true ||
-    identity.revokedAt ||
-    ![STAFF_ROLE_READER, STAFF_ROLE_OPERATOR].includes(identity.role)
-  ) {
-    const failed = await recordStaffPinAuthFailure(gate, sourceHash);
-    console.warn(JSON.stringify({ correlationId, event: 'staff_pin_auth_failed', reason: 'invalid_or_inactive' }));
-    return failed.blocked
-      ? staffPinRateLimitedResponse(correlationId, failed.retryAfterSeconds)
-      : staffPinInvalidResponse(correlationId);
-  }
+  const authenticated = await authenticateStaffPin(event, gate, pin, correlationId, 'staff_pin_auth_failed');
+  if (!authenticated.ok) return authenticated.response;
+  const { identity, lookupHash, pepper } = authenticated;
 
   let issued;
   try {
@@ -5879,6 +5859,126 @@ async function handlePinStaffAuthSession(event, body, correlationId) {
     principal: buildStaffPrincipalResponse(result.staff),
     session: buildStaffAuthSessionResponse(result.session),
   });
+}
+
+// Shared by PIN login and the GH-488 kiosk pairing proof: one limiter, the trivial-PIN rule, the
+// keyed lookup and the slow verification. Every failure counts against the source and venue limits.
+async function authenticateStaffPin(event, gate, pin, correlationId, failureEvent) {
+  const pepper = await getStaffPinPepper();
+  const sourceHash = staffPinSourceHash(pepper.value, readStaffSourceAddress(event));
+  const limit = await readStaffPinAuthLimit(gate, sourceHash);
+  if (limit.blocked) return { ok: false, response: staffPinRateLimitedResponse(correlationId, limit.retryAfterSeconds) };
+
+  if (isTrivialStaffPin(pin)) {
+    const failed = await recordStaffPinAuthFailure(gate, sourceHash);
+    return {
+      ok: false,
+      response: failed.blocked
+        ? staffPinRateLimitedResponse(correlationId, failed.retryAfterSeconds)
+        : staffPinInvalidResponse(correlationId),
+    };
+  }
+
+  const lookupHash = staffPinLookupHash(pepper.value, gate.environment, gate.venueId, pin);
+  const identity = await findLocalPinIdentity(lookupHash, pepper.version, gate);
+  const verified = await verifyStaffPin(
+    pin,
+    identity?.pinVerifier ?? null,
+    pepper.value,
+    gate.environment,
+    gate.venueId,
+  );
+  if (
+    !verified ||
+    !identity ||
+    identity.active !== true ||
+    identity.revokedAt ||
+    ![STAFF_ROLE_READER, STAFF_ROLE_OPERATOR].includes(identity.role)
+  ) {
+    const failed = await recordStaffPinAuthFailure(gate, sourceHash);
+    console.warn(JSON.stringify({ correlationId, event: failureEvent, reason: 'invalid_or_inactive' }));
+    return {
+      ok: false,
+      response: failed.blocked
+        ? staffPinRateLimitedResponse(correlationId, failed.retryAfterSeconds)
+        : staffPinInvalidResponse(correlationId),
+    };
+  }
+  return { ok: true, identity, lookupHash, pepper };
+}
+
+// GH-488 (D0243): a technician pairs a kiosk at the kiosk, or through remote control, with their
+// personal PIN. The PIN proves the person for this request only: no staff session is created, so
+// the person's session on a staff device is never replaced (D0160), and no token reaches the
+// kiosk. The PIN is never forwarded, stored or logged; the Booking Lambda receives only the
+// pseudonymous staff identity id, checks the pairing allowlist and performs every write.
+async function handleKioskStaffPairing(event, body, correlationId) {
+  if (!isPinStaffIdentityMode()) {
+    return jsonResponse(404, correlationId, {
+      status: 'not_found',
+      error: { code: 'route_not_found', message: 'Kiosk pairing requires personal staff PINs.' },
+    });
+  }
+  const gate = validatePinStaffGate();
+  if (!gate.ok) return staffAuthErrorResponse(correlationId, gate);
+
+  const pin = normalizePinInput(body.staffPin);
+  const detail = {
+    kioskCapability: stringOrNull(body.kioskCapability),
+    kioskInstallationId: stringOrNull(body.kioskInstallationId),
+    kioskNameId: stringOrNull(body.kioskNameId),
+    replace: body.replace === true,
+    webVersion: stringOrNull(body.webVersion),
+    wrapperVersion: stringOrNull(body.wrapperVersion),
+  };
+  if (
+    !/^ki_[a-f0-9]{24}$/.test(detail.kioskInstallationId ?? '') ||
+    !/^[A-Za-z0-9_-]{43}$/.test(detail.kioskCapability ?? '') ||
+    !/^[a-z0-9][a-z0-9-]{1,31}$/.test(detail.kioskNameId ?? '') ||
+    (body.replace !== undefined && typeof body.replace !== 'boolean')
+  ) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: { code: 'kiosk_pairing_invalid', message: 'The kiosk pairing request is incomplete.' },
+    });
+  }
+  if (!pin || !/^\d{6}$/.test(pin)) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: { code: 'staff_pin_format_invalid', message: 'Enter a six-digit PIN.' },
+    });
+  }
+
+  const authenticated = await authenticateStaffPin(event, gate, pin, correlationId, 'staff_pin_kiosk_pairing_failed');
+  if (!authenticated.ok) return authenticated.response;
+
+  const functionName = stringOrNull(process.env.KIOSK_PAIRING_FUNCTION_NAME);
+  if (!functionName) {
+    return jsonResponse(500, correlationId, {
+      status: 'config_error',
+      error: { code: 'kiosk_pairing_config_error', message: 'Kiosk pairing is not configured.' },
+    });
+  }
+  const response = await lambdaClient.send(new InvokeCommand({
+    FunctionName: functionName,
+    InvocationType: 'RequestResponse',
+    Payload: Buffer.from(JSON.stringify({
+      source: KIOSK_PAIRING_SOURCE,
+      detail: { ...detail, correlationId, staffIdentityId: authenticated.identity.staffIdentityId },
+    })),
+  }));
+  const result = response.FunctionError || !response.Payload
+    ? null
+    : parseJsonObject(Buffer.from(response.Payload).toString('utf8'));
+  const statusCode = Number(result?.statusCode);
+  if (!result || !Number.isInteger(statusCode) || statusCode < 200 || statusCode > 599) {
+    return jsonResponse(502, correlationId, {
+      status: 'unavailable',
+      error: { code: 'kiosk_pairing_failed', message: 'The kiosk could not be paired. Try again.' },
+    });
+  }
+  const { correlationId: _bookingCorrelationId, ...resultBody } = parseJsonObject(result.body);
+  return jsonResponse(statusCode, correlationId, resultBody);
 }
 
 function normalizePinInput(value) {

@@ -126,6 +126,8 @@ type ApiRouteTrustClass =
   | 'guest_token'
   | 'guest_write'
   | 'internal_ops'
+  | 'kiosk_installation'
+  | 'kiosk_staff_pairing'
   | 'legacy_dev_only'
   | 'roller_webhook'
   | 'staff_auth_entry'
@@ -313,6 +315,15 @@ const API_ROUTE_PROTECTION_CATALOG = [
     throttlingRateLimit: 5,
     trustClass: 'guest_write',
   },
+  // GH-488: each kiosk reads its pairing at start and every ten minutes; Cloud only, never ROLLER.
+  {
+    authorizationType: 'NONE',
+    handler: 'booking',
+    routeKey: 'POST /v1/kiosk/status',
+    throttlingBurstLimit: 10,
+    throttlingRateLimit: 2,
+    trustClass: 'kiosk_installation',
+  },
   {
     authorizationType: 'NONE',
     handler: 'webhook',
@@ -345,6 +356,16 @@ function buildApiRouteProtectionCatalog(
       throttlingBurstLimit: 10,
       throttlingRateLimit: 2,
       trustClass: 'staff_identity_session',
+    },
+    // GH-488: the kiosk installation proof plus an allowlisted staff PIN, verified in the Session
+    // Lambda; failures share the PIN login limiter. Pairing is a rare setup action.
+    {
+      authorizationType: 'NONE',
+      handler: 'session',
+      routeKey: 'POST /v1/staff/kiosk-pairing',
+      throttlingBurstLimit: 5,
+      throttlingRateLimit: 1,
+      trustClass: 'kiosk_staff_pairing',
     },
     {
       authorizationType: 'JWT',
@@ -1029,6 +1050,12 @@ exports.handler = async (event) => {
     });
     if (controlledT30EmailEnabled) {
       lookupHandler.grantInvoke(sessionHandler);
+    }
+    // GH-488 (D0243): after the staff PIN proof the Session Lambda asks the Booking Lambda to pair
+    // the kiosk installation (synchronous invoke; the Booking Lambda checks the allowlist).
+    if (config.staffIdentity.mode === 'pin') {
+      sessionHandler.addEnvironment('KIOSK_PAIRING_FUNCTION_NAME', bookingHandler.functionName);
+      bookingHandler.grantInvoke(sessionHandler);
     }
     // GH-456 (D0230): the Session and Booking Lambdas ask the Redeem Lambda to admit ready, paid
     // sessions automatically (asynchronous invoke; the Redeem Lambda checks every precondition).

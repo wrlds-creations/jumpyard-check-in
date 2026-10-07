@@ -83,6 +83,11 @@ jobs:
           GH481_DATABASE_TEST: 'true'
           GH481_PGPORT: '55435'
         run: npm run validate:gh481-kiosk-publish-with-payment
+      - name: Test kiosk pairing against PostgreSQL
+        env:
+          GH488_DATABASE_TEST: 'true'
+          GH488_PGPORT: '55435'
+        run: npm run validate:gh488-kiosk-pairing
 
   repository:
     name: Repository

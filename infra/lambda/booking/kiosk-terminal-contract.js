@@ -9,6 +9,16 @@ const KIOSK_TERMINAL_LOCK_ID_PATTERN = /^kt_[a-f0-9]{32}$/;
 // GH-481 (D0238): the provider transaction id (Adyen PSP reference) of an approved terminal payment.
 const KIOSK_TERMINAL_TRANSACTION_REF_PATTERN = /^[A-Za-z0-9]{8,64}$/;
 const KIOSK_TERMINAL_PAYMENT_TYPE = 'CreditCard';
+// GH-488 (D0243): server-owned kiosk names (Nacka K1 → Nacka T1 …) that a kiosk installation
+// claims after an allowlisted staff PIN proof. Names and display labels are not secret; the
+// terminal identifiers behind their aliases stay in the provider secret.
+const KIOSK_NAME_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,31}$/;
+const KIOSK_NAME_KINDS = new Set(['operational', 'test']);
+const KIOSK_DISPLAY_NAME_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,31}$/u;
+const KIOSK_STAFF_IDENTITY_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
+const KIOSK_WRAPPER_VERSION_PATTERN = /^[A-Za-z0-9._-]{1,32}$/;
+const KIOSK_WEB_VERSION_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
+const SUPPORTED_KIOSK_VENUE_ID = '50871';
 
 function normalizePaymentTerminalMap(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -82,13 +92,145 @@ function normalizeKioskProfile(value) {
   };
 }
 
-function resolveKioskPaymentTerminal(config, request) {
+// Display labels per terminal alias, kept apart from the mapping so they never reach ROLLER.
+function normalizePaymentTerminalNameMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([alias, terminal]) => [String(alias).trim(), displayNameOrNull(terminal?.displayName)])
+      .filter(([alias, displayName]) => alias && displayName),
+  );
+}
+
+function normalizeKioskNameMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([kioskNameId, kioskName]) => [String(kioskNameId).trim(), normalizeKioskName(kioskName)])
+      .filter(([kioskNameId, kioskName]) => KIOSK_NAME_ID_PATTERN.test(kioskNameId) && kioskName),
+  );
+}
+
+function normalizeKioskName(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const displayName = displayNameOrNull(value.displayName);
+  const kind = stringOrNull(value.kind);
+  const paymentTerminalAlias = stringOrNull(value.paymentTerminalAlias);
+  const venueId = stringOrNull(value.venueId);
+  if (!displayName || !KIOSK_NAME_KINDS.has(kind) || !paymentTerminalAlias || !venueId) return null;
+  return { active: value.active === true, displayName, kind, paymentTerminalAlias, venueId };
+}
+
+function normalizeKioskPairingStaffIdentityIds(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(stringOrNull).filter((id) => id && KIOSK_STAFF_IDENTITY_ID_PATTERN.test(id)))];
+}
+
+function displayNameOrNull(value) {
+  const displayName = stringOrNull(value);
+  return displayName && KIOSK_DISPLAY_NAME_PATTERN.test(displayName) ? displayName : null;
+}
+
+// The kiosk names one venue offers, in label order. A name is offered only while it is active and
+// its terminal alias resolves to a mapping with a valid lock, so a kiosk can never be paired to a
+// terminal that cannot take a payment.
+function kioskNameDirectory(config) {
+  const venueId = config.kioskVenueId;
+  if (venueId !== SUPPORTED_KIOSK_VENUE_ID) return [];
+  return Object.entries(config.kioskNames ?? {})
+    .filter(([, kioskName]) => kioskName.active && kioskName.venueId === venueId)
+    .filter(([, kioskName]) => {
+      const mapping = config.paymentTerminals?.[kioskName.paymentTerminalAlias];
+      return Boolean(mapping && validTerminalLock(config.paymentTerminals, mapping));
+    })
+    .map(([id, kioskName]) => ({
+      id,
+      kind: kioskName.kind,
+      name: kioskName.displayName,
+      terminalName: config.paymentTerminalNames?.[kioskName.paymentTerminalAlias] ?? null,
+    }))
+    .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'operational' ? -1 : 1) ||
+      a.name.localeCompare(b.name, 'sv', { numeric: true }));
+}
+
+function kioskTerminalLockId(config, kioskNameId) {
+  const kioskName = config.kioskNames?.[kioskNameId];
+  const mapping = kioskName ? config.paymentTerminals?.[kioskName.paymentTerminalAlias] : null;
+  return mapping && validTerminalLock(config.paymentTerminals, mapping) ? mapping.lockId : null;
+}
+
+function isKioskPairingStaffAllowed(config, staffIdentityId) {
+  const id = stringOrNull(staffIdentityId);
+  return Boolean(id && (config.kioskPairingStaffIdentityIds ?? []).includes(id));
+}
+
+// The installation proof both routes accept: the opaque id and the capability it was derived from.
+function verifiedKioskInstallationProof(installationIdValue, capabilityValue) {
+  const installationId = stringOrNull(installationIdValue);
+  const capability = stringOrNull(capabilityValue);
+  if (!installationId || !capability) return null;
+  return kioskCapabilityMatchesInstallationId(capability, installationId) ? { capability, installationId } : null;
+}
+
+function normalizeKioskClientVersions(value) {
+  const wrapperVersion = stringOrNull(value?.wrapperVersion);
+  const webVersion = stringOrNull(value?.webVersion);
+  return {
+    webVersion: webVersion && KIOSK_WEB_VERSION_PATTERN.test(webVersion) ? webVersion : null,
+    wrapperVersion: wrapperVersion && KIOSK_WRAPPER_VERSION_PATTERN.test(wrapperVersion) ? wrapperVersion : null,
+  };
+}
+
+function normalizeKioskPairingDetail(detail) {
+  const proof = verifiedKioskInstallationProof(detail?.kioskInstallationId, detail?.kioskCapability);
+  const kioskNameId = stringOrNull(detail?.kioskNameId);
+  const staffIdentityId = stringOrNull(detail?.staffIdentityId);
+  if (
+    !proof ||
+    !kioskNameId || !KIOSK_NAME_ID_PATTERN.test(kioskNameId) ||
+    !staffIdentityId || !KIOSK_STAFF_IDENTITY_ID_PATTERN.test(staffIdentityId) ||
+    (detail?.replace !== undefined && typeof detail.replace !== 'boolean')
+  ) {
+    return null;
+  }
+  return {
+    ...proof,
+    ...normalizeKioskClientVersions(detail),
+    kioskNameId,
+    replace: detail.replace === true,
+    staffIdentityId,
+  };
+}
+
+// Status for one installation: its own pairing, the venue's names with taken/free state, and
+// whether the installation still has a pre-GH-488 profile authorization. Never returns ids of
+// other installations, terminal identifiers or staff identities.
+function buildKioskStatus(config, installationId, activeRows) {
+  const directory = kioskNameDirectory(config);
+  const own = (activeRows ?? []).find((row) => row.installationId === installationId) ?? null;
+  const ownName = own ? directory.find((entry) => entry.id === own.kioskNameId) ?? null : null;
+  return {
+    kiosk: ownName
+      ? { id: ownName.id, kind: ownName.kind, name: ownName.name, paired: true, terminalName: ownName.terminalName }
+      : { legacy: config.kioskInstallations?.[installationId]?.active === true, paired: false },
+    names: directory.map((entry) => ({
+      ...entry,
+      mine: Boolean(ownName && ownName.id === entry.id),
+      taken: (activeRows ?? []).some((row) => row.kioskNameId === entry.id && row.installationId !== installationId),
+    })),
+  };
+}
+
+function resolveKioskPaymentTerminal(config, request, pairing = null) {
   if (request.channel !== 'kiosk') return { enabled: false, paymentTerminal: null };
 
   const installationId = stringOrNull(request.kioskInstallationId);
   const profileId = stringOrNull(request.kioskProfileId);
   const capability = stringOrNull(request.kioskCapability);
   const usesInstallationIdentity = Boolean(installationId || profileId || capability);
+
+  if (usesInstallationIdentity && pairing) return resolvePairedKioskTerminal(config, request, pairing);
+  if (usesInstallationIdentity && !profileId) return kioskInstallationNotPaired();
 
   if (usesInstallationIdentity) {
     const installation = installationId ? config.kioskInstallations?.[installationId] : null;
@@ -159,12 +301,64 @@ function validTerminalLock(mappings, terminal) {
   ));
 }
 
+// GH-488 (D0243): an installation paired in Aurora pays only on its kiosk name's terminal. Any
+// profile the device still sends is ignored; reservations keep the D0220 installation and
+// terminal keys, so a pairing never changes the lock semantics.
+function resolvePairedKioskTerminal(config, request, pairing) {
+  const installationId = stringOrNull(request.kioskInstallationId);
+  const capability = stringOrNull(request.kioskCapability);
+  const kioskNameId = stringOrNull(pairing?.kioskNameId);
+  const kioskName = kioskNameId ? config.kioskNames?.[kioskNameId] ?? null : null;
+  const authorized = Boolean(
+    installationId && KIOSK_INSTALLATION_ID_PATTERN.test(installationId) &&
+    capability && KIOSK_CAPABILITY_PATTERN.test(capability) &&
+    !request.paymentTerminalAlias &&
+    pairing?.installationId === installationId &&
+    pairing?.status === 'active' &&
+    kioskName?.active &&
+    config.kioskVenueId === SUPPORTED_KIOSK_VENUE_ID &&
+    kioskName.venueId === config.kioskVenueId &&
+    pairing.venueId === config.kioskVenueId &&
+    (!request.venueId || request.venueId === kioskName.venueId) &&
+    kioskCapabilityMatchesInstallationId(capability, installationId)
+  );
+  if (!authorized) return kioskInstallationNotAuthorized();
+
+  const terminalMapping = config.paymentTerminals?.[kioskName.paymentTerminalAlias] ?? null;
+  if (!terminalMapping || !validTerminalLock(config.paymentTerminals, terminalMapping)) {
+    return {
+      enabled: true,
+      error: {
+        code: 'kiosk_payment_terminal_not_configured',
+        message: 'The paired kiosk name has no available payment terminal.',
+      },
+      paymentTerminal: null,
+    };
+  }
+  return {
+    enabled: true, installationId, kioskNameId,
+    paymentTerminal: { deviceId: installationId, promptForTip: false, terminalId: terminalMapping.terminalId },
+    reservationKeys: [`jykb_install_${installationId}`, `jykb_terminal_${terminalMapping.lockId}`].sort(),
+  };
+}
+
 function kioskInstallationNotAuthorized() {
   return {
     enabled: true,
     error: {
       code: 'kiosk_installation_not_authorized',
       message: 'This kiosk installation is not authorized for the requested profile.',
+    },
+    paymentTerminal: null,
+  };
+}
+
+function kioskInstallationNotPaired() {
+  return {
+    enabled: true,
+    error: {
+      code: 'kiosk_installation_not_paired',
+      message: 'This kiosk is not paired with a kiosk name. Ask staff to pair it.',
     },
     paymentTerminal: null,
   };
@@ -496,18 +690,28 @@ function stringOrNull(value) {
 
 module.exports = {
   buildKioskQuotePayload,
+  buildKioskStatus,
+  isKioskPairingStaffAllowed,
   KIOSK_PAYMENT_CURRENCY,
+  kioskNameDirectory,
+  kioskTerminalLockId,
   kioskTerminalPublishPayment,
   normalizeDraftFinalizeAction,
   normalizeBookingReadback,
   normalizeItemsSummary,
+  normalizeKioskClientVersions,
   normalizeKioskInstallationMap,
+  normalizeKioskNameMap,
+  normalizeKioskPairingDetail,
+  normalizeKioskPairingStaffIdentityIds,
   normalizeKioskProfileMap,
   normalizePaymentTerminalMap,
+  normalizePaymentTerminalNameMap,
   normalizeTerminalOutcome,
   normalizeTerminalTransactionRef,
   publicKioskPaymentStatus,
   redactPaymentTerminalValues,
   resolveKioskPaymentTerminal,
+  verifiedKioskInstallationProof,
   verifyKioskDraftPayment,
 };

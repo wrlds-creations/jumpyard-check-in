@@ -2,6 +2,8 @@
 
 Scope: [Cloud #327](https://github.com/wrlds-creations/jumpyard-check-in/issues/327), paired with [kiosk #86](https://github.com/wrlds-creations/jumpyard-check-in-kiosk/issues/86).
 
+GH-488 (D0243) adds pairing on the kiosk with server-owned kiosk names; a paired installation no longer needs a profile or a per-installation secret entry. See [kiosk pairing](gh-488-kiosk-pairing.md).
+
 ## Contract
 
 One APK and one hosted application serve both Nacka profiles. Draft requests use `channel=kiosk`, `kioskInstallationId`, `kioskCapability`, and `kioskProfileId`. The two supported profiles are `nacka-forum-kiosk-1` and `nacka-forum-kiosk-2`. The backend derives the installation fingerprint from the capability and checks its active allowlist, selected profile, and configured Nacka venue before provider writes. Existing-booking purchases also check the authoritative original booking venue. Phone requests cannot supply kiosk identity fields.

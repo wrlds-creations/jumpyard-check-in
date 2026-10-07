@@ -81,8 +81,8 @@ function iamPoliciesReference(template, logicalId) {
 function validateParkTest(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    209,
-    'T0194 remains intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the #335 alarm topic, subscription and sustained Roller alarm, and the GH-473 Klaviyo key secret.',
+    215,
+    'T0194 remains intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the #335 alarm topic, subscription and sustained Roller alarm, the GH-473 Klaviyo key secret, and the GH-488 kiosk status and pairing routes.',
   );
   assert.equal(entriesOfType(template, 'AWS::SES::ConfigurationSet').length, 1);
   assert.equal(entriesOfType(template, 'AWS::SES::ConfigurationSetEventDestination').length, 1);
@@ -209,7 +209,7 @@ function validateParkTest(template) {
   ]);
 
   const routes = routesByKey(template);
-  assert.equal(routes.size, 28);
+  assert.equal(routes.size, 30);
   const jwtRouteKeys = [
     'POST /v1/admin/auth/session',
     'GET /v1/admin/staff',
@@ -230,6 +230,7 @@ function validateParkTest(template) {
   for (const routeKey of [
     'POST /v1/staff/auth/login',
     'POST /v1/staff/auth/session',
+    'POST /v1/staff/kiosk-pairing',
     'GET /v1/staff/check-in/sessions',
     'GET /v1/staff/check-in/sessions/{checkinSessionId}',
     'POST /v1/staff/check-in/sessions/{checkinSessionId}/redeem',
@@ -246,6 +247,8 @@ function validateParkTest(template) {
   assert.deepEqual(sessionEnvironment.STAFF_COGNITO_CLIENT_ID, { Ref: clientId });
   assert.deepEqual(sessionEnvironment.STAFF_PIN_PEPPER_SECRET_ARN, { Ref: pinPepperSecretId });
   assert.equal(sessionEnvironment.STAFF_AUTH_SECRET_ARN, undefined);
+  // GH-488: the PIN-proven kiosk pairing is forwarded to the Booking Lambda only in PIN mode.
+  assert.ok(sessionEnvironment.KIOSK_PAIRING_FUNCTION_NAME, 'PIN mode must name the kiosk pairing function.');
 
   const redeemEnvironment = lambdaEnvironment(template, `${PARK_TEST_STACK_NAME}-redeem`);
   assert.equal(redeemEnvironment.STAFF_IDENTITY_MODE, 'pin');
@@ -281,7 +284,8 @@ function validateDev(template) {
   assert.equal(entriesOfType(template, 'AWS::ApiGatewayV2::Authorizer').length, 0);
 
   const routes = routesByKey(template);
-  assert.equal(routes.size, 23);
+  assert.equal(routes.size, 24);
+  assert.equal(routes.has('POST /v1/staff/kiosk-pairing'), false, 'Kiosk pairing requires personal staff PINs.');
   assert.equal(routes.get('POST /v1/staff/auth/login').route.Properties.AuthorizationType, 'NONE');
   for (const routeKey of [
     'GET /v1/staff/check-in/sessions',
@@ -299,6 +303,7 @@ function validateDev(template) {
     assert.ok(environment.STAFF_AUTH_SECRET_ARN);
     assert.equal(environment.STAFF_COGNITO_CLIENT_ID, undefined);
     assert.equal(environment.STAFF_IDENTITY_VENUE_ID, undefined);
+    assert.equal(environment.KIOSK_PAIRING_FUNCTION_NAME, undefined);
   }
 }
 

@@ -10,19 +10,29 @@ const diagnostics = createServerDiagnostics('booking', (entry) => console.error(
 const { withGuestItemDetails, withPackageContents } = require('./package-contents');
 const {
   buildKioskQuotePayload,
+  buildKioskStatus,
+  isKioskPairingStaffAllowed,
   KIOSK_PAYMENT_CURRENCY,
+  kioskNameDirectory,
+  kioskTerminalLockId,
   kioskTerminalPublishPayment,
   normalizeDraftFinalizeAction,
   normalizeBookingReadback,
   normalizeItemsSummary,
+  normalizeKioskClientVersions,
   normalizeKioskInstallationMap,
+  normalizeKioskNameMap,
+  normalizeKioskPairingDetail,
+  normalizeKioskPairingStaffIdentityIds,
   normalizeKioskProfileMap,
   normalizePaymentTerminalMap,
+  normalizePaymentTerminalNameMap,
   normalizeTerminalOutcome,
   normalizeTerminalTransactionRef,
   publicKioskPaymentStatus,
   redactPaymentTerminalValues,
   resolveKioskPaymentTerminal,
+  verifiedKioskInstallationProof,
   verifyKioskDraftPayment,
 } = require('./kiosk-terminal-contract');
 const {
@@ -48,6 +58,8 @@ const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 const KIOSK_RECONCILIATION_SOURCE = 'jumpyard.kiosk-payment-reconciliation';
 const KIOSK_AUTHORITATIVE_CONFIRMATION_SOURCE = 'jumpyard.kiosk-authoritative-confirmation';
+// GH-488 (D0243): the Session Lambda proves the staff PIN and invokes this Lambda for the pairing.
+const KIOSK_PAIRING_SOURCE = 'jumpyard.kiosk-pairing';
 const KIOSK_RECONCILIATION_OFFSETS_MS = [
   0,
   5_000,
@@ -237,8 +249,19 @@ exports.handler = async (event) => {
       return await handleKioskAuthoritativeConfirmation(event.detail, correlationId);
     }
 
+    if (isKioskPairingEvent(event)) {
+      correlationId = normalizeCorrelationId(event?.detail?.correlationId) || correlationId;
+      return await handleKioskPairing(event.detail, correlationId);
+    }
+
     if (isDraftFinalizeRoute(routeKey, event)) {
       return await handleDraftFinalize(event, body, correlationId);
+    }
+
+    // GH-488: status is read-only toward ROLLER and stays available during an emergency stop so a
+    // kiosk can still show its name and pairing state.
+    if (isKioskStatusRoute(routeKey, event)) {
+      return await handleKioskStatus(body, correlationId);
     }
 
     if (isEmergencyStopEnabled()) {
@@ -593,7 +616,7 @@ async function handleDraft(event, body, correlationId) {
   request.customer = contact.customer;
 
   const config = await getRollerConfig();
-  const terminalSelection = resolveKioskPaymentTerminal(config, request);
+  const terminalSelection = resolveKioskPaymentTerminal(config, request, await readKioskPairing(request));
   if (terminalSelection.error) {
     await completeIdempotencyKey(request.idempotencyKey, 'failed', terminalSelection.error.code);
     return jsonResponse(409, correlationId, {
@@ -2480,7 +2503,7 @@ async function handleAddProductDraft(event, body, correlationId) {
     venueId: request.kioskInstallationId
       ? request.venueId && request.venueId !== original.venueId ? 'mismatch' : original.venueId || 'unknown'
       : request.venueId,
-  });
+  }, await readKioskPairing(request));
   if (terminalSelection.error) {
     await completeIdempotencyKey(request.idempotencyKey, 'failed', terminalSelection.error.code);
     return jsonResponse(409, correlationId, {
@@ -3317,15 +3340,18 @@ function validateAvailabilityRequest(request) {
 function validateKioskTerminalBinding(request) {
   const identityParts = [request.kioskCapability, request.kioskInstallationId, request.kioskProfileId];
   const identityPartCount = identityParts.filter(Boolean).length;
+  const hasInstallationProof = Boolean(request.kioskInstallationId && request.kioskCapability);
 
   if (request.channel === 'kiosk') {
-    if (identityPartCount > 0 && identityPartCount < identityParts.length) {
+    // GH-488 (D0243): the installation id and capability travel together; the profile is optional
+    // because a paired installation resolves through its server-owned kiosk name.
+    if (identityPartCount > 0 && !hasInstallationProof) {
       return {
         code: 'kiosk_installation_identity_incomplete',
-        message: 'Kiosk installation id, profile id, and capability must be supplied together.',
+        message: 'Kiosk installation id and capability must be supplied together.',
       };
     }
-    if (identityPartCount === identityParts.length && request.paymentTerminalAlias) {
+    if (hasInstallationProof && request.paymentTerminalAlias) {
       return {
         code: 'payment_terminal_alias_not_allowed',
         message: 'A kiosk installation identity cannot be combined with a client terminal alias.',
@@ -3527,8 +3553,12 @@ async function getRollerConfig() {
     clientId: String(secret.clientId ?? secret.client_id ?? '').trim(),
     clientSecret: String(secret.clientSecret ?? secret.client_secret ?? '').trim(),
     kioskInstallations: normalizeKioskInstallationMap(secret.kioskInstallations),
+    // GH-488: named kiosk positions, their terminal labels and who may pair a kiosk.
+    kioskNames: normalizeKioskNameMap(secret.kioskNames),
+    kioskPairingStaffIdentityIds: normalizeKioskPairingStaffIdentityIds(secret.kioskPairingStaffIdentityIds),
     kioskProfiles: normalizeKioskProfileMap(secret.kioskProfiles),
     kioskVenueId: stringOrNull(process.env.T0176_FULL_FLOW_VENUE_ID),
+    paymentTerminalNames: normalizePaymentTerminalNameMap(secret.paymentTerminals ?? secret.kioskPaymentTerminals),
     paymentTerminals: normalizePaymentTerminalMap(secret.paymentTerminals ?? secret.kioskPaymentTerminals),
   };
 
@@ -5144,6 +5174,223 @@ async function reserveKioskDraftBinding(selection, request) {
   return null;
 }
 
+// GH-488 (D0243): the active pairing of a proven installation, or null. The capability is checked
+// before the query, so an unproven id never reaches the database.
+async function readKioskPairing(request) {
+  if (request?.channel !== 'kiosk') return null;
+  const proof = verifiedKioskInstallationProof(request.kioskInstallationId, request.kioskCapability);
+  if (!proof) return null;
+  const result = await executeStatement(
+    `SELECT installation_id, venue_id, kiosk_name_id, status
+     FROM jumpyard.kiosk_installations
+     WHERE installation_id = :installationId AND status = 'active'`,
+    [stringParameter('installationId', proof.installationId)],
+  );
+  const row = firstMappedRow(result);
+  return row
+    ? {
+        installationId: stringOrNull(row.installation_id),
+        kioskNameId: stringOrNull(row.kiosk_name_id),
+        status: stringOrNull(row.status),
+        venueId: stringOrNull(row.venue_id),
+      }
+    : null;
+}
+
+async function readActiveKioskPairings(venueId) {
+  const result = await executeStatement(
+    `SELECT installation_id, kiosk_name_id
+     FROM jumpyard.kiosk_installations
+     WHERE venue_id = :venueId AND status = 'active'`,
+    [stringParameter('venueId', venueId)],
+  );
+  return mappedRows(result).map((row) => ({
+    installationId: stringOrNull(row.installation_id),
+    kioskNameId: stringOrNull(row.kiosk_name_id),
+  }));
+}
+
+// A pairing change must not move a kiosk or terminal while an attempt still holds its D0220
+// claim: the same definitive outcomes that let a new draft reuse a key also free it here.
+async function kioskPaymentKeysBusy(keys) {
+  const result = await executeStatement(
+    `SELECT existing.idempotency_key
+     FROM jumpyard.idempotency_records AS existing
+     WHERE existing.operation = 'kiosk_terminal_binding'
+       AND existing.idempotency_key IN (SELECT jsonb_array_elements_text(CAST(:keys AS jsonb)))
+       AND existing.status <> 'released'
+       AND NOT EXISTS (
+         SELECT 1 FROM jumpyard.prepayment_booking_drafts AS draft
+         WHERE draft.payment_attempt_id = existing.result_ref
+           AND draft.payment_channel = 'card_present'
+           AND (draft.payment_attempt_status IN ('failed', 'cancelled', 'reconciled')
+                OR draft.status = 'published')
+       )
+     LIMIT 1`,
+    [stringParameter('keys', JSON.stringify([...new Set(keys)]))],
+  );
+  return mappedRows(result).length > 0;
+}
+
+async function handleKioskStatus(body, correlationId) {
+  const proof = verifiedKioskInstallationProof(body.kioskInstallationId, body.kioskCapability);
+  if (!proof) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: { code: 'kiosk_installation_invalid', message: 'A valid kiosk installation proof is required.' },
+    });
+  }
+  const config = await getRollerConfig();
+  const activeRows = config.kioskVenueId ? await readActiveKioskPairings(config.kioskVenueId) : [];
+  const status = buildKioskStatus(config, proof.installationId, activeRows);
+  if (status.kiosk.paired) {
+    // Last seen and versions for the paired installation only; unknown callers never write.
+    const versions = normalizeKioskClientVersions(body);
+    await executeStatement(
+      `UPDATE jumpyard.kiosk_installations
+       SET last_seen_at = now(),
+           wrapper_version = COALESCE(:wrapperVersion, wrapper_version),
+           web_version = COALESCE(:webVersion, web_version),
+           updated_at = now()
+       WHERE installation_id = :installationId AND status = 'active'`,
+      [
+        stringParameter('installationId', proof.installationId),
+        stringParameter('wrapperVersion', versions.wrapperVersion),
+        stringParameter('webVersion', versions.webVersion),
+      ],
+    );
+  }
+  return jsonResponse(200, correlationId, { status: 'ok', ...status });
+}
+
+// Invoked only by the Session Lambda after the staff PIN proof; the detail carries the
+// pseudonymous staff identity id, never the PIN.
+async function handleKioskPairing(detail, correlationId) {
+  if (isEmergencyStopEnabled()) {
+    return safetyGateBlockedResponse(
+      correlationId,
+      'emergency_stop_active',
+      'Kiosk pairing is disabled while the JumpYard emergency stop is active.',
+    );
+  }
+  const request = normalizeKioskPairingDetail(detail);
+  if (!request) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: { code: 'kiosk_pairing_invalid', message: 'The kiosk pairing request is incomplete.' },
+    });
+  }
+  const config = await getRollerConfig();
+  if (!isKioskPairingStaffAllowed(config, request.staffIdentityId)) {
+    console.warn(JSON.stringify({ correlationId, event: 'kiosk_pairing_not_allowed' }));
+    return jsonResponse(403, correlationId, {
+      status: 'forbidden',
+      error: { code: 'kiosk_pairing_not_allowed', message: 'This staff member may not pair kiosks.' },
+    });
+  }
+  const kioskName = kioskNameDirectory(config).find((entry) => entry.id === request.kioskNameId) ?? null;
+  const lockId = kioskName ? kioskTerminalLockId(config, request.kioskNameId) : null;
+  if (!kioskName || !lockId) {
+    return jsonResponse(404, correlationId, {
+      status: 'not_found',
+      error: { code: 'kiosk_name_unknown', message: 'The kiosk name is not available for pairing.' },
+    });
+  }
+
+  const venueId = config.kioskVenueId;
+  const holder = (await readActiveKioskPairings(venueId))
+    .find((row) => row.kioskNameId === request.kioskNameId && row.installationId !== request.installationId) ?? null;
+  if (holder && !request.replace) return kioskNameTakenResponse(correlationId);
+
+  const busyKeys = [`jykb_install_${request.installationId}`, `jykb_terminal_${lockId}`];
+  if (holder) busyKeys.push(`jykb_install_${holder.installationId}`);
+  if (await kioskPaymentKeysBusy(busyKeys)) {
+    return jsonResponse(409, correlationId, {
+      status: 'blocked',
+      error: { code: 'kiosk_payment_busy', message: 'A payment on this kiosk or terminal is still unresolved.' },
+    });
+  }
+
+  if (holder) {
+    await executeStatement(
+      `UPDATE jumpyard.kiosk_installations
+       SET status = 'revoked', revoked_at = now(), revoked_reason = 'replaced', updated_at = now()
+       WHERE installation_id = :installationId AND kiosk_name_id = :kioskNameId AND status = 'active'`,
+      [
+        stringParameter('installationId', holder.installationId),
+        stringParameter('kioskNameId', request.kioskNameId),
+      ],
+    );
+  }
+  try {
+    await executeStatement(
+      `INSERT INTO jumpyard.kiosk_installations (
+         installation_id, venue_id, kiosk_name_id, status, paired_at, paired_by_staff_identity_id,
+         last_seen_at, wrapper_version, web_version
+       )
+       VALUES (
+         :installationId, :venueId, :kioskNameId, 'active', now(), :staffIdentityId,
+         now(), :wrapperVersion, :webVersion
+       )
+       ON CONFLICT (installation_id) DO UPDATE SET
+         venue_id = EXCLUDED.venue_id,
+         kiosk_name_id = EXCLUDED.kiosk_name_id,
+         status = 'active',
+         paired_at = now(),
+         paired_by_staff_identity_id = EXCLUDED.paired_by_staff_identity_id,
+         revoked_at = NULL,
+         revoked_reason = NULL,
+         last_seen_at = now(),
+         wrapper_version = EXCLUDED.wrapper_version,
+         web_version = EXCLUDED.web_version,
+         updated_at = now()`,
+      [
+        stringParameter('installationId', request.installationId),
+        stringParameter('venueId', venueId),
+        stringParameter('kioskNameId', request.kioskNameId),
+        stringParameter('staffIdentityId', request.staffIdentityId),
+        stringParameter('wrapperVersion', request.wrapperVersion),
+        stringParameter('webVersion', request.webVersion),
+      ],
+    );
+  } catch (error) {
+    // A concurrent pairing won the one-active-holder index; the operator chooses again.
+    if (isUniqueViolation(error)) return kioskNameTakenResponse(correlationId);
+    throw error;
+  }
+
+  await writeBookingEventLog({
+    correlationId,
+    eventType: 'kiosk.installation_paired',
+    payload: {
+      installationId: request.installationId,
+      kioskNameId: request.kioskNameId,
+      replacedInstallationId: holder?.installationId ?? null,
+      staffIdentityId: request.staffIdentityId,
+      venueId,
+    },
+    subjectRef: request.installationId,
+    summary: `Kiosk installation paired as ${request.kioskNameId}.`,
+  });
+
+  return jsonResponse(200, correlationId, {
+    status: 'paired',
+    kiosk: { id: kioskName.id, kind: kioskName.kind, name: kioskName.name, paired: true, terminalName: kioskName.terminalName },
+  });
+}
+
+function kioskNameTakenResponse(correlationId) {
+  return jsonResponse(409, correlationId, {
+    status: 'conflict',
+    error: { code: 'kiosk_name_taken', message: 'Another kiosk holds this name. Confirm to replace it.' },
+  });
+}
+
+function isUniqueViolation(error) {
+  const text = `${error?.code ?? ''} ${error?.name ?? ''} ${error?.message ?? ''}`;
+  return /23505|duplicate key|unique constraint/i.test(text);
+}
+
 async function reserveIdempotencyKey(operation, idempotencyKey, requestHash) {
   // Keep the server-owned reservation namespace inaccessible to client keys.
   if (idempotencyKey.startsWith('jykb_') || idempotencyKey.startsWith('jymc_') || idempotencyKey.startsWith('jysa_')) {
@@ -6101,6 +6348,15 @@ function isKioskReconciliationEvent(event) {
 
 function isKioskAuthoritativeConfirmationEvent(event) {
   return event?.source === KIOSK_AUTHORITATIVE_CONFIRMATION_SOURCE && event?.detail?.trigger !== 'http';
+}
+
+// Only a direct Lambda invocation, never an HTTP event, can carry a verified staff identity.
+function isKioskPairingEvent(event) {
+  return event?.source === KIOSK_PAIRING_SOURCE && !event.requestContext && !event.routeKey && !event.rawPath;
+}
+
+function isKioskStatusRoute(routeKey, event) {
+  return routeKey === 'POST /v1/kiosk/status' || event?.rawPath === '/v1/kiosk/status';
 }
 
 function isAvailabilityRoute(routeKey, event) {

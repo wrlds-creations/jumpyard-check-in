@@ -4,6 +4,27 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #488 Kiosk Pairing (Secret Applied 2026-10-07; Code Not Deployed)
+
+The park-test release profile gains the GH-488 kiosk pairing (D0243). The code is not deployed yet.
+
+Provider secret, applied on Love's go at 2026-10-07 08:34 UTC:
+- A version-guarded edit of `/jumpyard-check-in-park-test/roller/credentials`. The new version holds AWSCURRENT; the previous one is kept as AWSPREVIOUS.
+- Readback matches the reviewed plan exactly.
+- It offers six names: Nacka K1–K5 → Nacka T1–T5, and Test K1 → Test T1 (P400). The V210 alias is labelled Test T2.
+- The allowlist has two staff identities.
+- `clientId`, `clientSecret`, the legacy installation and both legacy profiles are unchanged.
+- The running release ignores the new keys.
+
+The planned code changes:
+- **Routes:** two new HTTP API routes, each with its integration and Lambda permission. `POST /v1/kiosk/status` (Booking, `kiosk_installation`, 2/10) and, in PIN mode only, `POST /v1/staff/kiosk-pairing` (Session, `kiosk_staff_pairing`, 1/5). The local synth goes from 209 to 215 resources; dev gains only the status route.
+- **IAM and environment:** the Session role may invoke the Booking Lambda (`bookingHandler.grantInvoke`), and Session gets `KIOSK_PAIRING_FUNCTION_NAME`. No new role, secret, queue, alarm or stack.
+- **Schema:** forward-only migration `0025_kiosk_installation_pairing.sql` creates `jumpyard.kiosk_installations` (installation id, venue, kiosk name, status, pairing staff identity id, last seen, versions) with one active installation per venue and name. Only `jumpyard_booking_runtime` gets `SELECT, INSERT, UPDATE`. No guest data, PIN, capability or terminal identifier is stored.
+- **Provider secret (applied, see above):** the existing `/jumpyard-check-in-park-test/roller/credentials` gains `kioskNames` (Nacka K1–K5, Test K1), five P630 aliases in `paymentTerminals` with stable lock ids and `displayName` labels, and `kioskPairingStaffIdentityIds` (Love, Gustav). Values are never printed or committed; every unrelated field is preserved.
+- **Cost:** no new billable resource; a few extra Lambda invocations per kiosk per hour.
+
+[Contract and setup](docs/gh-488-kiosk-pairing.md).
+
 ### Issue #473 Klaviyo Contact Lookup Secret (Deployed 2026-09-30)
 
 Release 36733819783 / `63f2ee0` (Park run [36734773707](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/36734773707)) added `KlaviyoProfilesReadSecret`, named `/jumpyard-check-in-park-test/klaviyo/profiles-read`: created empty, `DeletionPolicy: Retain`, all ten WRLDS tags. It also added one Booking role statement (`secretsmanager:GetSecretValue` and `DescribeSecret` on that secret only), and three Booking variables: `ENABLE_GH473_KLAVIYO_CONTACT_LOOKUP=true`, `GH473_KLAVIYO_LOOKUP_TIMEOUT_MS=1500` and `KLAVIYO_PROFILES_READ_SECRET_ARN`.
