@@ -77,7 +77,7 @@ Run `npm run validate:gh488-kiosk-pairing`. It covers the kiosk name directory, 
 
 ## Kiosk publish with the terminal payment (#481)
 
-Run `npm run validate:gh481-kiosk-publish-with-payment` and `npm run validate:kiosk-payment-reconciliation`. Set `GH481_DATABASE_TEST=true` for the disposable PostgreSQL case (local port 55481, CI port 55435). Physical acceptance is a supervised P400 purchase on Park: the booking is confirmed within seconds, and at least 2 minutes later the ROLLER booking has exactly one payment and nothing owing. See [the note](docs/gh-481-kiosk-publish-with-payment.md).
+Run `npm run validate:gh481-kiosk-publish-with-payment` and `npm run validate:kiosk-payment-reconciliation`. Set `GH481_DATABASE_TEST=true` for the disposable PostgreSQL case (local port 55481, CI port 55435). Physical acceptance is a supervised P400 purchase on Park. The booking is confirmed within seconds. At least 2 minutes later the ROLLER booking has exactly one payment and nothing owing, and the payment can be refunded through "Refund via gateway (Adyen)" in Venue Manager. See [the note](docs/gh-481-kiosk-publish-with-payment.md).
 
 Use this file to define active validation for the current project or milestone. Historical validation evidence was moved to [docs/history/validation-log.md](docs/history/validation-log.md) during T0128.
 

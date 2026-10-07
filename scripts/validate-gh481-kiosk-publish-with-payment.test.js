@@ -13,6 +13,7 @@ const source = fs.readFileSync(path.join(root, 'infra/lambda/booking/index.js'),
 const capability = 'C'.repeat(43); // Synthetic fixture, never a provisioned credential.
 const installationId = `ki_${crypto.createHash('sha256').update(capability).digest('hex').slice(0, 24)}`;
 const transactionRef = 'PSP4817OK0000001';
+const merchantId = 'RollerPay_JumpYardNacka';
 const draftUniqueId = 'synthetic-draft-uuid';
 const prepaymentDraftId = `jypd_${'1'.repeat(18)}`;
 const paymentAttemptId = `jytp_${'2'.repeat(18)}`;
@@ -64,7 +65,8 @@ function workerFixture({ claimed = {}, flowType = 'new_booking', publish, readba
     isAddProductDraftWriteEnabled: () => true,
     claimKioskReconciliation: async () => ({ roller_draft_unique_id: draftUniqueId,
       payment_approved_at: new Date().toISOString(), amount_owing_cents: 20000,
-      kiosk_installation_id: installationId, terminal_transaction_ref: transactionRef, ...claimed }),
+      kiosk_installation_id: installationId, terminal_transaction_ref: transactionRef,
+      terminal_merchant_id: merchantId, ...claimed }),
     getRollerConfig: async () => ({ env: 'playground' }),
     getRollerAccessToken: async () => ({ accessToken: 'synthetic-access' }),
     claimKioskPublishAttempt: async () => { calls.publishClaims += 1; return publishClaim && calls.publishClaims === 1; },
@@ -102,7 +104,8 @@ test('An approved attempt with its transaction id is published once, at once, wi
   assert.equal(calls.posts.length, 1);
   assert.deepEqual(plain(calls.posts[0]), {
     endpoint: '/bookings/draft/publish',
-    payload: { uniqueId: draftUniqueId, payment: { id: transactionRef, paymentType: 'CreditCard', amount: 200 } },
+    payload: { uniqueId: draftUniqueId,
+      payment: { id: transactionRef, paymentType: 'CreditCard', amount: 200, MerchantId: merchantId } },
   });
   assert.deepEqual(calls.publishResults, [{ status: 201, result: 'accepted' }]);
   assert.equal(calls.gets.length, 1, 'one readback after the publish confirms the booking');
@@ -143,6 +146,7 @@ test('Exhausted readback after a rejected publish ends in needs_staff without an
 
 for (const [name, claimed] of [
   ['no transaction id', { terminal_transaction_ref: null }],
+  ['no merchant account (gateway refunds would fail)', { terminal_merchant_id: null }],
   ['a legacy-alias draft', { kiosk_installation_id: null }],
   ['no verified amount owing', { amount_owing_cents: null }],
 ]) {
@@ -198,22 +202,26 @@ function finalizeFixture() {
   const finalize = (body) => backend.handleDraftFinalize({ headers: {} }, {
     idempotencyKey: 'synthetic-finalize', paymentAttemptId, prepaymentDraftId, rollerDraftUniqueId: draftUniqueId, ...body,
   }, 'test-correlation');
-  const storedRef = () => {
+  const storedParameter = (name) => {
     const update = statements.find(({ sql }) => sql.includes('terminal_transaction_ref = CASE'));
-    assert.ok(update, 'the outcome update stores the transaction id');
-    const parameter = update.parameters.find((p) => p.name === 'terminalTransactionRef');
+    assert.ok(update, 'the outcome update stores the transaction id and merchant account');
+    const parameter = update.parameters.find((p) => p.name === name);
     return parameter.value.isNull ? null : parameter.value.stringValue;
   };
-  return { finalize, queued, storedRef };
+  const storedRef = () => storedParameter('terminalTransactionRef');
+  const storedMerchant = () => storedParameter('terminalMerchantId');
+  return { finalize, queued, storedRef, storedMerchant };
 }
 
 test('An approval forwards a well-formed transaction id to the outcome update', async () => {
-  const { finalize, queued, storedRef } = finalizeFixture();
-  const response = await finalize({ outcome: 'approved', terminalTransactionId: ` ${transactionRef} ` });
+  const { finalize, queued, storedRef, storedMerchant } = finalizeFixture();
+  const response = await finalize({ outcome: 'approved', terminalTransactionId: ` ${transactionRef} `, terminalMerchantId: merchantId });
   assert.equal(response.statusCode, 202, response.body);
   assert.equal(storedRef(), transactionRef);
+  assert.equal(storedMerchant(), merchantId);
   assert.equal(queued.length, 1);
   assert.ok(!response.body.includes(transactionRef), 'the response never echoes the transaction id');
+  assert.ok(!response.body.includes(merchantId), 'the response never echoes the merchant account');
 });
 
 for (const [name, body] of [
@@ -230,12 +238,24 @@ for (const [name, body] of [
   });
 }
 
+for (const [name, value] of [['a missing', undefined], ['a malformed', 'has space; DROP'], ['a non-string', 42]]) {
+  test(`An approval with ${name} merchant account is still recorded, without one`, async () => {
+    const { finalize, queued, storedRef, storedMerchant } = finalizeFixture();
+    const response = await finalize({ outcome: 'approved', terminalTransactionId: transactionRef, terminalMerchantId: value });
+    assert.equal(response.statusCode, 202, response.body);
+    assert.equal(storedRef(), transactionRef);
+    assert.equal(storedMerchant(), null);
+    assert.equal(queued.length, 1);
+  });
+}
+
 for (const outcome of ['failed', 'cancelled', 'unknown']) {
   test(`A ${outcome} result never stores a transaction id`, async () => {
-    const { finalize, storedRef } = finalizeFixture();
-    const response = await finalize({ outcome, terminalTransactionId: transactionRef });
+    const { finalize, storedRef, storedMerchant } = finalizeFixture();
+    const response = await finalize({ outcome, terminalTransactionId: transactionRef, terminalMerchantId: merchantId });
     assert.equal(response.statusCode, 200, response.body);
     assert.equal(storedRef(), null);
+    assert.equal(storedMerchant(), null);
   });
 }
 
@@ -334,19 +354,25 @@ test('PostgreSQL: the transaction id is kept once, only for an installation-boun
     [attempt.paymentAttemptId])).rows[0].terminal_transaction_ref;
   try {
     const bound = await insertDraft('bound', installationId);
-    await backend.recordKioskTerminalOutcome({ ...bound, terminalTransactionRef: transactionRef }, 'approved');
+    await backend.recordKioskTerminalOutcome({ ...bound, terminalTransactionRef: transactionRef, terminalMerchantId: merchantId }, 'approved');
     assert.equal(await storedRef(bound), transactionRef);
-    await backend.recordKioskTerminalOutcome({ ...bound, terminalTransactionRef: 'PSP4817OTHER0002' }, 'approved');
+    await backend.recordKioskTerminalOutcome({ ...bound, terminalTransactionRef: 'PSP4817OTHER0002', terminalMerchantId: 'OtherMerchant' }, 'approved');
     assert.equal(await storedRef(bound), transactionRef, 'the first reported id is never overwritten');
     const claimed = await backend.claimKioskReconciliation(bound);
-    assert.deepEqual(contract.kioskTerminalPublishPayment(claimed), { id: transactionRef, paymentType: 'CreditCard', amount: 200 });
+    assert.deepEqual(contract.kioskTerminalPublishPayment(claimed),
+      { id: transactionRef, paymentType: 'CreditCard', amount: 200, MerchantId: merchantId });
 
     const legacy = await insertDraft('legacy', null);
-    await backend.recordKioskTerminalOutcome({ ...legacy, terminalTransactionRef: transactionRef }, 'approved');
+    await backend.recordKioskTerminalOutcome({ ...legacy, terminalTransactionRef: transactionRef, terminalMerchantId: merchantId }, 'approved');
     assert.equal(await storedRef(legacy), null, 'a legacy-alias draft never stores a transaction id');
+    const legacyMerchant = (await admin.query('SELECT terminal_merchant_id FROM jumpyard.prepayment_booking_drafts WHERE payment_attempt_id = $1',
+      [legacy.paymentAttemptId])).rows[0].terminal_merchant_id;
+    assert.equal(legacyMerchant, null, 'a legacy-alias draft never stores a merchant account');
 
     await assert.rejects(admin.query(`UPDATE jumpyard.prepayment_booking_drafts SET terminal_transaction_ref = 'bad ref'
       WHERE payment_attempt_id = $1`, [legacy.paymentAttemptId]), /terminal_transaction_ref_check/);
+    await assert.rejects(admin.query(`UPDATE jumpyard.prepayment_booking_drafts SET terminal_merchant_id = 'bad merchant'
+      WHERE payment_attempt_id = $1`, [bound.paymentAttemptId]), /terminal_merchant_id_check/);
     await assert.rejects(admin.query(`UPDATE jumpyard.prepayment_booking_drafts SET kiosk_installation_id = 'primary'
       WHERE payment_attempt_id = $1`, [legacy.paymentAttemptId]), /kiosk_installation_id_check/);
   } finally {

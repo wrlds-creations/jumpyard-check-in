@@ -450,6 +450,7 @@ const ACTION_SPECS: ActionSpec[] = [
           OR draft.customer_phone_hash IS NOT NULL
           OR draft.customer_phone_masked IS NOT NULL
           OR draft.terminal_transaction_ref IS NOT NULL
+          OR draft.terminal_merchant_id IS NOT NULL
           OR (
             draft.roller_draft_unique_id IS NOT NULL
             AND draft.roller_draft_unique_id !~ '^provider_[a-f0-9]{32}$'
@@ -489,6 +490,7 @@ const ACTION_SPECS: ActionSpec[] = [
             OR draft.customer_phone_hash IS NOT NULL
             OR draft.customer_phone_masked IS NOT NULL
             OR draft.terminal_transaction_ref IS NOT NULL
+            OR draft.terminal_merchant_id IS NOT NULL
             OR (
               draft.roller_draft_unique_id IS NOT NULL
               AND draft.roller_draft_unique_id !~ '^provider_[a-f0-9]{32}$'
@@ -526,6 +528,7 @@ const ACTION_SPECS: ActionSpec[] = [
             customer_phone_hash = NULL,
             customer_phone_masked = NULL,
             terminal_transaction_ref = NULL,
+            terminal_merchant_id = NULL,
             roller_draft_unique_id = CASE
               WHEN target.roller_draft_unique_id IS NULL THEN NULL
               WHEN target.roller_draft_unique_id ~ '^provider_[a-f0-9]{32}$'
