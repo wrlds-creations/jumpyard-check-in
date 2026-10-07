@@ -117,6 +117,16 @@ function readyKioskSessionRow() {
   };
 }
 
+// What a kiosk purchase stores before ROLLER confirms it: a Weekday Combo for two, socks and coffee.
+const KIOSK_DRAFT_ITEMS = [
+  { productId: '1242136', parentProductId: '1242135', productName: 'Weekday Combo', parentProductName: 'Weekday Combo',
+    productType: 'sessionpass', quantity: 1, bookingDate: TODAY, startTime: '14:00', endTime: '16:00' },
+  { productId: '1189901', parentProductId: '1189900', productName: 'Strumpor', parentProductName: 'JumpSocks',
+    productType: 'addon', quantity: 2, bookingDate: TODAY },
+  { productId: '1190001', parentProductId: '1190000', productName: 'Bryggkaffe', parentProductName: 'Kaffe',
+    productType: 'addon', quantity: 1, bookingDate: TODAY },
+];
+
 function createResolveDatabase(script = {}) {
   const calls = [];
   const execute = async (sql, parameters) => {
@@ -132,6 +142,9 @@ function createResolveDatabase(script = {}) {
       return rdsResult(script.readySession === false ? [] : [readyKioskSessionRow()]);
     }
     if (/FROM jumpyard\.roller_booking_items AS item\s+LEFT JOIN jumpyard\.roller_booking_tickets AS ticket/.test(sql)) return rdsResult([]);
+    if (/FROM jumpyard\.prepayment_booking_drafts AS draft\s+WHERE draft\.roller_draft_unique_id = :rollerUniqueId/.test(sql)) {
+      return rdsResult([{ items_summary: JSON.stringify(script.draftItems ?? KIOSK_DRAFT_ITEMS) }]);
+    }
     if (/WITH source_bookings AS MATERIALIZED/.test(sql)) return rdsResult([]);
     if (/FROM jumpyard\.booking_links AS link\s+INNER JOIN jumpyard\.prepayment_booking_drafts AS draft/.test(sql)) return rdsResult([]);
     if (/WITH staff_items AS \(/.test(sql)) return rdsResult([]);
@@ -156,6 +169,12 @@ async function validateKioskLinkOpensTheVisitBeforeRollerConfirms() {
   assert.equal(opened.body.session.status, 'ready_for_staff');
   assert.equal(opened.body.guestAccess.token, 'k'.repeat(43), 'the phone keeps the link as its guest access');
   assert.equal(sqlCalls(opened.calls, /INSERT INTO jumpyard\.checkin_sessions/).length, 0, 'no second session is created');
+  // Live test 2026-10-07: before ROLLER confirms, the phone gets what was bought, not a generic entry.
+  assert.deepEqual(opened.body.booking.items.map((item) => [item.productName, item.quantity]),
+    [['Weekday Combo', 1], ['Strumpor', 2], ['Bryggkaffe', 1]]);
+  assert.ok(opened.body.booking.items[0].packageContents?.length, 'the Combo carries its bands and pizza');
+  assert.equal(opened.body.source.provisionalItems, true);
+  assert.equal('cafe' in (opened.body.visit ?? {}), false, 'no café list yet, so the phone groups the items itself');
 
   const notReady = await resolveLink({ readySession: false });
   assert.equal(notReady.statusCode, 409, 'without a ready kiosk session the phone still waits');
