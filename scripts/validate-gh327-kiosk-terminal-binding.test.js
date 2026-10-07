@@ -126,6 +126,8 @@ function handlerFixture(extra = {}) {
     resolveOriginalBookingContext: async () => ({ ok: true, venueId: '50871', bookingReference: 'original-fixture', rollerUniqueId: 'original-id', customer: body.customer }),
     getRollerJson: async () => { throw new Error('Draft creation must not look up a customer'); },
     executeStatement: async (sql, parameters) => {
+      // GH-488: these legacy-profile installations have no registry pairing.
+      if (/FROM jumpyard\.kiosk_installations/.test(sql)) return { columnMetadata: [], records: [] };
       calls.push({ sql, parameters });
       const keys = JSON.parse(parameters.find((p) => p.name === 'keys').value.stringValue);
       return { columnMetadata: [{ name: 'idempotency_key' }], records: keys.map((key) => [{ stringValue: key }]) };

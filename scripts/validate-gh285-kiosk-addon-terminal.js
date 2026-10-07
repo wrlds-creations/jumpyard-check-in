@@ -136,7 +136,8 @@ const linkedDraft = {
 };
 assert.equal(publicKioskPaymentStatus(linkedDraft).status, 'confirmed');
 
-assert.match(bookingSource, /const terminalSelection = resolveKioskPaymentTerminal\(config, request\)/);
+// GH-488 (D0243): the resolver also receives the installation's registry pairing.
+assert.match(bookingSource, /const terminalSelection = resolveKioskPaymentTerminal\(config, request, await readKioskPairing\(request\)\)/);
 assert.match(bookingSource, /booking\.kiosk_add_product_terminal_contract_failed/);
 assert.match(bookingSource, /paymentChannel: terminalSelection\.enabled \? 'card_present' : 'ecommerce'/);
 assert.match(bookingSource, /draft\.flow_type IN \('new_booking', 'add_product'\)/);

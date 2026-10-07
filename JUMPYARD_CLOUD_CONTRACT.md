@@ -814,9 +814,28 @@ Draft rules:
 - Do not log, print, or persist the raw `paymentJwt`.
 - T0033 persists safe draft metadata to `jumpyard.prepayment_booking_drafts`, including `payment_jwt_present` and `payment_config_available` flags, but no raw `paymentJwt` value.
 - The kiosk card-present path sends `channel: "kiosk"`, `kioskInstallationId`, `kioskCapability`, and one fixed `kioskProfileId`. Cloud validates the active installation, capability fingerprint, allowed profile and Nacka venue, then resolves the private terminal mapping. It reserves both installation and terminal before the provider draft; unresolved attempts block another draft or profile change. The installation id supplies application `deviceId`; provider `terminalId` stays server-only. Cloud forces `promptForTip: false`, omits `amount`, and excludes terminal data from Booking Costs. Temporary compatibility accepts only the existing `primary` alias and is disabled after commissioning. See [#327 contract, configuration and recovery](docs/gh-327-kiosk-terminal-binding.md).
+- GH-488 (D0243): a kiosk paired through `POST /v1/staff/kiosk-pairing` sends only `kioskInstallationId` and `kioskCapability`. Cloud resolves the installation's active pairing in `jumpyard.kiosk_installations`, then its kiosk name's terminal alias; any `kioskProfileId` is ignored. Without a pairing and without a profile, the draft is refused with `409 kiosk_installation_not_paired` before any ROLLER call. Reservations, `deviceId` and every rule above are unchanged.
 - The kiosk response contains a safe payment-attempt id plus the ROLLER payment API origin and currency, never the terminal reference. JumpYard Cloud re-quotes server-side and requires exact amount plus SEK evidence before returning the terminal-bound JWT.
 - If amount owing is zero, use `POST /bookings/draft/publish`.
 - Payment implementation must first confirm how Roller's returned `paymentJwt` is used, which fake/test card numbers are supported in Playground, and whether the payment component can run inside the JumpYard PWA without a hosted payment-link detour.
+
+### `POST /v1/kiosk/status`
+
+GH-488 (D0243). Body: `kioskInstallationId`, `kioskCapability`, optional `wrapperVersion` (`^[A-Za-z0-9._-]{1,32}$`) and `webVersion` (`^[A-Za-z0-9._-]{1,64}$`). An invalid or mismatched proof returns `400 kiosk_installation_invalid`. The kiosk calls it at start and every ten minutes; it never calls ROLLER and stays available during an emergency stop.
+
+`200` returns `status: "ok"`, `kiosk` and `names`:
+
+- `kiosk` is `{ paired: true, id, name, kind, terminalName }` for an installation with an active pairing whose name is still offered, otherwise `{ paired: false, legacy }`, where `legacy` is true while the installation still has an active pre-GH-488 profile authorization.
+- `names` lists the venue's active kiosk names whose terminal mapping is valid, operational before test and in label order: `{ id, name, kind, terminalName, taken, mine }`. `taken` means another installation holds the name.
+- Only a paired installation's `last_seen_at` and versions are written. The response never contains other installation ids, terminal identifiers or staff identities.
+
+### `POST /v1/staff/kiosk-pairing`
+
+GH-488 (D0243), PIN staff identity mode only. Body: `kioskInstallationId`, `kioskCapability`, `kioskNameId` (`^[a-z0-9][a-z0-9-]{1,31}$`), `replace` (boolean), six-digit `staffPin`, optional versions. The Session Lambda verifies the PIN with the shared login limiter and creates no staff session (as #483), then invokes the Booking Lambda with source `jumpyard.kiosk-pairing` and the pseudonymous staff identity id only. The Booking Lambda requires the id on `kioskPairingStaffIdentityIds`, an offered name and no unresolved D0220 claim on the kiosk, the replaced kiosk or the terminal.
+
+- `200 { status: "paired", kiosk }` as in the status route. One audit event `kiosk.installation_paired` records the installation, name, replaced installation and staff identity id.
+- Errors: `400 kiosk_pairing_invalid`, `400 staff_pin_format_invalid`, `403 staff_pin_invalid`, `429 staff_pin_rate_limited` (with `retryAfterSeconds`), `403 kiosk_pairing_not_allowed`, `404 kiosk_name_unknown`, `409 kiosk_name_taken` (resend with `replace: true` to take over), `409 kiosk_payment_busy`, `409 emergency_stop_active`, `502 kiosk_pairing_failed`.
+- `replace` revokes the previous holder (`revoked_reason = 'replaced'`); pairing an installation under another name moves its single row. The partial unique index keeps one active installation per venue and name.
 
 ### `POST /v1/bookings/draft/finalize`
 

@@ -71,6 +71,10 @@ Run `npm --prefix jumpyard-checkin-phone run test:completion` plus the completed
 
 Run `npm run validate:gh327-kiosk-terminal-binding` for both draft handlers and profile authorization. Set `GH327_DATABASE_TEST=true` for the disposable PostgreSQL concurrency/role test (local port 55327, CI port 55435). [Contract, rollout and physical acceptance](docs/gh-327-kiosk-terminal-binding.md) distinguish automated checks from the completed attended V210/P400 payment and reset evidence.
 
+## Kiosk pairing (#488)
+
+Run `npm run validate:gh488-kiosk-pairing`. It covers the kiosk name directory, paired terminal resolution, the not-paired refusal, status, the allowlist, taken names, replace, unresolved-payment blocks and the PIN proof without a staff session. Set `GH488_DATABASE_TEST=true` for the disposable PostgreSQL case (local port 55488, CI port 55435). The T0193/T0194 validators assert 30 routes and 215 resources. Physical check on 2026-10-12: pair each Nacka kiosk with an allowlisted PIN and cancel one purchase on its own terminal with the red X.
+
 ## Kiosk publish with the terminal payment (#481)
 
 Run `npm run validate:gh481-kiosk-publish-with-payment` and `npm run validate:kiosk-payment-reconciliation`. Set `GH481_DATABASE_TEST=true` for the disposable PostgreSQL case (local port 55481, CI port 55435). Physical acceptance is a supervised P400 purchase on Park: the booking is confirmed within seconds, and at least 2 minutes later the ROLLER booking has exactly one payment and nothing owing. See [the note](docs/gh-481-kiosk-publish-with-payment.md).
