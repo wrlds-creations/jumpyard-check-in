@@ -194,3 +194,11 @@ test('reduced motion wins over a ready logo: no animation at all', () => {
     .map(match => block(css, match.index));
   assert.ok(media.some(body => body.includes(`${JUMP}, ${FLIP} { animation: none; }`)));
 });
+
+test('#495: the heading welcomes with "Redo att hoppa?" in the same italic, the last word in red', () => {
+  const copy = source('context/LanguageContext.tsx');
+  assert.match(copy, /title: 'Redo att',\s+titleAccent: 'hoppa\?',/);
+  assert.match(copy, /title: 'Ready to',\s+titleAccent: 'jump\?',/);
+  assert.doesNotMatch(copy, /Vad vill du göra\?|What would you like to do\?/);
+  assert.match(choice, /<h1 className="text-3xl leading-none font-black italic uppercase text-foreground mb-6 text-center">\s*\{t\.choice\.title\} <span className="text-primary">\{t\.choice\.titleAccent\}<\/span>\s*<\/h1>/);
+});

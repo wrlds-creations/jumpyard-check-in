@@ -61,8 +61,9 @@ export const ParkChoice = ({ onSelect, savedVisitCode = null, onResumeSavedVisit
                 />
             </span>
 
-            <h1 className="text-xl font-black italic uppercase text-foreground mb-6 text-center">
-                {t.choice.title}
+            {/* #495 (Love 2026-10-08): "Redo att hoppa?" replaces "Vad vill du göra?", larger and in the same italic. */}
+            <h1 className="text-3xl leading-none font-black italic uppercase text-foreground mb-6 text-center">
+                {t.choice.title} <span className="text-primary">{t.choice.titleAccent}</span>
             </h1>
 
             <div className="w-full max-w-full min-w-0 flex flex-col gap-3">
