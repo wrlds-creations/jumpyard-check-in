@@ -22,6 +22,10 @@ const KIOSK_STAFF_IDENTITY_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
 const KIOSK_WRAPPER_VERSION_PATTERN = /^[A-Za-z0-9._-]{1,32}$/;
 const KIOSK_WEB_VERSION_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const SUPPORTED_KIOSK_VENUE_ID = '50871';
+// GH-483 (D0239): "No payment" waits until the terminal has timed out (about 135 s) and ROLLER
+// has had time to turn a late payment notification into a booking (up to about 75 s).
+const KIOSK_STAFF_NO_PAYMENT_MIN_AGE_SECONDS = 5 * 60;
+const KIOSK_STAFF_RESOLUTION_ACTIONS = new Set(['inspect', 'no_payment', 'paid']);
 
 function normalizePaymentTerminalMap(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -559,6 +563,85 @@ function publicKioskPaymentStatus(row) {
   };
 }
 
+function normalizeKioskStaffResolutionAction(value) {
+  return KIOSK_STAFF_RESOLUTION_ACTIONS.has(value) ? value : null;
+}
+
+// GH-483 (D0239): what ROLLER says about one kiosk draft, from `GET /bookings/{draft uniqueId}`.
+// ROLLER answers 404 until it has turned the terminal payment into a booking, so only a 404
+// (together with an empty local cache) can support "no payment"; any other answer, error or
+// transport failure keeps the kiosk locked.
+function classifyKioskStaffRollerEvidence(result, { expectedOwingCents, requireTickets }) {
+  if (!result || result.transportError) return { booking: 'unavailable', amountOwingCents: null, readback: null };
+  if (result.status === 404) return { booking: 'not_found', amountOwingCents: null, readback: null };
+  if (!result.ok) return { booking: 'unavailable', amountOwingCents: null, readback: null };
+
+  const readback = normalizeBookingReadback(result.body, { requireTickets });
+  const booking = result.body?.booking && typeof result.body.booking === 'object' ? result.body.booking : result.body;
+  const costs = booking?.costs && typeof booking.costs === 'object' ? booking.costs : booking;
+  const owing = finiteNumber(costs?.amountOwing ?? booking?.amountOwing ?? booking?.remainder);
+  const amountOwingCents = owing === null ? null : Math.round(owing * 100);
+  if (readback.confirmed) return { booking: 'paid', amountOwingCents: 0, readback };
+  const expected = Number(expectedOwingCents);
+  if (amountOwingCents !== null && amountOwingCents > 0 && Number.isSafeInteger(expected) && expected > 0) {
+    return {
+      booking: amountOwingCents >= expected ? 'unpaid' : 'partially_paid',
+      amountOwingCents,
+      readback: null,
+    };
+  }
+  return { booking: 'unconfirmed', amountOwingCents, readback: null };
+}
+
+// GH-483 (D0239): which staff decisions one attempt allows. "Paid" needs a confirmed ROLLER
+// booking; "no payment" needs ROLLER and the local cache to know nothing about the draft, an
+// attempt that never reported an approval, and the minimum age. Nothing here is decided by time
+// alone or by the staff member's word.
+function kioskStaffResolutionEligibility(row, evidence) {
+  const attemptStatus = stringOrNull(row?.payment_attempt_status);
+  const published = row?.status === 'published';
+  const unresolved = ['created', 'unknown'].includes(attemptStatus);
+  const approvedNeedsStaff = attemptStatus === 'approved' && row?.booking_confirmation_status === 'needs_staff';
+  const ageSeconds = Math.max(0, Math.floor(Number(row?.age_seconds) || 0));
+  const noPaymentEvidence =
+    unresolved &&
+    !published &&
+    !stringOrNull(row?.roller_booking_reference) &&
+    Number(row?.local_booking_count ?? 0) === 0 &&
+    evidence?.booking === 'not_found';
+  const waitSeconds = noPaymentEvidence ? Math.max(0, KIOSK_STAFF_NO_PAYMENT_MIN_AGE_SECONDS - ageSeconds) : 0;
+  return {
+    ageSeconds,
+    noPayment: noPaymentEvidence && waitSeconds === 0,
+    noPaymentAvailableInSeconds: waitSeconds,
+    paid: (unresolved || approvedNeedsStaff) && evidence?.booking === 'paid',
+    resolvable: unresolved || approvedNeedsStaff,
+  };
+}
+
+// GH-483: the PII-free view of one attempt for the staff panel on the kiosk.
+function publicKioskStaffResolution(row, evidence, eligibility) {
+  const totalCents = Number(row?.total_cents);
+  return {
+    attempt: {
+      ageSeconds: eligibility.ageSeconds,
+      currency: stringOrNull(row?.currency) || KIOSK_PAYMENT_CURRENCY,
+      flowType: stringOrNull(row?.flow_type),
+      state: publicKioskPaymentStatus(row).status,
+      totalCents: Number.isSafeInteger(totalCents) ? totalCents : null,
+    },
+    roller: {
+      amountOwingCents: evidence?.amountOwingCents ?? null,
+      booking: evidence?.booking ?? 'unavailable',
+    },
+    actions: {
+      noPayment: eligibility.noPayment,
+      noPaymentAvailableInSeconds: eligibility.noPaymentAvailableInSeconds,
+      paid: eligibility.paid,
+    },
+  };
+}
+
 function normalizeItemsSummary(value) {
   const items = Array.isArray(value)
     ? value
@@ -704,6 +787,11 @@ module.exports = {
   buildKioskQuotePayload,
   buildKioskStatus,
   isKioskPairingStaffAllowed,
+  classifyKioskStaffRollerEvidence,
+  kioskStaffResolutionEligibility,
+  KIOSK_STAFF_NO_PAYMENT_MIN_AGE_SECONDS,
+  normalizeKioskStaffResolutionAction,
+  publicKioskStaffResolution,
   KIOSK_PAYMENT_CURRENCY,
   kioskNameDirectory,
   kioskTerminalLockId,

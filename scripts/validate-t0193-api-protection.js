@@ -15,6 +15,7 @@ const EXPECTED_ROUTES = [
   ['POST /v1/staff/auth/login', 'NONE', 'session', 'staff_auth_entry', 'staff_login'],
   ['POST /v1/staff/auth/session', 'NONE', 'session', 'staff_identity_session', 'staff_login'],
   ['POST /v1/staff/kiosk-pairing', 'NONE', 'session', 'kiosk_staff_pairing', 'kiosk_pairing'],
+  ['POST /v1/staff/kiosk-payments/resolve', 'NONE', 'session', 'kiosk_staff_resolution', 'kiosk_staff_resolution'],
   ['POST /v1/check-in/session-links', 'AWS_IAM', 'session', 'internal_ops', 'internal_session_link'],
   ['POST /v1/check-in/session-links/send-sms', 'AWS_IAM', 'session', 'internal_ops', 'internal_send_sms'],
   ['POST /v1/check-in/session-links/send-email', 'AWS_IAM', 'session', 'internal_ops', 'internal_send_email'],
@@ -93,7 +94,7 @@ function resourcesOfType(template, resourceType) {
 
 function validateRouteCatalog(template) {
   const routeEntries = resourcesOfType(template, 'AWS::ApiGatewayV2::Route');
-  assert.equal(routeEntries.length, EXPECTED_ROUTES.length, 'The HTTP API must synthesize exactly 30 routes.');
+  assert.equal(routeEntries.length, EXPECTED_ROUTES.length, 'The HTTP API must synthesize exactly 31 routes.');
 
   const routesByKey = new Map(
     routeEntries.map(([logicalId, resource]) => [resource.Properties.RouteKey, { logicalId, resource }]),
@@ -173,8 +174,8 @@ function validateRouteSettings(template, routesByKey) {
 function validateApprovedProtectionResources(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    215,
-    'The T0193 boundary must remain intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the GH-224 terminal route, the #335 alarm topic, subscription and sustained Roller alarm, the GH-473 Klaviyo key secret, and the GH-488 kiosk status and pairing routes.',
+    218,
+    'The T0193 boundary must remain intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the GH-224 terminal route, the #335 alarm topic, subscription and sustained Roller alarm, the GH-473 Klaviyo key secret, the GH-488 kiosk status and pairing routes, and the GH-483 kiosk staff resolution route.',
   );
   assert.equal(
     resourcesOfType(template, 'AWS::SecretsManager::Secret').filter(

@@ -11,9 +11,12 @@ const { withGuestItemDetails, withPackageContents } = require('./package-content
 const {
   buildKioskQuotePayload,
   buildKioskStatus,
+  classifyKioskStaffRollerEvidence,
   isKioskPairingStaffAllowed,
   KIOSK_PAYMENT_CURRENCY,
+  KIOSK_STAFF_NO_PAYMENT_MIN_AGE_SECONDS,
   kioskNameDirectory,
+  kioskStaffResolutionEligibility,
   kioskTerminalLockId,
   kioskTerminalPublishPayment,
   normalizeDraftFinalizeAction,
@@ -25,12 +28,14 @@ const {
   normalizeKioskPairingDetail,
   normalizeKioskPairingStaffIdentityIds,
   normalizeKioskProfileMap,
+  normalizeKioskStaffResolutionAction,
   normalizePaymentTerminalMap,
   normalizePaymentTerminalNameMap,
   normalizeTerminalMerchantId,
   normalizeTerminalOutcome,
   normalizeTerminalTransactionRef,
   publicKioskPaymentStatus,
+  publicKioskStaffResolution,
   redactPaymentTerminalValues,
   resolveKioskPaymentTerminal,
   verifiedKioskInstallationProof,
@@ -61,6 +66,8 @@ const KIOSK_RECONCILIATION_SOURCE = 'jumpyard.kiosk-payment-reconciliation';
 const KIOSK_AUTHORITATIVE_CONFIRMATION_SOURCE = 'jumpyard.kiosk-authoritative-confirmation';
 // GH-488 (D0243): the Session Lambda proves the staff PIN and invokes this Lambda for the pairing.
 const KIOSK_PAIRING_SOURCE = 'jumpyard.kiosk-pairing';
+// GH-483: invoked only by the Session Lambda after it has verified a staff operator's PIN.
+const KIOSK_STAFF_RESOLUTION_SOURCE = 'jumpyard.kiosk-staff-resolution';
 const KIOSK_RECONCILIATION_OFFSETS_MS = [
   0,
   5_000,
@@ -253,6 +260,11 @@ exports.handler = async (event) => {
     if (isKioskPairingEvent(event)) {
       correlationId = normalizeCorrelationId(event?.detail?.correlationId) || correlationId;
       return await handleKioskPairing(event.detail, correlationId);
+    }
+
+    if (isKioskStaffResolutionEvent(event)) {
+      correlationId = normalizeCorrelationId(event?.detail?.correlationId) || correlationId;
+      return await handleKioskStaffResolution(event.detail, correlationId);
     }
 
     if (isDraftFinalizeRoute(routeKey, event)) {
@@ -2275,6 +2287,327 @@ async function markKioskReconciliationNeedsStaff(request, reason) {
     ],
   );
   return firstMappedRow(result) ?? null;
+}
+
+// GH-483 (D0239): a staff member resolves one uncertain kiosk attempt at the kiosk. The Session
+// Lambda has verified the staff PIN and the operator role; this Lambda owns the attempt, the single
+// ROLLER read per request and every write. "No payment" is recorded only when ROLLER and the
+// local cache know nothing about the draft; "paid" only attaches a booking ROLLER confirms as
+// paid. The staff member's word alone never changes an attempt.
+async function handleKioskStaffResolution(detail, correlationId) {
+  const request = {
+    action: normalizeKioskStaffResolutionAction(detail?.action),
+    channel: 'kiosk',
+    kioskCapability: stringOrNull(detail?.kioskCapability),
+    kioskInstallationId: stringOrNull(detail?.kioskInstallationId),
+    kioskProfileId: stringOrNull(detail?.kioskProfileId),
+    paymentAttemptId: stringOrNull(detail?.paymentAttemptId),
+    prepaymentDraftId: stringOrNull(detail?.prepaymentDraftId),
+    rollerDraftUniqueId: stringOrNull(detail?.rollerDraftUniqueId),
+    staffIdentityId: stringOrNull(detail?.staffIdentityId),
+  };
+  if (
+    !request.action ||
+    !/^jypd_[a-f0-9]{18}$/.test(request.prepaymentDraftId ?? '') ||
+    !/^jytp_[a-f0-9]{18}$/.test(request.paymentAttemptId ?? '') ||
+    !request.rollerDraftUniqueId ||
+    request.rollerDraftUniqueId.length > 128 ||
+    !request.staffIdentityId ||
+    request.staffIdentityId.length > 128
+  ) {
+    return kioskStaffResolutionResult(400, {
+      status: 'invalid_request',
+      error: { code: 'kiosk_staff_resolution_invalid', message: 'The kiosk staff resolution request is incomplete.' },
+    });
+  }
+
+  const config = await getRollerConfig();
+  // GH-488 (D0243): a paired kiosk is proven through its pairing and sends no native profile.
+  const selection = resolveKioskPaymentTerminal(config, request, await readKioskPairing(request));
+  if (selection.error || !selection.installationId) {
+    return kioskStaffResolutionResult(409, {
+      status: 'blocked',
+      error: {
+        code: 'kiosk_installation_not_authorized',
+        message: 'This kiosk installation is not authorized for the requested profile.',
+      },
+    });
+  }
+
+  const row = await findKioskStaffResolutionAttempt(request, selection.installationId);
+  if (!row) {
+    return kioskStaffResolutionResult(404, {
+      status: 'blocked',
+      error: { code: 'kiosk_payment_attempt_not_found', message: 'The kiosk payment attempt was not found.' },
+    });
+  }
+
+  const evidence = await readKioskStaffRollerEvidence(config, row);
+  const eligibility = kioskStaffResolutionEligibility(row, evidence);
+  const audit = (result, extra = {}) => ({
+    action: request.action,
+    attemptStatusBefore: row.payment_attempt_status,
+    confirmationStatusBefore: row.booking_confirmation_status,
+    flowType: row.flow_type,
+    kioskNameId: selection.kioskNameId ?? null,
+    kioskProfileId: request.kioskProfileId,
+    result,
+    roller: { amountOwingCents: evidence.amountOwingCents, booking: evidence.booking, httpStatus: evidence.httpStatus ?? null },
+    ageSeconds: eligibility.ageSeconds,
+    staffIdentityId: request.staffIdentityId,
+    ...extra,
+  });
+
+  if (request.action === 'inspect') {
+    await writeKioskStaffResolutionAudit(correlationId, request, audit('inspected'));
+    return kioskStaffResolutionResult(200, {
+      status: 'inspected',
+      ...publicKioskStaffResolution(row, evidence, eligibility),
+    });
+  }
+
+  if (request.action === 'no_payment') {
+    if (!eligibility.noPayment) {
+      return refuseKioskStaffResolution(correlationId, request, row, evidence, eligibility, audit, noPaymentRefusal(eligibility, evidence));
+    }
+    const released = await releaseKioskAttemptWithoutPayment(request, selection.installationId, correlationId, audit('released'));
+    if (!released) {
+      return refuseKioskStaffResolution(correlationId, request, row, evidence, eligibility, audit, 'kiosk_payment_not_resolvable');
+    }
+    emitKioskTerminalOutcomeMetric('failed');
+    const current = await findKioskStaffResolutionAttempt(request, selection.installationId);
+    return kioskStaffResolutionResult(200, {
+      status: 'released',
+      ...publicKioskStaffResolution(current ?? row, evidence, kioskStaffResolutionEligibility(current ?? row, evidence)),
+    });
+  }
+
+  if (!eligibility.paid) {
+    return refuseKioskStaffResolution(correlationId, request, row, evidence, eligibility, audit, paidRefusal(eligibility, evidence));
+  }
+  const confirmed = await confirmKioskAttemptFromRollerEvidence(request, row, evidence.readback);
+  if (!confirmed) {
+    await writeKioskStaffResolutionAudit(correlationId, request, audit('attachment_failed'));
+    return kioskStaffResolutionResult(409, {
+      status: 'blocked',
+      error: {
+        code: 'kiosk_payment_needs_manual_check',
+        message: 'ROLLER shows a paid booking, but it could not be attached automatically.',
+      },
+      ...publicKioskStaffResolution(row, evidence, eligibility),
+    });
+  }
+  await writeKioskStaffResolutionAudit(correlationId, request, audit('confirmed_paid'));
+  return kioskStaffResolutionResult(200, {
+    ...publicKioskPaymentStatus(await findKioskPrepaymentAttempt(request)),
+    result: 'staff_confirmed_paid',
+  });
+}
+
+function kioskStaffResolutionResult(statusCode, body) {
+  return { statusCode, body };
+}
+
+function noPaymentRefusal(eligibility, evidence) {
+  if (!eligibility.resolvable) return 'kiosk_payment_not_resolvable';
+  if (evidence.booking === 'unavailable') return 'kiosk_payment_roller_unavailable';
+  if (eligibility.noPaymentAvailableInSeconds > 0) return 'kiosk_payment_check_too_early';
+  if (evidence.booking === 'not_found') return 'kiosk_payment_not_resolvable';
+  return 'kiosk_payment_roller_payment_found';
+}
+
+function paidRefusal(eligibility, evidence) {
+  if (!eligibility.resolvable) return 'kiosk_payment_not_resolvable';
+  if (evidence.booking === 'unavailable') return 'kiosk_payment_roller_unavailable';
+  return 'kiosk_payment_not_paid_in_roller';
+}
+
+const KIOSK_STAFF_REFUSAL_MESSAGES = {
+  kiosk_payment_check_too_early: 'The terminal may still report a result. Try again shortly.',
+  kiosk_payment_not_paid_in_roller: 'ROLLER shows no paid booking for this purchase.',
+  kiosk_payment_not_resolvable: 'This kiosk payment cannot be resolved here.',
+  kiosk_payment_roller_payment_found: 'ROLLER shows a booking or payment for this purchase.',
+  kiosk_payment_roller_unavailable: 'ROLLER could not be checked. Try again shortly.',
+};
+
+async function refuseKioskStaffResolution(correlationId, request, row, evidence, eligibility, audit, code) {
+  await writeKioskStaffResolutionAudit(correlationId, request, audit('refused', { refusal: code }));
+  return kioskStaffResolutionResult(409, {
+    status: 'blocked',
+    error: { code, message: KIOSK_STAFF_REFUSAL_MESSAGES[code] },
+    ...publicKioskStaffResolution(row, evidence, eligibility),
+  });
+}
+
+async function findKioskStaffResolutionAttempt(request, installationId) {
+  const result = await executeStatement(
+    `SELECT
+       draft.prepayment_draft_id,
+       draft.roller_draft_unique_id,
+       draft.payment_attempt_id,
+       draft.payment_attempt_status,
+       draft.status,
+       draft.flow_type,
+       draft.add_on_group_id,
+       draft.booking_confirmation_status,
+       draft.roller_booking_reference,
+       draft.roller_env,
+       draft.booking_date::text AS booking_date,
+       draft.start_time::text AS start_time,
+       draft.total_cents,
+       draft.amount_owing_cents,
+       draft.currency,
+       draft.items_summary::text AS items_summary,
+       floor(extract(epoch FROM now() - draft.created_at))::int AS age_seconds,
+       (
+         SELECT count(*)
+         FROM jumpyard.roller_bookings AS booking
+         WHERE booking.roller_env = draft.roller_env
+           AND (
+             booking.roller_unique_id = draft.roller_draft_unique_id
+             OR (draft.external_id IS NOT NULL AND booking.normalized_summary ->> 'externalId' = draft.external_id)
+           )
+       )::int AS local_booking_count
+     FROM jumpyard.prepayment_booking_drafts AS draft
+     WHERE draft.prepayment_draft_id = :prepaymentDraftId
+       AND draft.payment_attempt_id = :paymentAttemptId
+       AND draft.roller_draft_unique_id = :rollerDraftUniqueId
+       AND draft.kiosk_installation_id = :kioskInstallationId
+       AND draft.payment_channel = 'card_present'
+       AND draft.flow_type IN ('new_booking', 'add_product')
+     LIMIT 1`,
+    [
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+      stringParameter('rollerDraftUniqueId', request.rollerDraftUniqueId),
+      stringParameter('kioskInstallationId', installationId),
+    ],
+  );
+  return firstMappedRow(result) ?? null;
+}
+
+async function readKioskStaffRollerEvidence(config, row) {
+  let result;
+  try {
+    const token = await getRollerAccessToken(config);
+    result = await getRollerJson(config, token, `/bookings/${encodeURIComponent(row.roller_draft_unique_id)}`);
+  } catch {
+    result = { transportError: true };
+  }
+  const owingCents = Number(row.amount_owing_cents);
+  return {
+    ...classifyKioskStaffRollerEvidence(result, {
+      expectedOwingCents: Number.isSafeInteger(owingCents) && owingCents > 0 ? owingCents : Number(row.total_cents),
+      requireTickets: row.flow_type !== 'add_product',
+    }),
+    httpStatus: Number.isInteger(result?.status) ? result.status : null,
+  };
+}
+
+// The release, its guards and the audit row are one statement: an attempt is never released
+// without its audit, and a concurrent approval, booking or publish makes it a no-op.
+async function releaseKioskAttemptWithoutPayment(request, installationId, correlationId, auditPayload) {
+  const result = await executeStatement(
+    `WITH updated_draft AS (
+       UPDATE jumpyard.prepayment_booking_drafts AS draft
+       SET payment_attempt_status = 'failed',
+           status = 'failed',
+           booking_confirmation_status = 'failed',
+           reconciliation_last_result = 'staff_no_payment',
+           updated_at = now()
+       WHERE draft.prepayment_draft_id = :prepaymentDraftId
+         AND draft.payment_attempt_id = :paymentAttemptId
+         AND draft.roller_draft_unique_id = :rollerDraftUniqueId
+         AND draft.kiosk_installation_id = :kioskInstallationId
+         AND draft.payment_channel = 'card_present'
+         AND draft.payment_attempt_status IN ('created', 'unknown')
+         AND draft.status <> 'published'
+         AND draft.roller_booking_reference IS NULL
+         AND draft.created_at <= now() - (CAST(:minimumAgeSeconds AS integer) * interval '1 second')
+         AND NOT EXISTS (
+           SELECT 1
+           FROM jumpyard.roller_bookings AS booking
+           WHERE booking.roller_env = draft.roller_env
+             AND (
+               booking.roller_unique_id = draft.roller_draft_unique_id
+               OR (draft.external_id IS NOT NULL AND booking.normalized_summary ->> 'externalId' = draft.external_id)
+             )
+         )
+       RETURNING draft.prepayment_draft_id
+     ), audit AS (
+       -- No RETURNING: the booking role may insert into event_log but not read it. A data-modifying
+       -- CTE runs, and fails the whole statement, whether or not the outer query reads it.
+       INSERT INTO jumpyard.event_log (event_id, correlation_id, event_type, subject_ref, summary, event_payload)
+       SELECT :eventId, :correlationId, 'booking.kiosk_staff_resolution', updated_draft.prepayment_draft_id,
+              'Staff recorded no payment for an uncertain kiosk attempt after a ROLLER check.',
+              CAST(:eventPayload AS jsonb)
+       FROM updated_draft
+     )
+     SELECT updated_draft.prepayment_draft_id
+     FROM updated_draft`,
+    [
+      stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+      stringParameter('paymentAttemptId', request.paymentAttemptId),
+      stringParameter('rollerDraftUniqueId', request.rollerDraftUniqueId),
+      stringParameter('kioskInstallationId', installationId),
+      integerParameter('minimumAgeSeconds', KIOSK_STAFF_NO_PAYMENT_MIN_AGE_SECONDS),
+      stringParameter('eventId', `evt_${hashString(`kiosk_staff_release:${correlationId}:${Date.now()}:${Math.random()}`)}`),
+      stringParameter('correlationId', correlationId),
+      stringParameter('eventPayload', JSON.stringify(auditPayload)),
+    ],
+  );
+  return Boolean(firstMappedRow(result));
+}
+
+// "Paid": the attempt becomes approved only because ROLLER returned a confirmed paid booking for
+// its own draft, then the existing D0190 snapshot and attachment run exactly as in the worker.
+// No publish, payment or other provider write is made.
+async function confirmKioskAttemptFromRollerEvidence(request, row, readback) {
+  if (!readback?.confirmed) return false;
+  if (['created', 'unknown'].includes(row.payment_attempt_status)) {
+    await executeStatement(
+      `UPDATE jumpyard.prepayment_booking_drafts
+       SET payment_attempt_status = 'approved',
+           booking_confirmation_status = 'pending',
+           payment_approved_at = COALESCE(payment_approved_at, now()),
+           reconciliation_last_result = 'staff_roller_paid_evidence',
+           updated_at = now()
+       WHERE prepayment_draft_id = :prepaymentDraftId
+         AND payment_attempt_id = :paymentAttemptId
+         AND payment_attempt_status IN ('created', 'unknown')`,
+      [
+        stringParameter('prepaymentDraftId', request.prepaymentDraftId),
+        stringParameter('paymentAttemptId', request.paymentAttemptId),
+      ],
+    );
+  }
+  if (row.flow_type === 'new_booking') await ensureProvisionalKioskHandoff(request);
+
+  await persistKioskReconciliationBookingSnapshot(row, readback);
+  const confirmed = row.flow_type === 'add_product'
+    ? await confirmKioskAddProductReconciliation(request, readback)
+    : await confirmKioskReconciliation(request, readback);
+  const attachmentComplete = row.flow_type === 'add_product'
+    ? Boolean(confirmed?.add_on_group_id)
+    : Number(confirmed?.attached_session_count) === 1 && Number(confirmed?.attached_token_count) === 1;
+  if (!confirmed || !attachmentComplete) {
+    await markKioskReconciliationNeedsStaff(
+      request,
+      row.flow_type === 'add_product' ? 'authoritative_add_product_identity_missing' : 'authoritative_handoff_attachment_missing',
+    );
+    return false;
+  }
+  return true;
+}
+
+async function writeKioskStaffResolutionAudit(correlationId, request, payload) {
+  await writeBookingEventLog({
+    correlationId,
+    eventType: 'booking.kiosk_staff_resolution',
+    payload,
+    subjectRef: request.prepaymentDraftId,
+    summary: `Staff kiosk payment resolution: ${payload.action} ${payload.result}.`,
+  });
 }
 
 function wait(delayMs) {
@@ -6371,6 +6704,11 @@ function isKioskPairingEvent(event) {
   return event?.source === KIOSK_PAIRING_SOURCE && !event.requestContext && !event.routeKey && !event.rawPath;
 }
 
+function isKioskStaffResolutionEvent(event) {
+  return event?.source === KIOSK_STAFF_RESOLUTION_SOURCE &&
+    !event.requestContext && !event.routeKey && !event.rawPath;
+}
+
 function isKioskStatusRoute(routeKey, event) {
   return routeKey === 'POST /v1/kiosk/status' || event?.rawPath === '/v1/kiosk/status';
 }
@@ -6655,6 +6993,7 @@ handleAddProductDraft = diagnostics.step('add_product_draft', handleAddProductDr
 handleDraftFinalize = diagnostics.step('draft_finalize', handleDraftFinalize, 'draft_finalize');
 handleKioskPaymentReconciliation = diagnostics.step('kiosk_reconciliation', handleKioskPaymentReconciliation, 'kiosk_reconciliation');
 handleKioskAuthoritativeConfirmation = diagnostics.step('kiosk_confirmation', handleKioskAuthoritativeConfirmation, 'kiosk_confirmation');
+handleKioskStaffResolution = diagnostics.step('kiosk_staff_resolution', handleKioskStaffResolution, 'kiosk_staff_resolution');
 exports.handler = diagnostics.wrap(exports.handler);
 
 exports.__test = {

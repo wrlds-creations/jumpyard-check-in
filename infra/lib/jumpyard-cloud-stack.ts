@@ -128,6 +128,7 @@ type ApiRouteTrustClass =
   | 'internal_ops'
   | 'kiosk_installation'
   | 'kiosk_staff_pairing'
+  | 'kiosk_staff_resolution'
   | 'legacy_dev_only'
   | 'roller_webhook'
   | 'staff_auth_entry'
@@ -366,6 +367,16 @@ function buildApiRouteProtectionCatalog(
       throttlingBurstLimit: 5,
       throttlingRateLimit: 1,
       trustClass: 'kiosk_staff_pairing',
+    },
+    // GH-483: a staff PIN plus the kiosk installation proof, verified in the Session Lambda;
+    // failures share the PIN login limiter. A resolution is one check and one decision.
+    {
+      authorizationType: 'NONE',
+      handler: 'session',
+      routeKey: 'POST /v1/staff/kiosk-payments/resolve',
+      throttlingBurstLimit: 5,
+      throttlingRateLimit: 1,
+      trustClass: 'kiosk_staff_resolution',
     },
     {
       authorizationType: 'JWT',
@@ -1039,20 +1050,27 @@ exports.handler = async (event) => {
       // 30 s API Gateway ceiling so a slow refresh cannot cut off the durable receipt.
       timeout: Duration.seconds(25),
     });
+    const kioskStaffResolutionEnabled = config.staffIdentity.mode === 'pin';
     const sessionHandler = this.createHandler('SessionHandler', 'session', handlerResources, {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'session')),
       environment: {
         ROLLER_LIVE_LOOKUP_FUNCTION_NAME: lookupHandler.functionName,
+        // GH-483: the Booking Lambda performs the ROLLER check and writes for a kiosk staff resolution.
+        ...(kioskStaffResolutionEnabled ? { KIOSK_STAFF_RESOLUTION_FUNCTION_NAME: bookingHandler.functionName } : {}),
       },
+      // GH-483: slow PIN verification plus the Booking Lambda's ROLLER check and attachment need
+      // headroom below the 30 s API Gateway ceiling.
       timeout: prearrivalEmailEnabled
         ? Duration.seconds(60)
-        : controlledT30EmailEnabled ? Duration.seconds(30) : undefined,
+        : controlledT30EmailEnabled ? Duration.seconds(30)
+          : kioskStaffResolutionEnabled ? Duration.seconds(25) : undefined,
     });
     if (controlledT30EmailEnabled) {
       lookupHandler.grantInvoke(sessionHandler);
     }
     // GH-488 (D0243): after the staff PIN proof the Session Lambda asks the Booking Lambda to pair
-    // the kiosk installation (synchronous invoke; the Booking Lambda checks the allowlist).
+    // the kiosk installation (synchronous invoke; the Booking Lambda checks the allowlist). The same
+    // grant serves the GH-483 kiosk staff resolution (KIOSK_STAFF_RESOLUTION_FUNCTION_NAME above).
     if (config.staffIdentity.mode === 'pin') {
       sessionHandler.addEnvironment('KIOSK_PAIRING_FUNCTION_NAME', bookingHandler.functionName);
       bookingHandler.grantInvoke(sessionHandler);

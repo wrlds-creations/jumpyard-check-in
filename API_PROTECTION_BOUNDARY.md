@@ -25,6 +25,7 @@ This file is the source of truth for the route trust boundary first designed in 
 | `staff_protected` | Requires the short-lived server-verified staff token before protected reads or redeem work. |
 | `kiosk_installation` | GH-488 kiosk status. Requires the installation id and the capability it was derived from; returns only the installation's own pairing and the venue's kiosk names, writes last-seen data only for a paired installation, and never calls ROLLER. |
 | `kiosk_staff_pairing` | GH-488 kiosk pairing. Requires the installation proof plus an allowlisted staff member's personal PIN, verified per request with the T0194 login limiter. Creates no staff session; the Booking Lambda checks the allowlist, the offered name and unresolved payment claims before an audited write. |
+| `kiosk_staff_resolution` | GH-483 kiosk route. Requires the authorized kiosk installation identity plus a staff operator's personal PIN, verified per request with the T0194 login limiter. Creates no staff session; the Booking Lambda decides only on ROLLER evidence. |
 | `internal_ops` | Requires AWS IAM signing at Gateway and the existing service token in Lambda. Not callable as a normal browser endpoint. |
 | `roller_webhook` | Public only so Roller can deliver. Requires the exact registered `x-roller-apikey` token, persists/enqueues safe metadata before HTTP `200`, and performs authoritative reconciliation asynchronously. |
 | `legacy_dev_only` | Lower-level direct redeem route. Requires AWS IAM plus the existing service/dev token; normal product flow does not use it. |
@@ -38,6 +39,7 @@ Rates are requests per second followed by burst capacity. They are aggregate per
 | `POST /v1/check-in/lookup` | `guest_public` | `NONE` | Scoped identifier/date/venue validation; successful lookup issues hash-only stored guest proof | 25 / 80 |
 | `POST /v1/staff/auth/login` | `staff_auth_entry` | `NONE` | Existing AWS-stored passcode, safe correlation/logging | 2 / 10 |
 | `POST /v1/staff/kiosk-pairing` | `kiosk_staff_pairing` | `NONE` | PIN mode only (GH-488): kiosk installation proof, allowlisted staff PIN with the shared login limiter, no ROLLER call, audited guarded writes | 1 / 5 |
+| `POST /v1/staff/kiosk-payments/resolve` | `kiosk_staff_resolution` | `NONE` | PIN mode only (GH-483): kiosk installation proof, operator PIN with the shared login limiter, one ROLLER read per request, audited guarded writes | 1 / 5 |
 | `POST /v1/check-in/session-links` | `internal_ops` | `AWS_IAM` | Check-in-link service token | 1 / 5 |
 | `POST /v1/check-in/session-links/send-sms` | `internal_ops` | `AWS_IAM` | Service token plus existing send confirmation/provider gates | 1 / 5 |
 | `POST /v1/check-in/session-links/send-email` | `internal_ops` | `AWS_IAM` | Service token plus existing send confirmation/provider gates | 1 / 5 |
