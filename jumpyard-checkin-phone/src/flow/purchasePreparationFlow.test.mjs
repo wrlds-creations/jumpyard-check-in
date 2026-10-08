@@ -578,12 +578,49 @@ test('attested recovery: a reload after payment opens completion without another
   host.cleanup();
 });
 
-test('attested recovery: a still-unpaid booking shows the delayed state instead of safety', async () => {
-  const host = harness({ recovery: true, attested: true, lookup: async () => ({ ...booking, paid: false }) });
+test('attested recovery: without Cloud\'s provisional number a still-unpaid booking shows the delayed state, not safety', async () => {
+  const host = harness({ recovery: true, attested: true, finalize: async () => { throw new Error('Cloud unavailable'); },
+    lookup: async () => ({ ...booking, paid: false }) });
   host.showApprovedRecovery(host.readPayment(), host.readSnapshot());
   await settleUntil(() => host.preparationState() === 'delayed');
   assert.deepEqual(host.navigation(), []);
   assert.ok(!host.events.some(event => event[0] === 'session'));
   assert.equal(host.readPayment().attemptId, 'attempt-original');
+  host.cleanup();
+});
+
+// #491 (workshop 2026-10-07): after an external payment page (for example invoice) the guest lands
+// straight on "Du är incheckad" with the number, like a card payment in the page. No intermediate
+// "Betalningen är klar" page, no button, and nothing waits for ROLLER.
+test('attested return from an external payment page opens completion at once with the provisional number', async () => {
+  const provisional = deferred();
+  const host = harness({ recovery: true, attested: true, finalize: () => provisional.promise,
+    lookup: async () => ({ ...booking, paid: false }) });
+  host.handlePaymentReturnResult(host.readPayment(), { status: 'approved' });
+  assert.equal(host.preparationState(), 'preparing', 'only the short "Vi slutför ditt köp" spinner while Cloud answers');
+  await settleUntil(() => host.events.some(event => event[0] === 'finalize'));
+  assert.deepEqual(host.events.find(event => event[0] === 'finalize'), ['finalize', 'attempt-original', 'booking-original']);
+  provisional.resolve({ booking: { ...booking, paid: true }, checkinSession: provisionalSession });
+  await settleUntil(() => host.navigation().length === 1);
+  assert.deepEqual(host.navigation(), [['state', 'APP_CONFIRM']]);
+  assert.deepEqual(host.events.filter(event => event[0] === 'ready'), [['ready', 'jycs_provisional', 'completed']]);
+  assert.equal(host.state.ctx.checkinSession.handoffCode, '0042');
+  assert.equal(host.state.ctx.paymentCompleted, true, 'the completion shows the receipt line');
+  assert.deepEqual(host.lookups(), [], 'nothing waits for ROLLER');
+  assert.deepEqual(host.events.filter(event => event[0] === 'nudges'), [['nudges', 'booking-original']]);
+  assert.ok(!host.events.some(event => event[0] === 'recoveryReadyForSafety' && event[1] === true),
+    'never the "Betalningen är klar" page with a button');
+  assert.equal(host.events.filter(event => event[0] === 'retire').length, 1);
+  assert.equal(host.readPayment(), null);
+  host.cleanup();
+});
+
+test('a known paid booking (manual status check) keeps the ordinary session path without Cloud\'s provisional call', async () => {
+  const host = harness({ recovery: true, attested: true, startSession: async () => readySession });
+  host.showApprovedRecovery(host.readPayment(), host.readSnapshot(), booking);
+  await settleUntil(() => host.navigation().length === 1);
+  assert.deepEqual(host.navigation(), [['state', 'APP_CONFIRM']]);
+  assert.ok(!host.events.some(event => event[0] === 'finalize'));
+  assert.ok(!host.events.some(event => event[0] === 'nudges'));
   host.cleanup();
 });

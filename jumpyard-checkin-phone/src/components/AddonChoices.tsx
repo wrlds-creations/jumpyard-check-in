@@ -20,14 +20,19 @@ export interface AddonChoice {
   available: boolean;
 }
 
+type FirstRow = 'socks' | 'water_bottle';
+
 interface Props {
   entries: AddonChoice[];
   onQuantity: (id: AddonId, quantity: number) => void;
+  /** #491: a new purchase picks socks on the quantity step, so it shows only the bottle row here. */
+  rows?: readonly FirstRow[];
 }
 
 // #457 (Hylla): socks and water come first as compact rows, the optional add-ons follow as a
 // three-tile shelf. Every item is an ordinary offer, so Continue never asks for a tick.
 const SHELF_ORDER: AddonId[] = ['skyrider', 'lock', 'coffee'];
+const FIRST_ROWS: readonly FirstRow[] = ['socks', 'water_bottle'];
 
 function shelfEntries(entries: readonly AddonChoice[]) {
   const optional = entries.filter((entry) => entry.id !== 'socks' && entry.id !== 'water_bottle');
@@ -60,7 +65,7 @@ function useScrollFade(root: RefObject<HTMLElement | null>) {
   }, [root]);
 }
 
-export function AddonChoices({ entries, onQuantity }: Props) {
+export function AddonChoices({ entries, onQuantity, rows = FIRST_ROWS }: Props) {
   const { t, lang } = useTranslation();
   const copy = t.addons.choices;
   const uid = useId();
@@ -108,8 +113,8 @@ export function AddonChoices({ entries, onQuantity }: Props) {
   return (
     <div ref={root} className="addon-shop" data-testid="addon-choice-choices">
       {process.env.NEXT_PUBLIC_PHONE_ADDON_PREVIEW === 'true' && <p className="addon-shop-preview">{copy.preview}</p>}
-      <h2 className="addon-shop-group">{copy.firstGroup}</h2>
-      {(['socks', 'water_bottle'] as const).map((id) => {
+      <h2 className="addon-shop-group">{rows.includes('socks') ? copy.firstGroup : copy.firstGroupBottle}</h2>
+      {(['socks', 'water_bottle'] as const).filter((id) => rows.includes(id)).map((id) => {
         const socks = id === 'socks';
         // Keep the offer visible even when the catalog cannot sell this item.
         const entry = entries.find((item) => item.id === id) ?? {
@@ -123,6 +128,8 @@ export function AddonChoices({ entries, onQuantity }: Props) {
         return (
           <section key={id} className="addon-shop-row" data-selected={hasAddonPurchase(entry)}
             aria-labelledby={titleId} aria-describedby={noteId} data-testid={`addon-choice-${id}`}>
+            {/* #491 (workshop 2026-10-07): the bottle is recommended, in the Sky Rider tip's style. */}
+            {!socks && entry.available && <span className="addon-shop-note addon-shop-row-tag">{copy.waterRecommended}</span>}
             <div className="addon-shop-row-main">
               <span className="addon-shop-icon-wrap">
                 <JumpyardIcon name={entry.icon} className="addon-shop-icon" />

@@ -12,6 +12,11 @@ export interface SavedVisit {
     booking: Booking;
     session: CheckInSession;
     savedAt: string;
+    /**
+     * #491 round 1 (Love 2026-10-08): the guest chose "Gör en ny bokning". The visit is kept, so the
+     * first screen offers a way back, but a reload no longer opens it by itself.
+     */
+    parkedAt?: string;
 }
 
 function storage() {
@@ -57,6 +62,17 @@ export function readSavedVisit(now = new Date()): SavedVisit | null {
         return visit as SavedVisit;
     } catch {
         return null;
+    }
+}
+
+/** Keep today's visit for the way back, without reopening it on the next load. */
+export function parkSavedVisit(now = new Date()) {
+    const visit = readSavedVisit(now);
+    if (!visit) return;
+    try {
+        storage()?.setItem(SAVED_VISIT_KEY, JSON.stringify({ ...visit, parkedAt: now.toISOString() }));
+    } catch {
+        // Blocked storage only loses the way back; the guest can look the booking up.
     }
 }
 

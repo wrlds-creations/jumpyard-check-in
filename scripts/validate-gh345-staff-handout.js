@@ -48,6 +48,25 @@ test('Live quantity variants use their product name; purchased pizza and drink w
   assert.equal(pizza.quantity, 2);
   assert.equal(buildManifest([item({ productName: 'Bryggkaffe' })], day)[0].name, 'Bryggkaffe');
 });
+test('GH-491: the water bottle is collected in the café, so the staff café tab and the guest page agree', () => {
+  const water = buildManifest([item({ productId: '1765459', productName: 'JumpYard Vatten', quantity: 1,
+    summary: { productType: 'beverage' } })], day)[0];
+  assert.deepEqual([water.kind, water.area, water.name, water.quantity], ['water', 'cafe', 'JumpYard Vatten', 1]);
+  const bottle = buildManifest([item({ productId: 'bottle', productName: 'Antal', parentProductName: 'Jumpy Vattenflaska',
+    summary: { productType: 'addon' } })], day)[0];
+  assert.deepEqual([bottle.kind, bottle.area, bottle.name], ['water', 'cafe', 'Jumpy Vattenflaska']);
+  // Socks, padlocks and SkyRider stay at the entrance (the sock station and the wristband desk).
+  for (const [productName, kind] of [['JumpYard-strumpor', 'socks'], ['Hänglås', 'padlock'], ['SkyRider', 'skyrider']]) {
+    const row = buildManifest([item({ productName, summary: { productType: 'addon' } })], day)[0];
+    assert.deepEqual([row.kind, row.area], [kind, 'entrance'], productName);
+  }
+  const { CAFE_KINDS } = require('../infra/lambda/shared/staff-handout');
+  assert.deepEqual([...CAFE_KINDS].sort(), ['cafe', 'coffee', 'pizza', 'water']);
+  // The staff board counts water among what is left at the café.
+  const board = fs.readFileSync(path.join(root, 'infra/lambda/session/staff-board.js'), 'utf8');
+  assert.match(board, /const items = manifest\.filter\(\(item\) => item\.area === 'cafe'\);/);
+});
+
 test('GH-459: entrance band rows carry the colour of their end time; other goods never do', () => {
   const [entry] = buildManifest([item({ productId: 'entry', productName: 'Entré 90 min', quantity: 3,
     summary: { productType: 'sessionpass' }, startTime: '11:30:00', endTime: '13:00:00' })], day);

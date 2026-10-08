@@ -25,6 +25,9 @@ const json = (value, fallback) => {
   try { return JSON.parse(value) ?? fallback; } catch { return fallback; }
 };
 
+// Kinds handed out in the café; everything else is collected at the entrance.
+const CAFE_KINDS = new Set(['coffee', 'pizza', 'cafe', 'water']);
+
 // A label only places an explicitly purchased line at a counter. It never adds an
 // entitlement. Package contents come exclusively from the shared verified mapping.
 function classifyItem(item) {
@@ -54,8 +57,9 @@ function buildManifest(items, visitDate) {
     const displayName = (!productName || /^(antal|quantity|qty)$/i.test(productName))
       ? item.parentProductName?.trim() || productName || 'Produkt'
       : productName;
+    // GH-491 (workshop 2026-10-07): the water bottle is collected in the café, like coffee and pizza.
     const parts = item.packageContents || [{ kind, quantity: item.quantity,
-      collection: ['coffee', 'pizza', 'cafe'].includes(kind) ? 'later' : 'checkin' }];
+      collection: CAFE_KINDS.has(kind) ? 'later' : 'checkin' }];
     return parts.filter((part) => part.kind !== 'admission' || raw.selectedUnits !== 0).map((part) => ({
       id: `${item.rollerUniqueId}:${item.bookingItemId}:${visitDate}:${item.packageContents ? part.kind : 'purchased'}`,
       sourceBookingId: item.rollerUniqueId,
@@ -156,4 +160,4 @@ function createHandoutStore({ executeStatement, mappedRows, stringParameter }) {
   return { readManifest, readState };
 }
 
-module.exports = { buildManifest, classifyItem, createHandoutStore, paidBookingSql };
+module.exports = { CAFE_KINDS, buildManifest, classifyItem, createHandoutStore, paidBookingSql };

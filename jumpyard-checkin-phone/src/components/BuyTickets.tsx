@@ -40,7 +40,9 @@ import {
   findRecoveredBookingProduct,
   getMaxBookingProductQuantity,
   getVisibleBookingProductSections,
+  isPopularBookingProduct,
   isPurchasableBookingProduct,
+  sortPopularFirst,
 } from '@/flow/productVisibility';
 import {
   clearBuyFlowRecovery,
@@ -65,12 +67,26 @@ import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { FlowNav } from '@/components/FlowNav';
 import { AddonChoices } from '@/components/AddonChoices';
+import { SocksQuantity } from '@/components/SocksQuantity';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { resolvePurchasePreparation } from '@/flow/purchasePreparation';
+import {
+  availabilityCovers,
+  findAvailabilitySlot,
+  getSlotCapacity,
+  isAvailabilityFresh,
+  isSlotSelectable,
+  type SlotCapacity,
+} from '@/flow/slotCapacity';
+import { formatClock, formatStartsIn, minutesUntil, msUntilNextMinute } from '@/flow/slotClock';
 
 interface BuyTicketsProps {
   recoverySnapshot?: BuyFlowRecoverySnapshot | null;
+  /** Local previews only: fixed start times. The real page always offers the next three half hours. */
+  slotTimes?: readonly string[];
+  /** Local previews only: a fixed clock (HH:MM). The real page shows the phone's own clock, live. */
+  clockNow?: string;
   inlineExitVisible?: boolean;
   /**
    * #458 (D0231): the safety film and its approval come between the order review and contact,
@@ -133,6 +149,8 @@ const PAYMENT_OPTION_TYPE_ICONS: Record<PaymentOptionType, 'points-star' | 'prof
   giftCard: 'presentkort',
 };
 const SOCKS_UNLIMITED_MAX = Number.MAX_SAFE_INTEGER;
+// #491: a new purchase picks socks next to the jumpers; the add-on step keeps only the bottle row.
+const BUY_ADDON_ROWS = ['water_bottle'] as const;
 const PAYMENT_OPTION_GROUP_CLASS =
   'flex items-stretch overflow-hidden rounded-xl border bg-surface transition-all focus-within:ring-2 focus-within:ring-primary/10';
 
@@ -617,7 +635,7 @@ function getBuyProgressIndex(step: BuyTicketsStep, safetyFirst = false) {
   return 0;
 }
 
-// A reload during safety resumes at the review; the film is watched again before approval.
+// A reload during safety resumes at the add-ons (#491: no summary step); the film is watched again before approval.
 function isBuyStep(step: BuyTicketsStep): step is BuyFlowRecoveryBuyStep {
   return step !== 'SAFETY' && step !== 'PAYMENT' && step !== 'APPROVED' && step !== 'PENDING';
 }
@@ -628,6 +646,46 @@ function toRecoveryAddonQty(addonQty: AddonQuantityMap): BuyFlowRecoveryAddonQty
     if (addonQty[id] > 0) next[id] = addonQty[id];
   }
   return next;
+}
+
+// #491: the right side of a start time says how many 60-minute spots are left.
+function SlotCapacityLabel({ capacity, selected, pending }: { capacity: SlotCapacity; selected: boolean; pending: boolean }) {
+  const { t } = useTranslation();
+  if (capacity.state === 'full') {
+    return (
+      <span className="shrink-0 rounded-full bg-surface-strong px-2.5 py-1 text-[11px] font-black italic uppercase tracking-wider text-muted">
+        {t.buy.slotFull}
+      </span>
+    );
+  }
+  if (capacity.state === 'unknown') {
+    return pending ? (
+      <span className="flex shrink-0 items-center" role="status">
+        <span className={`h-2.5 w-20 animate-pulse rounded-full ${selected ? 'bg-white/40' : 'bg-surface-strong'}`} aria-hidden="true" />
+        <span className="sr-only">{t.buy.slotChecking}</span>
+      </span>
+    ) : null;
+  }
+  if (capacity.remaining === null) return null;
+  const spots = capacity.remaining === 1
+    ? t.buy.slotSpotsLeftOne
+    : t.buy.slotSpotsLeft.replace('{count}', String(capacity.remaining));
+  const spotsText = (
+    <span className={`whitespace-nowrap text-[11px] font-bold italic uppercase tracking-wider ${selected ? 'text-white' : 'text-foreground'}`}>
+      {spots}
+    </span>
+  );
+  if (capacity.state !== 'few') return <span className="shrink-0 text-right">{spotsText}</span>;
+  return (
+    <span className="flex shrink-0 flex-col items-end gap-1 text-right">
+      <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-black italic uppercase tracking-wider ${
+        selected ? 'bg-white text-primary' : 'bg-primary text-white'
+      }`}>
+        {t.buy.slotFewLeft}
+      </span>
+      {spotsText}
+    </span>
+  );
 }
 
 function AvailabilityLoadingCard({ selectedTime }: { selectedTime: string | null }) {
@@ -711,6 +769,8 @@ function BuyEntryProgress({ step, safetyFirst = false }: { step: BuyTicketsStep;
 
 export const BuyTickets = ({
   recoverySnapshot = null,
+  slotTimes,
+  clockNow,
   inlineExitVisible = false,
   safetyBeforePayment = false,
   onBack,
@@ -719,7 +779,21 @@ export const BuyTickets = ({
   onStepChange,
 }: BuyTicketsProps) => {
   const { lang, t } = useTranslation();
-  const slots = useMemo(() => generateSlots(), []);
+  const slotKey = slotTimes?.join(',') ?? '';
+  const slots = useMemo(() => (slotKey ? slotKey.split(',') : generateSlots()), [slotKey]);
+  // #491 round 1 (Love 2026-10-08): "Klockan är 13:42", updated on the minute, and how soon each slot starts.
+  const [liveClock, setLiveClock] = useState(() => new Date());
+  useEffect(() => {
+    if (clockNow) return;
+    let timer = 0;
+    const tick = () => {
+      setLiveClock(new Date());
+      timer = window.setTimeout(tick, msUntilNextMinute());
+    };
+    timer = window.setTimeout(tick, msUntilNextMinute());
+    return () => window.clearTimeout(timer);
+  }, [clockNow]);
+  const clock = clockNow ?? liveClock;
   const restoringPrePaymentRef = useRef(false);
   const restoredSnapshotUpdatedAtRef = useRef<string | null>(null);
   const todayLabel = useMemo(
@@ -735,6 +809,10 @@ export const BuyTickets = ({
     [lang, safetyApprovedAt, safetyBeforePayment]
   );
   const [availability, setAvailability] = useState<NewBookingAvailability | null>(null);
+  // #491: one read covers every shown start time and is reused on Continue (#427).
+  const [availabilityLoadedAt, setAvailabilityLoadedAt] = useState<number | null>(null);
+  const [slotAvailabilityPending, setSlotAvailabilityPending] = useState(false);
+  const availabilityRequestRef = useRef<{ key: string; promise: Promise<NewBookingAvailability> } | null>(null);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
@@ -759,7 +837,6 @@ export const BuyTickets = ({
   const [paymentOptionType, setPaymentOptionType] = useState<PaymentOptionType>('discount');
   const [codeRejectedDialogOpen, setCodeRejectedDialogOpen] = useState(false);
   const [paymentOptionsOpen, setPaymentOptionsOpen] = useState(false);
-  const [checkoutBreakdownOpen, setCheckoutBreakdownOpen] = useState(false);
   const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
   const [quote, setQuote] = useState<NewBookingQuote | null>(null);
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
@@ -818,8 +895,9 @@ export const BuyTickets = ({
   const selectedSlot = availability?.slots.find((slot) => slot.startTime === selectedTime) ?? null;
   const visibleProductSections = getVisibleBookingProductSections(selectedSlot);
   const comboProducts = visibleProductSections.combo;
-  const entryProducts = visibleProductSections.entry;
-  const familyProducts = visibleProductSections.family;
+  // #491 round 1 (Love 2026-10-08): 90 minutes first in entry and family; entry leads the page.
+  const entryProducts = sortPopularFirst(visibleProductSections.entry);
+  const familyProducts = sortPopularFirst(visibleProductSections.family);
   const maxQuantity = getMaxBookingProductQuantity(selectedProduct);
   const jumperCount = getJumperCount(selectedProduct, quantity);
   const selectedPackageContents = scalePackageContents(selectedProduct?.packageContents, quantity);
@@ -845,6 +923,11 @@ export const BuyTickets = ({
     ];
   });
   const addonsTotal = selectedAddons.reduce((total, addon) => total + addon.price * addon.qty, 0);
+  // #491: socks are picked on the quantity step but stay the same JumpSocks purchase line.
+  const socksEntry = buyAddons.find((addon) => addon.id === 'socks') ?? null;
+  const socksSellable = Boolean(socksEntry && isPricedAddon(socksEntry) && getBuyAddonMax(socksEntry) > 0);
+  const socksLine = selectedAddons.find((addon) => addon.id === 'socks') ?? null;
+  const socksTotal = socksLine ? socksLine.price * socksLine.qty : 0;
   const skyriderSelected = selectedAddons.some((addon) => addon.id === 'skyrider');
   const entryTotal = (selectedProduct?.unitPrice ?? 0) * quantity;
   const basketEstimateTotal = entryTotal + addonsTotal;
@@ -944,11 +1027,13 @@ export const BuyTickets = ({
       }
 
       try {
-        const freshAvailability = await getNewBookingAvailability([savedStartTime]);
+        // #491: the same single read also gives the other shown start times their spots.
+        const freshAvailability = await getNewBookingAvailability([...new Set([...slots, savedStartTime])]);
         if (!alive) return;
 
         const freshSlot = freshAvailability.slots.find((slot) => slot.startTime === savedStartTime) ?? null;
         setAvailability(freshAvailability);
+        setAvailabilityLoadedAt(Date.now());
         setSelectedTime(savedStartTime);
 
         if (!freshSlot) {
@@ -995,6 +1080,9 @@ export const BuyTickets = ({
         const recoveredSkyRiderConsent = recoveredSkyRiderSelected && recoverySnapshot.skyriderConsentConfirmed === true;
         const recoveredCustomerValid = isValidRecoveredCustomer(savedContact);
         const needsRecoveredSkyRiderConsent = recoveredSkyRiderSelected && !recoveredSkyRiderConsent;
+        // #491: there is no summary step any more; after the add-ons comes safety, then contact.
+        const recoveredStepAfterAddons: BuyTicketsStep =
+          safetyBeforePayment && !recoverySnapshot.safetyAttestedAt ? 'SAFETY' : 'CONTACT';
 
         setSelectedProduct(recoveredProduct);
         setQuantity(recoveredQuantity);
@@ -1018,15 +1106,16 @@ export const BuyTickets = ({
           return;
         }
         if (recoverySnapshot.currentFlowStep === 'SKYRIDER_ATTEST') {
-          setStep(needsRecoveredSkyRiderConsent ? 'SKYRIDER_ATTEST' : 'REVIEW');
+          setStep(needsRecoveredSkyRiderConsent ? 'SKYRIDER_ATTEST' : recoveredStepAfterAddons);
           return;
         }
         if (recoverySnapshot.currentFlowStep === 'CONTACT') {
           setStep(needsRecoveredSkyRiderConsent ? 'SKYRIDER_ATTEST' : 'CONTACT');
           return;
         }
+        // A purchase saved on the removed summary step continues where that step led.
         if (recoverySnapshot.currentFlowStep === 'REVIEW') {
-          setStep(needsRecoveredSkyRiderConsent ? 'SKYRIDER_ATTEST' : 'REVIEW');
+          setStep(needsRecoveredSkyRiderConsent ? 'SKYRIDER_ATTEST' : recoveredStepAfterAddons);
           return;
         }
 
@@ -1054,7 +1143,7 @@ export const BuyTickets = ({
           const recoveredQuote = await quoteNewBooking(toRecoveredCustomer(savedContact), recoveredItems, true);
           if (!alive) return;
           setQuote(recoveredQuote);
-          setStep('REVIEW');
+          setStep(recoveredStepAfterAddons);
         } catch (error) {
           if (!alive) return;
           const productLabelsForRestore = buildProductLabelMap(recoveredProduct, recoveredBuyAddons);
@@ -1086,7 +1175,40 @@ export const BuyTickets = ({
       alive = false;
       restoringPrePaymentRef.current = false;
     };
-  }, [invalidateQuote, recoverySnapshot, t.addons, t.buy]);
+  }, [invalidateQuote, recoverySnapshot, safetyBeforePayment, slots, t.addons, t.buy]);
+
+  // #491: one availability read for all shown start times. In-flight reads are shared, so Continue
+  // never starts a second one for the same times (#427).
+  const requestSlotAvailability = useCallback((times: readonly string[]) => {
+    const key = times.join(',');
+    const pending = availabilityRequestRef.current;
+    if (pending?.key === key) return pending.promise;
+    const promise = getNewBookingAvailability([...times]);
+    availabilityRequestRef.current = { key, promise };
+    setSlotAvailabilityPending(true);
+    promise.then((result) => {
+      if (availabilityRequestRef.current?.promise !== promise) return;
+      setAvailability(result);
+      setAvailabilityLoadedAt(Date.now());
+    }, () => undefined).finally(() => {
+      if (availabilityRequestRef.current?.promise !== promise) return;
+      availabilityRequestRef.current = null;
+      setSlotAvailabilityPending(false);
+    });
+    return promise;
+  }, []);
+
+  useEffect(() => () => {
+    availabilityRequestRef.current = null;
+  }, []);
+
+  // When the start-time step opens, read the spots of every shown time once; a fresh answer is kept
+  // when the guest comes back to this step.
+  useEffect(() => {
+    if (step !== 'TIMESLOT' || restoringPrePaymentRef.current || slots.length === 0) return;
+    if (availabilityCovers(availability, slots) && isAvailabilityFresh(availabilityLoadedAt)) return;
+    void requestSlotAvailability(slots).catch(() => undefined);
+  }, [availability, availabilityLoadedAt, requestSlotAvailability, slots, step]);
 
   useEffect(() => {
     if (draft || restoringPrePaymentRef.current || !isBuyStep(step)) return;
@@ -1187,13 +1309,30 @@ export const BuyTickets = ({
         ? t.buy.paymentOptionClipCardHint
         : null;
 
-  const loadAvailability = async (requestedSlots = selectedTime ? [selectedTime] : slots) => {
-    if (requestedSlots.length === 0) return;
+  // #491: Continue reuses the answer the step already loaded, so the product step does not wait.
+  // Only a missing, failed or stale (5 min) answer is read again, once, for all shown times.
+  const continueFromTimeslot = async () => {
+    const time = selectedTime;
+    if (!time || loadingAvailability) return;
+    if (availabilityCovers(availability, [time]) && isAvailabilityFresh(availabilityLoadedAt)) {
+      if (!isSlotSelectable(getSlotCapacity(findAvailabilitySlot(availability, time)))) return;
+      setStep('PRODUCT');
+      return;
+    }
     setLoadingAvailability(true);
     setAvailabilityError(null);
     try {
-      const result = await getNewBookingAvailability(requestedSlots);
+      const pending = availabilityRequestRef.current;
+      const result = pending && pending.key.split(',').includes(time)
+        ? await pending.promise
+        : await requestSlotAvailability(slots.includes(time) ? slots : [time]);
       setAvailability(result);
+      setAvailabilityLoadedAt(Date.now());
+      // Filled up while the guest was choosing: stay here, where the time now says "Fullt".
+      if (!isSlotSelectable(getSlotCapacity(findAvailabilitySlot(result, time)))) {
+        setSelectedTime(null);
+        return;
+      }
       setStep('PRODUCT');
     } catch (error) {
       setAvailabilityError(
@@ -1205,8 +1344,8 @@ export const BuyTickets = ({
   };
 
   const handleTimeSelect = (time: string) => {
+    if (!isSlotSelectable(getSlotCapacity(findAvailabilitySlot(availability, time)))) return;
     setSelectedTime(time);
-    setAvailability(null);
     setAvailabilityError(null);
     setSelectedProduct(null);
     setQuantity(1);
@@ -1302,14 +1441,21 @@ export const BuyTickets = ({
 
   const needsSkyRiderConsent = () => skyriderSelected && !skyriderConsentConfirmed;
 
-  // #457: socks and water are ordinary offers, so nothing on this step blocks Continue.
+  // #491 (workshop 2026-10-07): no summary step. After the add-ons (and the SkyRider attestation)
+  // comes safety, then contact with the summary open. An approval already given skips the film.
+  const goToStepAfterAddons = () => {
+    setSubmitError(null);
+    setStep(safetyBeforePayment && !safetyApprovedAt ? 'SAFETY' : 'CONTACT');
+  };
+
+  // #457: water and the optional add-ons are ordinary offers, so nothing on this step blocks Continue.
   const continueFromAddons = () => {
     if (needsSkyRiderConsent()) {
       setStep('SKYRIDER_ATTEST');
       return;
     }
 
-    setStep('REVIEW');
+    goToStepAfterAddons();
   };
 
   // GH-473: email-first sends first name and email only; never an invented last name or phone.
@@ -1696,8 +1842,10 @@ export const BuyTickets = ({
       onBack();
       return;
     }
-    if (step === 'REVIEW') setStep('ADDONS');
-    else if (step === 'SAFETY' || step === 'CONTACT') setStep('REVIEW');
+    // #491 round 1 (Love 2026-10-08): contact goes back to the safety film, which shows an approval already
+    // given at once; safety goes back to the add-ons.
+    if (step === 'CONTACT') setStep(safetyBeforePayment ? 'SAFETY' : 'ADDONS');
+    else if (step === 'SAFETY' || step === 'REVIEW') setStep('ADDONS');
     else if (step === 'SKYRIDER_ATTEST') setStep('ADDONS');
     else if (step === 'ADDONS') setStep('QUANTITY');
     else if (step === 'QUANTITY') setStep('PRODUCT');
@@ -1717,20 +1865,26 @@ export const BuyTickets = ({
     const ticketUnitLabel = getProductUnitBadgeLabel(product, t.buy);
     const comboInclusions = isCombo ? getComboInclusions(t.buy) : [];
     const showLeadingIcon = product.type !== 'combo';
+    // #491 (workshop 2026-10-07): 90 minutes is what most guests pick, for entry and family alike.
+    const popular = isPopularBookingProduct(product);
 
     return (
       <button
         key={product.key}
         onClick={() => available && handleProductSelect(product)}
         disabled={!available}
-        className={`min-w-0 ${isCombo ? 'p-4 rounded-2xl' : 'p-3.5 rounded-xl'} text-left flex items-center gap-3 transition-all border ${
+        data-popular={popular ? 'true' : undefined}
+        className={`relative min-w-0 ${isCombo ? 'p-4 rounded-2xl' : 'p-3.5 rounded-xl'} text-left flex items-center gap-3 transition-all border ${
           available
             ? isCombo
               ? 'bg-white border-primary/60 shadow-[0_0_22px_rgba(239,23,66,0.26)] ring-1 ring-primary/25 active:scale-[0.98]'
-              : 'bg-white border-border active:scale-[0.98]'
+              : popular
+                ? 'buy-product-popular bg-white border-2 border-primary shadow-[0_0_22px_rgba(239,23,66,0.26)] active:scale-[0.98]'
+                : 'bg-white border-border active:scale-[0.98]'
             : 'bg-surface-strong border-border opacity-50 cursor-not-allowed'
         }`}
       >
+        {popular && available && <span className="buy-product-tag">{t.buy.popular}</span>}
         {showLeadingIcon && <JumpyardIcon name={iconName} className="w-9 h-9 flex-shrink-0" />}
         <div className="flex-1 min-w-0">
           {!isCombo && (
@@ -1814,6 +1968,11 @@ export const BuyTickets = ({
           <h2 className="text-xl font-black italic text-foreground uppercase mb-1 text-center">
             {t.buy.selectTime}
           </h2>
+          <p className="buy-clock" data-testid="buy-clock">
+            <JumpyardIcon name="time" className="buy-clock-icon" />
+            <span className="buy-clock-label">{t.buy.clockNow}</span>
+            <time className="buy-clock-time">{formatClock(clock)}</time>
+          </p>
           <p className="text-foreground text-xs font-black italic uppercase text-center mb-5">{todayLabel}</p>
 
           {availabilityError && (
@@ -1826,33 +1985,42 @@ export const BuyTickets = ({
           <StableLoadingRegion loading={loadingAvailability} fallback={<AvailabilityLoadingCard selectedTime={selectedTime} />}>
               <div className="flex flex-col gap-3 mb-6">
                 {slots.map((time) => {
-                  const isSelected = selectedTime === time;
+                  const capacity = getSlotCapacity(findAvailabilitySlot(availability, time));
+                  const full = !isSlotSelectable(capacity);
+                  const isSelected = selectedTime === time && !full;
                   return (
                     <button
                       key={time}
                       onClick={() => handleTimeSelect(time)}
-                      className={`w-full min-h-[76px] px-5 py-4 rounded-2xl text-left flex items-center justify-between transition-all ${
-                        isSelected
-                          ? 'bg-primary text-white border-2 border-primary'
-                          : 'bg-white border border-border active:scale-[0.98]'
+                      disabled={full}
+                      data-slot-capacity={capacity.state}
+                      data-slot-remaining={capacity.remaining ?? ''}
+                      className={`w-full min-h-[76px] px-5 py-4 rounded-2xl text-left flex items-center justify-between gap-3 transition-all ${
+                        full
+                          ? 'bg-surface border border-border cursor-not-allowed'
+                          : isSelected
+                            ? 'bg-primary text-white border-2 border-primary'
+                            : 'bg-white border border-border active:scale-[0.98]'
                       }`}
                     >
-                      <div className="flex items-center gap-4">
-                        <span className={isSelected ? 'rounded-md bg-white' : ''}>
-                          <JumpyardIcon name="time" className="w-9 h-9" />
-                        </span>
-                        <span className={`text-2xl font-black italic ${isSelected ? 'text-white' : 'text-foreground'}`}>
+                      <div className="flex min-w-0 flex-col">
+                        <span className={`text-2xl font-black italic leading-none ${full ? 'text-muted' : isSelected ? 'text-white' : 'text-foreground'}`}>
                           {time}
                         </span>
+                        <span className={`mt-1.5 text-[11px] font-bold italic uppercase tracking-wider ${full ? 'text-muted' : isSelected ? 'text-white' : 'text-muted'}`}
+                          data-testid="slot-starts-in">
+                          {formatStartsIn(minutesUntil(time, clock), t.buy)}
+                        </span>
                       </div>
+                      <SlotCapacityLabel capacity={capacity} selected={isSelected} pending={slotAvailabilityPending} />
                     </button>
                   );
                 })}
               </div>
 
               <button
-                onClick={() => selectedTime && void loadAvailability([selectedTime])}
-                disabled={!selectedTime}
+                onClick={() => void continueFromTimeslot()}
+                disabled={!selectedTime || !isSlotSelectable(getSlotCapacity(findAvailabilitySlot(availability, selectedTime)))}
                 className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
               >
                 {t.common.continue}
@@ -1861,8 +2029,8 @@ export const BuyTickets = ({
 
           {availabilityError && (
             <button
-              onClick={() => selectedTime && void loadAvailability([selectedTime])}
-              disabled={loadingAvailability}
+              onClick={() => void continueFromTimeslot()}
+              disabled={loadingAvailability || !selectedTime}
               className="mt-3 w-full bg-white border border-border text-foreground font-black italic uppercase text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <RefreshCw size={15} /> {t.buy.retryAvailability}
@@ -1883,6 +2051,15 @@ export const BuyTickets = ({
             </p>
           )}
 
+          {entryProducts.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs text-foreground uppercase font-black italic tracking-wider mb-2 px-1">
+                {t.buy.sectionEntry}
+              </p>
+              <div className="flex flex-col gap-2.5">{entryProducts.map(renderProductCard)}</div>
+            </div>
+          )}
+
           {comboProducts.length > 0 && (
             <div className="mb-3">
               <p
@@ -1895,21 +2072,12 @@ export const BuyTickets = ({
             </div>
           )}
 
-          {entryProducts.length > 0 && (
-            <div className="mb-3">
-              <p className="text-xs text-foreground uppercase font-black italic tracking-wider mb-2 px-1">
-                {t.buy.sectionEntry}
-              </p>
-              <div className="flex flex-col gap-2">{entryProducts.map(renderProductCard)}</div>
-            </div>
-          )}
-
           {familyProducts.length > 0 && (
             <div>
               <p className="text-xs text-foreground uppercase font-black italic tracking-wider mb-2 px-1">
                 {t.buy.sectionFamily}
               </p>
-              <div className="flex flex-col gap-2">{familyProducts.map(renderProductCard)}</div>
+              <div className="flex flex-col gap-2.5">{familyProducts.map(renderProductCard)}</div>
             </div>
           )}
 
@@ -1922,7 +2090,7 @@ export const BuyTickets = ({
               <p className="mt-1 text-sm text-muted">{t.buy.noProductsAvailableDesc}</p>
               <button
                 onClick={() => {
-                  setAvailability(null);
+                  // #491: the loaded spots of every time are kept; no new read.
                   setSelectedTime(null);
                   setStep('TIMESLOT');
                 }}
@@ -1942,8 +2110,8 @@ export const BuyTickets = ({
           className="w-full max-w-full min-w-0 flex items-center justify-center"
           style={{ minHeight: 'calc(100dvh - 160px)' }}
         >
-          <div className="w-full px-2 py-5 text-center">
-            <div className="max-w-full bg-white border border-border rounded-2xl px-4 py-3 mb-6 inline-flex flex-wrap items-center justify-center gap-3 shadow-sm">
+          <div className="w-full px-2 py-2 text-center">
+            <div className="max-w-full bg-white border border-border rounded-2xl px-4 py-3 mb-4 inline-flex flex-wrap items-center justify-center gap-3 shadow-sm">
               <JumpyardIcon
                 name={getProductIconName(selectedProduct)}
                 className="w-8 h-8"
@@ -1961,7 +2129,7 @@ export const BuyTickets = ({
               {getQuantityTitle(selectedProduct, t.buy)}
             </h2>
             <PackageContentRows contents={selectedPackageContents} />
-            <p className="text-foreground text-sm font-normal italic uppercase mb-6 flex items-center justify-center gap-2">
+            <p className="text-foreground text-sm font-normal italic uppercase mb-4 flex items-center justify-center gap-2">
               <JumpyardIcon name="time" className="w-6 h-6" /> {t.buy.startTimeLabel} {selectedProduct.startTime} {t.buy.todaySuffix}
             </p>
 
@@ -1982,7 +2150,7 @@ export const BuyTickets = ({
                 <Plus size={20} />
               </button>
             </div>
-            <p className="text-xs text-foreground uppercase font-normal italic tracking-wider mb-6">
+            <p className="text-xs text-foreground uppercase font-normal italic tracking-wider mb-4">
               {maxQuantity > 0
                 ? `${getCapacityLabel(selectedProduct, t.buy.spotsAvailable, t.buy.spotsLeft)} · ${
                     t.buy.maxReached
@@ -1990,10 +2158,19 @@ export const BuyTickets = ({
                 : t.buy.spotsFull}
             </p>
 
+            {/* #491 (workshop 2026-10-07): socks next to the jumpers; the same JumpSocks purchase line as before. */}
+            <SocksQuantity
+              quantity={socksSellable ? addonQty.socks : 0}
+              price={socksEntry?.price ?? null}
+              available={socksSellable}
+              max={socksEntry ? getBuyAddonMax(socksEntry) : 0}
+              onQuantity={(next) => setOneAddon('socks', next)}
+            />
+
             <div className="bg-white border border-border p-4 rounded-2xl mb-5 flex justify-between items-center px-5">
               <span className="text-foreground text-sm font-black italic uppercase">{t.buy.total}</span>
-              <span className="text-xl font-black italic text-primary">
-                {formatMoney((selectedProduct.unitPrice ?? 0) * quantity)}
+              <span className="text-xl font-black italic text-primary" data-testid="buy-quantity-total">
+                {formatMoney(entryTotal + socksTotal)}
               </span>
             </div>
 
@@ -2018,8 +2195,11 @@ export const BuyTickets = ({
           </div>
 
           <div className="addon-shop-scroll">
+            {/* #491: socks are chosen on the quantity step, so only the bottle row and the shelf remain. */}
             <AddonChoices
-              entries={buyAddons.filter((addon) => addon.id === 'socks' || addon.id === 'water_bottle' || (isPricedAddon(addon) && getBuyAddonMax(addon) > 0))
+              rows={BUY_ADDON_ROWS}
+              entries={buyAddons.filter((addon) => addon.id !== 'socks'
+                && (addon.id === 'water_bottle' || (isPricedAddon(addon) && getBuyAddonMax(addon) > 0)))
                 .map((addon) => ({ ...addon, description: '', quantity: addonQty[addon.id], included: 0,
                   max: getBuyAddonMax(addon), available: isPricedAddon(addon) && getBuyAddonMax(addon) > 0 }))}
               onQuantity={setOneAddon} />
@@ -2046,7 +2226,7 @@ export const BuyTickets = ({
         <SkyRiderAttest
           onComplete={() => {
             setSkyriderConsentConfirmed(true);
-            setStep('REVIEW');
+            goToStepAfterAddons();
           }}
         />
       )}
@@ -2310,42 +2490,35 @@ export const BuyTickets = ({
               )}
             </section>
 
-            <div className="mb-4 overflow-hidden rounded-2xl border border-border bg-white">
-              <button
-                type="button"
-                onClick={() => setCheckoutBreakdownOpen((open) => !open)}
-                className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left"
-              >
+            {/* #491 (workshop 2026-10-07): the summary step is gone, so the order is shown open here. */}
+            <section className="mb-4 overflow-hidden rounded-2xl border border-border bg-white" data-testid="buy-contact-summary">
+              <div className="flex w-full items-center justify-between gap-4 px-4 py-4">
                 <span className="text-lg font-black italic uppercase text-foreground">{t.buy.toPay}</span>
-                <span className="flex items-center gap-2 text-2xl font-black italic leading-none text-primary">
-                  {formatMoney(checkoutAmount)}
-                  <ChevronDown
-                    size={22}
-                    className={`text-foreground transition-transform ${checkoutBreakdownOpen ? 'rotate-0' : '-rotate-90'}`}
-                  />
-                </span>
-              </button>
-              {checkoutBreakdownOpen && (
-                <div className="border-t border-border px-4 py-3">
-                  {basketLines.map((line) => (
-                    <div key={line.key} className="grid grid-cols-[minmax(0,1fr)_2.5rem_4.5rem] gap-2 py-1.5 text-sm">
-                      <span className="min-w-0 break-words font-bold italic uppercase text-foreground">
-                        {formatBasketLineLabel(line.label)}
-                      </span>
-                      <span className="text-center text-xs text-foreground">{line.qty} st</span>
-                      <span className="text-right font-black italic text-primary">{formatMoney(line.total)}</span>
-                    </div>
-                  ))}
-                  <PackageContentRows contents={selectedPackageContents} />
-                  {checkoutTotal !== null && checkoutAmount !== null && checkoutTotal !== checkoutAmount && (
-                    <div className="mt-2 flex justify-between gap-3 border-t border-border pt-2 text-[11px] text-foreground">
-                      <span>{t.buy.originalTotal}</span>
-                      <span>{formatMoney(checkoutTotal)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                <span className="text-2xl font-black italic leading-none text-primary">{formatMoney(checkoutAmount)}</span>
+              </div>
+              <div className="border-t border-border px-4 py-3">
+                <p className="mb-1 flex items-center gap-1.5 text-[11px] font-black italic uppercase tracking-wider text-foreground">
+                  <JumpyardIcon name="time" className="h-5 w-5 flex-shrink-0" />
+                  {t.buy.startTimeLabel} {selectedProduct.startTime} {t.buy.todaySuffix}
+                </p>
+                {basketLines.map((line) => (
+                  <div key={line.key} className="grid grid-cols-[minmax(0,1fr)_2.5rem_4.5rem] gap-2 py-1.5 text-sm">
+                    <span className="min-w-0 break-words font-bold italic uppercase text-foreground">
+                      {formatBasketLineLabel(line.label)}
+                    </span>
+                    <span className="text-center text-xs text-foreground">{line.qty} st</span>
+                    <span className="text-right font-black italic text-primary">{formatMoney(line.total)}</span>
+                  </div>
+                ))}
+                <PackageContentRows contents={selectedPackageContents} />
+                {checkoutTotal !== null && checkoutAmount !== null && checkoutTotal !== checkoutAmount && (
+                  <div className="mt-2 flex justify-between gap-3 border-t border-border pt-2 text-[11px] text-foreground">
+                    <span>{t.buy.originalTotal}</span>
+                    <span>{formatMoney(checkoutTotal)}</span>
+                  </div>
+                )}
+              </div>
+            </section>
 
             {submitError && (
               <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>
@@ -2386,81 +2559,10 @@ export const BuyTickets = ({
         </FlowScreen>
       )}
 
-      {step === 'REVIEW' && selectedProduct && (
-        <FlowScreen
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="w-full flex items-center justify-center"
-          style={{ minHeight: 'calc(100dvh - 160px)' }}
-        >
-          <div className="w-full px-2 py-5">
-            <h2 className="mb-6 text-center text-xl font-black italic uppercase text-foreground">
-              {t.buy.reviewTitle}
-            </h2>
-
-            <div className="mb-5 grid grid-cols-2 items-stretch gap-2.5">
-              <div className="flex min-w-0 items-center justify-center gap-2 rounded-2xl border border-border bg-white px-3 py-3 shadow-sm">
-                <JumpyardIcon name="time" className="h-8 w-8 flex-shrink-0" />
-                <p className="min-w-0 text-sm font-black italic uppercase leading-tight text-foreground">
-                  {selectedProduct.startTime} {t.buy.todaySuffix}
-                </p>
-              </div>
-              <div className="flex min-w-0 items-center justify-center gap-2 rounded-2xl border border-border bg-white px-3 py-3 shadow-sm">
-                <JumpyardIcon
-                  name={selectedProduct.type === 'combo' ? 'combo-60-min' : 'trampoline-jump'}
-                  className="h-8 w-8 flex-shrink-0"
-                />
-                <p className="min-w-0 text-sm font-black italic uppercase leading-tight text-foreground">
-                  {selectedProductDurationLabel}
-                </p>
-              </div>
-            </div>
-
-            <div className="mb-6 overflow-hidden rounded-2xl border border-border bg-white">
-              <div className="flex items-center justify-between gap-4 px-4 py-4">
-                <span className="flex min-w-0 items-center gap-2">
-                  <JumpyardIcon name="payment-card" className="h-7 w-7 flex-shrink-0" />
-                  <span className="text-lg font-black italic uppercase text-foreground">{t.buy.toPay}</span>
-                </span>
-                <span className="shrink-0 text-2xl font-black italic leading-none text-primary">
-                  {formatMoney(basketEstimateTotal)}
-                </span>
-              </div>
-              <div className="border-t border-border px-4 py-3">
-                {basketLines.map((line) => (
-                  <div
-                    key={line.key}
-                    className="grid grid-cols-[minmax(0,1fr)_2.5rem_4.5rem] gap-2 py-1.5 text-sm"
-                  >
-                    <span className="min-w-0 break-words font-bold italic uppercase text-foreground">
-                      {formatBasketLineLabel(line.label)}
-                    </span>
-                    <span className="text-center text-xs text-foreground">{line.qty} st</span>
-                    <span className="text-right font-black italic text-primary">{formatMoney(line.total)}</span>
-                  </div>
-                ))}
-                <PackageContentRows contents={selectedPackageContents} />
-              </div>
-            </div>
-
-            {submitError && <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>}
-
-            <button
-              onClick={() => {
-                setSubmitError(null);
-                setStep(safetyBeforePayment && !safetyApprovedAt ? 'SAFETY' : 'CONTACT');
-              }}
-              className="w-full rounded-2xl bg-primary py-4 text-lg font-black italic uppercase text-white transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {t.common.continue}
-            </button>
-          </div>
-        </FlowScreen>
-      )}
-
       {step === 'SAFETY' && (
         <SafetyVideo
           buyEntryFlow
+          approvedAt={safetyApprovedAt}
           onApprove={(attestedAt) => {
             setSafetyApprovedAt(attestedAt);
             setStep('CONTACT');

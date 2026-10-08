@@ -21,6 +21,16 @@ export function getMaxBookingProductQuantity(product: NewBookingProduct | null) 
   return Math.max(0, Math.min(10, unitCapacity));
 }
 
+/** #491 (workshop 2026-10-07): the 90-minute entry and family products carry "Populärt". */
+export function isPopularBookingProduct(product: Pick<NewBookingProduct, 'type' | 'durationMinutes'>) {
+  return (product.type === 'entry' || product.type === 'family') && product.durationMinutes === 90;
+}
+
+/** #491 round 1 (Love 2026-10-08): the popular product leads its section; the rest keep their order. */
+export function sortPopularFirst<T extends Pick<NewBookingProduct, 'type' | 'durationMinutes'>>(products: readonly T[]) {
+  return [...products.filter(isPopularBookingProduct), ...products.filter((product) => !isPopularBookingProduct(product))];
+}
+
 export function isBaseBookingProduct(product: NewBookingProduct): product is BaseBookingProduct {
   return product.type === 'entry' || product.type === 'family' || product.type === 'combo';
 }

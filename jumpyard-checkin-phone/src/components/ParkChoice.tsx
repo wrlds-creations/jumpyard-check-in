@@ -5,9 +5,12 @@ import { JumpyardIcon } from '@/components/JumpyardIcon';
 
 interface ParkChoiceProps {
     onSelect: (choice: 'BOOKING' | 'BUY') => void;
+    /** #491 round 1: today's saved number, offered as the way back after "Gör en ny bokning". */
+    savedVisitCode?: string | null;
+    onResumeSavedVisit?: () => void;
 }
 
-export const ParkChoice = ({ onSelect }: ParkChoiceProps) => {
+export const ParkChoice = ({ onSelect, savedVisitCode = null, onResumeSavedVisit }: ParkChoiceProps) => {
     const { t } = useTranslation();
 
     return (
@@ -53,6 +56,23 @@ export const ParkChoice = ({ onSelect }: ParkChoiceProps) => {
                     </div>
                 </button>
             </div>
+
+            {/* #491 round 1 (Love 2026-10-08): a guest who tapped "Gör en ny bokning" by mistake gets back to
+                today's number in one tap. Only shown while today's visit is saved on this phone. */}
+            {savedVisitCode && onResumeSavedVisit && (
+                <button
+                    type="button"
+                    onClick={onResumeSavedVisit}
+                    data-testid="park-choice-saved-visit"
+                    className="mt-6 inline-flex min-h-11 max-w-full items-center gap-2 px-2 text-sm font-extrabold italic text-foreground"
+                >
+                    <JumpyardIcon name="success-check" className="h-5 w-5 flex-shrink-0" />
+                    <span className="whitespace-nowrap underline decoration-primary/60 decoration-2 underline-offset-4">
+                        {t.choice.backToCheckin} <span aria-hidden="true">·</span>{' '}
+                        <span className="font-black text-primary tabular-nums">{savedVisitCode}</span>
+                    </span>
+                </button>
+            )}
         </FlowScreen>
     );
 };

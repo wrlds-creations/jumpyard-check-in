@@ -4429,7 +4429,14 @@ async function buildGuestVisit(session, venueId) {
   try {
     const store = createHandoutStore({ executeStatement, mappedRows, stringParameter });
     const state = await store.readState(session, venueId);
+    // GH-491: café lines come from ROLLER's items. A phone purchase that ROLLER has not confirmed yet
+    // has none, so `cafe` is left out and the phone groups the draft's items itself (coffee, water,
+    // pizza at the café), as the kiosk link already does (GH-484). An empty list means nothing at the café.
+    if (state.items.length === 0) {
+      return { checkedInAt: session.completedAt || session.readyForStaffAt || null };
+    }
     return {
+      // GH-491: the water bottle is collected in the café too (shared/staff-handout.js CAFE_KINDS).
       cafe: state.items.filter((item) => item.area === 'cafe').map((item) => ({
         collected: item.collected,
         detail: item.detail || null,

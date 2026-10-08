@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { FlowMotion, FlowTransition, FlowScreen } from '@/components/FlowTransition';
 import { AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
@@ -16,13 +16,14 @@ import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { ConnectedProfiles } from '@/components/ConnectedProfiles';
 import { ConfirmationScreen } from '@/components/ConfirmationScreen';
 import { isPhoneCompletionReady } from '@/flow/phoneCompletion';
-import { clearSavedVisit, readSavedVisit, saveVisit, type SavedVisit } from '@/flow/savedVisit';
+import { parkSavedVisit, readSavedVisit, saveVisit, type SavedVisit } from '@/flow/savedVisit';
 import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import { detectChannel, initialContext, initialState, nextState } from '@/flow/machine';
 import type { Branch } from '@/flow/machine';
 import {
     CloudBookingError,
     CloudSessionError,
+    finalizePhonePayment,
     getNewBookingAvailability,
     lookupBooking,
     markSessionReadyForStaff,
@@ -30,6 +31,7 @@ import {
     startCheckInSession,
     type SessionIssue,
 } from '@/flow/cloudClient';
+import { scheduleRollerConfirmationNudges } from '@/flow/provisionalConfirmation';
 import type { Booking, CheckInSession, ConnectedProfile, FlowContext, FlowState } from '@/flow/types';
 import {
     clearBuyFlowRecovery,
@@ -869,9 +871,19 @@ function CheckInFlow() {
         setRecoveryReadyForSafety(false);
         setRecoverySyncFailed(false);
         try {
-            const confirmation = knownBooking
-                ? { status: 'paid' as const, booking: knownBooking }
-                : await resolvePurchasePreparation(lookupBooking, identifier, { signal: preparation.signal, isCurrent: current });
+            // #491 (D0231): after an external payment page the guest lands on the number at once, like a
+            // card payment in the page: Cloud's provisional session first, ROLLER confirms in the background.
+            const prepaymentDraftId = snapshot.draftState?.prepaymentDraftId;
+            const rollerDraftUniqueId = snapshot.draftState?.uniqueId ?? snapshot.draftUniqueId;
+            const provisional = !knownBooking && snapshot.safetyAttestedAt && prepaymentDraftId && rollerDraftUniqueId
+                ? await finalizePhonePayment(prepaymentDraftId, rollerDraftUniqueId).catch(() => null)
+                : null;
+            if (!current()) return;
+            const confirmation = provisional
+                ? { status: 'paid' as const, booking: provisional.booking }
+                : knownBooking
+                    ? { status: 'paid' as const, booking: knownBooking }
+                    : await resolvePurchasePreparation(lookupBooking, identifier, { signal: preparation.signal, isCurrent: current });
             if (!current()) return;
             if (confirmation.status === 'unavailable') throw new Error('Booking confirmation unavailable');
             const booking = confirmation.booking;
@@ -882,6 +894,7 @@ function CheckInFlow() {
                 isCurrent: current,
                 signal: preparation.signal,
                 safetyAttestedAt: snapshot.safetyAttestedAt ?? null,
+                provisionalSession: provisional?.checkinSession ?? null,
             });
             if (!current()) return;
             recoveryContinuationRef.current = continuation;
@@ -890,6 +903,7 @@ function CheckInFlow() {
                 recoveryContinueRequestedRef.current = true;
                 setRecoveryContinuePending(true);
                 void revealRecoveredPurchase(record, snapshot, continuation);
+                if (provisional) scheduleRollerConfirmationNudges(lookupBooking, identifier);
                 return;
             }
             setRecoveryReadyForSafety(true);
@@ -1378,9 +1392,10 @@ function CheckInFlow() {
 
         if (state !== 'KIOSK_CHOICE' || linkToken) return;
         if (!snapshot) {
-            // GH-453 (D0229): a reload on the visit day goes straight back to the saved number.
+            // GH-453 (D0229): a reload on the visit day goes straight back to the saved number, unless the
+            // guest chose "Gör en ny bokning" (#491); then the first screen offers the way back instead.
             const visit = readSavedVisit();
-            if (visit) restoreSavedVisit(visit);
+            if (visit && !visit.parkedAt) restoreSavedVisit(visit);
             return;
         }
         // Legacy payment snapshots cannot prove a declined payment. Preserve their
@@ -1514,6 +1529,12 @@ function CheckInFlow() {
         if (phoneCompletion && ctx.booking && ctx.checkinSession) saveVisit(ctx.booking, ctx.checkinSession);
     }, [phoneCompletion, ctx.booking, ctx.checkinSession]);
     const progressState: FlowState = showingCompletedBuyRecovery ? 'APP_CONFIRM' : showingBuyPaymentRecovery ? 'APP_PAYMENT' : state;
+    // #491 round 1 (Love 2026-10-08): a guest who tapped "Gör en ny bokning" by mistake gets back to
+    // today's number from the first screen. Nothing shows without a saved visit of today.
+    const savedVisitOffer = useMemo(
+        () => (state === 'KIOSK_CHOICE' && recoveryGateReady && !buyRecoveryStatus ? readSavedVisit() : null),
+        [state, recoveryGateReady, buyRecoveryStatus],
+    );
     const exitFlowMode = getExitFlowMode({
         addonsStep,
         buyStep,
@@ -1626,6 +1647,8 @@ function CheckInFlow() {
                         <ParkChoice
                             key="park-choice"
                             onSelect={choice => advance({}, choice === 'BOOKING' ? 'booking' : 'buy')}
+                            savedVisitCode={savedVisitOffer?.session.handoffCode ?? null}
+                            onResumeSavedVisit={savedVisitOffer ? () => restoreSavedVisit(savedVisitOffer) : undefined}
                         />
                     )}
 
@@ -1741,7 +1764,8 @@ function CheckInFlow() {
                             selectedAddons={ctx.selectedAddons}
                             channel={ctx.channel}
                             alreadyCheckedIn={alreadyCheckedIn}
-                            onStartOver={ctx.channel === 'park-qr' ? () => { clearSavedVisit(); resetToStart(); } : undefined}
+                            receiptSent={ctx.paymentCompleted}
+                            onStartOver={ctx.channel === 'park-qr' ? () => { parkSavedVisit(); resetToStart(); } : undefined}
                         />
                     )}
                 </>

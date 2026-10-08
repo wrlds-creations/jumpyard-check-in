@@ -14,6 +14,11 @@ import { SafetyApproval, type SafetyApprovalProps } from '@/components/SafetyApp
 // captions, with the title at the foot of the film like a poster (variant B, Love 2026-10-01).
 interface SafetyVideoProps extends Omit<SafetyApprovalProps, 'headingRef' | 'onApprove'> {
     buyEntryFlow?: boolean;
+    /**
+     * #491 round 1 (Love 2026-10-08): the guest already watched the film to the end and approved in this
+     * purchase, then went back. The approval shows at once and keeps its time; the docked film still replays.
+     */
+    approvedAt?: string | null;
     /** Called once playback has genuinely reached the end. */
     onWatched?: (videoSeenAt: string) => void;
     onApprove: (attestedAt: string) => void;
@@ -34,6 +39,7 @@ export const SafetyVideo = (props: SafetyVideoProps) => {
 
 function LocalizedSafetyVideo({
     buyEntryFlow = false,
+    approvedAt = null,
     continuePlaying,
     onWatched,
     onApprove,
@@ -50,6 +56,10 @@ function LocalizedSafetyVideo({
     const [box, setBox] = useState({ width: 0, height: 0, panel: 0 });
     const { phase, progress } = playback;
     const done = phase === 'done';
+    // Without an earlier approval only a genuine end reveals it. With one, it is there at once and
+    // also while a replay is paused or failed; a running replay plays full size.
+    const watchedBefore = Boolean(approvedAt);
+    const approvable = done || (watchedBefore && (phase === 'idle' || phase === 'paused' || phase === 'error'));
     const title = buyEntryFlow ? t.safetyVideo.buyTitle : t.safetyVideo.title;
     const description = buyEntryFlow ? t.safetyVideo.buyDescription : t.safetyVideo.description;
     const durationLabel = t.safetyVideo.durationBadge.replace('{seconds}', String(SAFETY_MEDIA[lang].durationSeconds));
@@ -102,7 +112,8 @@ function LocalizedSafetyVideo({
     }, [onWatched]);
 
     const handlePlay = () => playbackRef.current?.start();
-    const approve = () => onApprove(new Date().toISOString());
+    // An earlier approval keeps its own time.
+    const approve = () => onApprove(approvedAt ?? new Date().toISOString());
 
     // The film uses the whole stage while it plays. The approval space is reserved from the start,
     // so revealing it never moves the layout.
@@ -119,19 +130,19 @@ function LocalizedSafetyVideo({
     const dockTop = Math.max(box.height - box.panel, Math.ceil(height * dockScale) + PANEL_GAP);
     const dockOverflows = measured && dockTop + box.panel > box.height;
     const compact = measured && box.height < COMPACT_STAGE_HEIGHT;
-    const docked = done;
+    const docked = approvable;
     // The blurred still covers the film's own captions wherever our controls sit on top of it.
-    const coverVisible = phase === 'idle' || phase === 'loading' || done;
+    const coverVisible = phase === 'idle' || phase === 'loading' || approvable;
     // The poster title follows the film width so its longest line never clips on small phones.
     const coverTitleSize = Math.max(16, Math.min(30, Math.floor((width - 40) / 8.2)));
     // Matching transform lists interpolate cleanly between playing and docked.
     const frameTransform = docked ? `translateY(0px) scale(${dockScale})` : `translateY(${playOffset}px) scale(1)`;
 
     useEffect(() => {
-        if (!done) return;
+        if (!approvable) return;
         headingRef.current?.focus({ preventScroll: true });
         if (docked && dockOverflows) panelRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
-    }, [done, docked, dockOverflows]);
+    }, [approvable, docked, dockOverflows]);
 
     return (
         <FlowScreen
@@ -140,6 +151,7 @@ function LocalizedSafetyVideo({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             data-safety-phase={phase}
+            data-safety-approved-before={watchedBefore ? 'true' : undefined}
         >
             <div ref={stageRef} className="safety-stage relative w-full flex-1">
                 <div
@@ -172,7 +184,7 @@ function LocalizedSafetyVideo({
                         className="absolute top-2 left-2 w-7 h-7 object-contain z-10 opacity-80"
                     />
 
-                    {phase === 'idle' && (
+                    {phase === 'idle' && !watchedBefore && (
                         <div className="absolute inset-0 z-20 flex flex-col bg-gradient-to-t from-black/75 via-black/15 to-transparent px-5 pb-6 pt-3 text-left">
                             <span className="self-end rounded-full bg-white px-2.5 py-1 text-[10px] font-black italic uppercase tracking-wider text-primary">
                                 {durationLabel}
@@ -237,9 +249,9 @@ function LocalizedSafetyVideo({
                     className="safety-approval absolute inset-x-0"
                     // The overflow padding keeps the approval clear of the Back/Exit buttons after scrolling.
                     style={docked && dockOverflows ? { top: dockTop, paddingBottom: 112 } : { bottom: 0 }}
-                    data-visible={String(done)}
-                    aria-hidden={!done}
-                    inert={!done}
+                    data-visible={String(approvable)}
+                    aria-hidden={!approvable}
+                    inert={!approvable}
                 >
                     <SafetyApproval {...approvalProps} compact={compact} headingRef={headingRef} onApprove={approve} />
                 </div>

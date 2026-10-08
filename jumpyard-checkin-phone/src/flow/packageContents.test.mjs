@@ -110,8 +110,9 @@ test('unknown combo names, legacy products, family and normal entry do not acqui
 test('actual Swedish/English QR screen separates bands from deferred pizza and coffee', async () => {
   const booking = await fromCloud([item()]);
   for (const [lang, band, pizza, later] of [
-    ['sv', 'Besöksband 60 min', 'Pizza att dela', 'Hämta i caféet'],
-    ['en', 'Wristband 60 min', 'Pizza to share', 'Collect at the café'],
+    // #491: the café banner names the place and no longer says "after jumping".
+    ['sv', 'Besöksband 60 min', 'Pizza att dela', 'Caféet'],
+    ['en', 'Wristband 60 min', 'Pizza to share', 'The café'],
   ]) {
     const markup = render(ConfirmationScreen, {
       booking, jumperCount: booking.jumpers, checkinSession: { checkinSessionId: 'preview-only', status: 'ready_for_staff', handoffCode: 'DEMO' },
@@ -226,7 +227,8 @@ test('package display never enters booking purchase requests', async () => {
   const source = fs.readFileSync(new URL('../components/BuyTickets.tsx', import.meta.url), 'utf8');
   const buildItems = source.slice(source.indexOf('const buildItems ='), source.indexOf('const buildItems =') + 1200);
   assert.doesNotMatch(buildItems, /packageContents|admissionItems|pizza/);
-  assert.equal((source.match(/<PackageContentRows contents=\{selectedPackageContents\}/g) || []).length, 3);
+  // #491: the quantity step and the open summary on contact (the summary step is gone).
+  assert.equal((source.match(/<PackageContentRows contents=\{selectedPackageContents\}/g) || []).length, 2);
 });
 
 test('the booking page shows the jump, not ROLLER’s package span: a 14:00 Weekday Combo reads 14:00–15:00 and 60 min (D0241)', async () => {

@@ -52,12 +52,22 @@
 .collectedMark { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #71717a; }
 .ended { padding: 28px 28px 0; text-align: center; font-size: 15px; line-height: 1.5; font-weight: 700; }
 
-/* GH-456 (Love 2026-10-06): each next step is a banner the guest cannot miss. */
-.pickup h2.step { display: flex; align-items: center; gap: 14px; margin: 0 0 6px; padding: 14px 16px; border: none; border-radius: 18px; background: #18181b; color: white; text-transform: none; }
-.pickup h2.step[data-tone='cafe'] { background: #e31837; margin-top: 22px; }
-.pickup h2.step[data-tone='done'] { background: #f4f4f5; color: #18181b; margin-top: 22px; }
-.stepIcon { flex: none; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: white; }
-.stepIconImage { width: 38px; height: 38px; }
-.stepText { display: flex; flex-direction: column; min-width: 0; }
-.stepTitle { font-size: clamp(20px, 6.3cqw, 26px); line-height: 1.02; text-transform: uppercase; letter-spacing: -.02em; }
-.stepHint { font-family: var(--font-sans); font-variation-settings: normal; font-size: 16px; font-weight: 800; font-style: italic; line-height: 1.25; margin-top: 5px; }
+/* GH-456 (Love 2026-10-06) made each step a banner. #491 round 1 (Love 2026-10-08): the three places are
+   light section headings instead, so they never read as buttons: a small icon, the place in capitals,
+   the hint beside it, over a rule (red for the café). */
+.pickup h2.step { display: flex; align-items: center; gap: 10px; margin: 0; padding: 0 0 8px; border: none; border-bottom: 2px solid #18181b; border-radius: 0; background: none; color: #18181b; text-transform: none; }
+.pickup h2.step[data-tone='cafe'] { border-bottom-color: #e31837; }
+.pickup h2.step[data-tone='done'] { border-bottom-color: #e4e4e7; color: #71717a; }
+.stepIcon { flex: none; display: block; width: 30px; height: 30px; }
+.stepIconImage { width: 30px; height: 30px; }
+.stepText { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; min-width: 0; }
+.stepTitle { font-size: 19px; line-height: 1.1; text-transform: uppercase; letter-spacing: -.01em; }
+.pickup h2.step[data-tone='cafe'] .stepTitle { color: #e31837; }
+.stepHint { font-family: var(--font-sans); font-variation-settings: normal; font-size: 14px; font-weight: 800; font-style: italic; line-height: 1.2; color: #52525b; }
+
+/* #491 (workshop 2026-10-07): three places, each its own banner: sock station, wristband desk, café. */
+.place + .place h2.step, .place + .place h2.laterTitle { margin-top: 26px; }
+/* The receipt line sits right under the number, small and calm. */
+.receipt { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 14px 24px 0; font-size: 14px; line-height: 1.3; font-weight: 800; font-style: italic; color: #1c1c1e; }
+.receiptIcon { width: 30px; height: 30px; flex: none; }
+.receipt + .pickup { padding-top: 16px; }

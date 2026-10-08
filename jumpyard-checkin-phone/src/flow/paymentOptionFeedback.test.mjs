@@ -98,6 +98,8 @@ function harness({ provider = async () => quote(), draftAmount = 0 } = {}) {
     canStartPayment: () => true,
     resolvePaidDraftBooking: result => events.push(['resolve', result]),
     backNavigationLocked: false,
+    // #491 round 1: Back from contact returns to the safety film in the live order.
+    safetyBeforePayment: true,
   };
   const names = ['invalidateQuote', 'clampPaymentOptionCode', 'updateClipCardCode', 'updateGiftCardNumber',
     'updatePaymentOptionValue', 'removePaymentOption', 'selectPaymentOptionType', 'continueWithoutCode', 'editRejectedCode',
