@@ -10,6 +10,36 @@ interface ParkChoiceProps {
     onResumeSavedVisit?: () => void;
 }
 
+// #492 (Love 2026-10-08): the logo jumps once with a flip. It is marked ready only when it has loaded
+// (even before React listened) and the start page is fully visible, after any FlowTransition fade; the
+// stylesheet then waits a short beat. The jump fits the room above the logo: first lower, then a smaller
+// logo while it turns, so it never reaches the top edge. Only a screen too short for both stands still.
+const MAX_JUMP_PX = 72;
+const MIN_JUMP_PX = 24;
+const MIN_FLIP_SCALE = 0.75;
+const TOP_MARGIN_PX = 8;
+
+const readyToJump = (logo: HTMLImageElement | null) => {
+    if (!logo?.complete || !logo.naturalWidth) return;
+    requestAnimationFrame(() => {
+        const entrance = logo.closest('[data-flow-transition]')?.getAnimations() ?? [];
+        void Promise.allSettled(entrance.map(animation => animation.finished)).then(() => {
+            const scene = logo.parentElement;
+            if (!scene || scene.dataset.ready) return;
+            // Turning, the logo reaches half its diagonal (times its size) above its centre.
+            const { top, width, height } = logo.getBoundingClientRect();
+            const radius = Math.hypot(width, height) / 2;
+            const room = top + height / 2 - TOP_MARGIN_PX;
+            const jump = Math.max(MIN_JUMP_PX, Math.min(MAX_JUMP_PX, room - radius));
+            const scale = Math.min(1, (room - jump) / radius);
+            if (scale < MIN_FLIP_SCALE) return;
+            scene.style.setProperty('--park-choice-jump', `${Math.floor(jump)}px`);
+            scene.style.setProperty('--park-choice-flip-scale', `${Math.floor(scale * 100) / 100}`);
+            scene.dataset.ready = 'true';
+        });
+    });
+};
+
 export const ParkChoice = ({ onSelect, savedVisitCode = null, onResumeSavedVisit }: ParkChoiceProps) => {
     const { t } = useTranslation();
 
@@ -21,7 +51,15 @@ export const ParkChoice = ({ onSelect, savedVisitCode = null, onResumeSavedVisit
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
         >
-            <img src="/jumpyard_logo.png" alt="JumpYard" className="w-36 mb-8" />
+            <span className="park-choice-logo mb-8">
+                <img
+                    ref={readyToJump}
+                    src="/jumpyard_logo.png"
+                    alt="JumpYard"
+                    className="w-36"
+                    onLoad={event => readyToJump(event.currentTarget)}
+                />
+            </span>
 
             <h1 className="text-xl font-black italic uppercase text-foreground mb-6 text-center">
                 {t.choice.title}

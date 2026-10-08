@@ -411,3 +411,34 @@ body:has(.addon-shop-total) [data-testid="flow-nav"] > [aria-hidden="true"] { di
 @media (prefers-reduced-motion: reduce) {
   .safety-film, .safety-approval, .safety-cover { transition: none; }
 }
+
+/* #492 (Love 2026-10-08): the start page's logo jumps once with a flip, in the kiosk's trampoline style
+   (kiosk #176): a crouch, a stretched take-off, one turn in the air, a squashed landing and a settle. It
+   starts a short beat after ParkChoice marks it ready (loaded and fully visible) and sets the jump and
+   the turning size that fit the room above it. The span jumps on one exact parabola (split where the
+   turning size is reached and left); the logo turns around its centre while its squash and stretch pivot
+   from its feet. Only transform animates, so the layout and the buttons never move. */
+.park-choice-logo { display: block; }
+.park-choice-logo[data-ready="true"] { animation: park-choice-jump 1.5s 0.8s; }
+.park-choice-logo[data-ready="true"] > img { animation: park-choice-flip 1.5s 0.8s; }
+@keyframes park-choice-jump {
+  0%, 18% { transform: translateY(0) scale(1); animation-timing-function: cubic-bezier(0.33, 0.4, 0.67, 0.73); }
+  28% { transform: translateY(calc(var(--park-choice-jump, 72px) * -0.556)) scale(var(--park-choice-flip-scale, 1)); animation-timing-function: cubic-bezier(0.33, 0.67, 0.67, 1); }
+  48% { transform: translateY(calc(var(--park-choice-jump, 72px) * -1)) scale(var(--park-choice-flip-scale, 1)); animation-timing-function: cubic-bezier(0.33, 0, 0.67, 0.33); }
+  68% { transform: translateY(calc(var(--park-choice-jump, 72px) * -0.556)) scale(var(--park-choice-flip-scale, 1)); animation-timing-function: cubic-bezier(0.33, 0.27, 0.67, 0.6); }
+  78%, 100% { transform: translateY(0) scale(1); }
+}
+@keyframes park-choice-flip {
+  0% { transform: rotate(0deg) translateY(50%) scale(1, 1) translateY(-50%); animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  11% { transform: rotate(0deg) translateY(50%) scale(1.17, 0.8) translateY(-50%); animation-timing-function: cubic-bezier(0.25, 0.6, 0.45, 1); }
+  18% { transform: rotate(0deg) translateY(50%) scale(0.9, 1.14) translateY(-50%); animation-timing-function: cubic-bezier(0.25, 0.6, 0.45, 1); }
+  25% { transform: rotate(0deg) translateY(50%) scale(1, 1) translateY(-50%); animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+  70% { transform: rotate(360deg) translateY(50%) scale(1, 1) translateY(-50%); animation-timing-function: cubic-bezier(0.55, 0, 0.75, 0.45); }
+  78% { transform: rotate(360deg) translateY(50%) scale(0.93, 1.09) translateY(-50%); animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1); }
+  86% { transform: rotate(360deg) translateY(50%) scale(1.2, 0.78) translateY(-50%); animation-timing-function: cubic-bezier(0.25, 0.6, 0.45, 1); }
+  93% { transform: rotate(360deg) translateY(50%) scale(0.97, 1.04) translateY(-50%); animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  100% { transform: rotate(360deg) translateY(50%) scale(1, 1) translateY(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .park-choice-logo[data-ready="true"], .park-choice-logo[data-ready="true"] > img { animation: none; }
+}
