@@ -36,16 +36,22 @@ export function installLocalTransport(options: { delay: () => number; fail: () =
     return () => { window.fetch = original; };
 }
 
+// #491: the first three requested start times show the three spot states: plenty, few and full.
+export const PREVIEW_SLOT_SPOTS = [34, 6, 0];
+
 export function makeAvailability(times: string[], date = new Date().toLocaleDateString('sv-SE')): NewBookingAvailability {
-    const product = (time: string, key: string, type: NewBookingProduct['type'], price: number, duration = 60, jumpers = 1, id = 1001): NewBookingProduct => ({
-        available: true, capacityRemaining: 100, durationMinutes: duration, endTime: null, jumpersPerUnit: jumpers,
+    const product = (time: string, key: string, type: NewBookingProduct['type'], price: number, duration = 60, jumpers = 1, id = 1001, spots = 100): NewBookingProduct => ({
+        available: spots > 0, capacityRemaining: spots, durationMinutes: duration, endTime: null, jumpersPerUnit: jumpers,
         key, label: type === 'addon' ? key : `${duration} min`, onlineSalesOpen: true, parentProductId: '1000',
         productId: String(id), productName: key, requiresAvailability: true, startTime: time, type, unitPrice: price, unitPriceCents: price * 100,
     });
-    return { date, slots: times.map(time => ({ date, startTime: time, products: [
-        product(time, 'combo', 'combo', 450, 60, 2, 1010),
-        ...[60, 90, 120].map((duration, i) => product(time, `entry-${duration}`, 'entry', 200 + i * 30, duration, 1, 1020 + i)),
-        ...[60, 90, 120].map((duration, i) => product(time, `family-${duration}`, 'family', 600 + i * 90, duration, 4, 1030 + i)),
-        ...[['socks',49,1765445], ['water_bottle',20,1040], ['skyrider',40,1765443], ['lock',45,1765441], ['coffee',35,1765452]].map(([key, price, id]) => ({ ...product(time, String(key), 'addon', Number(price), 0, 1, Number(id)), requiresAvailability: key === 'skyrider' })),
-    ] })) };
+    return { date, slots: times.map((time, index) => {
+        const spots = PREVIEW_SLOT_SPOTS[index] ?? PREVIEW_SLOT_SPOTS[0];
+        return { date, startTime: time, products: [
+            product(time, 'combo', 'combo', 450, 60, 2, 1010, spots),
+            ...[60, 90, 120].map((duration, i) => product(time, `entry-${duration}`, 'entry', 200 + i * 30, duration, 1, 1020 + i, spots)),
+            ...[60, 90, 120].map((duration, i) => product(time, `family-${duration}`, 'family', 600 + i * 90, duration, 4, 1030 + i, spots)),
+            ...[['socks',49,1765445], ['water_bottle',20,1040], ['skyrider',40,1765443], ['lock',45,1765441], ['coffee',35,1765452]].map(([key, price, id]) => ({ ...product(time, String(key), 'addon', Number(price), 0, 1, Number(id)), requiresAvailability: key === 'skyrider' })),
+        ] };
+    }) };
 }

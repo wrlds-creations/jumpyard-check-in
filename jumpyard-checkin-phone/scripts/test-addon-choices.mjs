@@ -12,7 +12,7 @@ test('#457: Continue never asks for a socks or water tick on either path', () =>
   assert.doesNotMatch(code, /type="checkbox"|ownSocks|ownBottle|onOwn|validate|attempted|role="alert"|useImperativeHandle/);
   for (const file of ['BuyTickets', 'AddonsOffer']) {
     const path = source('components/' + file + '.tsx');
-    assert.match(path, /<AddonChoices\s+entries=\{/);
+    assert.match(path, /<AddonChoices\s+(?:rows=\{BUY_ADDON_ROWS\}\s+)?entries=\{/);
     assert.doesNotMatch(path, /addonChoicesRef|AddonChoicesHandle|\.validate\(\)|alreadyHas|AlreadyHas|SocksConfirmation|WaterBottleConfirmation/);
     assert.doesNotMatch(path, /disabled=\{[^}]*RequirementMet/);
   }
@@ -45,7 +45,14 @@ test('plus and minus are the only purchase buttons and adjust one item at a time
 test('Hylla: socks and water come first as rows, the optional add-ons follow on a three-tile shelf', () => {
   const code = source('components/AddonChoices.tsx');
   const css = source('app/globals.css');
-  assert.match(code, /copy\.firstGroup[\s\S]*\(\['socks', 'water_bottle'\] as const\)\.map[\s\S]*copy\.optionalGroup[\s\S]*className="addon-shop-shelf"/);
+  assert.match(code, /copy\.firstGroup[\s\S]*\(\['socks', 'water_bottle'\] as const\)\.filter\(\(id\) => rows\.includes\(id\)\)\.map[\s\S]*copy\.optionalGroup[\s\S]*className="addon-shop-shelf"/);
+  // #491: the existing-booking path keeps both rows; a new purchase picks socks on the quantity step.
+  assert.match(code, /const FIRST_ROWS: readonly FirstRow\[\] = \['socks', 'water_bottle'\];/);
+  assert.match(code, /rows = FIRST_ROWS/);
+  const buy = source('components/BuyTickets.tsx');
+  assert.match(buy, /const BUY_ADDON_ROWS = \['water_bottle'\] as const;/);
+  assert.match(buy, /entries=\{buyAddons\.filter\(\(addon\) => addon\.id !== 'socks'/);
+  assert.doesNotMatch(source('components/AddonsOffer.tsx'), /rows=\{/);
   assert.match(code, /const SHELF_ORDER: AddonId\[\] = \['skyrider', 'lock', 'coffee'\];/);
   assert.match(css, /\.addon-shop-row-main \{\s+display: grid;\s+grid-template-columns: 36px minmax\(0, 1fr\) auto;/);
   assert.match(css, /\.addon-shop-shelf \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
@@ -201,7 +208,7 @@ test('both entry paths retain native scrolling without the discarded more-add-on
   assert.equal(existsSync(new URL('../src/flow/addonScroll.ts', import.meta.url)), false);
 });
 
-test('#470: SkyRider needs 125 cm and grip socks are required for everyone in the park', () => {
+test('#470: SkyRider needs 125 cm and JumpSocks are required for everyone in the trampoline area', () => {
   const copy = source('context/LanguageContext.tsx');
   assert.doesNotMatch(copy, /100 cm/);
   for (const line of [
@@ -209,7 +216,31 @@ test('#470: SkyRider needs 125 cm and grip socks are required for everyone in th
     "requirementTitle: 'Minimum 125 cm'",
     "confirmCheckbox: 'Jag bekräftar att alla SkyRider-åkare är minst 125 cm.'",
     "confirmCheckbox: 'I confirm that all SkyRider riders are at least 125 cm.'",
-    "socksBenefit: 'Bra grepp. Krävs för alla som vistas i parken.'",
-    "socksBenefit: 'Great grip. Required for everyone in the park.'",
+    // #491 (Love 2026-10-08): the rule names everyone in the trampoline area, parents who do not jump too.
+    "socksBenefit: 'Halkfria strumpor är obligatoriska i JumpYard och måste bäras av alla i trampolinområdet, även icke-hoppande föräldrar.'",
+    `socksBenefit: "Non-slip socks are required at JumpYard and must be worn by everyone in the trampoline area, including parents who aren't jumping."`,
   ]) assert.ok(copy.includes(line), line);
+});
+
+test('#491: the bottle row carries "Rekommenderas", as on the kiosk, in the Sky Rider tip style; socks sit on the quantity step', () => {
+  const code = source('components/AddonChoices.tsx');
+  const copy = source('context/LanguageContext.tsx');
+  const css = source('app/globals.css');
+  assert.match(code, /\{!socks && entry\.available && <span className="addon-shop-note addon-shop-row-tag">\{copy\.waterRecommended\}<\/span>\}/);
+  assert.match(copy, /waterRecommended: 'Rekommenderas'/);
+  assert.match(copy, /waterRecommended: 'Recommended'/);
+  assert.match(css, /\.addon-shop-row-tag \{ left: 12px; transform: none; \}/);
+  // The bottle keeps today's icon until JumpYard's own bottle can be drawn from Gustav's photo.
+  assert.match(source('flow/addonCatalog.ts'), /water_bottle: \{\s+icon: 'water-bottle'/);
+  const buy = source('components/BuyTickets.tsx');
+  assert.match(buy, /<SocksQuantity[\s\S]*?onQuantity=\{\(next\) => setOneAddon\('socks', next\)\}/);
+  // Love 2026-10-08: the socks are called JumpSocks everywhere. The quantity step of a purchase reads the
+  // add-on step's own socks copy, so an existing booking's add-on step shows the same title and text.
+  assert.equal(copy.match(/socksTitle: 'JumpSocks',/g)?.length, 2, 'the title is JumpSocks in SV and EN');
+  assert.doesNotMatch(copy, /socksQuantityTitle|socksQuantityRule|Hoppsockor|Grip socks/);
+  assert.match(code, /<h3 id=\{titleId\}>\{socks \? copy\.socksTitle : copy\.bottleTitle\}<\/h3>/);
+  const socksQuantity = source('components/SocksQuantity.tsx');
+  assert.match(socksQuantity, /<h3 id=\{titleId\} className="buy-socks-title">\{copy\.socksTitle\}<\/h3>/);
+  assert.match(socksQuantity, /\{sellable \? copy\.socksBenefit : copy\.unavailableRequired\}/);
+  assert.match(copy, /coffeeLabel: 'Bryggkaffe'/);
 });

@@ -1,13 +1,14 @@
 'use client';
 import { FlowScreen } from '@/components/FlowTransition';
 import { useTranslation } from '@/context/LanguageContext';
-import { JumpyardIcon, type JumpyardIconName } from '@/components/JumpyardIcon';
+import { JumpyardIcon } from '@/components/JumpyardIcon';
 import { QrCode } from '@/components/QrCode';
-import type { Addon, Booking, Channel, CheckInSession, GuestCafeItem } from '@/flow/types';
+import type { Addon, Booking, Channel, CheckInSession } from '@/flow/types';
 import { getBookingContentRows, packageContentCopy } from '@/flow/packageContents';
 import { isPhoneCompletionReady, isVisitDayOver } from '@/flow/phoneCompletion';
+import { buildPickupGroups } from '@/flow/pickupPlaces';
 import { BandColours } from './BandColours';
-import { PhoneCompletion, type CompletionGroup, type CompletionItem } from './PhoneCompletion';
+import { PhoneCompletion } from './PhoneCompletion';
 
 interface ConfirmationScreenProps {
     booking: Booking;
@@ -16,26 +17,10 @@ interface ConfirmationScreenProps {
     selectedAddons: Addon[];
     channel?: Channel;
     alreadyCheckedIn?: boolean;
+    /** #491: the guest paid in this flow, so the completion says the receipt was emailed. */
+    receiptSent?: boolean;
     onStartOver?: () => void;
 }
-
-// Items that staff hand out at check-in.
-const HANDOUT_IDS = new Set(['socks', 'water_bottle', 'connected', 'lock', 'skyrider']);
-// Non-physical / experience addons
-const EXPERIENCE_IDS = new Set(['coffee', 'extra_person']);
-
-const HANDOUT_ICONS: Partial<Record<Addon['id'], JumpyardIconName>> = {
-    connected: 'connected-band',
-    socks: 'grip-socks',
-    water_bottle: 'water-bottle',
-    lock: 'padlock',
-    skyrider: 'zipline',
-};
-
-const EXPERIENCE_ICONS: Partial<Record<Addon['id'], JumpyardIconName>> = {
-    coffee: 'drink-cup',
-    extra_person: 'add-guest',
-};
 
 export const ConfirmationScreen = ({
     booking,
@@ -44,6 +29,7 @@ export const ConfirmationScreen = ({
     selectedAddons,
     channel = 'park-qr',
     alreadyCheckedIn = false,
+    receiptSent = false,
     onStartOver,
 }: ConfirmationScreenProps) => {
     const { t, lang, setLang } = useTranslation();
@@ -58,52 +44,24 @@ export const ConfirmationScreen = ({
     const entryTicketLabel = getEntryTicketLabel(booking, t.confirm.entryTicketFallback);
 
     const contentRows = getBookingContentRows(booking, entryTicketLabel, jumperCount, lang);
-    const handoutItems: CompletionItem[] = contentRows
-        .filter((item) => item.collection === 'checkin')
-        .map((item) => ({ icon: 'visitor-wristband', label: item.label, qty: item.quantity, detail: item.detail, testId: 'ready-entry-ticket-type',
-            bandColours: item.bandColours }));
-    for (const addon of selectedAddons) {
-        if (HANDOUT_IDS.has(addon.id)) {
-            const label = addon.id === 'connected' ? t.confirm.connectedBands : addon.label;
-            handoutItems.push({ label, qty: addon.qty, icon: HANDOUT_ICONS[addon.id] ?? 'gift-card' });
-        }
-    }
-
-    const experienceGroups = [
-        {
-            title: packageContentCopy[lang].later,
-            key: 'later',
-            items: [
-                ...contentRows.filter((item) => item.collection === 'later').map((item) => ({
-                    id: item.key, label: item.label, qty: item.quantity, icon: 'combo-pizza' as JumpyardIconName, detail: item.detail,
-                })),
-                ...selectedAddons.filter((item) => item.id === 'coffee').map((item) => ({ ...item, icon: 'drink-cup' as JumpyardIconName, detail: undefined })),
-            ],
-        },
-        {
-            title: t.confirm.otherAddons,
-            key: 'other',
-            items: selectedAddons.filter((item) => EXPERIENCE_IDS.has(item.id) && item.id !== 'coffee')
-                .map((item) => ({ ...item, icon: EXPERIENCE_ICONS[item.id] ?? 'gift-card', detail: undefined })),
-        },
-    ].filter((group) => group.items.length > 0);
+    const labels = { connectedBands: t.confirm.connectedBands, later: packageContentCopy[lang].later, other: t.confirm.otherAddons };
+    // #491: socks at the sock station, bands (with SkyRider and padlocks) at the wristband desk,
+    // coffee, the water bottle and pizza at the café.
+    const phoneGroups = buildPickupGroups({ contentRows, selectedAddons, cloudCafe: null, labels });
+    const handoutItems = phoneGroups.filter((group) => group.key === 'socks' || group.key === 'bands').flatMap((group) => group.items);
+    const experienceGroups = phoneGroups.filter((group) => group.key === 'later' || group.key === 'other');
 
     if (isPhoneCompletionReady(checkinSession, channel, alreadyCheckedIn)) {
         // GH-453 (D0229): Cloud's café lines (with what is already collected) replace the phone's own grouping.
         const cloudCafe = Array.isArray(checkinSession?.cafe) ? checkinSession.cafe : null;
-        const completionGroups: CompletionGroup[] = cloudCafe
-            ? [
-                ...(cloudCafe.length ? [{ key: 'later', title: packageContentCopy[lang].later, items: cloudCafe.map(toCafeRow) }] : []),
-                ...experienceGroups.filter((group) => group.key !== 'later'),
-            ]
-            : experienceGroups;
+        const completionGroups = buildPickupGroups({ contentRows, selectedAddons, cloudCafe, labels });
         return <PhoneCompletion key={checkinSession!.checkinSessionId} lang={lang} onLanguageChange={setLang}
             handoffCode={handoffCode} handoffPayload={handoffQrValue} handoffDay={checkinSession?.handoffDay}
             sessionId={checkinSession?.checkinSessionId} handoffStatus={checkinSession?.handoffStatus} channel={channel}
             presence={isVisitDayOver(checkinSession) ? 'ended' : 'arrived'}
             checkedInAt={checkinSession?.checkedInAt ?? checkinSession?.completedAt ?? null}
             visitDayLabel={formatVisitDay(checkinSession?.handoffDay, lang)}
-            items={handoutItems} groups={completionGroups} onStartOver={onStartOver} />;
+            groups={completionGroups} receiptSent={receiptSent} onStartOver={onStartOver} />;
     }
 
     return (
@@ -201,8 +159,8 @@ export const ConfirmationScreen = ({
                             <h2 className="text-xs font-bold italic uppercase text-foreground">{group.title}</h2>
                         </div>
                         <div className="overflow-hidden rounded-2xl border border-border bg-white">
-                            {group.items.map(item => (
-                                <div key={item.id} className="flex min-w-0 justify-between items-center gap-2 border-b border-border px-3 py-2.5 last:border-b-0">
+                            {group.items.map((item, index) => (
+                                <div key={`${item.label}-${index}`} className="flex min-w-0 justify-between items-center gap-2 border-b border-border px-3 py-2.5 last:border-b-0">
                                     <JumpyardIcon name={item.icon} className="w-8 h-8 flex-shrink-0" />
                                     <span className="min-w-0 flex-1 break-words text-foreground text-sm font-bold italic">
                                         {item.label}
@@ -230,13 +188,6 @@ export const ConfirmationScreen = ({
         </FlowScreen>
     );
 };
-
-const CAFE_ICONS: Record<string, JumpyardIconName> = { coffee: 'drink-cup', pizza: 'combo-pizza' };
-
-function toCafeRow(item: GuestCafeItem): CompletionItem {
-    return { icon: CAFE_ICONS[item.kind] ?? 'drink-cup', label: item.name, qty: item.remaining, collected: item.collected,
-        detail: item.detail ?? undefined };
-}
 
 function formatVisitDay(day: string | null | undefined, lang: 'sv' | 'en') {
     if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;

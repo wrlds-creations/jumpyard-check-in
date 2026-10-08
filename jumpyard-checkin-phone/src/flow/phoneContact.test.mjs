@@ -223,7 +223,10 @@ test('GH-473: a Cloud without #473 (customer_required) also gets the four-field 
 
 test('GH-473: last name and phone render only after Cloud asks; both languages explain why', () => {
   const buy = fs.readFileSync(new URL('../components/BuyTickets.tsx', import.meta.url), 'utf8');
-  const contactStep = buy.slice(buy.indexOf("{step === 'CONTACT' && selectedProduct && ("), buy.indexOf("{step === 'REVIEW' && selectedProduct && ("));
+  // #491: the summary step is gone; safety follows the contact markup.
+  const contactStart = buy.indexOf("{step === 'CONTACT' && selectedProduct && (");
+  const contactStep = buy.slice(contactStart, buy.indexOf("{step === 'SAFETY' && (", contactStart));
+  assert.ok(contactStart > 0 && contactStep.length > 0 && contactStep.length < 20_000, 'the contact step markup is found on its own');
   assert.match(contactStep, /\{contactDetailsRequired && \(\s*<label>[\s\S]*?ref=\{lastNameInputRef\}[\s\S]*?autoComplete="family-name"/);
   assert.match(contactStep, /\{contactDetailsRequired && \(\s*<label className="block">[\s\S]*?type="tel"[\s\S]*?autoComplete="tel"/);
   assert.match(contactStep, /autoComplete="given-name"/);

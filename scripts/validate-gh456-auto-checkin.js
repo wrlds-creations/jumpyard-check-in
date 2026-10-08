@@ -66,6 +66,16 @@ function bookingRow({ bookingDate = TODAY, startTime = '00:00:00', endTime = '23
   };
 }
 
+// The manifest rows readManifest selects for this booking: one admission line by default (GH-491).
+function manifestRow(overrides = {}) {
+  return {
+    roller_unique_id: BOOKING_ID, booking_item_id: 'item-1', product_id: '900001', parent_product_id: null,
+    product_name: '60 min entré', parent_product_name: null, quantity: 2, booking_date: TODAY,
+    start_time: '14:00:00', end_time: '15:00:00', selected_units: 2,
+    summary: JSON.stringify({ productType: 'standardPass' }), ...overrides,
+  };
+}
+
 function staffSessionRow(script = {}) {
   return {
     checkin_session_id: SESSION_ID, roller_unique_id: BOOKING_ID, booking_reference: BOOKING_REFERENCE,
@@ -294,7 +304,7 @@ function createSessionDatabase(script = {}) {
         created_at: `${TODAY}T09:59:00.000Z` }]) : rdsResult([]);
     }
     if (/AND status IN \('guest_in_progress', 'ready_for_staff', 'staff_in_progress'\)\s+AND expires_at > now\(\)/.test(sql)) return rdsResult([]);
-    if (/WITH source_bookings AS MATERIALIZED/.test(sql)) return rdsResult([]);
+    if (/WITH source_bookings AS MATERIALIZED/.test(sql)) return rdsResult(script.manifestRows ?? [manifestRow()]);
     if (/FROM jumpyard\.staff_handout_claims c/.test(sql)) return rdsResult([{ claims: '[]', receipts: '[]' }]);
     if (/INSERT INTO jumpyard\.event_log/.test(sql)) return rdsResult([], 1);
     throw new Error(`Unexpected SQL during GH-456 session validation: ${sql.slice(0, 90)}`);
@@ -355,8 +365,27 @@ async function validateReopenAfterAdmissionKeepsTheNumber() {
   assert.equal(reopened.body.status, 'session_completed');
   assert.equal(reopened.body.session.handoffCode, '0427');
   assert.equal(reopened.body.session.status, 'redeemed');
-  assert.deepEqual(reopened.body.visit.cafe, []);
+  assert.deepEqual(reopened.body.visit.cafe, [], 'bands only: nothing to collect at the café');
   assert.ok(reopened.body.visit.checkedInAt);
+
+  // GH-491 (workshop 2026-10-07): the water bottle is collected in the café, like coffee and pizza.
+  const withWater = await startSession({ booking: bookingRow({ redeemed: 'redeemed' }), completed: true, manifestRows: [
+    manifestRow(),
+    manifestRow({ booking_item_id: 'item-2', product_id: '1765459', product_name: 'JumpYard Vatten', quantity: 1,
+      selected_units: 0, summary: JSON.stringify({ productType: 'beverage' }) }),
+    manifestRow({ booking_item_id: 'item-3', product_id: '1765452', product_name: 'Bryggkaffe', quantity: 2,
+      selected_units: 0, summary: JSON.stringify({ productType: 'foodbeverage' }) }),
+  ] }, { expectedDate: TODAY });
+  assert.deepEqual(withWater.body.visit.cafe.map(({ kind, name, remaining }) => ({ kind, name, remaining })), [
+    { kind: 'water', name: 'JumpYard Vatten', remaining: 1 }, { kind: 'coffee', name: 'Bryggkaffe', remaining: 2 },
+  ]);
+
+  // GH-491: with no ROLLER items yet (a purchase ROLLER has not confirmed) the visit leaves the café
+  // list out, so the phone groups the draft's own items instead of showing an empty café.
+  const unconfirmed = await startSession({ booking: bookingRow({ redeemed: 'redeemed' }), completed: true, manifestRows: [] },
+    { expectedDate: TODAY });
+  assert.equal('cafe' in unconfirmed.body.visit, false);
+  assert.ok(unconfirmed.body.visit.checkedInAt);
 
   const unknown = await startSession({ booking: bookingRow({ redeemed: 'redeemed' }), completed: false }, { expectedDate: TODAY });
   assert.equal(unknown.statusCode, 409, 'redeemed without our session (for example at kassan) stays blocked');

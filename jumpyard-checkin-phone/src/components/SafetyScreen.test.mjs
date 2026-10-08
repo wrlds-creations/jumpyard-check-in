@@ -68,10 +68,12 @@ test('only the playback controller\'s genuine end reveals the approval; the layo
   const video = source('components/SafetyVideo.tsx');
   assert.match(video, /if \(state\.phase === 'done'\) onWatchedRef\.current\?\.\(/);
   assert.match(video, /const done = phase === 'done';/);
-  // Variant A (Love 2026-09-30): the approval is in the layout from the start, hidden and inert until done,
-  // and the finished film docks with a transform.
-  assert.equal((video.match(/data-visible=\{String\(done\)\}\s+aria-hidden=\{!done\}\s+inert=\{!done\}/g) || []).length, 1);
-  assert.match(video, /const docked = done;/);
+  // Variant A (Love 2026-09-30): the approval is in the layout from the start, hidden and inert until it may
+  // be given, and the finished film docks with a transform. Without an earlier approval that is the genuine end.
+  assert.match(video, /const approvable = done \|\| \(watchedBefore && \(phase === 'idle' \|\| phase === 'paused' \|\| phase === 'error'\)\);/);
+  assert.match(video, /const watchedBefore = Boolean\(approvedAt\);/);
+  assert.equal((video.match(/data-visible=\{String\(approvable\)\}\s+aria-hidden=\{!approvable\}\s+inert=\{!approvable\}/g) || []).length, 1);
+  assert.match(video, /const docked = approvable;/);
   assert.match(video, /docked \? `translateY\(0px\) scale\(\$\{dockScale\}\)`/);
   assert.doesNotMatch(video, /onComplete|sheet/);
   const css = source('app/globals.css');
@@ -82,7 +84,7 @@ test('only the playback controller\'s genuine end reveals the approval; the layo
 test('a blurred still covers the film\'s own captions before and after playback (variant B)', () => {
   const video = source('components/SafetyVideo.tsx');
   // Love 2026-10-01: the burned-in captions start on the first frame and collided with the title.
-  assert.match(video, /const coverVisible = phase === 'idle' \|\| phase === 'loading' \|\| done;/);
+  assert.match(video, /const coverVisible = phase === 'idle' \|\| phase === 'loading' \|\| approvable;/);
   assert.match(video, /src=\{SAFETY_COVER\}[\s\S]*?data-visible=\{String\(coverVisible\)\}/);
   // The title is never clipped: its size follows the film width and the Swedish compound can break.
   assert.match(video, /style=\{\{ fontSize: coverTitleSize \}\}/);
@@ -107,7 +109,9 @@ test('safety comes before payment in both live phone paths (D0231)', () => {
   const buy = source('components/BuyTickets.tsx');
   assert.match(buy, /setStep\(safetyBeforePayment && !safetyApprovedAt \? 'SAFETY' : 'CONTACT'\)/);
   assert.match(buy, /if \(safetyBeforePayment && !safetyApprovedAt\) \{\s*setStep\('SAFETY'\);\s*return;\s*\}\s*void createDraft\(\);/);
-  assert.match(buy, /step === 'SAFETY' \|\| step === 'CONTACT'\) setStep\('REVIEW'\)/);
+  // #491: no summary step. Round 1 (Love 2026-10-08): contact goes back to the safety film, safety to the add-ons.
+  assert.match(buy, /if \(step === 'CONTACT'\) setStep\(safetyBeforePayment \? 'SAFETY' : 'ADDONS'\);\s*else if \(step === 'SAFETY' \|\| step === 'REVIEW'\) setStep\('ADDONS'\);/);
+  assert.doesNotMatch(buy, /step === 'REVIEW' &&|setStep\('REVIEW'\)/);
   // Existing booking (Love 2026-09-30): safety after the add-ons and before the add-on payment.
   const addons = source('components/AddonsOffer.tsx');
   assert.match(addons, /if \(safetyBeforePayment && !approvedAt\) \{\s*setStep\('SAFETY'\);\s*return;\s*\}/);
@@ -175,4 +179,20 @@ test('two late lookups nudge Cloud to attach the paid ROLLER booking; nothing wa
   assert.deepEqual(lookups, ['draft-1', 'draft-1'], 'a failed lookup is ignored');
   scheduleRollerConfirmationNudges(async () => undefined, '', (callback, delayMs) => scheduled.push([delayMs, callback]));
   assert.equal(scheduled.length, 2, 'no identifier, no lookups');
+});
+
+test('#491 round 1: back at the film after an approval, the approval shows at once and keeps its time', () => {
+  const video = source('components/SafetyVideo.tsx');
+  // The poster with the play button is only for a first viewing; the docked film still replays.
+  assert.match(video, /\{phase === 'idle' && !watchedBefore && \(/);
+  assert.match(video, /\{docked && \(\s*<button[\s\S]*?aria-label=\{t\.safetyVideo\.replay\}/);
+  // An earlier approval keeps its own time; a first approval is stamped now.
+  assert.match(video, /const approve = \(\) => onApprove\(approvedAt \?\? new Date\(\)\.toISOString\(\)\);/);
+  assert.match(video, /data-safety-approved-before=\{watchedBefore \? 'true' : undefined\}/);
+  // The purchase passes its approval to the film step, so Back from contact never asks for a rewatch.
+  const buy = source('components/BuyTickets.tsx');
+  assert.match(buy, /<SafetyVideo\s+buyEntryFlow\s+approvedAt=\{safetyApprovedAt\}/);
+  // The existing-booking paths keep today's rule (no earlier approval is passed there).
+  assert.doesNotMatch(source('app/page.tsx'), /approvedAt=/);
+  assert.doesNotMatch(source('components/AddonsOffer.tsx'), /approvedAt=/);
 });

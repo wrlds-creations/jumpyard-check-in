@@ -47,12 +47,12 @@ const PREVIEW_BOOKING: Booking = {
     ] }],
 };
 
-function stationItems(lang: Language): CompletionItem[] {
+// #491: socks at the sock station, bands at the wristband desk.
+function stationGroups(lang: Language): CompletionGroup[] {
     const l = LABELS[lang];
-    return [
-        { icon: 'visitor-wristband', label: l.band, qty: 2, detail: 'Weekday Combo', bandColours: [{ ...BAND['15:00'], quantity: 2 }] },
-        { icon: 'grip-socks', label: l.socks, qty: 2 },
-    ];
+    const socks: CompletionItem = { icon: 'grip-socks', label: l.socks, qty: 2 };
+    const band: CompletionItem = { icon: 'visitor-wristband', label: l.band, qty: 2, detail: 'Weekday Combo', bandColours: [{ ...BAND['15:00'], quantity: 2 }] };
+    return [{ key: 'socks', title: '', items: [socks] }, { key: 'bands', title: '', items: [band] }];
 }
 
 function cafeGroup(lang: Language, cafe: Cafe): CompletionGroup {
@@ -87,7 +87,7 @@ function Preview() {
             handoffPayload="JY_HANDOFF:0427:local-design-preview-not-a-real-session" sessionId="local-design-preview"
             handoffStatus="ready_for_staff" channel="sms" presence={frame.presence} checkedInAt={frame.checkedInAt}
             handoffDay="2026-10-17" visitDayLabel={LABELS[lang].day}
-            items={stationItems(lang)} groups={[cafeGroup(lang, frame.cafe ?? 'none')]}
+            groups={[...stationGroups(lang), cafeGroup(lang, frame.cafe ?? 'none')]}
             onStartOver={() => undefined} />;
     };
 

@@ -36,7 +36,7 @@ function memoryStorage() {
         removeItem: key => values.delete(key), values };
 }
 
-const { saveVisit, readSavedVisit, clearSavedVisit } = load('flow/savedVisit.ts');
+const { saveVisit, readSavedVisit, clearSavedVisit, parkSavedVisit } = load('flow/savedVisit.ts');
 const { stockholmToday } = load('flow/phoneCompletion.ts');
 const today = stockholmToday();
 const booking = { id: 'ABC123', jumpers: 2, time: '14:00', products: 1, paid: true, guestAccessToken: 'secret-booking-token' };
@@ -101,4 +101,43 @@ test('outside the check-in window the booking page says when to come back instea
     assert.match(late, /Your jump time has ended<\/strong>[\s\S]*Go to the front desk and we will help you\./);
     assert.doesNotMatch(late, /booking-start-checkin/);
     assert.match(summary(null), /booking-start-checkin/, 'inside the window the start button is there');
+});
+
+// #491 round 1 (Love 2026-10-08): "Gör en ny bokning" by mistake must not lose today's number.
+test('a parked visit stays for the way back; a new completion saves it unparked again', () => {
+    const storage = memoryStorage();
+    globalThis.window = { localStorage: storage };
+    try {
+        saveVisit(booking, session);
+        parkSavedVisit();
+        const parked = readSavedVisit();
+        assert.equal(parked.session.handoffCode, '0427', 'the number is kept');
+        assert.ok(parked.parkedAt, 'marked as parked');
+        saveVisit(parked.booking, parked.session);
+        assert.equal(readSavedVisit().parkedAt, undefined, 'showing the completion again unparks it');
+        clearSavedVisit();
+        assert.doesNotThrow(() => parkSavedVisit(), 'nothing to park is fine');
+        assert.equal(readSavedVisit(), null);
+    } finally { delete globalThis.window; }
+});
+
+const { ParkChoice } = load('components/ParkChoice.tsx');
+function renderChoice(props, lang = 'sv') {
+    globalThis.window = { localStorage: { getItem: () => lang } };
+    try {
+        return renderToStaticMarkup(React.createElement(LanguageProvider, null,
+            React.createElement(ParkChoice, { onSelect() {}, ...props })));
+    } finally { delete globalThis.window; }
+}
+
+test('the first screen offers the way back to today’s number only while a visit is saved', () => {
+    const none = renderChoice({});
+    assert.doesNotMatch(none, /park-choice-saved-visit|Tillbaka till min incheckning/);
+    const saved = renderChoice({ savedVisitCode: '0042', onResumeSavedVisit() {} });
+    assert.match(saved, /data-testid="park-choice-saved-visit"/);
+    assert.match(saved, /Tillbaka till min incheckning/);
+    assert.match(saved, />0042<\/span>/);
+    assert.ok(saved.indexOf('park-choice-saved-visit') > saved.indexOf('Köp entré'), 'under the two choices');
+    assert.match(renderChoice({ savedVisitCode: '0042', onResumeSavedVisit() {} }, 'en'), /Back to my check-in/);
+    assert.doesNotMatch(renderChoice({ savedVisitCode: '0042' }), /park-choice-saved-visit/, 'no action, no link');
 });

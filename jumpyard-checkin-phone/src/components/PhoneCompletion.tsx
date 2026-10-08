@@ -5,22 +5,13 @@ import { BandColours } from './BandColours';
 import { JumpyardIcon, type JumpyardIconName } from './JumpyardIcon';
 import { QrCode } from './QrCode';
 import type { Language } from '@/context/LanguageContext';
-import type { BandColourCount, Channel } from '@/flow/types';
+import type { Channel } from '@/flow/types';
+import type { PickupGroup, PickupItem } from '@/flow/pickupPlaces';
 import styles from './PhoneCompletion.module.css';
 
-export interface CompletionItem {
-    icon: JumpyardIconName;
-    label: string;
-    /** For café rows: what is still left to collect. */
-    qty: number;
-    /** GH-453: café quantity already handed out today (from Cloud). */
-    collected?: number;
-    detail?: string;
-    testId?: string;
-    /** GH-459: which band colour(s) to take for this row. */
-    bandColours?: BandColourCount[];
-}
-export interface CompletionGroup { key: string; title: string; items: CompletionItem[] }
+/** #491: one row to collect; the group says where (sock station, wristband desk, café). */
+export type CompletionItem = PickupItem;
+export type CompletionGroup = PickupGroup;
 /** GH-453/GH-456: a completed check-in is checked in all visit day; after the day the visit is over. */
 export type CompletionPresence = 'arrived' | 'ended';
 export interface PhoneCompletionProps {
@@ -37,8 +28,10 @@ export interface PhoneCompletionProps {
     checkedInAt?: string | null;
     /** Visit day as words, shown when the visit is over. */
     visitDayLabel?: string | null;
-    items: CompletionItem[];
+    /** #491: the three places to collect things, in the order the guest meets them. */
     groups: CompletionGroup[];
+    /** #491: the guest just paid, so ROLLER emails the receipt. */
+    receiptSent?: boolean;
     onStartOver?: () => void;
 }
 
@@ -47,25 +40,33 @@ export interface PhoneCompletionProps {
 export const SHOW_PHONE_QR = false;
 
 // Love, 2026-10-06: short words that say exactly what to do, in steps that jump out; no dashes.
-// Things are collected "på plats", so a guest who checked in at home knows it happens on arrival;
-// nobody calls it "stationen". The number's day sits small at the very bottom.
+// #491 (workshop 2026-10-07): three places replace "Hämta på plats": the sock station (take them
+// yourself), the wristband desk (staff hand out bands, SkyRider bands and padlocks) and the café
+// (show the number; coffee, water bottle, pizza). The café line no longer says "after jumping",
+// because the water bottle is collected there too. The number's day sits small at the very bottom.
 const COPY = {
     sv: {
         arrived: 'Du är incheckad', ended: 'Besöket är avslutat', since: 'Sedan', number: 'Ditt nummer',
         endedText: (code: string, day: string) => `Nummer ${code} gällde bara ${day}.`,
-        station: 'Hämta på plats', stationHint: 'Innan ni hoppar:',
-        cafeLater: 'Hämta i caféet', cafeLaterHint: 'Efter hoppet. Visa numret.',
+        pickup: 'Här hämtar ni',
+        socks: 'Strumpstation', socksHint: 'Ta själv.',
+        bands: 'Bandutlämning', bandsHint: 'Visa numret.',
+        cafeLater: 'Caféet', cafeLaterHint: 'Visa numret.',
         cafeLeft: 'Kvar i caféet', cafeLeftHint: 'Visa numret.',
         cafeDone: 'Allt i caféet är hämtat', collected: 'Hämtat',
+        receipt: 'Kvitto skickat till din e-post',
         another: 'Gör en ny bokning', qr: 'Förstora QR-kod', close: 'Stäng', enlarged: 'Visa för personalen', issued: 'Nummer från',
     },
     en: {
         arrived: 'You are checked in', ended: 'Your visit is over', since: 'Since', number: 'Your number',
         endedText: (code: string, day: string) => `Number ${code} was only valid on ${day}.`,
-        station: 'Collect on site', stationHint: 'Before you jump:',
-        cafeLater: 'Collect at the café', cafeLaterHint: 'After jumping. Show your number.',
+        pickup: 'Where to collect',
+        socks: 'Sock station', socksHint: 'Help yourself.',
+        bands: 'Wristband desk', bandsHint: 'Show your number.',
+        cafeLater: 'The café', cafeLaterHint: 'Show your number.',
         cafeLeft: 'Left at the café', cafeLeftHint: 'Show your number.',
         cafeDone: 'Everything at the café is collected', collected: 'Collected',
+        receipt: 'Receipt sent to your email',
         another: 'Make a new booking', qr: 'Enlarge QR code', close: 'Close', enlarged: 'Show to our staff', issued: 'Number from',
     },
 };
@@ -90,7 +91,8 @@ export function formatNumberDay(day: string | null | undefined, lang: Language) 
 
 /** Render only after the existing session is ready. This view never redeems or resets automatically. */
 export function PhoneCompletion({ lang, onLanguageChange, handoffCode, handoffPayload, handoffDay, sessionId,
-    handoffStatus, channel = 'park-qr', presence = 'arrived', checkedInAt, visitDayLabel, items, groups, onStartOver }: PhoneCompletionProps) {
+    handoffStatus, channel = 'park-qr', presence = 'arrived', checkedInAt, visitDayLabel, groups, receiptSent = false,
+    onStartOver }: PhoneCompletionProps) {
     const [largeQr, setLargeQr] = useState(false);
     const dialog = useRef<HTMLDialogElement>(null);
     const dialogTitle = useId();
@@ -117,6 +119,13 @@ export function PhoneCompletion({ lang, onLanguageChange, handoffCode, handoffPa
             ? { tone: 'cafe', title: t.cafeLeft, hint: t.cafeLeftHint }
             : { tone: 'cafe', title: t.cafeLater, hint: t.cafeLaterHint };
     };
+    // #491: one banner per place; anything else keeps a plain heading.
+    const banner = (group: CompletionGroup): { icon: JumpyardIconName; tone: string; title: string; hint: string | null; testId: string } | null => {
+        if (group.key === 'socks') return { icon: 'grip-socks', tone: 'socks', title: t.socks, hint: t.socksHint, testId: 'step-socks' };
+        if (group.key === 'bands') return { icon: 'visitor-wristband', tone: 'bands', title: t.bands, hint: t.bandsHint, testId: 'step-bands' };
+        if (group.key === 'later') return { icon: 'drink-cup', ...cafeStep(group), testId: 'step-cafe' };
+        return null;
+    };
     // Love, 2026-10-06: each next step is a big banner the guest cannot miss.
     const step = (icon: JumpyardIconName, title: string, hint: string | null, tone: string, testId: string) =>
         <h2 className={styles.step} data-tone={tone} data-testid={testId}>
@@ -139,6 +148,9 @@ export function PhoneCompletion({ lang, onLanguageChange, handoffCode, handoffPa
             {presence === 'arrived' && <><p className={styles.numberLabel}>{t.number}</p>
                 <strong className={styles.number} data-long={handoffCode.length > 4} data-testid="ready-entry-number">{handoffCode}</strong></>}
         </header>
+        {presence === 'arrived' && receiptSent && <p className={styles.receipt} data-testid="receipt-sent">
+            <JumpyardIcon name="email-confirmed" className={styles.receiptIcon} /><span>{t.receipt}</span>
+        </p>}
         {presence === 'ended' ? <section className={styles.ended} data-testid="visit-ended">
             <p>{t.endedText(handoffCode, visitDayLabel ?? handoffDay ?? '')}</p>
         </section> : <>
@@ -147,13 +159,11 @@ export function PhoneCompletion({ lang, onLanguageChange, handoffCode, handoffPa
                     <QrCode value={handoffPayload} className={styles.qr} testId="ready-entry-handoff-qr" />
                 </button>
             </section>}
-            <section className={styles.pickup} aria-label={t.station}>
-                {step('addons-bag', t.station, t.stationHint, 'station', 'step-station')}
-                <ul>{renderItems(items)}</ul>
+            <section className={styles.pickup} aria-label={t.pickup}>
                 {groups.map(group => {
-                    const cafe = group.key === 'later' ? cafeStep(group) : null;
-                    return <section key={group.key} data-testid={`confirmation-${group.key}`}>
-                        {cafe ? step('drink-cup', cafe.title, cafe.hint, cafe.tone, 'step-cafe')
+                    const place = banner(group);
+                    return <section key={group.key} className={styles.place} data-testid={`confirmation-${group.key}`} data-place={group.key}>
+                        {place ? step(place.icon, place.title, place.hint, place.tone, place.testId)
                             : <h2 className={styles.laterTitle}>{group.title}</h2>}
                         <ul>{renderItems(group.items, group.key === 'later')}</ul>
                     </section>;
