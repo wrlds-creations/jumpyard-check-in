@@ -61,7 +61,9 @@ const sv = {
     cta: 'Starta',
   },
   choice: {
-    title: 'Vad vill du göra?',
+    // #495 (Love 2026-10-08): a welcoming heading in the same italic; the last word is red.
+    title: 'Redo att',
+    titleAccent: 'hoppa?',
     haveBooking: 'Jag har en bokning',
     haveBookingDesc: 'Hitta din bokning och checka in',
     buyTickets: 'Köp entré',
@@ -553,7 +555,8 @@ const en: typeof sv = {
     cta: 'Start',
   },
   choice: {
-    title: 'What would you like to do?',
+    title: 'Ready to',
+    titleAccent: 'jump?',
     haveBooking: 'I have a booking',
     haveBookingDesc: 'Find your booking and check in',
     buyTickets: 'Buy entry',

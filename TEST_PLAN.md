@@ -1,5 +1,9 @@
 # Test Plan
 
+## Start-page heading (#495)
+
+Run `npm --prefix jumpyard-checkin-phone run test:logo-hop`, which also pins the "Redo att" / "hoppa?" copy in SV and EN and the red accent. Then check by hand on a phone that the start page reads "REDO ATT HOPPA?" on one line, with HOPPA? in red, and "READY TO JUMP?" in English.
+
 ## Start-page logo flip (#492)
 
 Run `npm --prefix jumpyard-checkin-phone run test:logo-hop`. It covers the logo becoming ready only after the image has loaded and the fade has finished, cached and broken images, the room rule, one 360° turn after a 0.8 s beat, transform-only animation, and reduced motion. Then check by hand on a phone, in Safari and in Chrome. On the start page the logo should wait a beat, flip once and land. Switching SV/EN should not replay it. Both buttons should work during the flip. With reduced motion on, the logo should stand still.
