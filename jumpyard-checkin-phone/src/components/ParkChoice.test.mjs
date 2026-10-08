@@ -200,5 +200,12 @@ test('#495: the heading welcomes with "Redo att hoppa?" in the same italic, the 
   assert.match(copy, /title: 'Redo att',\s+titleAccent: 'hoppa\?',/);
   assert.match(copy, /title: 'Ready to',\s+titleAccent: 'jump\?',/);
   assert.doesNotMatch(copy, /Vad vill du göra\?|What would you like to do\?/);
-  assert.match(choice, /<h1 className="text-3xl leading-none font-black italic uppercase text-foreground mb-6 text-center">\s*\{t\.choice\.title\} <span className="text-primary">\{t\.choice\.titleAccent\}<\/span>\s*<\/h1>/);
+  assert.match(choice, /<h1 className="park-choice-title uppercase text-foreground mb-6 text-center">\s*\{t\.choice\.title\} <span className="text-primary">\{t\.choice\.titleAccent\}<\/span>\s*<\/h1>/);
+  // Love: the font of "UTFORSKA JUMPYARD" on jumpyard.se, the condensed black slanted Acumin: the heading
+  // role (#498, guestTypography.test.mjs pins its axes), upright so the slant is never doubled.
+  assert.match(css, /\.park-choice-title \{ font-variation-settings: var\(--jy-heading-axes\); font-weight: 900; font-style: normal;/);
+  assert.match(css, /font-family: "JumpYard Acumin";\s+src: url\("\/fonts\/AcuminVariableConcept\.woff2"\) format\("woff2"\);/);
+  // The two calls to action are the button role (their labels are headings inside the buttons).
+  assert.equal((choice.match(/<h2 className="type-button text-lg font-black italic uppercase leading-tight">/g) || []).length, 2);
+  assert.match(source('app/page.tsx'), /preload\('\/fonts\/AcuminVariableConcept\.woff2', \{ as: 'font', type: 'font\/woff2', crossOrigin: 'anonymous' \}\)/);
 });

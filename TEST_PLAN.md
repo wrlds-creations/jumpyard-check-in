@@ -1,5 +1,9 @@
 # Test Plan
 
+## Guest typography (#498)
+
+Run `npm --prefix jumpyard-checkin-phone run test:guest-typography` (part of `npm run validate`). It pins the one upright Acumin face without an oblique range, the role axes (heading 60/900/-12 upright, button 65/900 italic, small button 65/800 italic, body 100 with wght 400/700), the role rules, the site weights and the completion hero's line boxes. `npm run validate:t0194-staff-identity-frontend` must still pass (the staff app keeps the shared system stack, D0159/D0247). On localhost check `/preview/workshop` at 375x812, 390x664 and 360x640 in SV and EN: no overflow, headings upright and buttons oblique. Love confirms it live on an iPhone.
+
 ## Start-page heading (#495)
 
 Run `npm --prefix jumpyard-checkin-phone run test:logo-hop`, which also pins the "Redo att" / "hoppa?" copy in SV and EN and the red accent. Then check by hand on a phone that the start page reads "REDO ATT HOPPA?" on one line, with HOPPA? in red, and "READY TO JUMP?" in English.

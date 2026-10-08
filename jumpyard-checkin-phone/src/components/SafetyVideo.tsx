@@ -133,8 +133,9 @@ function LocalizedSafetyVideo({
     const docked = approvable;
     // The blurred still covers the film's own captions wherever our controls sit on top of it.
     const coverVisible = phase === 'idle' || phase === 'loading' || approvable;
-    // The poster title follows the film width so its longest line never clips on small phones.
-    const coverTitleSize = Math.max(16, Math.min(30, Math.floor((width - 40) / 8.2)));
+    // The poster title follows the film width so its longest line never clips on small phones. #498: in the
+    // condensed heading role "GENOMGÅNG" is about 4 em wide, so the title can be larger than the old 30 px cap.
+    const coverTitleSize = Math.max(16, Math.min(44, Math.floor(width * 0.13)));
     // Matching transform lists interpolate cleanly between playing and docked.
     const frameTransform = docked ? `translateY(0px) scale(${dockScale})` : `translateY(${playOffset}px) scale(1)`;
 

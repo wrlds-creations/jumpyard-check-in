@@ -87,11 +87,11 @@ export function SafetyApproval({
             >
                 {isSubmitting && <Loader2 size={22} aria-hidden="true" className="flex-shrink-0 animate-spin motion-reduce:animate-none" />}
                 <span className="min-w-0">
-                    <span className={`block font-black italic uppercase leading-tight ${compact ? 'text-base' : 'text-lg'}`}>
+                    <span className={`type-button block font-black italic uppercase leading-tight ${compact ? 'text-base' : 'text-lg'}`}>
                         {isSubmitting ? t.safetyAttest.readyForStaffProcessing : t.safetyAttest.attestLead}
                     </span>
                     {!isSubmitting && (
-                        <span className={`mt-0.5 block font-semibold ${compact ? 'text-[12px] leading-tight' : 'text-[13px] leading-snug'}`}>{t.safetyAttest.attestRest}</span>
+                        <span className={`mt-0.5 block font-bold ${compact ? 'text-[12px] leading-tight' : 'text-[13px] leading-snug'}`}>{t.safetyAttest.attestRest}</span>
                     )}
                 </span>
             </button>
