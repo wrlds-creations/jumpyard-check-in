@@ -27,7 +27,8 @@
     "test:completion": "node --test src/components/PhoneCompletion.test.mjs src/flow/savedVisit.test.mjs src/flow/kioskPhoneLink.test.mjs",
     "test:workshop-flow": "node --no-warnings --experimental-strip-types --test src/flow/workshopFlow.test.mjs",
     "test:flow-nav": "node --no-warnings --test src/components/FlowNav.test.mjs",
-    "test:logo-hop": "node --no-warnings --experimental-strip-types --test src/components/ParkChoice.test.mjs"
+    "test:logo-hop": "node --no-warnings --experimental-strip-types --test src/components/ParkChoice.test.mjs",
+    "test:guest-typography": "node --no-warnings --test src/app/guestTypography.test.mjs"
   },
   "dependencies": {
     "@roller/ecom-payments": "file:vendor/ecom-payments",

@@ -1,4 +1,5 @@
 .bands { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 6px; }
-.label { font-size: 13px; line-height: 1.25; font-weight: 600; font-style: italic; color: #1c1c1e; }
-.band { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; line-height: 1.25; font-weight: 800; font-style: italic; text-transform: uppercase; letter-spacing: .01em; color: #1c1c1e; }
+/* #498: the label is body text, the colour name jumpyard.se's small-button role (globals.css). */
+.label { font-size: 13px; line-height: 1.25; font-weight: 700; font-style: italic; color: #1c1c1e; }
+.band { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; line-height: 1.25; font-variation-settings: var(--jy-small-button-axes); font-weight: 800; font-style: italic; text-transform: uppercase; letter-spacing: .01em; color: #1c1c1e; }
 .swatch { width: 30px; height: 12px; flex: none; border-radius: 999px; box-shadow: inset 0 0 0 1px #0000002e; }

@@ -117,7 +117,7 @@ export const ConfirmationScreen = ({
                         <p className="mx-auto mt-3 max-w-[18rem] text-sm font-bold italic text-foreground">
                             {lang === 'sv' ? 'Visa samma nummer eller QR-kod i entrén och caféet.' : 'Use the same number or QR code at the entrance and café.'}
                         </p>
-                        {checkinSession?.handoffDay && <p className="mt-1 text-xs font-medium">{lang === 'sv' ? 'Nummer från' : 'Number issued'} {checkinSession.handoffDay}</p>}
+                        {checkinSession?.handoffDay && <p className="mt-1 text-xs font-normal">{lang === 'sv' ? 'Nummer från' : 'Number issued'} {checkinSession.handoffDay}</p>}
                     </div>
                 )}
 

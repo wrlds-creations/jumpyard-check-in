@@ -58,6 +58,111 @@ input {
   font-family: inherit;
 }
 
+/* #498 (Love 2026-10-08, "kör alternativ 1 med exakt hemsidans värden"): the guest app uses JumpYard's own
+   Acumin with exactly jumpyard.se's type system. The file is byte-identical to the one jumpyard.se loads and,
+   as on the site, it is one upright face: an italic element gets the browser's oblique, never the slnt axis.
+   - Heading (titles, card titles and figures): "slnt" -12, "wdth" 60, "wght" 900, upright.
+   - Button: "slnt" 0, "wdth" 65, "wght" 900 in italic. Small buttons (14 px and less), chips, tags and small
+     uppercase labels are the site's small button: "wght" 800.
+   - Body: "slnt" 0, "wdth" 100, upright, with wght from font-weight (400, bold 700), so every weight in the
+     markup keeps working.
+   The staff app keeps the shared system stack in the two lines above (D0159); this later rule applies
+   Acumin to the guest app only (D0247). */
+@font-face {
+  font-family: "JumpYard Acumin";
+  src: url("/fonts/AcuminVariableConcept.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: normal;
+  font-display: swap;
+}
+
+:root {
+  --jy-heading-axes: "slnt" -12, "wdth" 60, "wght" 900;
+  --jy-button-axes: "slnt" 0, "wdth" 65, "wght" 900;
+  --jy-small-button-axes: "slnt" 0, "wdth" 65, "wght" 800;
+  --jy-body-axes: "slnt" 0, "wdth" 100;
+}
+
+body {
+  font-family: "JumpYard Acumin", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 400;
+  font-variation-settings: var(--jy-body-axes);
+}
+
+/* The guest markup writes display text as Tailwind `font-black italic` (labels also `font-bold italic
+   uppercase`); these rules give it the site's role from what it is. They are unlayered, so they beat the
+   utilities (`italic`, `font-black`, `tracking-*`), and wrapped in :where(), so a later role here or any
+   component class wins. Headings never take an oblique on top of their slant. Small means 14 px and less
+   (`text-sm`, `text-xs`, `text-[8px]`-`text-[13px]`); large means `text-base` (16 px) and up. */
+:where(.font-black) {
+  font-variation-settings: var(--jy-heading-axes);
+  font-weight: 900;
+  font-style: normal;
+}
+:where(.font-black):where(.text-base, .text-lg, .text-xl) { letter-spacing: 0.15px; }
+:where(.font-black):where(.text-2xl, .text-3xl, .text-4xl, .text-5xl) { letter-spacing: -0.03em; }
+/* Step titles a size up, so the condensed letters keep today's presence: 20 -> 26 px and 24 -> 32 px. */
+:where(h1.font-black.text-xl, h2.font-black.text-xl) { font-size: 1.625rem; line-height: 1.05; letter-spacing: -0.03em; }
+:where(h1.font-black.text-2xl, h2.font-black.text-2xl) { font-size: 2rem; line-height: 1; letter-spacing: -0.03em; }
+
+/* Small button: chips, tags and small uppercase labels, in bold or black, up to 14 px. A heading element
+   is one only when it is set that small. 14 px takes the site's -0.04em; 8-13 px keep their own spacing,
+   which the site has no size for. Like the site, no role adds word spacing. */
+:where(.uppercase:is(.font-black, .font-extrabold, .font-bold):not(.text-base, .text-lg, .text-xl, .text-2xl, .text-3xl, .text-4xl, .text-5xl, .text-6xl):not(:is(h1, h2, h3):not(.text-sm, .text-xs, .text-\[8px\], .text-\[9px\], .text-\[10px\], .text-\[11px\], .text-\[12px\], .text-\[13px\]))) {
+  font-variation-settings: var(--jy-small-button-axes);
+  font-weight: 800;
+  font-style: italic;
+}
+:where(.uppercase:is(.font-black, .font-extrabold, .font-bold):not(.text-base, .text-lg, .text-xl, .text-2xl, .text-3xl, .text-4xl, .text-5xl, .text-6xl, .text-xs, .text-\[8px\], .text-\[9px\], .text-\[10px\], .text-\[11px\], .text-\[12px\], .text-\[13px\]):not(:is(h1, h2, h3):not(.text-sm))) {
+  letter-spacing: -0.04em;
+}
+
+/* Button: a call to action carries its own `font-black italic`; a label nested in a button carries
+   .type-button. Small ones (14 px and less) are the site's small button. */
+:where(button.italic:is(.font-black, .font-extrabold), .type-button) {
+  font-variation-settings: var(--jy-button-axes);
+  font-weight: 900;
+  font-style: italic;
+}
+:where(button.italic:is(.font-black, .font-extrabold):not(.text-sm, .text-xs, .text-\[8px\], .text-\[9px\], .text-\[10px\], .text-\[11px\], .text-\[12px\], .text-\[13px\]), .type-button) {
+  letter-spacing: -0.015em;
+}
+:where(button.italic:is(.font-black, .font-extrabold):is(.text-sm, .text-xs, .text-\[8px\], .text-\[9px\], .text-\[10px\], .text-\[11px\], .text-\[12px\], .text-\[13px\])) {
+  font-variation-settings: var(--jy-small-button-axes);
+  font-weight: 800;
+  font-style: italic;
+}
+:where(button.italic.text-sm:is(.font-black, .font-extrabold)) { letter-spacing: -0.04em; }
+/* Calls to action a size up for the condensed caps (16 -> 18 px, the site's button size, and 18 -> 20 px);
+   the buttons keep their line heights. */
+:where(button.italic:is(.font-black, .font-extrabold).text-base) { font-size: 1.125rem; line-height: 1.5rem; }
+:where(button.italic:is(.font-black, .font-extrabold).text-lg) { font-size: 1.25rem; line-height: 1.75rem; }
+:where(.type-button.text-base) { font-size: 1.125rem; }
+:where(.type-button.text-lg) { font-size: 1.25rem; }
+/* Anything bold inside a button label (the saved visit's number) is part of the label. */
+:where(button.italic:is(.font-black, .font-extrabold), .type-button) :where(.font-black, .font-extrabold, .font-bold) {
+  font-variation-settings: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  letter-spacing: inherit;
+  word-spacing: inherit;
+}
+
+/* The component classes below (add-on shop, start time, total) take the same roles. */
+.addon-shop h3, .addon-shop-stepper output, .addon-shop-tile-count, .buy-clock-time, .addon-shop-total-amount {
+  font-variation-settings: var(--jy-heading-axes);
+  font-weight: 900;
+  font-style: normal;
+}
+.addon-shop-group, .addon-shop-note, .buy-product-tag, .buy-clock-label, .addon-shop-total-label {
+  font-variation-settings: var(--jy-small-button-axes);
+  font-weight: 800;
+  font-style: italic;
+}
+/* A truncated oblique label (the Weekday Combo contents) keeps room for its last letter's slant. */
+:where(.uppercase.italic) > .truncate { padding-right: 0.25em; }
+
 .text-jy-red {
   color: var(--primary);
 }
@@ -124,8 +229,6 @@ input {
   margin: 0 0 6px 4px;
   font-size: 11px;
   line-height: 16px;
-  font-weight: 900;
-  font-style: italic;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -163,9 +266,8 @@ input {
 .addon-shop h3 {
   font-size: 15px;
   line-height: 18px;
-  font-weight: 900;
-  font-style: italic;
   text-transform: uppercase;
+  letter-spacing: 0.15px;
   overflow-wrap: anywhere;
 }
 
@@ -176,7 +278,7 @@ input {
   border-top: 1px solid var(--shop-line);
   font-size: 12px;
   line-height: 16px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .addon-shop-stepper { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -197,7 +299,7 @@ input {
 .addon-shop button:disabled { opacity: 0.3; cursor: default; }
 /* Nothing to remove yet: the minus keeps its slot, so the plus never moves under the thumb. */
 .addon-shop-stepper > button:first-child:disabled { visibility: hidden; }
-.addon-shop-stepper output { width: 24px; text-align: center; font-size: 20px; line-height: 24px; font-weight: 900; font-style: italic; }
+.addon-shop-stepper output { width: 24px; text-align: center; font-size: 20px; line-height: 24px; }
 .addon-shop-stepper output[data-active="true"] { color: var(--primary); }
 .addon-shop button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
@@ -205,10 +307,10 @@ input {
 .addon-shop-tile { display: flex; flex-direction: column; align-items: center; padding: 10px 4px 6px; text-align: center; }
 .addon-shop-tile-icon { width: 32px; height: 32px; }
 .addon-shop-tile h3 { margin-top: 2px; font-size: 13px; line-height: 16px; }
-.addon-shop-tile-fact { display: none; margin-top: 1px; font-size: 11px; line-height: 14px; font-weight: 600; }
+.addon-shop-tile-fact { display: none; margin-top: 1px; font-size: 11px; line-height: 14px; font-weight: 700; }
 .addon-shop-tile-price { margin-top: 1px; font-size: 11px; line-height: 14px; font-weight: 700; color: var(--primary); white-space: nowrap; }
 .addon-shop-tile-included { display: block; color: var(--foreground); }
-.addon-shop-tile-count { position: absolute; top: 6px; right: 8px; font-size: 16px; line-height: 18px; font-weight: 900; font-style: italic; color: var(--primary); }
+.addon-shop-tile-count { position: absolute; top: 6px; right: 8px; font-size: 16px; line-height: 18px; color: var(--primary); }
 .addon-shop-tile-stepper { gap: 2px; margin-top: auto; padding-top: 6px; }
 /* The Sky Rider recommendation sits on the top border of its tile. */
 .addon-shop-note {
@@ -221,8 +323,6 @@ input {
   color: var(--primary);
   font-size: 10px;
   line-height: 14px;
-  font-weight: 900;
-  font-style: italic;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   white-space: nowrap;
@@ -246,8 +346,6 @@ input {
   color: #fff;
   font-size: 10px;
   line-height: 16px;
-  font-weight: 900;
-  font-style: italic;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   white-space: nowrap;
@@ -267,19 +365,15 @@ input {
 .buy-clock-label {
   font-size: 12px;
   line-height: 16px;
-  font-weight: 900;
-  font-style: italic;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 .buy-clock-time {
   font-size: 30px;
   line-height: 1;
-  font-weight: 900;
-  font-style: italic;
   color: var(--primary);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.03em;
 }
 
 /* #491: the socks row on the quantity step reuses the add-on row, a little more air above. */
@@ -340,8 +434,8 @@ input {
   margin-bottom: calc(16px + env(safe-area-inset-bottom, 0px) - max(12px, env(safe-area-inset-bottom, 0px)));
 }
 
-.addon-shop-total-label { font-size: 11px; line-height: 14px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
-.addon-shop-total-amount { display: inline-block; font-size: 22px; line-height: 26px; font-weight: 900; font-style: italic; color: var(--primary); white-space: nowrap; font-variant-numeric: tabular-nums; animation: addon-shop-bump 160ms ease-out; }
+.addon-shop-total-label { font-size: 11px; line-height: 14px; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+.addon-shop-total-amount { display: inline-block; font-size: 22px; line-height: 26px; letter-spacing: -0.03em; color: var(--primary); white-space: nowrap; font-variant-numeric: tabular-nums; animation: addon-shop-bump 160ms ease-out; }
 @keyframes addon-shop-bump { 50% { transform: scale(1.08); } }
 
 @media (max-width: 359px) {
@@ -408,6 +502,8 @@ body:has(.addon-shop-total) [data-testid="flow-nav"] > [aria-hidden="true"] { di
 .safety-approval[data-visible="true"] { transition-delay: 180ms; }
 .safety-cover { transition: opacity 360ms ease-out; }
 .safety-cover[data-visible="false"] { opacity: 0; }
+/* #498: the poster title is a heading of up to 44 px (its size follows the film width in SafetyVideo). */
+.safety-film h1 { letter-spacing: -0.03em; }
 @media (prefers-reduced-motion: reduce) {
   .safety-film, .safety-approval, .safety-cover { transition: none; }
 }
@@ -442,3 +538,7 @@ body:has(.addon-shop-total) [data-testid="flow-nav"] > [aria-hidden="true"] { di
 @media (prefers-reduced-motion: reduce) {
   .park-choice-logo[data-ready="true"], .park-choice-logo[data-ready="true"] > img { animation: none; }
 }
+
+/* #495 (Love 2026-10-08): "Redo att hoppa?" is set like "UTFORSKA JUMPYARD" on jumpyard.se: the heading
+   role (#498) at display size. */
+.park-choice-title { font-variation-settings: var(--jy-heading-axes); font-weight: 900; font-style: normal; font-size: clamp(2.5rem, 14.5vw, 3.5rem); line-height: 0.9; letter-spacing: -0.03em; }

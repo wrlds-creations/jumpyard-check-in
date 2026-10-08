@@ -155,11 +155,13 @@
   grid-area: lead;
   min-width: 0;
   color: var(--foreground);
-  font-size: clamp(15px, 4.5vw, 17px);
-  font-style: italic;
+  /* #498: the lead is jumpyard.se's heading role (globals.css), a size up for the condensed letters. */
+  font-size: clamp(17px, 5vw, 20px);
+  font-variation-settings: var(--jy-heading-axes);
+  font-style: normal;
   font-weight: 900;
   line-height: 1.1;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.15px;
   text-transform: uppercase;
 }
 
@@ -169,7 +171,7 @@
   margin-top: 1px;
   color: rgb(28 28 30 / 0.82);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.3;
   text-wrap: pretty;
 }
@@ -181,7 +183,7 @@
   color: var(--foreground);
   font-size: 14px;
   font-style: italic;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.25;
   text-wrap: pretty;
 }
@@ -229,8 +231,9 @@
   gap: 3px;
   color: var(--primary);
   font-size: 10px;
+  font-variation-settings: var(--jy-small-button-axes);
   font-style: italic;
-  font-weight: 900;
+  font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }

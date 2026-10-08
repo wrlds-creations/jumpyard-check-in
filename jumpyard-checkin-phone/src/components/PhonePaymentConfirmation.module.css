@@ -11,8 +11,10 @@
 .icon { width: 80px; height: 80px; margin-bottom: 28px; }
 .spinner { width: 64px; height: 64px; flex: none; margin-bottom: 28px; border: 6px solid #f5d7dd; border-top-color: var(--primary); border-radius: 50%; animation: payment-spin 1s linear infinite; }
 .help { margin: 20px 0 0; font-size: 16px; line-height: 1.5; text-wrap: pretty; }
-.title { margin: 0; font-size: clamp(26px, 7vw, 30px); font-weight: 900; font-style: italic; text-transform: uppercase; line-height: 1.12; text-wrap: balance; }
-.amount { margin: 22px 0 0; color: #147b51; font-size: 48px; font-weight: 900; font-style: italic; line-height: 1.2; }
+/* #498: the title and the amount are jumpyard.se's heading role, the button its button role (globals.css);
+   the condensed title and amount are a size larger. */
+.title { margin: 0; font-size: clamp(32px, 9vw, 38px); font-variation-settings: var(--jy-heading-axes); font-weight: 900; font-style: normal; text-transform: uppercase; line-height: 1.02; letter-spacing: -0.03em; text-wrap: balance; }
+.amount { margin: 22px 0 0; color: #147b51; font-size: 56px; font-variation-settings: var(--jy-heading-axes); font-weight: 900; font-style: normal; line-height: 1.2; letter-spacing: -0.03em; }
 .receipt { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 12px 0 0; font-size: 16px; line-height: 1.4; text-wrap: balance; }
 .receiptIcon { flex: none; width: 34px; height: 34px; }
 /* #458: calm wait after approval; no action, the number appears when ROLLER has confirmed. */
@@ -31,11 +33,13 @@
   padding: 16px 12px;
   background: var(--primary);
   color: white;
-  font-size: clamp(16px, 4.4vw, 18px);
+  font-size: clamp(18px, 5.4vw, 20px);
+  font-variation-settings: var(--jy-button-axes);
   font-weight: 900;
   font-style: italic;
   text-transform: uppercase;
   line-height: 1.2;
+  letter-spacing: -0.015em;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -51,7 +55,7 @@
   .confirmation { padding-block: 12px; }
   .icon { width: 64px; height: 64px; margin-bottom: 20px; }
   .spinner:not(.buttonSpinner):not(.inlineSpinner) { width: 56px; height: 56px; margin-bottom: 20px; }
-  .amount { margin-top: 16px; font-size: 42px; }
+  .amount { margin-top: 16px; font-size: 48px; }
   .continueButton { margin-top: 24px; }
 }
 

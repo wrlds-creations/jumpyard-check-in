@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import { preload } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
 import { FlowMotion, FlowTransition, FlowScreen } from '@/components/FlowTransition';
 import { AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
@@ -1814,6 +1815,8 @@ function isCompletedSession(session: CheckInSession) {
 }
 
 export default function Home() {
+    // #495/#498: Acumin, the guest app's font, starts loading with the page, not when the first text renders.
+    preload('/fonts/AcuminVariableConcept.woff2', { as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' });
     return (
         <LanguageProvider><FlowMotion>
             <main className="phone-flow-shell flex min-h-dvh w-full max-w-full min-w-0 flex-col items-center justify-start overflow-x-hidden p-3 pt-3 relative text-foreground bg-background selection:bg-primary selection:text-white">

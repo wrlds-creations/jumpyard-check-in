@@ -17,6 +17,7 @@
 .home h1 { font-size: 34px; text-transform: uppercase; line-height: 1.1; }
 .home p { font-size: 14px; color: #71717a; }
 .homeIcon { width: 90px; height: 90px; }
-.home h1, .home button { font-family: 'Completion Acumin', Arial, sans-serif; font-variation-settings: 'wght' 900, 'slnt' -12; }
+.home h1 { font-variation-settings: var(--jy-heading-axes); font-weight: 900; font-style: normal; }
+.home button { font-variation-settings: var(--jy-button-axes); font-weight: 900; font-style: italic; }
 .home button { width: 100%; padding: 14px 18px; background: #e31837; color: white; border-radius: 32px; text-transform: uppercase; font-size: 17px; cursor: pointer; }
 @media (max-width: 760px) { .preview { padding: 0; display: block; background: white; } .tools { display: none; } .viewport { width: 100%; height: auto; min-height: 100dvh; box-shadow: none; } }

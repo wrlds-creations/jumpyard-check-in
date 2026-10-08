@@ -61,8 +61,8 @@ export const ParkChoice = ({ onSelect, savedVisitCode = null, onResumeSavedVisit
                 />
             </span>
 
-            {/* #495 (Love 2026-10-08): "Redo att hoppa?" replaces "Vad vill du göra?", larger and in the same italic. */}
-            <h1 className="text-3xl leading-none font-black italic uppercase text-foreground mb-6 text-center">
+            {/* #495 (Love 2026-10-08): "Redo att hoppa?" replaces "Vad vill du göra?", in JumpYard's own Acumin. */}
+            <h1 className="park-choice-title uppercase text-foreground mb-6 text-center">
                 {t.choice.title} <span className="text-primary">{t.choice.titleAccent}</span>
             </h1>
 
@@ -75,7 +75,7 @@ export const ParkChoice = ({ onSelect, savedVisitCode = null, onResumeSavedVisit
                         <JumpyardIcon name="booking-confirmed-on-red-white-calendar" className="w-10 h-10" />
                     </div>
                     <div className="min-w-0">
-                        <h2 className="text-lg font-black italic uppercase leading-tight">
+                        <h2 className="type-button text-lg font-black italic uppercase leading-tight">
                             {t.choice.haveBooking}
                         </h2>
                     </div>
@@ -89,7 +89,7 @@ export const ParkChoice = ({ onSelect, savedVisitCode = null, onResumeSavedVisit
                         <JumpyardIcon name="admission-ticket-red-white-flame" className="w-10 h-10" />
                     </div>
                     <div className="min-w-0">
-                        <h2 className="text-lg font-black italic uppercase leading-tight">
+                        <h2 className="type-button text-lg font-black italic uppercase leading-tight">
                             {t.choice.buyTickets}
                         </h2>
                     </div>

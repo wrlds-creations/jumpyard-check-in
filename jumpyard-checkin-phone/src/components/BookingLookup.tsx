@@ -76,7 +76,7 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
                     animate={{ opacity: 1, height: 'auto' }}
                     className="mb-4 min-w-0 bg-red-50 border border-red-200 p-3 rounded-xl"
                 >
-                    <p className="text-sm text-red-700 font-medium">{getLookupErrorTitle(error, t)}</p>
+                    <p className="text-sm text-red-700 font-bold">{getLookupErrorTitle(error, t)}</p>
                     <p className="text-xs text-red-500 mt-0.5">{getLookupErrorDescription(error, t)}</p>
                 </FlowScreen>
             )}
