@@ -113,6 +113,8 @@ const GUEST_ACCESS_CHANNEL = 'guest_access';
 const TOKEN_BYTES = 32;
 // GH-488 (D0243): the Booking Lambda owns kiosk pairings; this Lambda only proves the staff member.
 const KIOSK_PAIRING_SOURCE = 'jumpyard.kiosk-pairing';
+// GH-483 (D0239): the Booking Lambda owns kiosk attempts; this Lambda only proves the staff member.
+const KIOSK_STAFF_RESOLUTION_SOURCE = 'jumpyard.kiosk-staff-resolution';
 
 const rdsClient = new RDSDataClient({});
 const secretsClient = new SecretsManagerClient({});
@@ -151,7 +153,8 @@ exports.handler = async (event) => {
         isAdminStaffItemRoute(routeKey, event) ||
         isStaffSessionListRoute(routeKey, event) ||
         isStaffSessionDetailRoute(routeKey, event) ||
-        isKioskStaffPairingRoute(routeKey, event))
+        isKioskStaffPairingRoute(routeKey, event) ||
+        isKioskStaffPaymentResolutionRoute(routeKey, event))
     ) {
       return safetyGateBlockedResponse(
         correlationId,
@@ -190,6 +193,10 @@ exports.handler = async (event) => {
 
     if (isKioskStaffPairingRoute(routeKey, event)) {
       return await handleKioskStaffPairing(event, body, correlationId);
+    }
+
+    if (isKioskStaffPaymentResolutionRoute(routeKey, event)) {
+      return await handleKioskStaffPaymentResolution(event, body, correlationId);
     }
 
     if (isCreateSessionLinkRoute(routeKey, event)) {
@@ -5003,6 +5010,13 @@ function isKioskStaffPairingRoute(routeKey, event) {
   return routeKey === 'POST /v1/staff/kiosk-pairing' || event?.rawPath === '/v1/staff/kiosk-pairing';
 }
 
+function isKioskStaffPaymentResolutionRoute(routeKey, event) {
+  return (
+    routeKey === 'POST /v1/staff/kiosk-payments/resolve' ||
+    event?.rawPath === '/v1/staff/kiosk-payments/resolve'
+  );
+}
+
 function isStaffAuthSessionRoute(routeKey, event) {
   return routeKey === 'POST /v1/staff/auth/session' || event?.rawPath === '/v1/staff/auth/session';
 }
@@ -5868,8 +5882,9 @@ async function handlePinStaffAuthSession(event, body, correlationId) {
   });
 }
 
-// Shared by PIN login and the GH-488 kiosk pairing proof: one limiter, the trivial-PIN rule, the
-// keyed lookup and the slow verification. Every failure counts against the source and venue limits.
+// Shared by PIN login, the GH-488 kiosk pairing proof and the GH-483 kiosk staff resolution: one
+// limiter, the trivial-PIN rule, the keyed lookup and the slow verification. Every failure counts
+// against the source and venue limits.
 async function authenticateStaffPin(event, gate, pin, correlationId, failureEvent) {
   const pepper = await getStaffPinPepper();
   const sourceHash = staffPinSourceHash(pepper.value, readStaffSourceAddress(event));
@@ -5982,6 +5997,95 @@ async function handleKioskStaffPairing(event, body, correlationId) {
     return jsonResponse(502, correlationId, {
       status: 'unavailable',
       error: { code: 'kiosk_pairing_failed', message: 'The kiosk could not be paired. Try again.' },
+    });
+  }
+  const { correlationId: _bookingCorrelationId, ...resultBody } = parseJsonObject(result.body);
+  return jsonResponse(statusCode, correlationId, resultBody);
+}
+
+// GH-483 (D0239): a staff operator resolves one uncertain kiosk payment at the kiosk with their
+// personal PIN. The PIN proves the person for this request only. No staff session is created, so
+// the employee's session on a staff device is never replaced (D0160), and no token reaches the
+// public kiosk. The PIN is never forwarded, stored or logged; the Booking Lambda receives only
+// the pseudonymous staff identity id and performs the ROLLER check and every write.
+async function handleKioskStaffPaymentResolution(event, body, correlationId) {
+  if (!isPinStaffIdentityMode()) {
+    return jsonResponse(404, correlationId, {
+      status: 'not_found',
+      error: { code: 'route_not_found', message: 'Kiosk staff resolution requires personal staff PINs.' },
+    });
+  }
+  const gate = validatePinStaffGate();
+  if (!gate.ok) return staffAuthErrorResponse(correlationId, gate);
+
+  const pin = normalizePinInput(body.staffPin);
+  const detail = {
+    action: stringOrNull(body.action),
+    kioskCapability: stringOrNull(body.kioskCapability),
+    kioskInstallationId: stringOrNull(body.kioskInstallationId),
+    kioskProfileId: stringOrNull(body.kioskProfileId),
+    paymentAttemptId: stringOrNull(body.paymentAttemptId),
+    prepaymentDraftId: stringOrNull(body.prepaymentDraftId),
+    rollerDraftUniqueId: stringOrNull(body.rollerDraftUniqueId),
+  };
+  if (
+    !['inspect', 'no_payment', 'paid'].includes(detail.action) ||
+    !/^jypd_[a-f0-9]{18}$/.test(detail.prepaymentDraftId ?? '') ||
+    !/^jytp_[a-f0-9]{18}$/.test(detail.paymentAttemptId ?? '') ||
+    !detail.rollerDraftUniqueId ||
+    detail.rollerDraftUniqueId.length > 128 ||
+    !/^ki_[a-f0-9]{24}$/.test(detail.kioskInstallationId ?? '') ||
+    (detail.kioskProfileId !== null && !/^[a-z0-9-]{1,64}$/.test(detail.kioskProfileId)) ||
+    !/^[A-Za-z0-9_-]{43}$/.test(detail.kioskCapability ?? '')
+  ) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: { code: 'kiosk_staff_resolution_invalid', message: 'The kiosk staff resolution request is incomplete.' },
+    });
+  }
+  if (!pin || !/^\d{6}$/.test(pin)) {
+    return jsonResponse(400, correlationId, {
+      status: 'invalid_request',
+      error: { code: 'staff_pin_format_invalid', message: 'Enter a six-digit PIN.' },
+    });
+  }
+
+  const authenticated = await authenticateStaffPin(event, gate, pin, correlationId, 'staff_pin_kiosk_proof_failed');
+  if (!authenticated.ok) return authenticated.response;
+  if (authenticated.identity.role !== STAFF_ROLE_OPERATOR) {
+    return jsonResponse(403, correlationId, {
+      status: 'forbidden',
+      error: { code: 'staff_permission_denied', message: 'This staff role cannot resolve kiosk payments.' },
+    });
+  }
+
+  const functionName = stringOrNull(process.env.KIOSK_STAFF_RESOLUTION_FUNCTION_NAME);
+  if (!functionName) {
+    return jsonResponse(500, correlationId, {
+      status: 'config_error',
+      error: { code: 'kiosk_staff_resolution_config_error', message: 'Kiosk staff resolution is not configured.' },
+    });
+  }
+  const response = await lambdaClient.send(new InvokeCommand({
+    FunctionName: functionName,
+    InvocationType: 'RequestResponse',
+    Payload: Buffer.from(JSON.stringify({
+      source: KIOSK_STAFF_RESOLUTION_SOURCE,
+      detail: {
+        ...detail,
+        correlationId,
+        staffIdentityId: authenticated.identity.staffIdentityId,
+      },
+    })),
+  }));
+  const result = response.FunctionError || !response.Payload
+    ? null
+    : parseJsonObject(Buffer.from(response.Payload).toString('utf8'));
+  const statusCode = Number(result?.statusCode);
+  if (!result || !Number.isInteger(statusCode) || statusCode < 200 || statusCode > 599) {
+    return jsonResponse(502, correlationId, {
+      status: 'unavailable',
+      error: { code: 'kiosk_staff_resolution_failed', message: 'The kiosk payment could not be checked. Try again.' },
     });
   }
   const { correlationId: _bookingCorrelationId, ...resultBody } = parseJsonObject(result.body);

@@ -31,6 +31,7 @@ const ROUTE_LIMITS = Object.freeze({
   legacy_redeem: Object.freeze({ rate: 1, burst: 5 }),
   kiosk_status: Object.freeze({ rate: 2, burst: 10 }),
   kiosk_pairing: Object.freeze({ rate: 1, burst: 5 }),
+  kiosk_staff_resolution: Object.freeze({ rate: 1, burst: 5 }),
 });
 
 class TokenBucket {

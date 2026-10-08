@@ -73,7 +73,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - The Nacka `50871` full-flow window is open from `2026-06-29` with no end date until Love asks to close it (D0236); Issue/PR closeout is not a close-window deploy.
 - Park-test phone PWA builds must set `NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL` to the park-test API, or the app falls back to dev.
 - Park-test post-payment sync only refreshes a recent local `new_booking` prepayment draft.
-- Deployed gates fail closed, require Nacka `50871` plus allowed dates, and reject invalid request items before side effects. The 28 routes use six IAM, four Cognito JWT, and eighteen Lambda-auth boundaries; shared-IP-safe route limits passed the 120-guest/20-minute and 40-device burst models.
+- Deployed gates fail closed, require Nacka `50871` plus allowed dates, and reject invalid request items before side effects. The 31 routes use six IAM, four Cognito JWT, and twenty-one Lambda-auth boundaries; shared-IP-safe route limits passed the 120-guest/20-minute and 40-device burst models.
 - T0194: staff PIN; admin Cognito/TOTP (8-character upper/lower/digit). Apps share phone styling; Cognito stays English/Open Sans.
 
 ## Durable Workflow Facts

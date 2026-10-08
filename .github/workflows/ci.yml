@@ -88,6 +88,11 @@ jobs:
           GH488_DATABASE_TEST: 'true'
           GH488_PGPORT: '55435'
         run: npm run validate:gh488-kiosk-pairing
+      - name: Test kiosk staff payment resolution against PostgreSQL
+        env:
+          GH483_DATABASE_TEST: 'true'
+          GH483_PGPORT: '55435'
+        run: npm run validate:gh483-kiosk-staff-resolution
 
   repository:
     name: Repository
