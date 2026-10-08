@@ -914,6 +914,37 @@ T0035 phone add-product result:
 - Approved add-product payment continues the original booking's check-in flow and bypasses the old local/mock `APP_PAYMENT` screen.
 - Stock-only selections such as socks-only or padlock-only create separate linked add-on drafts. They must not be routed into safety, QR, or ticket redemption as standalone check-in bookings.
 
+### `POST /v1/staff/kiosk-payments/resolve`
+
+Issue #483 (D0239), paired with kiosk #160. A staff operator resolves one kiosk payment attempt that is stuck without a definitive result (`unknown`, `created`, or an approval whose booking confirmation ran out of time). The kiosk calls this route from its "Vi saknar betalningsbesked" screen.
+
+Request: `action` (`inspect`, `no_payment` or `paid`), `staffPin` (six digits), the attempt's `prepaymentDraftId`, `paymentAttemptId` and `rollerDraftUniqueId`, and the kiosk identity (`kioskInstallationId`, `kioskCapability`, plus `kioskProfileId` only for an unpaired legacy kiosk) exactly as for a draft. A kiosk paired by name (#488, D0243) sends no profile.
+
+Authorization:
+
+- The Session Lambda verifies the personal staff PIN with the T0194 rules: the trivial-PIN rule, keyed lookup, slow verification, and the same source and venue failure limiter as login. Only `staff_operator` may continue (`403 staff_permission_denied`). A wrong PIN returns the neutral `403 staff_pin_invalid`, and a blocked source or venue returns `429 staff_pin_rate_limited`.
+- The PIN proves the person for this one request. No staff session is created or replaced, so the employee's session on a staff device continues (D0160). No token reaches the public kiosk.
+- The Booking Lambda receives only the pseudonymous staff identity id. It accepts only an installation-bound attempt (`kiosk_installation_id`) created by the requesting installation, which must be proven through its active pairing (D0243) or, before pairing, its authorized legacy profile.
+
+Each request reads ROLLER once: `GET /bookings/{rollerDraftUniqueId}`. Results:
+
+- `inspect` returns `status: "inspected"` with:
+  - `attempt`: `state`, `flowType`, `totalCents`, `currency`, `ageSeconds`;
+  - `roller.booking`: `not_found`, `unpaid`, `partially_paid`, `paid`, `unconfirmed` or `unavailable`, plus `amountOwingCents`;
+  - `actions`: `paid`, `noPayment`, `noPaymentAvailableInSeconds`.
+- `no_payment` succeeds (`status: "released"`) only when all of these hold:
+  - the attempt is `created` or `unknown`;
+  - it is not published and has no booking reference;
+  - ROLLER answers 404;
+  - the local cache holds no booking for the draft unique id or `externalId`;
+  - the draft is at least 5 minutes old, so a late terminal result or ROLLER payment notification has had time to arrive.
+
+  One guarded statement then records `failed` and writes the audit row; the audit insert reads nothing back, because the booking role may insert into `event_log` but not select from it. The kiosk claims (D0220) are taken over by the next draft at once.
+- `paid` succeeds only when ROLLER returns a confirmed paid booking for the draft (zero owing, safe status, tickets for new bookings). The attempt then becomes `approved` on that evidence, and the existing D0190 snapshot and attachment run as in the reconciliation worker. The response matches finalize/status, with `status: "confirmed"`, `provisionalHandoff` for new bookings, and `result: "staff_confirmed_paid"`. Nothing is published and no payment is written to ROLLER.
+- Any other case returns `409` with `kiosk_payment_roller_payment_found`, `kiosk_payment_check_too_early`, `kiosk_payment_roller_unavailable`, `kiosk_payment_not_paid_in_roller`, `kiosk_payment_not_resolvable` or `kiosk_payment_needs_manual_check`, together with the same inspection view. The kiosk stays locked.
+
+Every inspection, decision and refusal writes `booking.kiosk_staff_resolution` to `event_log`. The entry holds the staff identity id, the kiosk name (or legacy profile), the action, the result, the ROLLER classification and HTTP status, and the attempt state before the decision. Responses carry no guest, staff, terminal or provider identifiers. The route exists only in staff PIN mode, has its own API Gateway bucket (1 request/s, burst 5), and is closed by the emergency stop.
+
 ### `POST /v1/bookings/{bookingReference}/add-products/quote`
 
 Calculates an existing-booking product addition before changing the original booking.
