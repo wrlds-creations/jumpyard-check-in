@@ -59,7 +59,7 @@
 .stepText { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; min-width: 0; }
 .stepTitle { font-size: 22px; line-height: 1.1; text-transform: uppercase; letter-spacing: -.03em; }
 .pickup h2.step[data-tone='cafe'] .stepTitle { color: #e31837; }
-.stepHint { font-variation-settings: var(--jy-body-axes); font-size: 14px; font-weight: 700; font-style: italic; line-height: 1.2; letter-spacing: normal; word-spacing: normal; color: #52525b; }
+.stepHint { font-variation-settings: var(--jy-body-axes); font-size: 14px; font-weight: 700; font-style: italic; line-height: 1.2; letter-spacing: normal; word-spacing: normal; color: #18181b; }
 
 /* #491 (workshop 2026-10-07): three places, each its own banner: sock station, wristband desk, café. */
 .place + .place h2.step, .place + .place h2.laterTitle { margin-top: 26px; }

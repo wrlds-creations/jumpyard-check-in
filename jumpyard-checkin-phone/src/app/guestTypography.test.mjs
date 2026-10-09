@@ -135,3 +135,7 @@ test('#498 keeps D0159: the staff app\'s shared system stack lines stay, Acumin 
   assert.doesNotMatch(system, /!important/);
   for (const [name, text] of MODULES) assert.doesNotMatch(text, /!important/, name);
 });
+test('#491 (Love 2026-10-09): the completion hints "Ta själv." and "Visa numret." are black, never grey', () => {
+  assert.match(rule(MODULES[0][1], '.stepHint'), /color: #18181b;/);
+  assert.doesNotMatch(rule(MODULES[0][1], '.stepHint'), /#52525b|#71717a|#a1a1aa/);
+});
