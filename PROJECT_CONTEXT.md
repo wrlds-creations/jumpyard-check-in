@@ -3,6 +3,7 @@
 ## Must know
 
 - Safety before payment (D0231).
+- Entries sell at the kassa's drop-in price (D0248, #501).
 - Phone email marketing (#437): optional, default off, sent with the booking draft (D0225); unchecked is no instruction. [Gates](docs/gh-437-phone-email-marketing.md).
 
 - Phone completion (#432) uses the kiosk red hero/number design, number only (D0229). Ready and same-day admitted sessions use it; Cloud admits completed check-ins itself (D0230). No phone reset or print.

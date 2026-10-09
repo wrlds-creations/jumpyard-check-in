@@ -4,6 +4,10 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #501 Drop-in Entry Prices (Deployed 2026-10-09)
+
+Release 37936068108 / `ae0da6e` (Park run [37937040871](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/37937040871)) changed only the `BookingHandler5D1461BB` code: 218 resources before and after, nothing added or removed, and no migration, IAM, secret, route or gate change. Rollback candidate: release 37925387617 (`dcd41bf`). [Evidence](docs/gh-501-dropin-entry-prices.md#rollout-evidence).
+
 ### Issue #488 Kiosk Pairing (Secret Applied 2026-10-07; Code Not Deployed)
 
 The park-test release profile gains the GH-488 kiosk pairing (D0243). The code is not deployed yet.
