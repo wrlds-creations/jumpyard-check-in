@@ -29,6 +29,7 @@ The full working agreement is in `AGENTS.md` and [references/github-collaboratio
 
 - Ready phone completion uses the approved kiosk red hero/number and shadowed, enlargeable session QR; completed/missing/kiosk fallbacks and safe reset stay intact. [#432 evidence](docs/gh432-phone-completion.md).
 - Phone contact (D0234, #473, live 2026-09-30): first name + email. Cloud fills known customers from an exact Klaviyo lookup (Profiles:Read key in `/jumpyard-check-in-park-test/klaviyo/profiles-read`), unknown guests get `Gäst`/`0700000000`, and an uncertain lookup asks for last name + phone. The kiosk sends four fields until kiosk #150. Public phone lookup remains disabled and placeholder SMS/ingestion guards remain. Existing payments preserve their identity. [Evidence](docs/gh473-email-first-name-klaviyo.md#rollout-evidence).
+- Drop-in entry prices (D0248, #501, live 2026-10-09): phone and kiosk sell each entry as ROLLER's `Drop-In` sibling of the slot's web variant (+20 kr, family +60 kr); Combo and add-ons are unchanged. Park `ae0da6e`, release `37936068108`, run `37937040871`. [Evidence](docs/gh-501-dropin-entry-prices.md#rollout-evidence).
 
 - Phone prepares safety before receipt (#374/D0209); #331 and #330/D0208 preserved. SV/EN video: #343/D0210/D0219.
 - Catalog refresh precedes booking reads; public failure omits Combo (#339/#341).

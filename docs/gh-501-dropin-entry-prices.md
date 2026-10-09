@@ -42,13 +42,49 @@ The call budget is unchanged: one availability read per availability request, an
 
 ## Validation
 
-- `npm run validate:gh501-dropin-entry-prices` runs 9 unit tests and 6 handler checks with synthetic Nacka variants. All of them fail on the previous code.
+- `npm run validate:gh501-dropin-entry-prices` runs 9 catalog unit tests (3 of them new) and 6 handler checks with synthetic Nacka variants. All 6 handler checks fail on the previous code.
 - `npm run validate:gh339-catalog-resilience`, `node scripts/validate-gh315-water-product.js` and the booking and shared Lambda unit tests still pass.
+- PR #502 passed all 7 CI checks, including the full `npm run validate` on Linux.
 
-## Rollout
+## Rollout evidence
 
-The rollout is pending, through the protected Park release (`Refs #501`). Love verifies one phone purchase and one kiosk purchase at the drop-in price.
+Love approved the rollout in chat on 2026-10-09 ("ja jag godkänner!"). The release, plan and approval steps:
+
+| Step | Evidence |
+|---|---|
+| Merge | [PR #502](https://github.com/wrlds-creations/jumpyard-check-in/pull/502) squash-merged as `ae0da6e0d6f6a4db4e689ac97e8697fd2bed6408`. |
+| Release | [Run 37936068108](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/37936068108) produced artifact `11618198315`, digest `sha256:1a208cd49764eac010e8b6f18528fce2cfd0f953b5b240d9c50c928529307e3b`. |
+| Park plan | [Run 37937040871](https://github.com/wrlds-creations/jumpyard-check-in/actions/runs/37937040871) verified the downloaded digest. The plan showed 218 resources, current and in release; Added none; Removed none; Changed only `BookingHandler5D1461BB`. Migrations were not applied. |
+| Approval and deploy | The protected `park-test` approval recorded Love's go, the plan facts and the rollback candidate. The deploy and its verification step passed. |
+| Rollback candidate | Release 37925387617 (`dcd41bf`), the previous Park deployment. |
+
+No public frontend promotion was needed: the phone and kiosk sources did not change, and both call the Park API.
+
+### Runtime readback
+
+The Booking Lambda was modified at 2026-10-09T13:30:24Z, and its state is `Active`. One availability request for Friday 2026-10-09 at 17:00 and 17:30, sent like the phone sends it, returned these Drop-In siblings:
+
+| Entry | Drop-In id | Price |
+|---|---|---|
+| E60 | `1189812` | 220 kr |
+| E90 | `1189829` | 250 kr |
+| E120 | `1189777` | 280 kr |
+| F60 | `1189821` | 660 kr |
+| F90 | `1189838` | 750 kr |
+| F120 | `1189800` | 840 kr |
+
+- Weekday Combo stayed `1242136` at 450 kr, and SkyRider stayed 40 kr.
+- The Booking log showed no `booking.drop_in_price_missing` warning and no server error.
+
+### Acceptance
+
+| Channel | Time | Purchase | Result |
+|---|---|---|---|
+| Phone (`ecommerce`) | 15:36 | One 90 min entry as `Biljetter (Drop-In - 250 kr)` (`1189829`), 250 kr | Paid in full; the draft was published to ROLLER. |
+| Kiosk (`card_present`) | 15:51 | The same Drop-In entry plus Bryggkaffe, 285 kr | Paid in full on the terminal; the draft was published. |
+
+Love confirmed both purchases in chat ("testade i mobilen som funkade", "funkar för kiosk också"). Both showed the drop-in price and became Drop-In products in ROLLER, the same products the kassa sells.
 
 ## Open item
 
-Gustav may correct the Familj 120 min sibling in ROLLER (`Drop-In - 870 kr`, expected 930 kr). Until then, that tier sells at the web price and logs the warning.
+Gustav may correct the Familj 120 min sibling in ROLLER (`Drop-In - 870 kr`, expected 930 kr). Until then, that tier sells at the web price and logs the warning. It has never been sold.
