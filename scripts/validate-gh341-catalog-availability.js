@@ -102,7 +102,7 @@ function load(catalogFetch, options = {}) {
       }
     };`, {
     module, exports: module.exports, Buffer, TextDecoder, TextEncoder, URL, URLSearchParams,
-    AbortController, setTimeout, clearTimeout, console: { log() {}, error() {} },
+    AbortController, setTimeout, clearTimeout, console: { log() {}, error() {}, warn() {} },
     process: { env: { JUMPYARD_ENVIRONMENT: 'park-test' } }, fetch: failExternal,
     require(id) {
       if (id === './server-diagnostics') return require('../infra/lambda/lookup/server-diagnostics');
