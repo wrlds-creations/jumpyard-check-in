@@ -43,9 +43,13 @@ const {
 } = require('./kiosk-terminal-contract');
 const {
   LIVE_PHONE_BOOKING_PRODUCTS,
+  dropInPriceStepCents,
   fetchPublicCheckoutCatalog,
   filterPhoneProductsByPublicCatalog,
+  findDropInSibling,
+  isDropInVariantName,
   isPhoneAvailabilityProductAvailable,
+  pairDropInWithSlot,
   selectMappedAvailabilityProduct,
 } = require('./phone-product-catalog');
 
@@ -435,7 +439,18 @@ async function handleAvailability(body, correlationId) {
     });
   }
 
-  const availability = buildPhoneAvailability(request, phoneProducts, rollerResult.body);
+  const dropInPricing = { pricedSlotCount: 0, missing: new Map() };
+  const availability = buildPhoneAvailability(request, phoneProducts, rollerResult.body, dropInPricing);
+  const dropInMissingProducts = [...dropInPricing.missing.values()];
+  if (dropInMissingProducts.length > 0) {
+    // GH-501: product keys and ids only. These slots keep the web price until ROLLER has the pair.
+    console.warn(JSON.stringify({
+      eventType: 'booking.drop_in_price_missing',
+      correlationId,
+      date: request.date,
+      products: dropInMissingProducts,
+    }));
+  }
   await writeBookingEventLog({
     correlationId,
     eventType: 'booking.availability_succeeded',
@@ -445,6 +460,8 @@ async function handleAvailability(body, correlationId) {
       requestedSlots: request.startTimes.length,
       rollerEnvironment: config.env,
       availableProductCount: availability.products.filter((product) => product.available).length,
+      dropInPricedSlotCount: dropInPricing.pricedSlotCount,
+      dropInMissingProducts,
     },
     subjectRef: request.date,
     summary: 'Roller Playground product availability read succeeded.',
@@ -4533,7 +4550,8 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
        summary ->> 'parentProductId' AS parent_product_id,
        summary ->> 'parentProductName' AS parent_product_name,
        summary ->> 'id' AS id,
-       summary ->> 'name' AS name
+       summary ->> 'name' AS name,
+       summary ->> 'priceCents' AS price_cents
      FROM jumpyard.product_catalog_cache
      WHERE roller_env = :rollerEnv
        AND COALESCE(expires_at, fetched_at + interval '24 hours') > now()
@@ -4588,9 +4606,28 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
     return {
       ...product,
       availabilityProductIds: liveMapping?.productIds,
+      ...(dropInPriceStepCents(product.type) === null
+        ? {}
+        : { dropInVariants: mapDropInVariants(rows, parentProductId) }),
       parentProductId,
     };
   }).filter(Boolean);
+}
+
+// GH-501: the fresh cached Drop-In siblings under one entry parent.
+function mapDropInVariants(rows, parentProductId) {
+  return rows
+    .filter((row) => stringOrNull(row.parent_product_id) === parentProductId && isDropInVariantName(row.name))
+    .map((row) => ({
+      priceCents: numberOrNull(row.price_cents),
+      productId: stringOrNull(row.id),
+      productName: stringOrNull(row.name),
+    }))
+    .filter((variant) => variant.productId && Number.isInteger(variant.priceCents));
+}
+
+function phoneBookingTypeForParentName(parentName) {
+  return PHONE_BOOKING_PRODUCTS.find((product) => product.parentName === parentName)?.type ?? null;
 }
 
 function getRequiredPhoneBookingProducts() {
@@ -4744,7 +4781,26 @@ async function validateItemsAvailable(config, token, items) {
     const parent = productParent.availabilityParent || await loadAvailabilityParentForProduct(config, token, item, productParent.parentProductId);
     if (parent?.error) return parent.error;
 
-    const session = findSessionForProduct(parent, String(item.productId), item.startTime);
+    let session = findSessionForProduct(parent, String(item.productId), item.startTime);
+    // GH-501 (D0248): ROLLER lists only web variants per slot. A cached Drop-In entry variant is
+    // accepted only at the slot whose allocated web variant it pairs with (web + step), unless
+    // ROLLER itself allocates that Drop-In id to the slot.
+    if (isDropInVariantName(productParent.productName) && !isProductAllocatedToSession(session, item.productId)) {
+      const stepCents = dropInPriceStepCents(phoneBookingTypeForParentName(productParent.parentProductName));
+      const pairing = pairDropInWithSlot(
+        parent,
+        findSessionForParent(parent, item.startTime),
+        productParent.priceCents,
+        stepCents,
+      );
+      if (!pairing) {
+        return {
+          code: 'drop_in_price_mismatch',
+          message: `Product ${item.productId} is not the drop-in price for ${item.bookingDate} ${item.startTime}.`,
+        };
+      }
+      session = findSessionForProduct(parent, pairing.webProductId, item.startTime);
+    }
     const capacity = getSessionCapacityRemaining(session);
     const onlineSalesOpen = session?.onlineSalesOpen !== false;
 
@@ -4856,7 +4912,10 @@ async function loadParentProductsForChildIds(rollerEnv, productIds) {
   const result = await executeStatement(
     `SELECT
        summary ->> 'id' AS product_id,
-       COALESCE(NULLIF(summary ->> 'parentProductId', ''), summary ->> 'id') AS parent_product_id
+       COALESCE(NULLIF(summary ->> 'parentProductId', ''), summary ->> 'id') AS parent_product_id,
+       summary ->> 'name' AS product_name,
+       summary ->> 'parentProductName' AS parent_product_name,
+       summary ->> 'priceCents' AS price_cents
      FROM jumpyard.product_catalog_cache
      WHERE roller_env = :rollerEnv
        AND COALESCE(expires_at, fetched_at + interval '24 hours') > now()
@@ -4869,7 +4928,10 @@ async function loadParentProductsForChildIds(rollerEnv, productIds) {
 
   const rows = mappedRows(result).map((row) => ({
     parentProductId: stringOrNull(row.parent_product_id),
+    parentProductName: stringOrNull(row.parent_product_name),
+    priceCents: numberOrNull(row.price_cents),
     productId: stringOrNull(row.product_id),
+    productName: stringOrNull(row.product_name),
   }));
   if (rollerEnv !== 'live') return rows;
 
@@ -4897,7 +4959,7 @@ async function loadParentProductsForChildIds(rollerEnv, productIds) {
   return [...rows, ...liveBookingFallbackRows, ...liveAddonFallbackRows];
 }
 
-function buildPhoneAvailability(request, parentProducts, rollerBody) {
+function buildPhoneAvailability(request, parentProducts, rollerBody, dropInPricing = null) {
   const rollerProducts = Array.isArray(rollerBody) ? rollerBody : [];
   const products = [];
   const slots = request.startTimes.map((startTime) => ({
@@ -4939,7 +5001,9 @@ function buildPhoneAvailability(request, parentProducts, rollerBody) {
       const capacityRemaining = getSessionCapacityRemaining(session);
       const onlineSalesOpen = session?.onlineSalesOpen !== false;
       const available = isPhoneAvailabilityProductAvailable(session, selectedProduct, capacityRemaining);
-      const unitPrice = numberOrNull(selectedProduct?.cost);
+      const webUnitPrice = numberOrNull(selectedProduct?.cost);
+      const dropIn = selectDropInVariant(definition, selectedProduct, webUnitPrice, dropInPricing);
+      const unitPrice = dropIn ? dropIn.priceCents / 100 : webUnitPrice;
       const product = withPackageContents({
         available,
         capacityRemaining,
@@ -4950,13 +5014,13 @@ function buildPhoneAvailability(request, parentProducts, rollerBody) {
         label: definition.label,
         onlineSalesOpen,
         parentProductId: definition.parentProductId,
-        productId: stringOrNull(selectedProduct?.id),
-        productName: stringOrNull(selectedProduct?.name),
+        productId: dropIn ? dropIn.productId : stringOrNull(selectedProduct?.id),
+        productName: dropIn ? dropIn.productName : stringOrNull(selectedProduct?.name),
         requiresAvailability: true,
         startTime,
         type: definition.type,
         unitPrice,
-        unitPriceCents: unitPrice === null ? null : Math.round(unitPrice * 100),
+        unitPriceCents: dropIn ? dropIn.priceCents : unitPrice === null ? null : Math.round(unitPrice * 100),
       }, 1);
       products.push(product);
       return product;
@@ -4968,6 +5032,28 @@ function buildPhoneAvailability(request, parentProducts, rollerBody) {
     products,
     slots,
   };
+}
+
+// GH-501 (D0248): an entry sells as the cached Drop-In sibling priced at ROLLER's web price for the
+// slot plus the step. Without exactly one such sibling the slot keeps its web variant, as before,
+// and the miss is collected for the warning.
+function selectDropInVariant(definition, selectedProduct, webUnitPrice, dropInPricing) {
+  const stepCents = dropInPriceStepCents(definition.type);
+  if (stepCents === null || !selectedProduct || webUnitPrice === null) return null;
+  // ROLLER already allocates a Drop-In variant to this slot: sell it as it is.
+  if (isDropInVariantName(selectedProduct.name)) return null;
+
+  const webPriceCents = Math.round(webUnitPrice * 100);
+  const sibling = findDropInSibling(definition.dropInVariants, webPriceCents, stepCents);
+  if (dropInPricing) {
+    if (sibling) {
+      dropInPricing.pricedSlotCount += 1;
+    } else {
+      const webProductId = stringOrNull(selectedProduct.id);
+      dropInPricing.missing.set(`${definition.key}:${webProductId}`, { key: definition.key, webPriceCents, webProductId });
+    }
+  }
+  return sibling;
 }
 
 function findSessionForParent(parent, startTime) {
@@ -5010,6 +5096,11 @@ function findSessionForProduct(parent, productId, startTime) {
   if (allocations.length === 0) return session;
 
   return allocations.some((allocation) => String(allocation?.productId ?? '') === productId) ? session : null;
+}
+
+function isProductAllocatedToSession(session, productId) {
+  return Array.isArray(session?.allocations) &&
+    session.allocations.some((allocation) => String(allocation?.productId ?? '') === String(productId));
 }
 
 function findAvailabilityProduct(parent, productId) {

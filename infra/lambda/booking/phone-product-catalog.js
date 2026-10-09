@@ -133,6 +133,41 @@ function isPhoneAvailabilityProductAvailable(session, selectedProduct, capacityR
   );
 }
 
+// GH-501 (D0248): entries sell at the kassa's drop-in price. ROLLER's availability lists only the
+// web variant per slot, so the drop-in product is the cached Drop-In sibling under the same parent
+// priced exactly web + step (Gustav, 2026-10-09: +20 kr per entry, +60 kr per family entry).
+const DROP_IN_PRICE_STEP_CENTS = Object.freeze({ entry: 2000, family: 6000 });
+
+function isDropInVariantName(name) {
+  return /\bdrop[-\s]?in\b/i.test(String(name ?? ''));
+}
+
+function dropInPriceStepCents(type) {
+  return Object.prototype.hasOwnProperty.call(DROP_IN_PRICE_STEP_CENTS, type) ? DROP_IN_PRICE_STEP_CENTS[type] : null;
+}
+
+// The one cached Drop-In variant priced at web + step; none or several matches return null.
+function findDropInSibling(dropInVariants, webPriceCents, stepCents) {
+  if (!Array.isArray(dropInVariants) || !Number.isInteger(webPriceCents) || !Number.isInteger(stepCents)) return null;
+  const matches = dropInVariants.filter((variant) =>
+    stringOrNull(variant?.productId) &&
+    isDropInVariantName(variant?.productName) &&
+    Number(variant?.priceCents) === webPriceCents + stepCents);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+// A Drop-In variant is bookable in a slot only when it pairs with the web variant ROLLER allocates there.
+function pairDropInWithSlot(parent, session, dropInPriceCents, stepCents) {
+  if (!session || !Number.isInteger(stepCents)) return null;
+  const web = selectMappedAvailabilityProduct(parent, session);
+  if (!web || isDropInVariantName(web.name)) return null;
+  const webCost = web.cost === null || web.cost === undefined || web.cost === '' ? NaN : Number(web.cost);
+  if (!Number.isFinite(webCost)) return null;
+  const webPriceCents = Math.round(webCost * 100);
+  if (Number(dropInPriceCents) !== webPriceCents + stepCents) return null;
+  return { webPriceCents, webProductId: String(web.id) };
+}
+
 function parseJsonOrNull(value) {
   if (!value) return null;
 
@@ -150,10 +185,15 @@ function stringOrNull(value) {
 }
 
 module.exports = {
+  DROP_IN_PRICE_STEP_CENTS,
   LIVE_PHONE_BOOKING_PRODUCTS,
   LIVE_PUBLIC_CHECKOUT_CATALOG,
+  dropInPriceStepCents,
   fetchPublicCheckoutCatalog,
   filterPhoneProductsByPublicCatalog,
+  findDropInSibling,
+  isDropInVariantName,
   isPhoneAvailabilityProductAvailable,
+  pairDropInWithSlot,
   selectMappedAvailabilityProduct,
 };
