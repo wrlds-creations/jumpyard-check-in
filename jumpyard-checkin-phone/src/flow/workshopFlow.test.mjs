@@ -228,9 +228,37 @@ test('socks on the quantity step become the same JumpSocks purchase line the add
   // The quantity step binds the stepper to that same line and adds it to its total; the add-on step no longer offers socks.
   assert.match(buySource, /<SocksQuantity[\s\S]*?quantity=\{socksSellable \? addonQty\.socks : 0\}[\s\S]*?onQuantity=\{\(next\) => setOneAddon\('socks', next\)\}/);
   assert.match(buySource, /\{formatMoney\(entryTotal \+ socksTotal\)\}/);
-  assert.match(buySource, /<AddonChoices\s+rows=\{BUY_ADDON_ROWS\}\s+entries=\{buyAddons\.filter\(\(addon\) => addon\.id !== 'socks'/);
+  assert.match(buySource, /<AddonChoices\s+entries=\{buyAddons\.filter\(\(addon\) => addon\.id !== 'socks'/);
   // Nothing is preselected: the stepper starts at what the guest chose (0 for a new product).
   assert.match(buySource, /const handleProductSelect = \(product: NewBookingProduct\) => \{[\s\S]*?setAddonQty\(createEmptyAddonQty\(\)\);/);
+});
+
+// #515 (Love, 2026-10-12): an existing booking shows the purchase's socks block, and the parents are red.
+test('#515: an existing booking shows the same socks block as a purchase, above the same add-on list', () => {
+  const offer = fs.readFileSync(new URL('../components/AddonsOffer.tsx', import.meta.url), 'utf8');
+  const choices = fs.readFileSync(new URL('../components/AddonChoices.tsx', import.meta.url), 'utf8');
+  const socks = fs.readFileSync(new URL('../components/SocksQuantity.tsx', import.meta.url), 'utf8');
+  // The block counts every pair; the booking's own pairs are its floor, so only extra pairs are added and nothing is preselected.
+  assert.match(offer, /<SocksQuantity\s+quantity=\{qty\.socks\}\s+included=\{minQty\.socks\}[\s\S]*?onQuantity=\{\(next\) => setOne\('socks', next\)\} \/>\s*<AddonChoices\s+entries=\{catalog\.filter\(\(entry\) => entry\.id !== 'socks'\)/);
+  assert.match(socks, /disabled=\{quantity <= included\}/);
+  assert.match(socks, /onClick=\{\(\) => onQuantity\(Math\.max\(included, quantity - 1\)\)\}/);
+  assert.match(socks, /const added = Math\.max\(0, quantity - included\);/);
+  // The add-on list itself never offers socks: water first, then the shelf, in both flows.
+  assert.doesNotMatch(choices, /socksTitle|socksBenefit|firstGroup:|rows\?:|FIRST_ROWS/);
+  assert.match(choices, /<h2 className="addon-shop-group">\{copy\.firstGroupBottle\}<\/h2>/);
+  // The parents are emphasised inside the one rule text, in both languages.
+  const copy = fs.readFileSync(new URL('../context/LanguageContext.tsx', import.meta.url), 'utf8');
+  for (const [rule, parents] of [
+    ['Halkfria strumpor är obligatoriska i JumpYard och måste bäras av alla i trampolinområdet, även icke-hoppande föräldrar.', 'även icke-hoppande föräldrar'],
+    ["Non-slip socks are required at JumpYard and must be worn by everyone in the trampoline area, including parents who aren't jumping.", "including parents who aren't jumping"],
+  ]) {
+    assert.ok(rule.includes(parents));
+    assert.ok(copy.includes(`socksBenefit: ${rule.includes("'") ? JSON.stringify(rule) : `'${rule}'`},`), rule);
+    assert.ok(copy.includes(`socksParents: ${parents.includes("'") ? JSON.stringify(parents) : `'${parents}'`},`), parents);
+  }
+  assert.match(socks, /<strong className="socks-rule-parents">\{parents\}<\/strong>/);
+  const css = fs.readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8');
+  assert.match(css, /\.socks-rule-parents \{ color: var\(--primary\); font-weight: 900; \}/);
 });
 
 test('the summary step is gone: add-ons go to safety, then contact with the order shown open', () => {

@@ -18,10 +18,12 @@ import { BUY_FLOW_RECOVERY_MAX_AGE_MS, clearBuyFlowRecovery, type BuyFlowRecover
 import { installLocalTransport } from '../flow/localTransport';
 import styles from './preview.module.css';
 
-type ScenarioKey = 'buy2' | 'booking' | 'family4';
+type ScenarioKey = 'buy2' | 'booking' | 'booking0' | 'family4';
 const SCENARIOS: { key: ScenarioKey; title: string; note: string }[] = [
     { key: 'buy2', title: 'Köp entré · 2 hoppare', note: 'Ny gäst som köper i parken, 60 min × 2' },
     { key: 'booking', title: 'Bokning · strumpor redan köpta', note: '2 hoppare, 2 par hoppsockor ingår' },
+    // #515: the same booking without socks, where the socks block starts at 0 with nothing included.
+    { key: 'booking0', title: 'Bokning · inga strumpor', note: '2 hoppare, inga strumpor i bokningen' },
     { key: 'family4', title: 'Familj · 4 hoppare', note: 'Familjebiljett 60 min' },
 ];
 const SCREENS = [
@@ -31,6 +33,7 @@ const SCREENS = [
 type ScreenKey = (typeof SCREENS)[number]['key'];
 
 const BOOKING: Booking = { id: 'DEMO', guestAccessToken: 'local-fixture-only', jumpers: 2, time: '17:00', endTime: '18:00', durationMinutes: 60, products: 1, paid: true, guestName: 'Alex', lastName: 'Test', productLabel: '60 min', productType: 'entry', existingAddons: [{ id: 'socks', qty: 2, label: 'Hoppsockor', price: 49 }] };
+const BOOKING_NO_SOCKS: Booking = { ...BOOKING, existingAddons: [] };
 const BOOKING_STEP_ICONS: JumpyardIconName[] = ['booking-card', 'addons-bag', 'payment-card', 'safety-check', 'success-check'];
 
 function isScenario(value: string | null): value is ScenarioKey {
@@ -104,6 +107,7 @@ function BookingProgress() {
 }
 
 function Frame({ scenario, lang }: { scenario: ScenarioKey; lang: Language }) {
+    const booking = scenario === 'booking0' ? BOOKING_NO_SOCKS : scenario === 'booking' ? BOOKING : null;
     const { setLang } = useTranslation();
     const [ready, setReady] = useState(false);
     const [run, setRun] = useState(0);
@@ -117,7 +121,7 @@ function Frame({ scenario, lang }: { scenario: ScenarioKey; lang: Language }) {
         clearBuyFlowRecovery();
         setLang(lang);
         // Mount guest components only after the development transport is installed.
-        setSnapshot(scenario === 'booking' ? null : buySnapshot(scenario));
+        setSnapshot(booking ? null : buySnapshot(scenario as 'buy2' | 'family4'));
         setReady(true);
         return restore;
         // The transport and the query-driven language are set exactly once per frame.
@@ -134,7 +138,7 @@ function Frame({ scenario, lang }: { scenario: ScenarioKey; lang: Language }) {
         clearBuyFlowRecovery();
         setExitOpen(false);
         setContinued(false);
-        setSnapshot(scenario === 'booking' ? null : buySnapshot(scenario));
+        setSnapshot(booking ? null : buySnapshot(scenario as 'buy2' | 'family4'));
         setRun((value) => value + 1);
     };
     // The purchase stops before any quote, draft or payment request.
@@ -153,17 +157,17 @@ function Frame({ scenario, lang }: { scenario: ScenarioKey; lang: Language }) {
             <main className="phone-flow-shell relative flex min-h-dvh w-full min-w-0 flex-col items-center overflow-x-hidden p-3 pt-3 bg-background text-foreground" onClickCapture={stopAtPayment}>
                 <div className="phone-flow max-w-lg z-10 w-full min-w-0 flex flex-col items-center">
                     <LanguageToggle compact className="absolute top-2 right-2 z-20" />
-                    {scenario === 'booking' && !continued && <BookingProgress />}
+                    {booking && !continued && <BookingProgress />}
                     <FlowTransition resetDocumentScroll variant="slide" screenKey={`${run}:${continued}`} className="phone-flow-content relative flex w-full max-w-full min-w-0 items-center justify-center">
-                        {scenario !== 'booking' && snapshot && (
+                        {!booking && snapshot && (
                             <BuyTickets key={run} recoverySnapshot={snapshot} onBack={restart} inlineExitVisible
                                 onRequestExit={() => setExitOpen(true)} onBookingReady={async () => () => undefined} />
                         )}
-                        {scenario === 'booking' && !continued && (
-                            <AddonsOffer key={run} booking={BOOKING} guestCount={2} existingAddons={BOOKING.existingAddons!}
+                        {booking && !continued && (
+                            <AddonsOffer key={run} booking={booking} guestCount={2} existingAddons={booking.existingAddons!}
                                 onContinue={() => setContinued(true)} onPendingDone={restart} />
                         )}
-                        {scenario === 'booking' && continued && (
+                        {booking && continued && (
                             <div className={styles.next}>
                                 <p className={styles.eyebrow}>FÖRHANDSVISNING</p>
                                 <h2>Fortsätt gick igenom</h2>
@@ -172,7 +176,7 @@ function Frame({ scenario, lang }: { scenario: ScenarioKey; lang: Language }) {
                             </div>
                         )}
                     </FlowTransition>
-                    {scenario === 'booking' && !continued && (
+                    {booking && !continued && (
                         <FlowNav onBack={() => setNotice('Tillbaka går till bokningssammanfattningen i riktiga flödet.')} onExit={() => setExitOpen(true)} />
                     )}
                     <ExitFlowDialog open={exitOpen} onClose={() => setExitOpen(false)} onConfirm={restart} />

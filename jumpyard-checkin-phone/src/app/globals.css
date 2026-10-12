@@ -392,6 +392,10 @@ body {
 .buy-socks .buy-socks-title { grid-area: title; overflow-wrap: normal; }
 .buy-socks-meta { grid-area: meta; }
 .buy-socks-stepper { grid-area: stepper; }
+/* #515: an existing booking's pairs sit above the extra price, as on the add-on rows. */
+.buy-socks-included { display: block; }
+/* #515 (Love, 2026-10-12): the rule's parents in red and bold, wherever the socks block is shown. */
+.socks-rule-parents { color: var(--primary); font-weight: 900; }
 
 /* Tall screens get air and the tile facts; the 667 px budget stays compact. */
 @media (min-height: 740px) {
