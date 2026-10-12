@@ -4,6 +4,7 @@
 // transport answers availability and quotes; no request reaches Cloud or ROLLER, and Continue never
 // creates a booking. Each frame simulates the phone's clipboard (?clip= overrides it), so the review
 // looks the same on every computer; ?clip=real uses this computer's own clipboard.
+// #510: one field without a type chooser; the typed frames enter their text one character at a time.
 
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { LanguageProvider, useTranslation, type Language } from '@/context/LanguageContext';
@@ -12,10 +13,10 @@ import { BuyTickets } from '@/components/BuyTickets';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { ExitFlowDialog } from '@/components/ExitFlowDialog';
 import { BUY_FLOW_RECOVERY_MAX_AGE_MS, clearBuyFlowRecovery, type BuyFlowRecoverySnapshot } from '@/flow/buyFlowRecovery';
-import { installPasteTransport } from './pasteTransport';
+import { installPasteTransport, PREVIEW_DISCOUNT_CODE } from './pasteTransport';
 import styles from './preview.module.css';
 
-type FrameKey = 'tom' | 'presentkort' | 'medlem' | 'fore-kontakt' | 'fallback';
+type FrameKey = 'tom' | 'presentkort' | 'medlem-skrivet' | 'rabattkod' | 'fel-kod' | 'siffror' | 'medlem' | 'fore-kontakt' | 'fallback';
 type Clip = { mode: 'text'; text: string } | { mode: 'denied' } | { mode: 'missing' } | { mode: 'real' };
 interface FrameSpec {
     key: FrameKey;
@@ -24,19 +25,40 @@ interface FrameSpec {
     clip: string;
     contact: boolean;
     paste: boolean;
+    /** #510: typed into the field one character at a time instead of pasted. */
+    type?: string;
+    /** Taps Applicera after typing. */
+    apply?: boolean;
     scroll: 'codes' | 'top';
 }
 
 // Synthetic numbers in ROLLER's email shapes, with the leading "#" a copy brings along.
 const GIFT_CARD_COPY = '#4000123456';
 const MEMBER_COPY = '#178000001-602000001';
+const MEMBER_TYPED = '178000001-602000001';
 const FRAMES: FrameSpec[] = [
-    { key: 'tom', title: 'Tomt fält', note: 'Klistra in står där Applicera står så fort fältet har text. Här läser knappen datorns egna urklipp.', clip: 'real', contact: true, paste: false, scroll: 'codes' },
-    { key: 'presentkort', title: 'Presentkort', note: `Urklipp "${GIFT_CARD_COPY}": typen blir Presentkort, numret kontrolleras direkt och täcker allt.`, clip: GIFT_CARD_COPY, contact: true, paste: true, scroll: 'codes' },
-    { key: 'medlem', title: 'Medlemskort', note: `Urklipp "${MEMBER_COPY}": typen blir Medlem, 30 % på entrén och strumporna till fullpris.`, clip: MEMBER_COPY, contact: true, paste: true, scroll: 'codes' },
+    { key: 'tom', title: 'Tomt fält', note: 'Ett fält utan typväljare. Klistra in står där Applicera står så fort fältet har text. Här läser knappen datorns egna urklipp.', clip: 'real', contact: true, paste: false, scroll: 'codes' },
+    { key: 'presentkort', title: 'Presentkort, inklistrat', note: `Urklipp "${GIFT_CARD_COPY}": 10 siffror blir ett presentkort, numret kontrolleras direkt och täcker allt.`, clip: GIFT_CARD_COPY, contact: true, paste: true, scroll: 'codes' },
+    { key: 'medlem-skrivet', title: 'Medlemskort, skrivet', note: `Skrivet "${MEMBER_TYPED}": siffror, bindestreck, siffror blir ett medlemskort och kontrolleras direkt.`, clip: 'real', contact: true, paste: false, type: MEMBER_TYPED, scroll: 'codes' },
+    { key: 'rabattkod', title: 'Rabattkod', note: `Skrivet "${PREVIEW_DISCOUNT_CODE}" och Applicera: allt annat är en rabattkod eller ett klippkort.`, clip: 'real', contact: true, paste: false, type: PREVIEW_DISCOUNT_CODE, apply: true, scroll: 'codes' },
+    { key: 'fel-kod', title: 'Fel kod', note: 'Skrivet "VINTER10" och Applicera: en kod som inte finns ger "Koden kunde inte användas".', clip: 'real', contact: true, paste: false, type: 'VINTER10', apply: true, scroll: 'codes' },
+    { key: 'siffror', title: 'Siffror på väg', note: 'Medan siffrorna inte är ett helt nummer säger raden hur presentkort och medlemskort ser ut.', clip: 'real', contact: true, paste: false, type: '400012', scroll: 'codes' },
+    { key: 'medlem', title: 'Medlemskort, inklistrat', note: `Urklipp "${MEMBER_COPY}": 30 % på entrén och strumporna till fullpris.`, clip: MEMBER_COPY, contact: true, paste: true, scroll: 'codes' },
     { key: 'fore-kontakt', title: 'Före namn och e-post', note: 'Numret väntar och kontrolleras en gång när namn och e-post är ifyllda. Fyll i dem och se.', clip: GIFT_CARD_COPY, contact: false, paste: true, scroll: 'top' },
     { key: 'fallback', title: 'Urklipp nekas', note: 'Telefonen ger inte urklippet: fältet får fokus och en rad förklarar hur man klistrar in.', clip: 'denied', contact: true, paste: true, scroll: 'codes' },
 ];
+// The harness shows at most five phones per row.
+const FRAMES_PER_ROW = 5;
+
+/** Types like a guest: each character through React's own input event, a moment apart. */
+async function typeIntoField(input: HTMLInputElement, text: string) {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    for (let length = 1; length <= text.length; length += 1) {
+        setValue?.call(input, text.slice(0, length));
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 60));
+    }
+}
 
 function findFrame(key: string | null) {
     return FRAMES.find((frame) => frame.key === key) ?? null;
@@ -129,20 +151,25 @@ function Frame({ frame, lang, clip }: { frame: FrameSpec; lang: Language; clip: 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // The frame's own taps, the way a guest makes them: open the code section, then "Klistra in" once.
+    // The frame's own taps, the way a guest makes them: open the code section, then "Klistra in" once
+    // or (#510) type the text and, for a code, tap Applicera.
     useEffect(() => {
         if (!ready) return;
         let pasted = !frame.paste;
+        let typed = frame.type === undefined;
+        let cancelled = false;
         const later: number[] = [];
         const place = () => {
             const section = document.querySelector('[data-testid=payment-options]');
             if (frame.scroll === 'top' || !section) window.scrollTo({ top: 0 });
             else window.scrollTo({ top: section.getBoundingClientRect().top + window.scrollY - 12 });
         };
+        const settle = () => later.push(window.setTimeout(place, 150), window.setTimeout(place, 1200));
         const timer = window.setInterval(() => {
             const toggle = document.querySelector<HTMLButtonElement>('[data-testid=payment-options-toggle]');
             if (!toggle) return;
-            if (!document.querySelector('[data-testid=payment-code-input]')) {
+            const input = document.querySelector<HTMLInputElement>('[data-testid=payment-code-input]');
+            if (!input) {
                 toggle.click();
                 return;
             }
@@ -153,14 +180,25 @@ function Frame({ frame, lang, clip }: { frame: FrameSpec; lang: Language; clip: 
                 paste.click();
             }
             window.clearInterval(timer);
+            if (!typed && frame.type !== undefined) {
+                typed = true;
+                place();
+                void typeIntoField(input, frame.type).then(() => {
+                    if (cancelled) return;
+                    if (frame.apply) document.querySelector<HTMLButtonElement>('[data-testid=payment-code-apply]')?.click();
+                    settle();
+                });
+                return;
+            }
             // Again once the check has answered and the section has grown.
-            later.push(window.setTimeout(place, 150), window.setTimeout(place, 1200));
+            settle();
         }, 250);
         return () => {
+            cancelled = true;
             window.clearInterval(timer);
             later.forEach((id) => window.clearTimeout(id));
         };
-    }, [frame.paste, frame.scroll, ready, run]);
+    }, [frame.apply, frame.paste, frame.scroll, frame.type, ready, run]);
 
     useEffect(() => {
         if (!notice) return;
@@ -219,7 +257,8 @@ function Harness() {
         const header = bar.current;
         if (!container || !header) return;
         const compute = () => {
-            const byWidth = (container.clientWidth - 48 - 4 * 24) / (FRAMES.length * width);
+            const perRow = Math.min(FRAMES.length, FRAMES_PER_ROW);
+            const byWidth = (container.clientWidth - 48 - (perRow - 1) * 24) / (perRow * width);
             const byHeight = (window.innerHeight - header.offsetHeight - 110) / height;
             setScale(Math.max(0.4, Math.min(1, byWidth, byHeight)));
         };
@@ -233,9 +272,9 @@ function Harness() {
         <div className={styles.harness}>
             <header className={styles.bar} ref={bar}>
                 <div>
-                    <p className={styles.eyebrow}>LOCALHOST · TELEFON · #505</p>
-                    <h1>Klistra in presentkort och medlemskort</h1>
-                    <p className={styles.note}>Riktiga kontaktsteget med testdata: en entré 60 min (220 kr) och strumpor (49 kr). Inga köp och inga anrop till Cloud eller ROLLER. Varje telefon går att trycka i.</p>
+                    <p className={styles.eyebrow}>LOCALHOST · TELEFON · #505 + #510</p>
+                    <h1>Ett kodfält: skriv eller klistra in</h1>
+                    <p className={styles.note}>Riktiga kontaktsteget med testdata: en entré 60 min (220 kr) och strumpor (49 kr). Ingen typväljare: numret avgör om det är presentkort, medlemskort eller rabattkod. Inga köp och inga anrop till Cloud eller ROLLER. Varje telefon går att trycka i.</p>
                 </div>
                 <div className={styles.control}>
                     <span>Språk</span>
@@ -247,7 +286,7 @@ function Harness() {
                 </div>
                 <button type="button" className={styles.reset} onClick={() => setNonce((value) => value + 1)}>Börja om</button>
             </header>
-            <div className={styles.frames} ref={frames}>
+            <div className={styles.frames} ref={frames} style={{ flexWrap: 'wrap' }}>
                 {FRAMES.map((frame) => {
                     const url = `?frame=${frame.key}&lang=${lang}`;
                     return (

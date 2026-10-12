@@ -5,6 +5,10 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import { getPaymentOptionInputState } from './paymentOptionFeedback.ts';
 import { pendingEmailMarketingConsent } from './emailMarketingConsent.ts';
+import { detectPaymentCodeKind, isCompletePaymentCode } from './paymentCodeShape.ts';
+
+// vm objects come from another realm; compare their plain JSON.
+const plain = (value) => JSON.parse(JSON.stringify(value));
 
 const summary = (amount = 200, errors = []) => ({
   requestedCount: 1, appliedCount: amount > 0 ? 1 : 0, totalApplied: amount, applied: [], errors,
@@ -100,9 +104,13 @@ function harness({ provider = async () => quote(), draftAmount = 0 } = {}) {
     backNavigationLocked: false,
     // #491 round 1: Back from contact returns to the safety film in the live order.
     safetyBeforePayment: true,
+    // #510: the real shape rules decide the type; a complete typed number owes one check.
+    detectPaymentCodeKind, isCompletePaymentCode, pendingPastedCode: null, pasteHelpVisible: false,
+    setPendingPastedCode: value => { state.pendingPastedCode = value; },
+    setPasteHelpVisible: value => { state.pasteHelpVisible = value; },
   };
   const names = ['invalidateQuote', 'clampPaymentOptionCode', 'updateClipCardCode', 'updateGiftCardNumber',
-    'updatePaymentOptionValue', 'removePaymentOption', 'selectPaymentOptionType', 'continueWithoutCode', 'editRejectedCode',
+    'updatePaymentOptionValue', 'removePaymentOption', 'typePaymentCode', 'continueWithoutCode', 'editRejectedCode',
     'updateContact', 'hasPaymentOptionQuoteErrors', 'getDraftAmountOwing', 'applyPaymentOptions', 'createDraft', 'backFromStep'];
   const code = names.map(declaration).join('\n') + `\nglobalThis.handlers = {${names.join(',')}};`;
   vm.runInContext(ts.transpileModule(code, {
@@ -157,7 +165,7 @@ for (const change of ['updateClipCardCode', 'updateGiftCardNumber', 'contact', '
     if (change === 'contact') host.updateContact(() => {}, 'changed@example.invalid');
     else if (change === 'basket') host.invalidateQuote();
     else if (change === 'back') host.backFromStep();
-    else if (change === 'type') host.selectPaymentOptionType('giftCard');
+    else if (change === 'type') host.typePaymentCode('4000123456');
     else if (change === 'remove') host.removePaymentOption();
     else host[change]('synthetic-new');
     assert.equal(host.state.quote, null);
@@ -401,22 +409,37 @@ test('one code type at a time: entering one code clears the other', () => {
   assert.equal(host.state.clipCardCode, 'synthetic-again');
 });
 
-test('selecting the other code type clears the entered code and previous quote', () => {
+test('#510: one field; a typed value takes the type its shape shows and a complete number owes one check', () => {
   const host = harness();
   host.state.quote = quote();
-  host.state.clipCardCode = 'synthetic-code';
-  host.selectPaymentOptionType('giftCard');
-  assert.equal(host.state.paymentOptionType, 'giftCard');
+  host.state.clipCardCode = '400012345';
+  host.typePaymentCode('4000123456');
+  assert.equal(host.state.paymentOptionType, 'giftCard', 'ten digits are a gift card');
+  assert.equal(host.state.giftCardNumber, '4000123456');
   assert.equal(host.state.clipCardCode, '');
+  assert.equal(host.state.quote, null, 'a new value always needs a new check');
+  assert.deepEqual(plain(host.state.pendingPastedCode), { kind: 'giftCard', value: '4000123456', waitsForContact: false });
+  host.typePaymentCode('178000001-602000001');
+  assert.equal(host.state.paymentOptionType, 'member');
+  assert.equal(host.state.clipCardCode, '178000001-602000001', 'membership numbers travel as discount codes');
   assert.equal(host.state.giftCardNumber, '');
-  assert.equal(host.state.quote, null);
-  assert.equal(host.state.quoteRequestVersionRef.current, 1);
-  host.selectPaymentOptionType('giftCard');
-  assert.equal(host.state.quoteRequestVersionRef.current, 1, 'reselecting the active type changes nothing');
-  host.state.paymentInputsHaveValues = false;
-  host.selectPaymentOptionType('discount');
+  assert.deepEqual(plain(host.state.pendingPastedCode), { kind: 'member', value: '178000001-602000001', waitsForContact: false });
+  host.typePaymentCode('178000001-602000');
+  assert.equal(host.state.paymentOptionType, 'member', 'a shorter membership number is still one');
+  assert.equal(host.state.pendingPastedCode, null, 'only a whole 9 + 9 number is checked by itself');
+  for (const value of ['SOMMAR25', '400012345', '178000001-60200']) {
+    host.typePaymentCode(value);
+    assert.equal(host.state.paymentOptionType, 'discount', value);
+    assert.equal(host.state.clipCardCode, value);
+    assert.equal(host.state.pendingPastedCode, null, `${value} waits for Applicera, Enter or Continue`);
+  }
+  host.state.customerValid = false;
+  host.typePaymentCode('4000123456');
+  assert.equal(host.state.pendingPastedCode.waitsForContact, true, 'a number typed before the contact waits for it');
+  host.typePaymentCode('');
   assert.equal(host.state.paymentOptionType, 'discount');
-  assert.equal(host.state.quoteRequestVersionRef.current, 1, 'switching without a code needs no new quote');
+  assert.equal(host.state.giftCardNumber, '');
+  assert.equal(host.state.pendingPastedCode, null);
 });
 
 test('removing the applied code clears the active field and its quote', () => {
@@ -430,10 +453,11 @@ test('removing the applied code clears the active field and its quote', () => {
 
 test('member codes travel through the discount-code field and clear a gift card', () => {
   const host = harness();
-  host.state.giftCardNumber = 'synthetic-gift';
-  host.state.paymentOptionType = 'member';
-  host.updatePaymentOptionValue('synthetic-member');
-  assert.equal(host.state.clipCardCode, 'synthetic-member');
+  host.state.giftCardNumber = '4000123456';
+  host.state.paymentOptionType = 'giftCard';
+  host.updatePaymentOptionValue('178000001-602000001');
+  assert.equal(host.state.paymentOptionType, 'member');
+  assert.equal(host.state.clipCardCode, '178000001-602000001');
   assert.equal(host.state.giftCardNumber, '');
   assert.equal(host.state.quote, null);
 });

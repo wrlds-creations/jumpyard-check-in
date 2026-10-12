@@ -77,10 +77,18 @@ test('a membership number takes 30 % off the entries only: -66 kr and 203 kr to 
   assert.deepEqual(member.discountCodes.errors, []);
 });
 
+test('#510: the discount code SOMMAR25 takes 25 % off the entries only: -55 kr and 214 kr to pay', async () => {
+  const h = harness();
+  h.installPasteTransport({ delayMs: 0 });
+  const code = await quote(h, { discountCodes: ['SOMMAR25'] });
+  assert.deepEqual(code.costs, { total: 214, amountOwing: 214, discount: 55 });
+  assert.deepEqual(code.discountCodes.errors, []);
+});
+
 test('any other code or card is rejected and the price stays', async () => {
   const h = harness();
   h.installPasteTransport({ delayMs: 0 });
-  for (const body of [{ discountCodes: ['SOMMAR25'] }, { discountCodes: ['123456789'] }, { giftCards: [{ giftCardNumber: '400012345' }] }]) {
+  for (const body of [{ discountCodes: ['VINTER10'] }, { discountCodes: ['123456789'] }, { giftCards: [{ giftCardNumber: '400012345' }] }]) {
     const rejected = await quote(h, body);
     assert.equal(rejected.costs.amountOwing, 269, JSON.stringify(body));
     const summary = body.giftCards ? rejected.giftCards : rejected.discountCodes;

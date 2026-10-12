@@ -269,7 +269,9 @@ test('the real effect leaves an edited number and a running check alone', () => 
 
 test('Applicera, Enter, a typed edit and Continue take over from the pending automatic check', () => {
   const field = source.slice(source.indexOf('data-testid="payment-code-input"'), source.indexOf('data-testid="payment-code-hint"'));
-  assert.match(field, /onChange=\{\(event\) => \{[\s\S]*?setPendingPastedCode\(null\);\s*updatePaymentOptionValue\(event\.target\.value\);/);
+  // #510: a typed edit replaces the pending check with its own (a complete number) or none.
+  assert.match(field, /onChange=\{\(event\) => typePaymentCode\(event\.target\.value\)\}/);
+  assert.match(source, /const typePaymentCode = [\s\S]*?setPendingPastedCode\(isCompletePaymentCode\(kind, value\) \? \{ kind, value, waitsForContact: !customerValid \} : null\);/);
   assert.match(field, /event\.key !== 'Enter'[\s\S]*?setPendingPastedCode\(null\);\s*void applyPaymentOptions\(\);/);
   assert.match(field, /data-testid="payment-code-apply"\s+onClick=\{\(\) => \{\s*setPendingPastedCode\(null\);\s*void applyPaymentOptions\(\);/);
   assert.match(field, /onPaste=\{\(event\) => \{[\s\S]*?if \(pastePaymentCode\(event\.clipboardData\.getData\('text'\)\)\) event\.preventDefault\(\);/);
@@ -303,5 +305,14 @@ test('Swedish and English copy for Klistra in, its fallback line and the waiting
     "paymentCodePasteWaiting: 'Fill in your first name and email and we will check the card.',",
     "paymentCodePasteWaitingCode: 'Fill in your first name and email and we will check the code.',",
     "memberAcceptedTitle: 'Membership accepted',",
+    // #510 (D0251): the one field's label, placeholder and the hint while digits are typed.
+    "paymentCodeLabel: 'Kod',",
+    "paymentCodePlaceholder: 'Kod eller kortnummer',",
+    "cardShapeHint: 'Presentkort har 10 siffror. Medlemskort har ett bindestreck.',",
+    "paymentCodeLabel: 'Code',",
+    "paymentCodePlaceholder: 'Code or card number',",
+    "cardShapeHint: 'Gift cards have 10 digits. Membership numbers have a hyphen.',",
   ]) assert.ok(copy.includes(line), line);
+  // #510: the type chooser and its per-type labels are gone.
+  assert.doesNotMatch(copy, /paymentOptionTypeQuestion|giftCardPlaceholder|memberCodePlaceholder/);
 });
