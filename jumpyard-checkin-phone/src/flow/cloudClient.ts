@@ -396,7 +396,8 @@ const CUSTOMER_ADDON_LABELS: Record<AddonId, string> = {
   lock: 'Hänglås',
   skyrider: 'SkyRider',
   socks: 'Strumpor',
-  water_bottle: 'Vattenflaska',
+  // #504: plain water ("JumpYard Vatten" in ROLLER), also for water already in a booking.
+  water_bottle: 'Vatten',
 };
 
 export async function lookupBooking(code: string, options: { signal?: AbortSignal } = {}): Promise<Booking> {
