@@ -40,8 +40,8 @@ const ADMISSION_PRODUCT_TYPES = new Set(['membership', 'partypackage', 'pass', '
   'recurringsession', 'recurringsessions', 'sessionpass', 'standardpass']);
 const NON_PHYSICAL_PRODUCT_TYPES = new Set(['fee', 'giftcard']);
 // Phone and kiosk purchases are described with Cloud's own verified product definitions
-// before ROLLER confirms them; these types name its entry and family admissions.
-const PURCHASE_ADMISSION_TYPES = new Set(['entry', 'family']);
+// before ROLLER confirms them; these types name its entry, family and deal (GH-514) admissions.
+const PURCHASE_ADMISSION_TYPES = new Set(['entry', 'family', 'deal']);
 const productTypeKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 function deepFreeze(value) {

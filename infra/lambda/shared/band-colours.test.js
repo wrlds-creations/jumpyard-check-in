@@ -283,6 +283,7 @@ test('purchase items use Cloud’s verified product definitions; a Combo name al
   for (const [label, item, expected] of [
     ['entry definition', { productType: 'entry', durationMinutes: 120, startTime: '13:30' }, 'gul'],
     ['family definition', { productType: 'family', durationMinutes: 60, startTime: '14:00', endTime: '15:00' }, 'svart-rod'],
+    ['deal definition (GH-514)', { productType: 'deal', durationMinutes: 120, startTime: '16:00' }, 'morkbla'],
     ['ROLLER parent type', { productType: null, parentType: 'sessionpass', durationMinutes: 90, startTime: '11:30' }, 'morkbla'],
     ['unverified Combo', { productId: '1318777', productType: 'combo', durationMinutes: 60, startTime: '12:00' }, null],
     ['add-on', { productType: 'addon', durationMinutes: 60, startTime: '12:00' }, null],

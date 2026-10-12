@@ -299,6 +299,9 @@ test('round 1: 90 minutes leads entry and family, entry leads the page, with a r
   assert.match(buySource, /const entryProducts = sortPopularFirst\(visibleProductSections\.entry\);/);
   assert.match(buySource, /const familyProducts = sortPopularFirst\(visibleProductSections\.family\);/);
   const productStep = buySource.slice(buySource.indexOf("{step === 'PRODUCT' && ("), buySource.indexOf("{step === 'QUANTITY' && selectedProduct && ("));
+  // GH-514 (Love 2026-10-12, "Kör kortet högst upp"): the 2-for-1 deal leads the product step.
+  assert.ok(productStep.indexOf('dealProducts.map') > -1, 'the deal section renders');
+  assert.ok(productStep.indexOf('dealProducts.map') < productStep.indexOf('entryProducts.map'), 'the deal before the entries');
   assert.ok(productStep.indexOf('entryProducts.map') < productStep.indexOf('comboProducts.map'), 'entry before the Weekday Combo');
   assert.ok(productStep.indexOf('comboProducts.map') < productStep.indexOf('familyProducts.map'), 'family last');
   assert.match(buySource, /'buy-product-popular bg-white border-2 border-primary shadow-\[0_0_22px_rgba\(239,23,66,0\.26\)\] active:scale-\[0\.98\]'/);

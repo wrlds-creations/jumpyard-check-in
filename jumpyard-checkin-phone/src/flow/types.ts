@@ -126,7 +126,7 @@ export interface Booking {
   lastName?: string;
   existingAddons?: Addon[];
   productLabel?: string;
-  productType?: 'entry' | 'family' | 'combo';
+  productType?: 'entry' | 'family' | 'combo' | 'deal';
   admissionItems?: BookingAdmissionItem[];
   /** GH-459: band colours of the booking's admissions, one entry per colour. */
   bandColours?: BandColourCount[];
@@ -167,7 +167,7 @@ export interface FlowContext {
 
   baseProductId: string | null;
   baseProductLabel: string | null;
-  baseProductType: 'entry' | 'family' | 'combo' | null;
+  baseProductType: 'entry' | 'family' | 'combo' | 'deal' | null;
   baseDurationMinutes: number;
   baseUnitPrice: number;
   baseQuantity: number;

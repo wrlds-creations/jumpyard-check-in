@@ -1,5 +1,21 @@
 # Test Plan
 
+## The "2 timmar för 1" deal (#514, kiosk #195)
+
+Run these checks:
+
+- `npm run validate:gh514-deal`, which runs the real availability, validation and quote handlers. It covers Drop-In prices from the one existing read, a hidden deal when it is unlisted, the catalog fails, there is no session or it is renamed, rejected mismatched tiers and the quote id;
+- `validate:gh501-dropin-entry-prices`, `validate:gh339-catalog-resilience` and `validate:gh459-band-colours`;
+- the phone `test:product-visibility`, `test:workshop-flow` and `test:completion`, the kiosk `test:product-visibility`, and lint and `tsc` in both repos.
+
+In the development-only `/preview/workshop`, check the phone frames `hopptid`, `antal-deal`, `kontakt-deal` and `klar-deal` at 375x812, and the kiosk states `jump`, `quantity-deal` and `contact-deal` at 1080x1920, in SV and EN. The deal comes first with "Passa på" and "Betala för 60 min". The summary line reads "2 timmar för 1". The completion shows one band per jumper for start + 120 minutes.
+
+After release, on a Monday to Thursday:
+
+- buy the deal on a phone and on the kiosk at the kassa price;
+- check the band colour and the staff handout;
+- check that Friday to Sunday shows no deal. [Notes](docs/gh-514-deal-2-for-1.md).
+
 ## One code field on the phone (#510)
 
 Run `npm --prefix jumpyard-checkin-phone run test:payment-options` (part of `npm run validate`). The payment-option harness runs the real `typePaymentCode` and `updatePaymentOptionValue` handlers: the type follows the value, the other kind is cleared, only a whole gift card or membership number owes the one automatic check, and a number typed before the contact waits for it. The paste suite pins the field's typed edit and the SV/EN copy and checks that the chooser keys are gone. In the development-only `/preview/klistra-in`, check the frames `tom`, `presentkort`, `medlem-skrivet`, `rabattkod`, `fel-kod` and `siffror` in SV/EN at 375x812: no chooser, the placeholder fits next to "Klistra in", and each status names the type. After release, Love types a membership number, pastes a gift card number and types a discount code on an iPhone. [Notes](docs/gh-510-one-code-field.md).
