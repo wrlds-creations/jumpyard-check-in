@@ -50,7 +50,7 @@ const COPY = {
         arrived: 'Du är incheckad', ended: 'Besöket är avslutat', since: 'Sedan', number: 'Ditt nummer',
         endedText: (code: string, day: string) => `Nummer ${code} gällde bara ${day}.`,
         pickup: 'Här hämtar ni',
-        route: 'Gör så här nu', routeHome: 'När ni kommer till JumpYard', routeHomeHint: 'Gå förbi kassan, direkt till steg 1.',
+        route: 'Gör så här nu', routeHome: 'När ni kommer till JumpYard',
         socksTag: 'Strumpstationen', socks: 'Hämta strumpor',
         bandsTag: 'Bandutlämningen · Visa numret', bands: 'Hämta band', bandsExtras: 'Hämta band och tillbehör', extras: 'Hämta tillbehör',
         jump: 'Hoppa!',
@@ -64,7 +64,7 @@ const COPY = {
         arrived: 'You are checked in', ended: 'Your visit is over', since: 'Since', number: 'Your number',
         endedText: (code: string, day: string) => `Number ${code} was only valid on ${day}.`,
         pickup: 'Where to collect',
-        route: 'What to do now', routeHome: 'When you arrive at JumpYard', routeHomeHint: 'Skip the till and go straight to step 1.',
+        route: 'What to do now', routeHome: 'When you arrive at JumpYard',
         socksTag: 'Sock station', socks: 'Get your socks',
         bandsTag: 'Wristband desk · Show your number', bands: 'Get your bands', bandsExtras: 'Get bands and extras', extras: 'Get your extras',
         jump: 'Jump!',
@@ -207,7 +207,6 @@ export function PhoneCompletion({ lang, onLanguageChange, handoffCode, handoffPa
             </section>}
             <section className={styles.route} aria-label={t.pickup}>
                 <h2 className={styles.routeTitle} data-testid="route-heading">{onSite ? t.route : t.routeHome}</h2>
-                {!onSite && <p className={styles.routeHint} data-testid="route-skip-till">{t.routeHomeHint}</p>}
                 <ol className={styles.steps}>
                     {steps.map((group, index) => <li key={group.key} className={styles.step} data-step={group.key}
                         data-first={index === 0 ? 'true' : undefined} data-testid={`confirmation-${group.key}`}>
