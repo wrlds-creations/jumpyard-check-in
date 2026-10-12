@@ -27,6 +27,7 @@ import { RollerPaymentDropIn } from '@/components/RollerPaymentDropIn';
 import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { AddonChoices } from '@/components/AddonChoices';
+import { SocksQuantity } from '@/components/SocksQuantity';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 import { approvePaymentRecovery, clearPaymentRecoveryAfterCompletion, readPaymentRecovery } from '@/flow/paymentRecovery';
 import { getAddonBackRule, type AddonBackRule } from '@/flow/addonPaymentNavigation';
@@ -282,6 +283,7 @@ export const AddonsOffer = ({
         () => new Map(catalog.map((entry) => [entry.id, entry])),
         [catalog]
     );
+    const socksEntry = catalogById.get('socks') ?? null;
 
     const minQty = useMemo(() => {
         const base: Record<AddonId, number> = { skyrider: 0, connected: 0, coffee: 0, extra_person: 0, lock: 0, socks: 0, water_bottle: 0 };
@@ -679,10 +681,22 @@ export const AddonsOffer = ({
                         {catalogLoading ? (
                             <AddonsLoadingCard label={t.addons.loading} />
                         ) : (
-                            <AddonChoices
-                                entries={catalog.map((entry) => ({ ...entry, quantity: qty[entry.id], included: minQty[entry.id],
-                                    max: Math.max(minQty[entry.id], 1, guestCount * entry.maxPerGuest), available: isPricedCatalogEntry(entry) }))}
-                                onQuantity={setOne} />
+                            <>
+                                {/* #515 (Love, 2026-10-12): the purchase's own JumpSocks block, then the purchase's add-on
+                                    list, so a booking reads the same socks rule as a new purchase. */}
+                                <SocksQuantity
+                                    quantity={qty.socks}
+                                    included={minQty.socks}
+                                    price={socksEntry?.price ?? null}
+                                    available={socksEntry ? isPricedCatalogEntry(socksEntry) : false}
+                                    max={Math.max(minQty.socks, 1, guestCount * (socksEntry?.maxPerGuest ?? 0))}
+                                    onQuantity={(next) => setOne('socks', next)} />
+                                <AddonChoices
+                                    entries={catalog.filter((entry) => entry.id !== 'socks').map((entry) => ({ ...entry, quantity: qty[entry.id],
+                                        included: minQty[entry.id], max: Math.max(minQty[entry.id], 1, guestCount * entry.maxPerGuest),
+                                        available: isPricedCatalogEntry(entry) }))}
+                                    onQuantity={setOne} />
+                            </>
                         )}
                     </div>
 

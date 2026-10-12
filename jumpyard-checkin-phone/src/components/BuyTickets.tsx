@@ -146,8 +146,6 @@ type PaymentOptionType = 'discount' | 'member' | 'giftCard';
 
 const PAYMENT_OPTION_CODE_MAX_LENGTH = 32;
 const SOCKS_UNLIMITED_MAX = Number.MAX_SAFE_INTEGER;
-// #491: a new purchase picks socks next to the jumpers; the add-on step keeps only the bottle row.
-const BUY_ADDON_ROWS = ['water_bottle'] as const;
 const PAYMENT_OPTION_GROUP_CLASS =
   'flex items-stretch overflow-hidden rounded-xl border bg-surface transition-all focus-within:ring-2 focus-within:ring-primary/10';
 
@@ -2298,7 +2296,6 @@ export const BuyTickets = ({
           <div className="addon-shop-scroll">
             {/* #491: socks are chosen on the quantity step, so only the bottle row and the shelf remain. */}
             <AddonChoices
-              rows={BUY_ADDON_ROWS}
               entries={buyAddons.filter((addon) => addon.id !== 'socks'
                 && (addon.id === 'water_bottle' || (isPricedAddon(addon) && getBuyAddonMax(addon) > 0)))
                 .map((addon) => ({ ...addon, description: '', quantity: addonQty[addon.id], included: 0,

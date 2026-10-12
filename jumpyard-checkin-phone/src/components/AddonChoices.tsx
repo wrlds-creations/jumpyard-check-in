@@ -20,19 +20,16 @@ export interface AddonChoice {
   available: boolean;
 }
 
-type FirstRow = 'socks' | 'water_bottle';
-
 interface Props {
   entries: AddonChoice[];
   onQuantity: (id: AddonId, quantity: number) => void;
-  /** #491: a new purchase picks socks on the quantity step, so it shows only the bottle row here. */
-  rows?: readonly FirstRow[];
 }
 
-// #457 (Hylla): socks and water come first as compact rows, the optional add-ons follow as a
-// three-tile shelf. Every item is an ordinary offer, so Continue never asks for a tick.
+// #457 (Hylla): water comes first as a compact row, the optional add-ons follow as a three-tile
+// shelf. Every item is an ordinary offer, so Continue never asks for a tick.
+// #515: socks are never a row here. A purchase picks them on the quantity step and an existing
+// booking above this list, both in SocksQuantity.
 const SHELF_ORDER: AddonId[] = ['skyrider', 'lock', 'coffee'];
-const FIRST_ROWS: readonly FirstRow[] = ['socks', 'water_bottle'];
 
 function shelfEntries(entries: readonly AddonChoice[]) {
   const optional = entries.filter((entry) => entry.id !== 'socks' && entry.id !== 'water_bottle');
@@ -65,7 +62,7 @@ function useScrollFade(root: RefObject<HTMLElement | null>) {
   }, [root]);
 }
 
-export function AddonChoices({ entries, onQuantity, rows = FIRST_ROWS }: Props) {
+export function AddonChoices({ entries, onQuantity }: Props) {
   const { t, lang } = useTranslation();
   const copy = t.addons.choices;
   const uid = useId();
@@ -78,7 +75,6 @@ export function AddonChoices({ entries, onQuantity, rows = FIRST_ROWS }: Props) 
 
   const unitPrice = (entry: AddonChoice) => {
     const price = money(entry.price ?? 0);
-    if (entry.id === 'socks') return fill(copy.perPair, { price });
     if (entry.unit === t.addons.perJumper) return fill(copy.perJumper, { price });
     if (entry.unit === t.addons.each) return fill(copy.perEach, { price });
     return `${price} ${entry.unit}`;
@@ -110,43 +106,37 @@ export function AddonChoices({ entries, onQuantity, rows = FIRST_ROWS }: Props) 
     </div>
   );
 
+  // Keep the water offer visible even when the catalog cannot sell it.
+  const water = entries.find((item) => item.id === 'water_bottle') ?? {
+    id: 'water_bottle', label: t.addons.products.waterBottleLabel, icon: 'water', price: null,
+    description: '', unit: t.addons.each, quantity: 0, included: 0, max: 0, available: false,
+  } satisfies AddonChoice;
+  const waterTitleId = `${uid}-water_bottle-title`;
+  const waterNoteId = `${uid}-water_bottle-note`;
+
   return (
     <div ref={root} className="addon-shop" data-testid="addon-choice-choices">
       {process.env.NEXT_PUBLIC_PHONE_ADDON_PREVIEW === 'true' && <p className="addon-shop-preview">{copy.preview}</p>}
-      <h2 className="addon-shop-group">{rows.includes('socks') ? copy.firstGroup : copy.firstGroupBottle}</h2>
-      {(['socks', 'water_bottle'] as const).filter((id) => rows.includes(id)).map((id) => {
-        const socks = id === 'socks';
-        // Keep the offer visible even when the catalog cannot sell this item.
-        const entry = entries.find((item) => item.id === id) ?? {
-          id, label: socks ? t.addons.products.socksLabel : t.addons.products.waterBottleLabel,
-          icon: socks ? 'grip-socks' : 'water', price: null,
-          description: '', unit: t.addons.each, quantity: 0, included: 0, max: 0, available: false,
-        } satisfies AddonChoice;
-        const meta = rowMeta(entry);
-        const titleId = `${uid}-${id}-title`;
-        const noteId = `${uid}-${id}-note`;
-        return (
-          <section key={id} className="addon-shop-row" data-selected={hasAddonPurchase(entry)}
-            aria-labelledby={titleId} aria-describedby={noteId} data-testid={`addon-choice-${id}`}>
-            {/* #491 (workshop 2026-10-07): the bottle is recommended, in the Sky Rider tip's style. */}
-            {!socks && entry.available && <span className="addon-shop-note addon-shop-row-tag">{copy.waterRecommended}</span>}
-            <div className="addon-shop-row-main">
-              <span className="addon-shop-icon-wrap">
-                <JumpyardIcon name={entry.icon} className="addon-shop-icon" />
-                {hasAddonPurchase(entry) && <JumpyardIcon name="success-check" className="addon-shop-badge" />}
-              </span>
-              <div className="addon-shop-text">
-                <h3 id={titleId}>{socks ? copy.socksTitle : copy.bottleTitle}</h3>
-                {meta.map((line) => <p key={line} className="addon-shop-meta">{line}</p>)}
-              </div>
-              {stepper(entry)}
-            </div>
-            <p id={noteId} className="addon-shop-row-note">
-              {!entry.available ? copy.unavailableRequired : socks ? copy.socksBenefit : copy.bottleEnvironment}
-            </p>
-          </section>
-        );
-      })}
+      <h2 className="addon-shop-group">{copy.firstGroupBottle}</h2>
+      <section className="addon-shop-row" data-selected={hasAddonPurchase(water)}
+        aria-labelledby={waterTitleId} aria-describedby={waterNoteId} data-testid="addon-choice-water_bottle">
+        {/* #491 (workshop 2026-10-07): the water is recommended, in the Sky Rider tip's style. */}
+        {water.available && <span className="addon-shop-note addon-shop-row-tag">{copy.waterRecommended}</span>}
+        <div className="addon-shop-row-main">
+          <span className="addon-shop-icon-wrap">
+            <JumpyardIcon name={water.icon} className="addon-shop-icon" />
+            {hasAddonPurchase(water) && <JumpyardIcon name="success-check" className="addon-shop-badge" />}
+          </span>
+          <div className="addon-shop-text">
+            <h3 id={waterTitleId}>{copy.bottleTitle}</h3>
+            {rowMeta(water).map((line) => <p key={line} className="addon-shop-meta">{line}</p>)}
+          </div>
+          {stepper(water)}
+        </div>
+        <p id={waterNoteId} className="addon-shop-row-note">
+          {water.available ? copy.bottleEnvironment : copy.unavailableRequired}
+        </p>
+      </section>
       <h2 className="addon-shop-group addon-shop-group-optional">{copy.optionalGroup}</h2>
       <div className="addon-shop-shelf">
         {shelfEntries(entries).map((entry) => {
