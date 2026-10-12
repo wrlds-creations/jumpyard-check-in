@@ -131,7 +131,7 @@ const sv = {
     slotSpotsLeftOne: '1 plats kvar',
     slotFewLeft: 'Få platser kvar',
     slotFull: 'Fullt',
-    slotChecking: 'Kollar lediga platser',
+    slotChecking: 'Hämtar platser…',
     // #491 round 1 (Love 2026-10-08): the time now, and how soon each start time begins.
     clockNow: 'Klockan är',
     startsIn: 'om {time}',
@@ -625,7 +625,7 @@ const en: typeof sv = {
     slotSpotsLeftOne: '1 spot left',
     slotFewLeft: 'Few spots left',
     slotFull: 'Full',
-    slotChecking: 'Checking free spots',
+    slotChecking: 'Loading spots…',
     clockNow: 'The time is',
     startsIn: 'in {time}',
     startsNow: 'starts now',

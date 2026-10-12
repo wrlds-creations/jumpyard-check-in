@@ -656,10 +656,11 @@ function SlotCapacityLabel({ capacity, selected, pending }: { capacity: SlotCapa
     );
   }
   if (capacity.state === 'unknown') {
+    // #512 (Love, 2026-10-12): while the spots load, the slot says so in the style of "N platser kvar".
     return pending ? (
-      <span className="flex shrink-0 items-center" role="status">
-        <span className={`h-2.5 w-20 animate-pulse rounded-full ${selected ? 'bg-white/40' : 'bg-surface-strong'}`} aria-hidden="true" />
-        <span className="sr-only">{t.buy.slotChecking}</span>
+      <span role="status" data-testid="slot-spots-loading"
+        className={`shrink-0 animate-pulse whitespace-nowrap text-right text-[11px] font-bold italic uppercase tracking-wider ${selected ? 'text-white' : 'text-foreground'}`}>
+        {t.buy.slotChecking}
       </span>
     ) : null;
   }
