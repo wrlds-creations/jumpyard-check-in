@@ -226,6 +226,14 @@ const sv = {
     paymentOptionClipCardHint: 'Gäller även klippkort.',
     paymentOptionRemove: 'Ta bort koden',
     paymentOptionsApply: 'Applicera',
+    // #505 (D0250): paste a gift card, membership number or code from the clipboard.
+    paymentCodePaste: 'Klistra in',
+    paymentCodePasteHelp: 'Håll in i fältet och välj Klistra in.',
+    paymentCodePasteWaiting: 'Fyll i förnamn och e-post så kollar vi kortet.',
+    paymentCodePasteWaitingCode: 'Fyll i förnamn och e-post så kollar vi koden.',
+    // #505: the kiosk's titles for a membership card (#188).
+    memberAcceptedTitle: 'Medlemskortet är godkänt',
+    memberRejectedTitle: 'Medlemskortet kunde inte användas',
     paymentOptionsChecking: 'Kontrollerar…',
     paymentOptionsFailed: 'Koden kunde inte kontrolleras. Försök igen.',
     paymentOptionsContactRequired: 'Fyll i giltiga kontaktuppgifter ovan för att applicera.',
@@ -717,6 +725,13 @@ const en: typeof sv = {
     paymentOptionClipCardHint: 'Also for clip cards.',
     paymentOptionRemove: 'Remove code',
     paymentOptionsApply: 'Apply',
+    // #505 (D0250): paste a gift card, membership number or code from the clipboard.
+    paymentCodePaste: 'Paste',
+    paymentCodePasteHelp: 'Press and hold in the field and choose Paste.',
+    paymentCodePasteWaiting: 'Fill in your first name and email and we will check the card.',
+    paymentCodePasteWaitingCode: 'Fill in your first name and email and we will check the code.',
+    memberAcceptedTitle: 'Membership accepted',
+    memberRejectedTitle: 'The membership could not be used',
     paymentOptionsChecking: 'Checking…',
     paymentOptionsFailed: 'The code could not be checked. Please try again.',
     paymentOptionsContactRequired: 'Enter valid contact details above to apply.',
