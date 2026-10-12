@@ -106,9 +106,12 @@ test('#498: only the site\'s weights: body 400 and bold 700, small buttons 800, 
 
 test('#498: the completion page uses the roles and keeps its hero height', () => {
   const completion = MODULES[0][1];
-  assert.match(completion, /\.hero h1, \.numberLabel, \.number, \.pickup h2, \.quantity, \.dialog h2, \.dialog > strong \{ font-variation-settings: var\(--jy-heading-axes\); font-weight: 900; font-style: normal; \}/);
+  assert.match(completion, /\.hero h1, \.numberLabel, \.number, \.dialog h2, \.dialog > strong \{ font-variation-settings: var\(--jy-heading-axes\); font-weight: 900; font-style: normal; \}/);
+  // #504: the route's titles, step numbers, chip counts and café heading are the heading role; tags the small button.
+  assert.match(completion, /\.routeTitle, \.stepTitle, \.dot, \.chipCount, \.cafeTitle, \.otherTitle \{ font-variation-settings: var\(--jy-heading-axes\); font-weight: 900; font-style: normal; \}/);
+  assert.match(completion, /\.tag, \.cafeTag, \.chipCollected \{ font-variation-settings: var\(--jy-small-button-axes\); font-weight: 800; font-style: italic;/);
   assert.match(completion, /\.footer button, \.dialog button \{ font-variation-settings: var\(--jy-button-axes\); font-weight: 900; font-style: italic; letter-spacing: -\.015em;/);
-  assert.match(rule(completion, '.itemLabel'), /font-weight: 700; font-style: italic;/);
+  assert.match(rule(completion, '.chipWord'), /font-weight: 700; font-style: italic;/);
   // The condensed number and title are larger at line heights that keep today's line boxes:
   // number 29cqw x 1.02, title clamp(24px, 7.6cqw, 33px) x 1.12, label 17px x 1.2.
   const box = (selector) => {
@@ -135,7 +138,9 @@ test('#498 keeps D0159: the staff app\'s shared system stack lines stay, Acumin 
   assert.doesNotMatch(system, /!important/);
   for (const [name, text] of MODULES) assert.doesNotMatch(text, /!important/, name);
 });
-test('#491 (Love 2026-10-09): the completion hints "Ta själv." and "Visa numret." are black, never grey', () => {
-  assert.match(rule(MODULES[0][1], '.stepHint'), /color: #18181b;/);
-  assert.doesNotMatch(rule(MODULES[0][1], '.stepHint'), /#52525b|#71717a|#a1a1aa/);
+test('#491/#504 (Love 2026-10-09): the completion page\'s tags, chip words and hints are black or red, never grey', () => {
+  const completion = MODULES[0][1];
+  for (const selector of ['.tag', '.cafeTag', '.chipWord', '.chipCollected']) assert.match(rule(completion, selector), /color: #18181b;/, selector);
+  assert.match(rule(completion, '.routeHint'), /color: #e31837;/);
+  assert.doesNotMatch(completion, /#52525b|#71717a|#a1a1aa/, 'no grey anywhere on the last page');
 });

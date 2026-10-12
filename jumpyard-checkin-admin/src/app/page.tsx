@@ -83,6 +83,7 @@ type StaffIconName =
   | "success-check"
   | "time"
   | "visitor-wristband"
+  | "water"
   | "water-bottle"
   | "zipline";
 
@@ -214,7 +215,7 @@ function getItemIconName(item: StaffBookingItem): StaffIconName {
 
   if (text.includes("skyrider") || text.includes("sky rider")) return "zipline";
   if (text.includes("strump") || text.includes("sock")) return "grip-socks";
-  if (text.includes("vatten") || text.includes("water") || text.includes("flaska") || text.includes("bottle")) return "water-bottle";
+  if (text.includes("vatten") || text.includes("water") || text.includes("flaska") || text.includes("bottle")) return "water";
   if (text.includes("hanglas") || text.includes("lock")) return "padlock";
   if (text.includes("kaffe") || text.includes("coffee") || text.includes("brygg")) return "drink-cup";
   if (text.includes("familj") || text.includes("family") || text.includes("grupp")) return "group";
@@ -275,7 +276,8 @@ function getHandoutCategory(item: StaffBookingItem): HandoutCategoryDefinition {
   }
 
   if (text.includes("vatten") || text.includes("water") || text.includes("flaska") || text.includes("bottle")) {
-    return { icon: "water-bottle", key: "water-bottle", label: "Vattenflaska", order: 25, section: "checkin" };
+    // #504: plain water ("JumpYard Vatten" in ROLLER) with Love's bottle icon; the key stays for the handout data.
+    return { icon: "water", key: "water-bottle", label: "Vatten", order: 25, section: "checkin" };
   }
 
   if (text.includes("hanglas") || text.includes("lock")) {

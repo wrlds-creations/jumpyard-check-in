@@ -326,15 +326,16 @@ const sv = {
     choices: {
       preview: 'Testläge · testpriser · inga riktiga köp',
       firstGroup: 'Ta med egna eller köp här',
-      // #491: socks moved to the quantity step, so the purchase shows only the bottle here.
-      firstGroupBottle: 'Ta med egen eller köp här',
+      // #491: socks moved to the quantity step, so the purchase shows only the water here.
+      // #504 (Love, 2026-10-12): it is plain water, "JumpYard Vatten" in ROLLER, not a bottle to keep.
+      firstGroupBottle: 'Ta med egen flaska eller köp här',
       waterRecommended: 'Rekommenderas',
       optionalGroup: 'Valfritt',
       // #491 (Love 2026-10-08): the socks are called JumpSocks everywhere, with one rule text, on the
       // quantity step of a purchase and on the add-on step of an existing booking.
       socksTitle: 'JumpSocks',
       socksBenefit: 'Halkfria strumpor är obligatoriska i JumpYard och måste bäras av alla i trampolinområdet, även icke-hoppande föräldrar.',
-      bottleTitle: 'Vattenflaska',
+      bottleTitle: 'Vatten',
       bottleEnvironment: 'Inga engångsmuggar av miljöskäl.',
       lockBenefit: 'Lås in dina saker medan du hoppar.',
       coffeeBenefit: 'En god paus mellan hoppen.',
@@ -362,7 +363,7 @@ const sv = {
     socksAddPrompt: 'Lägg till de strumpor ni behöver.',
     socksRecommendedCount: 'Rekommenderat antal',
     socksSelectedCount: 'Valt',
-    waterBottleSectionTitle: 'Vattenflaska',
+    waterBottleSectionTitle: 'Vatten',
     waterBottleHelp: 'Har du med egen vattenflaska? Tyvärr kan vi inte dela ut engångsmuggar av miljöskäl.',
     waterBottleAlreadyHave: 'Vi har med egen vattenflaska.',
     alreadyInBooking: 'Ingår redan',
@@ -399,8 +400,8 @@ const sv = {
       lockDesc: 'Hänglås till skåpen.',
       socksLabel: 'Strumpor',
       socksDesc: 'Hoppstrumpor, obligatoriska.',
-      waterBottleLabel: 'Vattenflaska',
-      waterBottleDesc: 'Köp till en flaska eller bekräfta att ni har med egen.',
+      waterBottleLabel: 'Vatten',
+      waterBottleDesc: 'Köp till vatten eller bekräfta att ni har med egen flaska.',
     },
   },
   skyrider: {
@@ -813,12 +814,12 @@ const en: typeof sv = {
     choices: {
       preview: 'Preview · sample prices · no real purchases',
       firstGroup: 'Bring your own or buy here',
-      firstGroupBottle: 'Bring your own or buy here',
+      firstGroupBottle: 'Bring your own bottle or buy here',
       waterRecommended: 'Recommended',
       optionalGroup: 'Optional',
       socksTitle: 'JumpSocks',
       socksBenefit: "Non-slip socks are required at JumpYard and must be worn by everyone in the trampoline area, including parents who aren't jumping.",
-      bottleTitle: 'Water bottle',
+      bottleTitle: 'Water',
       bottleEnvironment: 'No disposable cups, to reduce waste.',
       lockBenefit: 'Lock away your things while you jump.',
       coffeeBenefit: 'A tasty break between jumps.',
@@ -846,7 +847,7 @@ const en: typeof sv = {
     socksAddPrompt: 'Add the socks you need.',
     socksRecommendedCount: 'Recommended count',
     socksSelectedCount: 'Selected',
-    waterBottleSectionTitle: 'Water bottle',
+    waterBottleSectionTitle: 'Water',
     waterBottleHelp: 'Do you have your own water bottle? Sorry, we cannot hand out disposable cups for environmental reasons.',
     waterBottleAlreadyHave: 'We brought our own water bottle.',
     alreadyInBooking: 'Already included',
@@ -883,8 +884,8 @@ const en: typeof sv = {
       lockDesc: 'Padlock for the lockers.',
       socksLabel: 'Socks',
       socksDesc: 'Jump socks, required.',
-      waterBottleLabel: 'Water bottle',
-      waterBottleDesc: 'Add a bottle or confirm you brought your own.',
+      waterBottleLabel: 'Water',
+      waterBottleDesc: 'Add water or confirm you brought your own bottle.',
     },
   },
   skyrider: {

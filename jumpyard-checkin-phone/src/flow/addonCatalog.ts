@@ -45,7 +45,7 @@ export const ADDON_CATALOG_CONFIG: Record<AddonId, AddonCatalogConfig> = {
     rollerProductId: 1765445,
   },
   water_bottle: {
-    icon: 'water-bottle',
+    icon: 'water',
     maxPerGuest: 4,
     requiresAvailability: false,
     rollerProductId: null,

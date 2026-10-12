@@ -6,10 +6,15 @@ import type { Addon, AddonId, BandColourCount, GuestCafeItem } from './types';
  * #491 (workshop 2026-10-07): the completion page names three places to collect things.
  * - socks: the sock station, where guests take their socks themselves;
  * - bands: the wristband desk, where staff hand out entry bands (with colour), SkyRider bands and padlocks;
- * - later: the café, where the guest shows the number for coffee, the water bottle and pizza.
+ * - later: the café, where the guest shows the number for coffee, water and pizza.
  * Cloud's café lines (GH-453) replace the phone's own café rows when Cloud sent them.
+ * #504 (Love, 2026-10-12): the page shows them as numbered steps with one chip per thing, so a row
+ * also says what it is (`kind`), which gives the chip its one word.
  */
 export type PickupGroupKey = 'socks' | 'bands' | 'later' | 'other';
+
+/** #504: what a row is. Entry bands are handed out by colour; the rest get a one-word chip. */
+export type PickupKind = 'admission' | 'socks' | 'lock' | 'skyrider' | 'connected' | 'water' | 'pizza';
 
 export interface PickupItem {
   icon: JumpyardIconName;
@@ -22,6 +27,8 @@ export interface PickupItem {
   testId?: string;
   /** GH-459: which band colour(s) to take for this row. */
   bandColours?: BandColourCount[];
+  /** #504: what the row is; without it the chip shows the label. */
+  kind?: PickupKind;
 }
 
 export interface PickupGroup { key: PickupGroupKey; title: string; items: PickupItem[] }
@@ -39,18 +46,26 @@ export const PICKUP_PLACE_BY_ADDON: Record<AddonId, PickupGroupKey> = {
 const ADDON_ICONS: Record<AddonId, JumpyardIconName> = {
   connected: 'connected-band',
   socks: 'grip-socks',
-  water_bottle: 'water-bottle',
+  water_bottle: 'water',
   lock: 'padlock',
   skyrider: 'zipline',
   coffee: 'drink-cup',
   extra_person: 'add-guest',
 };
 
+const ADDON_KINDS: Partial<Record<AddonId, PickupKind>> = {
+  connected: 'connected',
+  socks: 'socks',
+  water_bottle: 'water',
+  lock: 'lock',
+  skyrider: 'skyrider',
+};
+
 /** Icons for Cloud's café kinds; water belongs to the café since #491. */
 export const CAFE_ICONS: Record<string, JumpyardIconName> = {
   coffee: 'drink-cup',
   pizza: 'combo-pizza',
-  water: 'water-bottle',
+  water: 'water',
   cafe: 'drink-cup',
 };
 
@@ -61,6 +76,8 @@ export function toCafeRow(item: GuestCafeItem): PickupItem {
     qty: item.remaining,
     collected: item.collected,
     detail: item.detail ?? undefined,
+    // ROLLER names water "JumpYard Vatten" and pizza after its package; coffee keeps ROLLER's own name.
+    ...(item.kind === 'water' || item.kind === 'pizza' ? { kind: item.kind } : {}),
   };
 }
 
@@ -83,25 +100,27 @@ export function buildPickupGroups({
   for (const row of contentRows) {
     if (row.collection === 'checkin') {
       items.bands.push({ icon: 'visitor-wristband', label: row.label, qty: row.quantity, detail: row.detail,
-        testId: 'ready-entry-ticket-type', bandColours: row.bandColours });
+        testId: 'ready-entry-ticket-type', bandColours: row.bandColours, kind: 'admission' });
     } else {
-      items.later.push({ icon: 'combo-pizza', label: row.label, qty: row.quantity, detail: row.detail });
+      items.later.push({ icon: 'combo-pizza', label: row.label, qty: row.quantity, detail: row.detail, kind: 'pizza' });
     }
   }
 
   for (const addon of selectedAddons) {
     const place = PICKUP_PLACE_BY_ADDON[addon.id] ?? 'other';
+    const kind = ADDON_KINDS[addon.id];
     items[place].push({
       icon: ADDON_ICONS[addon.id] ?? 'gift-card',
       label: addon.id === 'connected' ? labels.connectedBands : addon.label,
       qty: addon.qty,
+      ...(kind ? { kind } : {}),
     });
   }
 
   if (cloudCafe) {
-    const phoneWater = items.later.filter((item) => item.icon === 'water-bottle');
+    const phoneWater = items.later.filter((item) => item.kind === 'water');
     // A Cloud from before #491 kept water at the entrance and leaves it out of its café list;
-    // the bottle is still shown at the café so it never disappears from the page.
+    // the water is still shown at the café so it never disappears from the page.
     const keepPhoneWater = !cloudCafe.some((item) => item.kind === 'water') ? phoneWater : [];
     items.later = [...cloudCafe.map(toCafeRow), ...keepPhoneWater];
   }
