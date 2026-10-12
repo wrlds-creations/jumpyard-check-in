@@ -300,6 +300,11 @@ test('round 1: the start-time step shows the time now and how soon each time sta
   assert.match(buySource, /const clock = clockNow \?\? liveClock;/);
   const copyFile = fs.readFileSync(new URL('../context/LanguageContext.tsx', import.meta.url), 'utf8');
   assert.match(copyFile, /clockNow: 'Klockan är'/);
+  // #512 (Love, 2026-10-12): while the spots load, each time says so in the style of "N platser kvar".
+  assert.match(buySource, /<span role="status" data-testid="slot-spots-loading"[\s\S]*?\{t\.buy\.slotChecking\}/);
+  assert.doesNotMatch(buySource, /h-2\.5 w-20 animate-pulse rounded-full/, 'no anonymous grey bar');
+  assert.match(copyFile, /slotChecking: 'Hämtar platser…'/);
+  assert.match(copyFile, /slotChecking: 'Loading spots…'/);
   assert.match(copyFile, /clockNow: 'The time is'/);
 });
 

@@ -21,13 +21,14 @@ import styles from './preview.module.css';
 // changed state, in Swedish and English at 375 x 812. Start times, products and prices come from the
 // local fixture in ../flow/localTransport.ts; payment is a local stand-in. Nothing reaches Park, Live
 // or ROLLER, and no booking, payment or session is created.
-type FrameId = 'start' | 'start-sparad' | 'starttid' | 'starttid-vald' | 'hopptid' | 'antal' | 'tillagg' | 'sakerhet'
+type FrameId = 'start' | 'start-sparad' | 'starttid' | 'starttid-laddar' | 'starttid-vald' | 'hopptid' | 'antal' | 'tillagg' | 'sakerhet'
     | 'kontakt' | 'sakerhet-tillbaka' | 'betalning' | 'klar-cafe' | 'klar-combo';
 
 const FRAMES: { id: FrameId; sv: string; en: string }[] = [
     { id: 'start', sv: 'Startsidan utan sparad incheckning', en: 'Start page without a saved check-in' },
     { id: 'start-sparad', sv: 'Startsidan efter Gör en ny bokning: vägen tillbaka till 0042', en: 'Start page after Make a new booking: the way back to 0042' },
     { id: 'starttid', sv: 'Starttid: klockan, när varje tid börjar, platser kvar, få kvar och fullt', en: 'Start time: the clock, how soon each time starts, spots left, few left and full' },
+    { id: 'starttid-laddar', sv: 'Starttid medan platserna hämtas: "Hämtar platser…"', en: 'Start time while the spots load: "Loading spots…"' },
     { id: 'starttid-vald', sv: 'Starttid: vald tid med få platser kvar', en: 'Start time: chosen time with few spots left' },
     { id: 'hopptid', sv: 'Hopptid: 90 min först och tydligast, även för familj', en: 'Jump time: 90 min first and strongest, family too' },
     { id: 'antal', sv: 'Antal hoppare och JumpSocks', en: 'Jumpers and JumpSocks' },
@@ -126,7 +127,8 @@ function Preview() {
             setMode({ frame: null, ready: true });
             return;
         }
-        const restore = installLocalTransport({ delay: () => 0, fail: () => false });
+        // #512: the loading frame keeps the spots request open, so "Hämtar platser…" stays on screen.
+        const restore = installLocalTransport({ delay: () => (frame === 'starttid-laddar' ? 600_000 : 0), fail: () => false });
         clearBuyFlowRecovery();
         setMode({ frame, ready: true });
         return () => {
