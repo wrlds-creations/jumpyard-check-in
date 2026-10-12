@@ -32,7 +32,7 @@ export function activeClaim(claims: HandoutClaim[] | undefined, area: HandoutAre
 }
 export const itemIcon: Record<string, string> = {
   admission: "visitor-wristband", socks: "grip-socks", coffee: "drink-cup", cafe: "drink-cup",
-  pizza: "combo-pizza", water: "water-bottle", padlock: "padlock", skyrider: "zipline", other: "addons-bag",
+  pizza: "combo-pizza", water: "water", padlock: "padlock", skyrider: "zipline", other: "addons-bag",
 };
 export function handoutMessage(code: string | null, fallback: string) {
   return ({

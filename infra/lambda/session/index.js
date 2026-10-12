@@ -252,6 +252,9 @@ exports.handler = async (event) => {
 
 async function handleStartSession(event, body, correlationId, options = {}) {
   const request = normalizeStartRequest(event, body);
+  // #504: a session opened from the kiosk's "Lappen i mobilen" link tells the phone the guest is
+  // at JumpYard, so its last page says "Gör så här nu". The link itself stays one token (kiosk D0048).
+  const arrival = options.kioskPhoneLink ? { arrival: 'kiosk' } : {};
   const validationError = validateStartRequest(request);
   if (validationError) {
     return jsonResponse(400, correlationId, {
@@ -301,6 +304,7 @@ async function handleStartSession(event, body, correlationId, options = {}) {
           session: completedSession,
           visit: await buildGuestVisit(completedSession, context.booking.venueId),
           ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
+          ...arrival,
           ...(bookingResponse ? bookingResponse : {}),
         });
       }
@@ -322,6 +326,7 @@ async function handleStartSession(event, body, correlationId, options = {}) {
           session: readySession,
           visit: visit ? { checkedInAt: visit.checkedInAt } : null,
           ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
+          ...arrival,
           ...(bookingResponse ? bookingResponse : {}),
         });
       }
@@ -433,6 +438,7 @@ async function handleStartSession(event, body, correlationId, options = {}) {
       session: readyResumedSession,
       visit: await buildGuestVisit(readyResumedSession, context.booking.venueId),
       ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
+      ...arrival,
       ...(bookingResponse ? bookingResponse : {}),
     });
   }
@@ -466,6 +472,7 @@ async function handleStartSession(event, body, correlationId, options = {}) {
     session: startedSession,
     visit: await buildGuestVisit(startedSession, context.booking.venueId),
     ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
+    ...arrival,
     ...(bookingResponse ? bookingResponse : {}),
   });
 }

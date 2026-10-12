@@ -109,10 +109,10 @@ test('unknown combo names, legacy products, family and normal entry do not acqui
 
 test('actual Swedish/English QR screen separates bands from deferred pizza and coffee', async () => {
   const booking = await fromCloud([item()]);
-  for (const [lang, band, pizza, later] of [
-    // #491: the café banner names the place and no longer says "after jumping".
-    ['sv', 'Besöksband 60 min', 'Pizza att dela', 'Caféet'],
-    ['en', 'Wristband 60 min', 'Pizza to share', 'The café'],
+  for (const [lang, socks, later] of [
+    // #491: the café heading names the place. #504: chips carry one word each (socks, pizza).
+    ['sv', '>Strumpor<', 'Caféet'],
+    ['en', '>Socks<', 'The café'],
   ]) {
     const markup = render(ConfirmationScreen, {
       booking, jumperCount: booking.jumpers, checkinSession: { checkinSessionId: 'preview-only', status: 'ready_for_staff', handoffCode: 'DEMO' },
@@ -121,14 +121,14 @@ test('actual Swedish/English QR screen separates bands from deferred pizza and c
     assert.match(markup, /data-handoff-code="DEMO"/);
     assert.doesNotMatch(markup, /data-qr-value=/, 'GH-456: the phone shows the number, not a QR code');
     const [handout, deferred] = markup.split('data-testid="confirmation-later"');
-    assert.ok(handout.includes(band));
-    assert.ok(handout.includes('Socks'));
-    assert.ok(!handout.includes(pizza));
+    assert.ok(handout.includes('data-testid="ready-entry-ticket-type"'), 'the bands have their own chip');
+    assert.ok(handout.includes(socks));
+    assert.ok(!handout.includes('>Pizza<'));
     assert.ok(deferred.includes(later));
-    assert.ok(deferred.includes(pizza));
-    assert.ok(deferred.includes('Coffee'));
-    assert.match(handout, /class="quantity">2<\/strong>/);
-    assert.match(deferred, /class="quantity">1<\/strong>/);
+    assert.ok(deferred.includes('>Pizza<'));
+    assert.ok(deferred.includes('>Coffee<'));
+    assert.match(handout, /class="chipCount">2<\/strong>/);
+    assert.match(deferred, /class="chipCount">1<\/strong>/);
   }
 });
 
@@ -201,12 +201,12 @@ test('a Weekday Combo bought on the phone shows two coloured bands and the pizza
     const markup = render(ConfirmationScreen, { booking, checkinSession, jumperCount: booking.jumpers, selectedAddons: [] }, lang);
     assert.match(markup, /data-phone-completion="true"/);
     const [handout, later] = markup.split('data-testid="confirmation-later"');
-    assert.ok(handout.includes(lang === 'sv' ? 'Besöksband 60 min' : 'Wristband 60 min'));
+    assert.ok(handout.includes(lang === 'sv' ? '>Hämta band<' : '>Get your bands<'), '#504: bands only, so no extras in the title');
     assert.ok(handout.includes('data-band-colour="morkbla"') && handout.includes(lang === 'sv' ? '>Mörkblå<' : '>Dark blue<'));
-    assert.match(handout, /class="quantity">2<\/strong>/);
-    assert.doesNotMatch(handout, /Pizza|class="quantity">1<\/strong>/);
-    assert.ok(later.includes(lang === 'sv' ? 'Pizza att dela' : 'Pizza to share'));
-    assert.match(later, /class="quantity">1<\/strong>/);
+    assert.match(handout, /class="chipCount">2<\/strong>/);
+    assert.doesNotMatch(handout, /Pizza|class="chipCount">1<\/strong>/);
+    assert.ok(later.includes('>Pizza<'));
+    assert.match(later, /class="chipCount">1<\/strong>/);
     assert.doesNotMatch(later, /data-band-colour/);
   }
 });

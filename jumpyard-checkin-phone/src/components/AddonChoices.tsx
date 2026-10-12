@@ -119,7 +119,7 @@ export function AddonChoices({ entries, onQuantity, rows = FIRST_ROWS }: Props) 
         // Keep the offer visible even when the catalog cannot sell this item.
         const entry = entries.find((item) => item.id === id) ?? {
           id, label: socks ? t.addons.products.socksLabel : t.addons.products.waterBottleLabel,
-          icon: socks ? 'grip-socks' : 'water-bottle', price: null,
+          icon: socks ? 'grip-socks' : 'water', price: null,
           description: '', unit: t.addons.each, quantity: 0, included: 0, max: 0, available: false,
         } satisfies AddonChoice;
         const meta = rowMeta(entry);

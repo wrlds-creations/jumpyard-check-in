@@ -230,8 +230,8 @@ test('#491: the bottle row carries "Rekommenderas", as on the kiosk, in the Sky 
   assert.match(copy, /waterRecommended: 'Rekommenderas'/);
   assert.match(copy, /waterRecommended: 'Recommended'/);
   assert.match(css, /\.addon-shop-row-tag \{ left: 12px; transform: none; \}/);
-  // The bottle keeps today's icon until JumpYard's own bottle can be drawn from Gustav's photo.
-  assert.match(source('flow/addonCatalog.ts'), /water_bottle: \{\s+icon: 'water-bottle'/);
+  // #504 (Love, 2026-10-12): plain water with Love's own bottle drawing, not the sports bottle.
+  assert.match(source('flow/addonCatalog.ts'), /water_bottle: \{\s+icon: 'water'/);
   const buy = source('components/BuyTickets.tsx');
   assert.match(buy, /<SocksQuantity[\s\S]*?onQuantity=\{\(next\) => setOneAddon\('socks', next\)\}/);
   // Love 2026-10-08: the socks are called JumpSocks everywhere. The quantity step of a purchase reads the

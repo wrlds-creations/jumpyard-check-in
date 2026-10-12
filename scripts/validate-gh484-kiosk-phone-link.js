@@ -168,6 +168,8 @@ async function validateKioskLinkOpensTheVisitBeforeRollerConfirms() {
   assert.equal(opened.body.session.handoffCode, SESSION.handoffCode, 'the same number as the kiosk');
   assert.equal(opened.body.session.status, 'ready_for_staff');
   assert.equal(opened.body.guestAccess.token, 'k'.repeat(43), 'the phone keeps the link as its guest access');
+  // #504: the kiosk link says the guest is at JumpYard, so the phone's last page says "Gör så här nu".
+  assert.equal(opened.body.arrival, 'kiosk');
   assert.equal(sqlCalls(opened.calls, /INSERT INTO jumpyard\.checkin_sessions/).length, 0, 'no second session is created');
   // Live test 2026-10-07: before ROLLER confirms, the phone gets what was bought, not a generic entry.
   assert.deepEqual(opened.body.booking.items.map((item) => [item.productName, item.quantity]),
@@ -183,6 +185,7 @@ async function validateKioskLinkOpensTheVisitBeforeRollerConfirms() {
   const email = await resolveLink({ channel: 'email' });
   assert.equal(email.statusCode, 409, 'an email link keeps the ordinary freshness rule');
   assert.equal(email.body.error.code, 'booking_not_fresh');
+  assert.equal('arrival' in email.body, false, 'only the kiosk link marks the guest as on site');
   console.log('[pass] a kiosk QR scanned before ROLLER confirms the purchase opens the same ready visit at once');
 }
 

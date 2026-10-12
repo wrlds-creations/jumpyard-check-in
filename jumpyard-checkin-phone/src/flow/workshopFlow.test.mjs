@@ -207,7 +207,7 @@ test('the step reads every shown time once when it opens and shares an in-flight
 test('socks on the quantity step become the same JumpSocks purchase line the add-on step used', () => {
   const addons = [
     { id: 'socks', label: 'Strumpor', price: 49, unit: 'st', maxPerGuest: 4, icon: 'grip-socks', rollerProductId: 1765445, requiresAvailability: false },
-    { id: 'water_bottle', label: 'Vattenflaska', price: 20, unit: 'st', maxPerGuest: 4, icon: 'water-bottle', rollerProductId: 1040, requiresAvailability: false },
+    { id: 'water_bottle', label: 'Vatten', price: 20, unit: 'st', maxPerGuest: 4, icon: 'water', rollerProductId: 1040, requiresAvailability: false },
   ];
   const { getSelectedAddonsForState, buildItemsForState } = compile(
     ['getAddonMaxQuantity', 'isPricedAddon', 'getAddonAvailabilityById', 'isKnownBuyAddonId', 'getSelectedAddonsForState', 'buildItemsForState'],

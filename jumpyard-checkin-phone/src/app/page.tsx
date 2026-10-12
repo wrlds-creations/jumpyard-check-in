@@ -20,6 +20,7 @@ import { isPhoneCompletionReady } from '@/flow/phoneCompletion';
 import { parkSavedVisit, readSavedVisit, saveVisit, type SavedVisit } from '@/flow/savedVisit';
 import { LanguageProvider, useTranslation } from '@/context/LanguageContext';
 import { detectChannel, initialContext, initialState, nextState } from '@/flow/machine';
+import { isSignArrival, rememberOnSite, wasOnSiteToday } from '@/flow/arrival';
 import type { Branch } from '@/flow/machine';
 import {
     CloudBookingError,
@@ -456,6 +457,11 @@ function CheckInFlow() {
     const channel = detectChannel(params);
     // Phone app is never used as actual kiosk — treat bare URL as park-qr
     const effectiveChannel = channel === 'kiosk' ? 'park-qr' as const : channel;
+    // #504: the sign link or the kiosk's phone link means the guest is at JumpYard (flow/arrival.ts).
+    const [onSite, setOnSite] = useState(() => {
+        if (isSignArrival(params)) rememberOnSite();
+        return wasOnSiteToday();
+    });
 
     const [state, setState] = useState<FlowState>(() => initialState(effectiveChannel));
     const [ctx, setCtx] = useState<FlowContext>(() => ({ ...initialContext(effectiveChannel), token }));
@@ -1483,8 +1489,12 @@ function CheckInFlow() {
 
         setSessionStartError(null);
         resolveCheckInSessionLink(linkToken, { onWaitingForBooking: () => { if (alive) setWaitingForLinkedBooking(true); } })
-            .then(({ booking, checkinSession }) => {
+            .then(({ booking, checkinSession, arrival }) => {
                 if (!alive) return;
+                if (arrival === 'kiosk') {
+                    rememberOnSite();
+                    setOnSite(true);
+                }
                 setAlreadyCheckedIn(false);
                 const bookingAddons = booking.existingAddons ?? [];
                 if (booking.paid) prefetchAddonsAvailability(booking);
@@ -1766,6 +1776,7 @@ function CheckInFlow() {
                             channel={ctx.channel}
                             alreadyCheckedIn={alreadyCheckedIn}
                             receiptSent={ctx.paymentCompleted}
+                            onSite={onSite}
                             onStartOver={ctx.channel === 'park-qr' ? () => { parkSavedVisit(); resetToStart(); } : undefined}
                         />
                     )}

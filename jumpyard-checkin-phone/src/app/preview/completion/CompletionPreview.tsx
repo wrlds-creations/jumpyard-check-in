@@ -10,7 +10,7 @@ import styles from './completion.module.css';
 
 // GH-459: example bookings with the band colours Cloud sends for their end times.
 const EXAMPLES = [
-    { id: 'standard', label: '1 × 60 min kl 14:00 med strumpor och vattenflaska (Svart/Röd)' },
+    { id: 'standard', label: '1 × 60 min kl 14:00 med strumpor och vatten (Svart/Röd)' },
     { id: 'combo', label: 'Combo kl 14:00: 2 entréer och 1 pizza (Svart/Röd)' },
     { id: 'buy-combo', label: 'Combo köpt i mobilen kl 12:00: 2 band och 1 pizza (Mörkblå)' },
     { id: 'b90', label: '3 × 90 min kl 11:30, slutar 13:00 (Mörkblå)' },
@@ -47,7 +47,7 @@ const COPY = {
         title: 'Du är incheckad', number: 'Ditt nummer',
         instruction: 'Visa numret eller QR-koden för personalen när du hämtar dina armband.',
         pickup: 'Att hämta ut', later: 'Hämta i caféet',
-        entry: '60 min entré', socks: 'Strumpor', water: 'Vattenflaska', pizza: 'Pizza att dela',
+        entry: '60 min entré', socks: 'Strumpor', water: 'Vatten', pizza: 'Pizza att dela',
         another: 'Gör en ny bokning', qr: 'Förstora QR-kod', close: 'Stäng',
         homeTitle: 'Redo för mer hopp?', homeNote: 'Här börjar en ny bokning i det riktiga flödet.',
         back: 'Tillbaka till slutsidan', cafe: 'Samma nummer och QR-kod gäller även i caféet.',
@@ -57,7 +57,7 @@ const COPY = {
         title: 'You are checked in', number: 'Your number',
         instruction: 'Show your number or QR code to our staff when collecting your wristbands.',
         pickup: 'To collect', later: 'Collect at the café',
-        entry: '60 min entry', socks: 'Jump socks', water: 'Water bottle', pizza: 'Pizza to share',
+        entry: '60 min entry', socks: 'Jump socks', water: 'Water', pizza: 'Pizza to share',
         another: 'Make a new booking', qr: 'Enlarge QR code', close: 'Close',
         homeTitle: 'Ready for more jumping?', homeNote: 'A new booking starts here in the real flow.',
         back: 'Back to completion', cafe: 'Use the same number and QR code at the café.',

@@ -23,7 +23,7 @@ export function previewHosts(lanAddress = '', interfaces = networkInterfaces()) 
 const fixtureProducts = [
   { key: 'E60', id: '90000001', price: 200, label: 'Entré 60 min', type: 'entry', durationMinutes: 60 },
   { key: 'socks', id: '90000002', price: 45, label: 'Hoppsockor', type: 'addon' },
-  { key: 'water_bottle', id: '90000003', price: 20, label: 'Vattenflaska, testprodukt', type: 'addon' },
+  { key: 'water_bottle', id: '90000003', price: 20, label: 'Vatten, testprodukt', type: 'addon' },
   { key: 'skyrider', id: '90000004', price: 40, label: 'SkyRider', type: 'addon' },
   { key: 'lock', id: '90000005', price: 49, label: 'Hänglås', type: 'addon' },
   { key: 'coffee', id: '90000006', price: 35, label: 'Kaffe', type: 'addon' },
