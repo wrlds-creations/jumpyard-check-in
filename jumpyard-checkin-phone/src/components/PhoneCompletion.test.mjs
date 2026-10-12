@@ -388,3 +388,11 @@ test('the page reads the sign and the kiosk link and hands the result to the las
     const client = fs.readFileSync(new URL('flow/cloudClient.ts', root), 'utf8');
     assert.match(client, /arrival: body\.arrival === 'kiosk' \? 'kiosk' : null,/);
 });
+
+test('water is plain "Vatten" wherever the phone names it, also for water already in a booking (#504)', () => {
+    for (const file of ['flow/cloudClient.ts', 'context/LanguageContext.tsx', 'flow/pickupPlaces.ts', 'components/PhoneCompletion.tsx']) {
+        const source = fs.readFileSync(new URL(file, root), 'utf8');
+        assert.doesNotMatch(source, /[Vv]attenflaska|Water bottle|water bottle/, file);
+    }
+    assert.match(fs.readFileSync(new URL('flow/cloudClient.ts', root), 'utf8'), /water_bottle: 'Vatten',/);
+});
