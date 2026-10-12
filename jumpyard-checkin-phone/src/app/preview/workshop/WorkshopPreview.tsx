@@ -31,7 +31,7 @@ const FRAMES: { id: FrameId; sv: string; en: string }[] = [
     { id: 'starttid-vald', sv: 'Starttid: vald tid med få platser kvar', en: 'Start time: chosen time with few spots left' },
     { id: 'hopptid', sv: 'Hopptid: 90 min först och tydligast, även för familj', en: 'Jump time: 90 min first and strongest, family too' },
     { id: 'antal', sv: 'Antal hoppare och JumpSocks', en: 'Jumpers and JumpSocks' },
-    { id: 'tillagg', sv: 'Tillägg: vattenflaskan Rekommenderas, inga strumpor', en: 'Add-ons: water bottle Recommended, no socks' },
+    { id: 'tillagg', sv: 'Tillägg: vattnet Rekommenderas, inga strumpor', en: 'Add-ons: water Recommended, no socks' },
     { id: 'sakerhet', sv: 'Säkerhet efter tilläggen, första gången', en: 'Safety after the add-ons, first time' },
     { id: 'kontakt', sv: 'Din kontakt med sammanställningen öppen', en: 'Your contact with the summary open' },
     { id: 'sakerhet-tillbaka', sv: 'Tillbaka från kontakt: godkännandet direkt, filmen kan spelas igen', en: 'Back from contact: the approval at once, the film can replay' },
@@ -95,7 +95,7 @@ function completionBooking(frame: 'klar-cafe' | 'klar-combo', lang: Language): {
             { id: 'socks', label: sv ? 'Strumpor' : 'Socks', qty: 2, price: 49 },
             { id: 'lock', label: sv ? 'Hänglås' : 'Padlock', qty: 1, price: 45 },
             { id: 'skyrider', label: 'SkyRider', qty: 1, price: 40 },
-            { id: 'water_bottle', label: sv ? 'Vattenflaska' : 'Water bottle', qty: 1, price: 20 },
+            { id: 'water_bottle', label: sv ? 'Vatten' : 'Water', qty: 1, price: 20 },
             { id: 'coffee', label: sv ? 'Bryggkaffe' : 'Filter coffee', qty: 2, price: 35 },
         ],
     };

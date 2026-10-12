@@ -131,7 +131,8 @@ const PHONE_ADDON_PRODUCTS = [
   {
     key: 'water_bottle',
     parentName: 'Jumpy Vattenflaska',
-    label: 'Vattenflaska',
+    // #504: guests see plain "Vatten"; ROLLER Live sells it as "JumpYard Vatten".
+    label: 'Vatten',
     type: 'addon',
     durationMinutes: 0,
     jumpersPerUnit: 1,

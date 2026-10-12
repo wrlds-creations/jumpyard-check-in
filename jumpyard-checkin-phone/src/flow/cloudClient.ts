@@ -101,6 +101,8 @@ interface CloudSessionResponse {
   /** GH-453: check-in time and the café lines still to collect. */
   visit?: CloudVisit | null;
   guestAccess?: CloudGuestAccess;
+  /** #504: the session was opened from the kiosk's "Lappen i mobilen" link, so the guest is on site. */
+  arrival?: 'kiosk' | null;
   retryAfterSeconds?: number;
   error?: {
     code?: string;
@@ -321,6 +323,8 @@ export interface AddProductDraftResult {
 export interface CheckInSessionLinkResult {
   booking: Booking;
   checkinSession: CheckInSession;
+  /** #504: Cloud marks a link from the kiosk's "Lappen i mobilen"; the guest is at JumpYard. */
+  arrival?: 'kiosk' | null;
 }
 
 interface CloudBookingCosts {
@@ -392,7 +396,8 @@ const CUSTOMER_ADDON_LABELS: Record<AddonId, string> = {
   lock: 'Hänglås',
   skyrider: 'SkyRider',
   socks: 'Strumpor',
-  water_bottle: 'Vattenflaska',
+  // #504: plain water ("JumpYard Vatten" in ROLLER), also for water already in a booking.
+  water_bottle: 'Vatten',
 };
 
 export async function lookupBooking(code: string, options: { signal?: AbortSignal } = {}): Promise<Booking> {
@@ -534,6 +539,7 @@ export async function resolveCheckInSessionLink(
   return {
     booking: toBooking(body.booking, 'ready', body.source, body.guestAccess),
     checkinSession: toCheckInSession(body.session, body.guestAccess, body.visit),
+    arrival: body.arrival === 'kiosk' ? 'kiosk' : null,
   };
 }
 

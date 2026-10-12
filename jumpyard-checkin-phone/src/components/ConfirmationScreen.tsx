@@ -19,6 +19,8 @@ interface ConfirmationScreenProps {
     alreadyCheckedIn?: boolean;
     /** #491: the guest paid in this flow, so the completion says the receipt was emailed. */
     receiptSent?: boolean;
+    /** #504: the guest is at JumpYard (sign or kiosk link), so the route says "Gör så här nu". */
+    onSite?: boolean;
     onStartOver?: () => void;
 }
 
@@ -30,6 +32,7 @@ export const ConfirmationScreen = ({
     channel = 'park-qr',
     alreadyCheckedIn = false,
     receiptSent = false,
+    onSite = false,
     onStartOver,
 }: ConfirmationScreenProps) => {
     const { t, lang, setLang } = useTranslation();
@@ -46,7 +49,7 @@ export const ConfirmationScreen = ({
     const contentRows = getBookingContentRows(booking, entryTicketLabel, jumperCount, lang);
     const labels = { connectedBands: t.confirm.connectedBands, later: packageContentCopy[lang].later, other: t.confirm.otherAddons };
     // #491: socks at the sock station, bands (with SkyRider and padlocks) at the wristband desk,
-    // coffee, the water bottle and pizza at the café.
+    // coffee, water and pizza at the café.
     const phoneGroups = buildPickupGroups({ contentRows, selectedAddons, cloudCafe: null, labels });
     const handoutItems = phoneGroups.filter((group) => group.key === 'socks' || group.key === 'bands').flatMap((group) => group.items);
     const experienceGroups = phoneGroups.filter((group) => group.key === 'later' || group.key === 'other');
@@ -61,7 +64,7 @@ export const ConfirmationScreen = ({
             presence={isVisitDayOver(checkinSession) ? 'ended' : 'arrived'}
             checkedInAt={checkinSession?.checkedInAt ?? checkinSession?.completedAt ?? null}
             visitDayLabel={formatVisitDay(checkinSession?.handoffDay, lang)}
-            groups={completionGroups} receiptSent={receiptSent} onStartOver={onStartOver} />;
+            groups={completionGroups} receiptSent={receiptSent} onSite={onSite} onStartOver={onStartOver} />;
     }
 
     return (

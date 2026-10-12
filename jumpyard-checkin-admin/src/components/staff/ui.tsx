@@ -22,6 +22,7 @@ export type IconName =
   | "success-check"
   | "time"
   | "visitor-wristband"
+  | "water"
   | "water-bottle"
   | "zipline";
 
