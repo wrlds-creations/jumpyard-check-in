@@ -30,8 +30,10 @@ test('a purchase or an included item marks the offer as covered, nothing else do
   }
   assert.equal(hasAddonPurchase(undefined), false);
   const code = source('components/AddonChoices.tsx');
-  assert.match(code, /className="addon-shop-row" data-selected=\{hasAddonPurchase\(entry\)\}/);
-  assert.match(code, /\{hasAddonPurchase\(entry\) && <JumpyardIcon name="success-check" className="addon-shop-badge" \/>\}/);
+  assert.match(code, /className="addon-shop-row" data-selected=\{hasAddonPurchase\(water\)\}/);
+  assert.match(code, /\{hasAddonPurchase\(water\) && <JumpyardIcon name="success-check" className="addon-shop-badge" \/>\}/);
+  // #515: the socks block marks the booking's own pairs with the same check.
+  assert.match(source('components/SocksQuantity.tsx'), /\{included > 0 && <JumpyardIcon name="success-check" className="addon-shop-badge" \/>\}/);
 });
 
 test('plus and minus are the only purchase buttons and adjust one item at a time', () => {
@@ -42,23 +44,24 @@ test('plus and minus are the only purchase buttons and adjust one item at a time
   assert.doesNotMatch(code, /guestCount|getRecommendedSocksToAdd|copy\.addSocks|copy\.addBottle/);
 });
 
-test('Hylla: socks and water come first as rows, the optional add-ons follow on a three-tile shelf', () => {
+test('Hylla: water comes first as a row and the optional add-ons follow on a three-tile shelf; socks are never a row (#515)', () => {
   const code = source('components/AddonChoices.tsx');
   const css = source('app/globals.css');
-  assert.match(code, /copy\.firstGroup[\s\S]*\(\['socks', 'water_bottle'\] as const\)\.filter\(\(id\) => rows\.includes\(id\)\)\.map[\s\S]*copy\.optionalGroup[\s\S]*className="addon-shop-shelf"/);
-  // #491: the existing-booking path keeps both rows; a new purchase picks socks on the quantity step.
-  assert.match(code, /const FIRST_ROWS: readonly FirstRow\[\] = \['socks', 'water_bottle'\];/);
-  assert.match(code, /rows = FIRST_ROWS/);
+  assert.match(code, /copy\.firstGroupBottle[\s\S]*data-testid="addon-choice-water_bottle"[\s\S]*copy\.optionalGroup[\s\S]*className="addon-shop-shelf"/);
+  // #515 (Love, 2026-10-12): both paths show socks in SocksQuantity, on the quantity step or above an existing booking's list.
+  assert.doesNotMatch(code, /FIRST_ROWS|FirstRow|rows\?:|copy\.firstGroup\b|socksTitle|socksBenefit/);
   const buy = source('components/BuyTickets.tsx');
-  assert.match(buy, /const BUY_ADDON_ROWS = \['water_bottle'\] as const;/);
+  assert.doesNotMatch(buy, /BUY_ADDON_ROWS|rows=\{/);
   assert.match(buy, /entries=\{buyAddons\.filter\(\(addon\) => addon\.id !== 'socks'/);
-  assert.doesNotMatch(source('components/AddonsOffer.tsx'), /rows=\{/);
+  const existing = source('components/AddonsOffer.tsx');
+  assert.doesNotMatch(existing, /rows=\{/);
+  assert.match(existing, /<SocksQuantity[\s\S]*?included=\{minQty\.socks\}[\s\S]*?<AddonChoices\s+entries=\{catalog\.filter\(\(entry\) => entry\.id !== 'socks'\)/);
   assert.match(code, /const SHELF_ORDER: AddonId\[\] = \['skyrider', 'lock', 'coffee'\];/);
   assert.match(css, /\.addon-shop-row-main \{\s+display: grid;\s+grid-template-columns: 36px minmax\(0, 1fr\) auto;/);
   assert.match(css, /\.addon-shop-shelf \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
-  // Socks keep their offer even when the catalog cannot sell them.
-  assert.match(code, /Keep the offer visible even when the catalog cannot sell this item\./);
-  assert.match(code, /!entry\.available \? copy\.unavailableRequired : socks \? copy\.socksBenefit : copy\.bottleEnvironment/);
+  // Water keeps its offer even when the catalog cannot sell it.
+  assert.match(code, /Keep the water offer visible even when the catalog cannot sell it\./);
+  assert.match(code, /\{water\.available \? copy\.bottleEnvironment : copy\.unavailableRequired\}/);
 });
 
 test('#457 leaves sock sizes out', () => {
@@ -132,7 +135,7 @@ test('compact rows keep readable copy and full touch targets beside the name and
   const code = source('components/AddonChoices.tsx');
   const css = source('app/globals.css');
   const copy = source('context/LanguageContext.tsx');
-  assert.match(code, /<div className="addon-shop-row-main">[\s\S]*?<h3 id=\{titleId\}>[\s\S]*?\{stepper\(entry\)\}\s*<\/div>/);
+  assert.match(code, /<div className="addon-shop-row-main">[\s\S]*?<h3 id=\{waterTitleId\}>[\s\S]*?\{stepper\(water\)\}\s*<\/div>/);
   assert.match(css, /--shop-control: 44px/);
   assert.match(css, /font-size: 14px/);
   assert.match(css, /\.addon-shop-row-note \{[\s\S]*?font-size: 12px;/);
@@ -154,7 +157,7 @@ test('phone omits the Tips row, miniature socks and separate add buttons', () =>
   assert.doesNotMatch(code, /socksRecommendation|visibleSocks|addon-shop-sock-icon|addon-shop-recommendation/);
   assert.doesNotMatch(source('context/LanguageContext.tsx'), /socksRecommendation|addSocks|addBottle/);
   assert.doesNotMatch(source('app/globals.css'), /addon-shop-recommendation|addon-shop-sock-icon|addon-shop-add/);
-  assert.match(code, /<JumpyardIcon name=\{entry.icon\} className="addon-shop-icon"/);
+  assert.match(code, /<JumpyardIcon name=\{water\.icon\} className="addon-shop-icon"/);
   assert.doesNotMatch(code, /addon-shop-add|addon-shop-purchase-copy/);
 });
 
@@ -222,11 +225,11 @@ test('#470: SkyRider needs 125 cm and JumpSocks are required for everyone in the
   ]) assert.ok(copy.includes(line), line);
 });
 
-test('#491: the bottle row carries "Rekommenderas", as on the kiosk, in the Sky Rider tip style; socks sit on the quantity step', () => {
+test('#491/#515: the water row carries "Rekommenderas", as on the kiosk, in the Sky Rider tip style; socks sit in SocksQuantity', () => {
   const code = source('components/AddonChoices.tsx');
   const copy = source('context/LanguageContext.tsx');
   const css = source('app/globals.css');
-  assert.match(code, /\{!socks && entry\.available && <span className="addon-shop-note addon-shop-row-tag">\{copy\.waterRecommended\}<\/span>\}/);
+  assert.match(code, /\{water\.available && <span className="addon-shop-note addon-shop-row-tag">\{copy\.waterRecommended\}<\/span>\}/);
   assert.match(copy, /waterRecommended: 'Rekommenderas'/);
   assert.match(copy, /waterRecommended: 'Recommended'/);
   assert.match(css, /\.addon-shop-row-tag \{ left: 12px; transform: none; \}/);
@@ -234,13 +237,13 @@ test('#491: the bottle row carries "Rekommenderas", as on the kiosk, in the Sky 
   assert.match(source('flow/addonCatalog.ts'), /water_bottle: \{\s+icon: 'water'/);
   const buy = source('components/BuyTickets.tsx');
   assert.match(buy, /<SocksQuantity[\s\S]*?onQuantity=\{\(next\) => setOneAddon\('socks', next\)\}/);
-  // Love 2026-10-08: the socks are called JumpSocks everywhere. The quantity step of a purchase reads the
-  // add-on step's own socks copy, so an existing booking's add-on step shows the same title and text.
+  // Love 2026-10-08: the socks are called JumpSocks everywhere. Since #515 a purchase's quantity step and an
+  // existing booking's add-on step both render SocksQuantity, so they show the same title and text.
   assert.equal(copy.match(/socksTitle: 'JumpSocks',/g)?.length, 2, 'the title is JumpSocks in SV and EN');
   assert.doesNotMatch(copy, /socksQuantityTitle|socksQuantityRule|Hoppsockor|Grip socks/);
-  assert.match(code, /<h3 id=\{titleId\}>\{socks \? copy\.socksTitle : copy\.bottleTitle\}<\/h3>/);
+  assert.match(code, /<h3 id=\{waterTitleId\}>\{copy\.bottleTitle\}<\/h3>/);
   const socksQuantity = source('components/SocksQuantity.tsx');
   assert.match(socksQuantity, /<h3 id=\{titleId\} className="buy-socks-title">\{copy\.socksTitle\}<\/h3>/);
-  assert.match(socksQuantity, /\{sellable \? copy\.socksBenefit : copy\.unavailableRequired\}/);
+  assert.match(socksQuantity, /\{sellable \? <SocksRule text=\{copy\.socksBenefit\} parents=\{copy\.socksParents\} \/> : copy\.unavailableRequired\}/);
   assert.match(copy, /coffeeLabel: 'Bryggkaffe'/);
 });
