@@ -181,8 +181,8 @@ async function renderAsyncRouteBoundary(filename, environment) {
   }
 }
 
-test('addons and contact previews stay development-only and never load their harness in production', async () => {
-  for (const preview of ['addons', 'contact']) {
+test('addons, contact and paste previews stay development-only and never load their harness in production', async () => {
+  for (const preview of ['addons', 'contact', 'klistra-in']) {
     const entry = path.join(sourceRoot, `app/preview/${preview}/page.tsx`);
     for (const environment of ['production', 'test', undefined]) {
       assert.deepEqual(await renderAsyncRouteBoundary(entry, environment), { result: 'not-found', imported: [] }, `${preview} ${environment}`);

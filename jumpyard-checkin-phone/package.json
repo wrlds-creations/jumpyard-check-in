@@ -19,7 +19,7 @@
     "lint": "eslint",
     "test:production-mock-boundary": "node --no-warnings --experimental-strip-types --test src/flow/productionMockBoundary.test.mjs",
     "postbuild": "node scripts/verify-production-mock-boundary.mjs",
-    "test:payment-options": "node --no-warnings --experimental-strip-types --test src/flow/paymentOptionFeedback.test.mjs",
+    "test:payment-options": "node --no-warnings --experimental-strip-types --test src/flow/paymentOptionFeedback.test.mjs src/flow/paymentCodeShape.test.mjs src/flow/paymentCodePaste.test.mjs src/app/preview/klistra-in/pasteTransport.test.mjs",
     "test:phone-contact": "node --no-warnings --experimental-strip-types --test src/flow/phoneContact.test.mjs",
     "test:contact-details": "node --no-warnings --experimental-strip-types --test src/flow/contactDetails.test.mjs src/flow/phoneContact.test.mjs",
     "test:email-marketing": "node --no-warnings --experimental-strip-types --test src/flow/emailMarketingConsent.test.mjs",

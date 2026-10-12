@@ -24,6 +24,8 @@ import {
   type NewBookingQuote,
 } from '@/flow/cloudClient';
 import { getPaymentOptionInputState, type PaymentOptionInputState } from '@/flow/paymentOptionFeedback';
+import { classifyPaymentCode } from '@/flow/paymentCodeShape';
+import { decidePastedCodeCheck, toPastedPaymentCode, type PendingPastedCode } from '@/flow/paymentCodePaste';
 import {
   hasSavedContactDetails,
   isContactReady,
@@ -837,6 +839,10 @@ export const BuyTickets = ({
   const [paymentOptionType, setPaymentOptionType] = useState<PaymentOptionType>('discount');
   const [codeRejectedDialogOpen, setCodeRejectedDialogOpen] = useState(false);
   const [paymentOptionsOpen, setPaymentOptionsOpen] = useState(false);
+  // #505 (D0250): "Klistra in", its fallback line and a pasted number that still owes its one automatic check.
+  const paymentCodeInputRef = useRef<HTMLInputElement>(null);
+  const [pasteHelpVisible, setPasteHelpVisible] = useState(false);
+  const [pendingPastedCode, setPendingPastedCode] = useState<PendingPastedCode | null>(null);
   const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
   const [quote, setQuote] = useState<NewBookingQuote | null>(null);
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
@@ -1284,30 +1290,49 @@ export const BuyTickets = ({
     })),
   ];
   const customerValid = isContactReady({ firstName, lastName, email, phone }, contactDetailsRequired);
+  // #505 (D0250): a pasted number waits for the contact and is then checked once (the effect below).
+  const pastedCodeCheck = decidePastedCodeCheck(pendingPastedCode, {
+    kind: paymentOptionType,
+    value: paymentOptionValue,
+    unchecked: paymentOptionState === 'ready',
+    contactReady: customerValid,
+    busy: step !== 'CONTACT' || submitting || applyingCodes || Boolean(draft),
+  });
+  const pasteHelpShown = pasteHelpVisible && paymentOptionState === 'empty';
+  // #505: a membership card has its own titles, as on the kiosk (#188).
+  const paymentOptionRejectedTitle = paymentOptionType === 'giftCard'
+    ? t.buy.giftCardRejectedTitle
+    : paymentOptionType === 'member' ? t.buy.memberRejectedTitle : t.buy.paymentCodeRejectedTitle;
   const paymentOptionStatus =
     paymentOptionState === 'applied'
       ? {
           tone: 'accepted' as const,
-          title: paymentOptionType === 'giftCard' ? t.buy.giftCardAcceptedTitle : t.buy.paymentCodeAcceptedTitle,
+          title: paymentOptionType === 'giftCard'
+            ? t.buy.giftCardAcceptedTitle
+            : paymentOptionType === 'member' ? t.buy.memberAcceptedTitle : t.buy.paymentCodeAcceptedTitle,
           detail: `-${formatMoney(paymentOptionAppliedAmount)} ${t.buy.paymentCodeAcceptedDetail}`,
         }
       : paymentOptionState === 'rejected'
         ? {
             tone: 'rejected' as const,
-            title: paymentOptionType === 'giftCard' ? t.buy.giftCardRejectedTitle : t.buy.paymentCodeRejectedTitle,
+            title: paymentOptionRejectedTitle,
             detail: t.buy.paymentCodeRejectedDetail,
           }
         : null;
   const paymentOptionHint =
-    paymentOptionState === 'ready'
-      ? !customerValid
-        ? t.buy.paymentOptionsContactRequired
-        : paymentOptionValue.length >= PAYMENT_OPTION_CODE_MAX_LENGTH
-          ? t.buy.paymentCodeMaxLength
-          : t.buy.paymentCodeCheckedOnContinue
-      : paymentOptionState === 'empty' && paymentOptionType === 'discount'
-        ? t.buy.paymentOptionClipCardHint
-        : null;
+    pasteHelpShown
+      ? t.buy.paymentCodePasteHelp
+      : pastedCodeCheck.action === 'wait' && pastedCodeCheck.reason === 'contact'
+        ? paymentOptionType === 'discount' ? t.buy.paymentCodePasteWaitingCode : t.buy.paymentCodePasteWaiting
+        : paymentOptionState === 'ready'
+          ? !customerValid
+            ? t.buy.paymentOptionsContactRequired
+            : paymentOptionValue.length >= PAYMENT_OPTION_CODE_MAX_LENGTH
+              ? t.buy.paymentCodeMaxLength
+              : t.buy.paymentCodeCheckedOnContinue
+          : paymentOptionState === 'empty' && paymentOptionType === 'discount'
+            ? t.buy.paymentOptionClipCardHint
+            : null;
 
   // #491: Continue reuses the answer the step already loaded, so the product step does not wait.
   // Only a missing, failed or stale (5 min) answer is read again, once, for all shown times.
@@ -1428,6 +1453,35 @@ export const BuyTickets = ({
     if (paymentInputsHaveValues) updatePaymentOptionValue('');
   };
 
+  // #505 (D0250): pasted text follows the kiosk's scan rules. Ten digits are a gift card and
+  // digits-hyphen-digits a membership number, whatever type is chosen; a leading "#" and spaces go.
+  // The field takes the clean number, which then owes one automatic check.
+  const pastePaymentCode = (raw: string) => {
+    const pasted = toPastedPaymentCode(classifyPaymentCode(raw, paymentOptionType), PAYMENT_OPTION_CODE_MAX_LENGTH);
+    if (!pasted) return false;
+    setPaymentOptionsOpen(true);
+    setPasteHelpVisible(false);
+    setPaymentOptionType(pasted.kind);
+    if (pasted.kind === 'giftCard') updateGiftCardNumber(pasted.value);
+    else updateClipCardCode(pasted.value);
+    setPendingPastedCode(pasted.autoCheck ? { kind: pasted.kind, value: pasted.value, waitsForContact: !customerValid } : null);
+    return true;
+  };
+
+  // readText() starts inside the tap: iOS shows its own paste prompt and Android may ask once.
+  // Without the API, without permission or after a dismissed prompt, the field's long press remains.
+  const pastePaymentCodeFromClipboard = async () => {
+    let text = '';
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      // Nothing to paste: the line under the field explains the long press.
+    }
+    if (pastePaymentCode(text)) return;
+    setPasteHelpVisible(true);
+    paymentCodeInputRef.current?.focus();
+  };
+
   const setOneAddon = (id: AddonId, nextQty: number) => {
     setSubmitError(null);
     invalidateQuote();
@@ -1504,6 +1558,18 @@ export const BuyTickets = ({
       setApplyingCodes(false);
     }
   };
+
+  // #505 (D0250): the pasted number's one automatic check, at once with a ready contact, otherwise
+  // once the contact is ready and the guest pauses typing. Each render replaces the timer, so it
+  // runs the current Applicera; clearing the pending number first makes it run only once.
+  useEffect(() => {
+    if (pastedCodeCheck.action !== 'check') return;
+    const timer = window.setTimeout(() => {
+      setPendingPastedCode(null);
+      void applyPaymentOptions();
+    }, pastedCodeCheck.delayMs);
+    return () => window.clearTimeout(timer);
+  });
 
   const createDraft = async (codes?: { giftCards: NewBookingGiftCardInput[]; discountCodes: NewBookingDiscountCodeInput[] }) => {
     if (draft) {
@@ -2352,9 +2418,10 @@ export const BuyTickets = ({
               )}
             </section>
 
-            <section className="mb-4 rounded-2xl border-2 border-primary/25 bg-white px-4 shadow-sm">
+            <section className="mb-4 rounded-2xl border-2 border-primary/25 bg-white px-4 shadow-sm" data-testid="payment-options">
               <button
                 type="button"
+                data-testid="payment-options-toggle"
                 onClick={() => setPaymentOptionsOpen((open) => !open)}
                 className="flex w-full items-center justify-between gap-3 py-4 text-left"
               >
@@ -2410,13 +2477,26 @@ export const BuyTickets = ({
                     })}
                   </div>
                   <div className={getPaymentOptionGroupClass(paymentOptionState)}>
+                    {/* #505: the normal text keyboard stays, because codes can contain letters. */}
                     <input
+                      ref={paymentCodeInputRef}
                       type="text"
+                      data-testid="payment-code-input"
                       value={paymentOptionValue}
-                      onChange={(event) => updatePaymentOptionValue(event.target.value)}
+                      onChange={(event) => {
+                        // A typed edit is no longer the pasted number; it waits for Applicera or Continue.
+                        setPasteHelpVisible(false);
+                        setPendingPastedCode(null);
+                        updatePaymentOptionValue(event.target.value);
+                      }}
+                      onPaste={(event) => {
+                        // #505: a long-press paste follows the same rules, with the clean number.
+                        if (pastePaymentCode(event.clipboardData.getData('text'))) event.preventDefault();
+                      }}
                       onKeyDown={(event) => {
                         if (event.key !== 'Enter') return;
                         event.preventDefault();
+                        setPendingPastedCode(null);
                         void applyPaymentOptions();
                       }}
                       placeholder={paymentOptionPlaceholder}
@@ -2439,10 +2519,24 @@ export const BuyTickets = ({
                       >
                         <X size={18} />
                       </button>
+                    ) : paymentOptionState === 'empty' ? (
+                      <button
+                        type="button"
+                        data-testid="payment-code-paste"
+                        onClick={() => void pastePaymentCodeFromClipboard()}
+                        disabled={checkoutLocked}
+                        className="flex items-center whitespace-nowrap px-3 text-[11px] font-black italic uppercase tracking-wider text-primary disabled:opacity-40"
+                      >
+                        {t.buy.paymentCodePaste}
+                      </button>
                     ) : (
                       <button
                         type="button"
-                        onClick={() => void applyPaymentOptions()}
+                        data-testid="payment-code-apply"
+                        onClick={() => {
+                          setPendingPastedCode(null);
+                          void applyPaymentOptions();
+                        }}
                         disabled={!paymentInputsHaveValues || !customerValid || checkoutLocked || applyingCodes}
                         className="flex items-center whitespace-nowrap px-3 text-[11px] font-black italic uppercase tracking-wider text-primary disabled:opacity-40"
                       >
@@ -2475,7 +2569,8 @@ export const BuyTickets = ({
                       </div>
                     </div>
                   ) : paymentOptionHint ? (
-                    <p id="payment-code-feedback" className="mt-1 text-[11px] font-bold text-muted">
+                    // #505: hints under the field are black, never grey.
+                    <p id="payment-code-feedback" data-testid="payment-code-hint" className="mt-1 text-[11px] font-bold text-foreground">
                       {paymentOptionHint}
                     </p>
                   ) : null}
@@ -2527,6 +2622,8 @@ export const BuyTickets = ({
             {/* #448: while the booking is created the button stays in full color with a spinner, so it reads as busy rather than disabled. */}
             <button
               onClick={() => {
+                // #505: Continue checks the code itself; a pasted number no longer waits for its own check.
+                setPendingPastedCode(null);
                 if (draft) {
                   setStep('PAYMENT');
                   return;
@@ -2548,7 +2645,7 @@ export const BuyTickets = ({
             </button>
             <PaymentCodeRejectedDialog
               open={codeRejectedDialogOpen}
-              title={paymentOptionType === 'giftCard' ? t.buy.giftCardRejectedTitle : t.buy.paymentCodeRejectedTitle}
+              title={paymentOptionRejectedTitle}
               description={t.buy.codeRejectedDialogBody}
               continueLabel={t.buy.codeRejectedContinueWithout}
               editLabel={t.buy.codeRejectedEditCode}
