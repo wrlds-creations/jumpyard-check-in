@@ -9,6 +9,9 @@ import { makeAvailability } from '../flow/localTransport';
 const ENTRY_60_PRICE = 220;
 export const PREVIEW_GIFT_CARD_BALANCE = 866;
 export const PREVIEW_MEMBER_ENTRY_DISCOUNT = 0.3;
+// #510: one made-up discount code with letters takes 25 % off the entries, as in the kiosk preview.
+export const PREVIEW_DISCOUNT_CODE = 'SOMMAR25';
+export const PREVIEW_CODE_ENTRY_DISCOUNT = 0.25;
 const GIFT_CARD_NUMBER = /^\d{10}$/;
 const MEMBER_NUMBER = /^\d+-\d+$/;
 
@@ -32,7 +35,7 @@ interface QuoteBody {
 }
 
 /** A gift card covers the basket up to its balance; a membership number gives 30 % off the
- * entries only; any other code or card is rejected, as ROLLER answers an unknown one. */
+ * entries only and SOMMAR25 25 %; any other code or card is rejected, as ROLLER answers an unknown one. */
 export function quotePastePreview(body: QuoteBody): NewBookingQuote {
     const products = new Map(makePasteAvailability(['17:00']).slots[0].products.map((product) => [Number(product.productId), product]));
     const items = Array.isArray(body.items) ? body.items : [];
@@ -44,8 +47,9 @@ export function quotePastePreview(body: QuoteBody): NewBookingQuote {
         .reduce((sum, item) => sum + lineTotal(item), 0);
 
     const codes = Array.isArray(body.discountCodes) ? body.discountCodes.map(String) : [];
-    const member = codes.length > 0 && MEMBER_NUMBER.test(codes[0]);
-    const discount = member ? Math.round(entries * PREVIEW_MEMBER_ENTRY_DISCOUNT) : 0;
+    const accepted = codes.length > 0 && (MEMBER_NUMBER.test(codes[0]) || codes[0] === PREVIEW_DISCOUNT_CODE);
+    const share = codes[0] === PREVIEW_DISCOUNT_CODE ? PREVIEW_CODE_ENTRY_DISCOUNT : PREVIEW_MEMBER_ENTRY_DISCOUNT;
+    const discount = accepted ? Math.round(entries * share) : 0;
     const afterDiscount = total - discount;
 
     const cards = Array.isArray(body.giftCards) ? body.giftCards.map((card) => String(card?.giftCardNumber ?? '')) : [];
@@ -57,10 +61,10 @@ export function quotePastePreview(body: QuoteBody): NewBookingQuote {
         costs: { total: afterDiscount, amountOwing: afterDiscount - covered, discount },
         discountCodes: {
             requestedCount: codes.length,
-            appliedCount: member ? 1 : 0,
+            appliedCount: accepted ? 1 : 0,
             totalApplied: discount,
-            applied: member ? [{ amountDeducted: discount, maskedCode: `••••${codes[0].slice(-4)}` }] : [],
-            errors: codes.length > 0 && !member ? [{ code: 'discount_code_not_applied', message: 'Klippkortskoden kunde inte användas.' }] : [],
+            applied: accepted ? [{ amountDeducted: discount, maskedCode: `••••${codes[0].slice(-4)}` }] : [],
+            errors: codes.length > 0 && !accepted ? [{ code: 'discount_code_not_applied', message: 'Klippkortskoden kunde inte användas.' }] : [],
         },
         giftCards: {
             requestedCount: cards.length,

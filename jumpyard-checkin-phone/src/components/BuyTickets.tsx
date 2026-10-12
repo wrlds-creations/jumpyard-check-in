@@ -24,7 +24,7 @@ import {
   type NewBookingQuote,
 } from '@/flow/cloudClient';
 import { getPaymentOptionInputState, type PaymentOptionInputState } from '@/flow/paymentOptionFeedback';
-import { classifyPaymentCode } from '@/flow/paymentCodeShape';
+import { classifyPaymentCode, detectPaymentCodeKind, isCompletePaymentCode } from '@/flow/paymentCodeShape';
 import { decidePastedCodeCheck, toPastedPaymentCode, type PendingPastedCode } from '@/flow/paymentCodePaste';
 import {
   hasSavedContactDetails,
@@ -140,16 +140,11 @@ interface BuyAddonEntry {
 }
 
 type AddonQuantityMap = Record<AddonId, number>;
-// Membership codes are redeemed through the existing discountCodes payload until a membership route exists.
+// #510 (D0251): the code's shape sets the type; the guest no longer chooses it. Membership codes are
+// redeemed through the existing discountCodes payload until a membership route exists.
 type PaymentOptionType = 'discount' | 'member' | 'giftCard';
 
 const PAYMENT_OPTION_CODE_MAX_LENGTH = 32;
-const PAYMENT_OPTION_TYPES: PaymentOptionType[] = ['discount', 'member', 'giftCard'];
-const PAYMENT_OPTION_TYPE_ICONS: Record<PaymentOptionType, 'points-star' | 'profile' | 'presentkort'> = {
-  discount: 'points-star',
-  member: 'profile',
-  giftCard: 'presentkort',
-};
 const SOCKS_UNLIMITED_MAX = Number.MAX_SAFE_INTEGER;
 // #491: a new purchase picks socks next to the jumpers; the add-on step keeps only the bottle row.
 const BUY_ADDON_ROWS = ['water_bottle'] as const;
@@ -949,18 +944,6 @@ export const BuyTickets = ({
   const paymentOptionValue = paymentOptionType === 'giftCard' ? giftCardNumber : clipCardCode;
   const paymentOptionState = paymentOptionType === 'giftCard' ? giftCardInputState : clipCardInputState;
   const paymentOptionAppliedAmount = paymentOptionType === 'giftCard' ? giftCardAppliedAmount : discountCodeAppliedAmount;
-  const paymentOptionFieldLabel =
-    paymentOptionType === 'giftCard'
-      ? t.buy.giftCardLabel
-      : paymentOptionType === 'member'
-        ? t.buy.memberCodeLabel
-        : t.buy.clipCardLabel;
-  const paymentOptionPlaceholder =
-    paymentOptionType === 'giftCard'
-      ? t.buy.giftCardPlaceholder
-      : paymentOptionType === 'member'
-        ? t.buy.memberCodePlaceholder
-        : t.buy.clipCardPlaceholder;
   const paymentInputsHaveValues = Boolean(giftCardNumber.trim() || clipCardCode.trim());
   const paymentInputsBlockingErrors = giftCardInputState === 'rejected' || clipCardInputState === 'rejected';
   const draftAmountOwing = getDraftAmountOwing(draft);
@@ -1291,6 +1274,7 @@ export const BuyTickets = ({
   ];
   const customerValid = isContactReady({ firstName, lastName, email, phone }, contactDetailsRequired);
   // #505 (D0250): a pasted number waits for the contact and is then checked once (the effect below).
+  // #510 (D0251): so does a typed complete gift card or membership number.
   const pastedCodeCheck = decidePastedCodeCheck(pendingPastedCode, {
     kind: paymentOptionType,
     value: paymentOptionValue,
@@ -1299,7 +1283,8 @@ export const BuyTickets = ({
     busy: step !== 'CONTACT' || submitting || applyingCodes || Boolean(draft),
   });
   const pasteHelpShown = pasteHelpVisible && paymentOptionState === 'empty';
-  // #505: a membership card has its own titles, as on the kiosk (#188).
+  // #505: a membership card has its own titles, as on the kiosk (#188). #510: the type is the one the
+  // value shows, so the titles name what the guest entered.
   const paymentOptionRejectedTitle = paymentOptionType === 'giftCard'
     ? t.buy.giftCardRejectedTitle
     : paymentOptionType === 'member' ? t.buy.memberRejectedTitle : t.buy.paymentCodeRejectedTitle;
@@ -1319,6 +1304,9 @@ export const BuyTickets = ({
             detail: t.buy.paymentCodeRejectedDetail,
           }
         : null;
+  // #510 (D0251): digits (with a hyphen) that are not yet a whole gift card or membership number.
+  const typingIncompleteCardNumber = /^\d[\d-]*$/.test(paymentOptionValue.trim()) &&
+    !isCompletePaymentCode(paymentOptionType, paymentOptionValue.trim());
   const paymentOptionHint =
     pasteHelpShown
       ? t.buy.paymentCodePasteHelp
@@ -1329,8 +1317,10 @@ export const BuyTickets = ({
             ? t.buy.paymentOptionsContactRequired
             : paymentOptionValue.length >= PAYMENT_OPTION_CODE_MAX_LENGTH
               ? t.buy.paymentCodeMaxLength
-              : t.buy.paymentCodeCheckedOnContinue
-          : paymentOptionState === 'empty' && paymentOptionType === 'discount'
+              : typingIncompleteCardNumber
+                ? t.buy.cardShapeHint
+                : t.buy.paymentCodeCheckedOnContinue
+          : paymentOptionState === 'empty'
             ? t.buy.paymentOptionClipCardHint
             : null;
 
@@ -1440,24 +1430,35 @@ export const BuyTickets = ({
     invalidateQuote();
   };
 
-  const updatePaymentOptionValue = (value: string) => {
-    if (paymentOptionType === 'giftCard') updateGiftCardNumber(value);
+  // #510 (D0251): one field and no chooser; the value tells its own type. Ten digits are a gift card,
+  // digits-hyphen-digits a membership number and anything else a discount code or clip card. A gift
+  // card goes to the gift card state, everything else to the discount state. Returns the type.
+  const updatePaymentOptionValue = (value: string): PaymentOptionType => {
+    const kind = detectPaymentCodeKind(value) ?? 'discount';
+    setPaymentOptionType(kind);
+    if (kind === 'giftCard') updateGiftCardNumber(value);
     else updateClipCardCode(value);
+    return kind;
   };
 
   const removePaymentOption = () => updatePaymentOptionValue('');
 
-  const selectPaymentOptionType = (type: PaymentOptionType) => {
-    if (type === paymentOptionType) return;
-    setPaymentOptionType(type);
-    if (paymentInputsHaveValues) updatePaymentOptionValue('');
+  // #510: a typed edit routes the value by its shape. A complete gift card (10 digits) or membership
+  // number (9 + 9) then owes one automatic check, as a pasted one does; anything else waits for
+  // Applicera, Enter or Continue.
+  const typePaymentCode = (raw: string) => {
+    setPasteHelpVisible(false);
+    const value = clampPaymentOptionCode(raw);
+    const kind = updatePaymentOptionValue(value);
+    setPendingPastedCode(isCompletePaymentCode(kind, value) ? { kind, value, waitsForContact: !customerValid } : null);
   };
 
   // #505 (D0250): pasted text follows the kiosk's scan rules. Ten digits are a gift card and
-  // digits-hyphen-digits a membership number, whatever type is chosen; a leading "#" and spaces go.
-  // The field takes the clean number, which then owes one automatic check.
+  // digits-hyphen-digits a membership number; a leading "#" and spaces go. Anything else is a
+  // discount code (#510: there is no chosen type any more). The field takes the clean number, which
+  // then owes one automatic check.
   const pastePaymentCode = (raw: string) => {
-    const pasted = toPastedPaymentCode(classifyPaymentCode(raw, paymentOptionType), PAYMENT_OPTION_CODE_MAX_LENGTH);
+    const pasted = toPastedPaymentCode(classifyPaymentCode(raw, 'discount'), PAYMENT_OPTION_CODE_MAX_LENGTH);
     if (!pasted) return false;
     setPaymentOptionsOpen(true);
     setPasteHelpVisible(false);
@@ -1562,6 +1563,7 @@ export const BuyTickets = ({
   // #505 (D0250): the pasted number's one automatic check, at once with a ready contact, otherwise
   // once the contact is ready and the guest pauses typing. Each render replaces the timer, so it
   // runs the current Applicera; clearing the pending number first makes it run only once.
+  // #510 (D0251): a typed complete gift card or membership number uses the same check.
   useEffect(() => {
     if (pastedCodeCheck.action !== 'check') return;
     const timer = window.setTimeout(() => {
@@ -2441,41 +2443,8 @@ export const BuyTickets = ({
 
               {(paymentOptionsOpen || paymentInputsHaveValues) && (
                 <div className="border-t border-primary/15 pb-4 pt-3">
-                  <p className="mb-1.5 text-[10px] font-black italic uppercase tracking-wider text-foreground">
-                    {t.buy.paymentOptionTypeQuestion}
-                  </p>
-                  <div
-                    role="radiogroup"
-                    aria-label={t.buy.paymentOptionTypeQuestion}
-                    className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-border bg-surface p-1"
-                  >
-                    {PAYMENT_OPTION_TYPES.map((type) => {
-                      const active = paymentOptionType === type;
-                      return (
-                        <button
-                          key={type}
-                          type="button"
-                          role="radio"
-                          aria-checked={active}
-                          onClick={() => selectPaymentOptionType(type)}
-                          disabled={checkoutLocked}
-                          className={`flex flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[9px] font-black italic uppercase leading-none tracking-wide transition-all ${
-                            active ? 'bg-white text-foreground shadow-sm ring-1 ring-primary/40' : 'text-muted'
-                          }`}
-                        >
-                          <JumpyardIcon
-                            name={PAYMENT_OPTION_TYPE_ICONS[type]}
-                            className={`h-6 w-6 ${active ? '' : 'opacity-40'}`}
-                          />
-                          {type === 'giftCard'
-                            ? t.buy.paymentOptionTypeGiftCard
-                            : type === 'member'
-                              ? t.buy.paymentOptionTypeMember
-                              : t.buy.paymentOptionTypeDiscount}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {/* #510 (D0251): one field and no chooser; the value tells whether it is a gift card,
+                      a membership number or a discount code. */}
                   <div className={getPaymentOptionGroupClass(paymentOptionState)}>
                     {/* #505: the normal text keyboard stays, because codes can contain letters. */}
                     <input
@@ -2483,12 +2452,7 @@ export const BuyTickets = ({
                       type="text"
                       data-testid="payment-code-input"
                       value={paymentOptionValue}
-                      onChange={(event) => {
-                        // A typed edit is no longer the pasted number; it waits for Applicera or Continue.
-                        setPasteHelpVisible(false);
-                        setPendingPastedCode(null);
-                        updatePaymentOptionValue(event.target.value);
-                      }}
+                      onChange={(event) => typePaymentCode(event.target.value)}
                       onPaste={(event) => {
                         // #505: a long-press paste follows the same rules, with the clean number.
                         if (pastePaymentCode(event.clipboardData.getData('text'))) event.preventDefault();
@@ -2499,12 +2463,12 @@ export const BuyTickets = ({
                         setPendingPastedCode(null);
                         void applyPaymentOptions();
                       }}
-                      placeholder={paymentOptionPlaceholder}
+                      placeholder={t.buy.paymentCodePlaceholder}
                       maxLength={PAYMENT_OPTION_CODE_MAX_LENGTH}
                       autoComplete="off"
                       spellCheck={false}
                       disabled={checkoutLocked}
-                      aria-label={paymentOptionFieldLabel}
+                      aria-label={t.buy.paymentCodeLabel}
                       aria-describedby={paymentOptionStatus || paymentOptionHint ? 'payment-code-feedback' : undefined}
                       aria-invalid={paymentOptionState === 'rejected'}
                       className="min-w-0 flex-1 bg-transparent px-4 py-3 text-base text-foreground placeholder:text-muted/40 outline-none disabled:opacity-60"
