@@ -141,6 +141,5 @@ test('#498 keeps D0159: the staff app\'s shared system stack lines stay, Acumin 
 test('#491/#504 (Love 2026-10-09): the completion page\'s tags, chip words and hints are black or red, never grey', () => {
   const completion = MODULES[0][1];
   for (const selector of ['.tag', '.cafeTag', '.chipWord', '.chipCollected']) assert.match(rule(completion, selector), /color: #18181b;/, selector);
-  assert.match(rule(completion, '.routeHint'), /color: #e31837;/);
   assert.doesNotMatch(completion, /#52525b|#71717a|#a1a1aa/, 'no grey anywhere on the last page');
 });

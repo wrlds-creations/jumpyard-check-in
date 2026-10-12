@@ -184,7 +184,7 @@ test('the local completion preview uses exactly the colours Cloud sends', () => 
 test('a home check-in through the email link is checked in too, without a reset callback (GH-456)', () => {
     const html = render({ channel: 'sms' }, 'en');
     for (const value of ['You are checked in', 'Your number', 'Wristband desk', 'Number from', 'data-presence="arrived"',
-        'When you arrive at JumpYard', 'Skip the till and go straight to step 1.']) {
+        'When you arrive at JumpYard']) {
         assert.ok(html.includes(value), value);
     }
     assert.doesNotMatch(html, /Receipt sent/, 'a home check-in paid nothing now, so no receipt line');
@@ -236,10 +236,12 @@ test('arrived shows the check-in time and the route: 1 socks, 2 bands, 3 jump, t
     assert.match(day({ presence: 'arrived', checkedInAt: '2026-10-17T11:45:00.000Z' }), /Sedan 13:45/, 'ISO times show in Nacka time');
 });
 
-test('away from the park the route says what to do on arrival, past the till (#504)', () => {
+// Love, 2026-10-12: the "Gå förbi kassan, direkt till steg 1." line under the heading is gone ("det blir bara konstigt").
+test('away from the park the route says what to do on arrival, without a line about the till (#504)', () => {
     const html = day({ presence: 'arrived' });
     assert.ok(html.includes('data-on-site="false"'));
-    assert.match(text(html), /När ni kommer till JumpYard Gå förbi kassan, direkt till steg 1\. 1 Strumpstationen Hämta strumpor/);
+    assert.match(text(html), /När ni kommer till JumpYard 1 Strumpstationen Hämta strumpor/);
+    assert.doesNotMatch(html, /Gå förbi kassan|Skip the till/);
     assert.doesNotMatch(html, /Gör så här nu/);
 });
 

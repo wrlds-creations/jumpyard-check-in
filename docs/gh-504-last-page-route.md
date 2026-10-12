@@ -7,7 +7,7 @@ Issue #504 turns the phone's last page into a route the guest follows in order: 
 1. **The hero is unchanged:** "Du är incheckad", the check-in time, "Ditt nummer" and the number.
 2. **The heading depends on where the guest is.**
    - **On site:** "Gör så här nu" ("What to do now").
-   - **Elsewhere:** "När ni kommer till JumpYard" ("When you arrive at JumpYard"), with the red line "Gå förbi kassan, direkt till steg 1." ("Skip the till and go straight to step 1.").
+   - **Elsewhere:** "När ni kommer till JumpYard" ("When you arrive at JumpYard"). The red line "Gå förbi kassan, direkt till steg 1." that first stood under it was removed on 2026-10-12 at Love's request ("det blir bara konstigt").
 3. **Numbered steps.** Only steps with something to collect are shown, numbered from 1. Step 1 is red, and a black line joins the numbers.
    - "Hämta strumpor" ("Get your socks"), with the tag "Strumpstationen".
    - "Hämta band och tillbehör" ("Get bands and extras"), with the tag "Bandutlämningen · Visa numret". The title is "Hämta band" with bands only, and "Hämta tillbehör" without bands.
