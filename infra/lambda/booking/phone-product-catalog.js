@@ -136,7 +136,8 @@ function isPhoneAvailabilityProductAvailable(session, selectedProduct, capacityR
 // GH-501 (D0248): entries sell at the kassa's drop-in price. ROLLER's availability lists only the
 // web variant per slot, so the drop-in product is the cached Drop-In sibling under the same parent
 // priced exactly web + step (Gustav, 2026-10-09: +20 kr per entry, +60 kr per family entry).
-const DROP_IN_PRICE_STEP_CENTS = Object.freeze({ entry: 2000, family: 6000 });
+// GH-514: the "2 timmar för 1" deal has the same +20 kr Drop-In siblings (Love: "Kör kassans pris").
+const DROP_IN_PRICE_STEP_CENTS = Object.freeze({ entry: 2000, family: 6000, deal: 2000 });
 
 function isDropInVariantName(name) {
   return /\bdrop[-\s]?in\b/i.test(String(name ?? ''));

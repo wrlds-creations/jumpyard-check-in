@@ -97,7 +97,7 @@ export async function buyWalkIn(
   jumpers: number,
   contactEmail: string | null,
   contactPhone: string | null,
-  product: { id: string; label: string; type: 'entry' | 'family' | 'combo'; durationMinutes: number },
+  product: { id: string; label: string; type: 'entry' | 'family' | 'combo' | 'deal'; durationMinutes: number },
   selectedTime: string
 ): Promise<Booking> {
   await delay(1000);

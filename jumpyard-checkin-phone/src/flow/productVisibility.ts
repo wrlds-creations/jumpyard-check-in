@@ -2,11 +2,13 @@ import type { BuyFlowRecoveryProduct } from './buyFlowRecovery';
 import type { NewBookingAvailabilitySlot, NewBookingProduct } from './cloudClient';
 
 export type BaseBookingProduct = NewBookingProduct & {
-  type: 'entry' | 'family' | 'combo';
+  type: 'entry' | 'family' | 'combo' | 'deal';
 };
 
 export interface VisibleBookingProductSections {
   combo: BaseBookingProduct[];
+  /** GH-514: ROLLER's "2 timmar för 1" deal, shown first on Monday to Thursday. */
+  deal: BaseBookingProduct[];
   entry: BaseBookingProduct[];
   family: BaseBookingProduct[];
   total: number;
@@ -32,7 +34,7 @@ export function sortPopularFirst<T extends Pick<NewBookingProduct, 'type' | 'dur
 }
 
 export function isBaseBookingProduct(product: NewBookingProduct): product is BaseBookingProduct {
-  return product.type === 'entry' || product.type === 'family' || product.type === 'combo';
+  return product.type === 'entry' || product.type === 'family' || product.type === 'combo' || product.type === 'deal';
 }
 
 export function isPurchasableBookingProduct(product: NewBookingProduct): product is BaseBookingProduct {
@@ -51,6 +53,7 @@ export function getVisibleBookingProductSections(
 
   return {
     combo: visibleProducts.filter((product) => product.type === 'combo'),
+    deal: visibleProducts.filter((product) => product.type === 'deal'),
     entry: visibleProducts.filter((product) => product.type === 'entry'),
     family: visibleProducts.filter((product) => product.type === 'family'),
     total: visibleProducts.length,

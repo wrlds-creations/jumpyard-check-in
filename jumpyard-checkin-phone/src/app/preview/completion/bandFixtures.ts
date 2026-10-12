@@ -7,6 +7,7 @@ export const PREVIEW_BAND_COLOURS = {
     '13:00': { id: 'morkbla', name: { sv: 'Mörkblå', en: 'Dark blue' }, swatch: ['#1F3A93'], endTime: '13:00' },
     '15:00': { id: 'svart-rod', name: { sv: 'Svart/Röd', en: 'Black/Red' }, swatch: ['#141414', '#E2231A'], endTime: '15:00' },
     '15:30': { id: 'gul', name: { sv: 'Gul', en: 'Yellow' }, swatch: ['#FFD400'], endTime: '15:30' },
+    '16:00': { id: 'gron', name: { sv: 'Grön', en: 'Green' }, swatch: ['#00A651'], endTime: '16:00' },
 } satisfies Record<string, BandColour>;
 
 /** What the phone builds from Cloud's provisional handoff when one Weekday Combo at 12:00 is

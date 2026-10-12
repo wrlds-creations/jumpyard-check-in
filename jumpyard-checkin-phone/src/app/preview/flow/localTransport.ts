@@ -48,7 +48,9 @@ export function makeAvailability(times: string[], date = new Date().toLocaleDate
     return { date, slots: times.map((time, index) => {
         const spots = PREVIEW_SLOT_SPOTS[index] ?? PREVIEW_SLOT_SPOTS[0];
         return { date, startTime: time, products: [
-            product(time, 'combo', 'combo', 450, 60, 2, 1010, spots),
+            // GH-514: the Weekday Combo left Nacka on 2026-10-12; Monday to Thursday ROLLER sells the 2-for-1 deal.
+            // Priced like the fixture's 60-minute entry, as ROLLER prices it (120 min for the 60-min price).
+            { ...product(time, 'DEAL120', 'deal', 200, 120, 1, 1416430, spots), label: '2 timmar för 1', parentProductId: '1416422' },
             ...[60, 90, 120].map((duration, i) => product(time, `entry-${duration}`, 'entry', 200 + i * 30, duration, 1, 1020 + i, spots)),
             ...[60, 90, 120].map((duration, i) => product(time, `family-${duration}`, 'family', 600 + i * 90, duration, 4, 1030 + i, spots)),
             ...[['socks',49,1765445], ['water_bottle',20,1040], ['skyrider',40,1765443], ['lock',45,1765441], ['coffee',35,1765452]].map(([key, price, id]) => ({ ...product(time, String(key), 'addon', Number(price), 0, 1, Number(id)), requiresAvailability: key === 'skyrider' })),
