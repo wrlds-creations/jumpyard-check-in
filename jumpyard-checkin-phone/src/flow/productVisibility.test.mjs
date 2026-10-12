@@ -75,7 +75,19 @@ test('returns an empty result when the selected slot has no purchasable products
     ])
   );
 
-  assert.deepEqual(sections, { combo: [], entry: [], family: [], total: 0 });
+  assert.deepEqual(sections, { combo: [], deal: [], entry: [], family: [], total: 0 });
+});
+
+test('GH-514: the 2-for-1 deal gets its own section only while it is purchasable', () => {
+  const deal = product({ durationMinutes: 120, key: 'DEAL120', label: '2 timmar för 1', productId: '1416430', type: 'deal', unitPrice: 220 });
+  const sections = getVisibleBookingProductSections(slot([deal, product({ key: 'E120', durationMinutes: 120, productId: 'entry-120' })]));
+  assert.deepEqual(sections.deal.map(({ key }) => key), ['DEAL120']);
+  assert.deepEqual(sections.entry.map(({ key }) => key), ['E120'], 'the regular 120 min entry stays');
+  assert.equal(sections.total, 2);
+  // Friday to Sunday ROLLER has no deal session: Cloud returns it unavailable and the phone hides it.
+  const closed = getVisibleBookingProductSections(slot([{ ...deal, available: false, capacityRemaining: null }]));
+  assert.deepEqual(closed.deal, []);
+  assert.equal(closed.total, 0);
 });
 
 test('recovery cannot restore an unavailable or otherwise hidden product', () => {

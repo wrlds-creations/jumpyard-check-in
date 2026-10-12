@@ -127,9 +127,10 @@ test('recognises only Drop-In variant names and the confirmed price steps', () =
   assert.equal(isDropInVariantName('Biljetter (220 kr)'), false);
   assert.equal(isDropInVariantName('Dropinsats'), false);
   assert.equal(isDropInVariantName(null), false);
-  assert.deepEqual({ ...DROP_IN_PRICE_STEP_CENTS }, { entry: 2000, family: 6000 });
+  assert.deepEqual({ ...DROP_IN_PRICE_STEP_CENTS }, { entry: 2000, family: 6000, deal: 2000 });
   assert.equal(dropInPriceStepCents('entry'), 2000);
   assert.equal(dropInPriceStepCents('family'), 6000);
+  assert.equal(dropInPriceStepCents('deal'), 2000, 'GH-514: the 2-for-1 deal sells at the kassa price too');
   assert.equal(dropInPriceStepCents('combo'), null);
   assert.equal(dropInPriceStepCents('toString'), null);
 });

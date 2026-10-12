@@ -92,6 +92,17 @@ const KIOSK_RECONCILIATION_OFFSETS_MS = [
 ];
 
 const PHONE_BOOKING_PRODUCTS = [
+  // GH-514: ROLLER's "2 timmar för 1" deal, 120 minutes for one jumper at the 60-minute price,
+  // sold Monday to Thursday. Like the Combo it shows only while the public web checkout lists it.
+  {
+    key: 'DEAL120',
+    parentName: '2 timmar för 1',
+    label: '2 timmar för 1',
+    type: 'deal',
+    durationMinutes: 120,
+    jumpersPerUnit: 1,
+    publicCatalogRequired: true,
+  },
   {
     key: 'COMBO60',
     parentName: 'Weekday Combo',
@@ -4562,6 +4573,7 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
            'Entré 90 min',
            'Entré 120 min',
            'Weekday Combo',
+           '2 timmar för 1',
            'Entré 60 min - Familj',
            'Entré 90 min - Familj',
            'Entré 120 min - Familj'
@@ -4571,6 +4583,7 @@ async function loadPhoneBookingParentProducts(rollerEnv) {
            'Entré 90 min',
            'Entré 120 min',
            'Weekday Combo',
+           '2 timmar för 1',
            'Entré 60 min - Familj',
            'Entré 90 min - Familj',
            'Entré 120 min - Familj'
@@ -4631,8 +4644,9 @@ function phoneBookingTypeForParentName(parentName) {
   return PHONE_BOOKING_PRODUCTS.find((product) => product.parentName === parentName)?.type ?? null;
 }
 
+// The Combo and the deal are optional offers: their absence never blocks the entries.
 function getRequiredPhoneBookingProducts() {
-  return PHONE_BOOKING_PRODUCTS.filter((product) => product.type !== 'combo');
+  return PHONE_BOOKING_PRODUCTS.filter((product) => product.type !== 'combo' && product.type !== 'deal');
 }
 
 function getLiveSmokeBookingProductFallbacks(rollerEnv) {
@@ -4852,7 +4866,8 @@ async function loadLivePaymentSmokeParentsFromAvailability(config, token, items,
   const parentProducts = await loadPhoneBookingParentProducts(config.env);
   const allowedParents = parentProducts.filter(
     (product) =>
-      (product.type === 'entry' || product.type === 'family' || product.type === 'combo') &&
+      (product.type === 'entry' || product.type === 'family' || product.type === 'combo' ||
+        product.type === 'deal') &&
       product.parentProductId,
   );
   const allowedParentIds = new Set(allowedParents.map((product) => String(product.parentProductId)));

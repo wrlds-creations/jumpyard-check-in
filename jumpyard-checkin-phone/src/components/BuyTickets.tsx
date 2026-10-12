@@ -313,7 +313,9 @@ function writeDraftRecovery(
       label: selectedProduct.label,
       productId: selectedProduct.productId,
       startTime: selectedProduct.startTime,
-      type: selectedProduct.type === 'family' || selectedProduct.type === 'combo' ? selectedProduct.type : 'entry',
+      type: selectedProduct.type === 'family' || selectedProduct.type === 'combo' || selectedProduct.type === 'deal'
+        ? selectedProduct.type
+        : 'entry',
       unitPrice: selectedProduct.unitPrice,
     },
     selectedStartTime: selectedTime,
@@ -341,6 +343,7 @@ function getProductDurationLabel(product: NewBookingProduct | null) {
 
 function getProductIconName(product: NewBookingProduct | null): JumpyardIconName {
   if (product?.type === 'combo') return 'combo-pizza';
+  if (product?.type === 'deal') return 'time';
   if (product?.type === 'family') return 'group';
   return 'admission-ticket';
 }
@@ -354,6 +357,7 @@ function getProductSectionLabel(
   labels: ReturnType<typeof useTranslation>['t']['buy']
 ) {
   if (product?.type === 'combo') return labels.sectionCombo;
+  if (product?.type === 'deal') return labels.sectionDeal;
   if (product?.type === 'family') return labels.sectionFamily;
   return labels.sectionEntry;
 }
@@ -381,6 +385,8 @@ function getBasketProductLabel(
   labels: ReturnType<typeof useTranslation>['t']['buy']
 ) {
   if (product.type === 'combo') return product.label;
+  // GH-514: the deal's name already says two hours; "120 min 2 timmar för 1" would read twice.
+  if (product.type === 'deal') return labels.sectionDeal;
   return `${getProductDurationLabel(product)} · ${getProductSectionLabel(product, labels)}`;
 }
 
@@ -500,7 +506,7 @@ function toRecoveryProduct(product: NewBookingProduct): BuyFlowRecoveryProduct {
     label: product.label,
     productId: product.productId,
     startTime: product.startTime,
-    type: product.type === 'family' || product.type === 'combo' ? product.type : 'entry',
+    type: product.type === 'family' || product.type === 'combo' || product.type === 'deal' ? product.type : 'entry',
     unitPrice: product.unitPrice,
   };
 }
@@ -897,6 +903,8 @@ export const BuyTickets = ({
   const selectedSlot = availability?.slots.find((slot) => slot.startTime === selectedTime) ?? null;
   const visibleProductSections = getVisibleBookingProductSections(selectedSlot);
   const comboProducts = visibleProductSections.combo;
+  // GH-514 (Love 2026-10-12, "Kör kortet högst upp"): the 2-for-1 deal leads the page when ROLLER sells it.
+  const dealProducts = visibleProductSections.deal;
   // #491 round 1 (Love 2026-10-08): 90 minutes first in entry and family; entry leads the page.
   const entryProducts = sortPopularFirst(visibleProductSections.entry);
   const familyProducts = sortPopularFirst(visibleProductSections.family);
@@ -1927,6 +1935,8 @@ export const BuyTickets = ({
 
   const renderProductCard = (product: NewBookingProduct) => {
     const isCombo = product.type === 'combo';
+    // GH-514: the deal reads like an entry card ("120 MIN", per person) with the Combo's red glow.
+    const isDeal = product.type === 'deal';
     const available = isPurchasableBookingProduct(product);
     const cardTitle = getProductCardTitle(product);
     const capacityLabel = getCapacityLabel(product, t.buy.spotsAvailable, t.buy.spotsLeft);
@@ -1943,9 +1953,10 @@ export const BuyTickets = ({
         onClick={() => available && handleProductSelect(product)}
         disabled={!available}
         data-popular={popular ? 'true' : undefined}
-        className={`relative min-w-0 ${isCombo ? 'p-4 rounded-2xl' : 'p-3.5 rounded-xl'} text-left flex items-center gap-3 transition-all border ${
+        data-product-type={product.type}
+        className={`relative min-w-0 ${isCombo || isDeal ? 'p-4 rounded-2xl' : 'p-3.5 rounded-xl'} text-left flex items-center gap-3 transition-all border ${
           available
-            ? isCombo
+            ? isCombo || isDeal
               ? 'bg-white border-primary/60 shadow-[0_0_22px_rgba(239,23,66,0.26)] ring-1 ring-primary/25 active:scale-[0.98]'
               : popular
                 ? 'buy-product-popular bg-white border-2 border-primary shadow-[0_0_22px_rgba(239,23,66,0.26)] active:scale-[0.98]'
@@ -1954,6 +1965,8 @@ export const BuyTickets = ({
         }`}
       >
         {popular && available && <span className="buy-product-tag">{t.buy.popular}</span>}
+        {/* GH-514 (Love 2026-10-12): a deal feeling, in the same red tag as Populärt. */}
+        {isDeal && available && <span className="buy-product-tag" data-deal-tag>{t.buy.dealTag}</span>}
         {showLeadingIcon && <JumpyardIcon name={iconName} className="w-9 h-9 flex-shrink-0" />}
         <div className="flex-1 min-w-0">
           {!isCombo && (
@@ -2007,6 +2020,11 @@ export const BuyTickets = ({
                 {available ? capacityLabel : t.buy.spotsFull}
               </span>
             </div>
+          )}
+          {isDeal && available && (
+            <p className="mt-1.5 text-[11px] font-black italic uppercase tracking-wide leading-none text-primary">
+              {t.buy.dealPayFor}
+            </p>
           )}
         </div>
         <p className={`shrink-0 text-base font-black italic ${available ? 'text-primary' : 'text-muted/60'}`}>
@@ -2120,6 +2138,18 @@ export const BuyTickets = ({
             </p>
           )}
 
+          {dealProducts.length > 0 && (
+            <div className="mb-3" data-product-section="deal">
+              <p
+                className="text-base text-foreground uppercase font-black italic tracking-wide mb-4 px-1"
+                style={{ textShadow: '1.4px 1.4px 0 #ef1742' }}
+              >
+                {t.buy.sectionDeal}
+              </p>
+              <div className="flex flex-col gap-2">{dealProducts.map(renderProductCard)}</div>
+            </div>
+          )}
+
           {entryProducts.length > 0 && (
             <div className="mb-3">
               <p className="text-xs text-foreground uppercase font-black italic tracking-wider mb-2 px-1">
@@ -2188,9 +2218,11 @@ export const BuyTickets = ({
               <span className="text-lg font-black italic uppercase text-foreground">
                 {selectedProduct.type === 'combo'
                   ? selectedProduct.label
-                  : selectedProduct.type === 'family'
-                    ? `${selectedProductDurationLabel} ${t.buy.sectionFamily}`
-                    : selectedProductDurationLabel}
+                  : selectedProduct.type === 'deal'
+                    ? `${t.buy.sectionDeal} · ${selectedProductDurationLabel}`
+                    : selectedProduct.type === 'family'
+                      ? `${selectedProductDurationLabel} ${t.buy.sectionFamily}`
+                      : selectedProductDurationLabel}
               </span>
             </div>
 

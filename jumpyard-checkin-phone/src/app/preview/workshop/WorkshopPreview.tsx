@@ -21,8 +21,8 @@ import styles from './preview.module.css';
 // changed state, in Swedish and English at 375 x 812. Start times, products and prices come from the
 // local fixture in ../flow/localTransport.ts; payment is a local stand-in. Nothing reaches Park, Live
 // or ROLLER, and no booking, payment or session is created.
-type FrameId = 'start' | 'start-sparad' | 'starttid' | 'starttid-laddar' | 'starttid-vald' | 'hopptid' | 'antal' | 'tillagg' | 'sakerhet'
-    | 'kontakt' | 'sakerhet-tillbaka' | 'betalning' | 'klar-cafe' | 'klar-combo';
+type FrameId = 'start' | 'start-sparad' | 'starttid' | 'starttid-laddar' | 'starttid-vald' | 'hopptid' | 'antal' | 'antal-deal' | 'tillagg'
+    | 'sakerhet' | 'kontakt' | 'kontakt-deal' | 'sakerhet-tillbaka' | 'betalning' | 'klar-cafe' | 'klar-combo' | 'klar-deal';
 
 const FRAMES: { id: FrameId; sv: string; en: string }[] = [
     { id: 'start', sv: 'Startsidan utan sparad incheckning', en: 'Start page without a saved check-in' },
@@ -30,15 +30,18 @@ const FRAMES: { id: FrameId; sv: string; en: string }[] = [
     { id: 'starttid', sv: 'Starttid: klockan, när varje tid börjar, platser kvar, få kvar och fullt', en: 'Start time: the clock, how soon each time starts, spots left, few left and full' },
     { id: 'starttid-laddar', sv: 'Starttid medan platserna hämtas: "Hämtar platser…"', en: 'Start time while the spots load: "Loading spots…"' },
     { id: 'starttid-vald', sv: 'Starttid: vald tid med få platser kvar', en: 'Start time: chosen time with few spots left' },
-    { id: 'hopptid', sv: 'Hopptid: 90 min först och tydligast, även för familj', en: 'Jump time: 90 min first and strongest, family too' },
+    { id: 'hopptid', sv: 'Hopptid: 2 timmar för 1 överst (mån–tors), sedan 90 min först', en: 'Jump time: 2 hours for 1 on top (Mon–Thu), then 90 min first' },
     { id: 'antal', sv: 'Antal hoppare och JumpSocks', en: 'Jumpers and JumpSocks' },
+    { id: 'antal-deal', sv: '2 timmar för 1: antal hoppare', en: '2 hours for 1: number of jumpers' },
     { id: 'tillagg', sv: 'Tillägg: vattnet Rekommenderas, inga strumpor', en: 'Add-ons: water Recommended, no socks' },
     { id: 'sakerhet', sv: 'Säkerhet efter tilläggen, första gången', en: 'Safety after the add-ons, first time' },
     { id: 'kontakt', sv: 'Din kontakt med sammanställningen öppen', en: 'Your contact with the summary open' },
+    { id: 'kontakt-deal', sv: '2 timmar för 1: kontakt och sammanställning', en: '2 hours for 1: contact and summary' },
     { id: 'sakerhet-tillbaka', sv: 'Tillbaka från kontakt: godkännandet direkt, filmen kan spelas igen', en: 'Back from contact: the approval at once, the film can replay' },
     { id: 'betalning', sv: 'Betalning (lokal ersättare), klicka Godkänn', en: 'Payment (local stand-in), press Approve' },
     { id: 'klar-cafe', sv: 'Efter betalning: kvitto och tre ställen, vatten och kaffe i caféet', en: 'After payment: receipt and three places, water and coffee at the café' },
     { id: 'klar-combo', sv: 'Efter betalning: Weekday Combo, band och pizza', en: 'After payment: Weekday Combo, bands and pizza' },
+    { id: 'klar-deal', sv: 'Efter betalning: 2 timmar för 1, två band för 16:00', en: 'After payment: 2 hours for 1, two bands for 16:00' },
 ];
 
 const SLOT_TIMES = ['14:00', '14:30', '15:00'] as const;
@@ -49,6 +52,8 @@ const BUY_ICONS: JumpyardIconName[] = ['admission-ticket', 'addons-bag', 'safety
 
 // The 90-minute entry from the local fixture (id 1021, 230 kr).
 const ENTRY_90 = { key: 'entry-90', productId: '1021', label: '90 min', startTime: '14:00', durationMinutes: 90, type: 'entry' as const, unitPrice: 230 };
+// GH-514: the 2-for-1 deal from the local fixture (id 1416430, 120 min at the fixture's 60-min price, 200 kr).
+const DEAL_120 = { key: 'DEAL120', productId: '1416430', label: '2 timmar för 1', startTime: '14:00', durationMinutes: 120, type: 'deal' as const, unitPrice: 200 };
 
 function snapshot(step: BuyFlowRecoverySnapshot['currentFlowStep'], extra: Partial<BuyFlowRecoverySnapshot> = {}): BuyFlowRecoverySnapshot {
     const now = new Date().toISOString();
@@ -64,6 +69,10 @@ function buySnapshot(frame: FrameId): BuyFlowRecoverySnapshot | null {
         case 'starttid-vald': return snapshot('TIMESLOT', { selectedStartTime: '14:30' });
         case 'hopptid': return snapshot('PRODUCT');
         case 'antal': return snapshot('QUANTITY', { ...chosen, addonQty: { socks: 2 } });
+        case 'antal-deal': return snapshot('QUANTITY', { selectedProduct: DEAL_120, quantity: 2, jumperCount: 2, addonQty: { socks: 2 } });
+        case 'kontakt-deal': return snapshot('CONTACT', {
+            selectedProduct: DEAL_120, quantity: 2, jumperCount: 2, addonQty: { socks: 2 }, safetyAttestedAt: new Date().toISOString(),
+        });
         case 'tillagg': return snapshot('ADDONS', { ...chosen, addonQty: { socks: 2 } });
         // A purchase saved on the removed summary step opens safety, the step that follows the add-ons now.
         case 'sakerhet': return snapshot('REVIEW', { ...chosen, addonQty: { socks: 2, water_bottle: 1, coffee: 2 } });
@@ -77,7 +86,14 @@ function buySnapshot(frame: FrameId): BuyFlowRecoverySnapshot | null {
     }
 }
 
-function completionBooking(frame: 'klar-cafe' | 'klar-combo', lang: Language): { booking: Booking; addons: Addon[] } {
+function completionBooking(frame: 'klar-cafe' | 'klar-combo' | 'klar-deal', lang: Language): { booking: Booking; addons: Addon[] } {
+    if (frame === 'klar-deal') {
+        // GH-514: a plain 120-minute admission per jumper; the band follows the 16:00 end time.
+        return { addons: [{ id: 'socks', label: lang === 'sv' ? 'Strumpor' : 'Socks', qty: 2, price: 49 }], booking: {
+            id: 'DEMO514', jumpers: 2, time: '14:00', endTime: '16:00', durationMinutes: 120, products: 1, paid: true,
+            productLabel: '2 timmar för 1', productType: 'deal', bandColours: [{ ...BAND['16:00'], quantity: 2 }],
+        } };
+    }
     if (frame === 'klar-combo') {
         return { addons: [], booking: {
             id: 'DEMO491', jumpers: 2, time: '14:00', endTime: '15:00', durationMinutes: 60, products: 1, paid: true,
@@ -192,8 +208,8 @@ function FrameScreen({ frame }: { frame: FrameId }) {
             onResumeSavedVisit={frame === 'start-sparad' ? () => setResumed(true) : undefined} /></PhoneShell>;
     }
 
-    if (frame === 'klar-cafe' || frame === 'klar-combo' || resumed || (frame === 'betalning' && paid === 'done')) {
-        const { booking, addons } = completionBooking(frame === 'klar-combo' ? 'klar-combo' : 'klar-cafe', lang);
+    if (frame === 'klar-cafe' || frame === 'klar-combo' || frame === 'klar-deal' || resumed || (frame === 'betalning' && paid === 'done')) {
+        const { booking, addons } = completionBooking(frame === 'klar-combo' || frame === 'klar-deal' ? frame : 'klar-cafe', lang);
         return <PhoneShell toggle="none">
             <ConfirmationScreen booking={booking} checkinSession={completionSession()} jumperCount={booking.jumpers}
                 selectedAddons={addons} channel="park-qr" receiptSent onStartOver={() => undefined} />
