@@ -1,5 +1,9 @@
 # Test Plan
 
+## Back from payment keeps the contact step editable (#518)
+
+Run `npm --prefix jumpyard-checkin-phone run test:payment-options` (part of `npm run validate`). The payment-option harness runs the real `BuyTickets` handlers: Back from payment keeps the draft and an unchanged Continue makes no call; a changed first name, email, email choice, typed code or removed code drops the kept draft, and Continue creates one fresh draft with the new values; Back stays shut while a payment runs. `emailMarketingConsent.test.mjs` pins the email choice handler. After release, Love goes to payment on an iPhone, taps "Tillbaka", adds a code and sees the lower price on "Betalning". [Notes](docs/gh-518-back-from-payment-edit.md).
+
 ## The jump time on the last page (#519)
 
 Run `npm --prefix jumpyard-checkin-phone run test:completion`: "Hopptid" / "Jump time" under the number, the deal's 120 minutes, a 90-minute entry, the kiosk link on site, a package's longest admission, no line without a start or on an ended day. Run `npm run validate:gh367-combo-contents`: the time from Cloud's provisional purchase, a lookup and a session-link resume. Run the other phone suites, lint and `tsc`. In the development-only `/preview/sista-sidan`, check `deal`, `deal-hemma`, `kiosk-lank`, `plats`, `hemma` and `slut` in SV/EN at 375x812. After release, from Monday to Thursday, buy "2 timmar för 1" on a phone, open an existing booking, and scan the kiosk's "Lappen i mobilen": each last page shows the booked start and end, the kiosk link the same as the kiosk. [Notes](docs/gh-504-last-page-route.md#the-jump-time-519).

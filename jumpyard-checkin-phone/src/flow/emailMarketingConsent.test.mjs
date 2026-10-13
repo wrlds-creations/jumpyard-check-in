@@ -22,12 +22,15 @@ test('pending consent is confined to draft, never customer or quote', () => {
   assert.doesNotMatch(recovery, /emailMarketingChecked|emailMarketingConsent|acceptMarketing/);
 });
 
-test('accessible switch defaults and resets unchecked, and locks with payment identity', () => {
+test('accessible switch defaults and resets unchecked, and never changes under a kept payment draft', () => {
   const component = fs.readFileSync(new URL('../components/BuyTickets.tsx', import.meta.url), 'utf8');
   assert.match(component, /\[emailMarketingChecked, setEmailMarketingChecked\] = useState\(false\)/);
   assert.match(component, /setEmail\(savedContact.email\);[\s\S]*?setEmailMarketingChecked\(false\)/);
   assert.match(component, /onChange=\{\(event\) => \{\s*setEmailMarketingChecked\(false\);\s*updateContact\(setEmail/);
   assert.match(component, /<EmailMarketingOptIn\s+checked=\{emailMarketingChecked\}[\s\S]*?emailValid=\{isValidEmail\(email\)\}\s*disabled=\{checkoutLocked\}/);
+  // #518: after Back from payment the choice can change, and the change drops the kept draft it travelled with.
+  assert.match(component, /const updateEmailMarketingChoice = \(checked: boolean\) => \{\s*setEmailMarketingChecked\(checked\);\s*dropKeptDraft\(\);\s*\};/);
+  assert.match(component, /onCheckedChange=\{updateEmailMarketingChoice\}/);
   const optIn = optInSource();
   assert.match(optIn, /type="checkbox"\s*role="switch"\s*checked=\{checked\}[\s\S]*?disabled=\{disabled\}\s*aria-labelledby=[\s\S]*?aria-describedby=\{helpId\}/);
   // It can only be switched on for a complete address, and only from the guest's own toggle.
