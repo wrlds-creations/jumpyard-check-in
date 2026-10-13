@@ -431,12 +431,14 @@ async function handleStartSession(event, body, correlationId, options = {}) {
       });
     }
     const readyResumedSession = await readyAttestedPurchaseSession(resumedSession, correlationId);
+    const checkinLink = await kioskPhoneLinkForStart(request, readyResumedSession, correlationId);
     const issuedGuestAccess = options.guestAccess || null;
 
     return jsonResponse(200, correlationId, {
       status: 'session_resumed',
       session: readyResumedSession,
       visit: await buildGuestVisit(readyResumedSession, context.booking.venueId),
+      ...(checkinLink ? { checkinLink } : {}),
       ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
       ...arrival,
       ...(bookingResponse ? bookingResponse : {}),
@@ -463,6 +465,7 @@ async function handleStartSession(event, body, correlationId, options = {}) {
     summary: 'Check-in session started.',
   });
   const startedSession = await readyAttestedPurchaseSession(session, correlationId);
+  const checkinLink = await kioskPhoneLinkForStart(request, startedSession, correlationId);
 
   const bookingResponse = request.includeBooking ? await buildPhoneSessionBookingResponse(context) : null;
   const issuedGuestAccess = options.guestAccess || null;
@@ -471,6 +474,7 @@ async function handleStartSession(event, body, correlationId, options = {}) {
     status: 'session_started',
     session: startedSession,
     visit: await buildGuestVisit(startedSession, context.booking.venueId),
+    ...(checkinLink ? { checkinLink } : {}),
     ...(issuedGuestAccess ? { guestAccess: issuedGuestAccess } : {}),
     ...arrival,
     ...(bookingResponse ? bookingResponse : {}),
@@ -615,6 +619,14 @@ async function createKioskPhoneLink(session, correlationId) {
     console.error(JSON.stringify({ event: 'checkin.kiosk_phone_link_failed', correlationId }));
     return null;
   }
+}
+
+// GH-523: a kiosk purchase paid without the terminal (a gift card or a code that covers it) starts its
+// session ready for staff (GH-458), so the kiosk never calls ready-for-staff, where GH-484 mints the link.
+// When the kiosk asks, session start mints the same link for a ready session with a number.
+async function kioskPhoneLinkForStart(request, session, correlationId) {
+  if (!request.phoneLink || session?.status !== 'ready_for_staff' || !session.handoffCode) return null;
+  return createKioskPhoneLink(session, correlationId);
 }
 
 // GH-458 (D0231): phone and kiosk guests approve safety before payment, and the Booking
@@ -1995,6 +2007,8 @@ function normalizeStartRequest(event, body) {
     idempotencyKey: stringOrNull(body.idempotencyKey) || stringOrNull(getHeader(event, 'x-idempotency-key')),
     identifier,
     includeBooking: body.includeBooking === true,
+    // GH-523: the kiosk asks for its "Lappen i mobilen" link in case the session starts ready.
+    phoneLink: body.phoneLink === true,
     guestResumeStep: normalizeGuestResumeStep(body.guestResumeStep),
     guestResumeStepProvided: Object.prototype.hasOwnProperty.call(body, 'guestResumeStep'),
     rollerUniqueId,
