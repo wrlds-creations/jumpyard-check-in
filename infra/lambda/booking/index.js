@@ -1577,10 +1577,16 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
     await recordKioskReconciliationAttempt(request, 'readback_pending');
     let readback = publishReadback;
     publishReadback = null;
+    // GH-531 (D0258): ROLLER answers 404 until it has created the paid booking, about a minute after
+    // the approval, so a 404 while attempts remain is an expected miss, not a ROLLER error. The last
+    // attempt's 404 still counts as one: a reconciliation that runs out of its window is an error.
+    const lastAttempt = index === KIOSK_RECONCILIATION_OFFSETS_MS.length - 1;
     for (const identifier of readbackIdentifiers) {
       if (readback) break;
       try {
-        const result = await getRollerJson(config, token, `/bookings/${encodeURIComponent(identifier)}`);
+        const result = await getRollerJson(config, token, `/bookings/${encodeURIComponent(identifier)}`, {
+          expectedMissStatus: lastAttempt ? null : 404,
+        });
         const candidate = result.ok
           ? normalizeBookingReadback(result.body, {
               requireTickets: existing.flow_type !== 'add_product',
@@ -4168,7 +4174,9 @@ async function publishDraftWithTerminalPayment(config, token, rollerDraftUniqueI
   });
 }
 
-async function getRollerJson(config, token, endpointPath) {
+// GH-531: `expectedMissStatus` names the one status the caller expects while it waits, such as the
+// kiosk reconciliation's 404 before ROLLER has created the booking. It changes the metric only.
+async function getRollerJson(config, token, endpointPath, { expectedMissStatus = null } = {}) {
   const response = await fetch(buildRollerUrl(config.baseUrl, endpointPath), {
     method: 'GET',
     headers: {
@@ -4181,6 +4189,7 @@ async function getRollerJson(config, token, endpointPath) {
     operation: rollerOperationFromEndpointPath(endpointPath, 'GET'),
     status: response.status,
     ok: response.ok,
+    expectedMiss: expectedMissStatus !== null && response.status === expectedMissStatus,
   });
   const text = await response.text();
   const body = parseJsonOrNull(text);
@@ -6621,7 +6630,7 @@ function buildRollerUrl(baseUrl, endpointPath) {
   return new URL(`${basePath}${endpointPath}`, parsedBaseUrl.origin);
 }
 
-function emitRollerApiMetric({ method, operation, status, ok }) {
+function emitRollerApiMetric({ method, operation, status, ok, expectedMiss = false }) {
   diagnostics.provider({ operation, status, ok });
   const statusCode = Number.isInteger(status) ? status : 0;
   const metricValues = {
@@ -6629,7 +6638,12 @@ function emitRollerApiMetric({ method, operation, status, ok }) {
   };
   const metrics = [{ Name: 'RollerApiCallCount', Unit: 'Count' }];
 
-  if (!ok) {
+  // GH-531 (D0258): an answer the caller waits through is counted apart, so the roller-api-errors
+  // alarms see only real ROLLER failures.
+  if (!ok && expectedMiss) {
+    metricValues.RollerApiExpectedMissCount = 1;
+    metrics.push({ Name: 'RollerApiExpectedMissCount', Unit: 'Count' });
+  } else if (!ok) {
     metricValues.RollerApiErrorCount = 1;
     metrics.push({ Name: 'RollerApiErrorCount', Unit: 'Count' });
   }
