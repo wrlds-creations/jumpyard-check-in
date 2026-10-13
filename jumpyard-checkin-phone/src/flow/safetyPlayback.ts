@@ -118,12 +118,13 @@ export function createSafetyPlayback(
       const playFailed = (error: unknown) => {
         if (ownedAttempt !== attempt || disposed) return;
         if (automatic && error instanceof Error && error.name === 'NotAllowedError') {
-          // Language changes can lose Safari's sound gesture. Keep a usable
-          // explicit resume at zero instead of treating permission as broken media.
+          // #530: even a muted start can be refused (an iPhone in Low Power Mode). Nothing has
+          // played, so the poster's play button starts the film with a tap, instead of treating
+          // permission as broken media.
           active = false;
           attempt += 1;
           clearWatchdog();
-          update('paused');
+          update('idle', 0);
           video.pause();
         } else {
           fail();
@@ -132,7 +133,9 @@ export function createSafetyPlayback(
       try {
         if (reload) video.load();
         if (!resume) video.currentTime = 0;
-        // Keep play() inside the guest's click for Safari's gesture requirement.
+        // #530: the film's audio track is silent (Love: "Det finns ingen ljud på videon"), so it
+        // always plays muted, which lets every browser start it without a tap.
+        video.muted = true;
         Promise.resolve(video.play()).catch(playFailed);
       } catch (error) {
         playFailed(error);

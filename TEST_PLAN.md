@@ -1,5 +1,9 @@
 # Test Plan
 
+## The safety film starts by itself, muted (#530, kiosk #212)
+
+Run `npm --prefix jumpyard-checkin-phone run test:safety-video`. `safetyPlayback.test.mjs` covers the muted automatic start reaching the approval, a muted tap, and a refused start (async, synchronous and after a language switch) ending at the poster's play button. `SafetyScreen.test.mjs` pins the mount rule, `muted` + `playsInline`, the poster with its spinner and that no sound control is left. Run the other phone suites, lint, `tsc` and `next build --webpack`. In the development-only `/preview/flow?full=1&screen=safety-buy|safety`, check SV and EN at 375x812 in a browser that requires a tap for sound: the film plays by itself with no control on it, and Back, Exit and the approval after the end are unchanged. After release, on an iPhone, the film starts by itself in a purchase and in an existing booking with an add-on. [Notes](docs/gh-530-safety-video-autoplay.md).
+
 ## Kiosk reconciliation expected misses (#531)
 
 Run `npm run validate:gh531-kiosk-expected-miss` (part of `npm run validate`). It loads the real Booking Lambda with scripted ROLLER answers and checks four things. Waiting 404s before ROLLER creates the booking emit `RollerApiExpectedMissCount` and no `RollerApiErrorCount`. A reconciliation that runs out of its 16 attempts still emits one error. A 5xx, 401, 429 or 400 during the wait stays an error. A 404 elsewhere is still an error, and the alarms still read only `RollerApiErrorCount`. Also run `validate:gh481-kiosk-publish-with-payment`, `validate:kiosk-payment-reconciliation`, `validate:gh340-server-errors` and `validate:gh335-alarm-routing`. After release, a kiosk card purchase on Park leaves `roller-api-errors` OK. [Notes](docs/gh-531-kiosk-expected-miss.md).
