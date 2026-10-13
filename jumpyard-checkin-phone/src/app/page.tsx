@@ -114,7 +114,8 @@ function getStepIndex(state: FlowState): number {
 }
 
 // #458: safety before payment swaps the Safety and Payment columns in both paths. On an existing
-// booking the add-on flow's own safety and payment steps light up their columns on APP_ADDONS.
+// booking the add-on flow's own safety and payment steps light up their columns on APP_ADDONS; the
+// summary follows the film (#520), so it lights up Payment like the purchase's contact step.
 const SAFETY_FIRST_STEP_ICONS: JumpyardIconName[] = [
     'booking-card',
     'addons-bag',
@@ -134,7 +135,7 @@ const SAFETY_FIRST_BUY_ENTRY_STEP_ICONS: JumpyardIconName[] = [
 function getSafetyFirstStepIndex(state: FlowState, addonsStep: AddonsOfferStep): number {
     if (state === 'APP_CONFIRM' || state === 'APP_PRESENT') return 4;
     if (state === 'APP_PAYMENT') return 3;
-    if (state === 'APP_ADDONS' && (addonsStep === 'PAYMENT' || addonsStep === 'APPROVED' || addonsStep === 'PENDING')) return 3;
+    if (state === 'APP_ADDONS' && (addonsStep === 'REVIEW' || addonsStep === 'PAYMENT' || addonsStep === 'APPROVED' || addonsStep === 'PENDING')) return 3;
     if (state === 'APP_SAFETY_VIDEO' || state === 'APP_SAFETY_ATTEST') return 2;
     if (state === 'APP_ADDONS' && addonsStep === 'SAFETY') return 2;
     if (state === 'APP_ADDONS' || state === 'APP_SKYRIDER_ATTEST' || state === 'APP_CONNECTED') return 1;
