@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { JumpyardIcon } from '@/components/JumpyardIcon';
 import { useTranslation } from '@/context/LanguageContext';
@@ -15,6 +15,8 @@ interface SocksQuantityProps {
   available: boolean;
   max: number;
   onQuantity: (quantity: number) => void;
+  /** #533: each new value brings the guest back here from the socks reminder: in view, + focused, one red pulse. */
+  attention?: number;
 }
 
 /**
@@ -24,10 +26,28 @@ interface SocksQuantityProps {
  * #515 (Love, 2026-10-12): an existing booking's add-on step shows this same block, so every guest
  * reads one rule, and its parents are red.
  */
-export function SocksQuantity({ quantity, included = 0, price, available, max, onQuantity }: SocksQuantityProps) {
+export function SocksQuantity({ quantity, included = 0, price, available, max, onQuantity, attention = 0 }: SocksQuantityProps) {
   const { t, lang } = useTranslation();
   const copy = t.addons.choices;
   const uid = useId();
+  const rowRef = useRef<HTMLElement>(null);
+  const addRef = useRef<HTMLButtonElement>(null);
+  // A block that mounts later (Back to this step) does not replay an earlier call.
+  const handledAttention = useRef(attention);
+
+  useEffect(() => {
+    if (attention === handledAttention.current) return;
+    handledAttention.current = attention;
+    const row = rowRef.current;
+    if (!row) return;
+    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    addRef.current?.focus({ preventScroll: true });
+    // The pulse is CSS on this attribute, restarted by a layout read; the animation's end removes it again.
+    row.removeAttribute('data-attention');
+    row.getBoundingClientRect();
+    row.setAttribute('data-attention', 'true');
+  }, [attention]);
+
   const sellable = available && price !== null;
   const money = (value: number) => `${new Intl.NumberFormat(lang === 'sv' ? 'sv-SE' : 'en-GB', { maximumFractionDigits: 2 }).format(value)} ${t.common.currency}`;
   const perPair = sellable ? copy.perPair.replace('{price}', money(price)) : '';
@@ -37,8 +57,9 @@ export function SocksQuantity({ quantity, included = 0, price, available, max, o
 
   return (
     <div className="addon-shop buy-socks" data-testid="buy-socks-quantity">
-      <section className="addon-shop-row" data-selected={sellable && quantity > 0}
-        aria-labelledby={titleId} aria-describedby={noteId}>
+      <section ref={rowRef} className="addon-shop-row" data-selected={sellable && quantity > 0}
+        aria-labelledby={titleId} aria-describedby={noteId}
+        onAnimationEnd={(event) => { if (event.target === event.currentTarget) event.currentTarget.removeAttribute('data-attention'); }}>
         {/* The title ("JumpSocks") has its own line above the price and the stepper. */}
         <div className="buy-socks-main">
           <span className="addon-shop-icon-wrap buy-socks-icon">
@@ -60,7 +81,7 @@ export function SocksQuantity({ quantity, included = 0, price, available, max, o
               data-testid="buy-socks-count">
               {added}
             </output>
-            <button type="button" aria-label={`${copy.add}: ${copy.socksTitle}`}
+            <button ref={addRef} type="button" aria-label={`${copy.add}: ${copy.socksTitle}`}
               data-testid="buy-socks-increment" disabled={!sellable || quantity >= max}
               onClick={() => onQuantity(Math.min(max, quantity + 1))}>
               <Plus aria-hidden="true" />

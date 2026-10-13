@@ -172,4 +172,7 @@ export interface FlowContext {
   baseUnitPrice: number;
   baseQuantity: number;
   baseTotal: number;
+
+  /** #533: the socks reminder was shown in this visit, so the add-on step does not show it again. */
+  socksReminderShown: boolean;
 }
