@@ -1,6 +1,6 @@
 # GH-530: the safety film starts by itself on the phone
 
-Issue #530 removes the tap on the safety film's cover. On 2026-10-13 Love asked: "jag vill att säkerhetsvideon går igång automatiskt på både mobil och kiosk". After the first preview (which offered a "LJUD PÅ" control), Love answered the same day: "Det finns ingen ljud på videon så det ska inte finnas någon ljud på". Decision D0258; kiosk #212 is the counterpart (kiosk D0070).
+Issue #530 removes the tap on the safety film's cover. On 2026-10-13 Love asked: "jag vill att säkerhetsvideon går igång automatiskt på både mobil och kiosk". After the first preview (which offered a "LJUD PÅ" control), Love answered the same day: "Det finns ingen ljud på videon så det ska inte finnas någon ljud på". Decision D0259; kiosk #212 is the counterpart (kiosk D0070).
 
 ## What the guest sees
 
