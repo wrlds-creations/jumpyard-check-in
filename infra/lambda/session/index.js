@@ -653,10 +653,24 @@ async function readyAttestedPurchaseSession(session, correlationId) {
     });
     await requestAutoCheckin(readySession.checkinSessionId, 'safety_attested_ready', correlationId);
     return readySession;
-  } catch {
-    console.error(JSON.stringify({ event: 'checkin.attested_ready_failed', correlationId }));
+  } catch (error) {
+    // GH-527: say why (for example handoff_venue_required), never the message itself.
+    console.error(JSON.stringify({ event: 'checkin.attested_ready_failed', correlationId, code: safeFailureCode(error) }));
     return session;
   }
+}
+
+// GH-527: the codes our own migrations raise (RAISE EXCEPTION). Only these are ever read from a message.
+const OWN_DATABASE_FAILURE_CODES = ['handoff_venue_required', 'staff_pin_pepper_version_stale'];
+
+// GH-527: a code to log for a failed step: the error's own snake_case code, or one of our own database codes
+// found in its message. A message can carry guest values (an email such as first_last@...), so nothing else is
+// taken from it; anything else is unknown_error.
+function safeFailureCode(error) {
+  const code = stringOrNull(error?.code);
+  if (code && /^[a-z][a-z0-9_]{2,63}$/.test(code)) return code;
+  const message = String(error?.message ?? '');
+  return OWN_DATABASE_FAILURE_CODES.find((known) => message.includes(known)) ?? 'unknown_error';
 }
 
 async function findSafetyAttestation(rollerUniqueId) {
