@@ -961,7 +961,8 @@ export const BuyTickets = ({
     (step === 'PAYMENT' && (paymentNavigationLocked || paymentApprovedForSync || paymentSyncing || paymentFailure === 'unknown'));
   const checkoutAmount = draftAmountOwing ?? quote?.costs.amountOwing ?? basketEstimateTotal;
   const checkoutTotal = quote?.costs.total ?? basketEstimateTotal;
-  const checkoutLocked = submitting || Boolean(draft) || showPaymentSyncCard;
+  // #518 (D0256): a draft kept by Back from payment no longer locks the contact step; an edit drops it.
+  const checkoutLocked = submitting || showPaymentSyncCard;
 
   const clearPaymentSyncState = () => {
     paymentPreparationAbortRef.current?.abort();
@@ -1412,10 +1413,25 @@ export const BuyTickets = ({
     setSkyriderConsentConfirmed(false);
   };
 
+  // #518 (D0256): Back from payment keeps the unsubmitted draft, so an unchanged contact step reopens the
+  // same payment. A changed contact or email choice drops it; the next Continue creates a fresh draft.
+  const dropKeptDraft = () => {
+    if (!draft) return;
+    setDraft(null);
+    clearPaymentSyncState();
+  };
+
   const updateContact = (setValue: (value: string) => void, value: string) => {
     setValue(value);
     setSubmitError(null);
     invalidateQuote();
+    dropKeptDraft();
+  };
+
+  // The email choice travels with the draft (D0225), so it cannot change under a kept one.
+  const updateEmailMarketingChoice = (checked: boolean) => {
+    setEmailMarketingChecked(checked);
+    dropKeptDraft();
   };
 
   // One code at a time: entering either type clears the other field.
@@ -2428,7 +2444,7 @@ export const BuyTickets = ({
                   active: t.buy.emailMarketingActive,
                   needEmail: t.buy.emailMarketingNeedEmail,
                 }}
-                onCheckedChange={setEmailMarketingChecked}
+                onCheckedChange={updateEmailMarketingChoice}
                 onNeedEmail={() => emailInputRef.current?.focus()}
               />
 
