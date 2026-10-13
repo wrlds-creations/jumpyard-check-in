@@ -1,6 +1,6 @@
 # GH-533: a friendly socks reminder
 
-Issue #533 adds a friendly pop-up when a guest continues without any JumpSocks. On 2026-10-13 Love asked: "går man vidare och inte har fyllt in någon strumpor alls så får man upp en snäll pop-up ... som bara säger typ du glömmer inte strumpor med en glad smiley eller något". On placement: "Om du har en bokning så ska den komma efter tillägg. Och har du köpt ... så ska den komma mellan entré och tillägg." Decision D0261; kiosk #215 is the counterpart (kiosk D0073).
+Issue #533 adds a friendly pop-up when a guest continues without any JumpSocks. On 2026-10-13 Love asked: "går man vidare och inte har fyllt in någon strumpor alls så får man upp en snäll pop-up ... som bara säger typ du glömmer inte strumpor med en glad smiley eller något". On placement: "Om du har en bokning så ska den komma efter tillägg. Och har du köpt ... så ska den komma mellan entré och tillägg." Decision D0261; kiosk #215 is the counterpart (kiosk D0074).
 
 ## What the guest sees
 
