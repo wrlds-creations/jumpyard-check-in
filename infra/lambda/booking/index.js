@@ -2699,14 +2699,8 @@ async function handleAddProductQuote(event, body, correlationId) {
     return parkTestGateBlockedResponse(correlationId, fullFlowGate);
   }
 
-  const customerResult = resolveAddProductCustomer(request, original);
-  if (!customerResult.ok) {
-    return jsonResponse(customerResult.statusCode, correlationId, {
-      status: customerResult.status,
-      error: customerResult.error,
-    });
-  }
-  request.customer = customerResult.customer;
+  // GH-532 (D0260): a price check never carries the guest; only the draft reads and sends the ROLLER guest.
+  request.customer = buildQuoteCustomer();
 
   const availabilityError = request.requireAvailability ? await validateItemsAvailable(config, token, request.items) : null;
   if (availabilityError) {
@@ -2842,7 +2836,7 @@ async function handleAddProductDraft(event, body, correlationId) {
     return parkTestGateBlockedResponse(correlationId, fullFlowGate);
   }
 
-  const customerResult = resolveAddProductCustomer(request, original);
+  const customerResult = await resolveAddProductGuestCustomer(config, token, original);
   if (!customerResult.ok) {
     return jsonResponse(customerResult.statusCode, correlationId, {
       status: customerResult.status,
@@ -3127,7 +3121,8 @@ function normalizeAddProductDraftRequest(event, body, bookingReference) {
     companyId: numberOrNull(body.companyId),
     confirmDraft: body.confirmDraft === true,
     correlationId: stringOrNull(body.correlationId),
-    customer: body.customer ? normalizeCustomer(body.customer, false) : null,
+    // GH-532 (D0260): the customer always comes from the ROLLER guest; a client customer is ignored.
+    customer: null,
     customerPaysFees: body.customerPaysFees === true,
     discounts: normalizeDiscounts(body.discounts, body.discountCodes),
     externalId: stringOrNull(body.externalId),
@@ -3685,11 +3680,6 @@ function validateAddProductDraftRequest(request) {
   const kioskBindingError = validateKioskTerminalBinding(request);
   if (kioskBindingError) return kioskBindingError;
 
-  if (hasAnyCustomerField(request.customer)) {
-    const customerError = validateCustomer(request.customer);
-    if (customerError) return customerError;
-  }
-
   return validateItems(request.items);
 }
 
@@ -3862,10 +3852,7 @@ function buildRollerBookingPayload(request, { customer, externalIdPrefix, withEm
   const payload = {
     externalId,
     name: request.name || 'JumpYard booking',
-    customer: {
-      ...customer,
-      acceptMarketingSms: Boolean(customer.phone && !isPlaceholderPhone(customer.phone) && customer.acceptMarketingSms),
-    },
+    customer: { ...customer },
     items: request.items.map((item) => ({
       productId: item.productId,
       quantity: item.quantity,
@@ -3879,17 +3866,16 @@ function buildRollerBookingPayload(request, { customer, externalIdPrefix, withEm
     customerPaysFees: request.customerPaysFees === true,
   };
 
-  // New phone and kiosk purchases never turn an unchecked choice into a
-  // withdrawal and never touch SMS. GH-437 option A (D0225, kiosk #444): a checked
-  // choice travels with the draft, the moment the ROLLER-to-Klaviyo integration
-  // honours it; quotes never carry it. Existing-booking add-ons stay unchanged.
-  if (request.flowType !== 'add_product') {
-    delete payload.customer.acceptMarketing;
-    delete payload.customer.acceptMarketingSms;
-    if (withEmailMarketingChoice && request.emailMarketingConsent &&
-        !emailMarketing.validateChoice(request.emailMarketingConsent)) {
-      payload.customer.acceptMarketing = true;
-    }
+  // No payload turns an unchecked choice into a withdrawal or touches SMS: ROLLER
+  // applies supplied flags to the guest it matches. GH-437 option A (D0225, kiosk
+  // #444): a checked choice travels with the new-purchase draft only, the moment the
+  // ROLLER-to-Klaviyo integration honours it; quotes never carry it. GH-532 (D0260):
+  // existing-booking add-ons carry none either.
+  delete payload.customer.acceptMarketing;
+  delete payload.customer.acceptMarketingSms;
+  if (withEmailMarketingChoice && request.emailMarketingConsent &&
+      !emailMarketing.validateChoice(request.emailMarketingConsent)) {
+    payload.customer.acceptMarketing = true;
   }
 
   if (request.comments) payload.comments = request.comments;
@@ -4261,36 +4247,52 @@ async function resolveOriginalBookingContext(config, token, bookingReference) {
     };
   }
 
-  const localCustomer = await findLocalOriginalBookingCustomer(
-    original.rollerUniqueId,
-    original.bookingReference,
-    original.rollerCustomerId,
-  );
-  original.customer = mergeOriginalBookingCustomer(original.customer, localCustomer, original.bookingName);
-
-  if (validateCustomer(original.customer)) {
-    const rollerGuestCustomer = await resolveOriginalBookingCustomerFromGuestDetail(config, token, rollerResult.body);
-    original.customer = mergeOriginalBookingCustomer(original.customer, rollerGuestCustomer, original.bookingName);
-  }
-
   return {
     ok: true,
     ...original,
   };
 }
 
-async function resolveOriginalBookingCustomerFromGuestDetail(config, token, bookingBody) {
-  const candidates = collectOriginalBookingGuestCandidates(bookingBody).slice(0, 8);
+// GH-532 (D0260): an add-on draft carries the original booking's ROLLER guest exactly as ROLLER returns it.
+// ROLLER matches a draft's customer on email and overwrites that guest's supplied fields, so only the guest's
+// own values are safe to send. Booking detail has a title and a customerId but no names, and a title
+// ("Add-on for <ref>", "Kalas Elsa") is never a name. One read per add-on draft, never for a quote.
+async function resolveAddProductGuestCustomer(config, token, original) {
+  const unresolved = {
+    ok: false,
+    status: 'blocked',
+    statusCode: 409,
+    error: {
+      code: 'original_booking_contact_unresolved',
+      message:
+        'Original booking contact could not be resolved server-side. Refresh Roller customer data or ask staff before creating add-products.',
+    },
+  };
+  const guestId = stringOrNull(original.rollerCustomerId);
+  if (!guestId) return unresolved;
 
-  for (const candidate of candidates) {
-    const result = await getRollerJson(config, token, `/guests/${encodeURIComponent(candidate)}`);
-    if (!result.ok) continue;
-
-    const customer = normalizeOriginalBookingGuestDetailCustomer(result.body);
-    if (!validateCustomer(customer)) return customer;
+  const result = await getRollerJson(config, token, `/guests/${encodeURIComponent(guestId)}`);
+  if (!result.ok && result.status !== 404) {
+    return {
+      ok: false,
+      status: 'roller_error',
+      statusCode: 502,
+      error: {
+        code: 'roller_original_guest_lookup_failed',
+        message: `Roller original guest lookup failed with HTTP ${result.status}.`,
+      },
+    };
   }
 
-  return null;
+  const guest = result.ok && isPlainObject(result.body) ? result.body : {};
+  const customer = {};
+  for (const field of ['firstName', 'lastName', 'email', 'phone']) {
+    // Sent exactly as ROLLER holds it: trimming or reformatting would itself change the guest.
+    if (typeof guest[field] !== 'string' || !guest[field].trim()) return unresolved;
+    customer[field] = guest[field];
+  }
+
+  return validateCustomer(customer) ? unresolved : { ok: true, customer };
 }
 
 async function findLocalOriginalBooking(bookingReference) {
@@ -4316,90 +4318,18 @@ async function findLocalOriginalBooking(bookingReference) {
   return firstMappedRow(result);
 }
 
-async function findLocalOriginalBookingCustomer(rollerUniqueId, bookingReference, rollerCustomerId) {
-  if (!rollerUniqueId && !bookingReference && !rollerCustomerId) return null;
-
-  const result = await executeStatement(
-    `WITH contact_candidate AS (
-       SELECT
-         0 AS priority,
-         CAST(:rollerCustomerId AS text) AS roller_customer_id
-       WHERE CAST(:rollerCustomerId AS text) IS NOT NULL
-       UNION ALL
-       SELECT
-         1 AS priority,
-         ticket.roller_customer_id
-       FROM jumpyard.roller_booking_tickets AS ticket
-       WHERE ticket.roller_unique_id = :rollerUniqueId
-         AND ticket.roller_customer_id IS NOT NULL
-       UNION ALL
-       SELECT
-         2 AS priority,
-         booking.normalized_summary ->> 'bookingCustomerId' AS roller_customer_id
-       FROM jumpyard.roller_bookings AS booking
-       WHERE (booking.roller_unique_id = :rollerUniqueId OR booking.booking_reference = :bookingReference)
-         AND booking.normalized_summary ->> 'bookingCustomerId' IS NOT NULL
-     ),
-     contact_source AS (
-       SELECT
-         0 AS priority,
-         draft.customer_email AS email,
-         draft.customer_phone AS phone,
-         draft.updated_at
-       FROM jumpyard.prepayment_booking_drafts AS draft
-       WHERE draft.roller_draft_unique_id = :rollerUniqueId
-         AND (draft.customer_email IS NOT NULL OR draft.customer_phone IS NOT NULL)
-       UNION ALL
-       SELECT
-         contact_candidate.priority + 1 AS priority,
-         gp.email,
-         gp.contact_number AS phone,
-         gp.updated_at
-       FROM contact_candidate
-       INNER JOIN jumpyard.guest_profiles AS gp
-         ON gp.roller_customer_id = contact_candidate.roller_customer_id
-       WHERE gp.email IS NOT NULL
-          OR gp.contact_number IS NOT NULL
-     )
-     SELECT
-       email,
-       phone
-     FROM contact_source
-     ORDER BY priority ASC, updated_at DESC
-     LIMIT 5`,
-    [
-      stringParameter('rollerUniqueId', rollerUniqueId),
-      stringParameter('bookingReference', bookingReference),
-      stringParameter('rollerCustomerId', rollerCustomerId),
-    ],
-  );
-
-  const rows = mappedRows(result);
-  if (rows.length === 0) return null;
-
-  return rows.reduce(
-    (contact, row) => ({
-      email: contact.email || stringOrNull(row.email),
-      phone: contact.phone || stringOrNull(row.phone),
-    }),
-    { email: null, phone: null },
-  );
-}
-
 function normalizeOriginalBookingContext(body, bookingReference, localBooking) {
   const booking = body?.booking && typeof body.booking === 'object' ? body.booking : body;
   const items = Array.isArray(booking?.items) ? booking.items : [];
   const firstItem = items[0] ?? {};
 
   return {
-    bookingName: stringOrNull(booking?.name ?? booking?.bookingName ?? booking?.title),
     bookingDate: stringOrNull(booking?.bookingDate ?? firstItem.bookingDate ?? localBooking?.booking_date),
     bookingReference:
       stringOrNull(booking?.bookingReference ?? booking?.reference ?? booking?.bookingId) ||
       stringOrNull(localBooking?.booking_reference) ||
       bookingReference,
     bookingStatus: stringOrNull(booking?.status ?? booking?.bookingStatus ?? localBooking?.booking_status),
-    customer: normalizeOriginalBookingCustomer(booking),
     localFreshnessStatus: stringOrNull(localBooking?.freshness_status),
     paymentStatus: stringOrNull(booking?.paymentStatus ?? booking?.status ?? booking?.bookingStatus ?? localBooking?.payment_status),
     rollerCustomerId: stringOrNull(booking?.customerId ?? booking?.customer?.id ?? localBooking?.booking_customer_id),
@@ -4429,132 +4359,6 @@ function extractVenueId(booking) {
       : []),
   ];
   return candidates.map(stringOrNull).find(Boolean) ?? null;
-}
-
-function normalizeOriginalBookingCustomer(booking) {
-  const candidates = [
-    booking?.customer,
-    booking?.bookingCustomer,
-    booking?.bookingHolder,
-    booking?.guest,
-    booking?.contact,
-    booking?.primaryContact,
-    booking?.holder,
-    booking?.customerDetails,
-    Array.isArray(booking?.contacts) ? booking.contacts[0] : null,
-    booking,
-  ].filter(isPlainObject);
-
-  const customer = {
-    email: null,
-    firstName: null,
-    lastName: null,
-    phone: null,
-  };
-  let fullName = null;
-
-  for (const candidate of candidates) {
-    customer.firstName =
-      customer.firstName || firstObjectString(candidate, ['firstName', 'first_name', 'givenName', 'given_name']);
-    customer.lastName =
-      customer.lastName || firstObjectString(candidate, ['lastName', 'last_name', 'familyName', 'family_name', 'surname']);
-    customer.email = customer.email || firstObjectString(candidate, ['email', 'emailAddress', 'email_address']);
-    customer.phone =
-      customer.phone ||
-      firstObjectString(candidate, ['phone', 'phoneNumber', 'phone_number', 'mobile', 'mobilePhone', 'contactNumber']);
-    fullName =
-      fullName ||
-      firstObjectString(candidate, ['fullName', 'full_name', 'customerName', 'bookingHolderName', 'name', 'bookingName']);
-  }
-
-  const nameParts = splitCustomerName(fullName);
-  return {
-    email: customer.email,
-    firstName: customer.firstName || nameParts.firstName,
-    lastName: customer.lastName || nameParts.lastName,
-    phone: customer.phone,
-  };
-}
-
-function normalizeOriginalBookingGuestDetailCustomer(body) {
-  const guest = firstPlainObject([
-    body?.guest,
-    body?.customer,
-    body?.data,
-    body,
-  ]);
-  return normalizeOriginalBookingCustomer(guest);
-}
-
-function mergeOriginalBookingCustomer(primary, fallback, fallbackName) {
-  const nameParts = splitCustomerName(fallbackName);
-
-  return {
-    email: stringOrNull(primary?.email) || stringOrNull(fallback?.email),
-    firstName: stringOrNull(primary?.firstName) || nameParts.firstName,
-    lastName: stringOrNull(primary?.lastName) || nameParts.lastName,
-    phone: stringOrNull(primary?.phone) || stringOrNull(fallback?.phone),
-  };
-}
-
-function collectOriginalBookingGuestCandidates(value) {
-  const candidates = [];
-  collectOriginalBookingGuestCandidatesInto(value, candidates, 0);
-  return [...new Set(candidates)];
-}
-
-function collectOriginalBookingGuestCandidatesInto(value, candidates, depth) {
-  if (depth > 10) return;
-
-  if (Array.isArray(value)) {
-    for (const item of value) collectOriginalBookingGuestCandidatesInto(item, candidates, depth + 1);
-    return;
-  }
-
-  if (!isPlainObject(value)) return;
-
-  for (const [key, child] of Object.entries(value)) {
-    if (isOriginalBookingGuestCandidateKey(key)) {
-      const candidate = stringOrNull(child);
-      if (candidate && /^[A-Za-z0-9-]{3,80}$/.test(candidate)) candidates.push(candidate);
-    }
-    collectOriginalBookingGuestCandidatesInto(child, candidates, depth + 1);
-  }
-}
-
-function isOriginalBookingGuestCandidateKey(key) {
-  return ['bookingcustomerid', 'customerid', 'guestid', 'rollercustomerid'].includes(
-    String(key || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase(),
-  );
-}
-
-function firstPlainObject(values) {
-  for (const value of values) {
-    if (isPlainObject(value)) return value;
-  }
-  return null;
-}
-
-function resolveAddProductCustomer(request, original) {
-  const customer = hasAnyCustomerField(request.customer) ? request.customer : original.customer;
-  const customerError = validateCustomer(customer);
-  if (customerError) {
-    return {
-      ok: false,
-      status: 'blocked',
-      statusCode: 409,
-      error: {
-        code: 'original_booking_contact_unresolved',
-        message:
-          'Original booking contact could not be resolved server-side. Refresh Roller customer data or ask staff before creating add-products.',
-      },
-    };
-  }
-
-  return {
-    customer,
-    ok: true,
-  };
 }
 
 function isOriginalBookingEligibleForAddProduct(original) {
@@ -6887,35 +6691,6 @@ function stringOrNull(value) {
 
 function isPlainObject(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-function firstObjectString(object, keys) {
-  if (!isPlainObject(object)) return null;
-
-  for (const key of keys) {
-    const value = stringOrNull(object[key]);
-    if (value) return value;
-  }
-
-  return null;
-}
-
-function splitCustomerName(value) {
-  const name = stringOrNull(value);
-  if (!name) return { firstName: null, lastName: null };
-
-  const parts = name.split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return { firstName: null, lastName: null };
-
-  return {
-    firstName: parts[0],
-    lastName: parts.slice(1).join(' '),
-  };
-}
-
-function hasAnyCustomerField(customer) {
-  if (!isPlainObject(customer)) return false;
-  return ['firstName', 'lastName', 'email', 'phone'].some((field) => Boolean(stringOrNull(customer[field])));
 }
 
 function numberOrNull(value) {

@@ -262,8 +262,12 @@ function draftFixture(database, extra = {}) {
     validateT0176FullFlowRequestItemDates: () => ({ ok: true }), validateT0162AddOnSmokeAccess: () => ({ ok: true }),
     validateT0176FullFlowOriginalBookingAccess: () => ({ ok: true }), verifyGuestAccessForBooking: async () => ({ ok: true }),
     getBookingReferenceFromPath: () => 'original-fixture',
-    resolveOriginalBookingContext: async () => ({ ok: true, venueId: '50871', bookingReference: 'original-fixture', rollerUniqueId: 'original-id', customer }),
-    getRollerJson: async () => { throw new Error('Draft creation must not look up a customer'); },
+    resolveOriginalBookingContext: async () => ({ ok: true, venueId: '50871', bookingReference: 'original-fixture', rollerUniqueId: 'original-id', rollerCustomerId: 'original-guest' }),
+    // #532: an add-on draft reads the original booking's ROLLER guest; a new purchase looks nothing up.
+    getRollerJson: async (_config, _token, endpoint) => {
+      if (endpoint === '/guests/original-guest') return { ok: true, status: 200, body: { ...customer } };
+      throw new Error('Draft creation must not look up anything else');
+    },
     executeStatement: database.executeStatement,
     postRollerJson: async (_config, _token, endpoint, payload) => {
       calls.push({ endpoint, payload });

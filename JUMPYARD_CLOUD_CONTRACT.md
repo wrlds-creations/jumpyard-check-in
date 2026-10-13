@@ -14,7 +14,7 @@ Love explicitly restored phone entry in phone/shared Cloud issue [#409](https://
 
 - Four-field new purchases require first name, last name, email and a guest-entered phone. This covers the kiosk until kiosk #150 and the phone fallback. Clients start with an empty phone field. On this path Cloud forwards the supplied number and never inserts a standard phone. The email-first path below may use `0700000000` for guests Klaviyo does not know.
 - Remove the extra pre-create email search, local guest-profile query and guest-detail loop. A new or unindexed email can create a draft without being found in advance. ROLLER owns customer matching. Normal updates from explicitly submitted contact fields still apply; preserving an existing different number is not promised.
-- Existing-booking add-ons retain established booking/access/contact resolution, without the extra email-matching loop. Missing original contact still requires staff resolution; no synthetic phone is manufactured.
+- Existing-booking add-ons retain established booking/access resolution, without the extra email-matching loop. Since #532 (D0260) their customer is the original booking's ROLLER guest exactly as `GET /guests/{customerId}` returns it. Missing original contact still requires staff resolution; no synthetic phone is manufactured.
 - Unsubmitted saved purchases without a phone return to contact entry before a new draft. Active draft/payment recovery keeps its original identity and cannot create another draft merely to add a phone.
 - Public lookup remains booking reference, email and supported QR/booking identifiers. Explicit or inferred phone requests return HTTP 400 `phone_lookup_disabled` before provider/cache/access work, regardless of a misleading `identifierType`. Genuine numeric booking references retain their existing behavior.
 - Equivalent spellings of `0700000000` remain missing contact internally, are not SMS-ready and cannot receive SMS, including legacy stored values. No bulk contact edits are authorized.
@@ -40,7 +40,7 @@ Love explicitly restored phone entry in phone/shared Cloud issue [#409](https://
 
 ## Phone Email Marketing (#437; Choice Sent With The Draft)
 
-Phone and kiosk (D0226, #444) new-purchase drafts may carry the optional Cloud-only `emailMarketingConsent` object: `{ granted: true, copyVersion: "phone-email-2026-09-23-v3", locale: "sv" | "en" }`. It is never part of a quote. Under D0225 a valid choice sets `acceptMarketing: true` on the ROLLER customer of that draft; absence sends no email instruction, SMS acceptance is never sent, and the kiosk cost-verification payload carries neither flag. A separately approved September 23 unpaid draft preserved all returned fields for the owned already-subscribed ROLLER guest; this observation does not establish every guest state, concurrent updates or downstream suppression behavior. Existing-booking add-on contracts are unchanged. Kiosk evidence uses source `kiosk_new_booking`.
+Phone and kiosk (D0226, #444) new-purchase drafts may carry the optional Cloud-only `emailMarketingConsent` object: `{ granted: true, copyVersion: "phone-email-2026-09-23-v3", locale: "sv" | "en" }`. It is never part of a quote. Under D0225 a valid choice sets `acceptMarketing: true` on the ROLLER customer of that draft; absence sends no email instruction, SMS acceptance is never sent, and the kiosk cost-verification payload carries neither flag. A separately approved September 23 unpaid draft preserved all returned fields for the owned already-subscribed ROLLER guest; this observation does not establish every guest state, concurrent updates or downstream suppression behavior. Existing-booking add-ons send no marketing flag at all (#532, D0260). Kiosk evidence uses source `kiosk_new_booking`.
 
 The server records the choice, timestamp, email hash and exact copy against the provider-returned draft identity as `sent_with_draft`. The after-payment Booking worker (paid-booking recheck, durable claim, guest update) stays in code but is closed: no profile sets `safetyGates.phoneEmailMarketingDeliveryApproval`, so `PHONE_EMAIL_MARKETING_PROVIDER_APPROVED` is false. A failed marketing operation does not fail payment. Public promotion of the switch waits for owned-address verification. [Persistence, provider gates and evidence](docs/gh-437-phone-email-marketing.md).
 
@@ -999,6 +999,7 @@ Rules:
 - Lookup booking detail through Roller first and block cancelled, deleted, or draft originals.
 - For SkyRider or other session products, run availability check first when `requireAvailability=true`.
 - Use Roller `POST /bookings/draft/costs` on the add-on booking payload to show final price impact.
+- GH-532 (D0260): the quote prices with Cloud's placeholder quote customer and reads no guest; a client `customer` is ignored.
 - Do not call `PUT /bookings/{uniqueId}` as the primary pilot path.
 - Quote mode must not create a Roller draft booking or Aurora booking link.
 - T0034 implements this in the deployed booking Lambda.
@@ -1013,12 +1014,6 @@ Request:
 {
   "confirmDraft": true,
   "idempotencyKey": "client-or-server-generated-key",
-  "customer": {
-    "firstName": "Guest",
-    "lastName": "Guest",
-    "email": "guest@example.com",
-    "phone": "+46000000000"
-  },
   "items": [
     {
       "productId": 1765860,
@@ -1060,7 +1055,8 @@ Rules:
 - Primary pilot pattern: create a separate add-on booking in Roller for the selected products.
 - Link the original booking and add-on booking in JumpYard Cloud using the original `rollerUniqueId`, original `bookingReference`, add-on `rollerUniqueId`, add-on `bookingReference`, and an internal `addOnGroupId`.
 - T0034 stores that link in `jumpyard.booking_links` with `link_type='add_product_draft'` and stores add-product draft metadata in `jumpyard.prepayment_booking_drafts` with `flow_type='add_product'`.
-- `confirmDraft=true`, customer fields, and an idempotency key are required because the route creates a Roller Playground draft booking.
+- `confirmDraft=true` and an idempotency key are required because the route creates a Roller draft booking.
+- Customer (#532, D0260): the add-on draft carries the original booking's ROLLER guest exactly as `GET /guests/{customerId}` returns it: first name, last name, email and phone, untrimmed, with no marketing flag. ROLLER matches drafts on email, so the guest stays unchanged. Names never come from the booking title, and a client `customer` is ignored. The add-on keeps its name `Add-on for <bookingReference>`. A guest without a customer id, a 404 or an empty field returns `409 original_booking_contact_unresolved`, and another failed read returns `502 roller_original_guest_lookup_failed`, both before any ROLLER write. The draft makes one guest read.
 - Raw `paymentJwt` values remain response-only and are not persisted in Aurora.
 - The existing-booking kiosk card-present path uses the same installation proof, fixed profile and persistent terminal reservation as new bookings. Cloud also checks the original booking venue, re-quotes without terminal data, and verifies exact amount plus SEK evidence before returning a terminal-bound JWT. Its temporary `primary` compatibility follows the same rollout boundary.
 - The kiosk response returns a safe fresh payment-attempt id and terminal payment API metadata, never the terminal reference. An explicit retry creates a new draft and attempt instead of reusing ambiguous payment authority.

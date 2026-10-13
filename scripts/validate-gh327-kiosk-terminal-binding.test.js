@@ -123,8 +123,12 @@ function handlerFixture(extra = {}) {
     validateT0176FullFlowRequestItemDates: () => ({ ok: true }), validateT0162AddOnSmokeAccess: () => ({ ok: true }),
     validateT0176FullFlowOriginalBookingAccess: () => ({ ok: true }), verifyGuestAccessForBooking: async () => ({ ok: true }),
     getBookingReferenceFromPath: () => 'original-fixture',
-    resolveOriginalBookingContext: async () => ({ ok: true, venueId: '50871', bookingReference: 'original-fixture', rollerUniqueId: 'original-id', customer: body.customer }),
-    getRollerJson: async () => { throw new Error('Draft creation must not look up a customer'); },
+    resolveOriginalBookingContext: async () => ({ ok: true, venueId: '50871', bookingReference: 'original-fixture', rollerUniqueId: 'original-id', rollerCustomerId: 'original-guest' }),
+    // #532: an add-on draft reads the original booking's ROLLER guest; a new purchase looks nothing up.
+    getRollerJson: async (_config, _token, endpoint) => {
+      if (endpoint === '/guests/original-guest') return { ok: true, status: 200, body: { ...body.customer } };
+      throw new Error('Draft creation must not look up anything else');
+    },
     executeStatement: async (sql, parameters) => {
       // GH-488: these legacy-profile installations have no registry pairing.
       if (/FROM jumpyard\.kiosk_installations/.test(sql)) return { columnMetadata: [], records: [] };
@@ -168,12 +172,14 @@ for (const method of ['handleDraft', 'handleAddProductDraft']) {
       assert.equal(calls.length, 0);
     }
   });
-  test(`${method}: missing phone fails validation before reservations or provider calls`, async () => {
+  test(`${method}: missing phone fails before reservations or provider calls`, async () => {
     const { calls, body, backend } = handlerFixture();
     delete body.customer.phone;
     const result = await backend[method]({}, body, 'test');
-    assert.equal(result.statusCode, 400);
-    assert.equal(JSON.parse(result.body).error.code, 'customer_required');
+    // #532: an add-on ignores the client customer; the ROLLER guest without a phone is unresolved.
+    const [statusCode, code] = method === 'handleDraft' ? [400, 'customer_required'] : [409, 'original_booking_contact_unresolved'];
+    assert.equal(result.statusCode, statusCode);
+    assert.equal(JSON.parse(result.body).error.code, code);
     assert.deepEqual(calls, []);
   });
   test(`${method}: a busy reservation never dispatches another draft`, async () => {

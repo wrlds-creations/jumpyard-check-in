@@ -33,7 +33,7 @@ function load(overrides = {}, env = {}) {
   return { ...module.exports.test, handler: module.exports.handler };
 }
 
-test('new phone and kiosk payloads carry no email or SMS instruction; add-ons are unchanged', () => {
+test('new phone and kiosk payloads carry no email or SMS instruction, and add-ons carry none either', () => {
   const h = load();
   const request = { externalId: 'external-test', items: [], discounts: [], giftCards: [], companyId: null };
   for (const channel of [null, undefined, 'kiosk']) {
@@ -43,8 +43,11 @@ test('new phone and kiosk payloads carry no email or SMS instruction; add-ons ar
     assert.equal(payload.customer.acceptMarketing, undefined);
     assert.equal(payload.customer.acceptMarketingSms, undefined);
   }
+  // #532: an add-on sends the ROLLER guest back unchanged, so it never carries a marketing flag.
   const addon = h.buildRollerBookingPayload({ ...request, flowType: 'add_product' }, { customer, externalIdPrefix: 'JY-A' });
-  assert.equal(addon.customer.acceptMarketing, true);
+  assert.equal(addon.customer.acceptMarketing, undefined);
+  assert.equal(addon.customer.acceptMarketingSms, undefined);
+  assert.equal(customer.acceptMarketing, true, 'the builder must not mutate the supplied customer');
 });
 
 test('a checked phone choice travels with the draft only; SMS, quotes and unchecked stay untouched', () => {
