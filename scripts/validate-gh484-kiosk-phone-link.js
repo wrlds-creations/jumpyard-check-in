@@ -76,7 +76,7 @@ function loadSession(database) {
     if (command.name === 'ExecuteStatementCommand') return database.execute(command.input.sql, command.input.parameters ?? []);
     throw new Error(`Unexpected AWS command ${command.name} during GH-484 validation.`);
   });
-  vm.runInNewContext(`${source}\nmodule.exports.__gh484 = { createKioskPhoneLink, handleResolveSessionLink, normalizeReadyRequest };`, {
+  vm.runInNewContext(`${source}\nmodule.exports.__gh484 = { createKioskPhoneLink, handleResolveSessionLink, kioskPhoneLinkForStart, normalizeReadyRequest, normalizeStartRequest };`, {
     AbortSignal, Buffer, TextDecoder, TextEncoder, URL, URLSearchParams, clearTimeout, setTimeout,
     console: { error: (message) => errors.push(String(message)), info() {}, log() {}, warn() {} },
     exports: module.exports, module,
@@ -239,6 +239,35 @@ async function validateLinksAreBoundedAndOptional() {
   console.log('[pass] links are capped per booking and day, optional, and never block the ready answer');
 }
 
+// GH-523 (Love, 2026-10-13): Nacka numbers 0004 and 0005 were paid without the terminal, so their sessions
+// started ready and the kiosk never called ready-for-staff. Session start mints the same link when asked.
+async function validateStartMintsTheLinkForAReadyPurchase() {
+  const database = createDatabase();
+  const { internals } = loadSession(database);
+  const link = await internals.kioskPhoneLinkForStart({ phoneLink: true }, SESSION, 'jy_gh523');
+  assert.match(link?.url ?? '', /^https:\/\/checkin\.jumpyard\.se\/\?jy_token=[A-Za-z0-9_-]{43}$/, 'the same link as ready-for-staff');
+  assert.equal(sqlCalls(database.calls, /INSERT INTO jumpyard\.checkin_tokens/).length, 1, 'one kiosk_phone token');
+
+  for (const [request, session, why] of [
+    [{ phoneLink: false }, SESSION, 'the phone and the park QR never ask'],
+    [{ phoneLink: true }, { ...SESSION, status: 'guest_in_progress', handoffCode: null }, 'a session that is not ready gets its link at ready-for-staff'],
+    [{ phoneLink: true }, { ...SESSION, handoffCode: null }, 'no number, no link'],
+    [{ phoneLink: true }, null, 'no session, no link'],
+  ]) {
+    const quiet = createDatabase();
+    assert.equal(await loadSession(quiet).internals.kioskPhoneLinkForStart(request, session, 'jy_gh523'), null, why);
+    assert.equal(quiet.calls.length, 0, `${why}: no Aurora call`);
+  }
+  const capped = createDatabase({ existingLinks: 5 });
+  assert.equal(await loadSession(capped).internals.kioskPhoneLinkForStart({ phoneLink: true }, SESSION, 'jy_gh523'), null,
+    'the five-a-day cap applies');
+
+  assert.equal(internals.normalizeStartRequest({}, { phoneLink: true }).phoneLink, true);
+  assert.equal(internals.normalizeStartRequest({}, { phoneLink: 'true' }).phoneLink, false, 'only an explicit true asks for a link');
+  assert.equal(internals.normalizeStartRequest({}, {}).phoneLink, false);
+  console.log('[pass] a kiosk session that starts ready returns the phone link when the kiosk asks');
+}
+
 async function validatePhoneLinksResolveLikeOtherLinks() {
   const kiosk = createDatabase({ channel: 'kiosk_phone' });
   const accepted = await loadSession(kiosk).internals.handleResolveSessionLink({ headers: {} }, { token: 'x'.repeat(43) }, 'jy_gh484');
@@ -256,6 +285,12 @@ function validateSourceContracts() {
   const contract = fs.readFileSync(path.join(ROOT, 'JUMPYARD_CLOUD_CONTRACT.md'), 'utf8');
   const packageJson = fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8');
   const slice = (text, start, end) => text.slice(text.indexOf(start), text.indexOf(end, text.indexOf(start)));
+
+  const start = slice(session, 'async function handleStartSession(', 'async function handleReadyForStaff(');
+  assert.match(start, /const readyResumedSession = await readyAttestedPurchaseSession\(resumedSession, correlationId\);\s+const checkinLink = await kioskPhoneLinkForStart\(request, readyResumedSession, correlationId\);/);
+  assert.match(start, /const startedSession = await readyAttestedPurchaseSession\(session, correlationId\);\s+const checkinLink = await kioskPhoneLinkForStart\(request, startedSession, correlationId\);/);
+  assert.equal((start.match(/\.\.\.\(checkinLink \? \{ checkinLink \} : \{\}\)/g) ?? []).length, 2,
+    'the resumed and the new session both return the link (GH-523)');
 
   const ready = slice(session, 'async function handleReadyForStaff(', 'async function createKioskPhoneLink(');
   assert.match(ready, /const checkinLink = request\.phoneLink \? await createKioskPhoneLink\(updatedSession, correlationId\) : null;/);
@@ -286,6 +321,7 @@ async function main() {
   await validateKioskLinkOpensTheVisitBeforeRollerConfirms();
   await validateLinkIsMintedForTheKioskGuest();
   await validateLinksAreBoundedAndOptional();
+  await validateStartMintsTheLinkForAReadyPurchase();
   await validatePhoneLinksResolveLikeOtherLinks();
   validateSourceContracts();
   console.log('GH-484 kiosk phone link validation passed.');
