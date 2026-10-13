@@ -4,7 +4,7 @@ Issue #504 turns the phone's last page into a route the guest follows in order: 
 
 ## The page
 
-1. **The hero is unchanged:** "Du är incheckad", the check-in time, "Ditt nummer" and the number.
+1. **The hero is unchanged:** "Du är incheckad", the check-in time, "Ditt nummer" and the number. Since #519 the jump time follows the number (see [The jump time](#the-jump-time-519)).
 2. **The heading depends on where the guest is.**
    - **On site:** "Gör så här nu" ("What to do now").
    - **Elsewhere:** "När ni kommer till JumpYard" ("When you arrive at JumpYard"). The red line "Gå förbi kassan, direkt till steg 1." that first stood under it was removed on 2026-10-12 at Love's request ("det blir bara konstigt").
@@ -25,6 +25,23 @@ The guest counts as on site when either of these opened the page:
 - **The kiosk's "Lappen i mobilen" link.** That link carries one token only, because the kiosk web and APK accept nothing else (kiosk D0048). So Cloud's session start returns `arrival: "kiosk"` when the token's channel is `kiosk_phone`.
 
 `flow/arrival.ts` remembers "on site" in `sessionStorage` (`jumpyard.onSite.v1`) for the Stockholm day. A reload or "Gör en ny bokning" keeps it, and the next day starts away again. The email link and a plain visit show "När ni kommer till JumpYard". That is still true for a guest already standing in the lobby.
+
+## The jump time (#519)
+
+Love asked for it on 2026-10-13, after a live phone purchase of "2 timmar för 1": the last page did not say when to jump, while the kiosk's does (kiosk #141). Decision D0254.
+
+- **The line:** "Hopptid 15:00–16:30" ("Jump time 15:00–16:30") under the number, white bold italic in the red hero, in both the on-site and the at-home variant. The hero grows 32 px.
+- **The time:** `getJumpTime` from `flow/jumpTime.ts`, the same as the booking page (D0241):
+  - ROLLER's start and end for entries and family tickets;
+  - the start plus the longest admission for a package;
+  - "2 timmar för 1" reads start to start + 120 minutes.
+- **Where the times come from:** every path already carries them.
+  - A phone purchase gets Cloud's provisional booking (D0231). Its draft item ends at the start plus the product length (`buildProductDisplayItem`).
+  - A booking opened from home or on site comes through the lookup or the session link (email, sign, kiosk link), with ROLLER's item times.
+  - The kiosk's "Lappen i mobilen" QR opens this same page through the session link, so it shows the same line as the kiosk's own hero.
+- **Missing data:** without a start there is no line, and without an end only the start shows. The ended day shows no time.
+- **Mixed lengths:** a jumpyard.se booking that mixes lengths (for example 60 + 90 min) shows its first row's time, as the booking page and the kiosk do.
+- **Preview:** `/preview/sista-sidan` gains `deal` (bought on site), `deal-hemma` (opened at home) and `kiosk-lank` (the kiosk's link, 90 min at 15:00).
 
 ## Water
 
@@ -48,7 +65,7 @@ Love's own bottle drawing is `water.png` in phone and staff app, with the inside
   - `flow/cloudClient.ts`, `components/ConfirmationScreen.tsx`;
   - the water copy in `context/LanguageContext.tsx`;
   - the water icon in `addonCatalog.ts`, `AddonChoices.tsx`, `BookingSummary.tsx` and `JumpyardIcon.tsx`;
-  - the development-only preview `/preview/sista-sidan` (eight cases in SV/EN).
+  - the development-only preview `/preview/sista-sidan` (eight cases in SV/EN, eleven since #519).
 - **Cloud:**
   - `infra/lambda/session/index.js` `handleStartSession` returns `arrival` on all four success paths of a `kiosk_phone` link;
   - `infra/lambda/booking/index.js` changes the catalog label.

@@ -11,10 +11,15 @@ import styles from '../workshop/preview.module.css';
 
 // #504 localhost review (Love, 2026-10-12, "A lättare"): the real last page, one frame per case, in
 // Swedish and English at 375 x 812. Bookings, numbers and café lines are local examples. Nothing reaches
-// Park, Live or ROLLER, and no booking, payment or session is created.
-type FrameId = 'plats' | 'hemma' | 'bara-band' | 'blandat' | 'cafe-delvis' | 'cafe-klart' | 'combo' | 'slut';
+// Park, Live or ROLLER, and no booking, payment or session is created. #519 (Love, 2026-10-13): the hero
+// shows the jump time under the number. The first two frames are the "2 timmar för 1" deal, and the third
+// is the page the kiosk's "Lappen i mobilen" QR opens (the same last page, on site).
+type FrameId = 'deal' | 'deal-hemma' | 'kiosk-lank' | 'plats' | 'hemma' | 'bara-band' | 'blandat' | 'cafe-delvis' | 'cafe-klart' | 'combo' | 'slut';
 
 const FRAMES: { id: FrameId; sv: string; en: string }[] = [
+    { id: 'deal', sv: '2 timmar för 1, köpt på plats (skylten): hopptid 15:00–17:00', en: '2 hours for 1, bought on site (the sign): jump time 15:00–17:00' },
+    { id: 'deal-hemma', sv: '2 timmar för 1, öppnad hemma (mejllänken)', en: '2 hours for 1, opened at home (the email link)' },
+    { id: 'kiosk-lank', sv: 'Kioskens "Lappen i mobilen": 90 min, hopptid 15:00–16:30', en: 'The kiosk\'s "Lappen i mobilen": 90 min, jump time 15:00–16:30' },
     { id: 'plats', sv: 'På plats (skylten): strumpor, band och tillbehör, vatten och kaffe', en: 'On site (the sign): socks, bands and extras, water and coffee' },
     { id: 'hemma', sv: 'Hemma (mejllänken): samma köp, gå förbi kassan', en: 'At home (the email link): the same purchase, skip the till' },
     { id: 'bara-band', sv: 'Bara band: inga strumpor, inga tillägg', en: 'Bands only: no socks, no extras' },
@@ -32,6 +37,12 @@ interface Case { booking: Booking; addons: Addon[]; session: CheckInSession; onS
 function entry(lang: Language, minutes: number, jumpers: number, endTime: keyof typeof BAND, extra: Partial<Booking> = {}): Booking {
     return { id: 'DEMO504', jumpers, time: '14:00', endTime, durationMinutes: minutes, products: 1, paid: true, productType: 'entry',
         productLabel: lang === 'sv' ? `${minutes} min entré` : `${minutes} min entry`, bandColours: [{ ...BAND[endTime], quantity: jumpers }], ...extra };
+}
+
+/** #519: two "2 timmar för 1" tickets at 15:00, 120 minutes each, so both bands are for 17:00 (GH-514). */
+function deal(): Booking {
+    return { id: 'DEMO519', jumpers: 2, time: '15:00', endTime: '17:00', durationMinutes: 120, products: 1, paid: true, productType: 'deal',
+        productLabel: '2 timmar för 1', bandColours: [{ ...BAND['17:00'], quantity: 2 }] };
 }
 
 function session(extra: Partial<CheckInSession> = {}): CheckInSession {
@@ -52,7 +63,16 @@ function exampleCase(frame: FrameId, lang: Language): Case {
         { id: 'coffee', label: 'Bryggkaffe', qty: 2, price: 35 },
     ];
     const base = { onSite: true, receiptSent: true, channel: 'park-qr' as const };
+    const socks: Addon[] = [{ id: 'socks', label: sv ? 'Strumpor' : 'Socks', qty: 2, price: 49 }];
     switch (frame) {
+        case 'deal':
+            return { ...base, booking: deal(), addons: socks, session: session({ checkedInAt: '14:41' }) };
+        case 'deal-hemma':
+            return { ...base, onSite: false, receiptSent: false, channel: 'sms', booking: deal(), addons: socks, session: session({ checkedInAt: '13:20' }) };
+        case 'kiosk-lank':
+            // The kiosk link is a guest link (channel sms) that Cloud marks as on site (`arrival: 'kiosk'`); the guest paid at the kiosk.
+            return { ...base, receiptSent: false, channel: 'sms', booking: entry(lang, 90, 2, '16:30', { time: '15:00' }), addons: socks,
+                session: session({ checkedInAt: '14:52' }) };
         case 'hemma':
             return { ...base, onSite: false, receiptSent: false, channel: 'sms', booking: entry(lang, 90, 2, '15:30'), addons: shopping, session: session() };
         case 'bara-band':
@@ -138,7 +158,7 @@ function Overview() {
     const langs: Language[] = ['sv', 'en'];
     return <div className={styles.page}>
         <header className={styles.header}>
-            <p className={styles.kicker}>LOKAL FÖRHANDSVISNING · #504</p>
+            <p className={styles.kicker}>LOKAL FÖRHANDSVISNING · #504 · #519</p>
             <h1>{sv ? 'Sista sidan: väg i tre steg.' : 'The last page: a route in three steps.'}</h1>
             <p>{sv ? 'Riktiga sidan med lokala exempel. Inget når Park, Live eller ROLLER.' : 'The real page with local examples. Nothing reaches Park, Live or ROLLER.'}</p>
         </header>

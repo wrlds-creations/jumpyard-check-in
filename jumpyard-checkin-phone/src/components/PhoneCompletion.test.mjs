@@ -398,3 +398,51 @@ test('water is plain "Vatten" wherever the phone names it, also for water alread
     }
     assert.match(fs.readFileSync(new URL('flow/cloudClient.ts', root), 'utf8'), /water_bottle: 'Vatten',/);
 });
+
+// #519 (Love, 2026-10-13): the hero shows when the jump starts and ends, under the number, as the kiosk does.
+const jumpTimeLine = (html) => html.match(/data-testid="completion-jump-time">([^<]+)<\/p>/)?.[1] ?? null;
+
+test('the hero shows the jump time under the number, in Swedish and English (#519)', () => {
+    const html = render({ booking: { ...booking, endTime: '15:00' } });
+    assert.equal(jumpTimeLine(html), 'Hopptid 14:00–15:00');
+    assert.ok(html.indexOf('ready-entry-number') < html.indexOf('completion-jump-time')
+        && html.indexOf('completion-jump-time') < html.indexOf('</header>'), 'under the number, inside the red hero');
+    assert.ok(html.indexOf('</header>') < html.indexOf('route-heading'), 'the route still starts below the hero');
+    assert.equal(jumpTimeLine(render({ booking: { ...booking, endTime: '15:00' } }, 'en')), 'Jump time 14:00–15:00');
+});
+
+test('"2 timmar för 1" shows its 120 minutes and a 90-minute entry its own end, bought or opened from home (#519)', () => {
+    const deal = { ...booking, jumpers: 2, time: '15:00', endTime: '17:00', durationMinutes: 120, productType: 'deal', productLabel: '2 timmar för 1' };
+    assert.equal(jumpTimeLine(render({ booking: deal, jumperCount: 2, receiptSent: true, onSite: true })), 'Hopptid 15:00–17:00');
+    assert.equal(jumpTimeLine(render({ booking: deal, jumperCount: 2, channel: 'sms' }, 'en')), 'Jump time 15:00–17:00');
+    const entry90 = { ...booking, time: '11:30', endTime: '13:00', durationMinutes: 90, productLabel: '90 min entré' };
+    assert.equal(jumpTimeLine(render({ booking: entry90, channel: 'sms' })), 'Hopptid 11:30–13:00');
+});
+
+test('the kiosk\'s "Lappen i mobilen" link opens the same last page, on site, with the kiosk\'s jump time (#519)', () => {
+    // A guest link (channel sms) that Cloud marks `arrival: 'kiosk'`; the kiosk's own hero reads "Hopptid 15:00–16:30".
+    const kioskBooking = { ...booking, jumpers: 2, time: '15:00', endTime: '16:30', durationMinutes: 90, productLabel: '90 min entré' };
+    const html = render({ booking: kioskBooking, jumperCount: 2, channel: 'sms', onSite: true });
+    assert.equal(jumpTimeLine(html), 'Hopptid 15:00–16:30');
+    for (const value of ['data-confirmation-channel="sms"', 'data-on-site="true"', 'Gör så här nu']) assert.ok(html.includes(value), value);
+    assert.equal(jumpTimeLine(render({ booking: kioskBooking, jumperCount: 2, channel: 'sms', onSite: true }, 'en')), 'Jump time 15:00–16:30');
+});
+
+test('a package ends at the start plus its longest admission, not at the end of the whole package (#519, D0241)', () => {
+    const combo = { ...booking, time: '14:00', endTime: '16:00', admissionItems: [{ label: 'Weekday Combo', quantity: 1, packageContents: [
+        { kind: 'admission', quantity: 2, durationMinutes: 60, collection: 'checkin' },
+        { kind: 'pizza', quantity: 1, collection: 'later' },
+    ] }] };
+    assert.equal(jumpTimeLine(render({ booking: combo })), 'Hopptid 14:00–15:00');
+});
+
+test('no start means no jump time, no end shows the start only, and an ended day shows none (#519)', () => {
+    const noStart = render({ booking: { ...booking, time: '' } });
+    assert.equal(jumpTimeLine(noStart), null);
+    assert.doesNotMatch(noStart, /Hopptid/);
+    assert.equal(jumpTimeLine(render({ booking: { ...booking, endTime: undefined } })), 'Hopptid 14:00');
+    const old = render({ booking: { ...booking, endTime: '15:00' }, checkinSession: { ...session, status: 'redeemed', handoffDay: '2026-09-22' } });
+    assert.match(old, /Besöket är avslutat/);
+    assert.doesNotMatch(old, /completion-jump-time|Hopptid/);
+    assert.doesNotMatch(day({ presence: 'ended', jumpTime: '14:00–15:00' }), /completion-jump-time|Hopptid/);
+});

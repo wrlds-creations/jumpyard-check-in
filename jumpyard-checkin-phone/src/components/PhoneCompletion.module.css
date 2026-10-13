@@ -34,6 +34,8 @@
 .hero[data-ended='true'] { padding-top: 58px; padding-bottom: 48px; }
 .hero[data-qr='false'] { padding-bottom: 46px; }
 .ended { padding: 28px 28px 0; text-align: center; font-size: 15px; line-height: 1.5; font-weight: 700; }
+/* #519: the jump time under the number, white bold italic like the kiosk's "Hopptid" line (kiosk #141). */
+.jumpTime { margin: 10px 0 0; font-size: 18px; line-height: 1.2; font-weight: 700; font-style: italic; }
 
 /* #504 (Love, 2026-10-09 to 2026-10-12, "A lättare"): a route of numbered steps under the number. Each step
    is a small place tag, a title and chips (icon, red count, one word); a black line joins the numbers.
