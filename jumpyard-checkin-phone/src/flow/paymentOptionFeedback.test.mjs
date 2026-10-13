@@ -108,10 +108,14 @@ function harness({ provider = async () => quote(), draftAmount = 0 } = {}) {
     detectPaymentCodeKind, isCompletePaymentCode, pendingPastedCode: null, pasteHelpVisible: false,
     setPendingPastedCode: value => { state.pendingPastedCode = value; },
     setPasteHelpVisible: value => { state.pasteHelpVisible = value; },
+    // #518: Back from payment reads the payment outcome; the email choice travels with the draft.
+    paymentFailure: null,
+    setEmailMarketingChecked: value => { state.emailMarketingChecked = value; },
   };
   const names = ['invalidateQuote', 'clampPaymentOptionCode', 'updateClipCardCode', 'updateGiftCardNumber',
     'updatePaymentOptionValue', 'removePaymentOption', 'typePaymentCode', 'continueWithoutCode', 'editRejectedCode',
-    'updateContact', 'hasPaymentOptionQuoteErrors', 'getDraftAmountOwing', 'applyPaymentOptions', 'createDraft', 'backFromStep'];
+    'dropKeptDraft', 'updateContact', 'updateEmailMarketingChoice', 'hasPaymentOptionQuoteErrors', 'getDraftAmountOwing',
+    'applyPaymentOptions', 'createDraft', 'backFromStep'];
   const code = names.map(declaration).join('\n') + `\nglobalThis.handlers = {${names.join(',')}};`;
   vm.runInContext(ts.transpileModule(code, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
@@ -493,4 +497,61 @@ test('editing the rejected code closes the dialog and keeps the code', () => {
   host.editRejectedCode();
   assert.equal(host.state.codeRejectedDialogOpen, false);
   assert.equal(host.state.clipCardCode, 'synthetic-bad');
+});
+
+// #518 (D0256): Back from payment keeps the unsubmitted draft and leaves the contact step editable.
+async function backFromPayment(host) {
+  await host.createDraft();
+  assert.equal(host.state.step, 'PAYMENT');
+  const draft = host.state.draft;
+  host.backFromStep();
+  assert.equal(host.state.step, 'CONTACT');
+  assert.equal(host.state.draft, draft, 'Back alone keeps the draft');
+  return draft;
+}
+
+test('#518: the contact step is not locked by a kept draft, only while booking or syncing', () => {
+  const component = fs.readFileSync(new URL('../components/BuyTickets.tsx', import.meta.url), 'utf8');
+  assert.match(component, /const checkoutLocked = submitting \|\| showPaymentSyncCard;/);
+  assert.match(component, /onCheckedChange=\{updateEmailMarketingChoice\}/);
+});
+
+test('#518: unchanged Continue after Back from payment reopens the same payment with no quote or draft', async () => {
+  const host = harness({ draftAmount: 100 });
+  const draft = await backFromPayment(host);
+  const calls = host.events.length;
+  await host.createDraft();
+  assert.equal(host.state.step, 'PAYMENT');
+  assert.equal(host.state.draft, draft);
+  assert.equal(host.events.length, calls, 'no new quote, draft or state change');
+});
+
+for (const change of ['first name', 'email', 'email choice', 'code', 'removed code']) {
+  test(`#518: ${change} changed after Back from payment drops the kept draft and Continue makes a fresh one`, async () => {
+    const host = harness({ draftAmount: 100 });
+    host.state.clipCardCode = 'synthetic-code';
+    await backFromPayment(host);
+    if (change === 'first name') host.updateContact(value => { host.state.firstName = value; }, 'Ny');
+    else if (change === 'email') host.updateContact(value => { host.state.email = value; }, 'ny@example.invalid');
+    else if (change === 'email choice') host.updateEmailMarketingChoice(true);
+    else if (change === 'code') host.typePaymentCode('SOMMAR25');
+    else host.removePaymentOption();
+    assert.equal(host.state.draft, null);
+    assert.equal(host.state.step, 'CONTACT');
+    await host.createDraft();
+    assert.equal(host.events.filter(([type]) => type === 'create').length, 2);
+    assert.equal(host.state.step, 'PAYMENT');
+    const create = host.events.filter(([type]) => type === 'create').at(-1)[1];
+    assert.deepEqual(create[6], pendingEmailMarketingConsent(change === 'email choice', 'sv'));
+  });
+}
+
+test('#518: a kept draft survives an unchanged Back and forth, and Back stays shut while a payment runs', async () => {
+  const host = harness({ draftAmount: 100 });
+  const draft = await backFromPayment(host);
+  await host.createDraft();
+  host.state.backNavigationLocked = true;
+  host.backFromStep();
+  assert.equal(host.state.step, 'PAYMENT');
+  assert.equal(host.state.draft, draft);
 });
