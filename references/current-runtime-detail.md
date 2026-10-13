@@ -8,7 +8,7 @@ Read for phone/admin behavior or data integration work. Facts follow the reviewe
 - [#345](../docs/gh-345-staff-handout.md): daily codes, today-only queue, early café; APK accepted. AirDroid: colleague.
 
 - Lookup is Aurora-first with Roller-authoritative refresh, Nacka/date scope, and nearest same-day selection. Ready bookings start/resume a server session; opaque booking-bound guest proof stays in phone memory and hash-only in Aurora.
-- Safety: server-owned handoff, approval-to-safety and final paid check (D0199/#331); SV/EN video (D0210/D0219/#343). Staff identity/heartbeat: #334.
+- Safety: server-owned handoff, approval-to-safety and final paid check (D0199/#331); SV/EN video (D0210/D0219/#343). D0255/#520: an existing booking's paid add-ons go add-ons, film, summary, payment. Staff identity/heartbeat: #334.
 - Phone purchases use server-owned Roller paths and Live availability. Weekday Combo `1242135`/`1242136` requires public eligibility; catalog failure omits Combo (#341). Daily price refresh precedes booking reads (#339); 24-hour expiry stays. D0207: 2x60-min bands + 1 later pizza; no socks/drinks.
 - Live water: `970411`/`970363` (D0195).
 - D0232/#457: Hylla add-ons (water row first, three-tile shelf) use plus/minus and native scroll; Continue needs no tick. D0253/#515: JumpSocks are one block, on the purchase quantity step and above a booking's add-on list, with the parents red. D0205/#350: tiny top-right SV/EN control; both languages only on start screens.

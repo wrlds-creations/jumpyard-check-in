@@ -23,10 +23,10 @@ import { PreviewPayment, PreviewProgress } from './PreviewPayment';
 import styles from './preview.module.css';
 
 // #458 localhost preview: real guest screens in the approved order (Love 2026-09-30), with local
-// stand-ins for card payment and ROLLER. Buy: … → review → safety → contact → payment → number.
-// Existing booking: add-ons → review → safety → add-on payment → number; without add-ons: add-ons →
-// safety → number. The guest is done at the approved payment; ROLLER confirms in the background.
-// Nothing reaches Park, Live or ROLLER.
+// stand-ins for card payment and ROLLER. Buy: … → add-ons → safety → contact → payment → number.
+// Existing booking (#520): add-ons → safety → summary → add-on payment → number; without add-ons:
+// add-ons → safety → number. The guest is done at the approved payment; ROLLER confirms in the
+// background. Nothing reaches Park, Live or ROLLER.
 type Screen = 'home' | 'lookup' | 'booking' | 'addons' | 'addon-pay' | 'safety' | 'buy' | 'safety-buy' | 'pay' | 'paid' | 'done';
 const SCREENS: Screen[] = ['home', 'lookup', 'booking', 'addons', 'addon-pay', 'safety', 'buy', 'safety-buy', 'pay', 'paid', 'done'];
 const BUY_SCREENS: Screen[] = ['buy', 'safety-buy', 'pay', 'paid'];
@@ -163,21 +163,21 @@ function Preview() {
             event.preventDefault(); event.stopPropagation();
             setAmount(total || '200 kr');
             go('pay');
-        } else if (button.matches('[data-testid=ready-for-staff-submit]') && button.closest('[data-add-product-status]')) {
-            // Existing booking: the approval would create the add-on draft and open the card payment.
-            event.preventDefault(); event.stopPropagation();
-            go('addon-pay');
         } else if (button.closest('[data-testid=addons-review]')) {
-            // The review now continues to safety; remember its total for the payment stand-in.
+            // Existing booking (#520): the summary follows the film; its button would create the add-on
+            // draft and open the card payment, so the preview shows its stand-in with the summary's total.
             const total = button.closest('[data-testid=addons-review]')?.querySelector('.text-xl.text-primary')?.textContent?.trim();
-            if (total) setAmount(total);
+            event.preventDefault(); event.stopPropagation();
+            setAmount(total || '20 kr');
+            go('addon-pay');
         }
     };
     if (!ready) return <p>Öppnar lokal förhandsvisning…</p>;
 
     const buyLabels = [t.buyProgress.entry, t.buyProgress.addons, t.buyProgress.safety, t.buyProgress.payment, t.buyProgress.done];
     const bookingLabels = [t.progress.booking, t.progress.extras, t.progress.safety, t.progress.payment, t.progress.done];
-    const bookingProgress = ({ booking: 0, addons: addonsStep === 'SAFETY' ? 2 : 1, safety: 2, 'addon-pay': 3 } as Partial<Record<Screen, number>>)[screen];
+    const addonsProgress = addonsStep === 'SAFETY' ? 2 : addonsStep === 'SELECT' || addonsStep === 'SKYRIDER_ATTEST' ? 1 : 3;
+    const bookingProgress = ({ booking: 0, addons: addonsProgress, safety: 2, 'addon-pay': 3 } as Partial<Record<Screen, number>>)[screen];
     const inBuyPath = BUY_SCREENS.includes(screen);
 
     const app = <FlowMotion><main className="phone-flow-shell relative flex min-h-dvh w-full min-w-0 flex-col items-center overflow-x-hidden p-3 pt-3 bg-background text-foreground" onClickCapture={capturePayment}>
