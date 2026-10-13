@@ -34,6 +34,8 @@ export interface PhoneCompletionProps {
     receiptSent?: boolean;
     /** #504: the guest is at JumpYard (the sign link or the kiosk's phone link), so the route says "now". */
     onSite?: boolean;
+    /** #519: the booked jump, "15:00–16:30" (flow/jumpTime.ts), shown under the number like the kiosk's (kiosk #141). */
+    jumpTime?: string | null;
     onStartOver?: () => void;
 }
 
@@ -47,7 +49,7 @@ export const SHOW_PHONE_QR = false;
 // it says "now"; otherwise it says what to do on arrival, past the till. No grey and no sentences.
 const COPY = {
     sv: {
-        arrived: 'Du är incheckad', ended: 'Besöket är avslutat', since: 'Sedan', number: 'Ditt nummer',
+        arrived: 'Du är incheckad', ended: 'Besöket är avslutat', since: 'Sedan', number: 'Ditt nummer', jumpTime: 'Hopptid',
         endedText: (code: string, day: string) => `Nummer ${code} gällde bara ${day}.`,
         pickup: 'Här hämtar ni',
         route: 'Gör så här nu', routeHome: 'När ni kommer till JumpYard',
@@ -61,7 +63,7 @@ const COPY = {
         another: 'Gör en ny bokning', qr: 'Förstora QR-kod', close: 'Stäng', enlarged: 'Visa för personalen', issued: 'Nummer från',
     },
     en: {
-        arrived: 'You are checked in', ended: 'Your visit is over', since: 'Since', number: 'Your number',
+        arrived: 'You are checked in', ended: 'Your visit is over', since: 'Since', number: 'Your number', jumpTime: 'Jump time',
         endedText: (code: string, day: string) => `Number ${code} was only valid on ${day}.`,
         pickup: 'Where to collect',
         route: 'What to do now', routeHome: 'When you arrive at JumpYard',
@@ -149,7 +151,7 @@ export function bandsStepTitle(items: PickupItem[], lang: Language) {
 /** Render only after the existing session is ready. This view never redeems or resets automatically. */
 export function PhoneCompletion({ lang, onLanguageChange, handoffCode, handoffPayload, handoffDay, sessionId,
     handoffStatus, channel = 'park-qr', presence = 'arrived', checkedInAt, visitDayLabel, groups, receiptSent = false,
-    onSite = false, onStartOver }: PhoneCompletionProps) {
+    onSite = false, jumpTime = null, onStartOver }: PhoneCompletionProps) {
     const [largeQr, setLargeQr] = useState(false);
     const dialog = useRef<HTMLDialogElement>(null);
     const dialogTitle = useId();
@@ -196,6 +198,8 @@ export function PhoneCompletion({ lang, onLanguageChange, handoffCode, handoffPa
             {presence === 'arrived' && since && <p className={styles.since} data-testid="checked-in-at">{t.since} {since}</p>}
             {presence === 'arrived' && <><p className={styles.numberLabel}>{t.number}</p>
                 <strong className={styles.number} data-long={handoffCode.length > 4} data-testid="ready-entry-number">{handoffCode}</strong></>}
+            {/* #519 (Love, 2026-10-13): when the jump starts and ends, as on the kiosk's last page. */}
+            {presence === 'arrived' && jumpTime && <p className={styles.jumpTime} data-testid="completion-jump-time">{t.jumpTime} {jumpTime}</p>}
         </header>
         {presence === 'ended' ? <section className={styles.ended} data-testid="visit-ended">
             <p>{t.endedText(handoffCode, visitDayLabel ?? handoffDay ?? '')}</p>

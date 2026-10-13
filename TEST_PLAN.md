@@ -1,5 +1,9 @@
 # Test Plan
 
+## The jump time on the last page (#519)
+
+Run `npm --prefix jumpyard-checkin-phone run test:completion`: "Hopptid" / "Jump time" under the number, the deal's 120 minutes, a 90-minute entry, the kiosk link on site, a package's longest admission, no line without a start or on an ended day. Run `npm run validate:gh367-combo-contents`: the time from Cloud's provisional purchase, a lookup and a session-link resume. Run the other phone suites, lint and `tsc`. In the development-only `/preview/sista-sidan`, check `deal`, `deal-hemma`, `kiosk-lank`, `plats`, `hemma` and `slut` in SV/EN at 375x812. After release, from Monday to Thursday, buy "2 timmar för 1" on a phone, open an existing booking, and scan the kiosk's "Lappen i mobilen": each last page shows the booked start and end, the kiosk link the same as the kiosk. [Notes](docs/gh-504-last-page-route.md#the-jump-time-519).
+
 ## The "2 timmar för 1" deal (#514, kiosk #195)
 
 Run these checks:

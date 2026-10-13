@@ -5,6 +5,7 @@ import { JumpyardIcon } from '@/components/JumpyardIcon';
 import { QrCode } from '@/components/QrCode';
 import type { Addon, Booking, Channel, CheckInSession } from '@/flow/types';
 import { getBookingContentRows, packageContentCopy } from '@/flow/packageContents';
+import { getJumpTime } from '@/flow/jumpTime';
 import { isPhoneCompletionReady, isVisitDayOver } from '@/flow/phoneCompletion';
 import { buildPickupGroups } from '@/flow/pickupPlaces';
 import { BandColours } from './BandColours';
@@ -58,13 +59,15 @@ export const ConfirmationScreen = ({
         // GH-453 (D0229): Cloud's café lines (with what is already collected) replace the phone's own grouping.
         const cloudCafe = Array.isArray(checkinSession?.cafe) ? checkinSession.cafe : null;
         const completionGroups = buildPickupGroups({ contentRows, selectedAddons, cloudCafe, labels });
+        // #519: the same jump time as the booking page (D0241) and the kiosk's last page.
         return <PhoneCompletion key={checkinSession!.checkinSessionId} lang={lang} onLanguageChange={setLang}
             handoffCode={handoffCode} handoffPayload={handoffQrValue} handoffDay={checkinSession?.handoffDay}
             sessionId={checkinSession?.checkinSessionId} handoffStatus={checkinSession?.handoffStatus} channel={channel}
             presence={isVisitDayOver(checkinSession) ? 'ended' : 'arrived'}
             checkedInAt={checkinSession?.checkedInAt ?? checkinSession?.completedAt ?? null}
             visitDayLabel={formatVisitDay(checkinSession?.handoffDay, lang)}
-            groups={completionGroups} receiptSent={receiptSent} onSite={onSite} onStartOver={onStartOver} />;
+            groups={completionGroups} receiptSent={receiptSent} onSite={onSite}
+            jumpTime={getJumpTime(booking, contentRows)?.time ?? null} onStartOver={onStartOver} />;
     }
 
     return (

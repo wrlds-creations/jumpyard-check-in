@@ -87,7 +87,7 @@ function Preview() {
             handoffPayload="JY_HANDOFF:0427:local-design-preview-not-a-real-session" sessionId="local-design-preview"
             handoffStatus="ready_for_staff" channel="sms" presence={frame.presence} checkedInAt={frame.checkedInAt}
             handoffDay="2026-10-17" visitDayLabel={LABELS[lang].day}
-            groups={[...stationGroups(lang), cafeGroup(lang, frame.cafe ?? 'none')]}
+            groups={[...stationGroups(lang), cafeGroup(lang, frame.cafe ?? 'none')]} jumpTime="14:00–15:00"
             onStartOver={() => undefined} />;
     };
 

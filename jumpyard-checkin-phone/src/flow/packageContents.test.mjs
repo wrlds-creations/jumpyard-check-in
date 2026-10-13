@@ -242,3 +242,51 @@ test('the booking page shows the jump, not ROLLER’s package span: a 14:00 Week
   assert.ok(plain.includes('11:30–13:00'), 'an ordinary entry keeps its booked times');
   assert.match(plain, />90 min<\/p>/);
 });
+
+// #519 (Love, 2026-10-13): the last page shows the same jump time, from what Cloud sends on every path to it:
+// a phone purchase's provisional handoff (D0231), a lookup and a session-link resume (email, sign, kiosk link).
+const jumpTimeLine = (html) => html.match(/data-testid="completion-jump-time">([^<]+)<\/p>/)?.[1] ?? null;
+const ready = { checkinSessionId: 'preview-only', status: 'ready_for_staff', handoffCode: 'DEMO' };
+
+test('"2 timmar för 1" reads 15:00–17:00 on the last page, bought on the phone or opened later (#519)', async () => {
+  // As Cloud stores the paid draft's item: the DEAL120 definition's 120 minutes give the end (buildProductDisplayItem).
+  const purchased = { bookingDate: '2026-10-13', durationMinutes: 120, endTime: '17:00', parentProductId: '1416422',
+    parentProductName: '2 timmar för 1', parentType: null, productId: '1416430', productName: '2 timmar för 1',
+    productSubType: null, productType: 'sessionpass', quantity: 2, startTime: '15:00', tickets: [] };
+  const answer = { status: 'provisional_handoff', provisionalHandoff: {
+    booking: { amountOwing: 0, bookingReference: 'preview-draft', customer: { firstName: 'Alex', lastName: 'Gäst' },
+      items: [withGuestItemDetails(purchased)], paymentStatus: 'paid', rollerUniqueId: 'preview-draft',
+      status: 'payment_approved_booking_syncing' },
+    guestAccess: { token: 'preview-only', expiresAt: null },
+    session: { bookingSyncStatus: 'pending', checkinSessionId: 'preview-session', status: 'ready_for_staff',
+      handoffStatus: 'ready_for_staff', handoffCode: '0001' },
+  } };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify(answer) });
+  let purchase;
+  try { purchase = await cloud.finalizePhonePayment('jypd_000000000000000000', 'preview-draft'); }
+  finally { globalThis.fetch = originalFetch; }
+  for (const [lang, line] of [['sv', 'Hopptid 15:00–17:00'], ['en', 'Jump time 15:00–17:00']]) {
+    const markup = render(ConfirmationScreen, { booking: purchase.booking, checkinSession: purchase.checkinSession,
+      jumperCount: purchase.booking.jumpers, selectedAddons: [], receiptSent: true }, lang);
+    assert.equal(jumpTimeLine(markup), line);
+  }
+  // Opened later from home or on site: ROLLER's own item times, through a lookup and a session-link resume.
+  for (const resume of [false, true]) {
+    const opened = await fromCloud([entry({ productId: '1416430', parentProductId: '1416422', productName: '2 timmar för 1',
+      parentProductName: '2 timmar för 1', startTime: '15:00', endTime: '17:00' })], resume);
+    const markup = render(ConfirmationScreen, { booking: opened, checkinSession: ready, jumperCount: opened.jumpers,
+      selectedAddons: [], channel: 'sms' });
+    assert.equal(jumpTimeLine(markup), 'Hopptid 15:00–17:00');
+    assert.ok(markup.includes('data-band-colour="rosa-lila"'), 'the bands are for 17:00 too (GH-459)');
+  }
+});
+
+test('an ordinary entry and a Weekday Combo read the same jump time on the last page as on the booking page (#519, D0241)', async () => {
+  const plain = await fromCloud([entry()]);
+  assert.equal(jumpTimeLine(render(ConfirmationScreen, { booking: plain, checkinSession: ready, jumperCount: plain.jumpers,
+    selectedAddons: [] })), 'Hopptid 11:30–13:00');
+  const combo = await fromCloud([item(1, { startTime: '14:00', endTime: '16:00' })]);
+  assert.equal(jumpTimeLine(render(ConfirmationScreen, { booking: combo, checkinSession: ready, jumperCount: combo.jumpers,
+    selectedAddons: [] }, 'en')), 'Jump time 14:00–15:00');
+});
