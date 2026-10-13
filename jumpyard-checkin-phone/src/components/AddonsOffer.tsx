@@ -28,6 +28,8 @@ import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { AddonChoices } from '@/components/AddonChoices';
 import { SocksQuantity } from '@/components/SocksQuantity';
+import { SocksReminderDialog } from '@/components/SocksReminderDialog';
+import { shouldRemindAboutSocks } from '@/flow/socksReminder';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 import { approvePaymentRecovery, clearPaymentRecoveryAfterCompletion, readPaymentRecovery } from '@/flow/paymentRecovery';
 import { getAddonBackRule, type AddonBackRule } from '@/flow/addonPaymentNavigation';
@@ -63,6 +65,9 @@ interface AddonsOfferProps {
     onContinue: (result: AddonsOfferResult) => void | Promise<void>;
     onPaymentApproved?: (result: AddonsOfferResult) => void;
     onPendingDone: () => void;
+    /** #533: the visit has already met the socks reminder; the page keeps this when the step is opened again. */
+    socksReminderShown?: boolean;
+    onSocksReminderShown?: () => void;
 }
 
 export interface AddonsAvailabilityPrefetch {
@@ -208,6 +213,8 @@ export const AddonsOffer = ({
     onPendingDone,
     onStepChange,
     onBackRuleChange,
+    socksReminderShown = false,
+    onSocksReminderShown,
 }: AddonsOfferProps) => {
     const { lang, t } = useTranslation();
     const bookingDate = booking.date ?? getVenueToday();
@@ -307,6 +314,10 @@ export const AddonsOffer = ({
     const [paymentFailure, setPaymentFailure] = useState<'failed' | 'unknown' | null>(null);
     const [paymentChecking, setPaymentChecking] = useState(false);
     const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
+    // #533: the socks reminder on leaving this step, at most once per visit; "Lägg till strumpor" draws the eye to the socks.
+    const [socksReminderOpen, setSocksReminderOpen] = useState(false);
+    const [socksReminderShownHere, setSocksReminderShownHere] = useState(false);
+    const [socksAttention, setSocksAttention] = useState(0);
     const handledBackRequest = useRef(backRequest);
     // #520: going back to the add-ons retires a summary quote that is still on its way.
     const reviewRequestRef = useRef(0);
@@ -530,7 +541,24 @@ export const AddonsOffer = ({
             return;
         }
 
-        // #457: socks and water are ordinary offers, so nothing on this step blocks Continue.
+        // #533 (Love, 2026-10-13): continuing without any socks shows a friendly reminder, at most once per visit.
+        if (shouldRemindAboutSocks({
+            socksAvailable: socksEntry ? isPricedCatalogEntry(socksEntry) : false,
+            socksQuantity: qty.socks,
+            socksIncluded: minQty.socks,
+            answered: socksReminderShown || socksReminderShownHere,
+        })) {
+            setSocksReminderShownHere(true);
+            onSocksReminderShown?.();
+            setSocksReminderOpen(true);
+            return;
+        }
+
+        continueFromSelect();
+    };
+
+    // #457: socks and water are ordinary offers, so nothing on this step blocks Continue; #533's reminder only asks.
+    const continueFromSelect = () => {
         if (addedAddons.length === 0) {
             completeAddons(false);
             return;
@@ -547,6 +575,18 @@ export const AddonsOffer = ({
         }
 
         goToStepAfterAddons();
+    };
+
+    // "Lägg till strumpor" closes the reminder at the socks block.
+    const addSocksFromReminder = () => {
+        setSocksReminderOpen(false);
+        setSocksAttention((value) => value + 1);
+    };
+
+    // "Vi har egna" continues as Continue does when socks are chosen.
+    const continueWithOwnSocks = () => {
+        setSocksReminderOpen(false);
+        continueFromSelect();
     };
 
     // #520 (Love, 2026-10-13): as when buying entry (#491), the safety film comes right after the add-ons
@@ -721,7 +761,8 @@ export const AddonsOffer = ({
                                     price={socksEntry?.price ?? null}
                                     available={socksEntry ? isPricedCatalogEntry(socksEntry) : false}
                                     max={Math.max(minQty.socks, 1, guestCount * (socksEntry?.maxPerGuest ?? 0))}
-                                    onQuantity={(next) => setOne('socks', next)} />
+                                    onQuantity={(next) => setOne('socks', next)}
+                                    attention={socksAttention} />
                                 <AddonChoices
                                     entries={catalog.filter((entry) => entry.id !== 'socks').map((entry) => ({ ...entry, quantity: qty[entry.id],
                                         included: minQty[entry.id], max: Math.max(minQty[entry.id], 1, guestCount * entry.maxPerGuest),
@@ -865,6 +906,12 @@ export const AddonsOffer = ({
                 </FlowScreen>
             )}
         </FlowScreen>
+        {/* #533: outside the step's transition root, so leaving the add-ons never copies the reminder into the old picture. */}
+        <SocksReminderDialog
+            open={socksReminderOpen && step === 'SELECT'}
+            onAddSocks={addSocksFromReminder}
+            onOwnSocks={continueWithOwnSocks}
+        />
         </FlowTransitionBoundary>
     );
 };

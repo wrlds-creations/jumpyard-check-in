@@ -70,9 +70,11 @@ import { SkyRiderAttest } from '@/components/SkyRiderAttest';
 import { FlowNav } from '@/components/FlowNav';
 import { AddonChoices } from '@/components/AddonChoices';
 import { SocksQuantity } from '@/components/SocksQuantity';
+import { SocksReminderDialog } from '@/components/SocksReminderDialog';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { resolvePurchasePreparation } from '@/flow/purchasePreparation';
+import { shouldRemindAboutSocks } from '@/flow/socksReminder';
 import {
   availabilityCovers,
   findAvailabilitySlot,
@@ -867,6 +869,10 @@ export const BuyTickets = ({
   const [pasteHelpVisible, setPasteHelpVisible] = useState(false);
   const [pendingPastedCode, setPendingPastedCode] = useState<PendingPastedCode | null>(null);
   const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
+  // #533: the socks reminder on leaving Entré, at most once per visit; "Lägg till strumpor" draws the eye to the socks.
+  const [socksReminderOpen, setSocksReminderOpen] = useState(false);
+  const [socksReminderShown, setSocksReminderShown] = useState(false);
+  const [socksAttention, setSocksAttention] = useState(0);
   const [quote, setQuote] = useState<NewBookingQuote | null>(null);
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1545,6 +1551,33 @@ export const BuyTickets = ({
     const max = addon ? getBuyAddonMax(addon) : 0;
     if (id === 'skyrider') setSkyriderConsentConfirmed(false);
     setAddonQty((current) => ({ ...current, [id]: Math.max(0, Math.min(max, nextQty)) }));
+  };
+
+  // #533 (Love, 2026-10-13): leaving Entré without any socks shows a friendly reminder, at most once per visit.
+  const continueFromQuantity = () => {
+    if (shouldRemindAboutSocks({
+      socksAvailable: socksSellable,
+      socksQuantity: addonQty.socks,
+      socksIncluded: 0,
+      answered: socksReminderShown,
+    })) {
+      setSocksReminderShown(true);
+      setSocksReminderOpen(true);
+      return;
+    }
+    setStep('ADDONS');
+  };
+
+  // "Lägg till strumpor" closes the reminder at the socks block.
+  const addSocksFromReminder = () => {
+    setSocksReminderOpen(false);
+    setSocksAttention((value) => value + 1);
+  };
+
+  // "Vi har egna" goes on to the add-ons; the reminder does not come back in this visit.
+  const continueWithOwnSocks = () => {
+    setSocksReminderOpen(false);
+    setStep('ADDONS');
   };
 
   const needsSkyRiderConsent = () => skyriderSelected && !skyriderConsentConfirmed;
@@ -2324,6 +2357,7 @@ export const BuyTickets = ({
               available={socksSellable}
               max={socksEntry ? getBuyAddonMax(socksEntry) : 0}
               onQuantity={(next) => setOneAddon('socks', next)}
+              attention={socksAttention}
             />
 
             <div className="bg-white border border-border p-4 rounded-2xl mb-5 flex justify-between items-center px-5">
@@ -2334,7 +2368,8 @@ export const BuyTickets = ({
             </div>
 
             <button
-              onClick={() => setStep('ADDONS')}
+              data-testid="buy-quantity-continue"
+              onClick={continueFromQuantity}
               className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center active:scale-[0.98]"
             >
               {t.common.continue}
@@ -2916,6 +2951,12 @@ export const BuyTickets = ({
         keepSpacer={noPaymentResolving}
       />
     </FlowScreen>
+    {/* #533: outside the step's transition root, so leaving Entré never copies the reminder into the old picture. */}
+    <SocksReminderDialog
+      open={socksReminderOpen && step === 'QUANTITY'}
+      onAddSocks={addSocksFromReminder}
+      onOwnSocks={continueWithOwnSocks}
+    />
     </FlowTransitionBoundary>
   );
 };

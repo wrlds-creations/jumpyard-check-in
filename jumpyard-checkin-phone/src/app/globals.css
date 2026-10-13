@@ -396,6 +396,13 @@ body {
 .buy-socks-included { display: block; }
 /* #515 (Love, 2026-10-12): the rule's parents in red and bold, wherever the socks block is shown. */
 .socks-rule-parents { color: var(--primary); font-weight: 900; }
+/* #533 (Love, 2026-10-13): "Lägg till strumpor" in the socks reminder brings the guest back to this block, whose
+   border pulses red twice. Only colour changes; nothing moves. */
+.buy-socks .addon-shop-row[data-attention] { animation: socks-attention 600ms ease-in-out 2; }
+@keyframes socks-attention {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(227 24 55 / 0); }
+  50% { border-color: var(--primary); box-shadow: 0 0 0 4px rgb(227 24 55 / 0.35); }
+}
 
 /* Tall screens get air and the tile facts; the 667 px budget stays compact. */
 @media (min-height: 740px) {

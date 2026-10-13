@@ -34,6 +34,8 @@ export function initialContext(channel: Channel): FlowContext {
     baseUnitPrice: 0,
     baseQuantity: 0,
     baseTotal: 0,
+
+    socksReminderShown: false,
   };
 }
 

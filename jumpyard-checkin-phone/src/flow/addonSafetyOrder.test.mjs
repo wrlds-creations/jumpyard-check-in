@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 
 import { getAddonBackRule } from './addonPaymentNavigation.ts';
+import { shouldRemindAboutSocks } from './socksReminder.ts';
 
 // #520 (Love, 2026-10-13): "om jag ska lägga till en extra vattenflaska så får jag upp sammanställningen
 // innan säkerhetsvideo, den ska komma efter precis som när man köper entré". An existing booking that adds
@@ -86,6 +87,13 @@ function harness({ safetyBeforePayment = true, earlierApproval = null, added = [
     paymentNavigationLocked: false,
     catalogLoading: false,
     catalogError: null,
+    // #533: these bookings already include socks, so the socks reminder never asks here (socksReminder.test.mjs).
+    shouldRemindAboutSocks,
+    socksEntry: { id: 'socks', price: 49, rollerProductId: 1010 },
+    qty: { socks: 2 },
+    minQty: { socks: 2 },
+    socksReminderShown: false,
+    socksReminderShownHere: false,
     addedAddons: added,
     addedSkyrider: added.some(addon => addon.id === 'skyrider'),
     skyriderConsentConfirmed: false,
@@ -128,7 +136,8 @@ function harness({ safetyBeforePayment = true, earlierApproval = null, added = [
     get: () => getAddonBackRule({ step: ctx.step, paymentNavigationLocked: ctx.paymentNavigationLocked, paymentFailure: ctx.paymentFailure }),
   });
   compile([
-    ...['needsSkyRiderConsent', 'returnToSelect', 'handleSelectContinue', 'goToStepAfterAddons', 'goToReview', 'confirmSkyRider', 'createDraft']
+    ...['isPricedCatalogEntry', 'needsSkyRiderConsent', 'returnToSelect', 'handleSelectContinue', 'continueFromSelect',
+      'goToStepAfterAddons', 'goToReview', 'confirmSkyRider', 'createDraft']
       .map(name => declaration('addons', name)),
     `const approveSafety = ${prop('addons', 'SafetyVideo', 'onApprove')};`,
     `const handleBack = ${effect('addons', 'handledBackRequest.current = backRequest')};`,

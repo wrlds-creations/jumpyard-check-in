@@ -239,7 +239,8 @@ test('#515: an existing booking shows the same socks block as a purchase, above 
   const choices = fs.readFileSync(new URL('../components/AddonChoices.tsx', import.meta.url), 'utf8');
   const socks = fs.readFileSync(new URL('../components/SocksQuantity.tsx', import.meta.url), 'utf8');
   // The block counts every pair; the booking's own pairs are its floor, so only extra pairs are added and nothing is preselected.
-  assert.match(offer, /<SocksQuantity\s+quantity=\{qty\.socks\}\s+included=\{minQty\.socks\}[\s\S]*?onQuantity=\{\(next\) => setOne\('socks', next\)\} \/>\s*<AddonChoices\s+entries=\{catalog\.filter\(\(entry\) => entry\.id !== 'socks'\)/);
+  // #533: the socks reminder's "Lägg till strumpor" calls the block to attention.
+  assert.match(offer, /<SocksQuantity\s+quantity=\{qty\.socks\}\s+included=\{minQty\.socks\}[\s\S]*?onQuantity=\{\(next\) => setOne\('socks', next\)\}\s+attention=\{socksAttention\} \/>\s*<AddonChoices\s+entries=\{catalog\.filter\(\(entry\) => entry\.id !== 'socks'\)/);
   assert.match(socks, /disabled=\{quantity <= included\}/);
   assert.match(socks, /onClick=\{\(\) => onQuantity\(Math\.max\(included, quantity - 1\)\)\}/);
   assert.match(socks, /const added = Math\.max\(0, quantity - included\);/);

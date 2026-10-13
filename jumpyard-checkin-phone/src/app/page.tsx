@@ -1740,6 +1740,9 @@ function CheckInFlow() {
                             prefetchedAvailability={matchingAddonsPrefetch}
                             onStepChange={setAddonsStep}
                             onBackRuleChange={setAddonsBackRule}
+                            // #533: once per visit, also after Back from the safety film reopens the add-ons.
+                            socksReminderShown={ctx.socksReminderShown}
+                            onSocksReminderShown={() => setCtx(current => ({ ...current, socksReminderShown: true }))}
                             onPaymentApproved={preparePaidAddonsForSafety}
                             onContinue={(result) => result.safetyAttestedAt
                                 ? completeAttestedAddons(result)

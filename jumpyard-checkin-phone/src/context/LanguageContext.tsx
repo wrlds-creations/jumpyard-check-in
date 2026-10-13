@@ -33,6 +33,12 @@ const sv = {
     confirm: 'Avsluta och gå till start',
     stay: 'Fortsätt här',
   },
+  // #533 (Love, 2026-10-13): "du glömmer inte strumpor med en glad smiley".
+  socksReminder: {
+    title: 'Glöm inte strumporna! 😊',
+    add: 'Lägg till strumpor',
+    own: 'Vi har egna',
+  },
   progress: {
     booking: 'Bokning',
     safety: 'Säkerhet',
@@ -535,6 +541,11 @@ const en: typeof sv = {
     description: 'Your choices on this device are removed. A booking or payment that is already complete is not affected.',
     confirm: 'Exit and go to start',
     stay: 'Stay here',
+  },
+  socksReminder: {
+    title: "Don't forget your socks! 😊",
+    add: 'Add socks',
+    own: 'We have our own',
   },
   progress: {
     booking: 'Booking',
