@@ -192,7 +192,8 @@ test('two late lookups nudge Cloud to attach the paid ROLLER booking; nothing wa
 test('#491 round 1: back at the film after an approval, the approval shows at once and keeps its time', () => {
   const video = source('components/SafetyVideo.tsx');
   // The poster with the play button is only for a first viewing; the docked film still replays.
-  assert.match(video, /\{phase === 'idle' && !watchedBefore && \(/);
+  assert.match(video, /const posterVisible = !watchedBefore && \(phase === 'idle' \|\| \(phase === 'loading' && progress === 0\)\);/);
+  assert.match(video, /\{posterVisible && \(/);
   assert.match(video, /\{docked && \(\s*<button[\s\S]*?aria-label=\{t\.safetyVideo\.replay\}/);
   // An earlier approval keeps its own time; a first approval is stamped now.
   assert.match(video, /const approve = \(\) => onApprove\(approvedAt \?\? new Date\(\)\.toISOString\(\)\);/);
@@ -204,4 +205,22 @@ test('#491 round 1: back at the film after an approval, the approval shows at on
   // add-on summary returns to the film, which shows the add-on flow's own approval at once.
   assert.doesNotMatch(source('app/page.tsx'), /approvedAt=/);
   assert.match(source('components/AddonsOffer.tsx'), /<SafetyVideo[\s\S]*?approvedAt=\{safetyApprovedAt\}/);
+});
+
+test('#530: the silent film starts by itself, muted and inline; approval still needs the end', () => {
+  const video = source('components/SafetyVideo.tsx');
+  // Love 2026-10-13: no tap on the cover. Read once when the screen opens, so an approval given on this
+  // screen (the add-on flow's price check) never restarts the film; an earlier approval keeps the docked film.
+  assert.match(video, /const startsByItself = useRef\(!approvedAt\);/);
+  assert.match(video, /if \(startsByItself\.current \|\| continuePlaying\.current\) controller\.start\(\{ automatic: true \}\);/);
+  // "Det finns ingen ljud på videon": muted and inline, so every browser may start it, and no sound control.
+  assert.match(video, /<video[^>]*\smuted\s[^>]*playsInline/);
+  assert.doesNotMatch(video, /unmute|volumechange|soundOn|Volume/);
+  assert.doesNotMatch(source('context/LanguageContext.tsx'), /soundOn/);
+  // While the film starts the poster stays, with a spinner in the play button's place; the play button is the
+  // fallback where the browser refuses even a muted start.
+  assert.match(video, /\{phase === 'idle' \? \(\s*<button[\s\S]*?aria-label=\{t\.safetyVideo\.play\}[\s\S]*?\) : \(\s*<span role="status" aria-label=\{t\.safetyVideo\.loading\}/);
+  assert.match(video, /\{!posterVisible && \(phase === 'loading' \|\| phase === 'error' \|\| phase === 'paused'\) && \(/);
+  // No new API calls: the film's screen uses no Cloud client.
+  assert.doesNotMatch(video, /cloudClient|fetch\(/);
 });

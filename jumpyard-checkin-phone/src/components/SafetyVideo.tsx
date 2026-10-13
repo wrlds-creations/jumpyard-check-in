@@ -12,6 +12,8 @@ import { SafetyApproval, type SafetyApprovalProps } from '@/components/SafetyApp
 // (variant A, chosen by Love 2026-09-30). The layout is fixed from the first frame and only
 // transform and opacity animate. Before and after playback a blurred still covers the film's own
 // captions, with the title at the foot of the film like a poster (variant B, Love 2026-10-01).
+// #530 (Love 2026-10-13): the film starts by itself when the screen opens, always muted, since its
+// audio track is silent; where a browser refuses even that, the poster's play button starts it.
 interface SafetyVideoProps extends Omit<SafetyApprovalProps, 'headingRef' | 'onApprove'> {
     buyEntryFlow?: boolean;
     /**
@@ -52,6 +54,8 @@ function LocalizedSafetyVideo({
     const headingRef = useRef<HTMLHeadingElement>(null);
     const playbackRef = useRef<ReturnType<typeof createSafetyPlayback> | null>(null);
     const onWatchedRef = useRef(onWatched);
+    // #530: read once when the screen opens, so an approval given here never restarts the film.
+    const startsByItself = useRef(!approvedAt);
     const [playback, setPlayback] = useState<SafetyPlaybackState>({ phase: 'idle', progress: 0 });
     const [box, setBox] = useState({ width: 0, height: 0, panel: 0 });
     const { phase, progress } = playback;
@@ -78,10 +82,10 @@ function LocalizedSafetyVideo({
             setPlayback(state);
         });
         playbackRef.current = controller;
-        // A keyed element isolates all events/promises from the previous language.
-        // Request playback immediately after a language click; browsers that block
-        // sound outside a direct gesture retain an explicit Resume action.
-        if (continuePlaying.current) controller.start({ automatic: true });
+        // A keyed element isolates all events/promises from the previous language. The film starts
+        // by itself unless the guest already approved here (#530); a language click carries on
+        // playing a replay. A start the browser refuses ends at the poster's play button.
+        if (startsByItself.current || continuePlaying.current) controller.start({ automatic: true });
         return () => {
             playbackRef.current = null;
             controller.dispose();
@@ -133,6 +137,8 @@ function LocalizedSafetyVideo({
     const docked = approvable;
     // The blurred still covers the film's own captions wherever our controls sit on top of it.
     const coverVisible = phase === 'idle' || phase === 'loading' || approvable;
+    // #530: while the film starts by itself the poster stays, with a spinner in the play button's place.
+    const posterVisible = !watchedBefore && (phase === 'idle' || (phase === 'loading' && progress === 0));
     // The poster title follows the film width so its longest line never clips on small phones. #498: in the
     // condensed heading role "GENOMGÅNG" is about 4 em wide, so the title can be larger than the old 30 px cap.
     const coverTitleSize = Math.max(16, Math.min(44, Math.floor(width * 0.13)));
@@ -165,6 +171,7 @@ function LocalizedSafetyVideo({
                         src={SAFETY_MEDIA[lang].src}
                         lang={lang}
                         aria-label={t.safetyVideo.title}
+                        muted
                         playsInline
                         preload="auto"
                         className="absolute inset-0 w-full h-full object-cover"
@@ -185,27 +192,33 @@ function LocalizedSafetyVideo({
                         className="absolute top-2 left-2 w-7 h-7 object-contain z-10 opacity-80"
                     />
 
-                    {phase === 'idle' && !watchedBefore && (
+                    {posterVisible && (
                         <div className="absolute inset-0 z-20 flex flex-col bg-gradient-to-t from-black/75 via-black/15 to-transparent px-5 pb-6 pt-3 text-left">
                             <span className="self-end rounded-full bg-white px-2.5 py-1 text-[10px] font-black italic uppercase tracking-wider text-primary">
                                 {durationLabel}
                             </span>
                             <div className="flex flex-1 items-center justify-center">
-                                <button
-                                    type="button"
-                                    onClick={handlePlay}
-                                    aria-label={t.safetyVideo.play}
-                                    className="flex h-20 w-20 items-center justify-center rounded-full bg-white text-primary shadow-lg transition-transform active:scale-[0.96]"
-                                >
-                                    <Play size={34} fill="currentColor" className="ml-1" />
-                                </button>
+                                {phase === 'idle' ? (
+                                    <button
+                                        type="button"
+                                        onClick={handlePlay}
+                                        aria-label={t.safetyVideo.play}
+                                        className="flex h-20 w-20 items-center justify-center rounded-full bg-white text-primary shadow-lg transition-transform active:scale-[0.96]"
+                                    >
+                                        <Play size={34} fill="currentColor" className="ml-1" />
+                                    </button>
+                                ) : (
+                                    <span role="status" aria-label={t.safetyVideo.loading} className="flex h-20 w-20 items-center justify-center rounded-full bg-white text-primary shadow-lg">
+                                        <Loader2 size={34} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
+                                    </span>
+                                )}
                             </div>
                             <h1 className="font-black italic uppercase leading-[0.95] text-white" style={{ fontSize: coverTitleSize }}>{coverTitle}</h1>
                             <p className="mt-2 max-w-[16rem] text-[13px] font-bold italic leading-snug text-white/90">{description}</p>
                         </div>
                     )}
 
-                    {(phase === 'loading' || phase === 'error' || phase === 'paused') && (
+                    {!posterVisible && (phase === 'loading' || phase === 'error' || phase === 'paused') && (
                         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/85 px-5 py-4 text-center text-white">
                             <div role={phase === 'error' ? 'alert' : 'status'} aria-live="polite" aria-atomic="true">
                                 {phase === 'loading'
