@@ -59,7 +59,8 @@ const COPY = {
         cafe: 'Caféet', cafeTag: 'När ni vill · Visa numret', cafeLeft: 'Kvar i caféet', cafeDone: 'Allt i caféet är hämtat',
         collected: 'Hämtat', band: 'Band',
         words: { admission: 'Band', socks: 'Strumpor', lock: 'Hänglås', skyrider: 'SkyRider', connected: 'Connected', water: 'Vatten', pizza: 'Pizza' },
-        receipt: 'Kvitto skickat till din e-post',
+        // #524 (Love 2026-10-13): "Det måste finnas ett verb där".
+        receipt: 'Kvittot är skickat till din e-post',
         another: 'Gör en ny bokning', qr: 'Förstora QR-kod', close: 'Stäng', enlarged: 'Visa för personalen', issued: 'Nummer från',
     },
     en: {
@@ -73,7 +74,7 @@ const COPY = {
         cafe: 'The café', cafeTag: 'Whenever you like · Show your number', cafeLeft: 'Left at the café', cafeDone: 'Everything at the café is collected',
         collected: 'Collected', band: 'Wristband',
         words: { admission: 'Wristband', socks: 'Socks', lock: 'Padlock', skyrider: 'SkyRider', connected: 'Connected', water: 'Water', pizza: 'Pizza' },
-        receipt: 'Receipt sent to your email',
+        receipt: 'Your receipt has been sent to your email',
         another: 'Make a new booking', qr: 'Enlarge QR code', close: 'Close', enlarged: 'Show to our staff', issued: 'Number from',
     },
 };

@@ -107,9 +107,14 @@ test('both languages retain booking/email lookup and restore a labelled phone in
 
 test('#448: the Contact button reads as busy, not disabled, while the booking is created', () => {
   const buy = fs.readFileSync(new URL('../components/BuyTickets.tsx', import.meta.url), 'utf8');
-  assert.match(buy, /data-testid="buy-contact-continue"\s+disabled=\{!customerValid \|\| submitting \|\| applyingCodes\}\s+aria-busy=\{submitting\}/);
-  assert.match(buy, /\$\{submitting \? 'cursor-wait' : 'disabled:opacity-40 disabled:cursor-not-allowed'\}/);
-  assert.match(buy, /\{submitting && <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" \/>\}/);
+  assert.match(buy, /data-testid="buy-contact-continue"\s+disabled=\{!customerValid \|\| contactBusy \|\| applyingCodes\}\s+aria-busy=\{contactBusy\}/);
+  assert.match(buy, /\$\{contactBusy \? 'cursor-wait' : 'disabled:opacity-40 disabled:cursor-not-allowed'\}/);
+  assert.match(buy, /\{contactBusy && <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" \/>\}/);
+  assert.match(buy, /\{contactBusy \? t\.buy\.creating : quote && checkoutAmount <= 0 \? t\.buy\.createDraftFree : t\.buy\.createDraft\}/);
+  // #524: a 0 kr purchase keeps the busy state, with Back, Exit and the fields locked, until its booking resolves.
+  assert.match(buy, /const noPaymentResolving = step === 'CONTACT' && noPaymentRequired;\s+const contactBusy = submitting \|\| noPaymentResolving;/);
+  assert.match(buy, /const backNavigationLocked =\s+step === 'APPROVED' \|\|\s+noPaymentResolving \|\|/);
+  assert.match(buy, /const checkoutLocked = [^;]*\|\| noPaymentResolving;/);
 });
 
 // GH-473: the real Continue handler with synthetic Cloud answers. Only network and React setters are stubbed.

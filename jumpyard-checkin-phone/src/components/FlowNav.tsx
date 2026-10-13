@@ -15,6 +15,8 @@ interface FlowNavProps {
     onBack?: (() => void) | null;
     onExit?: (() => void) | null;
     exitTestId?: string;
+    /** #524: Back and Exit step aside on a locked screen, but their room stays so the content does not jump. */
+    keepSpacer?: boolean;
 }
 
 const noSubscription = () => () => {};
@@ -47,20 +49,21 @@ function Chevron() {
     );
 }
 
-export function FlowNav({ onBack, onExit, exitTestId = 'exit-flow-open' }: FlowNavProps) {
+export function FlowNav({ onBack, onExit, exitTestId = 'exit-flow-open', keepSpacer = false }: FlowNavProps) {
     const { t } = useTranslation();
     const client = useSyncExternalStore(noSubscription, () => true, () => false);
     const typing = useSyncExternalStore(subscribeToFocus, () => isTextField(document.activeElement), () => false);
     const dialogOpen = useSyncExternalStore(subscribeToDialogs, () => Boolean(document.querySelector('[aria-modal="true"]')), () => false);
 
-    if (!onBack && !onExit) return null;
+    const spacer = <div aria-hidden="true" className="h-24 w-full shrink-0" data-testid="flow-nav-spacer" />;
+    if (!onBack && !onExit) return keepSpacer ? spacer : null;
     const hidden = typing || dialogOpen;
     const hit = 'group pointer-events-auto -m-1 rounded-full p-1 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-primary';
     const disc = 'grid h-12 w-12 place-items-center rounded-full border border-border bg-white shadow-[0_6px_18px_rgba(28,28,30,0.14)] transition-transform group-active:scale-95';
 
     return (
         <>
-            <div aria-hidden="true" className="h-24 w-full shrink-0" data-testid="flow-nav-spacer" />
+            {spacer}
             {client && createPortal(
                 <div
                     className={`pointer-events-none fixed inset-x-0 bottom-0 z-30 transition-opacity duration-200 ${hidden ? 'opacity-0' : 'opacity-100'}`}
