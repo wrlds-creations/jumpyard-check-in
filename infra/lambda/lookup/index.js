@@ -1384,9 +1384,21 @@ function needsVerifiedAssistedLookupVenue(access, rollerBooking, booking) {
   );
 }
 
+// GH-527: a booking our own draft flow published without payment (a 100 % code or a gift card that covers it)
+// is looked up at once, before ROLLER's booking webhook fills in its venue. Its draft was made for the configured
+// park venue, so the row gets that venue now and the attested-ready session start (ready_staff_session) never
+// meets handoff_venue_required. A venue from the request, ROLLER or the stored row still wins; no ROLLER call.
+function postPaymentSyncVenueId(access, request, rollerBooking, booking) {
+  if (!isParkTestEnvironment() || access?.mode !== 'post_payment_sync') return request.venueId;
+  return stringOrNull(request.venueId)
+    || extractVenueId(rollerBooking)
+    || stringOrNull(booking?.venueId)
+    || getT0171AssistedLookupVenueId();
+}
+
 function validateParkTestBookingScope(access, request, rollerBooking, booking, verifiedVenueId = null) {
   if (!isParkTestEnvironment() || access?.mode !== 'assisted_lookup') {
-    return { ok: true, venueId: request.venueId };
+    return { ok: true, venueId: postPaymentSyncVenueId(access, request, rollerBooking, booking) };
   }
 
   const dateWindow = getT0171AssistedLookupDateWindow();
