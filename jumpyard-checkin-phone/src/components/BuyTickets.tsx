@@ -146,6 +146,10 @@ type PaymentOptionType = 'discount' | 'member' | 'giftCard';
 
 const PAYMENT_OPTION_CODE_MAX_LENGTH = 32;
 const SOCKS_UNLIMITED_MAX = Number.MAX_SAFE_INTEGER;
+// #524: a 0 kr purchase marks its session ready itself (safety was approved before the draft). Right after
+// the publish Cloud may not know the booking's venue until ROLLER's webhook lands, a few seconds later,
+// so the ready call is tried twice more before "Hämta bokningen igen" shows.
+const NO_PAYMENT_READY_RETRY_DELAYS_MS = [2_000, 4_000];
 const PAYMENT_OPTION_GROUP_CLASS =
   'flex items-stretch overflow-hidden rounded-xl border bg-surface transition-all focus-within:ring-2 focus-within:ring-primary/10';
 
@@ -262,12 +266,19 @@ function getDraftAmountOwing(draft: NewBookingDraftResult | null) {
   return draft?.prepayment?.amountOwing ?? draft?.draft.costs.amountOwing ?? null;
 }
 
+// #524: a gift card or code covers the whole purchase, so nothing is paid.
+function isNoPaymentDraft(draft: NewBookingDraftResult | null) {
+  const amountOwing = getDraftAmountOwing(draft);
+  return amountOwing !== null && amountOwing <= 0;
+}
+
 function getDraftPaymentAttemptId(draft: NewBookingDraftResult | null) {
   return draft?.prepayment?.prepaymentDraftId ?? draft?.draft.uniqueId ?? draft?.draft.bookingReference ?? '';
 }
 
-function getDraftRecoveryStep(step: BuyTicketsStep, paymentApprovedForSync: boolean): BuyFlowRecoveryStep {
-  if (step === 'PENDING') return 'PENDING';
+// #524: a 0 kr purchase waits on the contact step, but a reload still finds it pending, as before.
+function getDraftRecoveryStep(step: BuyTicketsStep, paymentApprovedForSync: boolean, noPaymentRequired: boolean): BuyFlowRecoveryStep {
+  if (step === 'PENDING' || noPaymentRequired) return 'PENDING';
   if (paymentApprovedForSync) return 'PAYMENT';
   return 'PAYMENT';
 }
@@ -624,6 +635,18 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** #524: runs `attempt`; after a failure it waits each delay in turn and tries again, then throws the last failure. */
+async function retryAfterDelays<T>(attempt: () => Promise<T>, delaysMs: readonly number[], canRetry: () => boolean): Promise<T> {
+  for (let index = 0; ; index += 1) {
+    try {
+      return await attempt();
+    } catch (error) {
+      if (index >= delaysMs.length || !canRetry()) throw error;
+      await wait(delaysMs[index]);
+    }
+  }
+}
+
 function getBuyProgressIndex(step: BuyTicketsStep, safetyFirst = false) {
   if (safetyFirst) {
     if (step === 'ADDONS' || step === 'SKYRIDER_ATTEST' || step === 'REVIEW') return 1;
@@ -955,14 +978,21 @@ export const BuyTickets = ({
   const paymentInputsBlockingErrors = giftCardInputState === 'rejected' || clipCardInputState === 'rejected';
   const draftAmountOwing = getDraftAmountOwing(draft);
   const noPaymentRequired = draftAmountOwing !== null && draftAmountOwing <= 0;
+  // #524 (Love 2026-10-13): when a gift card or code covers everything, the guest stays on the contact
+  // step with "Slutför bokning" busy until the booking opens the last page. Back, Exit and the fields stay
+  // locked meanwhile; only a real failure shows the PENDING card with "Hämta bokningen igen".
+  const noPaymentResolving = step === 'CONTACT' && noPaymentRequired;
+  const contactBusy = submitting || noPaymentResolving;
   const showPaymentSyncCard = paymentApprovedForSync || paymentSyncing || Boolean(paymentSyncError);
   const backNavigationLocked =
     step === 'APPROVED' ||
+    noPaymentResolving ||
     (step === 'PAYMENT' && (paymentNavigationLocked || paymentApprovedForSync || paymentSyncing || paymentFailure === 'unknown'));
   const checkoutAmount = draftAmountOwing ?? quote?.costs.amountOwing ?? basketEstimateTotal;
   const checkoutTotal = quote?.costs.total ?? basketEstimateTotal;
   // #518 (D0256): a draft kept by Back from payment no longer locks the contact step; an edit drops it.
-  const checkoutLocked = submitting || showPaymentSyncCard;
+  // #524: a 0 kr draft still locks it while its booking is fetched.
+  const checkoutLocked = submitting || showPaymentSyncCard || noPaymentResolving;
 
   const clearPaymentSyncState = () => {
     paymentPreparationAbortRef.current?.abort();
@@ -1251,7 +1281,7 @@ export const BuyTickets = ({
   useEffect(() => {
     if (!draft) return;
     writeDraftRecovery(
-      getDraftRecoveryStep(step, paymentApprovedForSync),
+      getDraftRecoveryStep(step, paymentApprovedForSync, noPaymentRequired),
       draft,
       selectedProduct,
       selectedTime,
@@ -1656,7 +1686,7 @@ export const BuyTickets = ({
       setDraft(result);
       clearPaymentSyncState();
       if (getDraftAmountOwing(result) !== null && getDraftAmountOwing(result)! <= 0) {
-        setStep('PENDING');
+        // #524: no card in between; the contact step stays busy until the booking opens the last page.
         void resolvePaidDraftBooking(result);
         return;
       }
@@ -1730,10 +1760,23 @@ export const BuyTickets = ({
         paymentContinueRequestedRef.current = false;
         setPaymentContinuePending(false);
         setPaymentSyncError(t.buy.paymentSyncFailed);
+        // #524: a 0 kr purchase waited on the contact step; only a failure shows the card with the retry.
+        if (isNoPaymentDraft(activeDraft)) setStep('PENDING');
         return;
       }
 
-      const preparedContinuation = await onBookingReady(confirmation.booking, { signal: preparation.signal, isCurrent });
+      // #524: a 0 kr purchase approved safety before its draft (D0231), so the page marks its session ready
+      // itself instead of reopening the film when Cloud could not, with two sparse retries.
+      const safetyAttestedAt = isNoPaymentDraft(activeDraft) ? draftSafetyAttestation?.attestedAt : undefined;
+      const preparedContinuation = await retryAfterDelays(
+        () => onBookingReady(confirmation.booking, {
+          signal: preparation.signal,
+          isCurrent,
+          ...(safetyAttestedAt ? { safetyAttestedAt } : {}),
+        }),
+        safetyAttestedAt ? NO_PAYMENT_READY_RETRY_DELAYS_MS : [],
+        isCurrent,
+      );
       if (!isCurrent()) return;
       const continueToSafety = async () => {
         if (!isCurrent()) return;
@@ -1755,6 +1798,7 @@ export const BuyTickets = ({
       paymentContinueRequestedRef.current = false;
       setPaymentContinuePending(false);
       setPaymentSyncError(t.buy.paymentSyncFailed);
+      if (isNoPaymentDraft(activeDraft)) setStep('PENDING');
     } finally {
       if (isCurrent()) setPaymentSyncing(false);
     }
@@ -2629,7 +2673,8 @@ export const BuyTickets = ({
               <p className="mb-4 text-sm text-danger font-bold italic">{submitError}</p>
             )}
 
-            {/* #448: while the booking is created the button stays in full color with a spinner, so it reads as busy rather than disabled. */}
+            {/* #448: while the booking is created the button stays in full color with a spinner, so it reads as busy rather than disabled.
+                #524: a 0 kr purchase keeps that busy state until its booking opens the last page. */}
             <button
               onClick={() => {
                 // #505: Continue checks the code itself; a pasted number no longer waits for its own check.
@@ -2646,12 +2691,12 @@ export const BuyTickets = ({
                 void createDraft();
               }}
               data-testid="buy-contact-continue"
-              disabled={!customerValid || submitting || applyingCodes}
-              aria-busy={submitting}
-              className={`w-full bg-primary hover:bg-primary/90 ${submitting ? 'cursor-wait' : 'disabled:opacity-40 disabled:cursor-not-allowed'} text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]`}
+              disabled={!customerValid || contactBusy || applyingCodes}
+              aria-busy={contactBusy}
+              className={`w-full bg-primary hover:bg-primary/90 ${contactBusy ? 'cursor-wait' : 'disabled:opacity-40 disabled:cursor-not-allowed'} text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]`}
             >
-              {submitting && <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />}
-              {submitting ? t.buy.creating : quote && checkoutAmount <= 0 ? t.buy.createDraftFree : t.buy.createDraft}
+              {contactBusy && <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />}
+              {contactBusy ? t.buy.creating : quote && checkoutAmount <= 0 ? t.buy.createDraftFree : t.buy.createDraft}
             </button>
             <PaymentCodeRejectedDialog
               open={codeRejectedDialogOpen}
@@ -2866,8 +2911,9 @@ export const BuyTickets = ({
 
       <FlowNav
         onBack={backNavigationLocked ? null : backFromStep}
-        onExit={inlineExitVisible && onRequestExit ? onRequestExit : null}
+        onExit={inlineExitVisible && onRequestExit && !noPaymentResolving ? onRequestExit : null}
         exitTestId="buy-exit-flow-open"
+        keepSpacer={noPaymentResolving}
       />
     </FlowScreen>
     </FlowTransitionBoundary>

@@ -109,7 +109,9 @@ test('phone approval no longer accepts the first lookup regardless of paid state
   assert.match(buySource, /resolvePaidConfirmation\(lookupBooking, identifier, \{ wait \}\)/);
   assert.match(buySource, /resolvePurchasePreparation\(lookupBooking, identifier, \{ signal: preparation\.signal, isCurrent \}\)/);
   assert.match(buySource, /confirmation\.status === 'unavailable'/);
-  assert.match(buySource, /onBookingReady\(confirmation\.booking, \{ signal: preparation\.signal, isCurrent \}\)/);
+  assert.match(buySource, /onBookingReady\(confirmation\.booking, \{\s*signal: preparation\.signal,\s*isCurrent,\s*\.\.\.\(safetyAttestedAt \? \{ safetyAttestedAt \} : \{\}\),\s*\}\)/);
+  // #524: only a 0 kr purchase passes its safety approval here, so its page never reopens the film.
+  assert.match(buySource, /const safetyAttestedAt = isNoPaymentDraft\(activeDraft\) \? draftSafetyAttestation\?\.attestedAt : undefined;/);
   assert.match(buySource, /setStep\('APPROVED'\);[\s\S]*resolvePaidDraftBooking\(undefined, true\)/);
 });
 

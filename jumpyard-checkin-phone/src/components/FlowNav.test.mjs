@@ -33,6 +33,9 @@ test('server output reserves the in-flow spacer only, and nothing without an act
   assert.match(markup, /data-testid="flow-nav-spacer"/);
   assert.doesNotMatch(markup, /<button/);
   assert.equal(renderToStaticMarkup(React.createElement(FlowNav, { onBack: null, onExit: null })), '');
+  // #524: a locked screen keeps the room under its content, without any control, so nothing jumps.
+  assert.equal(renderToStaticMarkup(React.createElement(FlowNav, { onBack: null, onExit: null, keepSpacer: true })),
+    '<div aria-hidden="true" class="h-24 w-full shrink-0" data-testid="flow-nav-spacer"></div>');
 });
 
 test('the buttons float in the bottom corners and step aside for the keyboard and dialogs', () => {
@@ -60,6 +63,7 @@ test('the page renders Back/Exit at the bottom with the unchanged rules', () => 
 });
 
 test('ticket purchase keeps its own guarded Back/Exit, now at the bottom', () => {
-  assert.match(buy, /<FlowNav\s+onBack=\{backNavigationLocked \? null : backFromStep\}\s+onExit=\{inlineExitVisible && onRequestExit \? onRequestExit : null\}\s+exitTestId="buy-exit-flow-open"\s+\/>\s*<\/FlowScreen>\s*<\/FlowTransitionBoundary>/);
+  // #524: Exit also steps aside while a 0 kr purchase waits for its booking on the contact step; the room stays.
+  assert.match(buy, /<FlowNav\s+onBack=\{backNavigationLocked \? null : backFromStep\}\s+onExit=\{inlineExitVisible && onRequestExit && !noPaymentResolving \? onRequestExit : null\}\s+exitTestId="buy-exit-flow-open"\s+keepSpacer=\{noPaymentResolving\}\s+\/>\s*<\/FlowScreen>\s*<\/FlowTransitionBoundary>/);
   assert.doesNotMatch(buy, /ArrowLeft/);
 });

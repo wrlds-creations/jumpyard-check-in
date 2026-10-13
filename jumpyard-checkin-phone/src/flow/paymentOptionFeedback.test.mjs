@@ -157,7 +157,8 @@ for (const kind of ['discountCodes', 'giftCards']) {
       const create = host.events.find(([type]) => type === 'create')[1];
       assert.equal(create[4], host.state.giftCardInputs);
       assert.equal(create[5], host.state.discountCodeInputs);
-      assert.equal(host.state.step, amount === 200 ? 'PENDING' : 'PAYMENT');
+      // #524: a 0 kr draft stays on the contact step while its booking is fetched.
+      assert.equal(host.state.step, amount === 200 ? 'CONTACT' : 'PAYMENT');
     });
   }
 }
@@ -259,7 +260,7 @@ for (const amount of [0, 100, 200]) {
     await host.createDraft();
     assert.equal(host.events.filter(([type]) => type === 'request').length, 1);
     assert.equal(host.events.filter(([type]) => type === 'create').length, 1);
-    assert.equal(host.state.step, amount === 200 ? 'PENDING' : 'PAYMENT');
+    assert.equal(host.state.step, amount === 200 ? 'CONTACT' : 'PAYMENT');
     assert.equal(host.events.filter(([type]) => type === 'resolve').length, amount === 200 ? 1 : 0);
   });
 }
@@ -512,7 +513,9 @@ async function backFromPayment(host) {
 
 test('#518: the contact step is not locked by a kept draft, only while booking or syncing', () => {
   const component = fs.readFileSync(new URL('../components/BuyTickets.tsx', import.meta.url), 'utf8');
-  assert.match(component, /const checkoutLocked = submitting \|\| showPaymentSyncCard;/);
+  // #524: and while a 0 kr booking is fetched on the contact step; a kept draft alone never locks it.
+  assert.match(component, /const checkoutLocked = submitting \|\| showPaymentSyncCard \|\| noPaymentResolving;/);
+  assert.doesNotMatch(component, /const checkoutLocked = [^;]*Boolean\(draft\)/);
   assert.match(component, /onCheckedChange=\{updateEmailMarketingChoice\}/);
 });
 

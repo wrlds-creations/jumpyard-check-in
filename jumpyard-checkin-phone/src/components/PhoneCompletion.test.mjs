@@ -274,10 +274,12 @@ test('band chips merge rows of one colour and keep a plain band for bands withou
 
 test('a guest who just paid sees that the receipt was emailed, in the footer above the new booking (#504)', () => {
     const html = day({ presence: 'arrived', receiptSent: true, onStartOver() {} });
-    assert.match(html, /data-testid="receipt-sent"><img src="\/jumpyard-next-icons\/email-confirmed\.png"[^>]*><span>Kvitto skickat till din e-post<\/span>/);
+    // #524 (Love 2026-10-13): the line says what happened, with a verb.
+    assert.match(html, /data-testid="receipt-sent"><img src="\/jumpyard-next-icons\/email-confirmed\.png"[^>]*><span>Kvittot är skickat till din e-post<\/span>/);
     assert.ok(html.indexOf('step-jump') < html.indexOf('receipt-sent') && html.indexOf('receipt-sent') < html.indexOf('confirmation-start-over'),
         'after the route, above "Gör en ny bokning", so the steps come first');
-    assert.ok(day({ presence: 'arrived', receiptSent: true }, 'en').includes('Receipt sent to your email'));
+    assert.ok(day({ presence: 'arrived', receiptSent: true }, 'en').includes('<span>Your receipt has been sent to your email</span>'));
+    assert.doesNotMatch(html, /Kvitto skickat/, 'the old line without a verb is gone');
     assert.doesNotMatch(day({ presence: 'arrived' }), /receipt-sent/, 'no payment now, no receipt line');
     assert.doesNotMatch(day({ presence: 'ended', receiptSent: true }), /receipt-sent/, 'not on an earlier day');
 });
@@ -331,7 +333,7 @@ test('completion with water and coffee: sock station, desk with colour and extra
     for (const value of ['Caféet', '>Vatten<', '/jumpyard-next-icons/water.png', 'Bryggkaffe']) assert.ok(cafePart.includes(value), value);
     assert.doesNotMatch(bands, /Vatten/, 'water is not handed out at the desk');
     assert.doesNotMatch(html, /Vattenflaska|water-bottle/);
-    assert.match(html, /Kvitto skickat till din e-post/);
+    assert.match(html, /Kvittot är skickat till din e-post/);
 });
 
 test('completion of a Weekday Combo: two coloured bands at the desk, the pizza at the café, no sock station', () => {

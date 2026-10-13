@@ -87,7 +87,7 @@ const provisionalSession = { checkinSessionId: 'jycs_provisional', status: 'gues
 // retry delays. A synthetic draft API is added only for the zero-payment test;
 // approved purchase recovery never receives a new-payment or new-draft API.
 function harness({ recovery = false, zeroPurchase = false, attested = false, lookup = async () => booking, startSession = async () => session, clearPayment,
-  finalize = async () => ({ booking: { ...booking, paid: true }, checkinSession: provisionalSession }) } = {}) {
+  finalize = async () => ({ booking: { ...booking, paid: true }, checkinSession: provisionalSession }), ready = null } = {}) {
   const events = [];
   const waits = [];
   let saved = structuredClone(snapshot);
@@ -107,6 +107,7 @@ function harness({ recovery = false, zeroPurchase = false, attested = false, loo
     scheduleRollerConfirmationNudges: (_lookup, identifier) => { events.push(['nudges', identifier]); },
     markSessionReadyForStaff: async (value, status) => {
       events.push(['ready', value.checkinSessionId, status]);
+      if (ready) await ready();
       return { ...value, status: 'ready_for_staff', handoffStatus: 'ready_for_staff', handoffCode: '0042' };
     },
     AbortController, Error,
@@ -186,8 +187,8 @@ function harness({ recovery = false, zeroPurchase = false, attested = false, loo
     `const setupLifetime = ${lifetime('page', 'recoveryPreparationAbortRef.current?.abort()')};`,
     'globalThis.handlers = { prepareRecoveredPurchase, showApprovedRecovery, handlePaymentReturnResult, continueRecoveredPurchase, preparationState, retry, setupLifetime };',
   ] : [
-    ...['getDraftAmountOwing', 'getDraftPaymentAttemptId', 'writeDraftRecovery',
-      'resolvePaidDraftBooking', 'continueAfterApprovedPayment', 'confirmAttestedPurchase'].map(name => declaration('buy', name)),
+    ...['getDraftAmountOwing', 'isNoPaymentDraft', 'NO_PAYMENT_READY_RETRY_DELAYS_MS', 'retryAfterDelays', 'getDraftPaymentAttemptId',
+      'writeDraftRecovery', 'resolvePaidDraftBooking', 'continueAfterApprovedPayment', 'confirmAttestedPurchase'].map(name => declaration('buy', name)),
     ...(zeroPurchase ? ['invalidateQuote', 'createDraft', 'clearPaymentSyncState'].map(name => declaration('buy', name)) : []),
     `const onBookingReady = ${prop('page', 'BuyTickets', 'onBookingReady')};`,
     `const approve = ${prop('buy', 'RollerPaymentDropIn', 'onApproved')};`,
@@ -339,8 +340,11 @@ test('replacing a purchase during session preparation cannot publish the previou
 test('zero-payment draft preparation survives the old draft effect cleanup and opens safety', async () => {
   const work = deferred();
   const host = harness({ zeroPurchase: true, lookup: () => work.promise });
+  host.state.step = 'CONTACT';
   await host.createDraft();
-  assert.equal(host.state.step, 'PENDING');
+  // #524: no card in between; the guest stays on the busy contact step while the booking is fetched.
+  assert.equal(host.state.step, 'CONTACT');
+  assert.equal(host.state.paymentSyncing, true);
   assert.equal(host.lookups().length, 1);
   const preparationSignal = host.state.paymentPreparationAbortRef.current.signal;
   // React runs the prior [draft] effect cleanup after the create handler has
@@ -352,7 +356,107 @@ test('zero-payment draft preparation survives the old draft effect cleanup and o
   assert.deepEqual(host.navigation(), [['state', 'APP_SAFETY_VIDEO']]);
   assert.equal(host.state.paymentSyncing, false);
   assert.equal(host.events.filter(event => event[0] === 'create-zero-draft').length, 1);
+  assert.ok(!host.events.some(event => event[0] === 'step' && event[1] === 'PENDING'), 'never the "Bokning klar" card');
   host.cleanup();
+});
+
+// #524 (Love 2026-10-13): "betala inget så går jag direkt till sista skärmen". The live order approves safety
+// before the draft, so Cloud starts the paid session ready and the guest lands on the number.
+test('#524: a 0 kr purchase goes from the busy contact step straight to the last page with one lookup', async () => {
+  const host = harness({ zeroPurchase: true, attested: true, startSession: async () => readySession });
+  host.state.step = 'CONTACT';
+  await host.createDraft();
+  host.flushDraftEffect();
+  await settleUntil(() => host.navigation().length === 1);
+  assert.deepEqual(host.navigation(), [['state', 'APP_CONFIRM']]);
+  assert.deepEqual(host.events.filter(event => event[0] === 'step'), [], 'the contact step stays until the last page opens');
+  assert.equal(host.state.step, 'CONTACT');
+  assert.equal(host.lookups().length, 1, 'one lookup, no new call');
+  assert.deepEqual(host.waits, [], 'ROLLER has a 0 kr booking at once, so nothing waits');
+  assert.equal(host.events.filter(event => event[0] === 'session').length, 1);
+  assert.deepEqual(host.events.filter(event => event[0] === 'ready'), [], 'Cloud already made the session ready');
+  assert.equal(host.events.filter(event => event[0] === 'create-zero-draft').length, 1);
+  assert.ok(!host.events.some(event => event[0] === 'finalize'), 'no card payment, so nothing to finalize');
+  assert.equal(host.state.paymentSyncError, null);
+  host.cleanup();
+});
+
+test('#524: only a real failure shows the card with "Hämta bokningen igen", and its retry is one more lookup', async () => {
+  let available = false;
+  const host = harness({ zeroPurchase: true, attested: true, startSession: async () => readySession, lookup: async () => {
+    if (!available) throw new Error('booking not found');
+    return booking;
+  } });
+  host.state.step = 'CONTACT';
+  await host.createDraft();
+  host.flushDraftEffect();
+  await settleUntil(() => host.state.step === 'PENDING');
+  assert.equal(host.lookups().length, 3, 'the existing bounded attempts, nothing more');
+  assert.deepEqual(host.waits, [2_000, 2_000]);
+  assert.equal(host.state.paymentSyncError, 'synthetic-delayed');
+  assert.equal(host.state.paymentSyncing, false);
+  assert.deepEqual(host.navigation(), []);
+  available = true;
+  await host.resolvePaidDraftBooking();
+  await settleUntil(() => host.navigation().length === 1);
+  assert.deepEqual(host.navigation(), [['state', 'APP_CONFIRM']]);
+  assert.equal(host.lookups().length, 4);
+  assert.deepEqual(host.waits, [2_000, 2_000], 'the retry button looks at once');
+  assert.equal(host.events.filter(event => event[0] === 'create-zero-draft').length, 1, 'the retry fetches the same booking');
+  host.cleanup();
+});
+
+// #524, Love's live test 2026-10-13: Cloud's start could not make the session ready (the booking's venue
+// came with ROLLER's webhook a few seconds later), so the old 0 kr path reopened the safety film.
+test('#524: when Cloud cannot make the 0 kr session ready, the page marks it ready and never reopens the film', async () => {
+  const host = harness({ zeroPurchase: true, attested: true });
+  host.state.step = 'CONTACT';
+  await host.createDraft();
+  await settleUntil(() => host.navigation().length === 1);
+  assert.deepEqual(host.navigation(), [['state', 'APP_CONFIRM']]);
+  assert.deepEqual(host.events.filter(event => event[0] === 'ready'), [['ready', 'session-original', 'completed']]);
+  assert.equal(host.state.ctx.safetyAttestedAt, attestedAt);
+  assert.equal(host.lookups().length, 1);
+  assert.deepEqual(host.waits, []);
+  host.cleanup();
+});
+
+test('#524: a ready call refused while Cloud lacks the venue is retried after 2 s and 4 s, then opens the last page', async () => {
+  let refusals = 2;
+  const host = harness({ zeroPurchase: true, attested: true, ready: async () => {
+    if (refusals-- > 0) throw new Error('handoff_venue_required');
+  } });
+  host.state.step = 'CONTACT';
+  await host.createDraft();
+  await settleUntil(() => host.navigation().length === 1);
+  assert.deepEqual(host.navigation(), [['state', 'APP_CONFIRM']]);
+  assert.deepEqual(host.waits, [2_000, 4_000]);
+  assert.equal(host.events.filter(event => event[0] === 'ready').length, 3);
+  assert.equal(host.events.filter(event => event[0] === 'session').length, 3, 'each retry resumes the session first (Cloud only)');
+  assert.equal(host.lookups().length, 1, 'no new lookup and no ROLLER call');
+  assert.ok(!host.events.some(event => event[0] === 'step'), 'no card while it retries');
+  host.cleanup();
+});
+
+test('#524: a ready call that keeps failing shows "Hämta bokningen igen", never the film', async () => {
+  const host = harness({ zeroPurchase: true, attested: true, ready: async () => { throw new Error('handoff_venue_required'); } });
+  host.state.step = 'CONTACT';
+  await host.createDraft();
+  await settleUntil(() => host.state.step === 'PENDING');
+  assert.deepEqual(host.waits, [2_000, 4_000]);
+  assert.equal(host.events.filter(event => event[0] === 'ready').length, 3);
+  assert.equal(host.state.paymentSyncError, 'synthetic-delayed');
+  assert.deepEqual(host.navigation(), [], 'never APP_SAFETY_VIDEO');
+  host.cleanup();
+});
+
+test('#524: a 0 kr purchase is saved as pending while it waits on the contact step, as before', () => {
+  const { getDraftRecoveryStep } = compile(`${declaration('buy', 'getDraftRecoveryStep')}\nglobalThis.getDraftRecoveryStep = getDraftRecoveryStep;`, {});
+  assert.equal(getDraftRecoveryStep('CONTACT', false, true), 'PENDING');
+  assert.equal(getDraftRecoveryStep('PENDING', false, true), 'PENDING');
+  assert.equal(getDraftRecoveryStep('PENDING', false, false), 'PENDING');
+  assert.equal(getDraftRecoveryStep('CONTACT', false, false), 'PAYMENT', 'a kept paid draft is still a payment');
+  assert.equal(getDraftRecoveryStep('PAYMENT', true, false), 'PAYMENT');
 });
 
 test('approved return recovery keeps processing until its session is prepared and then needs one explicit continuation', async () => {
