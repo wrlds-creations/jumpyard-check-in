@@ -16,6 +16,8 @@ export interface SafetyApprovalProps {
     compact?: boolean;
     headingRef?: Ref<HTMLHeadingElement>;
     isSubmitting?: boolean;
+    /** #520: what the busy action says when it is not readying the visit for staff. */
+    submittingLabel?: string;
     submitError?: SessionIssue | null;
     /** #331: notice shown while an approved purchase waits for ROLLER's paid confirmation. */
     statusNotice?: string | null;
@@ -38,6 +40,7 @@ export function SafetyApproval({
     compact = false,
     headingRef,
     isSubmitting = false,
+    submittingLabel,
     submitError = null,
     statusNotice = null,
     statusState = 'idle',
@@ -88,7 +91,7 @@ export function SafetyApproval({
                 {isSubmitting && <Loader2 size={22} aria-hidden="true" className="flex-shrink-0 animate-spin motion-reduce:animate-none" />}
                 <span className="min-w-0">
                     <span className={`type-button block font-black italic uppercase leading-tight ${compact ? 'text-base' : 'text-lg'}`}>
-                        {isSubmitting ? t.safetyAttest.readyForStaffProcessing : t.safetyAttest.attestLead}
+                        {isSubmitting ? submittingLabel ?? t.safetyAttest.readyForStaffProcessing : t.safetyAttest.attestLead}
                     </span>
                     {!isSubmitting && (
                         <span className={`mt-0.5 block font-bold ${compact ? 'text-[12px] leading-tight' : 'text-[13px] leading-snug'}`}>{t.safetyAttest.attestRest}</span>

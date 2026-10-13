@@ -8,7 +8,7 @@ Workshop points 2 and 3 (2026-09-28) asked for fewer questions. Love decided on 
 
 - **Design A** on phone and kiosk: when the film has played to the end it docks to the top and the approval appears under it.
 - **Buy path:** … → review (Översikt) → safety → contact (Kontakt) → payment → completion.
-- **Existing booking:** add-ons → review → safety → add-on payment → completion. Without add-ons: add-ons → safety → completion.
+- **Existing booking:** add-ons → review → safety → add-on payment → completion. Without add-ons: add-ons → safety → completion. Since #520 (D0255, 2026-10-13) the film comes before the review: add-ons → safety → review → add-on payment.
 - **Wording:** the six short rules and "Jag intygar att samtliga i min bokning har tagit del av reglerna och förstått dem." / "I confirm that everyone in my booking has read and understood the rules."
 - **Done at approval** (later the same day): the guest must not be affected by ROLLER's delay. "När kunden har fått godkänd betalning så ska den bara känna att då är jag klar", and "telefonen ska också visa klar direkt". The system handles the rest in the background.
 
@@ -42,8 +42,8 @@ Workshop points 2 and 3 (2026-09-28) asked for fewer questions. Love decided on 
   - The Contact step cannot start a draft before the approval, and the draft carries it.
   - After the approved payment the phone shows "Vi slutför ditt köp …" (D0209 copy) while it asks Cloud for the provisional session and marks it ready. It then opens the completion screen with the number and QR. This usually takes a second or two, with no Continue button and no safety step.
   - Only if Cloud cannot give the provisional session does the calm wait on the receipt run. It uses the D0199 schedule, then shows the delayed state with one manual check and the staff path ("Betala inte igen …"). It never asks for another payment.
-- **Existing booking.** Safety sits between the add-on review and the add-on payment. After the approved add-on payment the visit is marked ready at once and completion opens. ROLLER confirms the add-on booking in the background, nudged by two late lookups. If the guest drops the add-ons after a declined payment, the approval still stands. Without add-ons the page's safety screen leads straight to completion.
-- **Back and Exit.** Back from safety returns to the review. Exit works until payment. After payment the flow stays one-way.
+- **Existing booking.** Safety sits between the add-on review and the add-on payment (since #520, D0255: between the add-ons and the review). After the approved add-on payment the visit is marked ready at once and completion opens. ROLLER confirms the add-on booking in the background, nudged by two late lookups. If the guest drops the add-ons after a declined payment, the approval still stands. Without add-ons the page's safety screen leads straight to completion.
+- **Back and Exit.** Back from safety returns to the review (since #520: Back from the review returns to safety, and Back from safety to the add-ons). Exit works until payment. After payment the flow stays one-way.
 - **Reload.** The pre-payment snapshot keeps `safetyAttestedAt`, so a reload at contact does not ask for safety again. Payment recovery passes the saved approval on: a paid purchase opens completion without another tap, and a still-unpaid one shows the delayed state instead of safety. The progress bar shows Safety before Payment in both paths.
 
 ## Verification

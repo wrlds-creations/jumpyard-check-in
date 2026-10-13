@@ -14,11 +14,13 @@ function declaration(name) {
   }
   visit(ast); assert.ok(found, name); return found;
 }
-function harness() {
+function harness({ safetyBeforePayment = false, safetyApprovedAt = null } = {}) {
   const steps = [], errors = [], quotes = []; let resolve, reject;
   const pending = new Promise((yes, no) => { resolve = yes; reject = no; });
   const state = {
     submitting: false, skyriderConsentConfirmed: false, reviewQuoteInFlightRef: { current: false },
+    // #520: the film follows the SkyRider attestation unless safety is already approved.
+    safetyBeforePayment, safetyApprovedAt, quote: null, step: 'SKYRIDER_ATTEST', reviewRequestRef: { current: 0 },
     booking: { id: 'DEMO', guestAccessToken: 'synthetic' }, requireAvailability: true,
     needsSkyRiderConsent: confirmed => !confirmed,
     buildItems: () => [{ productId: 1765443, quantity: 1 }],
@@ -28,7 +30,8 @@ function harness() {
     quoteAddProducts: () => { state.calls++; return pending; }, calls: 0,
     t: { addons: { quoteFailed: 'Quote failed' } }, CloudBookingError: class extends Error {},
   };
-  const code = declaration('goToReview') + declaration('confirmSkyRider') + ';globalThis.handlers={goToReview,confirmSkyRider};';
+  const code = declaration('goToStepAfterAddons') + declaration('goToReview') + declaration('confirmSkyRider')
+    + ';globalThis.handlers={goToReview,confirmSkyRider};';
   vm.runInNewContext(ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, state);
   return { ...state.handlers, state, steps, errors, quotes, resolve, reject };
 }
@@ -57,4 +60,19 @@ test('failed quote keeps SkyRider confirmation and exposes a retryable error wit
 test('missing SkyRider consent still stops before requesting a quote', async () => {
   const h = harness(); await h.goToReview(false);
   assert.deepEqual(h.steps, ['SKYRIDER_ATTEST']); assert.equal(h.state.calls, 0);
+});
+test('#520: with safety before payment, confirmed SkyRider opens the film and asks no quote yet', () => {
+  const h = harness({ safetyBeforePayment: true });
+  h.confirmSkyRider();
+  assert.equal(h.state.skyriderConsentConfirmed, true);
+  assert.deepEqual(h.steps, ['SAFETY']);
+  assert.equal(h.state.calls, 0);
+});
+test('#520: an approval already given goes from SkyRider straight to the summary', async () => {
+  const h = harness({ safetyBeforePayment: true, safetyApprovedAt: '2026-10-13T10:00:00.000Z' });
+  h.confirmSkyRider();
+  assert.equal(h.state.calls, 1);
+  h.resolve({ costs: { amountOwing: 40 } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(h.steps, ['REVIEW']);
 });

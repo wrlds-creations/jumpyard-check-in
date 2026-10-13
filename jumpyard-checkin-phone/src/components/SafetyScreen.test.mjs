@@ -62,6 +62,11 @@ test('a busy approval stays in full colour and cannot be sent twice', () => {
   assert.match(markup, /cursor-wait/);
   assert.doesNotMatch(markup, /disabled:opacity-40/);
   assert.match(markup, /Gör redo för personal/);
+  // #520: on an existing booking the approval asks the summary's price, and says so.
+  const pricing = renderToStaticMarkup(React.createElement(SafetyApproval, { isSubmitting: true, submittingLabel: 'Räknar pris…', onApprove: () => {} }));
+  assert.match(pricing, /Räknar pris…/);
+  assert.doesNotMatch(pricing, /Gör redo för personal/);
+  assert.match(source('components/AddonsOffer.tsx'), /isSubmitting=\{submitting\}\s*submittingLabel=\{t\.buy\.quoting\}/);
 });
 
 test('only the playback controller\'s genuine end reveals the approval; the layout never moves', () => {
@@ -112,11 +117,13 @@ test('safety comes before payment in both live phone paths (D0231)', () => {
   // #491: no summary step. Round 1 (Love 2026-10-08): contact goes back to the safety film, safety to the add-ons.
   assert.match(buy, /if \(step === 'CONTACT'\) setStep\(safetyBeforePayment \? 'SAFETY' : 'ADDONS'\);\s*else if \(step === 'SAFETY' \|\| step === 'REVIEW'\) setStep\('ADDONS'\);/);
   assert.doesNotMatch(buy, /step === 'REVIEW' &&|setStep\('REVIEW'\)/);
-  // Existing booking (Love 2026-09-30): safety after the add-ons and before the add-on payment.
+  // Existing booking: safety before the add-on payment (Love 2026-09-30); #520 (Love 2026-10-13): the film
+  // right after the add-ons, then the summary and the payment, as when buying entry.
   const addons = source('components/AddonsOffer.tsx');
-  assert.match(addons, /if \(safetyBeforePayment && !approvedAt\) \{\s*setStep\('SAFETY'\);\s*return;\s*\}/);
-  assert.match(addons, /setSafetyApprovedAt\(attestedAt\);\s*void createDraft\(attestedAt\);/);
-  assert.match(addons, /if \(step === 'SAFETY'\) \{\s*setStep\('REVIEW'\);\s*return;\s*\}\s*if \(backRule !== 'select'\) return;\s*returnToSelect\(\);/);
+  assert.match(addons, /if \(safetyBeforePayment && !safetyApprovedAt\) \{\s*setSubmitError\(null\);\s*setStep\('SAFETY'\);\s*return;\s*\}\s*void goToReview\(skyriderConsentOverride\);/);
+  assert.match(addons, /if \(safetyBeforePayment && !safetyApprovedAt\) \{\s*setStep\('SAFETY'\);\s*return;\s*\}\s*setSubmitting\(true\);/, 'no draft before the approval');
+  assert.match(addons, /setSafetyApprovedAt\(attestedAt\);\s*void goToReview\(\);/);
+  assert.match(addons, /if \(step === 'REVIEW' && safetyBeforePayment\) \{\s*setStep\('SAFETY'\);\s*return;\s*\}\s*if \(backRule !== 'select'\) return;\s*returnToSelect\(\);/);
   const page = source('app/page.tsx');
   assert.match(page, /const SAFETY_BEFORE_PAYMENT = true;/);
   assert.equal((page.match(/safetyBeforePayment=\{SAFETY_BEFORE_PAYMENT\}/g) || []).length, 2, 'purchase and existing booking');
@@ -160,9 +167,10 @@ test('the progress bar shows Safety before Payment in both phone paths', () => {
   const page = source('app/page.tsx');
   assert.match(page, /\[t\.progress\.booking, t\.progress\.extras, t\.progress\.safety, t\.progress\.payment, t\.progress\.done\]/);
   assert.match(page, /\[t\.buyProgress\.entry, t\.buyProgress\.addons, t\.buyProgress\.safety, t\.buyProgress\.payment, t\.buyProgress\.done\]/);
-  // The add-on flow's own safety and payment steps light up their columns while the page is on APP_ADDONS.
+  // The add-on flow's own safety and payment steps light up their columns while the page is on APP_ADDONS;
+  // the summary follows the film (#520), so it belongs to Payment.
   assert.match(page, /state === 'APP_ADDONS' && addonsStep === 'SAFETY'\) return 2;/);
-  assert.match(page, /state === 'APP_ADDONS' && \(addonsStep === 'PAYMENT' \|\| addonsStep === 'APPROVED' \|\| addonsStep === 'PENDING'\)\) return 3;/);
+  assert.match(page, /state === 'APP_ADDONS' && \(addonsStep === 'REVIEW' \|\| addonsStep === 'PAYMENT' \|\| addonsStep === 'APPROVED' \|\| addonsStep === 'PENDING'\)\) return 3;/);
   assert.match(page, /addonsStep=\{addonsStep\}\s*safetyFirst=\{SAFETY_BEFORE_PAYMENT\}/);
 });
 
@@ -192,7 +200,8 @@ test('#491 round 1: back at the film after an approval, the approval shows at on
   // The purchase passes its approval to the film step, so Back from contact never asks for a rewatch.
   const buy = source('components/BuyTickets.tsx');
   assert.match(buy, /<SafetyVideo\s+buyEntryFlow\s+approvedAt=\{safetyApprovedAt\}/);
-  // The existing-booking paths keep today's rule (no earlier approval is passed there).
+  // The page's own safety step keeps today's rule (no earlier approval is passed there). #520: Back from the
+  // add-on summary returns to the film, which shows the add-on flow's own approval at once.
   assert.doesNotMatch(source('app/page.tsx'), /approvedAt=/);
-  assert.doesNotMatch(source('components/AddonsOffer.tsx'), /approvedAt=/);
+  assert.match(source('components/AddonsOffer.tsx'), /<SafetyVideo[\s\S]*?approvedAt=\{safetyApprovedAt\}/);
 });

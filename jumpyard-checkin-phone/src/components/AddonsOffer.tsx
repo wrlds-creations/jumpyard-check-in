@@ -48,8 +48,9 @@ interface AddonsOfferProps {
     backRequest?: number;
     booking: Booking;
     /**
-     * #458 (D0231): the safety film and its approval come after the add-on review, before the
-     * add-on payment (Love 2026-09-30). Without add-ons, the page's safety step follows directly.
+     * #458 (D0231): the safety film and its approval come before the add-on payment (Love 2026-09-30).
+     * #520 (D0255): as when buying entry, the film follows the add-ons and the summary follows the
+     * approval (Love 2026-10-13). Without add-ons, the page's safety step follows directly.
      * Off keeps the old order (safety after payment).
      */
     safetyBeforePayment?: boolean;
@@ -307,6 +308,8 @@ export const AddonsOffer = ({
     const [paymentChecking, setPaymentChecking] = useState(false);
     const [skyriderConsentConfirmed, setSkyriderConsentConfirmed] = useState(false);
     const handledBackRequest = useRef(backRequest);
+    // #520: going back to the add-ons retires a summary quote that is still on its way.
+    const reviewRequestRef = useRef(0);
     const paymentApprovedRef = useRef(false);
     const paymentNavigationLockedRef = useRef(false);
     const [paymentNavigationLocked, setPaymentNavigationLocked] = useState(false);
@@ -327,6 +330,7 @@ export const AddonsOffer = ({
         if (recovery?.attemptId === paymentAttemptId && recovery.outcome === 'failed'
             && !await clearPaymentRecoveryAfterCompletion(paymentAttemptId)) return;
         if (activePaymentAttemptRef.current !== paymentAttemptId) return;
+        reviewRequestRef.current += 1;
         setSubmitError(null);
         setQuote(null);
         setDraft(null);
@@ -352,14 +356,15 @@ export const AddonsOffer = ({
     useEffect(() => {
         if (backRequest === handledBackRequest.current) return;
         handledBackRequest.current = backRequest;
-        // #458: Back from the safety film (nothing submitted yet) returns to the review it came from.
-        if (step === 'SAFETY') {
-            setStep('REVIEW');
+        // #520: Back from the summary returns to the film, which shows the approval at once (as in the
+        // purchase, #491 round 1); Back from the film returns to the add-ons.
+        if (step === 'REVIEW' && safetyBeforePayment) {
+            setStep('SAFETY');
             return;
         }
         if (backRule !== 'select') return;
         returnToSelect();
-    }, [backRequest, backRule, returnToSelect, step]);
+    }, [backRequest, backRule, returnToSelect, safetyBeforePayment, step]);
 
     useEffect(() => {
         setQty((current) => {
@@ -541,7 +546,22 @@ export const AddonsOffer = ({
             return;
         }
 
-        void goToReview();
+        goToStepAfterAddons();
+    };
+
+    // #520 (Love, 2026-10-13): as when buying entry (#491), the safety film comes right after the add-ons
+    // and the summary follows the approval. An approval given earlier in this visit goes straight to the summary.
+    const goToStepAfterAddons = (skyriderConsentOverride = skyriderConsentConfirmed) => {
+        if (needsSkyRiderConsent(skyriderConsentOverride)) {
+            setStep('SKYRIDER_ATTEST');
+            return;
+        }
+        if (safetyBeforePayment && !safetyApprovedAt) {
+            setSubmitError(null);
+            setStep('SAFETY');
+            return;
+        }
+        void goToReview(skyriderConsentOverride);
     };
 
     const reviewQuoteInFlightRef = useRef(false);
@@ -551,6 +571,13 @@ export const AddonsOffer = ({
             setStep('SKYRIDER_ATTEST');
             return;
         }
+        // #520: one add-products quote per summary; the way back through the film keeps it.
+        if (quote) {
+            setSubmitError(null);
+            setStep('REVIEW');
+            return;
+        }
+        const request = reviewRequestRef.current;
         reviewQuoteInFlightRef.current = true;
         setSubmitting(true);
         setSubmitError(null);
@@ -562,10 +589,14 @@ export const AddonsOffer = ({
                 buildItems(),
                 requireAvailability
             );
+            if (request !== reviewRequestRef.current) return;
             setQuote(result);
             setStep('REVIEW');
         } catch (error) {
+            if (request !== reviewRequestRef.current) return;
             setSubmitError(error instanceof CloudBookingError ? error.message : t.addons.quoteFailed);
+            // #520: after the film a failed quote returns to the add-ons, which show it and retry on Continue.
+            if (step === 'SAFETY') setStep('SELECT');
         } finally {
             reviewQuoteInFlightRef.current = false;
             setSubmitting(false);
@@ -574,17 +605,17 @@ export const AddonsOffer = ({
 
     const confirmSkyRider = () => {
         setSkyriderConsentConfirmed(true);
-        void goToReview(true);
+        goToStepAfterAddons(true);
     };
 
-    const createDraft = async (approvedAt = safetyApprovedAt) => {
+    const createDraft = async () => {
         if (!quote || submitting) return;
         if (needsSkyRiderConsent()) {
             setStep('SKYRIDER_ATTEST');
             return;
         }
         // #458: the add-on payment starts only after the safety approval.
-        if (safetyBeforePayment && !approvedAt) {
+        if (safetyBeforePayment && !safetyApprovedAt) {
             setStep('SAFETY');
             return;
         }
@@ -763,16 +794,21 @@ export const AddonsOffer = ({
                         disabled={submitting}
                         className="w-full bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
-                        {submitting ? t.buy.creating : safetyBeforePayment && !safetyApprovedAt ? t.common.continue : t.addons.createDraft}
+                        {submitting ? t.buy.creating : t.addons.createDraft}
                     </button>
                 </FlowScreen>
             )}
 
             {step === 'SAFETY' && (
                 <SafetyVideo
+                    // #520: back from the summary the approval shows at once and keeps its time; approving
+                    // opens the summary once its price is known.
+                    approvedAt={safetyApprovedAt}
+                    isSubmitting={submitting}
+                    submittingLabel={t.buy.quoting}
                     onApprove={(attestedAt) => {
                         setSafetyApprovedAt(attestedAt);
-                        void createDraft(attestedAt);
+                        void goToReview();
                     }}
                 />
             )}
