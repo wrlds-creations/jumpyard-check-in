@@ -4,6 +4,10 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #531 Kiosk Reconciliation Expected Misses (Booking Code Only)
+
+The Booking Lambda's kiosk reconciliation counts its waiting `get_booking_detail` 404s, before its last attempt, as the new embedded metric `RollerApiExpectedMissCount` instead of `RollerApiErrorCount` (D0258). The metric sits in namespace `JumpYard/Cloud` under the existing three dimension sets: environment; handler; operation and method. That adds at most three small custom metric series. No alarm, threshold, dashboard, IAM, queue, secret or other resource changes; `roller-api-errors` and `roller-api-errors-sustained` still read `RollerApiErrorCount`. The release ships through the protected Park workflow, and its run IDs are recorded on issue #531. [Notes](docs/gh-531-kiosk-expected-miss.md).
+
 ### Issue #488 Kiosk Pairing (Secret Applied 2026-10-07; Code Not Deployed)
 
 The park-test release profile gains the GH-488 kiosk pairing (D0243). The code is not deployed yet.
