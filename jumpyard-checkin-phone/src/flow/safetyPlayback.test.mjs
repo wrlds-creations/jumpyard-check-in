@@ -14,7 +14,7 @@ function harness() {
   let clock = 0, timerId = 0, plays = 0, loads = 0;
   const events = [];
   const video = Object.assign(new EventTarget(), {
-    currentTime: 0, duration: 15, paused: true, ended: false, readyState: 0, error: null,
+    currentTime: 0, duration: 15, paused: true, ended: false, readyState: 0, error: null, muted: false,
     play: () => { plays++; video.paused = false; return Promise.resolve(); },
     pause: () => { video.paused = true; video.dispatchEvent(new Event('pause')); },
     load: () => { loads++; video.error = null; video.currentTime = 0; video.ended = false; },
@@ -194,12 +194,50 @@ test('dispose pauses media, clears timers, and prevents every late callback', as
   assert.equal(h.timers, 0);
 });
 
-test('a browser denying automatic language playback offers explicit resume from zero', async () => {
+test('#530: the film starts by itself muted, so no browser needs a tap, and muted viewing reaches the end', async () => {
+  const h = harness();
+  h.controller.start({ automatic: true });
+  await flush();
+  assert.equal(h.video.muted, true, 'the silent film never asks for sound');
+  h.emit('playing', { readyState: 4 });
+  assert.equal(h.state.phase, 'playing');
+  assert.equal(h.plays, 1);
+  // Only the genuine end reveals the approval, as before.
+  h.finish();
+  assert.deepEqual(h.state, { phase: 'done', progress: 100 });
+});
+
+test('#530: a tap (play, replay or resume) also plays muted', () => {
+  const h = harness();
+  h.play();
+  assert.equal(h.video.muted, true);
+  h.finish();
+  h.video.muted = false;
+  h.controller.start();
+  assert.equal(h.video.muted, true);
+  assert.equal(h.video.currentTime, 0);
+});
+
+test('#530: refused even muted (an iPhone in Low Power Mode), the poster\'s play button starts the film from zero', async () => {
   const h = harness();
   h.video.play = () => Promise.reject(new DOMException('Gesture required', 'NotAllowedError'));
   h.controller.start({ automatic: true });
   await flush();
-  assert.deepEqual(h.state, { phase: 'paused', progress: 0 });
+  assert.deepEqual(h.state, { phase: 'idle', progress: 0 });
+  assert.equal(h.timers, 0);
+  h.video.play = () => { h.video.paused = false; return Promise.resolve(); };
+  h.video.currentTime = 3;
+  h.controller.start();
+  assert.equal(h.video.currentTime, 0);
+  assert.equal(h.state.phase, 'loading');
+});
+
+test('a browser denying automatic language playback shows the poster\'s play button from zero', async () => {
+  const h = harness();
+  h.video.play = () => Promise.reject(new DOMException('Gesture required', 'NotAllowedError'));
+  h.controller.start({ automatic: true });
+  await flush();
+  assert.deepEqual(h.state, { phase: 'idle', progress: 0 });
   assert.equal(h.timers, 0);
   h.video.play = () => Promise.resolve();
   h.controller.start();
@@ -215,11 +253,13 @@ test('automatic language playback still reports actual media failures', async ()
   assert.equal(h.state.phase, 'error');
 });
 
-test('synchronous automatic permission denial also retains explicit resume', () => {
+test('synchronous automatic permission denial also shows the play button', () => {
   const h = harness();
-  h.video.play = () => { throw new DOMException('Gesture required', 'NotAllowedError'); };
+  let calls = 0;
+  h.video.play = () => { calls++; throw new DOMException('Gesture required', 'NotAllowedError'); };
   h.controller.start({ automatic: true });
-  assert.deepEqual(h.state, { phase: 'paused', progress: 0 });
+  assert.equal(calls, 1);
+  assert.deepEqual(h.state, { phase: 'idle', progress: 0 });
   assert.equal(h.timers, 0);
 });
 
