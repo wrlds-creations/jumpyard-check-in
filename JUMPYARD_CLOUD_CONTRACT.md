@@ -924,7 +924,7 @@ Request: `action` (`inspect`, `no_payment` or `paid`), `staffPin` (six digits), 
 
 Authorization:
 
-- The Session Lambda verifies the personal staff PIN with the T0194 rules: the trivial-PIN rule, keyed lookup, slow verification, and the same source and venue failure limiter as login. Only `staff_operator` may continue (`403 staff_permission_denied`). A wrong PIN returns the neutral `403 staff_pin_invalid`, and a blocked source or venue returns `429 staff_pin_rate_limited`.
+- The Session Lambda verifies the personal staff PIN with the T0194 rules: keyed lookup, slow verification, and the same source and venue failure limiter as login. Any six-digit PIN is accepted (D0264). Only `staff_operator` may continue (`403 staff_permission_denied`). A wrong PIN returns the neutral `403 staff_pin_invalid`, and a blocked source or venue returns `429 staff_pin_rate_limited`.
 - The PIN proves the person for this one request. No staff session is created or replaced, so the employee's session on a staff device continues (D0160). No token reaches the public kiosk.
 - The Booking Lambda receives only the pseudonymous staff identity id. It accepts only an installation-bound attempt (`kiosk_installation_id`) created by the requesting installation, which must be proven through its active pairing (D0243) or, before pairing, its authorized legacy profile.
 
