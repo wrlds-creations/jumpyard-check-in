@@ -474,6 +474,15 @@ test('A paired kiosk (GH-488) sends no native profile and still reaches the Book
   assert.equal(state.invokes[0].detail.kioskProfileId, null);
 });
 
+test('A simple PIN such as 111111 resolves a kiosk payment too (GH-542)', async () => {
+  const { call, state } = loadSession({ identity: { pin_verifier: pinVerifier('111111') } });
+  const response = await call(kioskBody({ staffPin: '111111' }));
+  assert.equal(response.statusCode, 200);
+  assert.equal(state.invokes.length, 1);
+  assert.equal(state.invokes[0].detail.staffIdentityId, 'jystaff_synthetic');
+  assert.ok(!state.sql.some((statement) => /INSERT INTO jumpyard\.staff_pin_auth_limits/.test(statement)), 'no failed attempt is counted');
+});
+
 test('A wrong PIN counts against the login limiter and never reaches the Booking Lambda', async () => {
   const { call, state } = loadSession({ identity: { pin_verifier: pinVerifier('739164') } });
   const response = await call(kioskBody());

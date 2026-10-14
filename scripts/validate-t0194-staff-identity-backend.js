@@ -626,6 +626,146 @@ async function validateAdminSessionAndCrud() {
   assert.match(sql(update), /tokens_valid_after = now\(\)/);
 }
 
+// GH-542: any six-digit PIN, such as 111111 or 123456, can be created, reset and used to sign in.
+// One PIN per park still holds: the unique keyed lookup refuses a PIN that is already in use.
+async function validateAnySixDigitPin() {
+  const claims = adminClaims();
+  const identities = [];
+  const duplicate = () =>
+    new Error('duplicate key value violates unique constraint "staff_identities_pin_scope_unique_idx"');
+  const returnedRow = (identity) => ({
+    active: true,
+    created_at: new Date().toISOString(),
+    display_name: identity.displayName,
+    environment: 'park-test',
+    family_name: identity.familyName,
+    given_name: identity.givenName,
+    identity_revoked_at: null,
+    pin_changed_at: new Date().toISOString(),
+    pin_pepper_version: 1,
+    pin_reenrollment_required_at: null,
+    role: 'staff_operator',
+    staff_identity_id: identity.staffIdentityId,
+    updated_at: new Date().toISOString(),
+    venue_id: '50871',
+  });
+  const loaded = loadLambda('infra/lambda/session/index.js', {
+    onRdsSend(call) {
+      if (call.command === 'BeginTransactionCommand') return { transactionId: 'gh542-login' };
+      if (call.command === 'CommitTransactionCommand' || call.command === 'RollbackTransactionCommand') return {};
+
+      const statement = sql(call);
+      const parameters = parameterMap(call);
+      if (/UPDATE jumpyard\.staff_auth_sessions AS staff_session/.test(statement)) return rowsResult([adminSessionRow()]);
+      if (/INSERT INTO jumpyard\.staff_identities/.test(statement)) {
+        if (identities.some((identity) => identity.pinLookupHash === parameters.pinLookupHash)) throw duplicate();
+        const identity = {
+          displayName: parameters.displayName,
+          familyName: parameters.familyName,
+          givenName: parameters.givenName,
+          pinLookupHash: parameters.pinLookupHash,
+          pinVerifier: parameters.pinVerifier,
+          staffIdentityId: parameters.staffIdentityId,
+        };
+        identities.push(identity);
+        return rowsResult([returnedRow(identity)]);
+      }
+      if (/UPDATE jumpyard\.staff_identities[\s\S]*pin_lookup_hash = :pinLookupHash/.test(statement)) {
+        const identity = identities.find((candidate) => candidate.staffIdentityId === parameters.staffIdentityId);
+        if (identities.some((candidate) => candidate !== identity && candidate.pinLookupHash === parameters.pinLookupHash)) {
+          throw duplicate();
+        }
+        Object.assign(identity, { pinLookupHash: parameters.pinLookupHash, pinVerifier: parameters.pinVerifier });
+        return rowsResult([returnedRow(identity)]);
+      }
+      if (/FROM jumpyard\.staff_identities[\s\S]*FOR UPDATE/.test(statement)) {
+        const identity = identities.find(
+          (candidate) =>
+            candidate.staffIdentityId === parameters.staffIdentityId &&
+            candidate.pinLookupHash === parameters.pinLookupHash &&
+            candidate.pinVerifier === parameters.pinVerifier,
+        );
+        return identity
+          ? rowsResult([{
+            display_name: identity.displayName,
+            environment: 'park-test',
+            provider_subject: identity.staffIdentityId,
+            role: 'staff_operator',
+            staff_identity_id: identity.staffIdentityId,
+            venue_id: '50871',
+          }])
+          : EMPTY_RESULT;
+      }
+      if (/pin_lookup_hash = :pinLookupHash/.test(statement)) {
+        const identity = identities.find((candidate) => candidate.pinLookupHash === parameters.pinLookupHash);
+        return identity
+          ? rowsResult([identityRow({
+            display_name: identity.displayName,
+            family_name: identity.familyName,
+            given_name: identity.givenName,
+            pin_verifier: identity.pinVerifier,
+            provider_subject: identity.staffIdentityId,
+            staff_identity_id: identity.staffIdentityId,
+          })])
+          : EMPTY_RESULT;
+      }
+      if (/FROM jumpyard\.staff_pin_auth_limits/.test(statement)) return EMPTY_RESULT;
+      if (/UPDATE jumpyard\.staff_auth_sessions[\s\S]*new_pin_login/.test(statement)) return EMPTY_RESULT;
+      if (/INSERT INTO jumpyard\.staff_auth_sessions/.test(statement)) {
+        return rowsResult([{
+          absolute_expires_at: parameters.absoluteExpiresAt,
+          idle_expires_at: parameters.idleExpiresAt,
+          last_seen_at: new Date().toISOString(),
+          session_revoked_at: null,
+          staff_session_id: parameters.staffSessionId,
+        }]);
+      }
+      if (/INSERT INTO jumpyard\.event_log/.test(statement)) return { ...EMPTY_RESULT, numberOfRecordsUpdated: 1 };
+      throw new Error(`Unexpected GH-542 PIN SQL: ${statement}`);
+    },
+  });
+  const create = (firstName, pin) =>
+    loaded.handler(event('POST /v1/admin/staff', '/v1/admin/staff', { firstName, lastName: 'Station', pin }, { claims }));
+  const reset = (staffIdentityId, pin) =>
+    loaded.handler(event(
+      'PATCH /v1/admin/staff/{staffIdentityId}',
+      `/v1/admin/staff/${staffIdentityId}`,
+      { action: 'reset_pin', pin },
+      { claims, pathParameters: { staffIdentityId } },
+    ));
+  const login = (pin) => loaded.handler(event('POST /v1/staff/auth/login', '/v1/staff/auth/login', { pin }));
+
+  const staffIdByPin = new Map();
+  for (const [firstName, pin] of [['Entre', '111111'], ['Cafe', '123456']]) {
+    const response = await create(firstName, pin);
+    assert.equal(response.statusCode, 201, `${pin} must be accepted when an account is created.`);
+    staffIdByPin.set(pin, body(response).staff.staffIdentityId);
+  }
+  for (const pin of ['111111', '123456']) {
+    const response = await login(pin);
+    assert.equal(response.statusCode, 200, `${pin} must sign in.`);
+    assert.equal(body(response).status, 'authenticated');
+    assert.equal(body(response).staff.actorId, staffIdByPin.get(pin));
+  }
+
+  let response = await create('Entre Two', '111111');
+  assert.equal(response.statusCode, 409, 'A PIN in use must be refused on create.');
+  assert.equal(body(response).error.code, 'staff_pin_unavailable');
+  response = await reset(staffIdByPin.get('123456'), '111111');
+  assert.equal(response.statusCode, 409, 'A PIN in use must be refused on reset.');
+  assert.equal(body(response).error.code, 'staff_pin_unavailable');
+
+  response = await reset(staffIdByPin.get('123456'), '222222');
+  assert.equal(response.statusCode, 200, 'A simple PIN must be accepted on reset.');
+  response = await login('222222');
+  assert.equal(response.statusCode, 200);
+  assert.equal(body(response).staff.actorId, staffIdByPin.get('123456'));
+
+  assert.equal(identities.length, 2);
+  assertNoRawCredential(loaded.state, ['111111', '123456', '222222']);
+  assert.equal(loaded.state.networkCalls.length, 0);
+}
+
 async function validateAdminRoleBoundary() {
   const loaded = loadLambda('infra/lambda/session/index.js', {
     onRdsSend(call) {
@@ -708,6 +848,7 @@ async function main() {
   await validateUnknownPinAndRateLimits();
   await validatePinHeartbeatAndLogout();
   await validateAdminSessionAndCrud();
+  await validateAnySixDigitPin();
   await validateAdminRoleBoundary();
   await validatePinRedeemBoundary();
   console.log('[pass] six-digit PIN login uses HMAC lookup, scrypt verification, and an atomic hash-only session replacement');
@@ -716,7 +857,8 @@ async function main() {
   console.log('[pass] raw PIN, opaque token, and source IP never reach Aurora parameters or audit payloads');
   console.log('[pass] source and venue failure circuits fail closed while malformed credentials stop before Aurora');
   console.log('[pass] PIN heartbeat/logout, idle/absolute session checks, disable, and identity triggers revoke access');
-  console.log('[pass] Cognito/TOTP is limited to staff_admin session and server-authorized staff CRUD');
+  console.log('[pass] Cognito is limited to staff_admin session and server-authorized staff CRUD');
+  console.log('[pass] any six-digit PIN such as 111111 or 123456 can be created, reset and used to sign in; a PIN in use is refused (GH-542)');
   console.log('[pass] local reader/operator role and venue boundaries protect queue/detail/redeem before Roller work');
 }
 

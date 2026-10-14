@@ -2,6 +2,8 @@
 
 Status: complete and closed on 2026-07-14. The approved PIN-only backend, migration, Cognito administrator identity, secret rotation, transactional session replacement, request-stable Cloudflare Pages build, complete staff lifecycle, negative cases, and named credential-free audit are deployed and verified in park-test. Love accepted the final result and explicitly chose to close without an additional post-fix manual traffic smoke.
 
+Update 2026-10-14: [#542](gh-542-simpler-signin.md) (D0264) removed administrator TOTP and the trivial-PIN rule. Administrators sign in with email and password only, and any six-digit PIN is accepted. The rollout evidence below records the original T0194 setup.
+
 ## Outcome
 
 T0194 replaces the shared park-test passcode and generic `JumpYard Staff` actor with a deliberately simple split model:
@@ -9,7 +11,7 @@ T0194 replaces the shared park-test passcode and generic `JumpYard Staff` actor 
 - Ordinary staff enter only their personal six-digit PIN on the staff application's start page.
 - They do not enter a name, email address, password, Google account, device name, or authenticator-app code.
 - Shared park devices are not registered. A park may use the expected three to five devices directly.
-- A separate administrator signs in at `/admin` with a stronger Cognito account and TOTP, then creates, disables, enables, and resets ordinary staff accounts.
+- A separate administrator signs in at `/admin` with a Cognito account (email and password, without an authenticator code since D0264), then creates, disables, enables, and resets ordinary staff accounts.
 - When creating or resetting an account, the administrator enters first and last name, hands over the screen, and the employee chooses and repeats their own PIN.
 - Every ordinary account receives the fixed `staff_operator` role for the current check-in workflow.
 
@@ -21,7 +23,7 @@ The staff queue, QR/paste opening, booking detail, product handout, and existing
 
 The six-digit PIN is both the employee's identifier and proof. It therefore must be unique within the park. The server uses a secret-keyed lookup value to find the account and a separate domain-separated scrypt verifier to validate the PIN. Neither the raw PIN nor the opaque session token is stored in Aurora or written to logs.
 
-The administrator UI rejects duplicate PINs without revealing another employee's PIN. Predictable values such as `123456`, repeated digits, simple ascending or descending sequences, and a short deny-list are rejected.
+The administrator UI rejects duplicate PINs without revealing another employee's PIN. Any six digits are accepted, including `111111` and `123456` (D0264). Until #542, predictable values such as `123456`, repeated digits, simple ascending or descending sequences, and a short deny-list were rejected.
 
 Successful login returns a random opaque session token. Only its SHA-256 hash is stored. A new PIN login for the same employee revokes that employee's previous active PIN session, which limits accidental unattended sessions across shared devices.
 
@@ -39,9 +41,9 @@ The staff queue uses a stable session key, persistent activity throttle, and one
 
 ## Administrator Experience
 
-The known `/admin` route is separate from the staff start page. It uses a dedicated Cognito user pool with administrator-created accounts, OAuth authorization code with PKCE, and required authenticator-app TOTP. This complexity applies only to the small number of trusted account administrators, not ordinary park staff.
+The known `/admin` route is separate from the staff start page. It uses a dedicated Cognito user pool with administrator-created accounts and OAuth authorization code with PKCE. Since D0264 the pool's MFA is off, so administrators sign in with email and password only; T0194 originally required authenticator-app TOTP. This applies only to the small number of trusted account administrators, not ordinary park staff.
 
-For the small park-test administrator group, the deployed password policy accepts at least eight characters with an uppercase letter, lowercase letter, and digit; a symbol is optional. Cognito prevents reuse of the last five passwords and still requires administrator TOTP. This explicitly approved usability tradeoff does not change the PIN-only staff flow, and no actual administrator password is stored in source, documentation, Aurora, or deployment output.
+For the small park-test administrator group, the deployed password policy accepts at least eight characters with an uppercase letter, lowercase letter, and digit; a symbol is optional. Cognito prevents reuse of the last five passwords, and since D0264 it asks for no second factor. These explicitly approved usability tradeoffs do not change the PIN-only staff flow, and no actual administrator password is stored in source, documentation, Aurora, or deployment output.
 
 An authenticated `staff_admin` can:
 

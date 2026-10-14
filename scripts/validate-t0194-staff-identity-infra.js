@@ -138,8 +138,9 @@ function validateParkTest(template) {
   assert.equal(userPool.Properties.AdminCreateUserConfig.AllowAdminCreateUserOnly, true);
   assert.deepEqual(userPool.Properties.UsernameAttributes, ['email']);
   assert.deepEqual(userPool.Properties.AutoVerifiedAttributes, ['email']);
-  assert.equal(userPool.Properties.MfaConfiguration, 'ON');
-  assert.deepEqual(userPool.Properties.EnabledMfas, ['SOFTWARE_TOKEN_MFA']);
+  // GH-542: administrators sign in with email and password only; no MFA factor is enabled.
+  assert.equal(userPool.Properties.MfaConfiguration, 'OFF');
+  assert.equal(Object.hasOwn(userPool.Properties, 'EnabledMfas'), false);
   assert.deepEqual(userPool.Properties.UserPoolAddOns, { AdvancedSecurityMode: 'OFF' });
   assert.deepEqual(userPool.Properties.Policies.PasswordPolicy, {
     MinimumLength: 8,
@@ -314,6 +315,6 @@ validateParkTest(parkTest);
 validateDev(dev);
 
 console.log('[pass] T0194 keeps exactly five park-test Cognito/JWT resources for admins and no dev identity resources');
-console.log('[pass] T0194 enforces admin-only Cognito Essentials, TOTP, code flow, rotation, exact URLs, and JumpYard managed-login branding');
+console.log('[pass] T0194 enforces admin-only Cognito Essentials, email and password without MFA (GH-542), code flow, rotation, exact URLs, and JumpYard managed-login branding');
 console.log('[pass] T0194 JWT-protects exactly four admin routes while PIN staff routes use Lambda proof');
 console.log('[pass] T0194 repurposes the existing staff secret as a session-only PIN pepper and preserves dev legacy behavior');

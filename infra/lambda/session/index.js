@@ -5918,23 +5918,13 @@ async function handlePinStaffAuthSession(event, body, correlationId) {
 }
 
 // Shared by PIN login, the GH-488 kiosk pairing proof and the GH-483 kiosk staff resolution: one
-// limiter, the trivial-PIN rule, the keyed lookup and the slow verification. Every failure counts
-// against the source and venue limits.
+// limiter, the keyed lookup and the slow verification. Any six-digit PIN is accepted (GH-542).
+// Every failure counts against the source and venue limits.
 async function authenticateStaffPin(event, gate, pin, correlationId, failureEvent) {
   const pepper = await getStaffPinPepper();
   const sourceHash = staffPinSourceHash(pepper.value, readStaffSourceAddress(event));
   const limit = await readStaffPinAuthLimit(gate, sourceHash);
   if (limit.blocked) return { ok: false, response: staffPinRateLimitedResponse(correlationId, limit.retryAfterSeconds) };
-
-  if (isTrivialStaffPin(pin)) {
-    const failed = await recordStaffPinAuthFailure(gate, sourceHash);
-    return {
-      ok: false,
-      response: failed.blocked
-        ? staffPinRateLimitedResponse(correlationId, failed.retryAfterSeconds)
-        : staffPinInvalidResponse(correlationId),
-    };
-  }
 
   const lookupHash = staffPinLookupHash(pepper.value, gate.environment, gate.venueId, pin);
   const identity = await findLocalPinIdentity(lookupHash, pepper.version, gate);
@@ -6131,34 +6121,13 @@ function normalizePinInput(value) {
   return typeof value === 'string' ? value : null;
 }
 
+// GH-542: any six digits, such as 111111 or 123456. One PIN per park still holds through the
+// unique keyed lookup (409 staff_pin_unavailable).
 function validateNewStaffPin(pin) {
   if (!pin || !/^\d{6}$/.test(pin)) {
     return { code: 'staff_pin_format_invalid', message: 'PIN must contain exactly six digits.' };
   }
-  if (isTrivialStaffPin(pin)) {
-    return { code: 'staff_pin_too_simple', message: 'Choose a less predictable six-digit PIN.' };
-  }
   return null;
-}
-
-function isTrivialStaffPin(pin) {
-  if (/^(\d)\1{5}$/.test(pin)) return true;
-  return new Set([
-    '012345',
-    '123456',
-    '234567',
-    '345678',
-    '456789',
-    '987654',
-    '876543',
-    '765432',
-    '654321',
-    '543210',
-    '121212',
-    '112233',
-    '123123',
-    '000123',
-  ]).has(pin);
 }
 
 async function getStaffPinPepper(options = {}) {

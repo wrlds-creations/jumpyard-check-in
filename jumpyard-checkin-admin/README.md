@@ -100,7 +100,7 @@ For dev/Playground legacy validation after Cloudflare Pages is connected and the
 
 For park-test PIN identity, use a non-write rehearsal session unless a real Roller redemption is separately approved:
 
-1. Open `https://jumpyard-checkin-admin-park-test.pages.dev/admin`, complete admin password/TOTP, and create a synthetic staff record with first name, last name, and PIN.
+1. Open `https://jumpyard-checkin-admin-park-test.pages.dev/admin`, sign in with the admin email and password, and create a synthetic staff record with first name, last name, and PIN.
 2. Open `https://jumpyard-checkin-admin-park-test.pages.dev`, confirm only the PIN field is shown, and sign in with the synthetic PIN.
 3. Confirm the correct display name appears and the ready-for-staff queue loads.
 4. Duplicate the staff tab, log out in either copy, and confirm both tabs immediately return to a clean PIN screen.
