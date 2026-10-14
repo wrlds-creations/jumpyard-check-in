@@ -49,7 +49,7 @@ A client-supplied `customer` was also forwarded as is, so a request could write 
   - `normalizeAddProductDraftRequest` drops the client customer.
   - `buildRollerBookingPayload` strips both marketing flags from every payload, then sets `acceptMarketing: true` only for a valid new-purchase choice.
   - Removed: the title split (`normalizeOriginalBookingCustomer`, `mergeOriginalBookingCustomer`, `splitCustomerName` and their helpers) and the Aurora contact query (`findLocalOriginalBookingCustomer`).
-- **Follow-up:** the booking database role keeps a now unused `SELECT` on `jumpyard.guest_profiles` (migration 0011). Revoking it is a separate migration.
+- **Follow-up:** the booking database role kept a now unused `SELECT` on `jumpyard.guest_profiles` (migration 0011). #538 revokes it with migration 0027.
 
 ## Validation
 
