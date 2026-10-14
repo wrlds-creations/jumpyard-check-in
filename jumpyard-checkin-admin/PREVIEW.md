@@ -1,5 +1,7 @@
 # Staff design integration for #345
 
+#541 (D0263, 2026-10-14) replaced the four entrance tabs, Välj alla, the first-tap selection and the QR scanner described below with two lists, fold-out rows and one-tap "Lämna ut"; see [the #541 notes](../docs/gh-541-staff-simpler.md).
+
 ## Owner acceptance — 2026-09-09
 
 Love accepted the installed JumpYard Personal v1.0.0 APK: **“Jag testade och jag är nöjd.”** [PR #401](https://github.com/wrlds-creations/jumpyard-check-in/pull/401) merged as `8223843` after source review and all six CI jobs passed. [Android validation and exact APK identity](../jumpyard-checkin-android/README.md#device-validation--september-9-2026) separate automated evidence from this general owner acceptance. Earlier pending-acceptance notes below describe the preceding rollout stages; they do not add a new closure gate. AirDroid locking belongs to Love's colleague. The tested APK and deployed web artifact `971d901` are unchanged by this closeout.

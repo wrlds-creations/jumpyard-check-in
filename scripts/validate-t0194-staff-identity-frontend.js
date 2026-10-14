@@ -177,10 +177,12 @@ function validateStorageAndCleanup(page, identity, adminIdentity, adminPage, cal
     /set(?:Current)?Detail\(null\)/,
     /setCurrentQuery\(""\)/,
     /setRedeemConfirmation\(null\)/,
-    /setScannerOpen\(false\)/,
     /setCurrentSelectedId\(null\)/,
     /setSessions\(\[\]\)/,
+    /setUrgentSessions\(\[\]\)/,
   ]) assert.match(cleanup, required);
+  // GH-541: the staff app has no camera QR scanner any more; staff search by name, booking or number.
+  assert.doesNotMatch(page, /zxing|scanner|getUserMedia|Skanna QR/i);
 
   const terminate = section(page, 'const terminateStaffSession = useCallback(async () => {', 'const getUsableAuth', 'staff logout');
   assertBefore(terminate, 'clearStaffAuthStorage();', 'clearSensitiveUi();', 'Staff credentials must clear before UI data.');
@@ -284,7 +286,7 @@ function validateQueueRequestStability(page) {
   const activity = section(
     page,
     'const activeAuth = authRef.current;',
-    'if (!scannerOpen) return;',
+    'if (!selectedId || !authSessionKey) return;',
     'staff activity tracking',
   );
   assert.match(activity, /activityWriteAtRef\.current = 0/);

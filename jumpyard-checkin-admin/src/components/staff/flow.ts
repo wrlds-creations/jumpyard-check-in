@@ -1,6 +1,8 @@
 import type { HandoutArea, HandoutClaim, StaffSessionSummary } from "@/lib/adminApi";
 
 export type Stage = "ready" | "started" | "upcoming" | "completed";
+/** GH-541 (D0263): the entrance keeps two lists; Påbörjad and Redo are still Kommande. */
+export type BoardTab = "upcoming" | "completed";
 export function boardPollDelay(bookingCount: number) {
   // Keep a whole-day refresh below two page requests/second per phone.
   // Selected guest details still refresh every two seconds.
@@ -12,6 +14,19 @@ export function stageOf(session: StaffSessionSummary): Stage {
   if (session.status === "ready_for_staff" && session.safetyStatus === "completed" &&
       session.bookingSyncStatus === "confirmed" && !session.isExpired) return "ready";
   return "started";
+}
+export function boardTab(session: StaffSessionSummary): BoardTab {
+  return stageOf(session) === "completed" ? "completed" : "upcoming";
+}
+/** GH-456/541: Cloud's automatic check-in gave up, so staff check the group in from the red box. */
+export function needsStaff(session: StaffSessionSummary) {
+  return stageOf(session) !== "completed" && session.autoCheckin?.status === "needs_staff";
+}
+/** GH-541: the check-in time without Cloud's automatic actor ("automatiskt"); a colleague's name stays. */
+export function checkedInLabel(session: Pick<StaffSessionSummary, "completedAt" | "checkedInBy">) {
+  const by = session.checkedInBy;
+  const automatic = !by?.displayName || Boolean(by.actorId?.startsWith("system:")) || by.role === "system";
+  return `Incheckad ${clock(session.completedAt)}${automatic ? "" : ` · ${by?.displayName}`}`;
 }
 export function stockholmDay(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -50,5 +65,8 @@ export function handoutMessage(code: string | null, fallback: string) {
     payment_or_booking_changed: "Betalningen eller bokningen behöver kontrolleras.",
     session_not_ready_for_staff: "Gästen behöver slutföra check-in först.",
     safety_not_completed: "Säkerhetsgenomgången är inte klar.",
+    redeem_in_progress: "Incheckningen pågår redan. Vänta några sekunder.",
+    session_already_completed: "Gruppen är redan incheckad.",
+    session_expired: "Förberedelsen har gått ut – gästen öppnar bokningen igen.",
   } as Record<string, string>)[code || ""] || fallback;
 }

@@ -1,5 +1,20 @@
 # Test Plan
 
+## The simpler staff app (#541)
+
+Run `npm run validate:gh345-staff-handout` (part of `npm run validate`). Its `jumpyard-checkin-admin/src/lib/staffExperience.test.mjs` renders the real staff components:
+- only "Kommande" and "Incheckade", with Påbörjad and Redo counted as Kommande;
+- the red "Behöver personal" box on top for every tab, time slot and search, with "Checka in" that only redeems, and an open row that stays there after it;
+- "Incheckad HH:MM" without "automatiskt";
+- no QR button, camera, scanner code, `@zxing` dependency or camera permission;
+- read-only entrance goods with one "Lämna ut" that sends everything left as a selection plus confirmation, and the blocked colleague, reader and other-day cases;
+- café − / + quantities starting at everything left, the two wide café lists with large numbers;
+- Acumin byte-identical to the phone, with the phone's roles and a preload.
+
+Also run `validate:t0194-staff-identity-frontend` (locally its Turbopack build stops at the `node_modules` junction), `validate:gh274-redeem-success-visible`, `validate:gh456-auto-checkin`, and in `jumpyard-checkin-admin`, `npx tsc --noEmit`, `npm run lint` and `npx next build --webpack`.
+
+After release, reload the Motorola APK and open the staff app on the café computer, then follow the checks in [the notes](docs/gh-541-staff-simpler.md#after-release).
+
 ## Webhook retry timing and kiosk confirmation sources (#346)
 
 Run `npm run validate:gh346-webhook-retry` (part of `npm run validate`). It loads the real webhook worker and checks five things:

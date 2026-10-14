@@ -2,14 +2,12 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import type { IScannerControls } from "@zxing/browser";
 import {
   AlertTriangle,
   CalendarDays,
   CheckCircle2,
   Loader2,
   RefreshCcw,
-  ScanLine,
   Search,
   TicketCheck,
   X,
@@ -30,8 +28,8 @@ import {
   type StaffSessionSummary,
 } from "@/lib/adminApi";
 import StaffExperience from "@/components/staff/StaffExperience";
-import { boardPollDelay, handoutMessage, stockholmDay } from "@/components/staff/flow";
-import { createSelectionBuffer, mergeHandoutSummary, type HandoutDraft } from "@/components/staff/selection";
+import { boardPollDelay, handoutMessage, needsStaff, stockholmDay } from "@/components/staff/flow";
+import { createSelectionBuffer, mergeHandoutSummary } from "@/components/staff/selection";
 import {
   canStaffRedeem as staffCanRedeem,
   clearStaffAuthStorage,
@@ -50,7 +48,6 @@ import {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type RedeemState = "idle" | "loading" | "success" | "error";
-type ScannerState = "idle" | "starting" | "scanning" | "error";
 
 const SWEDISH_SHORT_MONTHS = ["jan", "feb", "mars", "apr", "maj", "juni", "juli", "aug", "sep", "okt", "nov", "dec"];
 
@@ -704,11 +701,9 @@ function ItemRows({ items }: { items: StaffBookingItem[] }) {
 function RedeemSuccessPanel({
   confirmation,
   onReturnToQueue,
-  onScanNext,
 }: {
   confirmation: RedeemConfirmation;
   onReturnToQueue: () => void;
-  onScanNext: () => void;
 }) {
   return (
     <section
@@ -742,23 +737,14 @@ function RedeemSuccessPanel({
           {confirmation.completedAt ? `Klar ${formatDateTime(confirmation.completedAt)}` : "Välj nästa steg."}
         </p>
 
-        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+        <div className="mt-5 grid gap-2">
           <button
             type="button"
             onClick={onReturnToQueue}
             data-testid="staff-redeem-success-return"
-            className="flex min-h-12 w-full items-center justify-center rounded-2xl border border-success/35 bg-white px-4 text-sm font-black italic uppercase text-success shadow-sm transition hover:bg-success/10"
+            className="flex min-h-12 w-full items-center justify-center rounded-2xl bg-success px-4 text-sm font-black italic uppercase text-white shadow-sm transition hover:brightness-95"
           >
             Tillbaka till kön
-          </button>
-          <button
-            type="button"
-            onClick={onScanNext}
-            data-testid="staff-redeem-success-scan-next"
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-success px-4 text-sm font-black italic uppercase text-white shadow-sm transition hover:brightness-95"
-          >
-            <ScanLine size={17} />
-            Scanna ny QR
           </button>
         </div>
       </div>
@@ -773,7 +759,6 @@ function DetailPanel({
   onClose,
   onRedeem,
   onReturnToQueue,
-  onScanNext,
   redeemConfirmation,
   redeemMessage,
   redeemState,
@@ -784,7 +769,6 @@ function DetailPanel({
   onClose?: () => void;
   onRedeem: () => void;
   onReturnToQueue: () => void;
-  onScanNext: () => void;
   redeemConfirmation: RedeemConfirmation | null;
   redeemMessage: string;
   redeemState: RedeemState;
@@ -794,7 +778,6 @@ function DetailPanel({
       <RedeemSuccessPanel
         confirmation={redeemConfirmation}
         onReturnToQueue={onReturnToQueue}
-        onScanNext={onScanNext}
       />
     );
   }
@@ -816,7 +799,7 @@ function DetailPanel({
         <div>
           <StaffIcon name="info" className="mx-auto mb-3 h-10 w-10 opacity-70" />
           <p className="text-lg font-black italic uppercase text-foreground">Välj handoff</p>
-          <p className="mt-1 text-sm text-foreground">Skanna QR eller tryck på en bokning i kön.</p>
+          <p className="mt-1 text-sm text-foreground">Sök eller tryck på en bokning i kön.</p>
         </div>
       </section>
     );
@@ -988,15 +971,13 @@ export default function Home() {
   const [redeemConfirmation, setRedeemConfirmation] = useState<RedeemConfirmation | null>(null);
   const [redeemMessage, setRedeemMessage] = useState("");
   const [redeemState, setRedeemState] = useState<RedeemState>("idle");
-  const [scannerMessage, setScannerMessage] = useState("");
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [scannerState, setScannerState] = useState<ScannerState>("idle");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<StaffSessionSummary[]>([]);
+  // GH-541: Cloud's "Behöver personal" groups from the last whole-day list stay on top while searching.
+  const [urgentSessions, setUrgentSessions] = useState<StaffSessionSummary[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [operatingDay, setOperatingDay] = useState(stockholmDay);
   const operatingDayRef = useRef(operatingDay);
-  const [handoutDraft, setHandoutDraft] = useState<HandoutDraft | null>(null);
   const selectionBufferRef = useRef<(ReturnType<typeof createSelectionBuffer> & { checkinSessionId: string; area: HandoutRequest["area"] }) | null>(null);
   const [handoutBusy, setHandoutBusy] = useState(false);
   const [handoutError, setHandoutError] = useState("");
@@ -1018,9 +999,6 @@ export default function Home() {
   const queueRefreshInFlightRef = useRef(false);
   const queueRefreshPendingRef = useRef(false);
   const queuePollDelayRef = useRef(2_000);
-  const scannerControlsRef = useRef<IScannerControls | null>(null);
-  const scannerHandledRef = useRef(false);
-  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   const authSessionKey = staffAuthSessionKey(auth);
 
@@ -1052,12 +1030,9 @@ export default function Home() {
     handoutVersionRef.current += 1;
     handoutBusyRef.current = false;
     selectionBufferRef.current = null;
-    setHandoutDraft(null);
     setHandoutBusy(false);
     setHandoutError("");
     setHandoutRecoveryTarget(undefined);
-    scannerControlsRef.current?.stop();
-    scannerControlsRef.current = null;
     setCurrentAuth(null);
     setAuthError("");
     setAuthPin("");
@@ -1069,11 +1044,9 @@ export default function Home() {
     setRedeemConfirmation(null);
     setRedeemMessage("");
     setRedeemState("idle");
-    setScannerMessage("");
-    setScannerOpen(false);
-    setScannerState("idle");
     setCurrentSelectedId(null);
     setSessions([]);
+    setUrgentSessions([]);
     setState("idle");
   }, [setCurrentAuth, setCurrentDetail, setCurrentQuery, setCurrentSelectedId]);
 
@@ -1149,16 +1122,8 @@ export default function Home() {
     setRedeemConfirmation(null);
     setRedeemMessage("");
     setRedeemState("idle");
-    setScannerMessage("");
     setCurrentSelectedId(null);
   }, [setCurrentDetail, setCurrentQuery, setCurrentSelectedId]);
-
-  const scanNextAfterRedeem = useCallback(() => {
-    returnToQueueAfterRedeem();
-    setScannerMessage("");
-    setScannerState("starting");
-    setScannerOpen(true);
-  }, [returnToQueueAfterRedeem]);
 
   const refreshSessions = useCallback(async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
     const today = stockholmDay();
@@ -1212,11 +1177,12 @@ export default function Home() {
           // receipt/ownership. The next scheduled refresh will catch up.
           if (requestedHandoutVersion !== handoutVersionRef.current || handoutBusyRef.current) continue;
           const currentSelectedId = selectedIdRef.current;
-          // A refreshed queue must never close a guest opened by QR or change the
+          // A refreshed queue must never close an opened guest or change the
           // operator's selected context (including a completed entrance/café visit).
           const nextSelectedId = currentSelectedId;
 
           setSessions(nextSessions);
+          if (!requestedQuery.trim()) setUrgentSessions(nextSessions.filter(needsStaff));
           queuePollDelayRef.current = boardPollDelay(nextSessions.length);
           setCurrentSelectedId(nextSelectedId);
           if (!nextSelectedId) {
@@ -1308,7 +1274,6 @@ export default function Home() {
     const raw = value.trim();
     if (!raw || raw.length > 400) return;
     const parsed = parseHandoffPayload(raw);
-    setScannerMessage("");
     if (parsed?.checkinSessionId) {
       setCurrentQuery(parsed.handoffCode || "");
       selectSession(parsed.checkinSessionId);
@@ -1464,69 +1429,6 @@ export default function Home() {
       window.clearInterval(intervalId);
     };
   }, [authSessionKey, setCurrentAuth, terminateStaffSession]);
-
-  useEffect(() => {
-    if (!scannerOpen) return;
-
-    let cancelled = false;
-    const lifecycleGeneration = lifecycleGenerationRef.current;
-    scannerHandledRef.current = false;
-
-    async function startScanner() {
-      try {
-        if (!scannerVideoRef.current) {
-          throw new Error("Scanner video saknas.");
-        }
-
-        const { BrowserQRCodeReader } = await import("@zxing/browser");
-        const codeReader = new BrowserQRCodeReader();
-        const controls = await codeReader.decodeFromVideoDevice(
-          undefined,
-          scannerVideoRef.current,
-          (result, _error, controls) => {
-            if (lifecycleGeneration !== lifecycleGenerationRef.current) {
-              controls.stop();
-              return;
-            }
-            const text = result?.getText();
-            if (!text || scannerHandledRef.current) return;
-
-            scannerHandledRef.current = true;
-            controls.stop();
-            scannerControlsRef.current = null;
-            setScannerOpen(false);
-            setScannerState("idle");
-            openHandoffPayload(text);
-          }
-        );
-
-        if (cancelled || lifecycleGeneration !== lifecycleGenerationRef.current) {
-          controls.stop();
-          return;
-        }
-
-        scannerControlsRef.current = controls;
-        setScannerState("scanning");
-      } catch (scanError) {
-        if (cancelled || lifecycleGeneration !== lifecycleGenerationRef.current) return;
-        scannerControlsRef.current = null;
-        setScannerState("error");
-        setScannerMessage(
-          scanError instanceof Error
-            ? `Kameran kunde inte startas: ${scanError.message}`
-            : "Kameran kunde inte startas."
-        );
-      }
-    }
-
-    void startScanner();
-
-    return () => {
-      cancelled = true;
-      scannerControlsRef.current?.stop();
-      scannerControlsRef.current = null;
-    };
-  }, [openHandoffPayload, scannerOpen]);
 
   useEffect(() => {
     if (!selectedId || !authSessionKey) return;
@@ -1714,13 +1616,12 @@ export default function Home() {
     void terminateStaffSession();
   }, [terminateStaffSession]);
 
-  const handleHandout = useCallback(async (request: HandoutRequest): Promise<boolean> => {
+  const handleHandout = useCallback(async (request: HandoutRequest, options: { confirm?: boolean } = {}): Promise<boolean> => {
     if (!detailRef.current) return false;
     const selected = detailRef.current;
     const currentBuffer = selectionBufferRef.current;
     if (request.action === "select" && currentBuffer?.checkinSessionId === selected.checkinSessionId && currentBuffer.area === request.area) {
       currentBuffer.update(request.selection || []);
-      setHandoutDraft({ checkinSessionId: selected.checkinSessionId, area: request.area, selection: request.selection || [] });
       return false;
     }
     if (handoutBusyRef.current) return false;
@@ -1728,7 +1629,6 @@ export default function Home() {
       checkinSessionId: selected.checkinSessionId, area: request.area,
     }) : null;
     selectionBufferRef.current = buffer;
-    if (buffer) setHandoutDraft({ checkinSessionId: selected.checkinSessionId, area: request.area, selection: request.selection || [] });
     const generation = lifecycleGenerationRef.current;
     const version = ++handoutVersionRef.current;
     handoutBusyRef.current = true;
@@ -1751,10 +1651,16 @@ export default function Home() {
         setSessions((rows) => rows.map((row) => mergeHandoutSummary(row, selected, result)));
         return result;
       };
-      const result = buffer ? await buffer.drain(send) : await send(request);
+      let result = buffer ? await buffer.drain(send) : await send(request);
+      // GH-541 (D0263): "Lämna ut" sends the whole choice and confirms it with the revision it got.
+      if (result && options.confirm && request.action === "select") {
+        const revision = result.handout.claims.find((claim) => claim.area === request.area)?.revision;
+        if (!Number.isSafeInteger(revision)) throw new Error("Selection revision missing");
+        result = await send({ area: request.area, action: "confirm", revision: revision as number });
+      }
       // Selection replies already contain current state; avoid a whole-day
       // database/reconciliation refresh after every tap.
-      if (request.action !== "select") void refreshSessions({ showLoading: false });
+      if (request.action !== "select" || options.confirm) void refreshSessions({ showLoading: false });
       return result?.completed === true;
     } catch (failure) {
       if (generation !== lifecycleGenerationRef.current || (activeAuth && !isSameStaffSession(authRef.current, activeAuth))) return false;
@@ -1770,10 +1676,56 @@ export default function Home() {
       if (version === handoutVersionRef.current) {
         handoutBusyRef.current = false;
         selectionBufferRef.current = null;
-        setHandoutDraft(null);
         setHandoutBusy(false);
         // refreshSelectedDetail deliberately skips during writes. Recover only
         // after releasing that guard, including a lost selection response.
+        if (refreshAfterFailure) void refreshSelectedDetail();
+      }
+    }
+  }, [getUsableAuth, handleProtectedAuthFailure, refreshSelectedDetail, refreshSessions, setCurrentDetail]);
+
+  // GH-541 (D0263): "Behöver personal" checks the group in with one tap and hands nothing out.
+  // It uses the same key as Cloud's automatic check-in, so the two can never redeem twice (#333).
+  const handleCheckIn = useCallback(async (): Promise<boolean> => {
+    const selected = detailRef.current;
+    if (!selected || handoutBusyRef.current) return false;
+    const generation = lifecycleGenerationRef.current;
+    const version = ++handoutVersionRef.current;
+    handoutBusyRef.current = true;
+    setHandoutBusy(true);
+    setHandoutError("");
+    setHandoutRecoveryTarget(undefined);
+    let activeAuth: StaffAuthSession | null = null;
+    let refreshAfterFailure = false;
+    try {
+      activeAuth = await getUsableAuth();
+      if (generation !== lifecycleGenerationRef.current) return false;
+      const result = await redeemStaffSession({
+        checkinSessionId: selected.checkinSessionId,
+        staffToken: activeAuth.auth.token,
+        idempotencyKey: `staff-redeem:${selected.checkinSessionId}`,
+      });
+      if (generation !== lifecycleGenerationRef.current || !isSameStaffSession(authRef.current, activeAuth)) return false;
+      const admitted = <T extends StaffSessionSummary>(row: T): T => row.checkinSessionId === selected.checkinSessionId
+        ? { ...row, ...result.session, autoCheckin: null } : row;
+      if (selectedIdRef.current === selected.checkinSessionId && detailRef.current) setCurrentDetail(admitted(detailRef.current));
+      setSessions((rows) => rows.map(admitted));
+      setUrgentSessions((rows) => rows.filter((row) => row.checkinSessionId !== selected.checkinSessionId));
+      void refreshSessions({ showLoading: false });
+      return true;
+    } catch (failure) {
+      if (generation !== lifecycleGenerationRef.current || (activeAuth && !isSameStaffSession(authRef.current, activeAuth))) return false;
+      if (handleProtectedAuthFailure(failure)) return false;
+      if (selectedIdRef.current === selected.checkinSessionId) {
+        setHandoutError(handoutMessage(failure instanceof StaffApiError ? failure.code : null,
+          "Incheckningen kunde inte slutföras. Försök igen."));
+        refreshAfterFailure = true;
+      }
+      return false;
+    } finally {
+      if (version === handoutVersionRef.current) {
+        handoutBusyRef.current = false;
+        setHandoutBusy(false);
         if (refreshAfterFailure) void refreshSelectedDetail();
       }
     }
@@ -1865,19 +1817,14 @@ export default function Home() {
     );
   }
 
-  if (auth.identityMode === "pin") return <StaffExperience auth={auth} sessions={sessions} detail={detail}
+  if (auth.identityMode === "pin") return <StaffExperience auth={auth} sessions={sessions} urgent={urgentSessions} detail={detail}
     selectedId={selectedId} loading={state === "loading"} detailLoading={detailState === "loading"}
-    busy={handoutBusy} draft={handoutDraft} error={handoutError || error} query={query} day={operatingDay}
+    busy={handoutBusy} error={handoutError || error} query={query} day={operatingDay}
     recoveryTarget={handoutRecoveryTarget}
-    onQuery={setCurrentQuery} onSearch={handleSearchSubmit} onOpen={(id) => { setHandoutError(""); setHandoutRecoveryTarget(undefined); selectSession(id); }} onClose={closeSelectedSession}
-    onLogout={handleStaffLogout} onHandout={handleHandout}
-    onRefresh={() => { void refreshSessions(); void refreshSelectedDetail(); }}
-    onScan={() => { closeSelectedSession(); setScannerMessage(""); setScannerState("starting"); setScannerOpen(true); }}
-    scanner={scannerOpen ? <div className="mx-auto max-w-xl px-3 py-3" data-testid="handoff-qr-scanner">
-      <div className="overflow-hidden rounded-2xl border border-primary"><video ref={scannerVideoRef} className="aspect-[4/3] w-full bg-black object-cover" muted playsInline />
-        <div className="flex items-center justify-between gap-3 bg-white p-3"><p role="status" className="text-sm font-bold">{scannerState === "error" ? scannerMessage : "Rikta kameran mot QR-koden"}</p>
-          <button type="button" onClick={() => setScannerOpen(false)} className="min-h-11 px-3 text-sm font-bold">Stäng</button></div></div>
-    </div> : null} />;
+    onQuery={setCurrentQuery} onSearch={handleSearchSubmit} onOpen={(id) => { setHandoutError(""); setHandoutRecoveryTarget(undefined); selectSession(id); }}
+    onClose={() => { setHandoutError(""); setHandoutRecoveryTarget(undefined); closeSelectedSession(); }}
+    onLogout={handleStaffLogout} onHandout={handleHandout} onCheckIn={handleCheckIn}
+    onRefresh={() => { void refreshSessions(); void refreshSelectedDetail(); }} />;
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -1935,7 +1882,6 @@ export default function Home() {
             onClose={closeSelectedSession}
             onRedeem={handleRedeem}
             onReturnToQueue={returnToQueueAfterRedeem}
-            onScanNext={scanNextAfterRedeem}
             redeemConfirmation={redeemConfirmation}
             redeemMessage={redeemMessage}
             redeemState={redeemState}
@@ -1954,69 +1900,22 @@ export default function Home() {
                 onKeyDown={(event) => {
                   if (event.key === "Enter") handleSearchSubmit();
                 }}
-                placeholder="Sök eller skanna QR"
+                placeholder="Sök namn, bokning eller nummer"
                 className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm font-bold outline-none placeholder:text-foreground/35"
                 autoComplete="off"
               />
             </label>
 
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={handleSearchSubmit}
-                disabled={!query.trim()}
-                data-testid="handoff-open-code"
-                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-border bg-white px-3 text-sm font-black italic uppercase text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:bg-surface disabled:text-foreground/40"
-              >
-                <Search size={16} />
-                Sök
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (scannerOpen) {
-                    setScannerOpen(false);
-                    setScannerState("idle");
-                    return;
-                  }
-
-                  setScannerMessage("");
-                  setScannerState("starting");
-                  setScannerOpen(true);
-                }}
-                data-testid="handoff-scan-toggle"
-                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-primary px-3 text-sm font-black italic uppercase text-white shadow-sm transition hover:bg-primary-dark"
-              >
-                <ScanLine size={17} />
-                {scannerOpen ? "Stäng" : "Skanna QR"}
-              </button>
-            </div>
-
-            {scannerOpen && (
-              <div
-                data-testid="handoff-qr-scanner"
-                className="mt-3 overflow-hidden rounded-2xl border border-border bg-surface"
-              >
-                <video
-                  ref={scannerVideoRef}
-                  className="aspect-[4/3] w-full bg-black object-cover sm:aspect-video"
-                  muted
-                  playsInline
-                />
-                <div className="flex items-center justify-between gap-3 border-t border-border bg-white px-3 py-2">
-                  <p className="text-xs uppercase text-foreground">
-                    {scannerState === "starting"
-                      ? "Startar kamera"
-                      : scannerState === "scanning"
-                        ? "Rikta kameran mot QR-koden"
-                        : scannerState === "error"
-                          ? scannerMessage
-                          : "QR-skanner"}
-                  </p>
-                  {scannerState === "starting" && <Loader2 className="shrink-0 animate-spin text-foreground" size={16} />}
-                </div>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={handleSearchSubmit}
+              disabled={!query.trim()}
+              data-testid="handoff-open-code"
+              className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-3 text-sm font-black italic uppercase text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-surface-strong disabled:text-foreground/45"
+            >
+              <Search size={16} />
+              Sök
+            </button>
           </div>
 
           {hasError && (
@@ -2067,7 +1966,6 @@ export default function Home() {
             loading={detailState === "loading"}
             onRedeem={handleRedeem}
             onReturnToQueue={returnToQueueAfterRedeem}
-            onScanNext={scanNextAfterRedeem}
             redeemConfirmation={redeemConfirmation}
             redeemMessage={redeemMessage}
             redeemState={redeemState}

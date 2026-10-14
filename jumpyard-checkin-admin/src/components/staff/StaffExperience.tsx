@@ -2,38 +2,55 @@
 
 import Image from "next/image";
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { Check, ChevronDown, LoaderCircle, Minus, Plus, RefreshCcw, ScanLine, Search, X } from "lucide-react";
-import type { HandoutArea, HandoutItem, HandoutRequest, HandoutSelection, StaffAuthSession, StaffSessionDetail, StaffSessionSummary } from "@/lib/adminApi";
-import { activeClaim, clock, itemIcon, nextPass, stageOf, stockholmDay, type Stage } from "./flow";
+import { Check, ChevronDown, LoaderCircle, Minus, Plus, RefreshCcw, Search, X } from "lucide-react";
+import type { HandoutArea, HandoutItem, HandoutReceipt, HandoutRequest, StaffAuthSession, StaffSessionDetail, StaffSessionSummary } from "@/lib/adminApi";
+import { activeClaim, boardTab, checkedInLabel, clock, itemIcon, needsStaff, nextPass, stageOf, stockholmDay, type BoardTab } from "./flow";
 import { BandChip, Icon, cls } from "./ui";
-import type { HandoutDraft } from "./selection";
 
-const stages: { id: Stage; label: string }[] = [
-  { id: "upcoming", label: "Kommande" }, { id: "started", label: "Påbörjade" },
-  { id: "ready", label: "Redo" }, { id: "completed", label: "Incheckade" },
-];
+// GH-541 (D0263): Cloud checks every finished group in itself, so the entrance keeps two lists.
+const tabs: { id: BoardTab; label: string }[] = [{ id: "upcoming", label: "Kommande" }, { id: "completed", label: "Incheckade" }];
+// The café computer stays on Café after "Byt personal" or an idle logout in the same browser tab.
+const AREA_KEY = "jumpyard_staff_area_v1";
 interface Props {
   auth: StaffAuthSession;
   sessions: StaffSessionSummary[];
+  /** GH-541: "Behöver personal" groups from the last whole-day list, kept on top while searching. */
+  urgent?: StaffSessionSummary[];
   detail: StaffSessionDetail | null;
   selectedId: string | null;
   loading: boolean;
   detailLoading: boolean;
   busy: boolean;
-  draft?: HandoutDraft | null;
   error: string;
   recoveryTarget?: { checkinSessionId: string; area: HandoutArea } | null;
   query: string;
   day: string;
-  scanner: ReactNode;
   onQuery: (query: string) => void;
   onSearch: () => void;
   onOpen: (id: string) => void;
   onClose: () => void;
-  onScan: () => void;
   onRefresh: () => void;
   onLogout: () => void;
-  onHandout: (request: HandoutRequest) => Promise<boolean>;
+  onHandout: (request: HandoutRequest, options?: { confirm?: boolean }) => Promise<boolean>;
+  onCheckIn: () => Promise<boolean>;
+}
+type HandoutView = ReturnType<typeof handoutView>;
+
+const left = (item: HandoutItem) => item.available ?? Math.max(0, item.quantity - item.collected);
+const nameOf = (session: StaffSessionSummary) => session.guest?.name || session.bookingReference || "Bokning";
+const checkedInAt = (session: StaffSessionSummary) => Date.parse(session.completedAt || "") || 0;
+const byStart = (a: StaffSessionSummary, b: StaffSessionSummary) =>
+  (a.booking.startTime || "").localeCompare(b.booking.startTime || "") || nameOf(a).localeCompare(nameOf(b), "sv");
+const newestFirst = (a: StaffSessionSummary, b: StaffSessionSummary) =>
+  checkedInAt(b) - checkedInAt(a) || (b.handoffCode || "").localeCompare(a.handoffCode || "");
+const oldestFirst = (a: StaffSessionSummary, b: StaffSessionSummary) =>
+  (checkedInAt(a) || Number.MAX_SAFE_INTEGER) - (checkedInAt(b) || Number.MAX_SAFE_INTEGER) || (a.handoffCode || "").localeCompare(b.handoffCode || "");
+function lastReceipt(receipts: HandoutReceipt[] | undefined, area: HandoutArea) {
+  return (receipts || []).filter((receipt) => receipt.area === area)
+    .reduce<HandoutReceipt | null>((last, receipt) => !last || Date.parse(receipt.completedAt) > Date.parse(last.completedAt) ? receipt : last, null);
+}
+function readArea(): HandoutArea {
+  try { return window.sessionStorage.getItem(AREA_KEY) === "cafe" ? "cafe" : "entrance"; } catch { return "entrance"; }
 }
 
 function AdmissionCount({ count }: { count?: number }) {
@@ -41,217 +58,279 @@ function AdmissionCount({ count }: { count?: number }) {
   return <span className="flex items-center gap-1"><Icon name="visitor-wristband" className="h-5 w-5" />{count} {count === 1 ? "entré" : "entréer"}</span>;
 }
 
-function BookingRow({ session, area, actorId, selected, onOpen }: {
-  session: StaffSessionSummary; area: HandoutArea; actorId?: string; selected: boolean; onOpen: () => void;
-}) {
-  const claim = activeClaim(session.claims, area);
-  const stage = stageOf(session);
-  const status = claim ? claim.actorId === actorId ? "Du hjälper" : `${claim.actorName} hjälper`
-    : area === "cafe" ? session.cafeRemaining ? `${session.cafeRemaining} kvar att hämta` : "Utlämnat"
-      : stage === "completed" ? `Incheckad ${clock(session.completedAt)}${session.checkedInBy?.displayName ? ` · ${session.checkedInBy.displayName}` : ""}`
-      // GH-456: an automatic check-in that failed hands the group to staff.
-      : session.autoCheckin?.status === "needs_staff" ? "Behöver personal"
-      : session.bookingSyncStatus !== "confirmed" ? "Bekräftas" : session.isExpired ? "Gått ut"
-        : stages.find((item) => item.id === stage)?.label;
-  // GH-459: entrance staff see which bands to take; a count shows when the group has several colours.
-  const bands = area === "entrance" ? session.bandColours ?? [] : [];
-  const counted = bands.length > 1 || bands.reduce((sum, band) => sum + band.quantity, 0) !== session.counts.admission;
-  return <button type="button" onClick={onOpen} aria-pressed={selected}
-    className={`w-full min-w-0 rounded-2xl border px-3 py-3 text-left shadow-sm transition active:scale-[0.99] ${selected ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "border-border bg-white hover:border-primary"}`}>
-    <span className="flex items-center justify-between gap-3">
-      <span className="truncate text-base font-black italic uppercase leading-tight">{session.guest?.name || session.bookingReference || "Bokning"}</span>
-      {session.handoffCode && <span className="shrink-0 text-lg font-black tabular-nums leading-none">{session.handoffCode}</span>}
-    </span>
-    <span className="mt-2 flex flex-wrap items-center justify-between gap-2">
-      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold">
-        <AdmissionCount count={session.counts.admission} />
-        {bands.map((band) => <BandChip key={band.id} colour={band} count={counted ? band.quantity : undefined} />)}
-        <span className="flex items-center gap-1"><Icon name="time" className="h-5 w-5" />{clock(session.booking.startTime)}</span>
-      </span>
-      <span className={`text-xs font-bold ${claim ? "text-primary" : stage === "ready" || stage === "completed" ? "text-success" : ""}`}>{status}</span>
-    </span>
-  </button>;
+function Note({ icon, tone = "", children }: { icon: string; tone?: string; children: ReactNode }) {
+  return <p className={`flex items-center gap-2 text-sm font-bold ${tone}`}><Icon name={icon} className="h-6 w-6" />{children}</p>;
 }
 
-function ProductRow({ item, quantity, disabled, readOnly = false, onQuantity }: {
-  item: HandoutItem; quantity: number; disabled: boolean; readOnly?: boolean; onQuantity: (quantity: number) => void;
+function rowStatus(session: StaffSessionSummary, area: HandoutArea, actorId?: string) {
+  const claim = activeClaim(session.claims, area);
+  if (claim) return { text: claim.actorId === actorId ? "Du hjälper" : `${claim.actorName} hjälper`, tone: "text-primary" };
+  if (area === "cafe") return session.cafeRemaining ? { text: `${session.cafeRemaining} kvar`, tone: "text-primary" } : { text: "Utlämnat", tone: "text-success" };
+  const stage = stageOf(session);
+  if (stage === "completed") return { text: checkedInLabel(session), tone: "text-success" };
+  // GH-456: an automatic check-in that failed hands the group to staff.
+  if (needsStaff(session)) return { text: "Behöver personal", tone: "text-primary" };
+  if (session.bookingSyncStatus !== "confirmed") return { text: "Bekräftas", tone: "" };
+  if (session.isExpired) return { text: "Gått ut", tone: "" };
+  if (stage === "started") return { text: "Påbörjad", tone: "text-primary" };
+  if (stage === "ready") return { text: "Redo", tone: "text-success" };
+  return null;
+}
+
+function Row({ session, area, props, urgent = false, onArea }: {
+  session: StaffSessionSummary; area: HandoutArea; props: Props; urgent?: boolean; onArea?: (area: HandoutArea) => void;
 }) {
-  const remaining = item.available ?? Math.max(0, item.quantity - item.collected);
+  const open = props.selectedId === session.checkinSessionId;
+  const status = urgent && needsStaff(session) ? null : rowStatus(session, area, props.auth.staff.actorId);
+  const cafe = area === "cafe";
+  // GH-459: entrance staff see which bands to take; a count shows when the group has several colours.
+  const bands = cafe ? [] : session.bandColours ?? [];
+  const counted = bands.length > 1 || bands.reduce((sum, band) => sum + band.quantity, 0) !== session.counts.admission;
+  const chevron = <ChevronDown size={cafe ? 22 : 18} aria-hidden="true" className={`shrink-0 transition-transform ${open ? "rotate-180 text-primary" : ""}`} />;
+  return <article className={`@container min-w-0 rounded-2xl border bg-white shadow-sm ${open ? "border-primary ring-4 ring-primary/10" : urgent ? "border-primary" : "border-border"}`}>
+    <button type="button" aria-expanded={open} onClick={open ? props.onClose : () => props.onOpen(session.checkinSessionId)}
+      className={`w-full min-w-0 text-left transition active:scale-[0.995] ${cafe ? "flex items-center gap-3 px-4 py-3 @2xl:gap-6 @2xl:px-6 @2xl:py-5" : "px-3 py-3"}`}>
+      {cafe ? <>
+        <span className="min-w-16 text-4xl font-black tabular-nums leading-none @2xl:min-w-28 @2xl:text-6xl">{session.handoffCode || "—"}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-lg font-black italic uppercase leading-tight @2xl:text-3xl">{nameOf(session)}</span>
+          <span className="mt-1 flex items-center gap-1 text-xs font-bold @2xl:text-sm"><Icon name="time" className="h-5 w-5" />{clock(session.booking.startTime)}</span>
+        </span>
+        {status && <span className={`shrink-0 text-base font-black italic uppercase @2xl:text-2xl ${status.tone}`}>{status.text}</span>}
+        {chevron}
+      </> : <>
+        <span className="flex items-center justify-between gap-3">
+          <span className="truncate text-lg font-black italic uppercase leading-tight">{nameOf(session)}</span>
+          <span className="flex shrink-0 items-center gap-2">{session.handoffCode && <span className="text-2xl font-black tabular-nums leading-none">{session.handoffCode}</span>}{chevron}</span>
+        </span>
+        <span className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold">
+            <AdmissionCount count={session.counts.admission} />
+            {bands.map((band) => <BandChip key={band.id} colour={band} count={counted ? band.quantity : undefined} />)}
+            <span className="flex items-center gap-1"><Icon name="time" className="h-5 w-5" />{clock(session.booking.startTime)}</span>
+          </span>
+          {status && <span className={`text-xs font-bold ${status.tone}`}>{status.text}</span>}
+        </span>
+      </>}
+    </button>
+    {open && <div className="border-t border-border"><Panel session={session} area={area} props={props} onArea={onArea} /></div>}
+  </article>;
+}
+
+function Panel({ session, area, props, onArea }: { session: StaffSessionSummary; area: HandoutArea; props: Props; onArea?: (area: HandoutArea) => void }) {
+  const detail = props.detail?.checkinSessionId === session.checkinSessionId ? props.detail : null;
+  if (!detail) return <p role="status" className="flex items-center gap-2 px-4 py-4 text-sm font-bold">
+    {props.detailLoading && <LoaderCircle size={18} aria-hidden="true" className="animate-spin text-primary motion-reduce:animate-none" />}
+    {props.detailLoading ? "Hämtar…" : props.error || "Bokningen kunde inte hämtas. Försök igen."}</p>;
+  return area === "cafe" ? <CafePanel key={detail.checkinSessionId} detail={detail} props={props} onArea={onArea} />
+    : <EntrancePanel detail={detail} props={props} onArea={onArea} />;
+}
+
+function handoutView(detail: StaffSessionDetail, area: HandoutArea, props: Props) {
+  const handout = detail.handout;
+  const claim = handout?.claims.find((item) => item.area === area);
+  const current = activeClaim(handout?.claims, area);
+  const owned = Boolean(claim?.actorId && claim.actorId === props.auth.staff.actorId);
+  const colleague = Boolean(current && !owned);
+  const pending = owned && Boolean(claim?.pendingOperation);
+  const stage = stageOf(detail);
+  const complete = stage === "completed";
+  const products = handout?.items.filter((item) => item.area === area) || [];
+  const blocker = colleague ? `${current?.actorName} hjälper gästen` : props.auth.staff.role === "staff_reader" ? "Du har läsbehörighet"
+    : detail.visitDate !== stockholmDay() ? "Bokningen gäller en annan dag"
+      : stage === "upcoming" ? "Check-in inte påbörjad"
+        : detail.bookingSyncStatus !== "confirmed" ? "Bokningen bekräftas"
+          : detail.isExpired && !complete ? "Förberedelsen har gått ut – gästen öppnar bokningen igen"
+            : stage === "started" ? "Gästen slutför check-in i mobilen eller kiosken" : null;
+  return { claim, owned, pending, stage, complete, products, blocker, handout,
+    remaining: products.filter((item) => left(item) > 0), locked: Boolean(blocker) || !handout };
+}
+
+function Goods({ children }: { children: ReactNode }) {
+  return <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border">{children}</div>;
+}
+
+function ProductRow({ item, amount, disabled = false, large = false, onAmount }: {
+  item: HandoutItem; amount?: number; disabled?: boolean; large?: boolean; onAmount?: (amount: number) => void;
+}) {
+  const remaining = left(item);
   const done = remaining === 0 && item.collected > 0;
-  const partial = item.area === "cafe";
   const duration = !done && item.kind === "admission" ? item.detail?.match(/\b\d+\s*min\b/)?.[0] : null;
   // GH-459: the band colour comes from Cloud's scheme; nothing shows when it has none.
   const band = item.kind === "admission" ? item.bandColour : undefined;
   const name = band?.name?.sv ? `${item.name} ${band.name.sv}` : item.name;
-  const label = done ? `${name}, utlämnat` : `${name}, ${remaining} kvar`;
-  const content = <>
-      <Icon name={itemIcon[item.kind] || "addons-bag"} className="h-10 w-10" />
-      <span className="min-w-0"><span className="block text-sm font-black italic uppercase leading-tight">{item.name}</span>
-        {(duration || band) && <span className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium">
-          {duration}{band && <BandChip colour={band} />}</span>}</span>
-      {!done && <span className="text-2xl font-black italic tabular-nums">{remaining || item.quantity}</span>}
-      {done ? <span className="col-start-4 grid h-7 w-7 place-items-center text-success"><Check size={23} strokeWidth={3} /></span> : !readOnly && <span aria-hidden="true"
-        className={`grid h-7 w-7 place-items-center rounded-full border-2 ${quantity > 0 ? "border-success text-success" : "border-border"}`}>
-        {quantity > 0 && <Check size={16} strokeWidth={3} />}</span>}
-  </>;
-  const rowClass = `grid min-h-18 w-full ${readOnly && !done ? "grid-cols-[auto_1fr_auto]" : "grid-cols-[auto_1fr_auto_auto]"} items-center gap-3 px-3 py-3 text-left`;
-  return <div data-state={done ? "completed" : quantity > 0 ? "selected" : "available"}
-    className={`rounded-2xl border bg-white transition-[border-color,box-shadow] ${done ? "border-success/65 shadow-[0_0_0_2px_#087f5b12,0_0_18px_#087f5b16]" : quantity > 0 ? "border-success ring-2 ring-success/10" : "border-border"}`}>
-    {readOnly ? <div className={rowClass} role="group" aria-label={label}>{content}</div> :
-      <button type="button" onClick={() => onQuantity(quantity > 0 ? 0 : partial ? Math.min(1, remaining) : remaining)} disabled={disabled || remaining === 0}
-        aria-pressed={quantity > 0} aria-label={label} className={rowClass}>{content}</button>}
-    {!readOnly && quantity > 0 && remaining > 1 && partial && <div className="flex items-center justify-end border-t border-success/15 px-3 py-1">
-      <div className="flex items-center gap-2">
-        <button type="button" disabled={disabled} onClick={() => onQuantity(quantity - 1)} aria-label={`Minska ${item.name}`} className="grid h-11 w-11 place-items-center"><Minus size={18} /></button>
-        <span className="min-w-12 text-center text-lg font-black tabular-nums">{quantity}<span className="text-xs font-bold"> / {remaining}</span></span>
-        <button type="button" disabled={disabled || quantity >= remaining} onClick={() => onQuantity(quantity + 1)} aria-label={`Öka ${item.name}`} className="grid h-11 w-11 place-items-center"><Plus size={18} /></button>
-      </div>
-    </div>}
+  const stepper = Boolean(onAmount) && remaining > 0;
+  const chosen = Math.max(0, Math.min(amount ?? remaining, remaining));
+  const step = `grid h-11 w-11 place-items-center rounded-xl border border-border transition hover:border-primary disabled:text-primary/30 disabled:hover:border-border ${large ? "@2xl:h-14 @2xl:w-14" : ""}`;
+  return <div role="group" aria-label={done ? `${name}, utlämnat` : `${name}, ${remaining} kvar`} data-state={done ? "completed" : "available"}
+    className={`grid min-h-14 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 bg-white px-3 py-2 ${large ? "@2xl:min-h-20 @2xl:px-4" : ""}`}>
+    <Icon name={itemIcon[item.kind] || "addons-bag"} className={large ? "h-9 w-9 @2xl:h-14 @2xl:w-14" : "h-9 w-9"} />
+    <span className="min-w-0"><span className={`block font-black italic uppercase leading-tight ${large ? "text-base @2xl:text-3xl" : "text-base"}`}>{item.name}</span>
+      {(duration || band || stepper) && <span className={`mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium ${large ? "@2xl:text-base" : ""}`}>
+        {duration}{band && <BandChip colour={band} />}{stepper && <span className="font-bold">{remaining} kvar</span>}</span>}</span>
+    {done ? <span className="grid h-8 w-8 place-items-center text-success"><Check size={24} strokeWidth={3} /></span>
+      : stepper ? <span className="flex items-center gap-1.5">
+        <button type="button" disabled={disabled || chosen === 0} onClick={() => onAmount?.(chosen - 1)} aria-label={`Minska ${item.name}`} className={step}><Minus size={18} /></button>
+        <span className={`min-w-9 text-center text-3xl font-black italic tabular-nums ${large ? "@2xl:min-w-14 @2xl:text-5xl" : ""}`}>{chosen}</span>
+        <button type="button" disabled={disabled || chosen >= remaining} onClick={() => onAmount?.(chosen + 1)} aria-label={`Öka ${item.name}`} className={step}><Plus size={18} /></button>
+      </span>
+        : <span className="text-3xl font-black italic tabular-nums">{remaining}</span>}
   </div>;
 }
 
-function Detail({ props, area, onArea }: { props: Props; area: HandoutArea; onArea: (area: HandoutArea) => void }) {
-  const [served, setServed] = useState(false);
-  const detail = props.detail;
-  const preview = props.sessions.find((session) => session.checkinSessionId === props.selectedId);
-  if (!detail) return <section className="rounded-3xl border border-border bg-white p-5">
-    <button type="button" className={cls.text} onClick={props.onClose}>Tillbaka</button>
-    {preview && <h2 className="mt-3 text-2xl font-black italic uppercase">{preview.guest?.name || preview.bookingReference}</h2>}
-    <p role="status" className="flex items-center gap-2 py-4 text-sm font-bold">{props.detailLoading && <LoaderCircle size={18} aria-hidden="true" className="animate-spin text-primary motion-reduce:animate-none" />}{props.detailLoading ? "Hämtar produkter…" : props.error || "Öppna en bokning eller skanna gästens QR-kod."}</p>
-  </section>;
-  const handout = detail.handout;
-  const claim = handout?.claims.find((item) => item.area === area);
-  const currentClaim = activeClaim(handout?.claims, area);
-  const owned = Boolean(claim?.actorId && claim.actorId === props.auth.staff.actorId);
-  const colleague = Boolean(currentClaim && !owned && Date.parse(currentClaim.expiresAt) > Date.now());
-  const pending = Boolean(claim?.pendingOperation);
-  const draft = props.draft?.checkinSessionId === detail.checkinSessionId && props.draft.area === area ? props.draft : null;
-  const selected = draft?.selection ?? (owned || pending ? claim?.selection || [] : []);
-  const stage = stageOf(detail);
-  const complete = stage === "completed";
-  const products = handout?.items.filter((item) => item.area === area) || [];
-  const other = handout?.items.filter((item) => item.area !== area) || [];
-  const remaining = products.filter((item) => (item.available ?? item.quantity - item.collected) > 0);
-  const allSelected = remaining.length > 0 && remaining.every((item) => selected.some((line) => line.id === item.id && line.quantity === (item.available ?? item.quantity - item.collected)));
-  const reader = props.auth.staff.role === "staff_reader";
-  const blocked = reader || !handout || colleague || detail.visitDate !== stockholmDay() ||
-    (!complete && stage !== "ready");
-  const disabled = blocked || (props.busy && !draft) || pending;
-  const blocker = colleague ? `${currentClaim?.actorName} hjälper gästen` : reader ? "Du har läsbehörighet"
-      : detail.visitDate !== stockholmDay() ? "Bokningen gäller en annan dag"
-        : stage === "upcoming" ? "Check-in inte påbörjad"
-          : detail.bookingSyncStatus !== "confirmed" ? "Bokningen bekräftas"
-            : detail.isExpired && !complete ? "Förberedelsen har gått ut – gästen öppnar bokningen igen"
-              : stage === "started" ? "Gästen slutför check-in i mobilen eller kiosken" : null;
-  const needsAdmission = selected.some((line) => products.some((item) => item.id === line.id && item.kind === "admission"));
-  function change(selection: HandoutSelection[]) {
-    setServed(false);
-    void props.onHandout({ area, action: "select", revision: claim?.revision || 0, selection });
+function Actions({ props, area, view, action, label, disabled, done, onRun, onArea }: {
+  props: Props; area: HandoutArea; view: HandoutView; action: string | null; label: string; disabled: boolean;
+  done: HandoutReceipt | null; onRun: () => void; onArea?: (area: HandoutArea) => void;
+}) {
+  const target = props.recoveryTarget;
+  return <div className="grid content-start gap-2 pt-1">
+    {props.error && <p role="alert" className="text-sm font-bold text-danger">{props.error}</p>}
+    {target && <button type="button" className={`${cls.text} w-full`} onClick={() => { onArea?.(target.area); props.onOpen(target.checkinSessionId); }}>Öppna pågående utlämning</button>}
+    {action ? <button type="button" aria-busy={props.busy} disabled={props.busy || disabled} onClick={onRun}
+      className={`${cls.primary} min-h-14 w-full gap-2 text-base disabled:aria-busy:bg-primary disabled:aria-busy:text-white ${area === "cafe" ? "@2xl:min-h-20" : ""}`}>
+      {/* The size sits on the label: Acumin's button role fixes the button's own size (D0247). */}
+      {props.busy && <LoaderCircle size={20} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />}<span aria-live="polite" className={area === "cafe" ? "@2xl:text-3xl" : ""}>{props.busy ? "Sparar…" : label}</span>
+    </button> : done && view.products.length > 0 && !view.remaining.length && <p className={`flex min-h-12 items-center justify-center gap-2 text-base font-black italic uppercase text-success ${area === "cafe" ? "@2xl:text-2xl" : ""}`}>
+      <Check size={20} strokeWidth={3} aria-hidden="true" />Utlämnat {clock(done.completedAt)} · {done.actorName}</p>}
+    {view.owned && !view.pending && !props.busy && <button type="button" className={`${cls.text} justify-self-end`}
+      onClick={() => void props.onHandout({ area, action: "release", revision: view.claim?.revision || 0 })}>Lämna tillbaka</button>}
+  </div>;
+}
+
+function EntrancePanel({ detail, props, onArea }: { detail: StaffSessionDetail; props: Props; onArea?: (area: HandoutArea) => void }) {
+  const view = handoutView(detail, "entrance", props);
+  const cafe = (view.handout?.items || []).filter((item) => item.area === "cafe");
+  const cafeLeft = cafe.filter((item) => left(item) > 0);
+  const ready = view.stage === "ready";
+  // GH-541 (D0263): checked-in groups get their goods with one tap; a group Cloud could not check in gets "Checka in".
+  const action = view.pending ? "resume" : view.complete ? view.remaining.length ? "handout" : null : ready ? "checkin" : null;
+  function run() {
+    if (action === "checkin") return void props.onCheckIn();
+    if (action === "resume") return void props.onHandout({ area: "entrance", action: "confirm", revision: view.claim?.revision || 0 });
+    void props.onHandout({ area: "entrance", action: "select", revision: view.claim?.revision || 0,
+      selection: view.remaining.map((item) => ({ id: item.id, quantity: left(item) })) }, { confirm: true });
   }
-  function quantity(item: HandoutItem, quantity: number) {
-    change([...selected.filter((line) => line.id !== item.id), ...(quantity > 0 ? [{ id: item.id, quantity }] : [])]);
+  return <div className="grid gap-2 p-3">
+    {view.blocker && <Note icon="info">{view.blocker}</Note>}
+    {view.products.length > 0 ? <Goods>{view.products.map((item) => <ProductRow key={item.id} item={item} />)}</Goods>
+      : <p className="py-1 text-sm font-bold">{view.complete || ready ? "Inget att lämna ut här." : "Produkterna visas när bokningen är klar."}</p>}
+    {cafe.length > 0 && <Note icon="drink-cup">Caféet: {cafeLeft.length ? cafeLeft.map((item) => `${left(item)} ${item.name}`).join(" · ") : "utlämnat"}</Note>}
+    <Actions props={props} area="entrance" view={view} action={action} disabled={view.locked} onRun={run} onArea={onArea}
+      label={action === "checkin" ? "Checka in" : action === "resume" ? "Fortsätt bekräfta" : "Lämna ut"} done={lastReceipt(view.handout?.receipts, "entrance")} />
+  </div>;
+}
+
+function CafePanel({ detail, props, onArea }: { detail: StaffSessionDetail; props: Props; onArea?: (area: HandoutArea) => void }) {
+  const [picked, setPicked] = useState<Record<string, number>>({});
+  const view = handoutView(detail, "cafe", props);
+  // Café goods start at everything left; minus keeps some for later (D0217 partial collection).
+  const amount = (item: HandoutItem) => Math.max(0, Math.min(picked[item.id] ?? left(item), left(item)));
+  const selection = view.remaining.map((item) => ({ id: item.id, quantity: amount(item) })).filter((line) => line.quantity > 0);
+  const action = view.pending ? "resume" : view.remaining.length ? "handout" : null;
+  const history = (view.handout?.receipts || []).filter((receipt) => receipt.area === "cafe").reverse();
+  async function run() {
+    if (action === "resume") return void props.onHandout({ area: "cafe", action: "confirm", revision: view.claim?.revision || 0 });
+    if (await props.onHandout({ area: "cafe", action: "select", revision: view.claim?.revision || 0, selection }, { confirm: true })) setPicked({});
   }
-  async function confirm() {
-    if (await props.onHandout({ area, action: "confirm", revision: claim?.revision || 0 })) setServed(true);
-  }
-  return <section className="rounded-3xl border border-border bg-white shadow-sm">
-    <div className="flex items-start justify-between gap-3 border-b border-border p-4">
-      <div className="min-w-0"><h2 className="break-words text-2xl font-black italic uppercase leading-tight sm:text-3xl">{detail.guest?.name || "Bokning"}</h2>
-        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-bold">
-          <AdmissionCount count={detail.counts.admission} />
-          <span className="flex items-center gap-1"><Icon name="time" className="h-5 w-5" />{clock(detail.booking.startTime)}</span>
-          <span>{detail.bookingReference}</span>
-          {detail.handoffDay && detail.handoffDay !== detail.visitDate && <span>Nummer från {detail.handoffDay}</span>}
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">{detail.handoffCode && <span className={`rounded-xl px-2 py-1 text-2xl font-black tabular-nums ${complete ? "text-success ring-1 ring-success/40 shadow-[0_0_16px_#087f5b18]" : ""}`}>{detail.handoffCode}</span>}
-        <button type="button" onClick={props.onClose} className={cls.icon} aria-label="Stäng bokning"><X size={18} /></button>
-      </div>
+  return <div className="grid gap-3 p-3 @2xl:p-5 @4xl:grid-cols-[minmax(0,1fr)_minmax(14rem,18rem)] @4xl:items-start @4xl:gap-6">
+    <div className="grid min-w-0 gap-2">
+      {view.blocker && <Note icon="info">{view.blocker}</Note>}
+      {view.products.length > 0 ? <Goods>{view.products.map((item) => <ProductRow key={item.id} item={item} large amount={amount(item)} disabled={view.locked || props.busy || view.pending}
+        onAmount={(value) => setPicked({ ...picked, [item.id]: value })} />)}</Goods> : <p className="text-sm font-bold">Inget att hämta i caféet.</p>}
+      {(history.length > 1 || (history.length > 0 && view.remaining.length > 0)) && <ul className="grid gap-1 pt-1 text-xs font-bold @2xl:text-sm">{history.map((receipt) => <li key={receipt.operationId}>
+        {clock(receipt.completedAt)} · {receipt.actorName} · {receipt.items.map((line) => `${line.quantity} ${line.name}`).join(" · ")}</li>)}</ul>}
     </div>
-    {complete && <p className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-bold text-success"><Icon name="success-check" className="h-6 w-6" />
-      Incheckad {clock(detail.completedAt)}{detail.checkedInBy?.displayName ? ` · ${detail.checkedInBy.displayName}` : ""}</p>}
-    {blocker && <p className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-bold"><Icon name="info" className="h-6 w-6" />{blocker}</p>}
-    <div className="p-3 sm:p-4">
-      <div className="mb-2 flex min-h-9 items-center justify-between gap-3"><h3 className="text-xs font-black italic uppercase tracking-wider">{area === "cafe" ? "Café" : "Lämna ut"}</h3>
-        {remaining.length > 1 && !blocked && <button type="button" aria-pressed={allSelected} aria-label={allSelected ? "Rensa alla val" : "Välj alla"}
-          className={`flex min-h-11 items-center gap-2 rounded-xl border px-3 text-xs font-bold transition disabled:opacity-50 ${allSelected ? "border-success text-success shadow-[0_0_12px_#087f5b12]" : "border-primary/40 text-primary hover:bg-primary/5"}`}
-          disabled={disabled} onClick={() => change(allSelected ? [] : remaining.map((item) => ({ id: item.id, quantity: item.available ?? item.quantity - item.collected })))}>
-          <span aria-hidden="true" className={`grid h-5 w-5 place-items-center rounded-md border ${allSelected ? "border-success" : "border-primary/50"}`}>{allSelected && <Check size={14} strokeWidth={3} />}</span>{allSelected ? "Alla valda" : "Välj alla"}</button>}
-      </div>
-      <div className="grid gap-2">{products.map((item) => <ProductRow key={item.id} item={item} quantity={selected.find((line) => line.id === item.id)?.quantity || 0} disabled={disabled} onQuantity={(value) => quantity(item, value)} />)}</div>
-      {products.length === 0 && <p className="py-3 text-sm">{stage === "ready" || complete ? "Inget att lämna ut här." : "Produkterna visas när bokningen är klar."}</p>}
-      {other.length > 0 && <details className="mt-4" open={area === "entrance"}>
-        <summary className="cursor-pointer py-2 text-xs font-black italic uppercase tracking-wider">{area === "cafe" ? "Entré" : "Hämtas i caféet"}</summary>
-        <div className="grid gap-2">{other.map((item) => <ProductRow key={item.id} item={item} quantity={0} disabled readOnly onQuantity={() => {}} />)}</div>
-      </details>}
-      {area === "cafe" && Boolean(handout?.receipts.length) && <details className="mt-3"><summary className="cursor-pointer py-2 text-xs font-bold">Historik</summary>
-        <ul className="grid gap-2">{handout?.receipts.map((receipt) => <li key={receipt.operationId} className="rounded-xl border border-border p-3 text-sm">
-          <p className="font-bold">{receipt.items.map((item) => `${item.quantity} ${item.name.toLocaleLowerCase("sv-SE")}`).join(" · ")}</p>
-          <p className="mt-1 text-xs">{clock(receipt.completedAt)} · {receipt.actorName} · {receipt.area === "cafe" ? "Café" : "Entré"}</p>
-        </li>)}</ul>
-      </details>}
-    </div>
-    <div className="sticky bottom-0 rounded-b-3xl border-t border-border bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4">
-      {owned && <div className="mb-2 flex justify-end">
-        {!pending && <button type="button" disabled={props.busy} className={cls.text} onClick={() => void props.onHandout({ area, action: "release", revision: claim?.revision || 0 })}>Lämna tillbaka</button>}
-      </div>}
-      {props.error && <p role="alert" className="mb-3 text-sm font-bold text-danger">{props.error}</p>}
-      {props.recoveryTarget && <button type="button" className={`${cls.text} mb-3 w-full`} onClick={() => {
-        onArea(props.recoveryTarget!.area); props.onOpen(props.recoveryTarget!.checkinSessionId);
-      }}>Öppna pågående utlämning</button>}
-      <button type="button" aria-busy={props.busy} className={`${cls.primary} min-h-14 w-full gap-2 disabled:aria-busy:bg-primary disabled:aria-busy:text-white`} disabled={props.busy || blocked || (!pending && selected.length === 0 && !served && remaining.length > 0)}
-        onClick={served || (!pending && remaining.length === 0) ? props.onScan : () => void confirm()}>
-        {props.busy && <LoaderCircle size={20} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />}<span aria-live="polite">{props.busy ? "Sparar…" : pending ? "Fortsätt bekräfta" : served || remaining.length === 0 ? "Skanna nästa" : needsAdmission && !complete ? "Checka in" : "Lämna ut"}</span>
-      </button>
-    </div>
-  </section>;
+    <Actions props={props} area="cafe" view={view} action={action} disabled={view.locked || (action === "handout" && !selection.length)}
+      onRun={() => void run()} onArea={onArea} label={action === "resume" ? "Fortsätt bekräfta" : "Lämna ut"} done={lastReceipt(view.handout?.receipts, "cafe")} />
+  </div>;
 }
 
 export default function StaffExperience(props: Props) {
-  const [area, setArea] = useState<HandoutArea>("entrance");
+  const [area, setArea] = useState<HandoutArea>(readArea);
   const [pass, setPass] = useState<string | null>(null);
-  const [stage, setStage] = useState<Stage>("ready");
+  const [tab, setTab] = useState<BoardTab>("upcoming");
   const [cafeDone, setCafeDone] = useState(false);
+  // An open row stays in the list it was opened from (after "Checka in" or a full café handout) until it is closed.
+  const [held, setHeld] = useState<{ id: string; place: string } | null>(null);
+  function chooseArea(value: HandoutArea) {
+    setArea(value);
+    try { window.sessionStorage.setItem(AREA_KEY, value); } catch { /* the choice then lasts until the next login */ }
+  }
+  const query = props.query.trim();
+  const cafe = area === "cafe";
   const passTime = pass || nextPass(props.sessions, new Date(), props.day);
   const slots = [...new Set(props.sessions.map((session) => session.booking.startTime?.slice(0, 5)).filter((value): value is string => Boolean(value)))].sort();
-  const passBookings = props.sessions.filter((session) => passTime === "all" || session.booking.startTime?.slice(0, 5) === passTime);
-  const cafeSummary = (session: StaffSessionSummary) => !props.query.trim() && stageOf(session) !== "completed" && session.cafeSession
+  const hold = held && held.id === props.selectedId ? held : null;
+  const placeOf = (session: StaffSessionSummary, place: string) => hold?.id === session.checkinSessionId ? hold.place : place;
+  // GH-541: "Behöver personal" stays on top whatever the tab, pass or search.
+  const fresh = new Map(props.sessions.map((session) => [session.checkinSessionId, session]));
+  const entrancePlace = (session: StaffSessionSummary) => placeOf(session, needsStaff(session) ? "urgent" : boardTab(session));
+  const pinned = new Map<string, StaffSessionSummary>();
+  for (const row of [...(query ? props.urgent ?? [] : []), ...props.sessions]) {
+    const current = fresh.get(row.checkinSessionId) ?? row;
+    if (entrancePlace(current) === "urgent") pinned.set(current.checkinSessionId, current);
+  }
+  const urgent = [...pinned.values()].sort(byStart);
+  const board = props.sessions.filter((session) => !pinned.has(session.checkinSessionId) &&
+    (passTime === "all" || session.booking.startTime?.slice(0, 5) === passTime));
+  const listed = query ? props.sessions.filter((session) => !pinned.has(session.checkinSessionId))
+    : board.filter((session) => entrancePlace(session) === tab).sort(tab === "completed" ? newestFirst : byStart);
+  const cafeSummary = (session: StaffSessionSummary) => !query && stageOf(session) !== "completed" && session.cafeSession
     ? { ...session, ...session.cafeSession, counts: { ...session.counts, admission: undefined } } : session;
-  const cafeBookings = props.sessions.filter((session) => (session.cafeQuantity || 0) > 0).map(cafeSummary);
-  const visible = props.query.trim() ? area === "cafe" ? props.sessions.map(cafeSummary) : props.sessions
-    : area === "cafe" ? cafeBookings.filter((session) => cafeDone ? session.cafeRemaining === 0 : (session.cafeRemaining || 0) > 0) : passBookings.filter((session) => stageOf(session) === stage);
-  const earlier = area === "entrance" && !props.query.trim() && passTime !== "all" ? props.sessions.filter((session) => stageOf(session) === "ready" && (session.booking.startTime || "") < passTime) : [];
-  const selected = Boolean(props.selectedId);
-  const detail = selected ? <Detail key={`${props.selectedId}:${area}`} props={props} area={area} onArea={setArea} /> : null;
+  const cafeRows = props.sessions.filter((session) => (session.cafeQuantity || 0) > 0).map(cafeSummary);
+  const cafePlace = (session: StaffSessionSummary) => placeOf(session, (session.cafeRemaining || 0) > 0 ? "waiting" : "served");
+  const waiting = cafeRows.filter((session) => cafePlace(session) === "waiting").sort(oldestFirst);
+  const served = cafeRows.filter((session) => cafePlace(session) === "served").sort(newestFirst);
+  const rows = (list: StaffSessionSummary[], rowArea: HandoutArea, place: string) => {
+    const opener = { ...props, onOpen: (id: string) => { setHeld({ id, place }); props.onOpen(id); } };
+    return <div className="grid gap-2">{list.map((session) => <Row key={session.checkinSessionId} session={session} area={rowArea}
+      props={opener} urgent={place === "urgent"} onArea={chooseArea} />)}</div>;
+  };
+  const empty = (text: string) => <p role="status" className="py-8 text-center text-sm font-bold lg:text-base">{props.loading ? "Hämtar bokningar…" : text}</p>;
+  const width = cafe ? "max-w-[1680px]" : "max-w-2xl";
   return <main className="min-h-screen bg-white text-black" style={{ "--border": "#efcfd6", "--surface": "#fff4f6", "--surface-strong": "#fce4e9", "--success": "#087f5b" } as CSSProperties}>
-    <header className="sticky top-0 z-20 border-b border-border bg-white/95 px-3 py-2 backdrop-blur sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-2 sm:gap-3">
+    <header className="sticky top-0 z-20 border-b border-border bg-white/95 px-3 py-2 backdrop-blur sm:px-6 lg:px-10">
+      <div className={`mx-auto flex ${width} items-center justify-between gap-3`}><div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <Image src="/jumpyard_logo.png" alt="JumpYard" width={42} height={42} priority className="h-9 w-9 shrink-0 object-contain" />
         <div className="min-w-0"><h1 className="text-xl font-black italic uppercase leading-none sm:text-2xl">Check-in</h1>
           <p className="mt-1 truncate text-xs font-bold" data-testid="staff-personal-identity">{props.auth.staff.displayName}</p></div>
       </div><div className="flex items-center gap-1"><button type="button" aria-label="Uppdatera" className={cls.icon} onClick={props.onRefresh}><RefreshCcw size={17} className={props.loading ? "animate-spin" : ""} /></button>
         <button type="button" onClick={props.onLogout} aria-label="Byt personal" className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-primary/30 bg-white px-2.5 text-xs font-bold text-primary transition hover:bg-primary/5 active:scale-[0.98] sm:text-sm"><Icon name="profile" className="h-6 w-6" /><span>Byt<span className="hidden min-[400px]:inline"> personal</span></span></button></div></div>
     </header>
-    {props.scanner}
-    {detail && <div className="mx-auto max-w-3xl px-3 py-3 lg:hidden">{detail}</div>}
-    <div className={`mx-auto max-w-7xl gap-4 px-3 py-3 sm:px-6 lg:grid-cols-[minmax(340px,400px)_1fr] lg:px-8 ${selected ? "hidden lg:grid" : "grid"}`}>
-      <aside className="min-w-0">
-        <div className="flex gap-2"><label className="flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-2xl border border-border px-3 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10"><Search size={18} className="shrink-0" />
-          <input value={props.query} onChange={(event) => props.onQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") props.onSearch(); }} placeholder="Namn, bokning eller nummer" aria-label="Sök namn, bokning eller nummer" autoComplete="off" className="h-full min-w-0 flex-1 bg-transparent text-sm font-bold outline-none placeholder:text-black/50" />
-          {props.query && <button type="button" aria-label="Rensa sökning" onClick={() => props.onQuery("")} className="grid h-9 w-9 place-items-center"><X size={16} /></button>}
-        </label><button type="button" onClick={props.onScan} className={`${cls.primary} px-3`} aria-label="Skanna QR"><ScanLine size={19} /></button></div>
-        <div className="mt-3 flex items-end justify-between gap-2 border-b border-border"><div className="flex gap-1">{(["entrance", "cafe"] as HandoutArea[]).map((value) => <button key={value} type="button" aria-pressed={area === value} onClick={() => setArea(value)} className={`-mb-px flex min-h-12 items-center gap-1 border-b-3 px-2 text-sm font-black italic uppercase ${area === value ? "border-primary text-primary" : "border-transparent"}`}><Icon name={value === "entrance" ? "group" : "drink-cup"} className="h-6 w-6" />{value === "entrance" ? "Entré" : "Café"}</button>)}</div>
-          {area === "entrance" && <label className="relative mb-2 flex items-center gap-1 text-sm font-black italic"><Icon name="time" className="h-6 w-6" /><select aria-label="Visa pass" value={passTime} onChange={(event) => setPass(event.target.value)} className="max-w-34 appearance-none bg-transparent py-2 pr-4 outline-none">{slots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}<option value="all">Hela dagen</option></select><ChevronDown size={14} className="pointer-events-none absolute right-0" /></label>}
+    <div className={`mx-auto ${width} px-3 py-3 sm:px-6 ${cafe ? "lg:px-10 lg:py-6" : ""}`}>
+      <label className={`flex min-h-12 min-w-0 items-center gap-2 rounded-2xl border border-border px-3 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10 ${cafe ? "lg:min-h-16 lg:px-5" : ""}`}><Search size={18} className="shrink-0" />
+        <input value={props.query} onChange={(event) => props.onQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") props.onSearch(); }} placeholder="Namn, bokning eller nummer" aria-label="Sök namn, bokning eller nummer" autoComplete="off" className={`h-full min-w-0 flex-1 bg-transparent text-sm font-bold outline-none placeholder:text-black/50 ${cafe ? "lg:text-xl" : ""}`} />
+        {props.query && <button type="button" aria-label="Rensa sökning" onClick={() => props.onQuery("")} className="grid h-9 w-9 place-items-center"><X size={16} /></button>}
+      </label>
+      <div className="mt-3 flex items-end justify-between gap-2 border-b border-border"><div className="flex gap-1">{(["entrance", "cafe"] as HandoutArea[]).map((value) => <button key={value} type="button" aria-pressed={area === value} onClick={() => chooseArea(value)} className={`-mb-px flex min-h-12 items-center gap-1 border-b-3 px-2 text-base font-black italic uppercase ${area === value ? "border-primary text-primary" : "border-transparent"}`}><Icon name={value === "entrance" ? "group" : "drink-cup"} className="h-6 w-6" />{value === "entrance" ? "Entré" : "Café"}</button>)}</div>
+        {!cafe && <label className="relative mb-2 flex items-center gap-1 text-sm font-black italic"><Icon name="time" className="h-6 w-6" /><select aria-label="Visa pass" value={passTime} onChange={(event) => setPass(event.target.value)} className="max-w-34 appearance-none bg-transparent py-2 pr-4 outline-none">{slots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}<option value="all">Hela dagen</option></select><ChevronDown size={14} className="pointer-events-none absolute right-0" /></label>}
+      </div>
+      {props.error && !props.selectedId && <p role="alert" className="mt-3 rounded-2xl border border-primary p-3 text-sm font-bold text-danger">{props.error}</p>}
+      {cafe ? query ? <div className="mt-3">{rows(props.sessions.map(cafeSummary), "cafe", "search")}{props.sessions.length === 0 && empty("Ingen träff idag.")}</div> : <>
+        <div className="mt-3 grid grid-cols-2 gap-2 lg:hidden">{[false, true].map((done) => <button key={String(done)} type="button" onClick={() => setCafeDone(done)} aria-pressed={cafeDone === done}
+          className={`min-h-12 rounded-2xl border text-base font-black italic uppercase ${cafeDone === done ? "border-primary bg-primary/5 text-primary" : "border-border"}`}>{done ? "Utlämnat" : "Kvar att hämta"} <span className="tabular-nums">{done ? served.length : waiting.length}</span></button>)}</div>
+        <div className="mt-3 grid gap-6 lg:mt-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-8">
+          <section aria-label="Kvar att hämta" className={cafeDone ? "hidden lg:block" : ""}>
+            <h2 className="mb-3 hidden items-baseline gap-3 text-2xl font-black italic uppercase lg:flex">Kvar att hämta<span className="text-primary tabular-nums">{waiting.length}</span></h2>
+            {rows(waiting, "cafe", "waiting")}{waiting.length === 0 && empty("Inget kvar att hämta.")}
+          </section>
+          <section aria-label="Utlämnat" className={cafeDone ? "" : "hidden lg:block"}>
+            <h2 className="mb-3 hidden items-baseline gap-3 text-2xl font-black italic uppercase lg:flex">Utlämnat<span className="text-success tabular-nums">{served.length}</span></h2>
+            {rows(served, "cafe", "served")}{served.length === 0 && empty("Inget utlämnat än.")}
+          </section>
         </div>
-        {!props.query.trim() && area === "entrance" && <div className="mt-3 grid grid-cols-4 overflow-hidden rounded-2xl border border-border">{stages.map((item) => <button key={item.id} type="button" aria-pressed={stage === item.id} onClick={() => setStage(item.id)} className={`flex min-h-16 flex-col items-center justify-center gap-1 border-l border-border first:border-l-0 ${stage === item.id ? "bg-primary/5 text-primary shadow-[inset_0_-3px_0_0_var(--primary)]" : "bg-white"}`}><span className="text-[10px] font-black italic uppercase min-[360px]:text-[11px]">{item.label}</span><span className="text-lg font-black italic tabular-nums">{passBookings.filter((session) => stageOf(session) === item.id).length}</span></button>)}</div>}
-        {area === "cafe" && !props.query.trim() && <div className="mt-3 grid grid-cols-2 gap-2">{[false, true].map((done) => <button key={String(done)} type="button" onClick={() => setCafeDone(done)} aria-pressed={cafeDone === done} className={`min-h-12 rounded-2xl border text-sm font-black italic uppercase ${cafeDone === done ? "border-primary bg-primary/5 text-primary" : "border-border"}`}>{done ? "Utlämnat" : "Kvar att hämta"}</button>)}</div>}
-        {props.error && !selected && <p role="alert" className="mt-3 rounded-2xl border border-primary p-3 text-sm font-bold text-danger">{props.error}</p>}
-        <div className="my-3 text-xs font-bold">{props.query.trim() ? `${visible.length} ${visible.length === 1 ? "träff" : "träffar"} idag` : area === "cafe" ? "Idag" : pass === null && passTime !== "all" ? `Nästa pass · ${passTime}` : `${visible.length} ${visible.length === 1 ? "bokning" : "bokningar"}`}</div>
-        <div className="grid gap-2">{visible.map((session) => <BookingRow key={session.checkinSessionId} session={session} area={area} actorId={props.auth.staff.actorId} selected={session.checkinSessionId === props.selectedId} onOpen={() => props.onOpen(session.checkinSessionId)} />)}</div>
-        {visible.length === 0 && <p role="status" className="py-8 text-center text-sm font-bold">{props.loading ? "Hämtar bokningar…" : "Inga bokningar här just nu."}</p>}
-        {earlier.length > 0 && <details className="mt-4"><summary className="cursor-pointer py-3 text-sm font-bold">Tidigare gäster som väntar · {earlier.length}</summary><div className="grid gap-2">{earlier.map((session) => <BookingRow key={session.checkinSessionId} session={session} area={area} actorId={props.auth.staff.actorId} selected={false} onOpen={() => props.onOpen(session.checkinSessionId)} />)}</div></details>}
-      </aside>
-      <div className="hidden lg:block">{detail || <div className="grid min-h-80 place-content-center rounded-3xl border border-border p-6 text-center"><Icon name={area === "cafe" ? "drink-cup" : "visitor-wristband"} className="mx-auto h-20 w-20" /><h2 className="mt-5 text-2xl font-black italic uppercase">Redo när gästen är redo</h2><p className="mt-2 text-sm">Skanna QR eller välj en bokning.</p></div>}</div>
+      </> : <>
+        {urgent.length > 0 && <section aria-labelledby="staff-needs-staff" className="mt-3 grid gap-2 rounded-3xl border-2 border-primary bg-primary/5 p-2">
+          <h2 id="staff-needs-staff" className="flex items-center justify-between px-1 pt-1 text-base font-black italic uppercase text-primary"><span>Behöver personal</span><span className="tabular-nums">{urgent.length}</span></h2>
+          {rows(urgent, "entrance", "urgent")}
+        </section>}
+        {!query && <div className="mt-3 grid grid-cols-2 overflow-hidden rounded-2xl border border-border">{tabs.map((item) => <button key={item.id} type="button" aria-pressed={tab === item.id} onClick={() => setTab(item.id)}
+          className={`flex min-h-16 flex-col items-center justify-center gap-0.5 border-l border-border first:border-l-0 ${tab === item.id ? "bg-primary/5 text-primary shadow-[inset_0_-3px_0_0_var(--primary)]" : "bg-white"}`}>
+          <span className="text-sm font-black italic uppercase">{item.label}</span><span className="text-2xl font-black italic tabular-nums">{board.filter((session) => entrancePlace(session) === item.id).length}</span></button>)}</div>}
+        <div className="my-3 text-xs font-bold">{query ? `${listed.length} ${listed.length === 1 ? "träff" : "träffar"} idag` : pass === null && passTime !== "all" ? `Nästa pass · ${passTime}` : `${listed.length} ${listed.length === 1 ? "bokning" : "bokningar"}`}</div>
+        {rows(listed, "entrance", query ? "search" : tab)}
+        {listed.length === 0 && empty("Inga bokningar här just nu.")}
+      </>}
     </div>
   </main>;
 }
