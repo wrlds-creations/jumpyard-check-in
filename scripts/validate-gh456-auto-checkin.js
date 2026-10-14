@@ -429,7 +429,11 @@ function validateSourceContracts() {
     assert.match(stack, new RegExp(`${handler}\\.addEnvironment\\('AUTO_CHECKIN_FUNCTION_NAME', redeemHandler\\.functionName\\)`));
     assert.match(stack, new RegExp(`redeemHandler\\.grantInvoke\\(${handler}\\)`));
   }
-  assert.match(board, /session\.autoCheckin\?\.status === "needs_staff" \? "Behöver personal"/);
+  // GH-541: a failed automatic check-in puts the group in the red "Behöver personal" box on top.
+  assert.match(fs.readFileSync(path.join(ROOT, 'jumpyard-checkin-admin', 'src', 'components', 'staff', 'flow.ts'), 'utf8'),
+    /return stageOf\(session\) !== "completed" && session\.autoCheckin\?\.status === "needs_staff";/);
+  assert.match(board, /if \(needsStaff\(session\)\) return \{ text: "Behöver personal"/);
+  assert.match(board, /<span>Behöver personal<\/span>/);
   // Love, 2026-10-06: automatic check-in is on in Nacka from this deploy. The switch lives in the
   // deploy config (Redeem Lambda AUTO_CHECKIN_REDEEM), so turning it off is a reviewed config change.
   assert.match(stack, /redeemHandler\.addEnvironment\('AUTO_CHECKIN_REDEEM', config\.autoCheckin\.redeem \? 'on' : 'off'\)/);
