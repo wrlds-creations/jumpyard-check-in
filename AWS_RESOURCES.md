@@ -4,6 +4,12 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #538 Booking Role Loses Unused Guest-Profile Read (Migration Only)
+
+Forward-only migration `0027_booking_guest_profiles_select_revoke.sql` revokes `SELECT ON jumpyard.guest_profiles` from `jumpyard_booking_runtime`. Since #532 (D0260), no Booking Lambda statement reads that table; the add-on customer comes from ROLLER. The data-sync and webhook roles keep their access. No AWS resource, secret, IAM policy or Lambda code changes.
+
+The migration is pending until a protected Park run with `apply_migrations=true`. Until then every Park deploy without that flag fails at "Check and optionally apply forward-only migrations". `validate:t0195-least-privilege` now applies `REVOKE` statements in migration order and asserts the booking role has no `SELECT` on `guest_profiles`.
+
 ### Issue #531 Kiosk Reconciliation Expected Misses (Booking Code Only)
 
 The Booking Lambda's kiosk reconciliation counts its waiting `get_booking_detail` 404s, before its last attempt, as the new embedded metric `RollerApiExpectedMissCount` instead of `RollerApiErrorCount` (D0258). The metric sits in namespace `JumpYard/Cloud` under the existing three dimension sets: environment; handler; operation and method. That adds at most three small custom metric series. No alarm, threshold, dashboard, IAM, queue, secret or other resource changes; `roller-api-errors` and `roller-api-errors-sustained` still read `RollerApiErrorCount`. The release ships through the protected Park workflow, and its run IDs are recorded on issue #531. [Notes](docs/gh-531-kiosk-expected-miss.md).

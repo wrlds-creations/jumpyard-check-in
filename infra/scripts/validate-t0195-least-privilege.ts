@@ -135,7 +135,15 @@ function statementActions(statements: readonly Record<string, unknown>[]): strin
 function parseGrants(sql: string): Map<string, Map<string, Set<Permission>>> {
   const result = new Map<string, Map<string, Set<Permission>>>();
   const grantPattern = /^GRANT\s+([A-Z,\s]+?)\s+ON\s+([\s\S]+?)\s+TO\s+(jumpyard_[a-z_]+);/gim;
-  for (const match of sql.matchAll(grantPattern)) {
+  // GH-538: a REVOKE must name its jumpyard tables, so it cannot run into the next statement the way
+  // `REVOKE ... FROM PUBLIC` would. Grants and revokes apply in migration order.
+  const revokePattern =
+    /^REVOKE\s+([A-Z,\s]+?)\s+ON\s+((?:jumpyard\.[a-z_]+\s*,\s*)*jumpyard\.[a-z_]+)\s+FROM\s+(jumpyard_[a-z_]+);/gim;
+  const statements = [
+    ...[...sql.matchAll(grantPattern)].map((match) => ({ match, revoke: false })),
+    ...[...sql.matchAll(revokePattern)].map((match) => ({ match, revoke: true })),
+  ].sort((left, right) => (left.match.index ?? 0) - (right.match.index ?? 0));
+  for (const { match, revoke } of statements) {
     const role = match[3];
     const tables = [...match[2].matchAll(/jumpyard\.([a-z_]+)/gi)].map((entry) => entry[1]);
     if (tables.length === 0) continue;
@@ -146,7 +154,7 @@ function parseGrants(sql: string): Map<string, Map<string, Set<Permission>>> {
     const roleGrants = result.get(role) ?? new Map<string, Set<Permission>>();
     for (const table of tables) {
       const tableGrants = roleGrants.get(table) ?? new Set<Permission>();
-      permissions.forEach((permission) => tableGrants.add(permission));
+      permissions.forEach((permission) => (revoke ? tableGrants.delete(permission) : tableGrants.add(permission)));
       roleGrants.set(table, tableGrants);
     }
     result.set(role, roleGrants);
@@ -350,6 +358,12 @@ function main(): void {
       `Data-sync must not receive unused SELECT on jumpyard.${writeOnlyTable}.`,
     );
   }
+  // GH-538: since #532 (D0260) the add-on customer comes from ROLLER, so booking reads no guest profile.
+  assert.equal(
+    grants.get('jumpyard_booking_runtime')?.get('guest_profiles')?.has('SELECT') ?? false,
+    false,
+    'Booking must not receive unused SELECT on jumpyard.guest_profiles.',
+  );
   for (const role of Object.values(ROLE_BY_HANDLER)) {
     assert.equal(grants.get(role)?.has('schema_migrations') ?? false, false, `${role} can access schema history.`);
     assert.equal(grants.get(role)?.has('data_lifecycle_runs') ?? false, false, `${role} can access lifecycle evidence.`);
