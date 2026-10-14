@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import test from 'node:test';
@@ -29,11 +30,14 @@ function load(relative, extra = '', { states = [], globals = {} } = {}) {
   }, { filename: filename.pathname });
   return loadedModule.exports;
 }
-const { default: StaffExperience, Detail, ProductRow, BookingRow } = load('../components/staff/StaffExperience.tsx', '\nexport { Detail, ProductRow, BookingRow };');
-const { nextPass, stageOf, activeClaim, boardPollDelay } = load('../components/staff/flow.ts');
+const panels = '\nexport { Row, EntrancePanel, CafePanel, ProductRow };';
+const board = (states = []) => load('../components/staff/StaffExperience.tsx', panels, { states });
+const { default: StaffExperience, Row, EntrancePanel, CafePanel, ProductRow } = board();
+const { nextPass, stageOf, activeClaim, boardPollDelay, boardTab, needsStaff, checkedInLabel } = load('../components/staff/flow.ts');
 const { createSelectionBuffer, mergeHandoutSummary } = load('../components/staff/selection.ts');
 const { ROUTE_LIMITS, TokenBucket } = require('../../../scripts/validate-t0193-capacity.js');
 const { STAFF_BOARD_PAGE_INTERVAL_MS } = load('./adminApi.ts');
+const read = (relative) => fs.readFileSync(new URL(relative, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 function nodes(tree, predicate) {
   if (Array.isArray(tree)) return tree.flatMap((node) => nodes(node, predicate));
   if (!tree || typeof tree !== 'object') return [];
@@ -43,112 +47,233 @@ function nodes(tree, predicate) {
 function text(tree) {
   if (Array.isArray(tree)) return tree.map(text).join('');
   if (typeof tree === 'string' || typeof tree === 'number') return String(tree);
+  if (tree && typeof tree.type === 'function') return text(tree.type(tree.props));
   return text(tree?.props?.children ?? '');
 }
+const plain = (value) => JSON.parse(JSON.stringify(value));
 const band = { id: 'b', area: 'entrance', kind: 'admission', name: 'Besöksband', quantity: 3, collected: 0, available: 3 };
-const coffee = { id: 'c', area: 'cafe', kind: 'coffee', name: 'Kaffe', quantity: 2, collected: 0, available: 2 };
+const socks = { id: 'socks', area: 'entrance', kind: 'socks', name: 'JumpSocks', quantity: 4, collected: 0, available: 4 };
+const coffee = { id: 'c', area: 'cafe', kind: 'coffee', name: 'Bryggkaffe', quantity: 2, collected: 0, available: 2 };
+const automatic = { actorId: 'system:auto-checkin', displayName: 'automatiskt', role: 'system' };
 function session(overrides = {}) {
   return { checkinSessionId: 's1', status: 'ready_for_staff', handoffStatus: 'ready_for_staff',
     safetyStatus: 'completed', bookingSyncStatus: 'confirmed', visitDate: '2026-09-08',
     guest: { name: 'Testgäst' }, counts: { admission: 3 }, booking: { startTime: '10:00' },
     handout: { items: [band, coffee], claims: [], receipts: [] }, ...overrides };
 }
-function props(detail, changes = []) {
+const admitted = (overrides = {}) => session({ status: 'redeemed', handoffStatus: 'completed', completedAt: '2026-09-08T07:31:00Z',
+  checkedInBy: automatic, handoffCode: '0042', ...overrides });
+function props(detail, calls = []) {
   return { auth: { staff: { actorId: 'sara', displayName: 'Sara', role: 'staff_operator' } },
-    detail, error: '', day: '2026-09-08', sessions: [detail], query: '',
-    onHandout: async (request) => { changes.push(request); return true; }, onClose() {} };
+    detail, selectedId: detail?.checkinSessionId ?? null, error: '', day: '2026-09-08', sessions: detail ? [detail] : [], query: '',
+    onHandout: async (request, options) => { calls.push(options ? { request, options } : { request }); return true; },
+    onCheckIn: async () => { calls.push('check-in'); return true; },
+    onOpen(id) { calls.push(`open:${id}`); }, onClose() {}, onQuery() {}, onSearch() {}, onRefresh() {}, onLogout() {} };
 }
 function buttons(tree) { return nodes(tree, (node) => node.type === 'button'); }
+const button = (tree, label) => buttons(tree).find((node) => text(node) === label || node.props['aria-label'] === label);
+const groups = (tree) => nodes(tree, (node) => node.props?.role === 'group').map((node) => node.props['aria-label']);
 
-test('Opening a ready guest is read-only; the first product tap selects and claims without an extra button', () => {
-  const changes = [];
-  const tree = Detail({ props: props(session(), changes), area: 'entrance' });
-  assert.equal(changes.length, 0);
-  const bandButton = buttons(tree).find((button) => button.props['aria-label'] === 'Besöksband, 3 kvar');
-  assert.equal(bandButton.props.disabled, false);
-  bandButton.props.onClick();
-  assert.deepEqual(JSON.parse(JSON.stringify(changes)), [{ area: 'entrance', action: 'select', revision: 0, selection: [{ id: 'b', quantity: 3 }] }]);
-  assert.ok(!buttons(tree).some((button) => /Jag tar hand om/.test(text(button))));
+test('The entrance has only Kommande and Incheckade; Påbörjad and Redo are Kommande', () => {
+  const rows = [session({ checkinSessionId: 'started', status: 'guest_in_progress', safetyStatus: 'not_started' }),
+    session({ checkinSessionId: 'ready' }), session({ checkinSessionId: 'upcoming', status: 'upcoming' }),
+    admitted({ checkinSessionId: 'in' })];
+  assert.deepEqual(rows.map(boardTab), ['upcoming', 'upcoming', 'upcoming', 'completed']);
+  const tree = StaffExperience({ ...props(null), sessions: rows });
+  const tabs = buttons(tree).filter((node) => /^(Kommande|Påbörjade|Redo|Incheckade)\d+$/.test(text(node)));
+  assert.deepEqual(tabs.map((node) => text(node)), ['Kommande3', 'Incheckade1']);
+  assert.deepEqual(tabs.map((node) => Boolean(node.props['aria-pressed'])), [true, false]);
+  assert.match(text(tree), /Påbörjad/);
+  assert.match(text(tree), /Redo/);
+  let switched = false;
+  button(StaffExperience({ ...props(null), onLogout() { switched = true; } }), 'Byt personal').props.onClick();
+  assert.equal(switched, true);
 });
 
-test('Reopened selection is checked; a colleague cannot edit or confirm it', () => {
-  const claim = { area: 'entrance', actorId: 'sara', actorName: 'Sara', expiresAt: '2026-09-08T07:42:00Z', revision: 4, selection: [{ id: 'b', quantity: 3 }] };
-  const detail = session({ handout: { items: [band], claims: [claim], receipts: [] } });
-  let tree = Detail({ props: props(detail), area: 'entrance' });
-  assert.equal(buttons(tree).find((button) => button.props['aria-label'] === 'Besöksband, 3 kvar').props['aria-pressed'], true);
-  assert.equal(buttons(tree).find((button) => text(button) === 'Checka in').props.disabled, false);
-  const colleague = props(detail); colleague.auth.staff.actorId = 'maja';
-  tree = Detail({ props: colleague, area: 'entrance' });
-  assert.ok(buttons(tree).filter((button) => button.props['aria-label'] === 'Besöksband, 3 kvar' || text(button) === 'Lämna ut').every((button) => button.props.disabled));
-  assert.match(text(tree), /Sara hjälper gästen/);
-});
-
-test('Ready guests can collect coffee before admission; each counter only changes its own goods', () => {
-  let tree = Detail({ props: props(session()), area: 'cafe' });
-  assert.equal(buttons(tree).find((button) => button.props['aria-label'] === 'Kaffe, 2 kvar').props.disabled, false);
-  assert.equal(buttons(tree).some((button) => button.props['aria-label'] === 'Besöksband, 3 kvar'), false);
-  assert.equal(nodes(tree, (node) => node.props?.role === 'group' && node.props['aria-label'] === 'Besöksband, 3 kvar').length, 1);
-  tree = Detail({ props: props(session()), area: 'entrance' });
-  assert.equal(buttons(tree).some((button) => button.props['aria-label'] === 'Kaffe, 2 kvar'), false);
-  const readOnly = nodes(tree, (node) => node.props?.role === 'group' && node.props['aria-label'] === 'Kaffe, 2 kvar')[0];
-  assert.ok(readOnly);
-  assert.equal(nodes(readOnly, (node) => node.props?.['aria-pressed'] !== undefined || /rounded-full/.test(node.props?.className || '')).length, 0);
-  for (const notReady of [{safetyStatus:'not_started'}, {bookingSyncStatus:'pending'}, {status:'upcoming'}]) {
-    tree = Detail({ props: props(session(notReady)), area:'cafe' });
-    assert.equal(buttons(tree).find((button)=>button.props['aria-label']==='Kaffe, 2 kvar').props.disabled, true);
+test('"Behöver personal" stays on top in its own red box whatever the tab, pass or search', () => {
+  const failed = session({ checkinSessionId: 'failed', guest: { name: 'Ali Hassan' }, booking: { startTime: '16:00' },
+    autoCheckin: { status: 'needs_staff', reason: 'roller_rejected', attempts: 3 } });
+  const others = [admitted({ checkinSessionId: 'in' }), session({ checkinSessionId: 'ready' })];
+  assert.equal(needsStaff(failed), true);
+  assert.equal(needsStaff(admitted({ autoCheckin: { status: 'needs_staff' } })), false, 'a later admission ends it');
+  const box = (tree) => nodes(tree, (node) => node.type === 'section' && node.props['aria-labelledby'] === 'staff-needs-staff')[0];
+  for (const states of [[], ['entrance', null, 'completed'], ['entrance', '10:00', 'upcoming']]) {
+    const tree = board(states).default({ ...props(null), sessions: [failed, ...others] });
+    assert.match(text(box(tree)), /Behöver personal1Ali Hassan/);
+    const tabs = buttons(tree).filter((node) => /^(Kommande|Incheckade)\d+$/.test(text(node))).map((node) => text(node));
+    assert.deepEqual(tabs, ['Kommande1', 'Incheckade1'], 'the red row is not counted in the tabs');
   }
-  tree = Detail({ props: props(session({ status: 'redeemed', handoffStatus: 'completed', checkedInBy: { displayName: 'Sara' } })), area: 'cafe' });
-  assert.equal(buttons(tree).find((button) => button.props['aria-label'] === 'Kaffe, 2 kvar').props.disabled, false);
-  assert.equal(nodes(tree, (node) => node.type === 'details')[0].props.open, false);
-  assert.match(text(tree), /Sara/);
-  let selected;
-  tree = ProductRow({ item: coffee, quantity: 2, disabled: false, onQuantity: (value) => { selected = value; } });
-  buttons(tree).find((button) => button.props['aria-label'] === 'Minska Kaffe').props.onClick();
-  assert.equal(selected, 1);
-  tree = ProductRow({ item: { ...coffee, collected: 1, available: 1 }, quantity: 0, disabled: false, onQuantity: (value) => { selected = value; } });
-  buttons(tree)[0].props.onClick();
-  assert.equal(selected, 1);
+  // While searching, the whole-day list from before the search keeps it on screen.
+  const searching = StaffExperience({ ...props(null), query: 'erik', sessions: [], urgent: [failed] });
+  assert.match(text(box(searching)), /Ali Hassan/);
+  // A search hit that no longer needs staff drops out of the box.
+  const fixed = StaffExperience({ ...props(null), query: 'ali', sessions: [{ ...failed, autoCheckin: null, status: 'redeemed', handoffStatus: 'completed' }], urgent: [failed] });
+  assert.equal(box(fixed), undefined);
+  // The box offers one tap that checks the group in; nothing is handed out with it.
+  const calls = [];
+  const open = StaffExperience({ ...props(failed, calls), sessions: [failed] });
+  button(box(open), 'Checka in').props.onClick();
+  assert.deepEqual(calls, ['check-in']);
 });
 
-test('Entrance selects all socks without steppers; completed products have a green outline without zero counts', () => {
-  const socks = {...band, id:'socks', kind:'socks', name:'Strumpor', quantity:4, available:4};
-  let selected;
-  let tree = ProductRow({ item:socks, quantity:0, disabled:false, onQuantity:value=>{selected=value;} });
-  buttons(tree)[0].props.onClick();
-  assert.equal(selected, 4);
-  tree = ProductRow({ item:socks, quantity:4, disabled:false, onQuantity(){} });
-  assert.equal(buttons(tree).length, 1);
-  tree = ProductRow({ item:{...socks,collected:4,available:0}, quantity:0, disabled:false, onQuantity(){} });
-  assert.equal(tree.props['data-state'], 'completed');
-  assert.match(tree.props.className, /border-success.*shadow/);
-  assert.doesNotMatch(text(tree), /0|4|utlämna|kvar|st\b/);
-  assert.equal(buttons(tree)[0].props['aria-label'], 'Strumpor, utlämnat');
+test('A row checked in from the red box stays there while it is open, then offers Lämna ut', () => {
+  const nowIn = admitted({ checkinSessionId: 'failed', guest: { name: 'Ali Hassan' }, checkedInBy: { actorId: 'sara', displayName: 'Sara', role: 'staff_operator' },
+    handout: { items: [band, socks], claims: [], receipts: [] } });
+  const tree = board(['entrance', null, 'upcoming', false, { id: 'failed', place: 'urgent' }]).default({ ...props(nowIn), sessions: [nowIn] });
+  const box = nodes(tree, (node) => node.type === 'section' && node.props['aria-labelledby'] === 'staff-needs-staff')[0];
+  assert.match(text(box), /Ali Hassan/);
+  assert.match(text(box), /Incheckad 09:31 · Sara/);
+  assert.ok(button(box, 'Lämna ut'));
+  // Closed, it moves to Incheckade.
+  const closed = board(['entrance', null, 'completed', false, { id: 'failed', place: 'urgent' }]).default({ ...props(nowIn), selectedId: null, sessions: [nowIn] });
+  assert.equal(nodes(closed, (node) => node.type === 'section' && node.props['aria-labelledby'] === 'staff-needs-staff').length, 0);
+  assert.match(text(closed), /Ali Hassan/);
 });
 
-test('Unacknowledged selections show immediately, permit the next tap and block final confirmation', () => {
-  const changes = [];
-  const draft = {checkinSessionId:'s1',area:'entrance',selection:[{id:'b',quantity:3}]};
-  const socks = {...band,id:'socks',kind:'socks',name:'Strumpor'};
-  const detail = session({handout:{items:[band,socks,coffee],claims:[],receipts:[]}});
-  const tree = Detail({props:{...props(detail,changes),busy:true,draft},area:'entrance'});
-  assert.equal(buttons(tree).find(button=>button.props['aria-label']==='Besöksband, 3 kvar').props['aria-pressed'], true);
-  const next = buttons(tree).find(button=>button.props['aria-label']==='Strumpor, 3 kvar');
-  assert.equal(next.props.disabled, false);
-  next.props.onClick();
-  assert.deepEqual(JSON.parse(JSON.stringify(changes[0].selection)), [{id:'b',quantity:3},{id:'socks',quantity:3}]);
-  assert.equal(buttons(tree).find(button=>text(button)==='Sparar…').props.disabled, true);
-  assert.equal(buttons(tree).find(button=>text(button)==='Sparar…').props['aria-busy'], true);
-  assert.equal(nodes(tree,node=>node.props?.['data-state']==='completed').length, 0);
+test('The check-in line keeps the time and never says "automatiskt"; a colleague keeps the name', () => {
+  assert.equal(checkedInLabel(admitted()), 'Incheckad 09:31');
+  assert.equal(checkedInLabel(admitted({ checkedInBy: { actorId: 'maja', displayName: 'Maja' } })), 'Incheckad 09:31 · Maja');
+  assert.equal(checkedInLabel(admitted({ checkedInBy: null })), 'Incheckad 09:31');
+  const row = Row({ session: admitted(), area: 'entrance', props: props(null) });
+  assert.match(text(row), /Incheckad 09:31/);
+  assert.doesNotMatch(text(row), /automatiskt/);
+  const open = board(['entrance', null, 'completed']).default({ ...props(admitted()), sessions: [admitted()] });
+  assert.match(text(open), /Incheckad 09:31/);
+  assert.doesNotMatch(text(open), /automatiskt/);
 });
 
-test('Queue and detail label actual admissions and never substitute product ticket totals', () => {
+test('The QR scanner is gone: no button, no camera, no scanner dependency', () => {
+  const tree = StaffExperience({ ...props(null), sessions: [session()] });
+  assert.equal(buttons(tree).some((node) => /skanna|scanna|qr/i.test(`${text(node)} ${node.props['aria-label'] || ''}`)), false);
+  assert.equal(nodes(tree, (node) => node.type === 'video').length, 0);
+  assert.ok(nodes(tree, (node) => node.type === 'input' && node.props.placeholder === 'Namn, bokning eller nummer').length);
+  const page = read('../app/page.tsx');
+  assert.doesNotMatch(page, /zxing|scanner|getUserMedia|Skanna QR|Scanna ny QR|<video/i);
+  const manifest = JSON.parse(read('../../package.json'));
+  assert.equal(manifest.dependencies['@zxing/browser'], undefined);
+  assert.equal(JSON.stringify(JSON.parse(read('../../package-lock.json'))).includes('@zxing'), false);
+  assert.match(read('../../public/_headers'), /Permissions-Policy: camera=\(\), microphone=\(\), geolocation=\(\)/);
+});
+
+test('One tap on Lämna ut hands out everything left at the entrance; goods are read-only', () => {
+  const calls = [];
+  const detail = admitted({ handout: { items: [band, { ...socks, collected: 1, available: 3 }, coffee], claims: [], receipts: [] } });
+  const tree = EntrancePanel({ detail, props: props(detail, calls) });
+  assert.deepEqual(groups(tree), ['Besöksband, 3 kvar', 'JumpSocks, 3 kvar']);
+  assert.equal(nodes(tree, (node) => node.props?.['aria-pressed'] !== undefined).length, 0, 'no ticks or selection at the entrance');
+  assert.match(text(tree), /Caféet: 2 Bryggkaffe/);
+  button(tree, 'Lämna ut').props.onClick();
+  assert.deepEqual(plain(calls), [{ request: { area: 'entrance', action: 'select', revision: 0,
+    selection: [{ id: 'b', quantity: 3 }, { id: 'socks', quantity: 3 }] }, options: { confirm: true } }]);
+  // Done: a check per line and who handed it out, no button.
+  const done = admitted({ handout: { items: [{ ...band, collected: 3, available: 0 }], claims: [],
+    receipts: [{ operationId: 'op', area: 'entrance', actorId: 'sara', actorName: 'Sara', completedAt: '2026-09-08T07:35:00Z', items: [] }] } });
+  const finished = EntrancePanel({ detail: done, props: props(done) });
+  assert.deepEqual(groups(finished), ['Besöksband, utlämnat']);
+  assert.equal(button(finished, 'Lämna ut'), undefined);
+  assert.match(text(finished), /Utlämnat 09:35 · Sara/);
+});
+
+test('Not checked in: Kommande shows the goods without a button; Redo offers Checka in', () => {
+  for (const [overrides, note] of [[{ status: 'upcoming' }, 'Check-in inte påbörjad'],
+    [{ status: 'guest_in_progress', safetyStatus: 'not_started' }, 'Gästen slutför check-in i mobilen eller kiosken'],
+    [{ bookingSyncStatus: 'pending' }, 'Bokningen bekräftas']]) {
+    const detail = session(overrides);
+    const tree = EntrancePanel({ detail, props: props(detail) });
+    assert.match(text(tree), new RegExp(note));
+    assert.equal(buttons(tree).some((node) => /Lämna ut|Checka in/.test(text(node))), false);
+  }
+  const calls = [];
+  const ready = EntrancePanel({ detail: session(), props: props(session(), calls) });
+  button(ready, 'Checka in').props.onClick();
+  assert.deepEqual(calls, ['check-in']);
+});
+
+test('A colleague, a reader or another day blocks the button; a pending confirmation resumes it', () => {
+  const claim = { area: 'entrance', actorId: 'maja', actorName: 'Maja', expiresAt: '2026-09-08T07:42:00Z', revision: 4, selection: [] };
+  let detail = admitted({ handout: { items: [band], claims: [claim], receipts: [] } });
+  let tree = EntrancePanel({ detail, props: props(detail) });
+  assert.equal(button(tree, 'Lämna ut').props.disabled, true);
+  assert.match(text(tree), /Maja hjälper gästen/);
+  const reader = props(admitted()); reader.auth.staff.role = 'staff_reader';
+  tree = EntrancePanel({ detail: admitted(), props: reader });
+  assert.equal(button(tree, 'Lämna ut').props.disabled, true);
+  assert.match(text(tree), /Du har läsbehörighet/);
+  tree = EntrancePanel({ detail: admitted({ visitDate: '2026-09-07' }), props: props(admitted()) });
+  assert.equal(button(tree, 'Lämna ut').props.disabled, true);
+  const calls = [];
+  detail = admitted({ handout: { items: [band], receipts: [], claims: [{ ...claim, actorId: 'sara', actorName: 'Sara', revision: 8, pendingOperation: 'saved' }] } });
+  tree = EntrancePanel({ detail, props: props(detail, calls) });
+  button(tree, 'Fortsätt bekräfta').props.onClick();
+  assert.deepEqual(plain(calls), [{ request: { area: 'entrance', action: 'confirm', revision: 8 } }]);
+  const recovery = props(detail); let opened; let area;
+  recovery.recoveryTarget = { checkinSessionId: 'previous-session', area: 'cafe' };
+  recovery.onOpen = (id) => { opened = id; };
+  button(EntrancePanel({ detail, props: recovery, onArea: (value) => { area = value; } }), 'Öppna pågående utlämning').props.onClick();
+  assert.equal(opened, 'previous-session'); assert.equal(area, 'cafe');
+});
+
+test('Café: quantities start at everything left, minus keeps some for later, Lämna ut confirms the choice', async () => {
+  const pizza = { id: 'p', area: 'cafe', kind: 'pizza', name: 'Pizza', quantity: 1, collected: 0, available: 1 };
+  const detail = session({ handout: { items: [band, coffee, pizza], claims: [], receipts: [] } });
+  let calls = [];
+  let tree = CafePanel({ detail, props: props(detail, calls) });
+  assert.deepEqual(groups(tree), ['Bryggkaffe, 2 kvar', 'Pizza, 1 kvar'], 'only café goods, even before admission');
+  assert.equal(button(tree, 'Minska Bryggkaffe').props.disabled, false);
+  assert.equal(button(tree, 'Öka Bryggkaffe').props.disabled, true);
+  button(tree, 'Lämna ut').props.onClick();
+  await Promise.resolve();
+  assert.deepEqual(plain(calls), [{ request: { area: 'cafe', action: 'select', revision: 0,
+    selection: [{ id: 'c', quantity: 2 }, { id: 'p', quantity: 1 }] }, options: { confirm: true } }]);
+  calls = [];
+  tree = load('../components/staff/StaffExperience.tsx', panels, { states: [{ c: 1, p: 0 }] }).CafePanel({ detail, props: props(detail, calls) });
+  button(tree, 'Lämna ut').props.onClick();
+  await Promise.resolve();
+  assert.deepEqual(plain(calls[0].request.selection), [{ id: 'c', quantity: 1 }]);
+  for (const notReady of [{ safetyStatus: 'not_started' }, { bookingSyncStatus: 'pending' }, { status: 'upcoming' }]) {
+    tree = CafePanel({ detail: session(notReady), props: props(session(notReady)) });
+    assert.equal(button(tree, 'Lämna ut').props.disabled, true);
+    assert.equal(button(tree, 'Minska Bryggkaffe').props.disabled, true);
+  }
+});
+
+test('The café is built for a computer: two wide lists with big numbers, and a toggle on a phone', () => {
+  const rows = [admitted({ checkinSessionId: 'waiting', handoffCode: '0031', cafeQuantity: 2, cafeRemaining: 2 }),
+    admitted({ checkinSessionId: 'served', handoffCode: '0029', guest: { name: 'Viktor' }, cafeQuantity: 1, cafeRemaining: 0 }),
+    session({ checkinSessionId: 'later', status: 'upcoming', cafeQuantity: 2, cafeRemaining: 2 })];
+  const tree = board(['cafe']).default({ ...props(null), sessions: rows });
+  const sections = nodes(tree, (node) => node.type === 'section');
+  assert.deepEqual(sections.map((node) => node.props['aria-label']), ['Kvar att hämta', 'Utlämnat']);
+  const columns = nodes(tree, (node) => /lg:grid-cols-\[minmax\(0,1\.6fr\)_minmax\(0,1fr\)\]/.test(node.props?.className || ''));
+  assert.equal(columns.length, 1);
+  assert.match(text(sections[0]), /0031.*Testgäst.*2 kvar/);
+  assert.match(text(sections[0]), /—.*Testgäst/, 'a purchase before check-in is listed too');
+  assert.match(text(sections[1]), /0029.*Viktor.*Utlämnat/);
+  const number = nodes(sections[0], (node) => node.type === 'span' && node.props.children === '0031')[0];
+  assert.match(number.props.className, /text-4xl.*@2xl:text-6xl/);
+  assert.ok(nodes(tree, (node) => node.type === 'article' && /@container/.test(node.props.className)).length >= 3);
+  const toggle = buttons(tree).filter((node) => /^(Kvar att hämta|Utlämnat) \d+$/.test(text(node)));
+  assert.equal(toggle.length, 2);
+  assert.ok(nodes(tree, (node) => /lg:hidden/.test(node.props?.className || '') && node.type === 'div').length >= 1);
+  assert.equal(nodes(tree, (node) => node.type === 'select').length, 0, 'the café has no pass picker');
+});
+
+test('Café search keeps exact candidates and opens each one', () => {
+  const first = session({ checkinSessionId: 'first', cafeSession: { checkinSessionId: 'admitted', status: 'redeemed' } });
+  const second = session({ checkinSessionId: 'second', cafeSession: first.cafeSession });
+  const calls = [];
+  const searched = board(['cafe']).default({ ...props(first, calls), selectedId: null, sessions: [first, second], query: '7777' });
+  for (const node of buttons(searched).filter((node) => text(node).includes('Testgäst'))) node.props.onClick();
+  assert.deepEqual(calls, ['open:first', 'open:second']);
+  assert.equal(nodes(searched, (node) => node.type === 'input' && node.props.type === 'date').length, 0);
+});
+
+test('Rows and goods label actual admissions and Cloud band colours only', () => {
   for (const count of [1, 2, 0, undefined]) {
-    const detail = session({ counts: { admission: count, selectedTickets: 6, tickets: 6 } });
-    for (const tree of [BookingRow({session:detail,area:'entrance'}), Detail({props:props(detail),area:'entrance'})]) {
-      const labels = nodes(tree, node => node.type === 'span').map(text);
-      assert.equal(labels.includes(`${count} ${count === 1 ? 'entré' : 'entréer'}`), Boolean(count));
-      assert.ok(!labels.some(label => /6.*(?:entré|gäst)|gäster/.test(label)));
-    }
+    const detail = admitted({ counts: { admission: count, selectedTickets: 6, tickets: 6 } });
+    const labels = nodes(Row({ session: detail, area: 'entrance', props: props(null) }), (node) => node.type === 'span').map(text);
+    assert.equal(labels.includes(`${count} ${count === 1 ? 'entré' : 'entréer'}`), Boolean(count));
+    assert.ok(!labels.some((label) => /6.*(?:entré|gäst)|gäster/.test(label)));
   }
 });
 
@@ -157,86 +282,64 @@ const { bandColourForAdmission } = require('../../../infra/lambda/shared/band-co
 const cloudBand = (startTime, durationMinutes) => bandColourForAdmission({ startTime, durationMinutes });
 const bandChips = (tree) => nodes(tree, (node) => Boolean(node.props?.['data-band-colour']));
 
-test('Entrance rows and the band product row show the Cloud band colour; café rows and other goods never do', () => {
+test('Entrance rows and the band line show the Cloud band colour; café rows and other goods never do', () => {
   const morkbla = cloudBand('11:30', 90);
-  const detail = session({ bandColours: [{ ...morkbla, quantity: 3 }],
+  const detail = admitted({ bandColours: [{ ...morkbla, quantity: 3 }],
     handout: { items: [{ ...band, detail: '90 min · Entré 90 min', bandColour: morkbla }, { ...coffee, bandColour: morkbla }], claims: [], receipts: [] } });
-  const row = BookingRow({ session: detail, area: 'entrance' });
+  const row = Row({ session: detail, area: 'entrance', props: props(null) });
   assert.deepEqual(bandChips(row).map((chip) => [chip.props['data-band-colour'], text(chip)]), [['morkbla', 'Bandfärg Mörkblå']]);
   assert.equal(nodes(row, (node) => node.props?.style?.background === '#1F3A93').length, 1);
-  assert.equal(bandChips(BookingRow({ session: detail, area: 'cafe' })).length, 0);
-  const tree = Detail({ props: props(detail), area: 'entrance' });
-  const bandButton = buttons(tree).find((button) => button.props['aria-label'] === 'Besöksband Mörkblå, 3 kvar');
-  assert.ok(bandButton, 'the band row names its colour');
-  assert.deepEqual(bandChips(bandButton).map(text), ['Bandfärg Mörkblå']);
-  assert.ok(text(bandButton).includes('90 min'));
+  assert.equal(bandChips(Row({ session: detail, area: 'cafe', props: props(null) })).length, 0);
+  const tree = EntrancePanel({ detail, props: props(detail) });
+  const line = nodes(tree, (node) => node.props?.role === 'group' && node.props['aria-label'] === 'Besöksband Mörkblå, 3 kvar')[0];
+  assert.ok(line, 'the band line names its colour');
+  assert.deepEqual(bandChips(line).map(text), ['Bandfärg Mörkblå']);
+  assert.ok(text(line).includes('90 min'));
   assert.equal(bandChips(tree).length, 1, 'coffee never shows a band colour');
 });
 
 test('Several colours are counted, two-tone bands draw both halves, and nothing shows without a valid colour', () => {
   const mixed = session({ counts: { admission: 3 }, bandColours: [{ ...cloudBand('11:30', 90), quantity: 2 }, { ...cloudBand('11:30', 60), quantity: 1 }] });
-  assert.deepEqual(bandChips(BookingRow({ session: mixed, area: 'entrance' })).map(text), ['Bandfärg 2 × Mörkblå', 'Bandfärg 1 × Röd']);
+  assert.deepEqual(bandChips(Row({ session: mixed, area: 'entrance', props: props(null) })).map(text), ['Bandfärg 2 × Mörkblå', 'Bandfärg 1 × Röd']);
   const twoTone = session({ counts: { admission: 1 }, bandColours: [{ ...cloudBand('14:00', 60), quantity: 1 }] });
-  const row = BookingRow({ session: twoTone, area: 'entrance' });
+  const row = Row({ session: twoTone, area: 'entrance', props: props(null) });
   assert.equal(nodes(row, (node) => node.props?.style?.background === 'linear-gradient(90deg, #141414 50%, #E2231A 50%)').length, 1);
   assert.deepEqual(bandChips(row).map(text), ['Bandfärg Svart/Röd']);
   for (const bandColours of [undefined, [], [{ id: 'x', name: { sv: 'X', en: 'X' }, swatch: ['red'], quantity: 3 }]]) {
-    assert.equal(bandChips(BookingRow({ session: session({ bandColours }), area: 'entrance' })).length, 0);
+    assert.equal(bandChips(Row({ session: session({ bandColours }), area: 'entrance', props: props(null) })).length, 0);
   }
   assert.equal(cloudBand('19:30', 60), null, 'an end time off the chart has no colour');
-  const plain = ProductRow({ item: band, quantity: 0, disabled: false, onQuantity() {} });
-  assert.equal(bandChips(plain).length, 0);
-  assert.equal(buttons(plain)[0].props['aria-label'], 'Besöksband, 3 kvar');
+  const plainBand = ProductRow({ item: band });
+  assert.equal(bandChips(plainBand).length, 0);
+  assert.equal(plainBand.props['aria-label'], 'Besöksband, 3 kvar');
 });
 
-test('Stage order follows the guest journey while Ready remains the operational default', () => {
-  const tree = StaffExperience(props(session()));
-  const tabs = buttons(tree).filter(button => /^(Kommande|Påbörjade|Redo|Incheckade)\d+$/.test(text(button)));
-  assert.deepEqual(tabs.map(button => text(button).replace(/\d+$/, '')), ['Kommande','Påbörjade','Redo','Incheckade']);
-  assert.deepEqual(tabs.map(button => Boolean(button.props['aria-pressed'])), [false,false,true,false]);
-  let switched = false;
-  const header = StaffExperience({...props(session()),onLogout(){switched=true;}});
-  buttons(header).find(button=>button.props['aria-label']==='Byt personal').props.onClick();
-  assert.equal(switched, true);
+test('The staff app uses the check-in font: the same Acumin file and roles as the phone (D0247)', () => {
+  const sha = (relative) => crypto.createHash('sha256').update(fs.readFileSync(new URL(relative, import.meta.url))).digest('hex');
+  assert.equal(sha('../../public/fonts/AcuminVariableConcept.woff2'), sha('../../../jumpyard-checkin-phone/public/fonts/AcuminVariableConcept.woff2'));
+  const phone = read('../../../jumpyard-checkin-phone/src/app/globals.css');
+  const staff = read('../app/globals.css');
+  const start = '@font-face {\n  font-family: "JumpYard Acumin";';
+  const roles = phone.slice(phone.indexOf(start), phone.indexOf('/* The component classes below')).trimEnd();
+  assert.ok(roles.length > 2000 && staff.includes(roles), 'the staff app carries the phone\'s face and roles unchanged');
+  assert.ok(staff.indexOf(roles) > staff.indexOf('font-family: ui-sans-serif'), 'Acumin comes after the shared fallback stack');
+  assert.match(read('../app/layout.tsx'), /preload\("\/fonts\/AcuminVariableConcept\.woff2", \{ as: "font", type: "font\/woff2", crossOrigin: "anonymous" \}\)/);
+  assert.match(read('../../public/_headers'), /font-src 'self'/);
 });
 
-test('Select all only selects this counter, indicates full selection and can clear it', () => {
-  const socks = {...band,id:'socks',kind:'socks',name:'Strumpor'};
-  const detail = session({handout:{items:[band,socks,coffee],claims:[],receipts:[]}});
-  const changes=[];
-  let tree = Detail({props:props(detail,changes),area:'entrance'});
-  let all = buttons(tree).find(button=>button.props['aria-label']==='Välj alla');
-  assert.equal(all.props['aria-pressed'], false);
-  all.props.onClick();
-  assert.deepEqual(JSON.parse(JSON.stringify(changes[0].selection)),[{id:'b',quantity:3},{id:'socks',quantity:3}]);
-  tree = Detail({props:{...props(detail,changes),draft:{checkinSessionId:'s1',area:'entrance',selection:changes[0].selection}},area:'entrance'});
-  all = buttons(tree).find(button=>button.props['aria-label']==='Rensa alla val');
-  assert.equal(all.props['aria-pressed'], true);
-  assert.equal(text(all), 'Alla valda');
-  all.props.onClick();
-  assert.equal(changes[1].selection.length, 0);
+test('Page wiring: Checka in only redeems with the shared key; Lämna ut confirms the revision its choice got', () => {
+  const page = read('../app/page.tsx');
+  const checkIn = page.slice(page.indexOf('const handleCheckIn = useCallback('), page.indexOf('const filteredSessions'));
+  assert.match(checkIn, /redeemStaffSession\(\{/);
+  assert.match(checkIn, /idempotencyKey: `staff-redeem:\$\{selected\.checkinSessionId\}`/);
+  assert.doesNotMatch(checkIn, /changeStaffHandout/);
+  const handout = page.slice(page.indexOf('const handleHandout = useCallback('), page.indexOf('const handleCheckIn'));
+  assert.match(handout, /if \(result && options\.confirm && request\.action === "select"\)/);
+  assert.match(handout, /result = await send\(\{ area: request\.area, action: "confirm", revision: revision as number \}\)/);
+  assert.match(page, /if \(!requestedQuery\.trim\(\)\) setUrgentSessions\(nextSessions\.filter\(needsStaff\)\)/);
+  assert.match(page, /urgent=\{urgentSessions\}/);
 });
 
-test('Café includes upcoming purchases and preserves exact search candidates; date picker and continuation banner are absent', () => {
-  const render = load('../components/staff/StaffExperience.tsx','',{states:['cafe']}).default;
-  const detail = session({status:'upcoming',cafeQuantity:2,cafeRemaining:2});
-  const tree = render(props(detail));
-  assert.ok(buttons(tree).some(button=>text(button).includes('Testgäst')));
-  assert.equal(nodes(tree,node=>node.type==='input'&&node.props.type==='date').length, 0);
-  assert.doesNotMatch(text(tree), /Fortsätt med/);
-  const search = load('../components/staff/StaffExperience.tsx','',{states:['cafe']}).default;
-  const first = session({checkinSessionId:'first',cafeSession:{checkinSessionId:'admitted',status:'redeemed'}});
-  const second = session({checkinSessionId:'second',cafeSession:first.cafeSession});
-  const retargeted = load('../components/staff/StaffExperience.tsx','',{states:['cafe']}).default;
-  const earlier = retargeted(props({...first,cafeQuantity:2,cafeRemaining:2}));
-  assert.ok(!nodes(earlier,node=>node.type==='span').map(text).includes('3 entréer'), 'do not label an earlier café group with the newer group entrance count');
-  const opened = [];
-  const searched = search({...props(first),sessions:[first,second],query:'7777',onOpen:id=>opened.push(id)});
-  for(const button of buttons(searched).filter(button=>text(button).includes('Testgäst'))) button.props.onClick();
-  assert.deepEqual(opened,['first','second']);
-});
-
-const plain = value => JSON.parse(JSON.stringify(value));
 function deferred() { let resolve; let reject; const promise = new Promise((done,fail)=>{resolve=done;reject=fail;}); return {promise,resolve,reject}; }
 const accepted = revision => ({session:{status:'ready_for_staff'},handout:{claims:[{area:'entrance',revision}],items:[],receipts:[]}});
 test('Rapid selections are coalesced behind the first claim and use each accepted revision', {timeout:2000}, async () => {
@@ -295,30 +398,15 @@ test('Today-only API requests follow the server day, retain all pages and preser
   assert.equal(urls[2].searchParams.has('view'),false);
 });
 
-test('Pending confirmation offers the same operation, and explicit recovery opens its own session', () => {
-  const changes = [];
-  const detail = session({ handout: { items: [band], receipts: [], claims: [{ actorId: 'sara', area: 'entrance', revision: 8, selection: [{ id: 'b', quantity: 3 }], pendingOperation: 'saved-operation' }] } });
-  const tree = Detail({ props: props(detail, changes), area: 'entrance' });
-  assert.ok(buttons(tree).find((button) => button.props['aria-label'] === 'Besöksband, 3 kvar').props.disabled);
-  buttons(tree).find((button) => text(button) === 'Fortsätt bekräfta').props.onClick();
-  assert.deepEqual(JSON.parse(JSON.stringify(changes)), [{ area: 'entrance', action: 'confirm', revision: 8 }]);
-  const recovery = props(detail); let opened; let area;
-  recovery.recoveryTarget = { checkinSessionId: 'previous-session', area: 'cafe' };
-  recovery.onOpen = (id) => { opened = id; };
-  const retry = Detail({ props: recovery, area: 'entrance', onArea: (value) => { area = value; } });
-  buttons(retry).find((button) => text(button) === 'Öppna pågående utlämning').props.onClick();
-  assert.equal(opened, 'previous-session'); assert.equal(area, 'cafe');
-});
-
 test('At 09:40 the default is the next actual 10:00 pass; safety and synchronization do not count as ready', () => {
-  const rows = [session({ booking: { startTime: '09:30' } }), session(), session({ booking: { startTime: '10:30' } })];
+  const rows = [session({ checkinSessionId: 'a', booking: { startTime: '09:30' } }), session(), session({ checkinSessionId: 'c', booking: { startTime: '10:30' } })];
   assert.equal(nextPass(rows), '10:00');
   assert.equal(stageOf(session({ safetyStatus: 'not_started' })), 'started');
   assert.equal(stageOf(session({ bookingSyncStatus: 'pending' })), 'started');
   assert.equal(stageOf(session({ status: 'upcoming' })), 'upcoming');
   assert.equal(activeClaim([{ area: 'cafe', actorId: 'maja', expiresAt: '2026-09-08T07:39:00Z' }], 'cafe'), null);
-  const tree = StaffExperience({ ...props(session()), sessions: rows });
-  assert.ok(buttons(tree).some((button) => text(button).startsWith('Redo')));
+  const tree = StaffExperience({ ...props(null), sessions: rows });
+  assert.ok(buttons(tree).some((node) => text(node) === 'Kommande1'));
   assert.match(text(tree), /Nästa pass · 10:00/);
 });
 
@@ -336,7 +424,7 @@ test('Five staff phones polling large days and confirming guests fit the shared 
         }
       }
       for (let at = 0; at < 60_000; at += 2_000) events.push({ at, route: 'staff_detail' });
-      // Two selections and one confirmation per guest, every ten seconds.
+      // GH-541: one Lämna ut is a selection and its confirmation; a third call leaves headroom.
       for (let start = 0; start < 60_000; start += 10_000) {
         for (const offset of [0, 1000, 2000]) events.push({ at: start + offset, route: 'staff_handout' });
       }

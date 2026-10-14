@@ -36,16 +36,15 @@ for (const [start, end, label] of [
   ['const clearSensitiveUi = useCallback(() => {', 'const terminateStaffSession', 'sensitive cleanup'],
   ['const selectSession = useCallback(', 'const closeSelectedSession', 'new selection'],
   ['const closeSelectedSession = useCallback(', 'const returnToQueueAfterRedeem', 'detail close'],
-  ['const returnToQueueAfterRedeem = useCallback(', 'const scanNextAfterRedeem', 'explicit queue return'],
+  ['const returnToQueueAfterRedeem = useCallback(', 'const refreshSessions', 'explicit queue return'],
 ]) {
   const cleanup = section(page, start, end, label);
   assert.match(cleanup, /setRedeemConfirmation\(null\)/);
   assert.match(cleanup, /setRedeemState\("idle"\)/);
 }
 
-const scanNext = section(page, 'const scanNextAfterRedeem = useCallback(', 'const refreshSessions', 'scan next');
-assert.match(scanNext, /returnToQueueAfterRedeem\(\)/);
-assert.match(scanNext, /setScannerOpen\(true\)/);
+// GH-541: the success view only returns to the queue; the camera scanner is gone.
+assert.doesNotMatch(page, /scanNextAfterRedeem|Scanna ny QR/);
 
 const queueRefresh = section(page, 'const refreshSessions = useCallback(', 'const refreshSelectedDetail', 'queue refresh');
 assert.match(queueRefresh, /setCurrentSelectedId\(nextSelectedId\)/);

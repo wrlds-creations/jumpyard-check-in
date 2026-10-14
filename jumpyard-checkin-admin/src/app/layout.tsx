@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { preload } from "react-dom";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -22,6 +23,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // #541: Acumin, the check-in font (D0247), starts loading with the page, not when the first text renders.
+  preload("/fonts/AcuminVariableConcept.woff2", { as: "font", type: "font/woff2", crossOrigin: "anonymous" });
   return (
     <html lang="sv">
       <body>{children}</body>
