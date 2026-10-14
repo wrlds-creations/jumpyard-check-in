@@ -3,7 +3,7 @@ const { GetSecretValueCommand, SecretsManagerClient } = require('@aws-sdk/client
 const { GetParameterCommand, SSMClient } = require('@aws-sdk/client-ssm');
 const { ExecuteStatementCommand, RDSDataClient } = require('@aws-sdk/client-rds-data');
 const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
-const { SendMessageCommand, SQSClient } = require('@aws-sdk/client-sqs');
+const { ChangeMessageVisibilityCommand, SendMessageCommand, SQSClient } = require('@aws-sdk/client-sqs');
 
 const DATABASE_NAME = 'jumpyard_cloud';
 const DEV_TOKEN_HEADERS = [
@@ -26,6 +26,17 @@ const LIVE_BASE_URL = 'https://api.roller.app';
 const LIVE_VENUE_ID = '50871';
 const MAX_ROLLER_ATTEMPTS = 4;
 const MAX_RETRY_AFTER_MS = 10_000;
+// GH-346 (D0262): a ROLLER request that has not answered after 15 s fails the attempt instead of
+// holding the worker until its 2-minute Lambda timeout. The pacing wait is added so the caller's
+// body read after that wait is not cut short.
+const ROLLER_REQUEST_TIMEOUT_MS = 15_000;
+// GH-346 (D0262): a failure the worker sees itself is retried after 1, 2, 4 and 8 minutes instead of
+// the queue's 12-minute visibility, so one failed event no longer holds the single FIFO group that
+// long. The 12-minute visibility stays the margin for crashes and throttled deliveries.
+const WEBHOOK_RETRY_DELAY_SECONDS = [60, 120, 240, 480];
+// Matches the source queue's maxReceiveCount: after the last delivery fails the message is released
+// at once, so SQS moves it to the DLQ without another wait.
+const WEBHOOK_QUEUE_MAX_RECEIVE_COUNT = 5;
 const SOURCE_WEBHOOK_GUEST_PROFILE = 'roller_webhook_booking_detail';
 const SOURCE_WEBHOOK_GUEST_DETAIL = 'roller_webhook_guest_detail';
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
@@ -211,9 +222,12 @@ async function handleWebhookQueue(event) {
       const message = parseWebhookQueueMessage(record.body);
       await processWebhookEventById(message.eventId, message.correlationId);
     } catch (error) {
+      const retryInSeconds = await scheduleWebhookRetry(record);
       console.error(JSON.stringify({
         code: error?.code || 'webhook_queue_processing_failed',
         messageId: record?.messageId || null,
+        reason: error?.reason || null,
+        retryInSeconds,
         status: 'failed',
       }));
       emitWebhookMetric('WebhookProcessingFailure', 1);
@@ -222,6 +236,34 @@ async function handleWebhookQueue(event) {
   }
 
   return { batchItemFailures };
+}
+
+function webhookRetryDelaySeconds(receiveCount) {
+  const count = Number.isInteger(receiveCount) && receiveCount > 0 ? receiveCount : 1;
+  if (count >= WEBHOOK_QUEUE_MAX_RECEIVE_COUNT) return 0;
+  return WEBHOOK_RETRY_DELAY_SECONDS[Math.min(count, WEBHOOK_RETRY_DELAY_SECONDS.length) - 1];
+}
+
+// Returns the seconds until the failed message is visible again, or null when the queue's own
+// 12-minute visibility applies because the message could not be rescheduled.
+async function scheduleWebhookRetry(record) {
+  const queueUrl = process.env.WEBHOOK_QUEUE_URL;
+  const receiptHandle = record?.receiptHandle;
+  if (!queueUrl || !receiptHandle) return null;
+
+  const visibilityTimeout = webhookRetryDelaySeconds(Number(record?.attributes?.ApproximateReceiveCount));
+  try {
+    await hooks.sendQueue(
+      new ChangeMessageVisibilityCommand({
+        QueueUrl: queueUrl,
+        ReceiptHandle: receiptHandle,
+        VisibilityTimeout: visibilityTimeout,
+      }),
+    );
+    return visibilityTimeout;
+  } catch {
+    return null;
+  }
 }
 
 function parseWebhookQueueMessage(body) {
@@ -938,7 +980,18 @@ async function requestRoller(url, options, operation) {
   const intervalMs = readBoundedIntegerEnv('ROLLER_WEBHOOK_REQUEST_INTERVAL_MS', 1000, 1000, 10_000);
 
   for (let attempt = 1; attempt <= MAX_ROLLER_ATTEMPTS; attempt += 1) {
-    const response = await hooks.fetch(url, options);
+    let response;
+    try {
+      response = await hooks.fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(ROLLER_REQUEST_TIMEOUT_MS + intervalMs),
+      });
+    } catch (error) {
+      if (error?.name !== 'TimeoutError' && error?.name !== 'AbortError') throw error;
+      const timeout = new Error(`Roller ${operation} did not answer in time.`);
+      timeout.code = 'roller_request_timeout';
+      throw timeout;
+    }
     const retryable = response.status === 429 || (response.status >= 500 && response.status <= 599);
     const retryAfterMs = parseRetryAfterMs(response.headers?.get?.('retry-after'));
     const delayMs = retryable ? Math.max(intervalMs, retryAfterMs) : intervalMs;
@@ -2007,11 +2060,19 @@ async function requestKioskAuthoritativeConfirmation(booking, source, correlatio
     ? JSON.parse(Buffer.from(response.Payload).toString('utf8'))
     : null;
   if (response.FunctionError || payload?.status !== 'confirmed') {
-    const error = new Error('The authoritative kiosk Handoff attachment did not complete.');
+    // GH-346: the Booking Lambda's reason code is logged and kept on the event, never booking data.
+    const reason = response.FunctionError ? 'function_error' : safeReasonCode(payload?.reason ?? payload?.status);
+    const error = new Error(`The authoritative kiosk Handoff attachment did not complete (${reason}).`);
     error.code = 'kiosk_confirmation_failed';
+    error.reason = reason;
     throw error;
   }
   return payload;
+}
+
+function safeReasonCode(value) {
+  const text = stringOrNull(value);
+  return text && /^[a-z0-9_]{1,64}$/.test(text) ? text : 'unknown';
 }
 
 async function reconcileLinkedAddOnBookingLinks(booking, source) {
@@ -2480,6 +2541,7 @@ exports.__test = {
   extractVenueId,
   getWebhookAuthToken,
   handleWebhookIntake,
+  handleWebhookQueue,
   handleWebhookRecovery,
   isWebhookEventAutomaticallyRetryable,
   parseRetryAfterMs,
@@ -2519,4 +2581,5 @@ exports.__test = {
     }
   },
   validateWebhookSignal,
+  webhookRetryDelaySeconds,
 };

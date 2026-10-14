@@ -1,5 +1,20 @@
 # Test Plan
 
+## Webhook retry timing and kiosk confirmation sources (#346)
+
+Run `npm run validate:gh346-webhook-retry` (part of `npm run validate`). It loads the real webhook worker and checks five things:
+- A failed record becomes visible again after 60, 120, 240 or 480 s, set by its receive count, and is released at once on the fifth delivery.
+- It is still reported as a batch failure, including when rescheduling fails.
+- A processed record keeps its visibility.
+- A ROLLER request carries a timeout signal, and a hang fails as `roller_request_timeout`.
+- A kiosk confirmation that is not confirmed carries only a safe reason code.
+
+It also loads the Booking Lambda's kiosk confirmation check. Rows from the automatic check-in's final refresh count as authoritative. A kiosk snapshot, the nightly sync and a tombstone do not, and the other checks still apply. Source assertions pin one message group, one worker, batch size 1, 12-minute visibility and five deliveries.
+
+Also run `validate:t0197-webhook-reconciliation`, `validate:gh282-kiosk-handoff-repair`, `validate:kiosk-payment-reconciliation`, `validate:gh456-auto-checkin` and `validate:gh483-kiosk-staff-resolution`.
+
+After release, a kiosk card purchase on Park leaves `webhook-processing-failures` and `webhook-queue-stale` OK, and the processor log shows no `kiosk_confirmation_failed`. [Notes](docs/gh-346-webhook-retry.md).
+
 ## The booking role no longer reads guest profiles (#538)
 
 Run `npm --prefix infra run validate:t0195-least-privilege` (part of `npm run infra:check`). It applies every migration's `GRANT` and `REVOKE` in order, asserts that `jumpyard_booking_runtime` has no `SELECT` on `jumpyard.guest_profiles`, and still checks every Booking Lambda statement against the remaining grants. Without migration 0027 it fails on the new assertion; with a booking statement that reads `guest_profiles` it fails grant coverage. CI's database job applies every migration, `0027` included, to PostgreSQL. After the Park run with `apply_migrations=true`, the migration status lists `0027` as applied, and an add-on quote and draft still work with no `permission denied` in the booking logs.

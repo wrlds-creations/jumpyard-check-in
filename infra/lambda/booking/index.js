@@ -68,6 +68,14 @@ const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
 const KIOSK_RECONCILIATION_SOURCE = 'jumpyard.kiosk-payment-reconciliation';
 const KIOSK_AUTHORITATIVE_CONFIRMATION_SOURCE = 'jumpyard.kiosk-authoritative-confirmation';
+// Booking rows written by a full live ROLLER readback. GH-346 (D0262): the automatic check-in's
+// final refresh is one, so a webhook confirmation that reads the row in the same second it is
+// written no longer reports needs_staff.
+const KIOSK_AUTHORITATIVE_BOOKING_SOURCES = new Set([
+  'roller_live_lookup',
+  'roller_redeem_final_refresh',
+  'roller_webhook_enrichment',
+]);
 // GH-488 (D0243): the Session Lambda proves the staff PIN and invokes this Lambda for the pairing.
 const KIOSK_PAIRING_SOURCE = 'jumpyard.kiosk-pairing';
 // GH-483: invoked only by the Session Lambda after it has verified a staff operator's PIN.
@@ -1834,7 +1842,7 @@ function validateKioskAuthoritativeConfirmationCandidates(candidates, request) {
   if (candidate.is_tombstoned || candidate.freshness_status !== 'fresh' || !candidate.last_seen_from_roller_at) {
     return 'authoritative_booking_not_fresh';
   }
-  if (!['roller_live_lookup', 'roller_webhook_enrichment'].includes(candidate.source_last_updated_by)) {
+  if (!KIOSK_AUTHORITATIVE_BOOKING_SOURCES.has(candidate.source_last_updated_by)) {
     return 'authoritative_source_invalid';
   }
   if (!Array.isArray(ticketIds) || ticketIds.length === 0 || ticketIds.some((ticketId) => !stringOrNull(ticketId))) {

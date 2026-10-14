@@ -4,6 +4,12 @@ All AWS resources created for this project must be represented here if they are 
 
 ## Current Status
 
+### Issue #346 Webhook Retry Timing (Lambda Code Only)
+
+The existing webhook processor Lambda calls `ChangeMessageVisibility` on a message whose processing it saw fail (D0262). The message comes back after 1, 2, 4 or 8 minutes instead of the queue's 12-minute visibility. On the fifth delivery it is released at once, so SQS moves it to the existing FIFO DLQ. The processor's ROLLER requests time out after about 15 s. The Booking Lambda's kiosk confirmation accepts booking rows from the automatic check-in's final refresh.
+
+There are no queue, event source mapping, reserved concurrency, IAM, alarm or other resource changes. The worker's consume grant already includes `sqs:ChangeMessageVisibility`. The release ships through the protected Park workflow, and its run IDs are recorded on issue #346. [Notes](docs/gh-346-webhook-retry.md).
+
 ### Issue #538 Booking Role Loses Unused Guest-Profile Read (Migration Only)
 
 Forward-only migration `0027_booking_guest_profiles_select_revoke.sql` revokes `SELECT ON jumpyard.guest_profiles` from `jumpyard_booking_runtime`. Since #532 (D0260), no Booking Lambda statement reads that table; the add-on customer comes from ROLLER. The data-sync and webhook roles keep their access. No AWS resource, secret, IAM policy or Lambda code changes.

@@ -12,7 +12,7 @@ The webhook is a doorbell, not the guest register:
 4. One reserved-concurrency worker verifies the current credentials belong to Nacka `50871`, reads current `GET /bookings/{identifier}`, applies the same 30-day-past plus all-future visit boundary as T0196, and upserts normalized booking/item/ticket/contact state.
 5. Duplicate and older signals are harmless because every accepted signal re-reads current Roller state. Processed event ids are no-ops.
 
-The queue retries a failed message five times before its FIFO DLQ. A five-minute recovery rule finds `received`, `pending_enrichment`, or `failed` rows older than two minutes only while their enrichment-attempt count is below five. Exhaustion emits a dedicated alarm and remains explicitly replayable after repair; it cannot retry indefinitely. T0196 remains the morning catch-all when Roller sends no webhook, and check-in-critical work still confirms live state.
+The queue retries a failed message five times before its FIFO DLQ. When the worker sees the failure itself, it makes the message visible again after 1, 2, 4 and 8 minutes and releases it at once on the fifth delivery. A crash, Lambda timeout or throttled delivery still waits the queue's 12-minute visibility (GH-346/D0262, [notes](gh-346-webhook-retry.md)). A five-minute recovery rule finds `received`, `pending_enrichment`, or `failed` rows older than two minutes only while their enrichment-attempt count is below five. Exhaustion emits a dedicated alarm and remains explicitly replayable after repair; it cannot retry indefinitely. T0196 remains the morning catch-all when Roller sends no webhook, and check-in-critical work still confirms live state.
 
 ## Exact Boundary
 
@@ -21,7 +21,7 @@ The queue retries a failed message five times before its FIFO DLQ. A five-minute
 - Registration: existing webhook `1465`, exact park-test booking endpoint, `Created`/`Updated`/`Cancelled`, `tickets=true`.
 - Authentication: exact HTTP header name `x-roller-apikey`; the value comes from `/jumpyard-check-in-park-test/webhooks/dev-token` and is compared as fixed-length SHA-256 digests with `timingSafeEqual`.
 - Runtime approval: `T0197_LIVE_WEBHOOK_PROCESSING_APPROVED` plus the existing emergency stop.
-- Provider pacing: at least one second between Roller request starts, bounded 429/5xx retry, maximum four attempts and ten-second `Retry-After`.
+- Provider pacing: at least one second between Roller request starts, bounded 429/5xx retry, maximum four attempts and ten-second `Retry-After`. A request that has not answered after 15 s plus the pacing wait fails the attempt (D0262).
 - Data: stable event id/hash, event type, booking identifiers, payload hash, status, attempts, timestamps, and bounded error summary only. No raw webhook/booking payload, note, address, secret, access token, or unmasked credential is stored or printed.
 
 ## Deployed Resources
