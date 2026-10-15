@@ -10,6 +10,10 @@ Decision: [D0263](../DECISIONS.md). Since D0230 Cloud checks every finished grou
 - **Goods are read-only:** bands with Cloud's colour and duration, padlocks, SkyRider and socks, plus a "Caféet: …" line. A checked-in group gets one "Lämna ut" that hands out everything left at the entrance. It is the existing handout API: a selection and its confirmation. Afterwards the row shows a check per line and "Utlämnat HH:MM · <staff>". Opening the same number again shows those checks, so bands are not handed out twice.
 - **The check-in line** reads "Incheckad HH:MM". Cloud's automatic actor ("automatiskt") is hidden; a colleague's name stays.
 - **Not checked in:** the goods show with the existing reason ("Check-in inte påbörjad", "Gästen slutför check-in i mobilen eller kiosken", "Bokningen bekräftas") and no button.
+- **Jump time (follow-up, 2026-10-15):** every entrance row shows the time from start to end, for example "14:30–16:00". It is the booking's start and end from the board summary, the same as the guest's "Hopptid" (D0254). Without an end, the latest band end stands in.
+- **Bands before check-in (follow-up, 2026-10-15):** a folded-out "Kommande" row shows the group's band lines like a checked-in group: "Besöksband", duration, colour and count.
+  - Cloud's handout list keeps admissions only for tickets chosen at check-in (`buildManifest`), so before that the app builds the lines from the row's `bandColours` and `counts.admission` (`plannedBands` in `flow.ts`).
+  - Any uncoloured rest gets its own line. Once Cloud lists the bands, only its lines show.
 
 ## Café (computer first)
 
@@ -67,5 +71,6 @@ Locally, T0194's Turbopack build cannot follow the `node_modules` junction, a kn
 
 Test these after the release:
 - **Motorola (APK):** reload it. Check the two tabs, a row that folds out, "Lämna ut" on a checked-in group, and that the same number then shows "Utlämnat".
+- **Follow-up:** every entrance row shows start to end, and a group that has not checked in shows its bands when folded out under "Kommande".
 - **Café computer:** open https://staff-checkin.jumpyard.se, choose Café, then fold out a guest, take one of two coffees with −, and press "Lämna ut".
 - **"Behöver personal":** this case appears only when an automatic check-in fails.

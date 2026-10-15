@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Check, ChevronDown, LoaderCircle, Minus, Plus, RefreshCcw, Search, X } from "lucide-react";
 import type { HandoutArea, HandoutItem, HandoutReceipt, HandoutRequest, StaffAuthSession, StaffSessionDetail, StaffSessionSummary } from "@/lib/adminApi";
-import { activeClaim, boardTab, checkedInLabel, clock, itemIcon, needsStaff, nextPass, stageOf, stockholmDay, type BoardTab } from "./flow";
+import { activeClaim, boardTab, checkedInLabel, clock, itemIcon, jumpTime, needsStaff, nextPass, plannedBands, stageOf, stockholmDay, type BoardTab } from "./flow";
 import { BandChip, Icon, cls } from "./ui";
 
 // GH-541 (D0263): Cloud checks every finished group in itself, so the entrance keeps two lists.
@@ -107,7 +107,7 @@ function Row({ session, area, props, urgent = false, onArea }: {
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold">
             <AdmissionCount count={session.counts.admission} />
             {bands.map((band) => <BandChip key={band.id} colour={band} count={counted ? band.quantity : undefined} />)}
-            <span className="flex items-center gap-1"><Icon name="time" className="h-5 w-5" />{clock(session.booking.startTime)}</span>
+            <span className="flex items-center gap-1"><Icon name="time" className="h-5 w-5" />{jumpTime(session)}</span>
           </span>
           {status && <span className={`text-xs font-bold ${status.tone}`}>{status.text}</span>}
         </span>
@@ -123,7 +123,7 @@ function Panel({ session, area, props, onArea }: { session: StaffSessionSummary;
     {props.detailLoading && <LoaderCircle size={18} aria-hidden="true" className="animate-spin text-primary motion-reduce:animate-none" />}
     {props.detailLoading ? "Hämtar…" : props.error || "Bokningen kunde inte hämtas. Försök igen."}</p>;
   return area === "cafe" ? <CafePanel key={detail.checkinSessionId} detail={detail} props={props} onArea={onArea} />
-    : <EntrancePanel detail={detail} props={props} onArea={onArea} />;
+    : <EntrancePanel detail={detail} summary={session} props={props} onArea={onArea} />;
 }
 
 function handoutView(detail: StaffSessionDetail, area: HandoutArea, props: Props) {
@@ -197,8 +197,13 @@ function Actions({ props, area, view, action, label, disabled, done, onRun, onAr
   </div>;
 }
 
-function EntrancePanel({ detail, props, onArea }: { detail: StaffSessionDetail; props: Props; onArea?: (area: HandoutArea) => void }) {
+function EntrancePanel({ detail, summary, props, onArea }: {
+  detail: StaffSessionDetail; summary?: StaffSessionSummary; props: Props; onArea?: (area: HandoutArea) => void;
+}) {
   const view = handoutView(detail, "entrance", props);
+  // GH-541: before check-in the bands come from the row, the way a checked-in group shows them; read-only.
+  const goods = view.complete || view.products.some((item) => item.kind === "admission") ? view.products
+    : [...plannedBands(summary ?? detail), ...view.products];
   const cafe = (view.handout?.items || []).filter((item) => item.area === "cafe");
   const cafeLeft = cafe.filter((item) => left(item) > 0);
   const ready = view.stage === "ready";
@@ -212,7 +217,7 @@ function EntrancePanel({ detail, props, onArea }: { detail: StaffSessionDetail; 
   }
   return <div className="grid gap-2 p-3">
     {view.blocker && <Note icon="info">{view.blocker}</Note>}
-    {view.products.length > 0 ? <Goods>{view.products.map((item) => <ProductRow key={item.id} item={item} />)}</Goods>
+    {goods.length > 0 ? <Goods>{goods.map((item) => <ProductRow key={item.id} item={item} />)}</Goods>
       : <p className="py-1 text-sm font-bold">{view.complete || ready ? "Inget att lämna ut här." : "Produkterna visas när bokningen är klar."}</p>}
     {cafe.length > 0 && <Note icon="drink-cup">Caféet: {cafeLeft.length ? cafeLeft.map((item) => `${left(item)} ${item.name}`).join(" · ") : "utlämnat"}</Note>}
     <Actions props={props} area="entrance" view={view} action={action} disabled={view.locked} onRun={run} onArea={onArea}

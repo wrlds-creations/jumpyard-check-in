@@ -1,4 +1,4 @@
-import type { HandoutArea, HandoutClaim, StaffSessionSummary } from "@/lib/adminApi";
+import type { HandoutArea, HandoutClaim, HandoutItem, StaffSessionSummary } from "@/lib/adminApi";
 
 export type Stage = "ready" | "started" | "upcoming" | "completed";
 /** GH-541 (D0263): the entrance keeps two lists; Påbörjad and Redo are still Kommande. */
@@ -27,6 +27,32 @@ export function checkedInLabel(session: Pick<StaffSessionSummary, "completedAt" 
   const by = session.checkedInBy;
   const automatic = !by?.displayName || Boolean(by.actorId?.startsWith("system:")) || by.role === "system";
   return `Incheckad ${clock(session.completedAt)}${automatic ? "" : ` · ${by?.displayName}`}`;
+}
+const minutesOf = (value?: string | null) => {
+  const match = value?.match(/^(\d{1,2}):(\d{2})/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+};
+/** GH-541: the jump time from start to end, like the guest's "Hopptid" (D0254); the latest band end stands in for a missing end. */
+export function jumpTime(session: Pick<StaffSessionSummary, "booking" | "bandColours">) {
+  const start = clock(session.booking.startTime);
+  const ends = (session.bandColours ?? []).map((band) => band.endTime).filter((value): value is string => Boolean(value)).sort();
+  const end = session.booking.endTime ? clock(session.booking.endTime) : ends.length ? clock(ends[ends.length - 1]) : null;
+  return end && end !== "—" && start !== "—" && end !== start ? `${start}–${end}` : start;
+}
+/** GH-541: before check-in Cloud lists no bands (only chosen tickets count), so a folded-out Kommande row shows the
+ * board's band colours as band lines instead: one per colour with its duration, and any uncoloured rest. */
+export function plannedBands(session: Pick<StaffSessionSummary, "booking" | "bandColours" | "counts">): HandoutItem[] {
+  const start = minutesOf(session.booking.startTime);
+  const line = (id: string, quantity: number, detail: string | null = null): HandoutItem =>
+    ({ id: `planned:${id}`, area: "entrance", kind: "admission", name: "Besöksband", detail, quantity, collected: 0, available: quantity });
+  const bands = (session.bandColours ?? []).filter((band) => Number.isSafeInteger(band.quantity) && band.quantity > 0);
+  const lines = bands.map((band) => {
+    const end = minutesOf(band.endTime);
+    const minutes = start !== null && end !== null && end > start ? end - start : null;
+    return { ...line(band.id, band.quantity, minutes ? `${minutes} min` : null), bandColour: { id: band.id, name: band.name, swatch: band.swatch } };
+  });
+  const rest = (session.counts.admission ?? 0) - bands.reduce((sum, band) => sum + band.quantity, 0);
+  return Number.isSafeInteger(rest) && rest > 0 ? [...lines, line("admission", rest)] : lines;
 }
 export function stockholmDay(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
