@@ -14,8 +14,25 @@ export interface ContactFields {
   phone: string;
 }
 
+// GH-552: the format Cloud accepts for an email-first purchase (infra/lambda/booking/contact-lookup.js):
+// plain characters, one @ and a domain with a dot, compared in lower case after trimming.
+const EMAIL_FORMAT = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+// A character no address can hold (a comma, a space, å), or a second @.
+const NEVER_IN_EMAIL = /[^a-z0-9.!#$%&'*+/=?^_`{|}~@-]|@[^@]*@/i;
+
 export function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+  const email = value.trim().toLowerCase();
+  return email.length <= 254 && EMAIL_FORMAT.test(email);
+}
+
+/**
+ * GH-552: "Kontrollera e-postadressen" for an address Cloud would refuse. A character no address can
+ * hold shows it at once; a half-typed address only once the guest has left the field.
+ */
+export function shouldShowEmailFormatMessage(value: string, editing: boolean) {
+  const email = value.trim();
+  if (!email || isValidEmail(email)) return false;
+  return !editing || NEVER_IN_EMAIL.test(email);
 }
 
 export function isValidPhone(value: string) {

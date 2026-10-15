@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
 import backendLookup from '../../../infra/lambda/booking/contact-lookup.js';
 import {
@@ -8,6 +9,7 @@ import {
   isContactReady,
   isValidEmail,
   isValidPhone,
+  shouldShowEmailFormatMessage,
   toNewBookingCustomer,
 } from './contactDetails.ts';
 
@@ -50,4 +52,52 @@ test('a saved contact with a last name or phone resumes in the four-field form',
   assert.equal(hasSavedContactDetails(contact({ lastName: 'Test' })), true);
   assert.equal(hasSavedContactDetails(contact({ phone: '0701740605' })), true);
   assert.equal(hasSavedContactDetails(contact({ lastName: '  ', phone: ' ' })), false);
+});
+
+// GH-552: one table for the phone and Cloud, so a mistyped email never reaches Cloud's lookup.
+const VALID_EMAILS = ['guest@example.invalid', ' guest@example.invalid ', 'Guest.Name@Example.Invalid',
+  "o'brien+jy552@sub.example.invalid", 'a@b.co'];
+const INVALID_EMAILS = ['love@wrlds.co,', 'guest,x@example.invalid', 'guest @example.invalid', 'guest@example', 'guest@',
+  '@example.invalid', 'guest', 'guest@@example.invalid', 'guest@example..invalid', 'guest@example.invalid.',
+  'guest@-example.invalid', 'gäst@example.invalid', 'guest@exämple.invalid', '', '   ', `${'g'.repeat(240)}@example.invalid`];
+
+test('GH-552: the phone accepts exactly the email format Cloud accepts', () => {
+  for (const email of VALID_EMAILS) {
+    assert.equal(isValidEmail(email), true, email);
+    assert.equal(backendLookup.isValidEmailFormat(email), true, email);
+  }
+  for (const email of INVALID_EMAILS) {
+    assert.equal(isValidEmail(email), false, email);
+    assert.equal(backendLookup.isValidEmailFormat(email), false, email);
+    assert.equal(isContactReady(contact({ email }), false), false, `${email}: Continue stays off`);
+    assert.equal(isContactReady(contact({ email, lastName: 'Test', phone: '070-174 06 05' }), true), false,
+      `${email}: also with all four fields`);
+  }
+});
+
+test('GH-552: the message shows at once for a character no address holds, otherwise after leaving the field', () => {
+  // Love's typo, a space inside, a second @ and å are wrong whatever the guest types next.
+  for (const email of ['love@wrlds.co,', 'guest @example', 'guest@@', 'gäst@']) {
+    for (const editing of [true, false]) assert.equal(shouldShowEmailFormatMessage(email, editing), true, email);
+  }
+  // A half-typed address is not a mistake while the guest is still typing.
+  for (const email of ['guest', 'guest@', 'guest@example', 'guest@example.']) {
+    assert.equal(shouldShowEmailFormatMessage(email, true), false, email);
+    assert.equal(shouldShowEmailFormatMessage(email, false), true, email);
+  }
+  for (const email of ['', '   ', 'guest@example.invalid', ' guest@example.invalid ', 'Guest@Example.Invalid']) {
+    for (const editing of [true, false]) assert.equal(shouldShowEmailFormatMessage(email, editing), false, email);
+  }
+});
+
+test('GH-552: the message sits on the email label row; Cloud\'s fallback is unchanged', () => {
+  const component = fs.readFileSync(new URL('../components/BuyTickets.tsx', import.meta.url), 'utf8');
+  assert.match(component, /const emailFormatMessageShown = shouldShowEmailFormatMessage\(email, emailFocused\);/);
+  assert.match(component, /\{t\.buy\.emailLabel\}\s*\{\/\*[^*]*\*\/\}\s*\{emailFormatMessageShown && \(\s*<span role="alert" data-testid="buy-email-invalid"[^>]*>\s*<JumpyardIcon name="warning-transparent"[^>]*\/> \{t\.buy\.emailInvalid\}\s*<\/span>\s*\)\}\s*<\/span>\s*<input\s+ref=\{emailInputRef\}/);
+  assert.match(component, /aria-invalid=\{emailFormatMessageShown\}/);
+  // D0234: only Cloud's uncertain lookup asks for last name and phone.
+  assert.match(component, /if \(code === 'contact_details_required' \|\| \(code === 'customer_required' && !contactDetailsRequired\)\) \{/);
+  const copy = fs.readFileSync(new URL('../context/LanguageContext.tsx', import.meta.url), 'utf8');
+  assert.match(copy, /emailInvalid: 'Kontrollera e-postadressen',/);
+  assert.match(copy, /emailInvalid: 'Check the email address',/);
 });
