@@ -63,7 +63,8 @@ const STAFF_PIN_SCRYPT_PARALLELIZATION = 1;
 const STAFF_PIN_SCRYPT_KEY_LENGTH = 32;
 const STAFF_PIN_SCRYPT_MAX_MEMORY = 64 * 1024 * 1024;
 const MAX_CHECKIN_LINK_TTL_MINUTES = 7 * 24 * 60;
-const MAX_SELECTED_TICKETS = 10;
+// #549 (D0272): a group of up to 50; the Redeem Lambda sends them to ROLLER 10 at a time.
+const MAX_SELECTED_TICKETS = 50;
 const MAX_REQUEST_BODY_BYTES = 32 * 1024;
 const REDEEMABLE_PRODUCT_KEYS = new Set([
   'membership',

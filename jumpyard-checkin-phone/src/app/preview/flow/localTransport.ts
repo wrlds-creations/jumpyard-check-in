@@ -37,7 +37,8 @@ export function installLocalTransport(options: { delay: () => number; fail: () =
 }
 
 // #491: the first three requested start times show the three spot states: plenty, few and full.
-export const PREVIEW_SLOT_SPOTS = [34, 6, 0];
+// #549: plenty is above the 50-jumper limit, so the quantity step reaches 50.
+export const PREVIEW_SLOT_SPOTS = [80, 6, 0];
 
 export function makeAvailability(times: string[], date = new Date().toLocaleDateString('sv-SE')): NewBookingAvailability {
     const product = (time: string, key: string, type: NewBookingProduct['type'], price: number, duration = 60, jumpers = 1, id = 1001, spots = 100): NewBookingProduct => ({

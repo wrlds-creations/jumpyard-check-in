@@ -14,13 +14,21 @@ export interface VisibleBookingProductSections {
   total: number;
 }
 
+/**
+ * #549 (D0272): a purchase holds up to 50 jumpers, the most Cloud checks in as one group. A family
+ * counts as 4 and a combo as 2, so at most 50 entries, 25 combos or 12 families.
+ */
+export const MAX_JUMPERS_PER_PURCHASE = 50;
+
 export function getMaxBookingProductQuantity(product: NewBookingProduct | null) {
   if (!product?.available) return 0;
-  if (product.capacityRemaining === null) return 10;
+  const jumpersPerUnit = Math.max(1, product.jumpersPerUnit);
+  const unitLimit = Math.floor(MAX_JUMPERS_PER_PURCHASE / jumpersPerUnit);
+  if (product.capacityRemaining === null) return unitLimit;
 
-  const unitCapacity = Math.floor(product.capacityRemaining / Math.max(1, product.jumpersPerUnit));
+  const unitCapacity = Math.floor(product.capacityRemaining / jumpersPerUnit);
 
-  return Math.max(0, Math.min(10, unitCapacity));
+  return Math.max(0, Math.min(unitLimit, unitCapacity));
 }
 
 /** #491 (workshop 2026-10-07): the 90-minute entry and family products carry "Populärt". */
