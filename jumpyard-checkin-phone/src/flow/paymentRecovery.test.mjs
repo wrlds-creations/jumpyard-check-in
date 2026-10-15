@@ -16,6 +16,12 @@ import {
   initializePaymentRecoverySubmission,
   markPaymentRecoverySubmitted,
   failUnsubmittedPaymentRecovery,
+  failUnstartedPaymentRecovery,
+  discardUnsubmittedPaymentRecovery,
+  abandonUnresolvedPaymentRecovery,
+  isUnsubmittedPaymentRecovery,
+  unresolvedPaymentRestartAt,
+  UNRESOLVED_PAYMENT_RESTART_MS,
   purgeExpiredPaymentRecovery,
   readPaymentRecovery,
   setPaymentRecoveryOutcome,
@@ -579,4 +585,145 @@ test('a veto, exception or asynchronous callback cannot report completed-state c
   assert.equal(asyncCalled, false);
   assert.equal(await withNoActivePaymentRecovery(() => ({ then() { assert.fail('Guard awaited a thenable'); } })), false);
   assert.equal(await withNoActivePaymentRecovery(() => true), true, 'All failure paths release their own lease');
+});
+
+const flushLocks = () => new Promise(resolve => setImmediate(resolve));
+
+// #553 (D0270): the page that showed the card form, as a separate module instance (another document).
+async function preparedOnOldPage(tag, attemptId, { pressPay = false } = {}) {
+  const oldPage = await import(`./paymentRecovery.ts?${tag}`);
+  const owner = await oldPage.acquirePaymentRecoveryOwnership();
+  assert.equal(owner.protected, true);
+  const record = oldPage.beginPaymentRecovery(input(attemptId));
+  assert.equal(oldPage.initializePaymentRecoverySubmission(record, owner), true);
+  assert.equal(await oldPage.bindPaymentRecoverySession(attemptId, `${attemptId}-session`), true);
+  if (pressPay) assert.equal(oldPage.markPaymentRecoverySubmitted(record, owner), true);
+  return { oldPage, owner, record };
+}
+
+test('#553: Pay records its time, and a prepared attempt waits for the draft life without one', async (t) => {
+  installExclusiveLockManager(t);
+  const { owner, record } = await preparedOnOldPage('gh553-times', 'timed');
+  const prepared = readPaymentRecovery();
+  assert.equal(isUnsubmittedPaymentRecovery(prepared), true);
+  assert.equal(prepared.submission.submittedAt, undefined);
+  assert.equal(unresolvedPaymentRestartAt(prepared), record.createdAt + 30 * 60 * 1000);
+  now += 5_000;
+  const oldPage = await import('./paymentRecovery.ts?gh553-times');
+  assert.equal(oldPage.markPaymentRecoverySubmitted(record, owner), true);
+  const submitted = readPaymentRecovery();
+  assert.equal(isUnsubmittedPaymentRecovery(submitted), false);
+  assert.equal(submitted.submission.submittedAt, now);
+  assert.equal(unresolvedPaymentRestartAt(submitted), now + UNRESOLVED_PAYMENT_RESTART_MS);
+  owner.release();
+  const tampered = JSON.parse(values.get(PROOF_KEY));
+  values.set(PROOF_KEY, JSON.stringify({ ...tampered, submittedAt: record.createdAt - 1 }));
+  assert.equal(readPaymentRecovery().submission, null, 'A Pay time outside the attempt is not trusted');
+});
+
+test('#553: a later page drops a never-paid attempt only under a fresh lease', async (t) => {
+  const { held } = installExclusiveLockManager(t);
+  const { owner } = await preparedOnOldPage('gh553-discard', 'never-paid');
+  assert.equal(await discardUnsubmittedPaymentRecovery('never-paid'), false, 'A checkout still open elsewhere keeps it');
+  assert.ok(values.has(KEY) && values.has(PROOF_KEY));
+  owner.release();
+  await flushLocks();
+  let calls = 0;
+  assert.equal(await discardUnsubmittedPaymentRecovery('another-attempt', () => { calls += 1; }), false);
+  assert.equal(await discardUnsubmittedPaymentRecovery('never-paid', () => { calls += 1; return false; }), false);
+  assert.ok(values.has(KEY) && values.has(PROOF_KEY), 'A veto keeps the attempt');
+  assert.equal(await discardUnsubmittedPaymentRecovery('never-paid', () => {
+    calls += 1;
+    assert.equal(held.size, 1, 'The caller rewrites its basket inside the lease');
+  }), true);
+  assert.equal(calls, 2);
+  for (const key of [KEY, PROOF_KEY, OBSERVATION_KEY]) assert.equal(values.has(key), false, key);
+  await flushLocks();
+  assert.equal(held.size, 0);
+  assert.equal(beginPaymentRecovery(input('next-draft')).attemptId, 'next-draft', 'A new checkout can start');
+});
+
+test('#553: a pressed Pay, a provider return or a missing lock never counts as unsubmitted', async (t) => {
+  installExclusiveLockManager(t);
+  const paid = await preparedOnOldPage('gh553-pressed', 'pressed-pay', { pressPay: true });
+  paid.owner.release();
+  await flushLocks();
+  assert.equal(await discardUnsubmittedPaymentRecovery('pressed-pay'), false);
+  assert.ok(values.has(KEY) && values.has(PROOF_KEY));
+
+  values.clear();
+  const returning = await preparedOnOldPage('gh553-return', 'returning');
+  returning.owner.release();
+  await flushLocks();
+  window.location.href = 'https://phone.example.test/?sessionId=returning-session&redirectResult=opaque';
+  assert.equal(await discardUnsubmittedPaymentRecovery('returning'), false);
+  assert.ok(values.has(KEY));
+  window.location.href = 'https://phone.example.test/?channel=park-qr#buy';
+
+  values.clear();
+  const unprotectedPage = await import('./paymentRecovery.ts?gh553-unprotected');
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} });
+  try {
+    const legacyOwner = await unprotectedPage.acquirePaymentRecoveryOwnership();
+    assert.equal(legacyOwner.protected, false);
+    const record = unprotectedPage.beginPaymentRecovery(input('no-locks'));
+    assert.equal(unprotectedPage.initializePaymentRecoverySubmission(record, legacyOwner), true);
+    legacyOwner.release();
+    assert.equal(isUnsubmittedPaymentRecovery(readPaymentRecovery()), false, 'Without Web Locks there is no prepared proof');
+    assert.equal(await discardUnsubmittedPaymentRecovery('no-locks'), false);
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'navigator', descriptor);
+    else delete globalThis.navigator;
+  }
+});
+
+test('#553: an unresolved attempt gives way only after its restart time, never once approved or failed', async (t) => {
+  installExclusiveLockManager(t);
+  const { oldPage, owner } = await preparedOnOldPage('gh553-abandon', 'unresolved', { pressPay: true });
+  const pressedAt = now;
+  assert.equal(oldPage.setPaymentRecoveryOutcome('unresolved', 'unknown'), true);
+  owner.release();
+  await flushLocks();
+  now = pressedAt + UNRESOLVED_PAYMENT_RESTART_MS - 1;
+  assert.equal(await abandonUnresolvedPaymentRecovery('unresolved'), false);
+  assert.ok(values.has(KEY));
+  now = pressedAt + UNRESOLVED_PAYMENT_RESTART_MS;
+  let rewrote = false;
+  assert.equal(await abandonUnresolvedPaymentRecovery('unresolved', () => { rewrote = true; }), true);
+  assert.equal(rewrote, true);
+  for (const key of [KEY, PROOF_KEY, OBSERVATION_KEY]) assert.equal(values.has(key), false, key);
+
+  for (const outcome of ['approved', 'failed']) {
+    values.clear();
+    now += 3 * PAYMENT_RECOVERY_MAX_AGE_MS;
+    const done = await preparedOnOldPage(`gh553-${outcome}`, `done-${outcome}`, { pressPay: true });
+    assert.equal(done.oldPage.setPaymentRecoveryOutcome(`done-${outcome}`, outcome), true);
+    done.owner.release();
+    await flushLocks();
+    now += UNRESOLVED_PAYMENT_RESTART_MS + 1;
+    assert.equal(await abandonUnresolvedPaymentRecovery(`done-${outcome}`), false, outcome);
+    assert.ok(values.has(KEY), outcome);
+  }
+});
+
+test('#553: a form that never became ready fails without a session, but never after Pay', async () => {
+  const lease = await protectedOwnership();
+  try {
+    const record = beginPaymentRecovery(input('never-ready'));
+    assert.equal(initializePaymentRecoverySubmission(record, lease.ownership), true);
+    assert.equal(failUnsubmittedPaymentRecovery(record, lease.ownership), false, 'The older guard needs a bound session');
+    assert.equal(failUnstartedPaymentRecovery(record, lease.ownership), true);
+    assert.equal(readPaymentRecovery().outcome, 'failed');
+  } finally { lease.restore(); }
+  values.clear();
+  const second = await protectedOwnership();
+  try {
+    const record = beginPaymentRecovery(input('pressed'));
+    assert.equal(initializePaymentRecoverySubmission(record, second.ownership), true);
+    assert.equal(await bindPaymentRecoverySession('pressed', 'pressed-session'), true);
+    assert.equal(markPaymentRecoverySubmitted(record, second.ownership), true);
+    assert.equal(failUnstartedPaymentRecovery(record, second.ownership), false);
+    assert.equal(readPaymentRecovery().outcome, 'pending');
+  } finally { second.restore(); }
 });

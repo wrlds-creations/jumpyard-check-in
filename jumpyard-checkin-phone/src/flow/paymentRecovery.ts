@@ -6,6 +6,8 @@ export interface PaymentRecoverySubmission {
   phase: 'prepared' | 'submitted' | 'unresolved' | 'failed' | 'approved';
   protected: boolean;
   sessionHash: string | null;
+  /** #553 (D0270): when Pay was pressed; absent before Pay and on proofs written by older pages. */
+  submittedAt?: number;
 }
 
 export interface PaymentRecoveryOwnership {
@@ -50,6 +52,10 @@ export interface PaymentRedirect {
 }
 
 export const PAYMENT_RECOVERY_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+/** #553 (D0270): an unresolved payment may start over this long after Pay, once Cloud finds no booking. */
+export const UNRESOLVED_PAYMENT_RESTART_MS = 3 * 60 * 1000;
+// Without a recorded Pay time, wait out the ROLLER draft's 30-minute life instead.
+const UNTIMED_PAYMENT_RESTART_MS = 30 * 60 * 1000;
 const STORAGE_KEY = 'jumpyard.paymentRecovery.v1';
 const SUBMISSION_KEY = 'jumpyard.paymentSubmission.v1';
 const OBSERVATION_KEY = 'jumpyard.paymentObservation.v1';
@@ -210,9 +216,12 @@ function readSubmission(record: PaymentRecoveryRecord): SubmissionProof | null {
       || value.bookingIdentifier !== record.bookingIdentifier || value.createdAt !== record.createdAt
       || value.expiresAt !== record.expiresAt || !identifier(value.ownerId) || typeof value.protected !== 'boolean'
       || !['prepared', 'submitted', 'unresolved', 'failed', 'approved'].includes(String(value.phase))
-      || (value.sessionHash !== null && (typeof value.sessionHash !== 'string' || !/^[a-f0-9]{64}$/.test(value.sessionHash)))) return null;
+      || (value.sessionHash !== null && (typeof value.sessionHash !== 'string' || !/^[a-f0-9]{64}$/.test(value.sessionHash)))
+      || (value.submittedAt !== undefined && (typeof value.submittedAt !== 'number' || !Number.isSafeInteger(value.submittedAt)
+        || value.submittedAt < record.createdAt || value.submittedAt >= record.expiresAt))) return null;
     return { version: 1, ownerId: value.ownerId, protected: value.protected,
       phase: value.phase as SubmissionProof['phase'], sessionHash: value.sessionHash as string | null,
+      ...(typeof value.submittedAt === 'number' ? { submittedAt: value.submittedAt } : {}),
       attemptId: record.attemptId, bookingIdentifier: record.bookingIdentifier,
       createdAt: record.createdAt, expiresAt: record.expiresAt };
   } catch {
@@ -287,8 +296,98 @@ export function markPaymentRecoverySubmitted(record: PaymentRecoveryRecord, owne
   if (proof && (proof.ownerId !== ownership.ownerId || proof.phase !== 'prepared')) return false;
   const next: SubmissionProof = { version: 1, ownerId: ownership.ownerId, protected: ownership.protected,
     phase: 'submitted', attemptId: current.attemptId, bookingIdentifier: current.bookingIdentifier,
-    createdAt: current.createdAt, expiresAt: current.expiresAt, sessionHash: current.sessionHash };
+    createdAt: current.createdAt, expiresAt: current.expiresAt, sessionHash: current.sessionHash,
+    submittedAt: Math.max(current.createdAt, Date.now()) };
   return persistSubmission(next) && ownedRecord(record, ownership)?.submission?.phase === 'submitted';
+}
+
+/** #553 (D0270): a form that never became ready cannot have sent a payment, with or without a session. */
+export function failUnstartedPaymentRecovery(record: PaymentRecoveryRecord, ownership: PaymentRecoveryOwnership): boolean {
+  const current = ownedRecord(record, ownership);
+  const proof = current && readSubmission(current);
+  if (!ownership.protected || !current || current.outcome !== 'pending' || current.returnConsumed
+    || !proof?.protected || proof.ownerId !== ownership.ownerId || proof.phase !== 'prepared'
+    || proof.sessionHash !== current.sessionHash) return false;
+  return persistSubmission({ ...proof, phase: 'failed' }) && setPaymentRecoveryOutcome(current.attemptId, 'failed');
+}
+
+/** #553 (D0270): Pay was never pressed in this attempt, so no payment can have been sent for it. */
+export function isUnsubmittedPaymentRecovery(record: PaymentRecoveryRecord | null): boolean {
+  return Boolean(record && record.outcome === 'pending' && !record.returnConsumed
+    && record.submission?.protected === true && record.submission.phase === 'prepared');
+}
+
+/** #553 (D0270): when an unresolved attempt may give way to a new one. */
+export function unresolvedPaymentRestartAt(record: PaymentRecoveryRecord): number {
+  const submittedAt = record.submission?.submittedAt;
+  return typeof submittedAt === 'number' ? submittedAt + UNRESOLVED_PAYMENT_RESTART_MS
+    : record.createdAt + UNTIMED_PAYMENT_RESTART_MS;
+}
+
+// Removes this attempt's base record and its own proof/observation metadata only.
+function removePaymentRecovery(current: PaymentRecoveryRecord): boolean {
+  const target = storage();
+  if (!target) return false;
+  for (const key of [SUBMISSION_KEY, OBSERVATION_KEY]) {
+    let value: unknown = null;
+    try { value = JSON.parse(target.getItem(key) ?? 'null'); } catch { target.removeItem(key); continue; }
+    if (object(value) && value.attemptId === current.attemptId && value.createdAt === current.createdAt) target.removeItem(key);
+  }
+  target.removeItem(STORAGE_KEY);
+  return target.getItem(STORAGE_KEY) === null;
+}
+
+/**
+ * #553 (D0270): a later page may drop an attempt whose guest never pressed Pay. It needs a fresh,
+ * protected lease, so a checkout still open in another tab keeps the attempt; a provider return,
+ * any later phase or a replaced attempt is never dropped.
+ */
+export async function discardUnsubmittedPaymentRecovery(
+  attemptId: string,
+  beforeClear?: () => boolean | void,
+): Promise<boolean> {
+  if (hasPaymentRedirect() || activeOwners.size > 0) return false;
+  const before = readPaymentRecovery();
+  if (!before || before.attemptId !== attemptId || !isUnsubmittedPaymentRecovery(before)) return false;
+  const ownership = await acquirePaymentRecoveryOwnership();
+  if (!ownership) return false;
+  try {
+    if (!ownership.protected || hasPaymentRedirect()) return false;
+    const current = readPaymentRecovery();
+    if (!current || current.attemptId !== attemptId || current.createdAt !== before.createdAt
+      || current.bookingIdentifier !== before.bookingIdentifier || current.kind !== before.kind
+      || !isUnsubmittedPaymentRecovery(current) || current.submission?.ownerId === ownership.ownerId) return false;
+    if (beforeClear?.() === false) return false;
+    return removePaymentRecovery(current);
+  } catch { return false; }
+  finally { ownership.release(); }
+}
+
+/**
+ * #553 (D0270): after its restart time, and only once the caller has found no booking for it, an
+ * unresolved new-booking attempt gives way to a new one. Approved and failed attempts keep their rules.
+ */
+export async function abandonUnresolvedPaymentRecovery(
+  attemptId: string,
+  beforeClear?: () => boolean | void,
+): Promise<boolean> {
+  if (hasPaymentRedirect()) return false;
+  const before = readPaymentRecovery();
+  if (!before || before.attemptId !== attemptId || before.kind !== 'new_booking'
+    || before.outcome === 'approved' || before.outcome === 'failed'
+    || Date.now() < unresolvedPaymentRestartAt(before)) return false;
+  const ownership = activeOwners.size ? null : await acquirePaymentRecoveryOwnership();
+  if (!activeOwners.size && !ownership) return false;
+  try {
+    const current = readPaymentRecovery();
+    if (!current || current.attemptId !== attemptId || current.createdAt !== before.createdAt
+      || current.bookingIdentifier !== before.bookingIdentifier || current.kind !== before.kind
+      || current.outcome === 'approved' || current.outcome === 'failed'
+      || Date.now() < unresolvedPaymentRestartAt(current) || hasPaymentRedirect()) return false;
+    if (beforeClear?.() === false) return false;
+    return removePaymentRecovery(current);
+  } catch { return false; }
+  finally { ownership?.release(); }
 }
 
 export function failUnsubmittedPaymentRecovery(record: PaymentRecoveryRecord, ownership: PaymentRecoveryOwnership): boolean {

@@ -532,7 +532,12 @@ test('late ready callbacks cannot undo submission or the unknown timeout', async
   harness.ready(0);
   await harness.settle();
   assert.equal(view.status(), 'received');
+  // #553 (D0270): after Pay the bank's own approval (3-D Secure, BankID) stays on screen for ten minutes.
   await harness.advance(30_000);
+  assert.equal(view.status(), 'received');
+  assert.notEqual(find(view.tree, element => element.props?.id === 'roller-payment-container').props.hidden, true);
+  assert.equal(harness.records.callbacks.length, 0);
+  await harness.advance(10 * 60_000 - 30_000);
   assert.equal(view.status(), 'unknown');
   harness.ready(0);
   await harness.settle();
@@ -544,18 +549,22 @@ test('late ready callbacks cannot undo submission or the unknown timeout', async
 });
 
 for (const delayed of ['bootstrap', 'session', 'checkout']) {
-  test(`delayed ${delayed} cannot reopen payment after the unknown timeout`, async t => {
+  test(`delayed ${delayed} cannot reopen payment after the load timeout`, async t => {
     let release;
     const gate = new Promise(resolve => { release = resolve; });
     const harness = createHarness(t, { [`${delayed}Gate`]: gate });
     const view = harness.mount({ identity: `delayed-${delayed}`, paymentSession: paymentSession(`delayed-${delayed}`) });
+    const recovery = harness.load(path.join(sourceRoot, 'flow/paymentRecovery.ts'));
     await harness.settle();
     await harness.advance(30_000);
-    assert.equal(view.status(), 'unknown');
+    // #553 (D0270): a form that never became ready cannot have sent a payment, so it fails for a clean retry.
+    assert.equal(view.status(), 'failed');
+    assert.equal(recovery.readPaymentRecovery().outcome, 'failed');
+    assert.deepEqual(harness.records.callbacks.map(callback => callback.result.status), ['failed']);
     release();
     await harness.settle();
-    assert.equal(view.status(), 'unknown');
-    assert.equal(harness.records.locks.at(-1)?.locked, true);
+    assert.equal(view.status(), 'failed');
+    assert.equal(harness.records.locks.at(-1)?.locked, false);
     assert.equal(harness.records.sessions.length, delayed === 'bootstrap' ? 0 : 1);
     if (delayed === 'checkout') {
       assert.equal(find(view.tree, element => element.props?.id === 'roller-payment-container').props.hidden, true);
