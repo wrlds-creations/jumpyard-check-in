@@ -1,5 +1,17 @@
 # Test Plan
 
+## A finished guest is checked in at once (#547)
+
+Run `npm run validate:gh547-ready-is-checked-in` (part of `npm run validate`). It drives the real Lambdas with a scripted Aurora, Lambda and ROLLER and checks that:
+- a confirmed kiosk add-on starts the automatic check-in for its sessions, and so does an add-on that ROLLER confirms after the window, from the board refresh;
+- a paid draft becomes provisional handout lines with the final kinds, counters and band colours, and ROLLER's own lines are unchanged;
+- the board counts a pending purchase's bands and café goods, and the detail lists its lines while `pending` or `needs_staff`, not once `confirmed`;
+- a band handout checks the group in, in ROLLER, with `staff-redeem:<id>` when Cloud has not, and only hands out when Cloud has.
+
+`npm run validate:gh345-staff-handout` runs `staffExperience.test.mjs`. It covers a pending kiosk group under "Incheckade" with its goods and "Lämna ut" at the entrance and in the café, and no red box or "Checka in". It also covers a kept press: shown as handed out, matched to ROLLER's final lines, and confirmed after `booking_sync_pending`, with the resume, colleague, done and logout cases.
+
+Also run `validate:gh456-auto-checkin`, `validate:gh289-handoff-linked-addons`, `validate:gh285-kiosk-addon-terminal`, `validate:kiosk-payment-reconciliation`, `validate:t0194-staff-identity-frontend`, and in `jumpyard-checkin-admin`, `npx tsc --noEmit`, `npm run lint` and `npx next build`. The Park plan may change only the Session, Booking and Redeem Lambda code (the Redeem Lambda carries the shared `staff-handout.js`). After release, follow [the notes](docs/gh-547-ready-is-checked-in.md#after-release).
+
 ## Simpler sign-in: no admin code and any staff PIN (#542)
 
 Run `npm run validate:t0194-staff-identity-backend`, `validate:t0194-staff-identity-infra`, `validate:gh483-kiosk-staff-resolution` and `validate:gh488-kiosk-pairing` (all part of `npm run validate`). They check that:
@@ -12,8 +24,8 @@ The Park plan may change only the admin user pool's MFA setting and the Session 
 ## The simpler staff app (#541)
 
 Run `npm run validate:gh345-staff-handout` (part of `npm run validate`). Its `jumpyard-checkin-admin/src/lib/staffExperience.test.mjs` renders the real staff components:
-- only "Kommande" and "Incheckade", with Påbörjad and Redo counted as Kommande;
-- the red "Behöver personal" box on top for every tab, time slot and search, with "Checka in" that only redeems, and an open row that stays there after it;
+- only "Kommande" and "Incheckade", with Påbörjad counted as Kommande (#547 removed Redo, the red "Behöver personal" box and "Checka in");
+- an open row that stays in the list it was opened from;
 - "Incheckad HH:MM" without "automatiskt";
 - no QR button, camera, scanner code, `@zxing` dependency or camera permission;
 - read-only entrance goods with one "Lämna ut" that sends everything left as a selection plus confirmation, and the blocked colleague, reader and other-day cases;

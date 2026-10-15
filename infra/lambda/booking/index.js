@@ -2088,7 +2088,8 @@ async function confirmKioskAddProductReconciliation(request, readback) {
      )
      SELECT
        confirmed_draft.*,
-       (SELECT count(*) FROM updated_session)::int AS linked_add_on_session_count
+       (SELECT count(*) FROM updated_session)::int AS linked_add_on_session_count,
+       (SELECT jsonb_agg(checkin_session_id) FROM updated_session)::text AS linked_add_on_session_ids
      FROM confirmed_draft`,
     [
       stringParameter('bookingReference', readback.bookingReference),
@@ -2096,7 +2097,14 @@ async function confirmKioskAddProductReconciliation(request, readback) {
       stringParameter('paymentAttemptId', request.paymentAttemptId),
     ],
   );
-  return firstMappedRow(result) ?? null;
+  const confirmed = firstMappedRow(result) ?? null;
+  // GH-547 (D0265): the add-on held the group's check-in while ROLLER confirmed it. Admit the group
+  // now, as for a new kiosk or phone purchase; the Redeem Lambda checks that it is ready and paid.
+  if (confirmed) {
+    await requestAutoCheckin(parseJsonArraySafe(confirmed.linked_add_on_session_ids), 'kiosk_add_on_confirmed',
+      request.correlationId);
+  }
+  return confirmed;
 }
 
 async function persistKioskReconciliationBookingSnapshot(existing, readback) {

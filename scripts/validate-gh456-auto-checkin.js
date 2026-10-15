@@ -429,11 +429,15 @@ function validateSourceContracts() {
     assert.match(stack, new RegExp(`${handler}\\.addEnvironment\\('AUTO_CHECKIN_FUNCTION_NAME', redeemHandler\\.functionName\\)`));
     assert.match(stack, new RegExp(`redeemHandler\\.grantInvoke\\(${handler}\\)`));
   }
-  // GH-541: a failed automatic check-in puts the group in the red "Behöver personal" box on top.
+  // GH-547 (D0265): a finished guest is Incheckad at once and a failed automatic check-in goes to the
+  // monitor, not to a red box. A confirmed kiosk add-on admits its group as well, in or after the window.
   assert.match(fs.readFileSync(path.join(ROOT, 'jumpyard-checkin-admin', 'src', 'components', 'staff', 'flow.ts'), 'utf8'),
-    /return stageOf\(session\) !== "completed" && session\.autoCheckin\?\.status === "needs_staff";/);
-  assert.match(board, /if \(needsStaff\(session\)\) return \{ text: "Behöver personal"/);
-  assert.match(board, /<span>Behöver personal<\/span>/);
+    /if \(session\.status === "ready_for_staff" && session\.safetyStatus === "completed"\) return "completed";/);
+  assert.doesNotMatch(board, /Behöver personal|needsStaff/);
+  assert.match(slice(booking, 'async function confirmKioskAddProductReconciliation(', 'async function persistKioskReconciliationBookingSnapshot('),
+    /requestAutoCheckin\(parseJsonArraySafe\(confirmed\.linked_add_on_session_ids\), 'kiosk_add_on_confirmed'/);
+  assert.match(slice(session, 'async function refreshLinkedAddOnEffectiveSyncState(', 'async function findReadyStaffSessions('),
+    /requestAutoCheckin\(stringOrNull\(id\), 'kiosk_add_on_confirmed', null\)/);
   // Love, 2026-10-06: automatic check-in is on in Nacka from this deploy. The switch lives in the
   // deploy config (Redeem Lambda AUTO_CHECKIN_REDEEM), so turning it off is a reviewed config change.
   assert.match(stack, /redeemHandler\.addEnvironment\('AUTO_CHECKIN_REDEEM', config\.autoCheckin\.redeem \? 'on' : 'off'\)/);
