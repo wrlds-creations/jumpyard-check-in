@@ -85,9 +85,15 @@ test('mobile keeps approved concise bilingual benefits and the Sky Rider note', 
   assert.doesNotMatch(code, /copy\.(intro|optionalTitle|purchaseKept)/);
   assert.match(copy, /skyRiderBenefit: 'Se parken från ovan i vår höghöjdsbana\.'/);
   assert.match(copy, /skyRiderBenefit: 'See the park from above on our high ropes course\.'/);
-  assert.match(copy, /bottleEnvironment: 'Inga engångsmuggar av miljöskäl\.'/);
-  assert.match(copy, /bottleEnvironment: 'No disposable cups, to reduce waste\.'/);
-  assert.match(code, /entry.id === 'skyrider' && entry.available && <span className="addon-shop-note"/);
+  // #548 (Love, 2026-10-15): no cups for the environment, but a water station for refills.
+  assert.match(copy, /bottleEnvironment: 'Av miljöskäl delar vi tyvärr inte ut muggar, men du kan fylla på flaskan vid vattenstationen\.'/);
+  assert.match(copy, /bottleEnvironment: "To reduce waste, we don't hand out cups, but you can refill the bottle at the water station\."/);
+  // #548 (Love, 2026-10-15): SkyRider's label is its rule, "det måste vara ett 'måste'", not a tip.
+  assert.match(code, /entry\.id === 'skyrider' && entry\.available && <p className="addon-shop-tile-rule">\{copy\.skyRiderRule\}<\/p>/);
+  assert.match(copy, /skyRiderRule: 'Måste åkas efter hopptiden'/);
+  assert.match(copy, /skyRiderRule: 'Must be ridden after jump time'/);
+  assert.doesNotMatch(copy, /Vårt tips|Our pick/);
+  assert.doesNotMatch(code, /copy\.recommended\b/);
 });
 
 test('component does not fetch prices, use kiosk dimensions or expose purchase-removing controls', () => {
@@ -223,6 +229,26 @@ test('#470: SkyRider needs 125 cm and JumpSocks are required for everyone in the
     "socksBenefit: 'Halkfria strumpor är obligatoriska i JumpYard och måste bäras av alla i trampolinområdet, även icke-hoppande föräldrar.'",
     `socksBenefit: "Non-slip socks are required at JumpYard and must be worn by everyone in the trampoline area, including parents who aren't jumping."`,
   ]) assert.ok(copy.includes(line), line);
+});
+
+test('#548: SkyRider must be ridden after the jump time, on its tile and its step, never only recommended', () => {
+  const copy = source('context/LanguageContext.tsx');
+  for (const line of [
+    "description: 'Kolla höjdkravet och när SkyRider åks.'",
+    "description: 'Check the height requirement and when to ride SkyRider.'",
+    "timingTitle: 'Åks efter hopptiden'",
+    "timingTitle: 'Ride after jump time'",
+    "timingText: 'SkyRider måste åkas efter hopptiden.'",
+    "timingText: 'SkyRider must be ridden after your jump time.'",
+    // Love, 2026-10-15: the water card names the filled 0.5 l bottle the guest buys.
+    "bottleTitle: '0,5 liter vatten'",
+    "bottleTitle: '0.5 litres of water'",
+  ]) assert.ok(copy.includes(line), line);
+  assert.doesNotMatch(copy, /passar bäst|fits best|Best after jump time|rekommenderar att SkyRider|recommend doing SkyRider/i);
+  // The rule shows on every screen height, red like the other labels.
+  const css = source('app/globals.css');
+  assert.match(css, /\.addon-shop-tile-rule \{[^}]*color: var\(--primary\);[^}]*text-transform: uppercase;/);
+  assert.doesNotMatch(css, /\.addon-shop-tile-rule \{[^}]*display: none/);
 });
 
 test('#491/#515: the water row carries "Rekommenderas", as on the kiosk, in the Sky Rider tip style; socks sit in SocksQuantity', () => {

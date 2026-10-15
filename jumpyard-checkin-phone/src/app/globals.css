@@ -155,7 +155,7 @@ body {
   font-weight: 900;
   font-style: normal;
 }
-.addon-shop-group, .addon-shop-note, .buy-product-tag, .buy-clock-label, .addon-shop-total-label {
+.addon-shop-group, .addon-shop-note, .addon-shop-tile-rule, .buy-product-tag, .buy-clock-label, .addon-shop-total-label {
   font-variation-settings: var(--jy-small-button-axes);
   font-weight: 800;
   font-style: italic;
@@ -308,11 +308,13 @@ body {
 .addon-shop-tile-icon { width: 32px; height: 32px; }
 .addon-shop-tile h3 { margin-top: 2px; font-size: 13px; line-height: 16px; }
 .addon-shop-tile-fact { display: none; margin-top: 1px; font-size: 11px; line-height: 14px; font-weight: 700; }
+/* #548: SkyRider's rule under its name, in the label style and on every screen height. */
+.addon-shop-tile-rule { margin-top: 2px; color: var(--primary); font-size: 10px; line-height: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
 .addon-shop-tile-price { margin-top: 1px; font-size: 11px; line-height: 14px; font-weight: 700; color: var(--primary); white-space: nowrap; }
 .addon-shop-tile-included { display: block; color: var(--foreground); }
 .addon-shop-tile-count { position: absolute; top: 6px; right: 8px; font-size: 16px; line-height: 18px; color: var(--primary); }
 .addon-shop-tile-stepper { gap: 2px; margin-top: auto; padding-top: 6px; }
-/* The Sky Rider recommendation sits on the top border of its tile. */
+/* A small red label on a card's top border (the water's "Rekommenderas"). */
 .addon-shop-note {
   position: absolute;
   top: -7px;

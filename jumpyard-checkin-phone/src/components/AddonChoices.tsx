@@ -120,7 +120,7 @@ export function AddonChoices({ entries, onQuantity }: Props) {
       <h2 className="addon-shop-group">{copy.firstGroupBottle}</h2>
       <section className="addon-shop-row" data-selected={hasAddonPurchase(water)}
         aria-labelledby={waterTitleId} aria-describedby={waterNoteId} data-testid="addon-choice-water_bottle">
-        {/* #491 (workshop 2026-10-07): the water is recommended, in the Sky Rider tip's style. */}
+        {/* #491 (workshop 2026-10-07): the water is recommended, as a small red label on the row's top border. */}
         {water.available && <span className="addon-shop-note addon-shop-row-tag">{copy.waterRecommended}</span>}
         <div className="addon-shop-row-main">
           <span className="addon-shop-icon-wrap">
@@ -148,7 +148,6 @@ export function AddonChoices({ entries, onQuantity }: Props) {
           return (
             <section key={entry.id} className="addon-shop-tile" data-selected={entry.quantity > entry.included}
               aria-labelledby={nameId} aria-describedby={sell ? sellId : undefined} data-testid={`addon-choice-${entry.id}`}>
-              {entry.id === 'skyrider' && entry.available && <span className="addon-shop-note">{copy.recommended}</span>}
               {added > 0 && <span className="addon-shop-tile-count">
                 <span aria-hidden="true">×{added}</span>
                 <span className="addon-shop-sr">{fill(copy.chosen, { count: added })}</span>
@@ -156,6 +155,8 @@ export function AddonChoices({ entries, onQuantity }: Props) {
               <JumpyardIcon name={entry.icon} className="addon-shop-tile-icon" />
               <h3 id={nameId}>{entry.label}</h3>
               {fact && <p className="addon-shop-tile-fact">{fact}</p>}
+              {/* #548 (Love, 2026-10-15): SkyRider's label is its rule, a must and not a tip. */}
+              {entry.id === 'skyrider' && entry.available && <p className="addon-shop-tile-rule">{copy.skyRiderRule}</p>}
               <p className="addon-shop-tile-price">
                 {sellable(entry) ? unitPrice(entry) : t.addons.unsupported}
                 {entry.included > 0 && <span className="addon-shop-tile-included">{fill(copy.included, { count: entry.included })}</span>}
