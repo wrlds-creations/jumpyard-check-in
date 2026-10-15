@@ -1,5 +1,15 @@
 # Test Plan
 
+## A reload before Pay goes back to payment (#553)
+
+Run `npm --prefix jumpyard-checkin-phone run test:payment-recovery` (part of `npm run validate`).
+
+- `paymentRecovery.test.mjs` covers the Pay time, dropping a never-paid attempt only under a fresh lease (not while another tab holds the checkout, not after Pay, not on a provider return, not without Web Locks), the restart time, and the never-ready failure.
+- `phonePaymentRecovery.test.mjs` runs the real drop-in and SDK offline: the bank's approval is still on screen 30 seconds after Pay and turns unresolved at ten minutes, and a form that never loads fails for a retry.
+- `pagePaymentRecovery.test.mjs` runs the real gate and handlers: a `prepared` reload continues on the contact step with no lookup, and "Börja om" needs the restart time and a not-found lookup, checks once more, and lets a paid booking continue instead.
+
+Run the other phone suites, lint, `tsc` and `next build --webpack`. On localhost at 375x812, with a stand-in for Cloud and saved data made by the app's own modules, check four states: a reload before Pay opens "Din kontakt" with "Gå till betalning"; Pay 40 seconds ago shows the waiting card; Pay 4 minutes ago shows "Vi hittar ingen betalning" with "Börja om"; and "Börja om" opens "Din kontakt". After release, on an iPhone, open the card form, reload the page (or leave Chrome until iOS reloads it) and land on "Din kontakt". [Notes](docs/gh-553-unpaid-reload-resume.md).
+
 ## A finished guest is checked in at once (#547)
 
 Run `npm run validate:gh547-ready-is-checked-in` (part of `npm run validate`). It drives the real Lambdas with a scripted Aurora, Lambda and ROLLER and checks that:

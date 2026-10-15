@@ -19,6 +19,7 @@ function loadFlowModule(name, globals = {}) {
 
 const flowMachine = loadFlowModule('./machine.ts');
 const recoveryHelpers = loadFlowModule('./buyFlowRecovery.ts');
+const paymentRecoveryHelpers = loadFlowModule('./paymentRecovery.ts');
 
 function declaration(name) {
   let result;
@@ -107,8 +108,24 @@ function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () 
     revealRecoveredPurchase: (...args) => events.push(['reveal', ...args]),
     initialContext: flowMachine.initialContext, nextState: flowMachine.nextState, effectiveChannel: 'park-qr',
     scrollToTop: () => events.push(['scroll']),
+    // #553 (D0270): the real pure helpers; the storage-backed actions are recorded stand-ins.
+    isUnsubmittedPaymentRecovery: paymentRecoveryHelpers.isUnsubmittedPaymentRecovery,
+    unresolvedPaymentRestartAt: paymentRecoveryHelpers.unresolvedPaymentRestartAt,
+    discardUnsubmittedPaymentRecovery: async (id, beforeClear) => {
+      events.push(['discard-unsubmitted', id]);
+      if (beforeClear?.() === false) return false;
+      record = null; return true;
+    },
+    abandonUnresolvedPaymentRecovery: async (id, beforeClear) => {
+      events.push(['abandon-unresolved', id]);
+      if (beforeClear?.() === false) return false;
+      record = null; return true;
+    },
+    recoveryRestartOffer: null,
+    recoveryAutoCheckRef: { current: null },
   };
   for (const name of [
+    'setRecoveryRestartOffer',
     'setActiveReturnAttempt', 'setRecoveryGateReady', 'setRecoveryReturnRecord', 'setBuyRecoveryStatus', 'setState', 'setExitDialogOpen',
     'setRecoveryContinuePending', 'setRecoverySyncFailed', 'setRecoveryReadyForSafety', 'setBuyRecoverySnapshot',
     'setAlreadyCheckedIn', 'setSessionStartError', 'setReadyForStaffError', 'setIsStartingSession',
@@ -123,6 +140,7 @@ function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () 
   const handlers = load([
     'recoveryMatchesBooking', 'recoveryMatchesDraft', 'recoveryStillCurrent', 'sameBuyRecoverySnapshot',
     'resetToStart', 'retryFailedPayment', 'checkRecoveryPayment', 'prepareRecoveredPurchase', 'resumeBuyFlowRecovery',
+    'resumeUnsubmittedPurchase', 'checkUnresolvedPayment', 'restartUnresolvedPayment',
     'isBuyEntryRecoveryState', 'initialRecoveryGate', 'initialLinkResolution',
     'advance', 'completeSafetyAndReadyForStaff', 'writeSafetyRecovery', 'persistSafetyRecovery',
     'isReadyForStaffSession', 'isCompletedSession', 'getResumeState',
@@ -132,7 +150,8 @@ function harness({ outcome = 'unknown', kind = 'new_booking', lookup = async () 
     for (const [key, update] of pendingState) state[key] = typeof update === 'function' ? update(state[key]) : update;
     pendingState.clear();
   };
-  return { ...handlers, state, events, flushRender, readSaved: () => saved, readRecord: () => record };
+  return { ...handlers, state, events, flushRender, readSaved: () => saved, readRecord: () => record,
+    setRecord: value => { record = value; } };
 }
 
 function paidSafetyHarness() {
@@ -894,4 +913,125 @@ test('an already-redeemed session after paid confirmation saves the confirmed bo
   assert.equal(host.buy.hasCompletedBuyFlowRecovery(snapshot), true);
   assert.equal(snapshot.completion.status, 'completed');
   assert.equal(snapshot.draftState.amountOwing, 0);
+});
+
+const flushAsync = () => new Promise(resolve => setImmediate(resolve));
+const notFound = () => Object.assign(new Error('Booking was not found.'), { reason: 'not_found' });
+
+test('#553: a reload before Pay continues the same purchase on the contact step without a lookup', async () => {
+  const host = harness({ outcome: 'pending' });
+  host.state.buyRecoveryStatus = null;
+  host.setRecord({ ...host.readRecord(), submission: { phase: 'prepared', protected: true } });
+  host.initialRecoveryGate();
+  await flushAsync();
+  const saved = host.readSaved();
+  assert.ok(host.events.some(event => event[0] === 'discard-unsubmitted' && event[1] === 'attempt-original'));
+  assert.equal(saved.currentFlowStep, 'CONTACT');
+  assert.equal(saved.bookingReference, null);
+  assert.equal(saved.draftUniqueId, null);
+  assert.equal(saved.draftState, null);
+  assert.deepEqual(saved.contact, seedSnapshot().contact);
+  assert.deepEqual(saved.addonQty, seedSnapshot().addonQty);
+  assert.equal(saved.quantity, 2);
+  assert.ok(host.events.some(event => event[0] === 'setState' && event[1] === 'KIOSK_BUY'));
+  assert.ok(!host.events.some(event => ['lookup', 'show-approved', 'clear-basket'].includes(event[0])));
+  assert.ok(!host.events.some(event => event[0] === 'setBuyRecoveryStatus' && event[1] === 'payment-unknown'));
+});
+
+test('#553: a checkout still open elsewhere, a later phase or a provider return keeps the unresolved card', async () => {
+  const otherTab = harness({ outcome: 'pending' });
+  otherTab.state.buyRecoveryStatus = null;
+  otherTab.setRecord({ ...otherTab.readRecord(), submission: { phase: 'prepared', protected: true } });
+  otherTab.state.discardUnsubmittedPaymentRecovery = async id => { otherTab.events.push(['discard-refused', id]); return false; };
+  otherTab.initialRecoveryGate();
+  await flushAsync();
+  assert.equal(otherTab.state.buyRecoveryStatus, 'payment-unknown');
+  assert.equal(otherTab.readSaved().currentFlowStep, 'PAYMENT');
+  assert.ok(!otherTab.events.some(event => event[0] === 'setState' && event[1] === 'KIOSK_BUY'));
+
+  for (const submission of [{ phase: 'submitted', protected: true }, { phase: 'unresolved', protected: true },
+    { phase: 'prepared', protected: false }, null]) {
+    const host = harness({ outcome: 'pending' });
+    host.state.buyRecoveryStatus = null;
+    host.setRecord({ ...host.readRecord(), submission });
+    host.initialRecoveryGate();
+    await flushAsync();
+    assert.equal(host.state.buyRecoveryStatus, 'payment-unknown', JSON.stringify(submission));
+    assert.ok(!host.events.some(event => event[0] === 'discard-unsubmitted'));
+  }
+
+  const returned = harness({ outcome: 'pending' });
+  returned.state.buyRecoveryStatus = null;
+  returned.setRecord({ ...returned.readRecord(), submission: { phase: 'prepared', protected: true } });
+  returned.state.hasPaymentRedirect = () => true;
+  returned.initialRecoveryGate();
+  await flushAsync();
+  assert.ok(!returned.events.some(event => event[0] === 'discard-unsubmitted'));
+  assert.ok(returned.events.some(event => event[0] === 'setBuyRecoveryStatus' && event[1] === 'payment-return'));
+});
+
+test('#553: a never-paid add-on attempt is dropped and the gate runs again without a new basket', async () => {
+  const host = harness({ outcome: 'pending', kind: 'add_product' });
+  host.state.buyRecoveryStatus = null;
+  host.setRecord({ ...host.readRecord(), submission: { phase: 'prepared', protected: true } });
+  host.initialRecoveryGate();
+  await flushAsync();
+  assert.ok(host.events.some(event => event[0] === 'discard-unsubmitted'));
+  assert.equal(host.readSaved().currentFlowStep, 'PAYMENT', 'A purchase that does not own the attempt is not rewritten');
+  assert.equal(host.state.buyRecoveryStatus, null);
+  assert.ok(!host.events.some(event => event[0] === 'setState' && event[1] === 'KIOSK_BUY'));
+});
+
+test('#553: Start over needs the restart time and a not-found answer, then continues on the contact step', async () => {
+  const host = harness({ outcome: 'unknown', lookup: async () => { throw notFound(); } });
+  const submitted = { ...host.readRecord(), submission: { phase: 'submitted', protected: true, submittedAt: Date.now() } };
+  host.setRecord(submitted);
+  host.state.recoveryReturnRecord = submitted;
+
+  await host.checkUnresolvedPayment();
+  assert.ok(!host.events.some(event => event[0] === 'setRecoveryRestartOffer'), 'Not before three minutes after Pay');
+  await host.restartUnresolvedPayment();
+  assert.ok(!host.events.some(event => event[0] === 'abandon-unresolved'));
+
+  const old = { ...submitted, submission: { ...submitted.submission,
+    submittedAt: Date.now() - paymentRecoveryHelpers.UNRESOLVED_PAYMENT_RESTART_MS } };
+  host.setRecord(old);
+  host.state.recoveryReturnRecord = old;
+  await host.checkUnresolvedPayment();
+  assert.ok(host.events.some(event => event[0] === 'setRecoveryRestartOffer' && event[1] === 'attempt-original:1'));
+
+  host.state.recoveryRestartOffer = 'attempt-original:1';
+  const lookupsBefore = host.events.filter(event => event[0] === 'lookup').length;
+  await host.restartUnresolvedPayment();
+  assert.equal(host.events.filter(event => event[0] === 'lookup').length, lookupsBefore + 1, 'Start over checks once more');
+  assert.ok(host.events.some(event => event[0] === 'abandon-unresolved' && event[1] === 'attempt-original'));
+  const saved = host.readSaved();
+  assert.equal(saved.currentFlowStep, 'CONTACT');
+  assert.equal(saved.draftState, null);
+  assert.deepEqual(saved.contact, seedSnapshot().contact);
+  assert.ok(host.events.some(event => event[0] === 'setState' && event[1] === 'KIOSK_BUY'));
+});
+
+test('#553: Start over continues to the number when the check finds the paid booking, and waits on an outage', async () => {
+  const paid = harness({ outcome: 'unknown',
+    lookup: async () => ({ paid: true, id: 'booking-original', rollerUniqueId: 'booking-original' }) });
+  const old = { ...paid.readRecord(), submission: { phase: 'submitted', protected: true, submittedAt: 1 } };
+  paid.setRecord(old);
+  paid.state.recoveryReturnRecord = old;
+  paid.state.recoveryRestartOffer = 'attempt-original:1';
+  await paid.restartUnresolvedPayment();
+  assert.ok(paid.events.some(event => event[0] === 'show-approved'));
+  assert.ok(!paid.events.some(event => event[0] === 'abandon-unresolved'));
+  assert.notEqual(paid.readSaved().currentFlowStep, 'CONTACT');
+
+  const offline = harness({ outcome: 'unknown', lookup: async () => { throw new Error('offline'); } });
+  const stale = { ...offline.readRecord(), submission: { phase: 'submitted', protected: true, submittedAt: 1 } };
+  offline.setRecord(stale);
+  offline.state.recoveryReturnRecord = stale;
+  await offline.checkUnresolvedPayment();
+  assert.ok(!offline.events.some(event => event[0] === 'setRecoveryRestartOffer'), 'An unavailable check never offers a restart');
+  offline.state.recoveryRestartOffer = 'attempt-original:1';
+  await offline.restartUnresolvedPayment();
+  assert.ok(!offline.events.some(event => event[0] === 'abandon-unresolved'));
+  assert.equal(offline.state.buyRecoveryStatus, 'payment-unknown');
 });

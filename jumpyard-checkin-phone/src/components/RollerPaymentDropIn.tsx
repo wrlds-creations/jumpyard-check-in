@@ -9,7 +9,7 @@ import { excludeKlarnaFromPaymentSession } from '@/flow/paymentMethodPolicy';
 import {
   acquirePaymentRecoveryOwnership, beginPaymentRecovery, bindPaymentRecoverySession, claimPaymentRedirect, clearPaymentRecovery,
   classifyPaymentResult, consumePaymentRedirect, getPaymentRedirect, hasPaymentRedirect,
-  failUnsubmittedPaymentRecovery, initializePaymentRecoverySubmission, markPaymentRecoverySubmitted,
+  failUnstartedPaymentRecovery, failUnsubmittedPaymentRecovery, initializePaymentRecoverySubmission, markPaymentRecoverySubmitted,
   matchesPaymentRedirect, readPaymentRecovery, setPaymentRecoveryOutcome,
   type PaymentRecoveryOwnership, type PaymentRecoveryRecord,
 } from '@/flow/paymentRecovery';
@@ -36,6 +36,8 @@ interface RollerPaymentDropInProps {
 
 const PAYMENT_CONTAINER_ID = 'roller-payment-container';
 const RESULT_WAIT_MS = 30_000;
+// #553 (D0270): after Pay, the bank's own approval (3-D Secure, BankID) stays on screen this long.
+const SUBMITTED_RESULT_WAIT_MS = 10 * 60_000;
 
 export const RollerPaymentDropIn = ({
   amountLabel, attemptId, bookingIdentifier, kind = 'new_booking', returnAttempt,
@@ -74,6 +76,7 @@ export const RollerPaymentDropIn = ({
     let terminal = false;
     let uncertain = false;
     let submissionStarted = Boolean(returnId);
+    let formReady = false;
     let documentLeaving = false;
     let ownership: PaymentRecoveryOwnership | null = null;
     let ownedAttempt: PaymentRecoveryRecord | null = null;
@@ -91,6 +94,20 @@ export const RollerPaymentDropIn = ({
     const lockNavigation = (locked: boolean) => callbacks.current.onNavigationLockChange?.(locked);
     const unknown = () => {
       if (cancelled || terminal || uncertain) return;
+      // #553 (D0270): a form that never became ready cannot have sent a payment, so a load timeout or
+      // setup error gives the guest a clean retry instead of an unresolved payment.
+      if (!formReady && !submissionStarted && !returnId && ownership && ownedAttempt
+        && failUnstartedPaymentRecovery(ownedAttempt, ownership)) {
+        terminal = true;
+        stopTimer();
+        ownership.release();
+        ownership = null;
+        lockNavigation(false);
+        setStatus('failed');
+        setMessage(null);
+        callbacks.current.onFailed({ status: 'failed', message: null, provider: null });
+        return;
+      }
       uncertain = true;
       stopTimer();
       if (ownership && ownsCurrentRecord()) setPaymentRecoveryOutcome(attemptId, 'unknown');
@@ -99,9 +116,9 @@ export const RollerPaymentDropIn = ({
       setMessage(null);
       callbacks.current.onFailed({ status: 'unknown', message: null, provider: null });
     };
-    const waitForResult = () => {
+    const waitForResult = (ms = RESULT_WAIT_MS) => {
       stopTimer();
-      timeout = setTimeout(unknown, RESULT_WAIT_MS);
+      timeout = setTimeout(unknown, ms);
     };
     // A restored document can still report its outstanding wallet error, but its old
     // submit promise must never start payment after browser navigation.
@@ -167,6 +184,7 @@ export const RollerPaymentDropIn = ({
         const handlers = {
           onReady: () => {
             if (canInitialize() && !submissionStarted) {
+              formReady = true;
               stopTimer();
               lockNavigation(false);
               setStatus('ready');
@@ -183,7 +201,7 @@ export const RollerPaymentDropIn = ({
             }
             lockNavigation(true);
             setStatus('received');
-            waitForResult();
+            waitForResult(SUBMITTED_RESULT_WAIT_MS);
             return Promise.resolve();
           },
           onPaymentReceived: () => {
@@ -191,7 +209,7 @@ export const RollerPaymentDropIn = ({
               submissionStarted = true;
               setPaymentRecoveryOutcome(attemptId, 'unknown');
               lockNavigation(true);
-              if (!uncertain) { setStatus('received'); waitForResult(); }
+              if (!uncertain) { setStatus('received'); waitForResult(SUBMITTED_RESULT_WAIT_MS); }
             }
           },
           onPaymentCompleted: (result: unknown) => {
