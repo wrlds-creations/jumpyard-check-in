@@ -18,7 +18,9 @@ Run `npm run validate:gh345-staff-handout` (part of `npm run validate`). Its `ju
 - no QR button, camera, scanner code, `@zxing` dependency or camera permission;
 - read-only entrance goods with one "Lämna ut" that sends everything left as a selection plus confirmation, and the blocked colleague, reader and other-day cases;
 - café − / + quantities starting at everything left, the two wide café lists with large numbers;
-- Acumin byte-identical to the phone, with the phone's roles and a preload.
+- Acumin byte-identical to the phone, with the phone's roles and a preload;
+- the start–end jump time on entrance rows, with the latest band end standing in for a missing end;
+- band lines from the row's colours in a folded-out "Kommande" row before check-in, with no doubled bands once Cloud lists them.
 
 Also run `validate:t0194-staff-identity-frontend` (locally its Turbopack build stops at the `node_modules` junction), `validate:gh274-redeem-success-visible`, `validate:gh456-auto-checkin`, and in `jumpyard-checkin-admin`, `npx tsc --noEmit`, `npm run lint` and `npx next build --webpack`.
 

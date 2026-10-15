@@ -33,7 +33,7 @@ function load(relative, extra = '', { states = [], globals = {} } = {}) {
 const panels = '\nexport { Row, EntrancePanel, CafePanel, ProductRow };';
 const board = (states = []) => load('../components/staff/StaffExperience.tsx', panels, { states });
 const { default: StaffExperience, Row, EntrancePanel, CafePanel, ProductRow } = board();
-const { nextPass, stageOf, activeClaim, boardPollDelay, boardTab, needsStaff, checkedInLabel } = load('../components/staff/flow.ts');
+const { nextPass, stageOf, activeClaim, boardPollDelay, boardTab, needsStaff, checkedInLabel, jumpTime } = load('../components/staff/flow.ts');
 const { createSelectionBuffer, mergeHandoutSummary } = load('../components/staff/selection.ts');
 const { ROUTE_LIMITS, TokenBucket } = require('../../../scripts/validate-t0193-capacity.js');
 const { STAFF_BOARD_PAGE_INTERVAL_MS } = load('./adminApi.ts');
@@ -312,6 +312,32 @@ test('Several colours are counted, two-tone bands draw both halves, and nothing 
   const plainBand = ProductRow({ item: band });
   assert.equal(bandChips(plainBand).length, 0);
   assert.equal(plainBand.props['aria-label'], 'Besöksband, 3 kvar');
+});
+
+test('Entrance rows show the jump time from start to end; a folded-out Kommande row shows its bands like a checked-in one', () => {
+  assert.equal(jumpTime({ booking: { startTime: '14:30:00', endTime: '16:00:00' } }), '14:30–16:00');
+  assert.equal(jumpTime({ booking: { startTime: '14:30:00', endTime: null },
+    bandColours: [{ ...cloudBand('14:30', 60), quantity: 1 }, { ...cloudBand('14:30', 90), quantity: 2 }] }), '14:30–16:00', 'the latest band end stands in');
+  assert.equal(jumpTime({ booking: { startTime: '14:30:00', endTime: null } }), '14:30');
+  const timed = session({ booking: { startTime: '14:30:00', endTime: '16:00:00' } });
+  assert.match(text(Row({ session: timed, area: 'entrance', props: props(null) })), /14:30–16:00/);
+  // Before check-in Cloud lists no bands (only chosen tickets count); the row's colours stand in, read-only.
+  const gron = cloudBand('14:30', 90);
+  const upcoming = session({ checkinSessionId: 'booking:R1', status: 'upcoming', booking: { startTime: '14:30:00', endTime: '16:00:00' },
+    counts: { admission: 3 }, bandColours: [{ ...gron, quantity: 2 }], handout: { items: [socks], claims: [], receipts: [] } });
+  const tree = EntrancePanel({ detail: upcoming, summary: upcoming, props: props(upcoming) });
+  assert.deepEqual(groups(tree), ['Besöksband Grön, 2 kvar', 'Besöksband, 1 kvar', 'JumpSocks, 4 kvar']);
+  const line = nodes(tree, (node) => node.props?.role === 'group' && node.props['aria-label'] === 'Besöksband Grön, 2 kvar')[0];
+  assert.match(text(line), /90 min/);
+  assert.deepEqual(bandChips(line).map(text), ['Bandfärg Grön']);
+  assert.match(text(tree), /Check-in inte påbörjad/);
+  assert.equal(buttons(tree).some((node) => /Lämna ut|Checka in/.test(text(node))), false);
+  // Once Cloud lists the bands (chosen at check-in), only its own lines show.
+  const checkedIn = admitted({ bandColours: [{ ...gron, quantity: 2 }], handout: { items: [{ ...band, bandColour: gron }], claims: [], receipts: [] } });
+  assert.deepEqual(groups(EntrancePanel({ detail: checkedIn, summary: checkedIn, props: props(checkedIn) })), ['Besöksband Grön, 3 kvar']);
+  const started = session({ status: 'guest_in_progress', safetyStatus: 'not_started', bandColours: [{ ...gron, quantity: 3 }],
+    handout: { items: [band], claims: [], receipts: [] } });
+  assert.deepEqual(groups(EntrancePanel({ detail: started, summary: started, props: props(started) })), ['Besöksband, 3 kvar'], 'no doubled bands');
 });
 
 test('The staff app uses the check-in font: the same Acumin file and roles as the phone (D0247)', () => {
