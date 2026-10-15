@@ -53,12 +53,16 @@ import { RollerPaymentDropIn, type RollerPaymentResultSummary } from '@/componen
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 import { resolvePurchasePreparation, runPurchasePreparationRequest } from '@/flow/purchasePreparation';
 import {
+    abandonUnresolvedPaymentRecovery,
     approvePaymentRecovery,
     clearPaymentRecoveryAfterCompletion,
     consumePaymentRedirect,
+    discardUnsubmittedPaymentRecovery,
     getPaymentRedirect,
     hasPaymentRedirect,
+    isUnsubmittedPaymentRecovery,
     readPaymentRecovery,
+    unresolvedPaymentRestartAt,
     withNoActivePaymentRecovery,
     type PaymentRecoveryRecord,
 } from '@/flow/paymentRecovery';
@@ -300,11 +304,16 @@ function BuyRecoveryCard({
     onRestart,
     onRetry,
     canRetry = true,
+    restart = null,
+    onStartAgain,
 }: {
     status: BuyRecoveryStatus;
     onRestart: () => void;
     onRetry: () => void;
     canRetry?: boolean;
+    /** #553 (D0270): this unresolved purchase can start over: soon ('waiting') or now ('offered'). */
+    restart?: 'waiting' | 'offered' | null;
+    onStartAgain?: () => void;
 }) {
     const { t } = useTranslation();
     const checking = status === 'checking' || status === 'payment-checking';
@@ -312,6 +321,7 @@ function BuyRecoveryCard({
     const unknownPayment = status === 'payment-unknown' || status === 'payment-checking';
     const failedPayment = status === 'payment-failed';
     const completedUnavailable = status === 'completed-unavailable';
+    const restartOffered = unknownPayment && restart === 'offered' && Boolean(onStartAgain);
 
     return (
         <FlowScreen
@@ -342,17 +352,38 @@ function BuyRecoveryCard({
                             <AlertCircle size={26} className="text-primary" />
                         </div>
                         <h2 className="text-xl font-black italic uppercase text-foreground">
-                            {unknownPayment ? t.buy.paymentRecoveryTitle : failedPayment ? t.buy.paymentFailedTitle
-                                : completedUnavailable ? t.buyRecovery.completedUnavailableTitle : t.buyRecovery.failedTitle}
+                            {restartOffered ? t.buy.paymentRestartTitle
+                                : unknownPayment ? t.buy.paymentRecoveryTitle : failedPayment ? t.buy.paymentFailedTitle
+                                    : completedUnavailable ? t.buyRecovery.completedUnavailableTitle : t.buyRecovery.failedTitle}
                         </h2>
                         <p className="mt-2 text-sm text-muted">
-                            {unknownPayment ? t.buy.paymentRecoveryDescription
-                                : failedPayment ? t.buy.paymentFailedDesc
-                                    : completedUnavailable ? t.buyRecovery.completedUnavailableDescription
-                                        : unsafe ? t.buyRecovery.unsafeDescription : t.buyRecovery.failedDescription}
+                            {restartOffered ? t.buy.paymentRestartDescription
+                                : unknownPayment ? (restart === 'waiting' ? t.buy.paymentRecoveryWaitDescription : t.buy.paymentRecoveryDescription)
+                                    : failedPayment ? t.buy.paymentFailedDesc
+                                        : completedUnavailable ? t.buyRecovery.completedUnavailableDescription
+                                            : unsafe ? t.buyRecovery.unsafeDescription : t.buyRecovery.failedDescription}
                         </p>
                         <div className="mt-4 flex flex-col gap-2">
-                            {!unsafe && canRetry && (
+                            {restartOffered && (
+                                <button
+                                    type="button"
+                                    onClick={onStartAgain}
+                                    data-testid="payment-recovery-start-again"
+                                    className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                                >
+                                    <RotateCcw size={16} /> {t.buyRecovery.startOver}
+                                </button>
+                            )}
+                            {restartOffered && canRetry && (
+                                <button
+                                    type="button"
+                                    onClick={onRetry}
+                                    className="w-full bg-white hover:bg-surface border border-border text-foreground font-black italic uppercase text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                                >
+                                    <RefreshCw size={16} /> {t.buy.paymentCheckStatus}
+                                </button>
+                            )}
+                            {!restartOffered && !unsafe && canRetry && (
                                 <button
                                     type="button"
                                     onClick={onRetry}
@@ -497,6 +528,10 @@ function CheckInFlow() {
     const recoveryContinueRequestedRef = useRef(false);
     const recoveryPreparationAbortRef = useRef<AbortController | null>(null);
     const recoveryApprovalRef = useRef<{ key: string; run: number } | null>(null);
+    // #553 (D0270): the unresolved attempt ("attemptId:createdAt") that may start over, and the one
+    // whose single automatic check has run.
+    const [recoveryRestartOffer, setRecoveryRestartOffer] = useState<string | null>(null);
+    const recoveryAutoCheckRef = useRef<string | null>(null);
 
     useEffect(() => () => {
         recoveryRunRef.current += 1;
@@ -973,8 +1008,8 @@ function CheckInFlow() {
         }
     };
 
-    const checkRecoveryPayment = async () => {
-        if (recoveryCheckingRef.current) return;
+    const checkRecoveryPayment = async (): Promise<'paid' | 'not_found' | 'unconfirmed'> => {
+        if (recoveryCheckingRef.current) return 'unconfirmed';
         const record = readPaymentRecovery();
         const snapshot = readBuyFlowRecovery();
         if (!snapshot || (record && (record.kind !== 'new_booking' || !recoveryMatchesDraft(record, snapshot)))
@@ -982,32 +1017,120 @@ function CheckInFlow() {
             || (record && record.createdAt !== recoveryReturnRecord?.createdAt)
             || !recoveryStillCurrent(record, snapshot)) {
             setBuyRecoveryStatus('payment-unknown');
-            return;
+            return 'unconfirmed';
         }
         const identifier = record?.bookingIdentifier ?? getBuyFlowRecoveryIdentifier(snapshot);
-        if (!identifier) return;
+        if (!identifier) return 'unconfirmed';
         recoveryCheckingRef.current = true;
         const run = ++recoveryRunRef.current;
         setBuyRecoveryStatus('payment-checking');
         try {
             // One explicit status check, always against the original purchase.
             const booking = await lookupBooking(identifier);
-            if (run !== recoveryRunRef.current || !recoveryStillCurrent(record, snapshot)) return;
+            if (run !== recoveryRunRef.current || !recoveryStillCurrent(record, snapshot)) return 'unconfirmed';
             if (!booking.paid || (booking.rollerUniqueId !== identifier && booking.id !== identifier)) {
                 setBuyRecoveryStatus('payment-unknown');
-                return;
+                return 'unconfirmed';
             }
             if (record && !await approvePaymentRecovery(record.attemptId)) {
                 if (run === recoveryRunRef.current) setBuyRecoveryStatus('payment-unknown');
-                return;
+                return 'unconfirmed';
             }
-            if (run !== recoveryRunRef.current || !recoveryStillCurrent(record, snapshot)) return;
+            if (run !== recoveryRunRef.current || !recoveryStillCurrent(record, snapshot)) return 'unconfirmed';
             showApprovedRecovery(record ? readPaymentRecovery() : null, snapshot, booking);
-        } catch {
-            if (run === recoveryRunRef.current) setBuyRecoveryStatus('payment-unknown');
+            return 'paid';
+        } catch (error) {
+            if (run !== recoveryRunRef.current) return 'unconfirmed';
+            setBuyRecoveryStatus('payment-unknown');
+            // #553 (D0270): Cloud answered that ROLLER has no booking for the original purchase.
+            return (error as { reason?: unknown } | null)?.reason === 'not_found' ? 'not_found' : 'unconfirmed';
         } finally {
             recoveryCheckingRef.current = false;
         }
+    };
+
+    // #553 (D0270): one status check; past its restart time, a not-found answer offers "Börja om".
+    const checkUnresolvedPayment = async () => {
+        const result = await checkRecoveryPayment();
+        const latest = readPaymentRecovery();
+        if (result === 'not_found' && latest && latest.kind === 'new_booking'
+            && latest.attemptId === recoveryReturnRecord?.attemptId && latest.createdAt === recoveryReturnRecord.createdAt
+            && Date.now() >= unresolvedPaymentRestartAt(latest)) {
+            setRecoveryRestartOffer(`${latest.attemptId}:${latest.createdAt}`);
+        }
+    };
+
+    // #553 (D0270): "Börja om" checks the original purchase once more. Only a not-found answer gives the
+    // attempt up; the same basket continues on the contact step, where "Gå till betalning" makes a new draft.
+    const restartUnresolvedPayment = async () => {
+        const record = readPaymentRecovery();
+        const snapshot = readBuyFlowRecovery();
+        if (!record || !snapshot || record.kind !== 'new_booking' || !recoveryMatchesDraft(record, snapshot)
+            || recoveryRestartOffer !== `${record.attemptId}:${record.createdAt}`) {
+            setRecoveryRestartOffer(null);
+            return;
+        }
+        if (await checkRecoveryPayment() !== 'not_found') return;
+        const abandoned = await abandonUnresolvedPaymentRecovery(record.attemptId, () => {
+            const latest = readBuyFlowRecovery();
+            if (!latest || !sameBuyRecoverySnapshot(snapshot, latest)) return false;
+            const retry: BuyFlowRecoverySnapshot = {
+                ...latest,
+                currentFlowStep: 'CONTACT',
+                bookingReference: null,
+                draftUniqueId: null,
+                draftState: null,
+            };
+            writeBuyFlowRecovery(retry);
+            return isPrePaymentBuyFlowRecovery(readBuyFlowRecovery());
+        });
+        const saved = abandoned ? readBuyFlowRecovery() : null;
+        if (!saved || !isPrePaymentBuyFlowRecovery(saved)) {
+            setBuyRecoveryStatus('payment-unknown');
+            return;
+        }
+        recoveryRunRef.current += 1;
+        recoveryContinuationRef.current = null;
+        setRecoveryRestartOffer(null);
+        setRecoveryReturnRecord(null);
+        setActiveReturnAttempt(null);
+        setBuyRecoverySnapshot(saved);
+        setBuyRecoveryStatus(null);
+        setState('KIOSK_BUY');
+    };
+
+    // #553 (D0270): Pay was never pressed in this attempt, so it holds no payment. Give it up under a
+    // fresh lease and continue the same purchase on the contact step, or let the gate run again.
+    const resumeUnsubmittedPurchase = async (record: PaymentRecoveryRecord, snapshot: BuyFlowRecoverySnapshot | null) => {
+        const run = ++recoveryRunRef.current;
+        const resume = Boolean(snapshot && recoveryMatchesDraft(record, snapshot)
+            && snapshot.draftState?.paymentApproved !== true);
+        const discarded = await discardUnsubmittedPaymentRecovery(record.attemptId, () => {
+            if (!resume) return true;
+            const latest = readBuyFlowRecovery();
+            if (!latest || !sameBuyRecoverySnapshot(snapshot, latest)) return false;
+            const retry: BuyFlowRecoverySnapshot = {
+                ...latest,
+                currentFlowStep: 'CONTACT',
+                bookingReference: null,
+                draftUniqueId: null,
+                draftState: null,
+            };
+            writeBuyFlowRecovery(retry);
+            return isPrePaymentBuyFlowRecovery(readBuyFlowRecovery());
+        });
+        if (run !== recoveryRunRef.current) return;
+        if (!discarded) {
+            // A checkout still open in another tab, or a changed attempt, keeps today's protection.
+            setRecoveryReturnRecord(readPaymentRecovery());
+            setBuyRecoverySnapshot(readBuyFlowRecovery());
+            setBuyRecoveryStatus('payment-unknown');
+            return;
+        }
+        const saved = readBuyFlowRecovery();
+        setBuyRecoverySnapshot(saved);
+        setBuyRecoveryStatus(null);
+        if (resume && isPrePaymentBuyFlowRecovery(saved)) setState('KIOSK_BUY');
     };
 
     const retryFailedPayment = async () => {
@@ -1376,6 +1499,14 @@ function CheckInFlow() {
             return;
         } else if (record || returned) {
             setState('KIOSK_CHOICE');
+            // #553 (D0270): a reload on the card form before Pay (an app switch, the home screen, pull to
+            // refresh) holds no payment. Continue before payment instead of showing the unresolved card.
+            if (record && !returned && isUnsubmittedPaymentRecovery(record)) {
+                setRecoveryReturnRecord(null);
+                setBuyRecoveryStatus('checking');
+                void resumeUnsubmittedPurchase(record, snapshot);
+                return;
+            }
             setRecoveryReturnRecord(record);
             if (!record || !snapshot || !recoveryMatchesDraft(record, snapshot)) {
                 setBuyRecoveryStatus('payment-unknown');
@@ -1524,6 +1655,25 @@ function CheckInFlow() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state, recoveryGateReady]);
 
+    // #553 (D0270): an unresolved new purchase is checked once by itself at its restart time; a
+    // not-found answer then offers "Börja om". No other automatic ROLLER lookups are made.
+    const restartableRecoveryKey = state === 'KIOSK_CHOICE' && buyRecoveryStatus === 'payment-unknown'
+        && recoveryReturnRecord?.kind === 'new_booking' && recoveryMatchesDraft(recoveryReturnRecord, buyRecoverySnapshot)
+        ? `${recoveryReturnRecord.attemptId}:${recoveryReturnRecord.createdAt}` : null;
+    const restartableRecoveryAt = restartableRecoveryKey && recoveryReturnRecord
+        ? unresolvedPaymentRestartAt(recoveryReturnRecord) : null;
+    useEffect(() => {
+        if (!restartableRecoveryKey || restartableRecoveryAt === null || recoveryRestartOffer === restartableRecoveryKey
+            || recoveryAutoCheckRef.current === restartableRecoveryKey) return;
+        const timer = window.setTimeout(() => {
+            recoveryAutoCheckRef.current = restartableRecoveryKey;
+            void checkUnresolvedPayment();
+        }, Math.max(0, restartableRecoveryAt - Date.now()));
+        return () => window.clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [restartableRecoveryKey, restartableRecoveryAt, recoveryRestartOffer]);
+    const recoveryRestartState: 'waiting' | 'offered' | null = !restartableRecoveryKey ? null
+        : recoveryRestartOffer === restartableRecoveryKey ? 'offered' : 'waiting';
     const backState = getBackState(state, ctx);
     // #330: the add-on offer decides whether Back is offered during its own payment.
     const flowBackAction = getFlowBackAction({ state, backState, addonsBackRule });
@@ -1648,10 +1798,12 @@ function CheckInFlow() {
                                 if (buyRecoveryStatus === 'payment-failed') retryFailedPayment();
                                 else if (buyRecoveryStatus === 'payment-unknown'
                                     && (recoveryReturnRecord || !(buyRecoverySnapshot?.draftState?.paymentApproved
-                                        && isBuyEntryRecoveryState(buyRecoverySnapshot.currentFlowStep as FlowState)))) void checkRecoveryPayment();
+                                        && isBuyEntryRecoveryState(buyRecoverySnapshot.currentFlowStep as FlowState)))) void checkUnresolvedPayment();
                                 else void resumeBuyFlowRecovery();
                             }}
                             onRestart={restartAfterBuyRecovery}
+                            restart={recoveryRestartState}
+                            onStartAgain={() => void restartUnresolvedPayment()}
                         />
                     )}
 
@@ -1684,6 +1836,7 @@ function CheckInFlow() {
                             }}
                             inlineExitVisible={exitFlowMode === 'confirm'}
                             onRequestExit={() => setExitDialogOpen(true)}
+                            onPaymentUnresolved={() => void resetToStart()}
                             onStepChange={setBuyStep}
                             onBookingReady={(booking, preparation) => {
                                 return preparePaidNewBooking(booking, null, { ...preparation, paymentApproved: true });

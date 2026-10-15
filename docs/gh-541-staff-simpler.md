@@ -1,5 +1,7 @@
 # #541 A simpler staff app
 
+Revised on 2026-10-15 by [#547](gh-547-ready-is-checked-in.md) (D0265): a finished guest is "Incheckad" at once, and the red "Behöver personal" box, "Checka in", "Redo" and "Bekräftas" are gone.
+
 Decision: [D0263](../DECISIONS.md). Since D0230 Cloud checks every finished group in itself, so staff no longer check guests in. The entrance phone (the JumpYard Personal APK on the Motorola phones, 432 CSS px) answers guests and hands out bands, and the café works on a computer. The change is web only. The APK loads `https://staff-checkin.jumpyard.se/`, so it needs no rebuild; its camera permission is now unused.
 
 ## Entrance (phone first)

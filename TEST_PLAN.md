@@ -22,6 +22,31 @@ At 375 px in the development-only `/preview/addons?full=1&scenario=buy2|booking0
 - `checkin.redeem_succeeded` records one ROLLER call per 10 (`rollerCalls`).
 
 [Notes](docs/gh-549-group-size.md).
+## A reload before Pay goes back to payment (#553)
+
+Run `npm --prefix jumpyard-checkin-phone run test:payment-recovery` (part of `npm run validate`).
+
+- `paymentRecovery.test.mjs` covers the Pay time, dropping a never-paid attempt only under a fresh lease (not while another tab holds the checkout, not after Pay, not on a provider return, not without Web Locks), the restart time, and the never-ready failure.
+- `phonePaymentRecovery.test.mjs` runs the real drop-in and SDK offline: the bank's approval is still on screen 30 seconds after Pay and turns unresolved at ten minutes, and a form that never loads fails for a retry.
+- `pagePaymentRecovery.test.mjs` runs the real gate and handlers: a `prepared` reload continues on the contact step with no lookup, and "Börja om" needs the restart time and a not-found lookup, checks once more, and lets a paid booking continue instead.
+
+Run the other phone suites, lint, `tsc` and `next build --webpack`. On localhost at 375x812, with a stand-in for Cloud and saved data made by the app's own modules, check four states: a reload before Pay opens "Din kontakt" with "Gå till betalning"; Pay 40 seconds ago shows the waiting card; Pay 4 minutes ago shows "Vi hittar ingen betalning" with "Börja om"; and "Börja om" opens "Din kontakt". After release, on an iPhone, open the card form, reload the page (or leave Chrome until iOS reloads it) and land on "Din kontakt". [Notes](docs/gh-553-unpaid-reload-resume.md).
+
+## A fixed heading and a clearer progress on the safety film (#551, kiosk #224)
+
+Run `npm --prefix jumpyard-checkin-phone run test:safety-video` and `test:flow-nav`. `safetyPlayback.test.mjs` covers the seconds left (15 at the start, 1 in the last second, 0 at the end). `SafetyScreen.test.mjs` pins the heading as a direct child of the film, the thick bar (full after the end), the seconds chip only while the film runs, the copy and the CSS, and that the poster title and duration chip are gone. Run the other phone suites (including `test:workshop-flow`), lint, `tsc` and `next build --webpack`. In the development-only `/preview/flow?full=1&screen=safety-buy|safety`, check SV and EN at 375x812: the heading stays at the top on the poster, while the film plays, when paused and after the end; the bar and "N sek kvar" count down; Back and Exit are gone while the film starts or plays and come back after it, on a pause or an error; muted autoplay, the approval after the end, Back and Exit are unchanged. After release, on a phone, the heading and the bar with the seconds left show, and Back/Exit are gone while the film plays, in a purchase and on an existing booking. [Notes](docs/gh-551-safety-heading-progress.md).
+
+## A finished guest is checked in at once (#547)
+
+Run `npm run validate:gh547-ready-is-checked-in` (part of `npm run validate`). It drives the real Lambdas with a scripted Aurora, Lambda and ROLLER and checks that:
+- a confirmed kiosk add-on starts the automatic check-in for its sessions, and so does an add-on that ROLLER confirms after the window, from the board refresh;
+- a paid draft becomes provisional handout lines with the final kinds, counters and band colours, and ROLLER's own lines are unchanged;
+- the board counts a pending purchase's bands and café goods, and the detail lists its lines while `pending` or `needs_staff`, not once `confirmed`;
+- a band handout checks the group in, in ROLLER, with `staff-redeem:<id>` when Cloud has not, and only hands out when Cloud has.
+
+`npm run validate:gh345-staff-handout` runs `staffExperience.test.mjs`. It covers a pending kiosk group under "Incheckade" with its goods and "Lämna ut" at the entrance and in the café, and no red box or "Checka in". It also covers a kept press: shown as handed out, matched to ROLLER's final lines, and confirmed after `booking_sync_pending`, with the resume, colleague, done and logout cases.
+
+Also run `validate:gh456-auto-checkin`, `validate:gh289-handoff-linked-addons`, `validate:gh285-kiosk-addon-terminal`, `validate:kiosk-payment-reconciliation`, `validate:t0194-staff-identity-frontend`, and in `jumpyard-checkin-admin`, `npx tsc --noEmit`, `npm run lint` and `npx next build`. The Park plan may change only the Session, Booking and Redeem Lambda code (the Redeem Lambda carries the shared `staff-handout.js`). After release, follow [the notes](docs/gh-547-ready-is-checked-in.md#after-release).
 
 ## Simpler sign-in: no admin code and any staff PIN (#542)
 
@@ -35,8 +60,8 @@ The Park plan may change only the admin user pool's MFA setting and the Session 
 ## The simpler staff app (#541)
 
 Run `npm run validate:gh345-staff-handout` (part of `npm run validate`). Its `jumpyard-checkin-admin/src/lib/staffExperience.test.mjs` renders the real staff components:
-- only "Kommande" and "Incheckade", with Påbörjad and Redo counted as Kommande;
-- the red "Behöver personal" box on top for every tab, time slot and search, with "Checka in" that only redeems, and an open row that stays there after it;
+- only "Kommande" and "Incheckade", with Påbörjad counted as Kommande (#547 removed Redo, the red "Behöver personal" box and "Checka in");
+- an open row that stays in the list it was opened from;
 - "Incheckad HH:MM" without "automatiskt";
 - no QR button, camera, scanner code, `@zxing` dependency or camera permission;
 - read-only entrance goods with one "Lämna ut" that sends everything left as a selection plus confirmation, and the blocked colleague, reader and other-day cases;
@@ -164,6 +189,7 @@ Run `npm run validate:gh473-contact-lookup`. It covers the Cloud lookup outcomes
 In the development-only `/preview/contact`, check both states in SV/EN at 390x844 and 375x667:
 - By default the form shows first name and email only.
 - After the synthetic `contact_details_required` answer, the notice, last name (focused) and phone appear. Email, basket and codes stay, and Continue needs both new fields.
+- #552: `love@wrlds.co,` shows "Kontrollera e-postadressen" in red on the email label row, keeps Continue off and reveals no other field; `love@wrlds.co` clears it and Continue goes on. `contactDetails.test.mjs` pins the same format table as Cloud's `invalid_email`.
 - The production export keeps `/preview/contact` a not-found page.
 
 Park acceptance follows the protected release and Love storing the key. Use owned aliases and synthetic values only:

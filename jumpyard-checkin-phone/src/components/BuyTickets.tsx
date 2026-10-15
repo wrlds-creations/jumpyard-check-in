@@ -30,6 +30,7 @@ import {
   hasSavedContactDetails,
   isContactReady,
   isValidEmail,
+  shouldShowEmailFormatMessage,
   toNewBookingCustomer,
 } from '@/flow/contactDetails';
 import { PaymentCodeRejectedDialog } from '@/components/PaymentCodeRejectedDialog';
@@ -109,6 +110,8 @@ interface BuyTicketsProps {
     },
   ) => Promise<() => void | Promise<void>>;
   onRequestExit?: () => void;
+  /** #553 (D0270): the page's recovery card takes over an unresolved payment (automatic check, Börja om). */
+  onPaymentUnresolved?: () => void;
   onStepChange?: (step: BuyTicketsStep) => void;
 }
 
@@ -801,6 +804,7 @@ export const BuyTickets = ({
   onBack,
   onBookingReady,
   onRequestExit,
+  onPaymentUnresolved,
   onStepChange,
 }: BuyTicketsProps) => {
   const { lang, t } = useTranslation();
@@ -1312,6 +1316,8 @@ export const BuyTickets = ({
     })),
   ];
   const customerValid = isContactReady({ firstName, lastName, email, phone }, contactDetailsRequired);
+  // #552: a mistyped email is the guest's to correct, on the field; it never reaches Cloud's lookup.
+  const emailFormatMessageShown = shouldShowEmailFormatMessage(email, emailFocused);
   // #505 (D0250): a pasted number waits for the contact and is then checked once (the effect below).
   // #510 (D0251): so does a typed complete gift card or membership number.
   const pastedCodeCheck = decidePastedCodeCheck(pendingPastedCode, {
@@ -2479,6 +2485,12 @@ export const BuyTickets = ({
               <label className="block mb-3">
                 <span className="text-[10px] text-foreground uppercase font-black italic tracking-wider flex items-center gap-1.5 mb-1">
                   <JumpyardIcon name="email-confirmed" className="w-5 h-5" /> {t.buy.emailLabel}
+                  {/* #552: on the label row, so nothing on the step moves when it shows. */}
+                  {emailFormatMessageShown && (
+                    <span role="alert" data-testid="buy-email-invalid" className="ml-auto flex items-center gap-1 text-[11px] text-danger">
+                      <JumpyardIcon name="warning-transparent" className="h-4 w-4 flex-shrink-0" /> {t.buy.emailInvalid}
+                    </span>
+                  )}
                 </span>
                 <input
                   ref={emailInputRef}
@@ -2493,7 +2505,12 @@ export const BuyTickets = ({
                   placeholder={t.buy.emailPlaceholder}
                   autoComplete="email"
                   disabled={checkoutLocked}
-                  className="w-full bg-white border border-border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-60"
+                  aria-invalid={emailFormatMessageShown}
+                  className={`w-full bg-white border rounded-xl px-4 py-3 text-base text-foreground placeholder:text-muted/40 focus:ring-2 outline-none transition-all disabled:opacity-60 ${
+                    emailFormatMessageShown
+                      ? 'border-danger focus:border-danger focus:ring-danger/10'
+                      : 'border-border focus:border-primary focus:ring-primary/10'
+                  }`}
                 />
               </label>
 
@@ -2812,7 +2829,10 @@ export const BuyTickets = ({
                       setStep('APPROVED');
                       void (draftSafetyAttestation ? confirmAttestedPurchase() : resolvePaidDraftBooking(undefined, true));
                     }}
-                    onFailed={(result) => setPaymentFailure(result.status === 'failed' ? 'failed' : 'unknown')}
+                    onFailed={(result) => {
+                      setPaymentFailure(result.status === 'failed' ? 'failed' : 'unknown');
+                      if (result.status !== 'failed') onPaymentUnresolved?.();
+                    }}
                   />
                 </div>
                 {paymentFailure === 'unknown' && (

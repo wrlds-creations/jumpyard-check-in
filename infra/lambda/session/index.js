@@ -11,7 +11,7 @@ const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const crypto = require('crypto');
 const { buildCheckinEmailMessage, buildCheckinEmailPreview } = require('./email-template');
 const { withGuestItemDetails, withPackageContents } = require('./package-contents');
-const { createHandoutStore } = require('./staff-handout');
+const { createHandoutStore, provisionalManifest } = require('./staff-handout');
 const { createStaffBoard } = require('./staff-board');
 const { evaluateCheckinWindow, stockholmNow } = require('./checkin-window');
 
@@ -783,8 +783,13 @@ async function handleStaffSessionDetail(event, correlationId) {
     });
   }
 
-  const handout = await createHandoutStore({ executeStatement, mappedRows, stringParameter })
+  const state = await createHandoutStore({ executeStatement, mappedRows, stringParameter })
     .readState(session, stringOrNull(auth.staff?.venueId));
+  // GH-547 (D0265): until ROLLER confirms the purchase, its paid draft's goods are the handout lines.
+  const provisional = session.bookingSyncStatus === 'confirmed' ? [] : provisionalManifest(session.items
+    .filter((item) => item.fulfillmentSource === 'provisional' || item.bookingItemKey?.startsWith('linked-provisional:'))
+    .map((item) => ({ rollerUniqueId: item.bookingItemKey, items: [item.summary] })), session.visitDate);
+  const handout = { ...state, items: [...state.items, ...provisional.map((item) => ({ ...item, collected: 0, available: item.quantity }))] };
   return jsonResponse(200, correlationId, {
     status: 'found', session: { ...session, handout, counts: { ...session.counts,
       admission: handout.items.filter((item) => item.kind === 'admission').reduce((sum, item) => sum + (item.sessionLimit ?? item.quantity), 0) } },
@@ -2885,16 +2890,23 @@ async function refreshLinkedAddOnEffectiveSyncState(checkinSessionId = null, sta
        WHERE session.checkin_session_id = sync.checkin_session_id
          AND COALESCE(session.session_summary ->> 'bookingSyncStatus', 'confirmed')
            IS DISTINCT FROM sync.booking_sync_status
-       RETURNING session.checkin_session_id
+       RETURNING session.checkin_session_id, sync.booking_sync_status
      )
-     SELECT count(*)::int AS updated_session_count
+     SELECT count(*)::int AS updated_session_count,
+       (SELECT jsonb_agg(checkin_session_id) FROM updated_session
+         WHERE booking_sync_status = 'confirmed')::text AS confirmed_session_ids
      FROM updated_session`,
     [
       ...(checkinSessionId ? [stringParameter('checkinSessionId', checkinSessionId)] : []),
       ...(staffVenueId ? [stringParameter('staffVenueId', staffVenueId)] : []),
     ],
   );
-  return Number(firstMappedRow(result)?.updated_session_count ?? 0);
+  const row = firstMappedRow(result);
+  // GH-547 (D0265): a kiosk add-on that ROLLER confirmed after the reconciliation window (through
+  // the webhook) releases the group here, so admit it as the Booking Lambda does in its window.
+  await Promise.all(parseJsonArray(row?.confirmed_session_ids).slice(0, 10)
+    .map((id) => requestAutoCheckin(stringOrNull(id), 'kiosk_add_on_confirmed', null)));
+  return Number(row?.updated_session_count ?? 0);
 }
 
 async function findReadyStaffSessions(request, staffVenueId = null) {
@@ -3287,9 +3299,10 @@ async function findStaffSessionDetail(checkinSessionId, staffVenueId = null) {
       : [],
     findStaffBookingTickets(session.rollerUniqueId, session.selectedTicketIds, staffVenueId),
   ]);
+  // GH-547: a kiosk purchase past the reconciliation window (needs_staff) shows its draft too.
   const baseItems = authoritativeItems.length > 0
     ? authoritativeItems
-    : session.bookingSyncStatus === 'pending'
+    : session.bookingSyncStatus === 'pending' || session.bookingSyncStatus === 'needs_staff'
       ? await findProvisionalStaffBookingItems(session.rollerUniqueId, staffVenueId)
       : [];
   const items = [...baseItems, ...provisionalLinkedAddOns];

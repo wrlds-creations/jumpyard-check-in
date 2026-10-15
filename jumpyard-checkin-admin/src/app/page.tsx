@@ -28,7 +28,17 @@ import {
   type StaffSessionSummary,
 } from "@/lib/adminApi";
 import StaffExperience from "@/components/staff/StaffExperience";
-import { boardPollDelay, handoutMessage, needsStaff, stockholmDay } from "@/components/staff/flow";
+import { boardPollDelay, handoutMessage, stockholmDay } from "@/components/staff/flow";
+import {
+  afterAttempt,
+  confirmRemembered,
+  readRemembered,
+  rememberHandout,
+  storeRemembered,
+  withRemembered,
+  withRememberedCafe,
+  type RememberedHandout,
+} from "@/components/staff/remembered";
 import { createSelectionBuffer, mergeHandoutSummary } from "@/components/staff/selection";
 import {
   canStaffRedeem as staffCanRedeem,
@@ -973,8 +983,11 @@ export default function Home() {
   const [redeemState, setRedeemState] = useState<RedeemState>("idle");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<StaffSessionSummary[]>([]);
-  // GH-541: Cloud's "Behöver personal" groups from the last whole-day list stay on top while searching.
-  const [urgentSessions, setUrgentSessions] = useState<StaffSessionSummary[]>([]);
+  // GH-547 (D0265): "Lämna ut" pressed before ROLLER confirmed the purchase, kept until Cloud has it.
+  const [remembered, setRemembered] = useState<RememberedHandout[]>([]);
+  const rememberedRef = useRef<RememberedHandout[]>([]);
+  const rememberedRunRef = useRef<Promise<void> | null>(null);
+  const sessionsRef = useRef<StaffSessionSummary[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [operatingDay, setOperatingDay] = useState(stockholmDay);
   const operatingDayRef = useRef(operatingDay);
@@ -1046,9 +1059,16 @@ export default function Home() {
     setRedeemState("idle");
     setCurrentSelectedId(null);
     setSessions([]);
-    setUrgentSessions([]);
     setState("idle");
   }, [setCurrentAuth, setCurrentDetail, setCurrentQuery, setCurrentSelectedId]);
+
+  // The goods were handed out, so a press outlives "Byt personal" and a reload in this tab (sessionStorage,
+  // session ids and product lines only); a new day starts empty.
+  const setCurrentRemembered = useCallback((next: RememberedHandout[]) => {
+    rememberedRef.current = next;
+    setRemembered(next);
+    storeRemembered(next);
+  }, []);
 
   const terminateStaffSession = useCallback(async () => {
     if (logoutInProgressRef.current) return;
@@ -1175,14 +1195,13 @@ export default function Home() {
 
           // A list started before a product write must not undo its accepted
           // receipt/ownership. The next scheduled refresh will catch up.
-          if (requestedHandoutVersion !== handoutVersionRef.current || handoutBusyRef.current) continue;
+          if (requestedHandoutVersion !== handoutVersionRef.current || handoutBusyRef.current || rememberedRunRef.current) continue;
           const currentSelectedId = selectedIdRef.current;
           // A refreshed queue must never close an opened guest or change the
           // operator's selected context (including a completed entrance/café visit).
           const nextSelectedId = currentSelectedId;
 
           setSessions(nextSessions);
-          if (!requestedQuery.trim()) setUrgentSessions(nextSessions.filter(needsStaff));
           queuePollDelayRef.current = boardPollDelay(nextSessions.length);
           setCurrentSelectedId(nextSelectedId);
           if (!nextSelectedId) {
@@ -1233,7 +1252,7 @@ export default function Home() {
           requestAuth = await getUsableAuth();
           const nextDetail = await getStaffSession(requestedSelectedId, requestAuth.auth.token);
           if (
-            requestedHandoutVersion !== handoutVersionRef.current || handoutBusyRef.current ||
+            requestedHandoutVersion !== handoutVersionRef.current || handoutBusyRef.current || rememberedRunRef.current ||
             requestedSelectedId !== selectedIdRef.current ||
             !isSameStaffSession(authRef.current, requestAuth)
           ) {
@@ -1616,9 +1635,18 @@ export default function Home() {
     void terminateStaffSession();
   }, [terminateStaffSession]);
 
+  // GH-547 (D0265): Cloud takes no handout before ROLLER has the booking, so "Lämna ut" is kept on
+  // this device; the goods show as handed out here and the handout is confirmed once Cloud allows it.
+  const rememberPress = useCallback((selected: StaffSessionDetail, request: HandoutRequest) => {
+    setCurrentRemembered(rememberHandout(rememberedRef.current, selected, request, operatingDayRef.current));
+    return true;
+  }, [setCurrentRemembered]);
+
   const handleHandout = useCallback(async (request: HandoutRequest, options: { confirm?: boolean } = {}): Promise<boolean> => {
     if (!detailRef.current) return false;
     const selected = detailRef.current;
+    const keep = request.action === "select" && options.confirm === true;
+    if (keep && selected.bookingSyncStatus !== "confirmed") return rememberPress(selected, request);
     const currentBuffer = selectionBufferRef.current;
     if (request.action === "select" && currentBuffer?.checkinSessionId === selected.checkinSessionId && currentBuffer.area === request.area) {
       currentBuffer.update(request.selection || []);
@@ -1638,6 +1666,8 @@ export default function Home() {
     let activeAuth: StaffAuthSession | null = null;
     let refreshAfterFailure = false;
     try {
+      // A kept press being confirmed in the background finishes first (a second or two).
+      if (rememberedRunRef.current) await rememberedRunRef.current.catch(() => undefined);
       activeAuth = await getUsableAuth();
       if (generation !== lifecycleGenerationRef.current) return false;
       const requestAuth = activeAuth;
@@ -1665,6 +1695,8 @@ export default function Home() {
     } catch (failure) {
       if (generation !== lifecycleGenerationRef.current || (activeAuth && !isSameStaffSession(authRef.current, activeAuth))) return false;
       if (handleProtectedAuthFailure(failure)) return false;
+      // ROLLER has not confirmed the purchase after all (a new kiosk add-on): keep the press.
+      if (keep && failure instanceof StaffApiError && failure.code === "booking_sync_pending") return rememberPress(selected, request);
       if (selectedIdRef.current === selected.checkinSessionId) {
         setHandoutRecoveryTarget(failure instanceof StaffApiError ? failure.recoveryTarget : undefined);
         setHandoutError(handoutMessage(failure instanceof StaffApiError ? failure.code : null,
@@ -1682,54 +1714,82 @@ export default function Home() {
         if (refreshAfterFailure) void refreshSelectedDetail();
       }
     }
-  }, [getUsableAuth, handleProtectedAuthFailure, refreshSelectedDetail, refreshSessions, setCurrentDetail]);
+  }, [getUsableAuth, handleProtectedAuthFailure, refreshSelectedDetail, refreshSessions, rememberPress, setCurrentDetail]);
 
-  // GH-541 (D0263): "Behöver personal" checks the group in with one tap and hands nothing out.
-  // It uses the same key as Cloud's automatic check-in, so the two can never redeem twice (#333).
-  const handleCheckIn = useCallback(async (): Promise<boolean> => {
-    const selected = detailRef.current;
-    if (!selected || handoutBusyRef.current) return false;
-    const generation = lifecycleGenerationRef.current;
-    const version = ++handoutVersionRef.current;
-    handoutBusyRef.current = true;
-    setHandoutBusy(true);
-    setHandoutError("");
-    setHandoutRecoveryTarget(undefined);
-    let activeAuth: StaffAuthSession | null = null;
-    let refreshAfterFailure = false;
+  // GH-547 (D0265): confirms one kept press at a time once the board shows ROLLER's booking. It
+  // selects the same goods and confirms them like "Lämna ut"; bands then also check the group in
+  // in ROLLER if Cloud has not (D0217). The operator's own taps wait for it.
+  const confirmNextRemembered = useCallback(async () => {
+    if (rememberedRunRef.current || handoutBusyRef.current || !authRef.current) return;
+    const now = Date.now();
+    const record = rememberedRef.current.find((candidate) => {
+      if (candidate.day !== operatingDayRef.current || candidate.nextAt > now) return false;
+      const row = sessionsRef.current.find((session) => session.checkinSessionId === candidate.checkinSessionId);
+      return !row || row.bookingSyncStatus === "confirmed";
+    });
+    if (!record) return;
+    const run = (async () => {
+      handoutVersionRef.current += 1;
+      let attempt: Awaited<ReturnType<typeof confirmRemembered>> = { outcome: "stop" };
+      try {
+        const activeAuth = await getUsableAuth();
+        attempt = await confirmRemembered(record, {
+          actorId: activeAuth.staff.actorId,
+          getDetail: (id) => getStaffSession(id, activeAuth.auth.token),
+          change: (id, request) => changeStaffHandout(id, activeAuth.auth.token, request),
+          onResult: (detail, result) => {
+            if (!isSameStaffSession(authRef.current, activeAuth)) return;
+            if (selectedIdRef.current === detail.checkinSessionId && detailRef.current) {
+              setCurrentDetail({ ...detailRef.current, ...result.session, handout: result.handout });
+            }
+            setSessions((rows) => rows.map((row) => mergeHandoutSummary(row, detail, result)));
+          },
+        });
+      } catch {
+        // No usable staff session: the press waits for the next login.
+      }
+      if (attempt.outcome === "stop") handleProtectedAuthFailure(attempt.failure);
+      const current = rememberedRef.current.find((candidate) =>
+        candidate.checkinSessionId === record.checkinSessionId && candidate.area === record.area);
+      if (current) {
+        // A second press while this ran is kept whole and tried again at once.
+        const next = current.lines.length !== record.lines.length ? { ...current, nextAt: 0 } : afterAttempt(current, attempt.outcome);
+        setCurrentRemembered(rememberedRef.current.flatMap((candidate) => candidate !== current ? [candidate] : next ? [next] : []));
+      }
+      handoutVersionRef.current += 1;
+      if (attempt.outcome === "done") void refreshSessions({ showLoading: false });
+    })();
+    rememberedRunRef.current = run;
     try {
-      activeAuth = await getUsableAuth();
-      if (generation !== lifecycleGenerationRef.current) return false;
-      const result = await redeemStaffSession({
-        checkinSessionId: selected.checkinSessionId,
-        staffToken: activeAuth.auth.token,
-        idempotencyKey: `staff-redeem:${selected.checkinSessionId}`,
-      });
-      if (generation !== lifecycleGenerationRef.current || !isSameStaffSession(authRef.current, activeAuth)) return false;
-      const admitted = <T extends StaffSessionSummary>(row: T): T => row.checkinSessionId === selected.checkinSessionId
-        ? { ...row, ...result.session, autoCheckin: null } : row;
-      if (selectedIdRef.current === selected.checkinSessionId && detailRef.current) setCurrentDetail(admitted(detailRef.current));
-      setSessions((rows) => rows.map(admitted));
-      setUrgentSessions((rows) => rows.filter((row) => row.checkinSessionId !== selected.checkinSessionId));
-      void refreshSessions({ showLoading: false });
-      return true;
-    } catch (failure) {
-      if (generation !== lifecycleGenerationRef.current || (activeAuth && !isSameStaffSession(authRef.current, activeAuth))) return false;
-      if (handleProtectedAuthFailure(failure)) return false;
-      if (selectedIdRef.current === selected.checkinSessionId) {
-        setHandoutError(handoutMessage(failure instanceof StaffApiError ? failure.code : null,
-          "Incheckningen kunde inte slutföras. Försök igen."));
-        refreshAfterFailure = true;
-      }
-      return false;
+      await run;
     } finally {
-      if (version === handoutVersionRef.current) {
-        handoutBusyRef.current = false;
-        setHandoutBusy(false);
-        if (refreshAfterFailure) void refreshSelectedDetail();
-      }
+      rememberedRunRef.current = null;
     }
-  }, [getUsableAuth, handleProtectedAuthFailure, refreshSelectedDetail, refreshSessions, setCurrentDetail]);
+  }, [getUsableAuth, handleProtectedAuthFailure, refreshSessions, setCurrentDetail, setCurrentRemembered]);
+
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
+
+  useEffect(() => {
+    // A press kept before a reload; another day's presses are dropped.
+    const timeoutId = window.setTimeout(() => setCurrentRemembered(readRemembered(operatingDay)), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [operatingDay, setCurrentRemembered]);
+
+  useEffect(() => {
+    if (!authSessionKey) return;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") void confirmNextRemembered();
+    }, 1_000);
+    return () => window.clearInterval(intervalId);
+  }, [authSessionKey, confirmNextRemembered]);
+
+  const shownSessions = useMemo(() => remembered.length
+    ? sessions.map((session) => withRememberedCafe(session, remembered)) : sessions, [remembered, sessions]);
+  const staffName = auth?.staff.displayName || "Personal";
+  const shownDetail = useMemo(() => detail && remembered.length ? withRemembered(detail, remembered, staffName) : detail,
+    [detail, remembered, staffName]);
 
   const filteredSessions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -1817,13 +1877,13 @@ export default function Home() {
     );
   }
 
-  if (auth.identityMode === "pin") return <StaffExperience auth={auth} sessions={sessions} urgent={urgentSessions} detail={detail}
+  if (auth.identityMode === "pin") return <StaffExperience auth={auth} sessions={shownSessions} detail={shownDetail}
     selectedId={selectedId} loading={state === "loading"} detailLoading={detailState === "loading"}
     busy={handoutBusy} error={handoutError || error} query={query} day={operatingDay}
     recoveryTarget={handoutRecoveryTarget}
     onQuery={setCurrentQuery} onSearch={handleSearchSubmit} onOpen={(id) => { setHandoutError(""); setHandoutRecoveryTarget(undefined); selectSession(id); }}
     onClose={() => { setHandoutError(""); setHandoutRecoveryTarget(undefined); closeSelectedSession(); }}
-    onLogout={handleStaffLogout} onHandout={handleHandout} onCheckIn={handleCheckIn}
+    onLogout={handleStaffLogout} onHandout={handleHandout}
     onRefresh={() => { void refreshSessions(); void refreshSelectedDetail(); }} />;
 
   return (

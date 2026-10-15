@@ -1,5 +1,5 @@
 'use strict';
-const { buildManifest, paidBookingSql } = require('./staff-handout');
+const { buildManifest, paidBookingSql, provisionalManifest } = require('./staff-handout');
 const { groupBandColours } = require('./band-colours');
 
 function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSession }) {
@@ -43,6 +43,20 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
           LEFT JOIN LATERAL (SELECT pc.summary FROM jumpyard.product_catalog_cache pc WHERE pc.roller_env = purchased.roller_env
             AND pc.summary ->> 'id' = i.product_id ORDER BY pc.fetched_at DESC LIMIT 1) catalog ON true
           WHERE purchased.venue_id = :venueId AND ${paidBookingSql('purchased')}), '[]'::jsonb)::text AS handout_catalog,
+        -- GH-547 (D0265): until ROLLER confirms the purchase, the goods of its paid draft stand in.
+        CASE WHEN COALESCE(cs.session_summary ->> 'bookingSyncStatus', 'confirmed') <> 'confirmed' THEN jsonb_build_array(
+          (SELECT jsonb_build_object('rollerUniqueId', d.roller_draft_unique_id, 'items', d.items_summary)
+            FROM jumpyard.prepayment_booking_drafts d WHERE d.roller_draft_unique_id = b.roller_unique_id
+              AND NOT EXISTS (SELECT 1 FROM jumpyard.roller_booking_items i WHERE i.roller_unique_id = b.roller_unique_id))) ||
+          COALESCE((SELECT jsonb_agg(jsonb_build_object('rollerUniqueId', d.roller_draft_unique_id, 'items', d.items_summary)
+            ORDER BY d.created_at) FROM jumpyard.booking_links link
+            JOIN jumpyard.prepayment_booking_drafts d ON d.roller_draft_unique_id = link.linked_roller_unique_id
+              AND d.original_roller_unique_id = link.original_roller_unique_id AND d.add_on_group_id = link.add_on_group_id
+            WHERE link.original_roller_unique_id = b.roller_unique_id AND link.link_type = 'add_product_draft'
+              AND d.flow_type = 'add_product' AND d.payment_channel = 'card_present'
+              AND d.payment_attempt_status IN ('approved', 'reconciled') AND d.booking_confirmation_status IN ('pending', 'needs_staff')
+              AND NOT EXISTS (SELECT 1 FROM jumpyard.roller_booking_items i WHERE i.roller_unique_id = link.linked_roller_unique_id)),
+            '[]'::jsonb) END::text AS provisional_catalog,
         COALESCE((SELECT jsonb_object_agg(totals.id, totals.quantity) FROM (
           SELECT item ->> 'id' AS id, sum((item ->> 'quantity')::int) AS quantity
           FROM jumpyard.staff_handout_operations op CROSS JOIN LATERAL jsonb_array_elements(op.items) item
@@ -101,7 +115,8 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
       p('venueId', venueId), p('bookingId', bookingId)]);
     const rows = mappedRows(result);
     return { sessions: rows.slice(0, 100).map((row) => {
-      const manifest = buildManifest(parse(row.handout_catalog, []), row.visit_date);
+      const manifest = [...buildManifest(parse(row.handout_catalog, []), row.visit_date),
+        ...provisionalManifest(parse(row.provisional_catalog, []), row.visit_date)];
       const items = manifest.filter((item) => item.area === 'cafe');
       const admission = manifest.filter((item) => item.kind === 'admission');
       const collected = parse(row.collected_items, {});

@@ -5,7 +5,7 @@ Read for phone/admin behavior or data integration work. Facts follow the reviewe
 ## Current Implemented Flow Facts
 
 - #340: safe, correlated server-error reports. #403: lookup reads audit IDs. #407: [apply codes](../docs/gh407-code-feedback.md).
-- [#345](../docs/gh-345-staff-handout.md): daily codes, today-only queue, early café; APK accepted. AirDroid: colleague. [D0263/#541](../docs/gh-541-staff-simpler.md): Kommande/Incheckade, red "Behöver personal" box, fold-out rows with one-tap "Lämna ut", a computer café, no QR, Acumin.
+- [#345](../docs/gh-345-staff-handout.md): daily codes, today-only queue, early café; APK accepted. AirDroid: colleague. [D0263/#541](../docs/gh-541-staff-simpler.md): Kommande/Incheckade, fold-out rows with one-tap "Lämna ut", a computer café, no QR, Acumin. [D0265/#547](../docs/gh-547-ready-is-checked-in.md): a finished guest is Incheckad at once, with the paid draft's goods and a kept "Lämna ut" until ROLLER confirms; no red box.
 
 - Lookup is Aurora-first with Roller-authoritative refresh, Nacka/date scope, and nearest same-day selection. Ready bookings start/resume a server session; opaque booking-bound guest proof stays in phone memory and hash-only in Aurora.
 - Safety: server-owned handoff, approval-to-safety and final paid check (D0199/#331); SV/EN video (D0210/D0219/#343). D0255/#520: an existing booking's paid add-ons go add-ons, film, summary, payment. Staff identity/heartbeat: #334.

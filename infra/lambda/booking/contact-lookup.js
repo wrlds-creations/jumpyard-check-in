@@ -8,11 +8,14 @@
 // - Anything else is uncertain (several profiles, an HTTP error, a timeout, no usable key, a disabled
 //   lookup or an unexpected answer): no draft is created and the guest is asked for last name and phone.
 // Klaviyo values only travel inside the ROLLER customer. They are never logged or returned to a client.
+// GH-552: an email the lookup cannot ask about is a typo, not an uncertain answer. The draft validation
+// rejects it with invalid_email first, so it never reaches the lookup or asks for last name and phone.
 
 const KLAVIYO_PROFILES_URL = 'https://a.klaviyo.com/api/profiles';
 const KLAVIYO_REVISION = '2026-07-15';
 const KLAVIYO_PROFILE_FIELDS = 'email,first_name,last_name,phone_number,location';
 const CONTACT_DETAILS_REQUIRED = 'contact_details_required';
+const INVALID_EMAIL = 'invalid_email';
 const PLACEHOLDER_LAST_NAME = 'Gäst';
 const PLACEHOLDER_PHONE = '0700000000';
 const DEFAULT_TIMEOUT_MS = 1500;
@@ -49,6 +52,15 @@ function draftContactMode(customer) {
 function lookupEmail(value) {
   const email = text(value)?.toLowerCase() ?? null;
   return email && email.length <= 254 && LOOKUP_EMAIL.test(email) ? email : null;
+}
+
+/**
+ * GH-552: the email format an email-first draft accepts is exactly what the lookup can ask about:
+ * trimmed, any letter case, plain characters, one @ and a domain with a dot. The phone and the kiosk
+ * check the same format before they send.
+ */
+function isValidEmailFormat(value) {
+  return lookupEmail(value) !== null;
 }
 
 function buildProfileLookupUrl(email) {
@@ -274,6 +286,7 @@ function describeOutcome(result) {
 module.exports = {
   CONTACT_DETAILS_REQUIRED,
   DEFAULT_TIMEOUT_MS,
+  INVALID_EMAIL,
   KLAVIYO_REVISION,
   PLACEHOLDER_LAST_NAME,
   PLACEHOLDER_PHONE,
@@ -282,6 +295,7 @@ module.exports = {
   createApiKeyProvider,
   describeOutcome,
   draftContactMode,
+  isValidEmailFormat,
   parseApiKey,
   resolveEmailFirstCustomer,
   rollerPhone,

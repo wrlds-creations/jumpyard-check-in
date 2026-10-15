@@ -4,18 +4,17 @@ import Image from "next/image";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Check, ChevronDown, LoaderCircle, Minus, Plus, RefreshCcw, Search, X } from "lucide-react";
 import type { HandoutArea, HandoutItem, HandoutReceipt, HandoutRequest, StaffAuthSession, StaffSessionDetail, StaffSessionSummary } from "@/lib/adminApi";
-import { activeClaim, boardTab, checkedInLabel, clock, itemIcon, jumpTime, needsStaff, nextPass, plannedBands, stageOf, stockholmDay, type BoardTab } from "./flow";
+import { activeClaim, boardTab, checkedInLabel, checkedInTime, clock, itemIcon, jumpTime, nextPass, plannedBands, stageOf, stockholmDay, type BoardTab } from "./flow";
 import { BandChip, Icon, cls } from "./ui";
 
 // GH-541 (D0263): Cloud checks every finished group in itself, so the entrance keeps two lists.
+// GH-547 (D0265): a guest who is done on the phone or kiosk is Incheckad at once; there is no red box.
 const tabs: { id: BoardTab; label: string }[] = [{ id: "upcoming", label: "Kommande" }, { id: "completed", label: "Incheckade" }];
 // The café computer stays on Café after "Byt personal" or an idle logout in the same browser tab.
 const AREA_KEY = "jumpyard_staff_area_v1";
 interface Props {
   auth: StaffAuthSession;
   sessions: StaffSessionSummary[];
-  /** GH-541: "Behöver personal" groups from the last whole-day list, kept on top while searching. */
-  urgent?: StaffSessionSummary[];
   detail: StaffSessionDetail | null;
   selectedId: string | null;
   loading: boolean;
@@ -32,13 +31,12 @@ interface Props {
   onRefresh: () => void;
   onLogout: () => void;
   onHandout: (request: HandoutRequest, options?: { confirm?: boolean }) => Promise<boolean>;
-  onCheckIn: () => Promise<boolean>;
 }
 type HandoutView = ReturnType<typeof handoutView>;
 
 const left = (item: HandoutItem) => item.available ?? Math.max(0, item.quantity - item.collected);
 const nameOf = (session: StaffSessionSummary) => session.guest?.name || session.bookingReference || "Bokning";
-const checkedInAt = (session: StaffSessionSummary) => Date.parse(session.completedAt || "") || 0;
+const checkedInAt = (session: StaffSessionSummary) => Date.parse(checkedInTime(session) || "") || 0;
 const byStart = (a: StaffSessionSummary, b: StaffSessionSummary) =>
   (a.booking.startTime || "").localeCompare(b.booking.startTime || "") || nameOf(a).localeCompare(nameOf(b), "sv");
 const newestFirst = (a: StaffSessionSummary, b: StaffSessionSummary) =>
@@ -68,26 +66,22 @@ function rowStatus(session: StaffSessionSummary, area: HandoutArea, actorId?: st
   if (area === "cafe") return session.cafeRemaining ? { text: `${session.cafeRemaining} kvar`, tone: "text-primary" } : { text: "Utlämnat", tone: "text-success" };
   const stage = stageOf(session);
   if (stage === "completed") return { text: checkedInLabel(session), tone: "text-success" };
-  // GH-456: an automatic check-in that failed hands the group to staff.
-  if (needsStaff(session)) return { text: "Behöver personal", tone: "text-primary" };
-  if (session.bookingSyncStatus !== "confirmed") return { text: "Bekräftas", tone: "" };
   if (session.isExpired) return { text: "Gått ut", tone: "" };
   if (stage === "started") return { text: "Påbörjad", tone: "text-primary" };
-  if (stage === "ready") return { text: "Redo", tone: "text-success" };
   return null;
 }
 
-function Row({ session, area, props, urgent = false, onArea }: {
-  session: StaffSessionSummary; area: HandoutArea; props: Props; urgent?: boolean; onArea?: (area: HandoutArea) => void;
+function Row({ session, area, props, onArea }: {
+  session: StaffSessionSummary; area: HandoutArea; props: Props; onArea?: (area: HandoutArea) => void;
 }) {
   const open = props.selectedId === session.checkinSessionId;
-  const status = urgent && needsStaff(session) ? null : rowStatus(session, area, props.auth.staff.actorId);
+  const status = rowStatus(session, area, props.auth.staff.actorId);
   const cafe = area === "cafe";
   // GH-459: entrance staff see which bands to take; a count shows when the group has several colours.
   const bands = cafe ? [] : session.bandColours ?? [];
   const counted = bands.length > 1 || bands.reduce((sum, band) => sum + band.quantity, 0) !== session.counts.admission;
   const chevron = <ChevronDown size={cafe ? 22 : 18} aria-hidden="true" className={`shrink-0 transition-transform ${open ? "rotate-180 text-primary" : ""}`} />;
-  return <article className={`@container min-w-0 rounded-2xl border bg-white shadow-sm ${open ? "border-primary ring-4 ring-primary/10" : urgent ? "border-primary" : "border-border"}`}>
+  return <article className={`@container min-w-0 rounded-2xl border bg-white shadow-sm ${open ? "border-primary ring-4 ring-primary/10" : "border-border"}`}>
     <button type="button" aria-expanded={open} onClick={open ? props.onClose : () => props.onOpen(session.checkinSessionId)}
       className={`w-full min-w-0 text-left transition active:scale-[0.995] ${cafe ? "flex items-center gap-3 px-4 py-3 @2xl:gap-6 @2xl:px-6 @2xl:py-5" : "px-3 py-3"}`}>
       {cafe ? <>
@@ -136,12 +130,13 @@ function handoutView(detail: StaffSessionDetail, area: HandoutArea, props: Props
   const stage = stageOf(detail);
   const complete = stage === "completed";
   const products = handout?.items.filter((item) => item.area === area) || [];
+  // GH-547 (D0265): a checked-in group is handed out at once, even while ROLLER still confirms its purchase
+  // (the press is then kept on this device and confirmed in Cloud later).
   const blocker = colleague ? `${current?.actorName} hjälper gästen` : props.auth.staff.role === "staff_reader" ? "Du har läsbehörighet"
     : detail.visitDate !== stockholmDay() ? "Bokningen gäller en annan dag"
       : stage === "upcoming" ? "Check-in inte påbörjad"
-        : detail.bookingSyncStatus !== "confirmed" ? "Bokningen bekräftas"
-          : detail.isExpired && !complete ? "Förberedelsen har gått ut – gästen öppnar bokningen igen"
-            : stage === "started" ? "Gästen slutför check-in i mobilen eller kiosken" : null;
+        : detail.isExpired && !complete ? "Förberedelsen har gått ut – gästen öppnar bokningen igen"
+          : stage === "started" ? "Gästen slutför check-in i mobilen eller kiosken" : null;
   return { claim, owned, pending, stage, complete, products, blocker, handout,
     remaining: products.filter((item) => left(item) > 0), locked: Boolean(blocker) || !handout };
 }
@@ -206,11 +201,9 @@ function EntrancePanel({ detail, summary, props, onArea }: {
     : [...plannedBands(summary ?? detail), ...view.products];
   const cafe = (view.handout?.items || []).filter((item) => item.area === "cafe");
   const cafeLeft = cafe.filter((item) => left(item) > 0);
-  const ready = view.stage === "ready";
-  // GH-541 (D0263): checked-in groups get their goods with one tap; a group Cloud could not check in gets "Checka in".
-  const action = view.pending ? "resume" : view.complete ? view.remaining.length ? "handout" : null : ready ? "checkin" : null;
+  // GH-541 (D0263): checked-in groups get their goods with one tap.
+  const action = view.pending ? "resume" : view.complete && view.remaining.length ? "handout" : null;
   function run() {
-    if (action === "checkin") return void props.onCheckIn();
     if (action === "resume") return void props.onHandout({ area: "entrance", action: "confirm", revision: view.claim?.revision || 0 });
     void props.onHandout({ area: "entrance", action: "select", revision: view.claim?.revision || 0,
       selection: view.remaining.map((item) => ({ id: item.id, quantity: left(item) })) }, { confirm: true });
@@ -218,10 +211,10 @@ function EntrancePanel({ detail, summary, props, onArea }: {
   return <div className="grid gap-2 p-3">
     {view.blocker && <Note icon="info">{view.blocker}</Note>}
     {goods.length > 0 ? <Goods>{goods.map((item) => <ProductRow key={item.id} item={item} />)}</Goods>
-      : <p className="py-1 text-sm font-bold">{view.complete || ready ? "Inget att lämna ut här." : "Produkterna visas när bokningen är klar."}</p>}
+      : <p className="py-1 text-sm font-bold">{view.complete ? "Inget att lämna ut här." : "Produkterna visas när bokningen är klar."}</p>}
     {cafe.length > 0 && <Note icon="drink-cup">Caféet: {cafeLeft.length ? cafeLeft.map((item) => `${left(item)} ${item.name}`).join(" · ") : "utlämnat"}</Note>}
     <Actions props={props} area="entrance" view={view} action={action} disabled={view.locked} onRun={run} onArea={onArea}
-      label={action === "checkin" ? "Checka in" : action === "resume" ? "Fortsätt bekräfta" : "Lämna ut"} done={lastReceipt(view.handout?.receipts, "entrance")} />
+      label={action === "resume" ? "Fortsätt bekräfta" : "Lämna ut"} done={lastReceipt(view.handout?.receipts, "entrance")} />
   </div>;
 }
 
@@ -255,7 +248,7 @@ export default function StaffExperience(props: Props) {
   const [pass, setPass] = useState<string | null>(null);
   const [tab, setTab] = useState<BoardTab>("upcoming");
   const [cafeDone, setCafeDone] = useState(false);
-  // An open row stays in the list it was opened from (after "Checka in" or a full café handout) until it is closed.
+  // An open row stays in the list it was opened from (after the guest finishes or a full café handout) until it is closed.
   const [held, setHeld] = useState<{ id: string; place: string } | null>(null);
   function chooseArea(value: HandoutArea) {
     setArea(value);
@@ -267,18 +260,9 @@ export default function StaffExperience(props: Props) {
   const slots = [...new Set(props.sessions.map((session) => session.booking.startTime?.slice(0, 5)).filter((value): value is string => Boolean(value)))].sort();
   const hold = held && held.id === props.selectedId ? held : null;
   const placeOf = (session: StaffSessionSummary, place: string) => hold?.id === session.checkinSessionId ? hold.place : place;
-  // GH-541: "Behöver personal" stays on top whatever the tab, pass or search.
-  const fresh = new Map(props.sessions.map((session) => [session.checkinSessionId, session]));
-  const entrancePlace = (session: StaffSessionSummary) => placeOf(session, needsStaff(session) ? "urgent" : boardTab(session));
-  const pinned = new Map<string, StaffSessionSummary>();
-  for (const row of [...(query ? props.urgent ?? [] : []), ...props.sessions]) {
-    const current = fresh.get(row.checkinSessionId) ?? row;
-    if (entrancePlace(current) === "urgent") pinned.set(current.checkinSessionId, current);
-  }
-  const urgent = [...pinned.values()].sort(byStart);
-  const board = props.sessions.filter((session) => !pinned.has(session.checkinSessionId) &&
-    (passTime === "all" || session.booking.startTime?.slice(0, 5) === passTime));
-  const listed = query ? props.sessions.filter((session) => !pinned.has(session.checkinSessionId))
+  const entrancePlace = (session: StaffSessionSummary) => placeOf(session, boardTab(session));
+  const board = props.sessions.filter((session) => passTime === "all" || session.booking.startTime?.slice(0, 5) === passTime);
+  const listed = query ? props.sessions
     : board.filter((session) => entrancePlace(session) === tab).sort(tab === "completed" ? newestFirst : byStart);
   const cafeSummary = (session: StaffSessionSummary) => !query && stageOf(session) !== "completed" && session.cafeSession
     ? { ...session, ...session.cafeSession, counts: { ...session.counts, admission: undefined } } : session;
@@ -289,7 +273,7 @@ export default function StaffExperience(props: Props) {
   const rows = (list: StaffSessionSummary[], rowArea: HandoutArea, place: string) => {
     const opener = { ...props, onOpen: (id: string) => { setHeld({ id, place }); props.onOpen(id); } };
     return <div className="grid gap-2">{list.map((session) => <Row key={session.checkinSessionId} session={session} area={rowArea}
-      props={opener} urgent={place === "urgent"} onArea={chooseArea} />)}</div>;
+      props={opener} onArea={chooseArea} />)}</div>;
   };
   const empty = (text: string) => <p role="status" className="py-8 text-center text-sm font-bold lg:text-base">{props.loading ? "Hämtar bokningar…" : text}</p>;
   const width = cafe ? "max-w-[1680px]" : "max-w-2xl";
@@ -325,10 +309,6 @@ export default function StaffExperience(props: Props) {
           </section>
         </div>
       </> : <>
-        {urgent.length > 0 && <section aria-labelledby="staff-needs-staff" className="mt-3 grid gap-2 rounded-3xl border-2 border-primary bg-primary/5 p-2">
-          <h2 id="staff-needs-staff" className="flex items-center justify-between px-1 pt-1 text-base font-black italic uppercase text-primary"><span>Behöver personal</span><span className="tabular-nums">{urgent.length}</span></h2>
-          {rows(urgent, "entrance", "urgent")}
-        </section>}
         {!query && <div className="mt-3 grid grid-cols-2 overflow-hidden rounded-2xl border border-border">{tabs.map((item) => <button key={item.id} type="button" aria-pressed={tab === item.id} onClick={() => setTab(item.id)}
           className={`flex min-h-16 flex-col items-center justify-center gap-0.5 border-l border-border first:border-l-0 ${tab === item.id ? "bg-primary/5 text-primary shadow-[inset_0_-3px_0_0_var(--primary)]" : "bg-white"}`}>
           <span className="text-sm font-black italic uppercase">{item.label}</span><span className="text-2xl font-black italic tabular-nums">{board.filter((session) => entrancePlace(session) === item.id).length}</span></button>)}</div>}

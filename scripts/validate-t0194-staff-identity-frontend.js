@@ -179,8 +179,10 @@ function validateStorageAndCleanup(page, identity, adminIdentity, adminPage, cal
     /setRedeemConfirmation\(null\)/,
     /setCurrentSelectedId\(null\)/,
     /setSessions\(\[\]\)/,
-    /setUrgentSessions\(\[\]\)/,
   ]) assert.match(cleanup, required);
+  // GH-547 (D0265): a "Lämna ut" kept until ROLLER confirms outlives "Byt personal", because the goods
+  // were handed out. It holds the session id, the counter and product lines only, never guest data.
+  assert.doesNotMatch(cleanup.slice(0, cleanup.indexOf('}, [')), /Remembered/);
   // GH-541: the staff app has no camera QR scanner any more; staff search by name, booking or number.
   assert.doesNotMatch(page, /zxing|scanner|getUserMedia|Skanna QR/i);
 

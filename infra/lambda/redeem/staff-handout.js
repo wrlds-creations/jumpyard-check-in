@@ -3,7 +3,7 @@
 const { withPackageContents } = require('./package-contents');
 // GH-459: guest band colours use this same admission classification.
 const { ADMISSION_PRODUCT_TYPES: admissionTypes, NON_PHYSICAL_PRODUCT_TYPES: nonPhysicalTypes,
-  bandColourForAdmission, productTypeKey: key } = require('./band-colours');
+  PURCHASE_ADMISSION_TYPES: purchaseAdmissionTypes, bandColourForAdmission, productTypeKey: key } = require('./band-colours');
 // Match GH-338's exact payment classification for both original and linked goods.
 // In particular, a zero balance cannot override an explicit Unpaid/PartiallyPaid.
 function paidBookingSql(alias) {
@@ -35,7 +35,8 @@ function classifyItem(item) {
     item.summary?.productSubType, item.summary?.parentType].map(key);
   const label = `${item.productName || ''} ${item.parentProductName || ''}`.toLowerCase();
   if (types.some((type) => nonPhysicalTypes.has(type))) return null;
-  if (types.some((type) => admissionTypes.has(type))) return 'admission';
+  // A purchase ROLLER has not confirmed yet is described with Cloud's own definitions (GH-547).
+  if (types.some((type) => admissionTypes.has(type) || (item.provisional && purchaseAdmissionTypes.has(type)))) return 'admission';
   if (/coffee|kaffe|cappuccino|latte|espresso/.test(label)) return 'coffee';
   if (/pizza/.test(label)) return 'pizza';
   if (/sock|strump/.test(label)) return 'socks';
@@ -77,7 +78,27 @@ function buildManifest(items, visitDate) {
       ...(part.kind === 'admission' && Number.isSafeInteger(raw.selectedUnits)
         ? { sessionLimit: Math.min(part.quantity, raw.selectedUnits * (item.packageContents ? 2 : 1)) } : {}),
       ...bandColourOf(part, item),
+      ...(raw.provisional ? { provisional: true } : {}),
     }));
+  });
+}
+
+// GH-547 (D0265): until ROLLER confirms a paid kiosk or phone purchase (about 80 s for the kiosk),
+// staff see its goods from the draft Cloud stored with the payment: the same lines, counters and
+// band colours as afterwards, marked provisional. Their ids last only until ROLLER's booking
+// replaces them, so a handout is never confirmed against them.
+function provisionalManifest(sources, visitDate) {
+  return (Array.isArray(sources) ? sources : []).flatMap((source) => {
+    const items = source && typeof source.rollerUniqueId === 'string' && Array.isArray(source.items) ? source.items : [];
+    return buildManifest(items.map((item, index) => ({
+      rollerUniqueId: source.rollerUniqueId, bookingItemId: `provisional:${index}`,
+      productId: item?.productId ?? null, parentProductId: item?.parentProductId ?? null,
+      productName: item?.productName ?? null, parentProductName: item?.parentProductName ?? null,
+      quantity: Number(item?.quantity), bookingDate: item?.bookingDate ?? null,
+      startTime: item?.startTime ?? null, endTime: item?.endTime ?? null,
+      summary: { type: item?.type, productType: item?.productType, productSubType: item?.productSubType, parentType: item?.parentType },
+      provisional: true,
+    })), visitDate);
   });
 }
 
@@ -160,4 +181,4 @@ function createHandoutStore({ executeStatement, mappedRows, stringParameter }) {
   return { readManifest, readState };
 }
 
-module.exports = { CAFE_KINDS, buildManifest, classifyItem, createHandoutStore, paidBookingSql };
+module.exports = { CAFE_KINDS, buildManifest, classifyItem, createHandoutStore, paidBookingSql, provisionalManifest };

@@ -26,15 +26,16 @@ Love explicitly restored phone entry in phone/shared Cloud issue [#409](https://
 
 `POST /v1/bookings/draft` accepts two customer shapes. First name, last name, email and phone keep the four-field path above exactly: no lookup, and the submitted values reach ROLLER. Only `firstName` and `email`, with neither `lastName` nor `phone` (empty strings count as absent), is email-first. Any other partial shape still returns `400 customer_required`. Quotes and existing-booking add-ons never look anything up.
 
+- **Email format (#552, D0271).** The email must have the format the lookup can ask about: trimmed, any letter case, plain ASCII address characters, one `@` and a domain with a dot, at most 254 characters. Anything else, such as a trailing comma, a space inside, no domain or å/ä/ö, returns `400 {status: "invalid_request", error: {code: "invalid_email"}}` before the reservation, the key read, Klaviyo or ROLLER. The phone and the kiosk check the same format and show "Kontrollera e-postadressen". The four-field path keeps its own check (`customer_email_invalid`).
 - **Lookup.** After the idempotency reservation and before any ROLLER call, Cloud sends `GET https://a.klaviyo.com/api/profiles?filter=equals(email,"<lower-case email>")&fields[profile]=email,first_name,last_name,phone_number,location` with `Authorization: Klaviyo-API-Key <key>`, `revision: 2026-07-15` and `accept: application/vnd.api+json`. Redirects are refused, and one 1.5 s timeout covers the whole exchange. Node's global fetch keeps the connection alive in a warm container.
 - **Exactly one profile with the same email.** ROLLER receives Klaviyo's `first_name` (else the typed first name), `last_name` (else `Gäst`) and `phone_number` (else `0700000000`). A `+46` number is sent in the national `0…` form; other countries keep E.164. `address` holds only `zip`→`postcode` (D0234) and is omitted without it. Other location fields (street, city, country, IP, coordinates, region, timezone) are never read, because Klaviyo can derive some of them from IP.
 - **No profile.** The typed first name, last name `Gäst` and phone `0700000000`, without an address.
-- **Uncertain.** This covers more than one profile or a further result page, any non-2xx answer, a timeout or network error, an unexpected shape or type, a different profile email, an email the filter cannot express safely, a missing, empty, unreadable or invalid key, and a disabled lookup. Cloud contacts no ROLLER endpoint, marks the reservation `failed` with `contact_details_required` and returns `409 {status: "blocked", error: {code: "contact_details_required"}}`. The client shows last name and phone and resubmits all four fields with a new idempotency key.
+- **Uncertain.** This covers more than one profile or a further result page, any non-2xx answer, a timeout or network error, an unexpected shape or type, a different profile email, an email the filter cannot express safely (validation already answers it with `invalid_email`), a missing, empty, unreadable or invalid key, and a disabled lookup. Cloud contacts no ROLLER endpoint, marks the reservation `failed` with `contact_details_required` and returns `409 {status: "blocked", error: {code: "contact_details_required"}}`. The client shows last name and phone and resubmits all four fields with a new idempotency key.
 - **Guards.** Placeholders keep the #409 rules: `0700000000` is never SMS-ready, `acceptMarketingSms` is never sent, and ingestion treats it as missing contact. The email choice (D0225) travels unchanged. The idempotency hash uses the submitted contact, so it does not depend on Klaviyo's answer. The prepayment record stores the contact sent to ROLLER, with a placeholder phone stored as null.
 - **Privacy.** Klaviyo values never appear in a response: the draft response is unchanged, and a ROLLER rejection of an email-first draft returns only error codes and field names. Logs hold one `booking.contact_lookup` line with `found`, `not_found` or `uncertain:<reason>` and `latencyMs`. `booking.draft_succeeded` adds `contactMode` and `contactLookup`.
 - **Quotes.** `POST /v1/bookings/quote` never sends a partial customer to Booking Costs; a customer without all four fields is replaced by the synthetic quote customer.
 - **Configuration and key.** `contactLookup.klaviyoEnabled` and `timeoutMs` (500–3000 ms, default 1500) are enabled only in the reviewed full-flow profile. Booking receives `ENABLE_GH473_KLAVIYO_CONTACT_LOOKUP`, `GH473_KLAVIYO_LOOKUP_TIMEOUT_MS` and `KLAVIYO_PROFILES_READ_SECRET_ARN`. The key is stored in the retained, initially empty secret `/jumpyard-check-in-park-test/klaviyo/profiles-read`, as `pk_…` or `{"apiKey":"pk_…"}`. It is read once per container and cached for five minutes; a missing key is re-read after a minute, and a 401/403 answer drops the cache. Until Love stores the key, every email-first draft is uncertain and the phone shows the full form.
-- **Kiosk.** Kiosk #150 can use the same contract. The kiosk sends four fields today and is unchanged.
+- **Kiosk.** Kiosk #150 uses the same contract, and kiosk #225 checks the same email format.
 
 [Evidence, validation and acceptance](docs/gh473-email-first-name-klaviyo.md).
 
@@ -572,7 +573,9 @@ Rules:
 
 ### `GET /v1/staff/check-in/sessions/{checkinSessionId}`
 
-Under current staff venue/read authorization, #345 also returns completed sessions, read-only `booking:<id>` placeholders and authoritative `handout` items/available quantities, claims and attributed receipts. Opening details never claims a guest. [Current handout contract](docs/gh-345-staff-handout.md#api-changes).
+Under current staff venue/read authorization, #345 also returns completed sessions, read-only `booking:<id>` placeholders and authoritative `handout` items/available quantities, claims and attributed receipts. Opening details never claims a guest.
+
+#547 (D0265): until ROLLER confirms a paid purchase (`bookingSyncStatus` `pending` or `needs_staff`), the detail's `handout.items` and the board's counts, `bandColours` and café totals also include the paid draft's goods as lines with `provisional: true` and synthetic ids. They are never accepted in a handout selection: the handout route answers `booking_sync_pending` until the booking is confirmed. [Current handout contract](docs/gh-345-staff-handout.md#api-changes).
 
 Returns detail for one ready-for-staff session.
 
@@ -1082,7 +1085,8 @@ Decided with JumpYard's product owner on 2026-10-06: a completed check-in counts
 - **Automatic admission.** After ready-for-staff (and after a safety-attested ready) the Session Lambda, and after the phone or kiosk booking confirmation the Booking Lambda, invoke the Redeem Lambda asynchronously with `{ source: "jumpyard.auto-checkin", detail: { checkinSessionId, correlationId, trigger } }` (environment `AUTO_CHECKIN_FUNCTION_NAME`). Whichever comes last admits.
   - The Redeem Lambda admits only a `ready_for_staff` session with completed safety, `bookingSyncStatus = confirmed` and no active staff claim, on the visit day, until the session end plus 30 minutes.
   - It uses the internal redeem route with key `staff-redeem:<checkinSessionId>` and actor `system:auto-checkin` (display name `automatiskt`), so staff and the system can never redeem twice, and the #333 receipts apply. The staff board shows "Incheckad HH:MM · automatiskt".
-  - A ROLLER outage (5xx or 429) throws so Lambda retries asynchronously, three attempts at most. A rejection or the last failure records `session_summary.autoCheckin { status: "needs_staff", reason, attempts }`, and the board shows "Behöver personal".
+  - A ROLLER outage (5xx or 429) throws so Lambda retries asynchronously, three attempts at most. A rejection or the last failure records `session_summary.autoCheckin { status: "needs_staff", reason, attempts }`. The staff app shows the group as "Incheckad" anyway (#547, D0265), and the monitor chat catches the failure.
+  - #547 (D0265): a confirmed kiosk add-on triggers it too (`kiosk_add_on_confirmed`), from the Booking Lambda's add-on confirmation or from the board's linked add-on refresh when ROLLER confirms it after the window.
   - Redeem write gates and the emergency stop block it as they block staff. `AUTO_CHECKIN_REDEEM=off` turns it off.
 - **Phone.** The phone shows the number, not the QR code. The `JY_HANDOFF:<code>:<sessionId>` payload stays valid for the staff app and the kiosk slip.
 - **Phone purchases** offer only sessions that start within the next two hours, so every phone purchase falls inside the window.
@@ -1105,6 +1109,7 @@ Decided with JumpYard's product owner on 2026-10-06: a completed check-in counts
 | `roller_unavailable` | Roller API timeout/error. | Show staff handoff. |
 | `unsafe_environment` | Roller config is not Playground-safe in dev. | Block operation. |
 | `contact_details_required` | An email-first new-purchase draft could not be resolved safely (#473, D0234); nothing was created. | Show last name and phone, then resubmit all four fields with a new idempotency key. |
+| `invalid_email` | An email-first new-purchase draft has an email outside the accepted format (#552, D0271); nothing was reserved or created. | Show "Kontrollera e-postadressen" on the email field; never ask for last name and phone. |
 
 ## Proposed AWS Target
 
