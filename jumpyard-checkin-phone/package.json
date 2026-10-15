@@ -28,6 +28,7 @@
     "test:workshop-flow": "node --no-warnings --experimental-strip-types --test src/flow/workshopFlow.test.mjs",
     "test:socks-reminder": "node --no-warnings --experimental-strip-types --test src/flow/socksReminder.test.mjs",
     "test:started-session": "node --no-warnings --experimental-strip-types --test src/flow/startedSession.test.mjs",
+    "test:group-size": "node --no-warnings --experimental-strip-types --test src/flow/groupSize.test.mjs",
     "test:flow-nav": "node --no-warnings --test src/components/FlowNav.test.mjs",
     "test:logo-hop": "node --no-warnings --experimental-strip-types --test src/components/ParkChoice.test.mjs",
     "test:guest-typography": "node --no-warnings --test src/app/guestTypography.test.mjs"

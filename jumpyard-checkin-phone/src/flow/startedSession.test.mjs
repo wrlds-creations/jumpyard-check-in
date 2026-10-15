@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
 
-import { ADDON_CATALOG_CONFIG, BUY_ENTRY_ADDON_IDS } from './addonCatalog.ts';
+import { ADDON_CATALOG_CONFIG, ADDON_MAX_QUANTITY, BUY_ENTRY_ADDON_IDS } from './addonCatalog.ts';
 import { findRecoveredBookingProduct, getMaxBookingProductQuantity } from './productVisibility.ts';
 import { isSessionStartedError } from './sessionStarted.ts';
 import { findAvailabilitySlot } from './slotCapacity.ts';
@@ -145,7 +145,7 @@ function rebookHarness({ newSlotProducts, quantity = 2, addonQty = { socks: 2, s
     addonQty: { ...empty, ...addonQty },
     t: { addons: { products: { skyriderLabel: 'SkyRider', socksLabel: 'Strumpor', waterBottleLabel: 'Vatten', lockLabel: 'Lås', coffeeLabel: 'Kaffe' }, perJumper: '/hoppare', perPerson: '/person', each: 'st' } },
     findAvailabilitySlot, findRecoveredBookingProduct, getMaxBookingProductQuantity,
-    ADDON_CATALOG_CONFIG, BUY_ENTRY_ADDON_IDS, SOCKS_UNLIMITED_MAX: Number.MAX_SAFE_INTEGER, Map, Number, Math,
+    ADDON_CATALOG_CONFIG, ADDON_MAX_QUANTITY, BUY_ENTRY_ADDON_IDS, SOCKS_UNLIMITED_MAX: Number.MAX_SAFE_INTEGER, Map, Number, Math,
     goToStepAfterAddons: () => steps.push('AFTER_ADDONS'),
     setStep: (step) => steps.push(step),
   };

@@ -10,7 +10,13 @@ const diagnostics = createServerDiagnostics('redeem',
   (entry) => console.warn(JSON.stringify(entry)));
 
 const DATABASE_NAME = 'jumpyard_cloud';
+// ROLLER accepts at most 10 tickets per POST /redemptions call.
 const MAX_REDEEM_TICKETS = 10;
+// #549 (D0272): a group checks in up to 50 entry tickets, sent to ROLLER 10 at a time.
+const MAX_GROUP_ENTRY_TICKETS = 50;
+// #549: every add-on unit is a ROLLER ticket of its own, and a purchase session lists them beside
+// the entries (they are never redeemed), so a request may carry many more ids than entries.
+const MAX_REQUEST_TICKET_IDS = 1000;
 const MAX_REQUEST_BODY_BYTES = 32 * 1024;
 const REDEEMABLE_PRODUCT_KEYS = new Set([
   'membership',
@@ -367,7 +373,16 @@ exports.handler = async (event) => {
       return finalizeRecoveredRedeem(finalizeInput, 'roller_ticket_status', null);
     }
 
-    const rollerResult = await redeemRollerTickets(config, token, refreshedDecision.selectedTicketIds, request);
+    // #549 (D0272): a group above 10 is redeemed in one Roller call per 10, one after the other. When this
+    // same operation ran before (a retried or resumed key, for example one that stopped between the
+    // calls), the tickets Roller already shows redeemed are not sent again. A first attempt sends the
+    // whole group, so a group partly redeemed elsewhere is still refused and goes to staff as before.
+    // The request hash above covers the whole group either way.
+    const continuesOwnAttempt = idempotency.mode === 'retry_after_failure' || idempotency.mode === 'resumed';
+    const pendingTicketIds = continuesOwnAttempt
+      ? refreshedDecision.selectedTicketIds.filter((ticketId) => !isUsedRedeemStatus(rollerTicketStates.states[ticketId]))
+      : refreshedDecision.selectedTicketIds;
+    const rollerResult = await redeemRollerTicketsInBatches(config, token, pendingTicketIds, request);
 
     if (rollerResult.ok) {
       // #333: the durable receipt (tickets, idempotency key and the staff session) is written in
@@ -386,6 +401,7 @@ exports.handler = async (event) => {
           ...(trustedStaffActor ? staffAuditPayload(trustedStaffActor) : {}),
           ticketCount: refreshedDecision.selectedTicketIds.length,
           refreshedFromRoller: true,
+          rollerCalls: rollerResult.calls,
         },
         rollerResponseRef: `roller_redemptions:http_${rollerResult.status}`,
         selectedTicketIds: refreshedDecision.selectedTicketIds,
@@ -951,10 +967,10 @@ function validateRequest(request) {
     };
   }
 
-  if (request.ticketIds.length > MAX_REDEEM_TICKETS) {
+  if (request.ticketIds.length > MAX_REQUEST_TICKET_IDS) {
     return {
       code: 'too_many_tickets',
-      message: `Roller accepts at most ${MAX_REDEEM_TICKETS} ticket redemptions per call.`,
+      message: `At most ${MAX_REQUEST_TICKET_IDS} ticket ids are accepted per redeem request.`,
     };
   }
 
@@ -1121,11 +1137,12 @@ function evaluateStaffRedeemSession(session) {
     };
   }
 
-  if (session.selectedTicketIds.length > MAX_REDEEM_TICKETS) {
+  // #549: the list holds add-on tickets too; the entry limit applies after the product split.
+  if (session.selectedTicketIds.length > MAX_REQUEST_TICKET_IDS) {
     return {
       canRedeem: false,
       reason: 'too_many_tickets',
-      message: `Roller accepts at most ${MAX_REDEEM_TICKETS} ticket redemptions per call.`,
+      message: `At most ${MAX_REQUEST_TICKET_IDS} ticket ids are accepted per check-in session.`,
     };
   }
 
@@ -1393,10 +1410,10 @@ function evaluateRedeemContext(context, request) {
     return blocked('no_redeemable_tickets', 'The booking does not have local redeemable ticket ids.', selectedTicketIds, excludedTickets);
   }
 
-  if (selectedTicketIds.length > MAX_REDEEM_TICKETS) {
+  if (selectedTicketIds.length > MAX_GROUP_ENTRY_TICKETS) {
     return blocked(
       'too_many_tickets',
-      `Roller accepts at most ${MAX_REDEEM_TICKETS} ticket redemptions per call.`,
+      `A group checks in at most ${MAX_GROUP_ENTRY_TICKETS} entry tickets (${MAX_REDEEM_TICKETS} per Roller call).`,
       selectedTicketIds,
       excludedTickets,
     );
@@ -1499,6 +1516,7 @@ function buildRedeemPlan(context, decision, rollerWrite) {
     bookingReference: context.booking.bookingReference,
     canRedeem: decision.canRedeem,
     freshnessStatus: context.booking.freshnessStatus,
+    maxTicketsPerGroup: MAX_GROUP_ENTRY_TICKETS,
     maxTicketsPerRollerCall: MAX_REDEEM_TICKETS,
     reason: decision.reason,
     requiresConfirmation: !rollerWrite,
@@ -3580,6 +3598,19 @@ async function redeemRollerTickets(config, token, ticketIds, request) {
     ok: response.ok,
     status: response.status,
   };
+}
+
+// #549 (D0272): one POST /redemptions per 10 tickets, in order; the first refusal stops the rest and
+// is the result. A group of up to 10 is still exactly one call.
+async function redeemRollerTicketsInBatches(config, token, ticketIds, request) {
+  let result = null;
+  let calls = 0;
+  for (let start = 0; start < ticketIds.length; start += MAX_REDEEM_TICKETS) {
+    result = await redeemRollerTickets(config, token, ticketIds.slice(start, start + MAX_REDEEM_TICKETS), request);
+    calls += 1;
+    if (!result.ok) break;
+  }
+  return { ...result, calls };
 }
 
 function sanitizeRollerErrors(body) {
