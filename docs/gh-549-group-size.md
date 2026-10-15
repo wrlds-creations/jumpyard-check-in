@@ -6,7 +6,7 @@ On 2026-10-15 Love asked: "vi måste låsa upp så man kan köpa upp till 20 ent
 
 Love then asked "kan vi sätta 50 i entreer? och vi tillåter väl om någon gjort 50 entreer via en bokning via rollers hemsida och checkar in?" and decided "Ja, kör 50."
 
-Decision D0272; kiosk D0078.
+Decision D0272; kiosk D0079.
 
 ## Phone and kiosk
 
