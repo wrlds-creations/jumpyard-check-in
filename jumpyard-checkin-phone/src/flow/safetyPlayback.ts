@@ -5,6 +5,12 @@ export type SafetyPlaybackState = {
 
 export const SAFETY_VIDEO_TIMEOUT_MS = 12_000;
 
+// #551/#224: the whole seconds of the film still to play, from the progress (0-100). Rounding up, the count
+// reads the full length at the start and 1 in the last second; the small margin absorbs float noise.
+export function safetySecondsLeft(progress: number, durationSeconds: number) {
+  return Math.max(0, Math.ceil(durationSeconds * (1 - progress / 100) - 0.05));
+}
+
 type Timers = Pick<typeof globalThis, 'setTimeout' | 'clearTimeout'>;
 
 // Media events, not a requested play(), decide what the guest sees. Each retry

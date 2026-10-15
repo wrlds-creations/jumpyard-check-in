@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createSafetyPlayback, SAFETY_VIDEO_TIMEOUT_MS } from './safetyPlayback.ts';
+import { createSafetyPlayback, safetySecondsLeft, SAFETY_VIDEO_TIMEOUT_MS } from './safetyPlayback.ts';
 
 const deferred = () => {
   let resolve, reject;
@@ -279,4 +279,12 @@ test('a retired language cannot pause or complete the next language', async () =
   assert.equal(old.timers, 0);
   current.finish();
   assert.equal(current.state.phase, 'done');
+});
+
+test('#551/#224: the seconds left count down from the full length to 1 in the last second', () => {
+  assert.equal(safetySecondsLeft(0, 15), 15);
+  assert.equal(safetySecondsLeft(100 / 15, 15), 14, 'one second in, float noise included');
+  assert.equal(safetySecondsLeft(40, 15), 9);
+  assert.equal(safetySecondsLeft(99, 15), 1, 'the playing progress stops at 99');
+  assert.equal(safetySecondsLeft(100, 15), 0);
 });

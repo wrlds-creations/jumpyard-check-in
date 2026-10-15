@@ -1,5 +1,9 @@
 # Test Plan
 
+## A fixed heading and a clearer progress on the safety film (#551, kiosk #224)
+
+Run `npm --prefix jumpyard-checkin-phone run test:safety-video` and `test:flow-nav`. `safetyPlayback.test.mjs` covers the seconds left (15 at the start, 1 in the last second, 0 at the end). `SafetyScreen.test.mjs` pins the heading as a direct child of the film, the thick bar (full after the end), the seconds chip only while the film runs, the copy and the CSS, and that the poster title and duration chip are gone. Run the other phone suites (including `test:workshop-flow`), lint, `tsc` and `next build --webpack`. In the development-only `/preview/flow?full=1&screen=safety-buy|safety`, check SV and EN at 375x812: the heading stays at the top on the poster, while the film plays, when paused and after the end; the bar and "N sek kvar" count down; Back and Exit are gone while the film starts or plays and come back after it, on a pause or an error; muted autoplay, the approval after the end, Back and Exit are unchanged. After release, on a phone, the heading and the bar with the seconds left show, and Back/Exit are gone while the film plays, in a purchase and on an existing booking. [Notes](docs/gh-551-safety-heading-progress.md).
+
 ## A finished guest is checked in at once (#547)
 
 Run `npm run validate:gh547-ready-is-checked-in` (part of `npm run validate`). It drives the real Lambdas with a scripted Aurora, Lambda and ROLLER and checks that:

@@ -299,7 +299,6 @@ const sv = {
   safetyVideo: {
     title: 'Säkerhetsgenomgång',
     description: 'Titta på videon tillsammans med alla som ska hoppa.',
-    buyTitle: 'Säkerhetsgenomgång',
     buyDescription: 'Titta på videon tillsammans med alla som ska hoppa.',
     play: 'Spela upp',
     playing: 'Videon spelas…',
@@ -312,7 +311,9 @@ const sv = {
     staffHelp: 'Be personalen på plats om hjälp med säkerhetsgenomgången om problemet kvarstår.',
     watchFull: 'Titta hela videon',
     replay: 'Se videon igen',
-    durationBadge: 'ca {seconds} sek',
+    // #551: the fixed heading at the top of the film, and the seconds left while it plays.
+    heading: 'Säkerhetsgenomgång',
+    timeLeft: '{seconds} sek kvar',
   },
   // #458: one approval under the film. Short rules; the button carries the approved attestation.
   safetyAttest: {
@@ -801,7 +802,6 @@ const en: typeof sv = {
   safetyVideo: {
     title: 'Safety video',
     description: 'Watch the video together with everyone who will jump.',
-    buyTitle: 'Safety walkthrough',
     buyDescription: 'Watch the video together with everyone who will jump.',
     play: 'Play',
     playing: 'Video playing…',
@@ -814,7 +814,8 @@ const en: typeof sv = {
     staffHelp: 'If the problem continues, ask staff at the park for help with the safety briefing.',
     watchFull: 'Watch the full video',
     replay: 'Watch again',
-    durationBadge: 'about {seconds} sec',
+    heading: 'Safety briefing',
+    timeLeft: '{seconds} sec left',
   },
   safetyAttest: {
     safetyRulesTitle: 'Safety rules',

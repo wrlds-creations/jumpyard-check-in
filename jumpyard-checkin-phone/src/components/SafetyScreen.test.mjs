@@ -91,9 +91,8 @@ test('a blurred still covers the film\'s own captions before and after playback 
   // Love 2026-10-01: the burned-in captions start on the first frame and collided with the title.
   assert.match(video, /const coverVisible = phase === 'idle' \|\| phase === 'loading' \|\| approvable;/);
   assert.match(video, /src=\{SAFETY_COVER\}[\s\S]*?data-visible=\{String\(coverVisible\)\}/);
-  // The title is never clipped: its size follows the film width and the Swedish compound can break.
-  assert.match(video, /style=\{\{ fontSize: coverTitleSize \}\}/);
-  assert.match(video, /'Säkerhets\\u00ADgenomgång'/);
+  // #551: the poster keeps its play button or spinner and its line; the title is the fixed heading now.
+  assert.doesNotMatch(video, /coverTitle|durationLabel|durationBadge/);
   const css = source('app/globals.css');
   assert.match(css, /\.safety-cover \{ transition: opacity 360ms ease-out; \}/);
   assert.match(css, /\.safety-cover\[data-visible="false"\] \{ opacity: 0; \}/);
@@ -223,4 +222,36 @@ test('#530: the silent film starts by itself, muted and inline; approval still n
   assert.match(video, /\{!posterVisible && \(phase === 'loading' \|\| phase === 'error' \|\| phase === 'paused'\) && \(/);
   // No new API calls: the film's screen uses no Cloud client.
   assert.doesNotMatch(video, /cloudClient|fetch\(/);
+});
+
+test('#551 (variant A): a fixed heading at the top of the film, a thick bar at its foot and the seconds left', () => {
+  const video = source('components/SafetyVideo.tsx');
+  // Love 2026-10-15: "en statisk säkerhetsgenomgång text högst upp på videon". One heading, a direct child of the
+  // film like the video itself, so it stays in every phase: start, playing, paused and docked after the end.
+  assert.equal(video.split('<div className="safety-heading">').length - 1, 1);
+  assert.match(video, /\n {20}<video\r?\n/);
+  assert.match(video, /\n {20}<div className="safety-heading">\s*<span className="safety-flame" aria-hidden="true"><img src="\/jumpyard_logo_splash\.png" alt="" \/><\/span>\s*<h1 className="safety-heading-text font-black uppercase">\{t\.safetyVideo\.heading\}<\/h1>\s*<\/div>/);
+  // "Tydligare progress bar": the thick bar is always there and full after the end; the seconds left show only
+  // while the film runs (not on the poster, not docked).
+  assert.match(video, /\n {20}<div className="safety-bar" aria-hidden="true"><span style=\{\{ width: `\$\{shownProgress\}%` \}\} \/><\/div>/);
+  assert.match(video, /const shownProgress = done \? 100 : progress;/);
+  assert.match(video, /const showTimeLeft = !approvable && !posterVisible;/);
+  assert.match(video, /\{showTimeLeft && <span className="safety-time-left font-black uppercase">\{timeLeft\}<\/span>\}/);
+  assert.match(video, /t\.safetyVideo\.timeLeft\.replace\('\{seconds\}', String\(safetySecondsLeft\(progress, SAFETY_MEDIA\[lang\]\.durationSeconds\)\)\)/);
+  // Sized from the film width, so it docks with the film and matches the kiosk.
+  assert.match(video, /'--film-u': `\$\{width \/ 100\}px`/);
+  // Love 2026-10-15: "gömma knapparna också under säkerhetsgenomgången". Back and Exit (FlowNav) step aside
+  // while the film starts or plays, and come back for the approval, a pause or an error; the language stays.
+  assert.match(video, /const filmRunning = phase === 'loading' \|\| phase === 'playing';/);
+  assert.match(video, /data-safety-film-running=\{String\(filmRunning\)\}/);
+  assert.doesNotMatch(video, /Bottom progress bar|absolute bottom-0 left-0 h-1/);
+  const copy = source('context/LanguageContext.tsx');
+  assert.match(copy, /heading: 'Säkerhetsgenomgång',\s*timeLeft: '\{seconds\} sek kvar',/);
+  assert.match(copy, /heading: 'Safety briefing',\s*timeLeft: '\{seconds\} sec left',/);
+  const css = source('app/globals.css');
+  assert.match(css, /\.safety-film \.safety-heading \{\s*position: absolute; inset: 0 0 auto 0; z-index: 40; pointer-events: none;/);
+  assert.match(css, /\.safety-film \.safety-heading-text \{[^}]*font-size: calc\(var\(--film-u\) \* 7\.4\);[^}]*font-variation-settings: var\(--jy-heading-axes\);/);
+  assert.match(css, /\.safety-film \.safety-bar \{[^}]*bottom: calc\(var\(--film-u\) \* 5\);\s*height: calc\(var\(--film-u\) \* 2\.8\);[^}]*background: #fff;/);
+  assert.match(css, /\.safety-film \.safety-bar > span \{[^}]*background: var\(--primary\);/);
+  assert.match(css, /\.safety-film \.safety-time-left \{[^}]*background: #fff; color: var\(--primary\);/);
 });
