@@ -151,6 +151,8 @@ function draftHarness(answers) {
     buildItems: () => [{ productId: 1189805, quantity: 2 }],
     productLabels: new Map(), t: { buy: { draftFailed: 'draft-failed' } },
     formatBuyFlowError: error => `formatted:${error.code}`,
+    // #557: no refusal here is a session that has already begun.
+    clockNow: undefined, isSessionStartedError: () => false, showStartedSession: () => {},
     setQuote: value => { state.quote = value; }, setDraft: value => { state.draft = value; },
     setSubmitting: value => { state.submitting = value; }, setSubmitError: value => { state.error = value; },
     setStep: value => { state.step = value; }, setCodeRejectedDialogOpen: value => { state.codeRejectedDialogOpen = value; },

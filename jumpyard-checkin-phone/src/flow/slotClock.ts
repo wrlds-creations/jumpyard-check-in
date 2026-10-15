@@ -29,11 +29,44 @@ export function formatDuration(minutes: number) {
   return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
 }
 
-/** "om 18 min" / "in 18 min", or "startar nu" when the start time has come. */
-export function formatStartsIn(minutes: number | null, copy: { startsIn: string; startsNow: string }) {
+/**
+ * "om 18 min" / "in 18 min", "startar nu" when the start time has come, and "Har precis börjat" once it
+ * has begun (GH-557) when the copy has that line.
+ */
+export function formatStartsIn(
+  minutes: number | null,
+  copy: { startsIn: string; startsNow: string; justStarted?: string },
+) {
   if (minutes === null) return null;
+  if (minutes < 0 && copy.justStarted) return copy.justStarted;
   if (minutes <= 0) return copy.startsNow;
   return copy.startsIn.replace('{time}', formatDuration(minutes));
+}
+
+/**
+ * GH-557 (D0273): ROLLER sells a session until 10 minutes after its start, as on JumpYard's website, so the
+ * time step offers a start time that began less than this many minutes ago.
+ */
+export const JUST_STARTED_MINUTES = 10;
+
+function timeOfDay(minutesFromMidnight: number) {
+  return `${String(Math.floor(minutesFromMidnight / 60)).padStart(2, '0')}:${String(minutesFromMidnight % 60).padStart(2, '0')}`;
+}
+
+/**
+ * The start times the time step offers at `now`: the half hour that began less than JUST_STARTED_MINUTES ago,
+ * then the next `count` half hours, counting one that starts this minute ("startar nu").
+ */
+export function buildSlotTimes(now: Date | string, count = 3) {
+  const clock = minutesOfDay(formatClock(now));
+  if (clock === null) return [];
+  const lastStart = Math.floor(clock / 30) * 30;
+  const times = clock > lastStart && clock - lastStart < JUST_STARTED_MINUTES ? [timeOfDay(lastStart)] : [];
+  const firstUpcoming = times.length;
+  for (let minutes = Math.ceil(clock / 30) * 30; times.length - firstUpcoming < count && minutes < 24 * 60; minutes += 30) {
+    times.push(timeOfDay(minutes));
+  }
+  return times;
 }
 
 /** Milliseconds to the next whole minute, so a live clock changes with the phone's own clock. */

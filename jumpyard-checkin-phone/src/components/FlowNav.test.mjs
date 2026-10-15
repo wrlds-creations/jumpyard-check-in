@@ -67,7 +67,8 @@ test('the page renders Back/Exit at the bottom with the unchanged rules', () => 
 
 test('ticket purchase keeps its own guarded Back/Exit, now at the bottom', () => {
   // #524: Exit also steps aside while a 0 kr purchase waits for its booking on the contact step; the room stays.
-  // #533: only the socks reminder follows the step root, outside its transition picture.
-  assert.match(buy, /<FlowNav\s+onBack=\{backNavigationLocked \? null : backFromStep\}\s+onExit=\{inlineExitVisible && onRequestExit && !noPaymentResolving \? onRequestExit : null\}\s+exitTestId="buy-exit-flow-open"\s+keepSpacer=\{noPaymentResolving\}\s+\/>\s*<\/FlowScreen>\s*(?:\{\/\*[^}]*\*\/\}\s*<SocksReminderDialog[^>]*\/>\s*)?<\/FlowTransitionBoundary>/);
+  // #533: only the socks reminder follows the step root, outside its transition picture; #557 adds the
+  // "Tiden har redan börjat" dialog the same way.
+  assert.match(buy, /<FlowNav\s+onBack=\{backNavigationLocked \? null : backFromStep\}\s+onExit=\{inlineExitVisible && onRequestExit && !noPaymentResolving \? onRequestExit : null\}\s+exitTestId="buy-exit-flow-open"\s+keepSpacer=\{noPaymentResolving\}\s+\/>\s*<\/FlowScreen>\s*(?:\{\/\*[^}]*\*\/\}\s*<SocksReminderDialog[^>]*\/>\s*)?(?:\{\/\*[^}]*\*\/\}\s*<SessionStartedDialog[^>]*\/>\s*)?<\/FlowTransitionBoundary>/);
   assert.doesNotMatch(buy, /ArrowLeft/);
 });

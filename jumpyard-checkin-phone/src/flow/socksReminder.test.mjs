@@ -248,7 +248,8 @@ test('the dialog: each button calls its own choice, and a tap outside means "Lä
 
 test('both steps render the reminder outside their transition root and call the socks block to attention', () => {
   for (const [file, step] of [['buy', 'QUANTITY'], ['addons', 'SELECT']]) {
-    assert.match(text[file], new RegExp(`</FlowScreen>\\s*\\{/\\* #533[^}]*\\*/\\}\\s*<SocksReminderDialog\\s+open=\\{socksReminderOpen && step === '${step}'\\}\\s+onAddSocks=\\{addSocksFromReminder\\}\\s+onOwnSocks=\\{continueWithOwnSocks\\}\\s*/>\\s*</FlowTransitionBoundary>`), file);
+    // #557: the purchase's "Tiden har redan börjat" dialog may follow the reminder, outside the root too.
+    assert.match(text[file], new RegExp(`</FlowScreen>\\s*\\{/\\* #533[^}]*\\*/\\}\\s*<SocksReminderDialog\\s+open=\\{socksReminderOpen && step === '${step}'\\}\\s+onAddSocks=\\{addSocksFromReminder\\}\\s+onOwnSocks=\\{continueWithOwnSocks\\}\\s*/>\\s*(?:\\{/\\*[^}]*\\*/\\}\\s*<SessionStartedDialog[^>]*/>\\s*)?</FlowTransitionBoundary>`), file);
     assert.match(text[file], /attention=\{socksAttention\}/, file);
   }
   assert.match(text.buy, /data-testid="buy-quantity-continue"\s+onClick=\{continueFromQuantity\}/);

@@ -17,7 +17,7 @@ Decided by Love and JumpYard's product owner on 2026-10-06 (D0229, D0230):
 | Late, but inside the session | The check-in works and the band colour is unchanged. Staff can see the check-in time. |
 | Reopen the same day after admission | `session_completed`: the same number, plus what is left at the café. |
 | Another day | "Besöket är avslutat" and no number to use. |
-| Phone purchase | Offers only the next three half-hour slots, so the slot is always inside the window. |
+| Phone purchase | Offers the next three half-hour slots and, for 10 minutes after a start, that start (#557, D0273), so the slot is always inside the window. |
 
 The phone shows only the number. The `JY_HANDOFF:<code>:<sessionId>` payload stays in Cloud, the staff app and the kiosk slip. `SHOW_PHONE_QR` in `PhoneCompletion.tsx` brings the QR back on the phone.
 

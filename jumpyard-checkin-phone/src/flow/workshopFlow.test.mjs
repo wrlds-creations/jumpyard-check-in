@@ -105,12 +105,15 @@ test('90 minutes is "Populärt" for entry and family; 60, 120 and the Combo are 
   assert.match(buySource, /\{popular && available && <span className="buy-product-tag">\{t\.buy\.popular\}<\/span>\}/);
 });
 
-function continueHarness({ availability = null, loadedAt = null, selectedTime = '14:30', pending = null, reply } = {}) {
+function continueHarness({ availability = null, loadedAt = null, selectedTime = '14:30', pending = null, reply, rebooking = false } = {}) {
   const requests = [];
   const state = {
     availability, availabilityLoadedAt: loadedAt, selectedTime, loadingAvailability: false, slots: ['14:00', '14:30', '15:00'],
     steps: [], errors: [], selected: [],
     availabilityRequestRef: { current: pending },
+    // GH-557: after "Välj ny tid" Continue moves the purchase to the chosen time instead of opening the product step.
+    rebookingRef: { current: rebooking },
+    rebookPurchaseTo: (time, answer) => state.steps.push(`REBOOK ${time} ${answer ? 'answer' : 'none'}`),
     availabilityCovers, findAvailabilitySlot, getSlotCapacity, isAvailabilityFresh, isSlotSelectable,
     CloudBookingError: class CloudBookingError extends Error {},
     t: { buy: { availabilityFailed: 'Vi kunde inte hämta lediga tider.' } },
@@ -127,7 +130,7 @@ function continueHarness({ availability = null, loadedAt = null, selectedTime = 
       if (name === 'setAvailability') state.availability = value;
     };
   }
-  const handlers = compile(['requestSlotAvailability', 'continueFromTimeslot'], state);
+  const handlers = compile(['requestSlotAvailability', 'leaveTimeslot', 'continueFromTimeslot'], state);
   return { ...handlers, state, requests };
 }
 
@@ -173,6 +176,17 @@ test('a time that filled up while the guest chose stays on the start-time step, 
     reply: () => assert.fail('no new read') });
   await fresh.continueFromTimeslot();
   assert.deepEqual(fresh.state.steps, [], 'a full time never opens the product step');
+});
+
+test('GH-557: after "Välj ny tid" Continue moves the purchase to the chosen time with the loaded answer', async () => {
+  const fresh = continueHarness({ availability: threeSlots([34, 6, 0]), loadedAt: Date.now(), rebooking: true,
+    reply: () => assert.fail('no new read') });
+  await fresh.continueFromTimeslot();
+  assert.deepEqual(fresh.state.steps, ['REBOOK 14:30 answer']);
+  const read = continueHarness({ rebooking: true, reply: () => threeSlots([34, 6, 0]) });
+  await read.continueFromTimeslot();
+  assert.deepEqual(read.state.steps, ['REBOOK 14:30 answer']);
+  assert.equal(read.requests.length, 1);
 });
 
 test('a failed read shows the existing error and retry; nothing else changes', async () => {
