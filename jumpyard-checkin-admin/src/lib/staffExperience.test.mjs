@@ -33,8 +33,9 @@ function load(relative, extra = '', { states = [], globals = {} } = {}) {
 const panels = '\nexport { Row, EntrancePanel, CafePanel, ProductRow };';
 const board = (states = []) => load('../components/staff/StaffExperience.tsx', panels, { states });
 const { default: StaffExperience, Row, EntrancePanel, CafePanel, ProductRow } = board();
-const { nextPass, stageOf, activeClaim, boardPollDelay, boardTab, needsStaff, checkedInLabel, jumpTime } = load('../components/staff/flow.ts');
+const { nextPass, stageOf, activeClaim, boardPollDelay, boardTab, checkedInLabel, jumpTime } = load('../components/staff/flow.ts');
 const { createSelectionBuffer, mergeHandoutSummary } = load('../components/staff/selection.ts');
+const remembered = (globals = {}) => load('../components/staff/remembered.ts', '', { globals });
 const { ROUTE_LIMITS, TokenBucket } = require('../../../scripts/validate-t0193-capacity.js');
 const { STAFF_BOARD_PAGE_INTERVAL_MS } = load('./adminApi.ts');
 const read = (relative) => fs.readFileSync(new URL(relative, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
@@ -67,73 +68,100 @@ function props(detail, calls = []) {
   return { auth: { staff: { actorId: 'sara', displayName: 'Sara', role: 'staff_operator' } },
     detail, selectedId: detail?.checkinSessionId ?? null, error: '', day: '2026-09-08', sessions: detail ? [detail] : [], query: '',
     onHandout: async (request, options) => { calls.push(options ? { request, options } : { request }); return true; },
-    onCheckIn: async () => { calls.push('check-in'); return true; },
     onOpen(id) { calls.push(`open:${id}`); }, onClose() {}, onQuery() {}, onSearch() {}, onRefresh() {}, onLogout() {} };
 }
+// GH-547: a kiosk group right after payment. ROLLER has not confirmed the purchase, so Cloud lists the
+// paid draft's goods (provisional lines) and the session waits with bookingSyncStatus "pending".
+const provisional = (line) => ({ ...line, id: `draft:provisional:${line.id}`, provisional: true });
+const kioskGroup = (overrides = {}) => session({ checkinSessionId: 'kiosk', handoffCode: '0061', guest: { name: 'Kioskgäst' },
+  bookingSyncStatus: 'pending', readyForStaffAt: '2026-09-08T07:38:00Z', completedAt: null, booking: { startTime: '10:00', endTime: null },
+  handout: { items: [provisional({ ...band, productId: 'e60' }), provisional({ ...socks, productId: 'socks', quantity: 2, available: 2 }),
+    provisional({ ...coffee, productId: 'coffee', quantity: 1, available: 1 })], claims: [], receipts: [] }, ...overrides });
 function buttons(tree) { return nodes(tree, (node) => node.type === 'button'); }
 const button = (tree, label) => buttons(tree).find((node) => text(node) === label || node.props['aria-label'] === label);
 const groups = (tree) => nodes(tree, (node) => node.props?.role === 'group').map((node) => node.props['aria-label']);
 
-test('The entrance has only Kommande and Incheckade; Påbörjad and Redo are Kommande', () => {
+test('The entrance has only Kommande and Incheckade; a guest who is done is Incheckad at once', () => {
   const rows = [session({ checkinSessionId: 'started', status: 'guest_in_progress', safetyStatus: 'not_started' }),
     session({ checkinSessionId: 'ready' }), session({ checkinSessionId: 'upcoming', status: 'upcoming' }),
-    admitted({ checkinSessionId: 'in' })];
-  assert.deepEqual(rows.map(boardTab), ['upcoming', 'upcoming', 'upcoming', 'completed']);
+    admitted({ checkinSessionId: 'in' }), kioskGroup()];
+  assert.deepEqual(rows.map(boardTab), ['upcoming', 'completed', 'upcoming', 'completed', 'completed']);
   const tree = StaffExperience({ ...props(null), sessions: rows });
   const tabs = buttons(tree).filter((node) => /^(Kommande|Påbörjade|Redo|Incheckade)\d+$/.test(text(node)));
-  assert.deepEqual(tabs.map((node) => text(node)), ['Kommande3', 'Incheckade1']);
+  assert.deepEqual(tabs.map((node) => text(node)), ['Kommande2', 'Incheckade3']);
   assert.deepEqual(tabs.map((node) => Boolean(node.props['aria-pressed'])), [true, false]);
   assert.match(text(tree), /Påbörjad/);
-  assert.match(text(tree), /Redo/);
+  assert.doesNotMatch(text(tree), /Redo|Bekräftas|Checka in/);
   let switched = false;
   button(StaffExperience({ ...props(null), onLogout() { switched = true; } }), 'Byt personal').props.onClick();
   assert.equal(switched, true);
 });
 
-test('"Behöver personal" stays on top in its own red box whatever the tab, pass or search', () => {
-  const failed = session({ checkinSessionId: 'failed', guest: { name: 'Ali Hassan' }, booking: { startTime: '16:00' },
-    autoCheckin: { status: 'needs_staff', reason: 'roller_rejected', attempts: 3 } });
-  const others = [admitted({ checkinSessionId: 'in' }), session({ checkinSessionId: 'ready' })];
-  assert.equal(needsStaff(failed), true);
-  assert.equal(needsStaff(admitted({ autoCheckin: { status: 'needs_staff' } })), false, 'a later admission ends it');
-  const box = (tree) => nodes(tree, (node) => node.type === 'section' && node.props['aria-labelledby'] === 'staff-needs-staff')[0];
-  for (const states of [[], ['entrance', null, 'completed'], ['entrance', '10:00', 'upcoming']]) {
-    const tree = board(states).default({ ...props(null), sessions: [failed, ...others] });
-    assert.match(text(box(tree)), /Behöver personal1Ali Hassan/);
-    const tabs = buttons(tree).filter((node) => /^(Kommande|Incheckade)\d+$/.test(text(node))).map((node) => text(node));
-    assert.deepEqual(tabs, ['Kommande1', 'Incheckade1'], 'the red row is not counted in the tabs');
-  }
-  // While searching, the whole-day list from before the search keeps it on screen.
-  const searching = StaffExperience({ ...props(null), query: 'erik', sessions: [], urgent: [failed] });
-  assert.match(text(box(searching)), /Ali Hassan/);
-  // A search hit that no longer needs staff drops out of the box.
-  const fixed = StaffExperience({ ...props(null), query: 'ali', sessions: [{ ...failed, autoCheckin: null, status: 'redeemed', handoffStatus: 'completed' }], urgent: [failed] });
-  assert.equal(box(fixed), undefined);
-  // The box offers one tap that checks the group in; nothing is handed out with it.
+test('GH-547: a kiosk group still pending in ROLLER is under Incheckade with its goods and a Lämna ut', () => {
+  const group = kioskGroup({ counts: { admission: 3 }, bandColours: [{ ...require('../../../infra/lambda/shared/band-colours.js')
+    .bandColourForAdmission({ startTime: '10:00', durationMinutes: 60 }), quantity: 3 }], cafeQuantity: 1, cafeRemaining: 1 });
+  const listed = board(['entrance', 'all', 'completed']).default({ ...props(null), sessions: [group, admitted({ checkinSessionId: 'in' })] });
+  const row = text(listed);
+  assert.match(row, /Kioskgäst/);
+  assert.match(row, /Incheckad 09:38/, 'the time the guest finished on the kiosk');
+  assert.match(row, /3 entréer/);
+  assert.doesNotMatch(row, /Bekräftas|Redo|Checka in|Behöver personal/);
+  // Folded out: the purchase's goods, read-only, and Lämna ut is pressable at once.
   const calls = [];
-  const open = StaffExperience({ ...props(failed, calls), sessions: [failed] });
-  button(box(open), 'Checka in').props.onClick();
-  assert.deepEqual(calls, ['check-in']);
+  const panel = EntrancePanel({ detail: group, summary: group, props: props(group, calls) });
+  assert.deepEqual(groups(panel), ['Besöksband, 3 kvar', 'JumpSocks, 2 kvar']);
+  assert.match(text(panel), /Caféet: 1 Bryggkaffe/);
+  assert.doesNotMatch(text(panel), /bekräftas|Checka in/i);
+  const handOut = button(panel, 'Lämna ut');
+  assert.equal(handOut.props.disabled, false);
+  handOut.props.onClick();
+  assert.deepEqual(plain(calls), [{ request: { area: 'entrance', action: 'select', revision: 0,
+    selection: [{ id: 'draft:provisional:b', quantity: 3 }, { id: 'draft:provisional:socks', quantity: 2 }] }, options: { confirm: true } }]);
+  // The café computer lists it among Kvar att hämta with its coffee.
+  const cafe = board(['cafe']).default({ ...props(null), sessions: [group] });
+  assert.match(text(nodes(cafe, (node) => node.type === 'section')[0]), /0061.*Kioskgäst.*1 kvar/);
+  const cafePanel = CafePanel({ detail: group, props: props(group) });
+  assert.deepEqual(groups(cafePanel), ['Bryggkaffe, 1 kvar']);
+  assert.equal(button(cafePanel, 'Lämna ut').props.disabled, false);
 });
 
-test('A row checked in from the red box stays there while it is open, then offers Lämna ut', () => {
-  const nowIn = admitted({ checkinSessionId: 'failed', guest: { name: 'Ali Hassan' }, checkedInBy: { actorId: 'sara', displayName: 'Sara', role: 'staff_operator' },
+test('No red box and no Checka in: a group Cloud could not check in is Incheckad like the others', () => {
+  const failed = session({ checkinSessionId: 'failed', guest: { name: 'Ali Hassan' }, booking: { startTime: '16:00' },
+    readyForStaffAt: '2026-09-08T07:20:00Z', autoCheckin: { status: 'needs_staff', reason: 'roller_rejected', attempts: 3 },
     handout: { items: [band, socks], claims: [], receipts: [] } });
-  const tree = board(['entrance', null, 'upcoming', false, { id: 'failed', place: 'urgent' }]).default({ ...props(nowIn), sessions: [nowIn] });
-  const box = nodes(tree, (node) => node.type === 'section' && node.props['aria-labelledby'] === 'staff-needs-staff')[0];
-  assert.match(text(box), /Ali Hassan/);
-  assert.match(text(box), /Incheckad 09:31 · Sara/);
-  assert.ok(button(box, 'Lämna ut'));
-  // Closed, it moves to Incheckade.
-  const closed = board(['entrance', null, 'completed', false, { id: 'failed', place: 'urgent' }]).default({ ...props(nowIn), selectedId: null, sessions: [nowIn] });
-  assert.equal(nodes(closed, (node) => node.type === 'section' && node.props['aria-labelledby'] === 'staff-needs-staff').length, 0);
-  assert.match(text(closed), /Ali Hassan/);
+  for (const states of [[], ['entrance', 'all', 'completed'], ['entrance', '16:00', 'upcoming']]) {
+    const tree = board(states).default({ ...props(null), sessions: [failed, admitted({ checkinSessionId: 'in' })] });
+    assert.equal(nodes(tree, (node) => node.type === 'section' && node.props['aria-labelledby'] === 'staff-needs-staff').length, 0);
+    assert.doesNotMatch(text(tree), /Behöver personal/);
+  }
+  const all = board(['entrance', 'all', 'completed']).default({ ...props(null), sessions: [failed, admitted({ checkinSessionId: 'in' })] });
+  const tabs = buttons(all).filter((node) => /^(Kommande|Incheckade)\d+$/.test(text(node))).map((node) => text(node));
+  assert.deepEqual(tabs, ['Kommande0', 'Incheckade2']);
+  assert.match(text(all), /Ali Hassan.*Incheckad 09:20/);
+  const open = StaffExperience({ ...props(failed), sessions: [failed] });
+  assert.equal(button(open, 'Checka in'), undefined);
+  assert.ok(button(EntrancePanel({ detail: failed, props: props(failed) }), 'Lämna ut'));
+  const source = read('../components/staff/StaffExperience.tsx');
+  assert.doesNotMatch(source, /Behöver personal|staff-needs-staff|onCheckIn|Checka in|Bokningen bekräftas|"Bekräftas"|"Redo"/);
+  assert.doesNotMatch(read('../components/staff/flow.ts'), /needsStaff|Bokningen bekräftas fortfarande/);
+});
+
+test('An open row stays in the list it was opened from while the guest finishes, then moves when closed', () => {
+  const done = session({ checkinSessionId: 'finishing', guest: { name: 'Lisa Holm' }, handout: { items: [band], claims: [], receipts: [] } });
+  const open = board(['entrance', 'all', 'upcoming', false, { id: 'finishing', place: 'upcoming' }]).default({ ...props(done), sessions: [done] });
+  assert.match(text(open), /Lisa Holm/);
+  assert.ok(button(open, 'Lämna ut'));
+  const closed = board(['entrance', 'all', 'upcoming', false, { id: 'finishing', place: 'upcoming' }]).default({ ...props(done), selectedId: null, sessions: [done] });
+  assert.doesNotMatch(text(closed), /Lisa Holm/);
 });
 
 test('The check-in line keeps the time and never says "automatiskt"; a colleague keeps the name', () => {
   assert.equal(checkedInLabel(admitted()), 'Incheckad 09:31');
   assert.equal(checkedInLabel(admitted({ checkedInBy: { actorId: 'maja', displayName: 'Maja' } })), 'Incheckad 09:31 · Maja');
   assert.equal(checkedInLabel(admitted({ checkedInBy: null })), 'Incheckad 09:31');
+  // GH-547: the time the guest finished, before and after Cloud checks the group in in ROLLER.
+  assert.equal(checkedInLabel(kioskGroup()), 'Incheckad 09:38');
+  assert.equal(checkedInLabel(admitted({ readyForStaffAt: '2026-09-08T07:30:00Z' })), 'Incheckad 09:30');
   const row = Row({ session: admitted(), area: 'entrance', props: props(null) });
   assert.match(text(row), /Incheckad 09:31/);
   assert.doesNotMatch(text(row), /automatiskt/);
@@ -174,19 +202,23 @@ test('One tap on Lämna ut hands out everything left at the entrance; goods are 
   assert.match(text(finished), /Utlämnat 09:35 · Sara/);
 });
 
-test('Not checked in: Kommande shows the goods without a button; Redo offers Checka in', () => {
+test('Not checked in: Kommande shows the goods without a button; a guest who is done gets Lämna ut', () => {
   for (const [overrides, note] of [[{ status: 'upcoming' }, 'Check-in inte påbörjad'],
     [{ status: 'guest_in_progress', safetyStatus: 'not_started' }, 'Gästen slutför check-in i mobilen eller kiosken'],
-    [{ bookingSyncStatus: 'pending' }, 'Bokningen bekräftas']]) {
+    [{ status: 'guest_in_progress', safetyStatus: 'not_started', bookingSyncStatus: 'pending' }, 'Gästen slutför check-in i mobilen eller kiosken']]) {
     const detail = session(overrides);
     const tree = EntrancePanel({ detail, props: props(detail) });
     assert.match(text(tree), new RegExp(note));
     assert.equal(buttons(tree).some((node) => /Lämna ut|Checka in/.test(text(node))), false);
   }
-  const calls = [];
-  const ready = EntrancePanel({ detail: session(), props: props(session(), calls) });
-  button(ready, 'Checka in').props.onClick();
-  assert.deepEqual(calls, ['check-in']);
+  for (const detail of [session(), session({ bookingSyncStatus: 'pending' }), session({ bookingSyncStatus: 'needs_staff' })]) {
+    const calls = [];
+    const ready = EntrancePanel({ detail, props: props(detail, calls) });
+    assert.equal(button(ready, 'Checka in'), undefined);
+    assert.doesNotMatch(text(ready), /bekräftas/i);
+    button(ready, 'Lämna ut').props.onClick();
+    assert.equal(calls[0].request.action, 'select');
+  }
 });
 
 test('A colleague, a reader or another day blocks the button; a pending confirmation resumes it', () => {
@@ -230,11 +262,15 @@ test('Café: quantities start at everything left, minus keeps some for later, L�
   button(tree, 'Lämna ut').props.onClick();
   await Promise.resolve();
   assert.deepEqual(plain(calls[0].request.selection), [{ id: 'c', quantity: 1 }]);
-  for (const notReady of [{ safetyStatus: 'not_started' }, { bookingSyncStatus: 'pending' }, { status: 'upcoming' }]) {
+  for (const notReady of [{ safetyStatus: 'not_started' }, { status: 'guest_in_progress', safetyStatus: 'not_started' }, { status: 'upcoming' }]) {
     tree = CafePanel({ detail: session(notReady), props: props(session(notReady)) });
     assert.equal(button(tree, 'Lämna ut').props.disabled, true);
     assert.equal(button(tree, 'Minska Bryggkaffe').props.disabled, true);
   }
+  // GH-547: a guest who is done collects at once, also while ROLLER confirms the purchase.
+  tree = CafePanel({ detail: session({ bookingSyncStatus: 'pending' }), props: props(session({ bookingSyncStatus: 'pending' })) });
+  assert.equal(button(tree, 'Lämna ut').props.disabled, false);
+  assert.equal(button(tree, 'Minska Bryggkaffe').props.disabled, false);
 });
 
 test('The café is built for a computer: two wide lists with big numbers, and a toggle on a phone', () => {
@@ -353,17 +389,21 @@ test('The staff app uses the check-in font: the same Acumin file and roles as th
   assert.match(read('../../public/_headers'), /font-src 'self'/);
 });
 
-test('Page wiring: Checka in only redeems with the shared key; Lämna ut confirms the revision its choice got', () => {
+test('Page wiring: no Checka in; Lämna ut before ROLLER is kept, otherwise it confirms the revision its choice got', () => {
   const page = read('../app/page.tsx');
-  const checkIn = page.slice(page.indexOf('const handleCheckIn = useCallback('), page.indexOf('const filteredSessions'));
-  assert.match(checkIn, /redeemStaffSession\(\{/);
-  assert.match(checkIn, /idempotencyKey: `staff-redeem:\$\{selected\.checkinSessionId\}`/);
-  assert.doesNotMatch(checkIn, /changeStaffHandout/);
-  const handout = page.slice(page.indexOf('const handleHandout = useCallback('), page.indexOf('const handleCheckIn'));
+  assert.doesNotMatch(page, /handleCheckIn|onCheckIn|urgentSessions|needsStaff/);
+  const handout = page.slice(page.indexOf('const handleHandout = useCallback('), page.indexOf('const confirmNextRemembered'));
+  assert.match(handout, /if \(keep && selected\.bookingSyncStatus !== "confirmed"\) return rememberPress\(selected, request\)/);
+  assert.match(handout, /failure\.code === "booking_sync_pending"\) return rememberPress\(selected, request\)/);
+  assert.match(handout, /if \(rememberedRunRef\.current\) await rememberedRunRef\.current/, 'a background confirmation finishes first');
   assert.match(handout, /if \(result && options\.confirm && request\.action === "select"\)/);
   assert.match(handout, /result = await send\(\{ area: request\.area, action: "confirm", revision: revision as number \}\)/);
-  assert.match(page, /if \(!requestedQuery\.trim\(\)\) setUrgentSessions\(nextSessions\.filter\(needsStaff\)\)/);
-  assert.match(page, /urgent=\{urgentSessions\}/);
+  const engine = page.slice(page.indexOf('const confirmNextRemembered = useCallback('), page.indexOf('const shownSessions'));
+  assert.match(engine, /row\.bookingSyncStatus === "confirmed"/, 'it waits for the board to show ROLLER\'s booking');
+  assert.match(engine, /changeStaffHandout\(id, activeAuth\.auth\.token, request\)/);
+  assert.match(page, /sessions=\{shownSessions\} detail=\{shownDetail\}/);
+  // The legacy handoff page keeps its own redeem with the shared key (#333).
+  assert.match(page, /idempotencyKey: `staff-redeem:\$\{detail\.checkinSessionId\}`/);
 });
 
 function deferred() { let resolve; let reject; const promise = new Promise((done,fail)=>{resolve=done;reject=fail;}); return {promise,resolve,reject}; }
@@ -424,16 +464,128 @@ test('Today-only API requests follow the server day, retain all pages and preser
   assert.equal(urls[2].searchParams.has('view'),false);
 });
 
-test('At 09:40 the default is the next actual 10:00 pass; safety and synchronization do not count as ready', () => {
+test('At 09:40 the default is the next actual 10:00 pass; a finished guest is checked in whatever ROLLER says', () => {
   const rows = [session({ checkinSessionId: 'a', booking: { startTime: '09:30' } }), session(), session({ checkinSessionId: 'c', booking: { startTime: '10:30' } })];
   assert.equal(nextPass(rows), '10:00');
   assert.equal(stageOf(session({ safetyStatus: 'not_started' })), 'started');
-  assert.equal(stageOf(session({ bookingSyncStatus: 'pending' })), 'started');
+  for (const bookingSyncStatus of ['confirmed', 'pending', 'needs_staff']) assert.equal(stageOf(session({ bookingSyncStatus })), 'completed');
+  assert.equal(stageOf(session({ isExpired: true })), 'completed');
   assert.equal(stageOf(session({ status: 'upcoming' })), 'upcoming');
   assert.equal(activeClaim([{ area: 'cafe', actorId: 'maja', expiresAt: '2026-09-08T07:39:00Z' }], 'cafe'), null);
   const tree = StaffExperience({ ...props(null), sessions: rows });
-  assert.ok(buttons(tree).some((node) => text(node) === 'Kommande1'));
+  assert.ok(buttons(tree).some((node) => text(node) === 'Incheckade1'));
   assert.match(text(tree), /Nästa pass · 10:00/);
+});
+
+// GH-547 (D0265): "Lämna ut" before ROLLER confirmed the purchase is kept on the device and confirmed later.
+const entrancePress = { area: 'entrance', action: 'select', revision: 0,
+  selection: [{ id: 'draft:provisional:b', quantity: 3 }, { id: 'draft:provisional:socks', quantity: 2 }] };
+const finalGoods = (overrides = {}) => session({ checkinSessionId: 'kiosk', bookingSyncStatus: 'confirmed', handout: { claims: [], receipts: [],
+  items: [{ ...band, id: 'R1:i1', productId: 'e60' }, { ...socks, id: 'R1:i2', productId: 'socks', quantity: 2, available: 2 },
+    { ...coffee, id: 'R1:i3', productId: 'coffee', quantity: 1, available: 1 }] }, ...overrides });
+
+test('Lämna ut before ROLLER is kept on this device and shows as handed out, before and after ROLLER confirms', () => {
+  const { rememberHandout, withRemembered } = remembered();
+  const group = kioskGroup();
+  const records = rememberHandout([], group, entrancePress, '2026-09-08', new Date('2026-09-08T07:40:00Z'));
+  // Only the session, the counter and the product lines are kept: no guest or staff names (T0194).
+  assert.deepEqual(plain(records), [{ checkinSessionId: 'kiosk', area: 'entrance',
+    day: '2026-09-08', pressedAt: '2026-09-08T07:40:00.000Z', attempts: 0, nextAt: 0,
+    lines: [{ kind: 'admission', productId: 'e60', name: 'Besöksband', quantity: 3 }, { kind: 'socks', productId: 'socks', name: 'JumpSocks', quantity: 2 }] }]);
+  const shown = withRemembered(group, records, 'Sara');
+  const panel = EntrancePanel({ detail: shown, summary: shown, props: props(shown) });
+  assert.deepEqual(groups(panel), ['Besöksband, utlämnat', 'JumpSocks, utlämnat']);
+  assert.match(text(panel), /Utlämnat 09:40 · Sara/);
+  assert.match(text(panel), /Caféet: 1 Bryggkaffe/, 'the café goods stay for the café');
+  assert.equal(button(panel, 'Lämna ut'), undefined);
+  // ROLLER's booking replaces the draft's lines; the same goods still show as handed out until Cloud has them.
+  assert.deepEqual(groups(EntrancePanel({ detail: withRemembered(finalGoods(), records, 'Sara'), props: props(finalGoods()) })),
+    ['Besöksband, utlämnat', 'JumpSocks, utlämnat']);
+  // A second press adds to the first; an empty press keeps nothing.
+  const more = rememberHandout(records, group, { area: 'cafe', action: 'select', revision: 0, selection: [{ id: 'draft:provisional:c', quantity: 1 }] }, '2026-09-08');
+  assert.deepEqual(plain(more.map((record) => record.area)), ['entrance', 'cafe']);
+  assert.equal(rememberHandout(records, group, { ...entrancePress, selection: [] }, '2026-09-08'), records);
+});
+
+test('A kept press selects the final goods: the group\'s bands whole, the rest up to the pressed number', () => {
+  const { rememberedSelection } = remembered();
+  const lines = [{ kind: 'admission', productId: 'e60', name: 'Besöksband', quantity: 3 }, { kind: 'socks', productId: 'socks', name: 'JumpSocks', quantity: 2 }];
+  const items = [{ ...band, id: 'a1', productId: 'e60', quantity: 2, available: 2 }, { ...band, id: 'a2', productId: 'e90', quantity: 2, available: 2 },
+    { ...socks, id: 's1', productId: 'socks', quantity: 4, available: 4 }, { ...socks, id: 'p1', kind: 'padlock', name: 'Hänglås', productId: 'lock', quantity: 1, available: 1 }];
+  assert.deepEqual(plain(rememberedSelection(lines, items)), [{ id: 'a1', quantity: 2 }, { id: 'a2', quantity: 2 }, { id: 's1', quantity: 2 }]);
+  assert.deepEqual(plain(rememberedSelection([{ kind: 'coffee', productId: 'coffee', name: 'Bryggkaffe', quantity: 1 }],
+    [{ ...coffee, productId: 'coffee' }])), [{ id: 'c', quantity: 1 }], 'a café press keeps the rest for later');
+  assert.deepEqual(plain(rememberedSelection(lines, items.map((item) => ({ ...item, collected: item.quantity, available: 0 })))), []);
+});
+
+test('A kept press is confirmed once Cloud accepts it, also after booking_sync_pending, and never twice', async () => {
+  const { confirmRemembered, afterAttempt, rememberHandout } = remembered();
+  const [record] = rememberHandout([], kioskGroup(), entrancePress, '2026-09-08');
+  const tools = (detail, replies = []) => {
+    const sent = [];
+    return { sent, actorId: 'sara', getDetail: async () => detail,
+      change: async (_id, request) => { sent.push(plain(request)); const reply = replies.shift(); if (reply instanceof Error) throw reply; return reply; } };
+  };
+  const failure = (code, extra = {}) => Object.assign(new Error(code), { code, ...extra });
+  // ROLLER is not done: nothing is sent and the wait does not count as a try.
+  let run = tools(kioskGroup());
+  assert.equal((await confirmRemembered(record, run)).outcome, 'wait');
+  assert.equal(run.sent.length, 0);
+  assert.equal(afterAttempt(record, 'wait', 1000).attempts, 0);
+  // Cloud still answers booking_sync_pending: try again later.
+  run = tools(finalGoods(), [failure('booking_sync_pending')]);
+  const pending = await confirmRemembered(record, run);
+  assert.equal(pending.outcome, 'retry');
+  const later = afterAttempt(record, pending.outcome, 1000);
+  assert.deepEqual([later.attempts, later.nextAt], [1, 4000]);
+  // Then the handout is the same selection and confirmation as a tap on Lämna ut.
+  run = tools(finalGoods(), [{ status: 'ok', handout: { claims: [{ area: 'entrance', revision: 7 }], items: [], receipts: [] }, session: {} },
+    { status: 'ok', completed: true, handout: { claims: [], items: [], receipts: [] }, session: { status: 'redeemed' } }]);
+  assert.equal((await confirmRemembered(later, run)).outcome, 'done');
+  assert.deepEqual(run.sent, [{ area: 'entrance', action: 'select', revision: 0, selection: [{ id: 'R1:i1', quantity: 3 }, { id: 'R1:i2', quantity: 2 }] },
+    { area: 'entrance', action: 'confirm', revision: 7 }]);
+  assert.equal(afterAttempt(later, 'done'), null);
+  // A confirmation that timed out resumes as the same operation.
+  const saved = finalGoods({ handout: { ...finalGoods().handout, claims: [{ area: 'entrance', actorId: 'sara', actorName: 'Sara',
+    revision: 8, pendingOperation: 'op', expiresAt: '2026-09-08T07:42:00Z', selection: [] }] } });
+  run = tools(saved, [{ status: 'ok', completed: true, handout: { claims: [], items: [], receipts: [] }, session: {} }]);
+  assert.equal((await confirmRemembered(record, run)).outcome, 'done');
+  assert.deepEqual(run.sent, [{ area: 'entrance', action: 'confirm', revision: 8 }]);
+  // A colleague is handing out: wait for them without sending anything.
+  const colleague = finalGoods({ handout: { ...finalGoods().handout, claims: [{ area: 'entrance', actorId: 'maja', actorName: 'Maja',
+    revision: 3, pendingOperation: null, expiresAt: '2026-09-08T07:42:00Z', selection: [] }] } });
+  run = tools(colleague);
+  assert.equal((await confirmRemembered(record, run)).outcome, 'retry');
+  assert.equal(run.sent.length, 0);
+  // Handed out elsewhere already: nothing is left to do.
+  const collected = finalGoods({ handout: { ...finalGoods().handout, items: finalGoods().handout.items.map((item) => ({ ...item, collected: item.quantity, available: 0 })) } });
+  run = tools(collected);
+  assert.equal((await confirmRemembered(record, run)).outcome, 'done');
+  assert.equal(run.sent.length, 0);
+  assert.equal((await confirmRemembered(record, tools(finalGoods(), [failure('quantity_already_collected')]))).outcome, 'done');
+  // A staff session that ended keeps the press for the next login.
+  assert.equal((await confirmRemembered(record, tools(finalGoods(), [failure('staff_auth_token_expired', { isAuthenticationFailure: true })]))).outcome, 'stop');
+  assert.equal(afterAttempt(record, 'stop'), record);
+  // Tries are bounded: about eight minutes of failures end it.
+  let next = record;
+  for (let tries = 0; next && tries < 30; tries += 1) next = afterAttempt(next, 'retry', 0);
+  assert.equal(next, null);
+});
+
+test('A café press moves the row to Utlämnat on this device, and kept presses last the day in the tab (sessionStorage)', () => {
+  const { rememberHandout, withRememberedCafe, readRemembered, storeRemembered, REMEMBERED_KEY } = (() => {
+    const store = new Map();
+    return remembered({ window: { sessionStorage: { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) } } });
+  })();
+  const group = kioskGroup({ cafeQuantity: 1, cafeRemaining: 1 });
+  const records = rememberHandout([], group, { area: 'cafe', action: 'select', revision: 0, selection: [{ id: 'draft:provisional:c', quantity: 1 }] }, '2026-09-08');
+  assert.equal(withRememberedCafe(group, records).cafeRemaining, 0);
+  const tree = board(['cafe']).default({ ...props(null), sessions: [withRememberedCafe(group, records)] });
+  assert.match(text(nodes(tree, (node) => node.type === 'section')[1]), /0061.*Kioskgäst.*Utlämnat/);
+  storeRemembered([...records, { ...records[0], checkinSessionId: 'yesterday', day: '2026-09-07' }]);
+  assert.equal(REMEMBERED_KEY, 'jumpyard_staff_remembered_handouts_v1');
+  assert.deepEqual(plain(readRemembered('2026-09-08').map((record) => record.checkinSessionId)), ['kiosk']);
+  assert.deepEqual(plain(remembered().readRemembered('2026-09-08')), [], 'no storage, no presses, no error');
 });
 
 test('Five staff phones polling large days and confirming guests fit the shared route budgets', () => {

@@ -1,7 +1,7 @@
 import type { HandoutArea, HandoutClaim, HandoutItem, StaffSessionSummary } from "@/lib/adminApi";
 
-export type Stage = "ready" | "started" | "upcoming" | "completed";
-/** GH-541 (D0263): the entrance keeps two lists; Påbörjad and Redo are still Kommande. */
+export type Stage = "started" | "upcoming" | "completed";
+/** GH-541 (D0263): the entrance keeps two lists; Påbörjad is still Kommande. */
 export type BoardTab = "upcoming" | "completed";
 export function boardPollDelay(bookingCount: number) {
   // Keep a whole-day refresh below two page requests/second per phone.
@@ -10,23 +10,24 @@ export function boardPollDelay(bookingCount: number) {
 }
 export function stageOf(session: StaffSessionSummary): Stage {
   if (session.status === "redeemed" || session.handoffStatus === "completed") return "completed";
+  // GH-547 (D0265): the guest's last screen on the phone or kiosk is check-in for staff, whatever ROLLER
+  // and Cloud's own check-in in ROLLER are still doing. Failures go to the monitor, not to staff.
+  if (session.status === "ready_for_staff" && session.safetyStatus === "completed") return "completed";
   if (session.status === "upcoming") return "upcoming";
-  if (session.status === "ready_for_staff" && session.safetyStatus === "completed" &&
-      session.bookingSyncStatus === "confirmed" && !session.isExpired) return "ready";
   return "started";
 }
 export function boardTab(session: StaffSessionSummary): BoardTab {
   return stageOf(session) === "completed" ? "completed" : "upcoming";
 }
-/** GH-456/541: Cloud's automatic check-in gave up, so staff check the group in from the red box. */
-export function needsStaff(session: StaffSessionSummary) {
-  return stageOf(session) !== "completed" && session.autoCheckin?.status === "needs_staff";
+/** GH-547: a group is checked in when the guest was done; Cloud's redeem time stands in only without it. */
+export function checkedInTime(session: Pick<StaffSessionSummary, "completedAt" | "readyForStaffAt">) {
+  return session.readyForStaffAt || session.completedAt;
 }
 /** GH-541: the check-in time without Cloud's automatic actor ("automatiskt"); a colleague's name stays. */
-export function checkedInLabel(session: Pick<StaffSessionSummary, "completedAt" | "checkedInBy">) {
+export function checkedInLabel(session: Pick<StaffSessionSummary, "completedAt" | "readyForStaffAt" | "checkedInBy">) {
   const by = session.checkedInBy;
   const automatic = !by?.displayName || Boolean(by.actorId?.startsWith("system:")) || by.role === "system";
-  return `Incheckad ${clock(session.completedAt)}${automatic ? "" : ` · ${by?.displayName}`}`;
+  return `Incheckad ${clock(checkedInTime(session))}${automatic ? "" : ` · ${by?.displayName}`}`;
 }
 const minutesOf = (value?: string | null) => {
   const match = value?.match(/^(\d{1,2}):(\d{2})/);
@@ -87,7 +88,6 @@ export function handoutMessage(code: string | null, fallback: string) {
     admission_not_confirmed: "Gästen behöver checkas in i entrén först.",
     admission_requires_whole_group: "Välj alla besöksband för att checka in gruppen.",
     wrong_date: "Bokningen gäller en annan dag. Kontrollera datumet.",
-    booking_sync_pending: "Betalningen är godkänd. Bokningen bekräftas fortfarande.",
     payment_or_booking_changed: "Betalningen eller bokningen behöver kontrolleras.",
     session_not_ready_for_staff: "Gästen behöver slutföra check-in först.",
     safety_not_completed: "Säkerhetsgenomgången är inte klar.",

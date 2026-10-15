@@ -130,6 +130,9 @@ export interface HandoutItem extends HandoutSelection {
   available?: number;
   /** GH-459: admission rows only; absent when the end time is not on the scheme. */
   bandColour?: StaffBandColour;
+  productId?: string | null;
+  /** GH-547: a line from the paid purchase before ROLLER confirms it; its id is never handed out. */
+  provisional?: boolean;
 }
 export interface HandoutClaim {
   area: HandoutArea;

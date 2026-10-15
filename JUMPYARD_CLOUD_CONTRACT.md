@@ -572,7 +572,9 @@ Rules:
 
 ### `GET /v1/staff/check-in/sessions/{checkinSessionId}`
 
-Under current staff venue/read authorization, #345 also returns completed sessions, read-only `booking:<id>` placeholders and authoritative `handout` items/available quantities, claims and attributed receipts. Opening details never claims a guest. [Current handout contract](docs/gh-345-staff-handout.md#api-changes).
+Under current staff venue/read authorization, #345 also returns completed sessions, read-only `booking:<id>` placeholders and authoritative `handout` items/available quantities, claims and attributed receipts. Opening details never claims a guest.
+
+#547 (D0265): until ROLLER confirms a paid purchase (`bookingSyncStatus` `pending` or `needs_staff`), the detail's `handout.items` and the board's counts, `bandColours` and café totals also include the paid draft's goods as lines with `provisional: true` and synthetic ids. They are never accepted in a handout selection: the handout route answers `booking_sync_pending` until the booking is confirmed. [Current handout contract](docs/gh-345-staff-handout.md#api-changes).
 
 Returns detail for one ready-for-staff session.
 
@@ -1081,7 +1083,8 @@ Decided with JumpYard's product owner on 2026-10-06: a completed check-in counts
 - **Automatic admission.** After ready-for-staff (and after a safety-attested ready) the Session Lambda, and after the phone or kiosk booking confirmation the Booking Lambda, invoke the Redeem Lambda asynchronously with `{ source: "jumpyard.auto-checkin", detail: { checkinSessionId, correlationId, trigger } }` (environment `AUTO_CHECKIN_FUNCTION_NAME`). Whichever comes last admits.
   - The Redeem Lambda admits only a `ready_for_staff` session with completed safety, `bookingSyncStatus = confirmed` and no active staff claim, on the visit day, until the session end plus 30 minutes.
   - It uses the internal redeem route with key `staff-redeem:<checkinSessionId>` and actor `system:auto-checkin` (display name `automatiskt`), so staff and the system can never redeem twice, and the #333 receipts apply. The staff board shows "Incheckad HH:MM · automatiskt".
-  - A ROLLER outage (5xx or 429) throws so Lambda retries asynchronously, three attempts at most. A rejection or the last failure records `session_summary.autoCheckin { status: "needs_staff", reason, attempts }`, and the board shows "Behöver personal".
+  - A ROLLER outage (5xx or 429) throws so Lambda retries asynchronously, three attempts at most. A rejection or the last failure records `session_summary.autoCheckin { status: "needs_staff", reason, attempts }`. The staff app shows the group as "Incheckad" anyway (#547, D0265), and the monitor chat catches the failure.
+  - #547 (D0265): a confirmed kiosk add-on triggers it too (`kiosk_add_on_confirmed`), from the Booking Lambda's add-on confirmation or from the board's linked add-on refresh when ROLLER confirms it after the window.
   - Redeem write gates and the emergency stop block it as they block staff. `AUTO_CHECKIN_REDEEM=off` turns it off.
 - **Phone.** The phone shows the number, not the QR code. The `JY_HANDOFF:<code>:<sessionId>` payload stays valid for the staff app and the kiosk slip.
 - **Phone purchases** offer only sessions that start within the next two hours, so every phone purchase falls inside the window.
