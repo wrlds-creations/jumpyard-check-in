@@ -82,6 +82,8 @@ function harness({ provider = async () => quote(), draftAmount = 0 } = {}) {
     buildItems: () => [{ productId: 1, quantity: 1 }],
     productLabels: new Map(), t: { buy: { paymentOptionsUpdateRequired: 'fix-code', draftFailed: 'request-failed' } },
     formatBuyFlowError: () => 'request-failed',
+    // #557: no refusal here is a session that has already begun.
+    clockNow: undefined, isSessionStartedError: () => false, showStartedSession: () => {},
     setQuote: value => { state.quote = value; events.push(['quote', value]); },
     setDraft: value => { state.draft = value; events.push(['draft', value]); },
     setSubmitting: value => { state.submitting = value; },

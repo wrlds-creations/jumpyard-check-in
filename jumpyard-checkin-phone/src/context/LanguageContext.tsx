@@ -39,6 +39,12 @@ const sv = {
     add: 'Lägg till strumpor',
     own: 'Vi har egna',
   },
+  // GH-557 (D0273): ROLLER stopped selling the chosen time after it began.
+  sessionStarted: {
+    title: 'Tiden har redan börjat',
+    text: 'Välj en ny tid. Det du har valt ligger kvar.',
+    chooseNewTime: 'Välj ny tid',
+  },
   progress: {
     booking: 'Bokning',
     safety: 'Säkerhet',
@@ -146,6 +152,8 @@ const sv = {
     clockNow: 'Klockan är',
     startsIn: 'om {time}',
     startsNow: 'startar nu',
+    // GH-557 (D0273): a start time is offered until 10 minutes after it began.
+    justStarted: 'Har precis börjat',
     popular: 'Populärt',
     maxReached: 'Max',
     contactTitle: 'Din kontakt',
@@ -555,6 +563,11 @@ const en: typeof sv = {
     add: 'Add socks',
     own: 'We have our own',
   },
+  sessionStarted: {
+    title: 'This time has already started',
+    text: 'Choose a new time. Your choices are kept.',
+    chooseNewTime: 'Choose a new time',
+  },
   progress: {
     booking: 'Booking',
     safety: 'Safety',
@@ -657,6 +670,7 @@ const en: typeof sv = {
     clockNow: 'The time is',
     startsIn: 'in {time}',
     startsNow: 'starts now',
+    justStarted: 'Just started',
     popular: 'Popular',
     maxReached: 'Max',
     contactTitle: 'Your contact',

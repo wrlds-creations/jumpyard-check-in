@@ -72,6 +72,7 @@ import { FlowNav } from '@/components/FlowNav';
 import { AddonChoices } from '@/components/AddonChoices';
 import { SocksQuantity } from '@/components/SocksQuantity';
 import { SocksReminderDialog } from '@/components/SocksReminderDialog';
+import { SessionStartedDialog } from '@/components/SessionStartedDialog';
 import { PhonePaymentConfirmation } from '@/components/PhonePaymentConfirmation';
 import { SafetyVideo } from '@/components/SafetyVideo';
 import { resolvePurchasePreparation } from '@/flow/purchasePreparation';
@@ -84,11 +85,15 @@ import {
   isSlotSelectable,
   type SlotCapacity,
 } from '@/flow/slotCapacity';
-import { formatClock, formatStartsIn, minutesUntil, msUntilNextMinute } from '@/flow/slotClock';
+import { buildSlotTimes, formatClock, formatStartsIn, minutesUntil, msUntilNextMinute } from '@/flow/slotClock';
+import { isSessionStartedError } from '@/flow/sessionStarted';
 
 interface BuyTicketsProps {
   recoverySnapshot?: BuyFlowRecoverySnapshot | null;
-  /** Local previews only: fixed start times. The real page always offers the next three half hours. */
+  /**
+   * Local previews only: fixed start times. The real page offers the next three half hours and, for 10 minutes
+   * after a start, that start too (GH-557).
+   */
   slotTimes?: readonly string[];
   /** Local previews only: a fixed clock (HH:MM). The real page shows the phone's own clock, live. */
   clockNow?: string;
@@ -167,19 +172,6 @@ const createEmptyAddonQty = (): AddonQuantityMap => ({
   socks: 0,
   water_bottle: 0,
 });
-
-function generateSlots(): string[] {
-  const now = new Date();
-  const startMin = Math.ceil((now.getHours() * 60 + now.getMinutes()) / 30) * 30;
-  const slots: string[] = [];
-
-  for (let minutes = startMin; slots.length < 3 && minutes < 24 * 60; minutes += 30) {
-    const hours = Math.floor(minutes / 60);
-    slots.push(`${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`);
-  }
-
-  return slots;
-}
 
 function formatTodayDate(lang: 'sv' | 'en') {
   return new Intl.DateTimeFormat(lang === 'sv' ? 'sv-SE' : 'en-GB', {
@@ -809,7 +801,6 @@ export const BuyTickets = ({
 }: BuyTicketsProps) => {
   const { lang, t } = useTranslation();
   const slotKey = slotTimes?.join(',') ?? '';
-  const slots = useMemo(() => (slotKey ? slotKey.split(',') : generateSlots()), [slotKey]);
   // #491 round 1 (Love 2026-10-08): "Klockan är 13:42", updated on the minute, and how soon each slot starts.
   const [liveClock, setLiveClock] = useState(() => new Date());
   useEffect(() => {
@@ -823,6 +814,10 @@ export const BuyTickets = ({
     return () => window.clearTimeout(timer);
   }, [clockNow]);
   const clock = clockNow ?? liveClock;
+  // GH-557 (D0273): the offered times follow the clock: a half hour that began under 10 minutes ago, then the
+  // next three. The list changes only when its times do, so the step's single availability read stays one.
+  const shownTimesKey = slotKey || buildSlotTimes(clock).join(',');
+  const slots = useMemo(() => (shownTimesKey ? shownTimesKey.split(',') : []), [shownTimesKey]);
   const restoringPrePaymentRef = useRef(false);
   const restoredSnapshotUpdatedAtRef = useRef<string | null>(null);
   const todayLabel = useMemo(
@@ -879,6 +874,12 @@ export const BuyTickets = ({
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // GH-557 (D0273): the start time ROLLER stopped selling after it began ("Tiden har redan börjat").
+  const [startedSessionTime, setStartedSessionTime] = useState<string | null>(null);
+  // A time refused that way stays hidden, even while an older answer still lists it as open.
+  const [closedStartTimes, setClosedStartTimes] = useState<string[]>([]);
+  // After "Välj ny tid" the next chosen time keeps the purchase and leads back to the contact step.
+  const rebookingRef = useRef(false);
   const [paymentSyncing, setPaymentSyncing] = useState(false);
   const [paymentSyncError, setPaymentSyncError] = useState<string | null>(null);
   const [paymentApprovedForSync, setPaymentApprovedForSync] = useState(false);
@@ -928,6 +929,21 @@ export const BuyTickets = ({
   useEffect(() => () => {
     onStepChange?.('TIMESLOT');
   }, [onStepChange]);
+
+  // GH-557: a time that has begun is offered only while Cloud's answer says ROLLER still sells it; it is
+  // never shown as "Fullt" and disappears 10 minutes after the start.
+  const visibleSlots = slots.filter((time) => {
+    const minutes = minutesUntil(time, clock);
+    if (minutes === null || minutes >= 0) return true;
+    if (closedStartTimes.includes(time)) return false;
+    const capacity = getSlotCapacity(findAvailabilitySlot(availability, time));
+    return capacity.state === 'open' || capacity.state === 'few';
+  });
+  const visibleSlotsKey = visibleSlots.join(',');
+  useEffect(() => {
+    if (step !== 'TIMESLOT' || restoringPrePaymentRef.current || !selectedTime) return;
+    if (!visibleSlotsKey.split(',').includes(selectedTime)) setSelectedTime(null);
+  }, [selectedTime, step, visibleSlotsKey]);
 
   const selectedSlot = availability?.slots.find((slot) => slot.startTime === selectedTime) ?? null;
   const visibleProductSections = getVisibleBookingProductSections(selectedSlot);
@@ -1178,8 +1194,15 @@ export const BuyTickets = ({
           setStep(recoveredStepAfterAddons);
         } catch (error) {
           if (!alive) return;
-          const productLabelsForRestore = buildProductLabelMap(recoveredProduct, recoveredBuyAddons);
-          setSubmitError(formatBuyFlowError(error, t.buy, productLabelsForRestore, t.buy.quoteFailed));
+          // GH-557: the saved time began and ROLLER no longer sells it; the guest picks a new time.
+          if (isSessionStartedError(error, recoveredProduct.startTime, clockNow ?? new Date())) {
+            const closedTime = recoveredProduct.startTime;
+            setClosedStartTimes((times) => (times.includes(closedTime) ? times : [...times, closedTime]));
+            setStartedSessionTime(closedTime);
+          } else {
+            const productLabelsForRestore = buildProductLabelMap(recoveredProduct, recoveredBuyAddons);
+            setSubmitError(formatBuyFlowError(error, t.buy, productLabelsForRestore, t.buy.quoteFailed));
+          }
           setStep('CONTACT');
         }
       } catch (error) {
@@ -1207,7 +1230,7 @@ export const BuyTickets = ({
       alive = false;
       restoringPrePaymentRef.current = false;
     };
-  }, [invalidateQuote, recoverySnapshot, safetyBeforePayment, slots, t.addons, t.buy]);
+  }, [clockNow, invalidateQuote, recoverySnapshot, safetyBeforePayment, slots, t.addons, t.buy]);
 
   // #491: one availability read for all shown start times. In-flight reads are shared, so Continue
   // never starts a second one for the same times (#427).
@@ -1369,6 +1392,15 @@ export const BuyTickets = ({
             ? t.buy.paymentOptionClipCardHint
             : null;
 
+  // GH-557 (D0273): after "Välj ny tid" the purchase moves to the new time; otherwise the product step opens.
+  const leaveTimeslot = (time: string, answer: NewBookingAvailability | null) => {
+    if (rebookingRef.current) {
+      rebookPurchaseTo(time, answer);
+      return;
+    }
+    setStep('PRODUCT');
+  };
+
   // #491: Continue reuses the answer the step already loaded, so the product step does not wait.
   // Only a missing, failed or stale (5 min) answer is read again, once, for all shown times.
   const continueFromTimeslot = async () => {
@@ -1376,7 +1408,7 @@ export const BuyTickets = ({
     if (!time || loadingAvailability) return;
     if (availabilityCovers(availability, [time]) && isAvailabilityFresh(availabilityLoadedAt)) {
       if (!isSlotSelectable(getSlotCapacity(findAvailabilitySlot(availability, time)))) return;
-      setStep('PRODUCT');
+      leaveTimeslot(time, availability);
       return;
     }
     setLoadingAvailability(true);
@@ -1393,7 +1425,7 @@ export const BuyTickets = ({
         setSelectedTime(null);
         return;
       }
-      setStep('PRODUCT');
+      leaveTimeslot(time, result);
     } catch (error) {
       setAvailabilityError(
         error instanceof CloudBookingError ? error.message : t.buy.availabilityFailed
@@ -1407,6 +1439,8 @@ export const BuyTickets = ({
     if (!isSlotSelectable(getSlotCapacity(findAvailabilitySlot(availability, time)))) return;
     setSelectedTime(time);
     setAvailabilityError(null);
+    // GH-557: a new time after "Tiden har redan börjat" keeps tickets, add-ons, name and codes.
+    if (rebookingRef.current) return;
     setSelectedProduct(null);
     setQuantity(1);
     setAddonQty(createEmptyAddonQty());
@@ -1593,6 +1627,61 @@ export const BuyTickets = ({
     goToStepAfterAddons();
   };
 
+  // GH-557 (D0273): moves the purchase to the new start time and back to the contact step. The ticket is the
+  // same product at the new time, priced for that time. A ticket not sold there opens the product step, fewer
+  // places the quantity step, and an add-on not sold there the add-on step. Name, codes and safety stay.
+  const rebookPurchaseTo = (time: string, answer: NewBookingAvailability | null) => {
+    rebookingRef.current = false;
+    const slot = findAvailabilitySlot(answer, time);
+    const nextProduct = selectedProduct ? findRecoveredBookingProduct(slot, toRecoveryProduct(selectedProduct)) : null;
+    const nextMax = getMaxBookingProductQuantity(nextProduct);
+    if (!slot || !nextProduct || nextMax <= 0) {
+      setSelectedProduct(null);
+      setQuantity(1);
+      setAddonQty(createEmptyAddonQty());
+      setSkyriderConsentConfirmed(false);
+      setStep('PRODUCT');
+      return;
+    }
+    const nextQuantity = Math.max(1, Math.min(nextMax, quantity));
+    const nextAddonQty = clampRecoveredAddonQty(
+      toRecoveryAddonQty(addonQty),
+      slot,
+      getBuyAddonEntriesForSlot(slot, t.addons),
+    );
+    setSelectedProduct(nextProduct);
+    setQuantity(nextQuantity);
+    setAddonQty(nextAddonQty);
+    if (nextAddonQty.skyrider <= 0) setSkyriderConsentConfirmed(false);
+    if (nextQuantity !== quantity) {
+      setStep('QUANTITY');
+      return;
+    }
+    if (BUY_ENTRY_ADDON_IDS.some((id) => nextAddonQty[id] !== addonQty[id])) {
+      setStep('ADDONS');
+      return;
+    }
+    goToStepAfterAddons();
+  };
+
+  const showStartedSession = (time: string) => {
+    setClosedStartTimes((times) => (times.includes(time) ? times : [...times, time]));
+    setStartedSessionTime(time);
+  };
+
+  // "Välj ny tid": the time step with one fresh read; the next chosen time keeps the rest of the purchase.
+  const chooseNewTime = () => {
+    setStartedSessionTime(null);
+    rebookingRef.current = true;
+    invalidateQuote();
+    setDraft(null);
+    clearPaymentSyncState();
+    setSubmitError(null);
+    setSelectedTime(null);
+    setAvailabilityLoadedAt(null);
+    setStep('TIMESLOT');
+  };
+
   // GH-473: email-first sends first name and email only; never an invented last name or phone.
   const buildCustomer = (): NewBookingCustomer =>
     toNewBookingCustomer({ firstName, lastName, email, phone }, contactDetailsRequired);
@@ -1632,7 +1721,11 @@ export const BuyTickets = ({
       setQuote(quoted);
     } catch (error) {
       if (quoteRequestVersionRef.current === requestVersion) {
-        setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.paymentOptionsFailed));
+        if (isSessionStartedError(error, selectedProduct.startTime, clockNow ?? new Date())) {
+          showStartedSession(selectedProduct.startTime);
+        } else {
+          setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.paymentOptionsFailed));
+        }
       }
     } finally {
       quoteOperationInFlightRef.current = false;
@@ -1728,6 +1821,11 @@ export const BuyTickets = ({
         contactDetailsFocusPendingRef.current = true;
         setContactDetailsAsked(true);
         setContactDetailsRequired(true);
+        return;
+      }
+      // GH-557 (D0273): the time began and ROLLER stopped selling it before the purchase reached payment.
+      if (isSessionStartedError(error, selectedProduct.startTime, clockNow ?? new Date())) {
+        showStartedSession(selectedProduct.startTime);
         return;
       }
       setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.draftFailed));
@@ -2156,10 +2254,12 @@ export const BuyTickets = ({
 
           <StableLoadingRegion loading={loadingAvailability} fallback={<AvailabilityLoadingCard selectedTime={selectedTime} />}>
               <div className="flex flex-col gap-3 mb-6">
-                {slots.map((time) => {
+                {visibleSlots.map((time) => {
                   const capacity = getSlotCapacity(findAvailabilitySlot(availability, time));
                   const full = !isSlotSelectable(capacity);
                   const isSelected = selectedTime === time && !full;
+                  // GH-557: "Har precis börjat" in red, so a time that has begun reads differently.
+                  const started = (minutesUntil(time, clock) ?? 0) < 0;
                   return (
                     <button
                       key={time}
@@ -2167,6 +2267,7 @@ export const BuyTickets = ({
                       disabled={full}
                       data-slot-capacity={capacity.state}
                       data-slot-remaining={capacity.remaining ?? ''}
+                      data-slot-started={String(started)}
                       className={`w-full min-h-[76px] px-5 py-4 rounded-2xl text-left flex items-center justify-between gap-3 transition-all ${
                         full
                           ? 'bg-surface border border-border cursor-not-allowed'
@@ -2179,7 +2280,7 @@ export const BuyTickets = ({
                         <span className={`text-2xl font-black italic leading-none ${full ? 'text-muted' : isSelected ? 'text-white' : 'text-foreground'}`}>
                           {time}
                         </span>
-                        <span className={`mt-1.5 text-[11px] font-bold italic uppercase tracking-wider ${full ? 'text-muted' : isSelected ? 'text-white' : 'text-muted'}`}
+                        <span className={`mt-1.5 text-[11px] font-bold italic uppercase tracking-wider ${full ? 'text-muted' : isSelected ? 'text-white' : started ? 'text-primary' : 'text-muted'}`}
                           data-testid="slot-starts-in">
                           {formatStartsIn(minutesUntil(time, clock), t.buy)}
                         </span>
@@ -2192,6 +2293,7 @@ export const BuyTickets = ({
 
               <button
                 onClick={() => void continueFromTimeslot()}
+                data-testid="buy-timeslot-continue"
                 disabled={!selectedTime || !isSlotSelectable(getSlotCapacity(findAvailabilitySlot(availability, selectedTime)))}
                 className="w-full bg-primary hover:bg-primary/90 text-white font-black italic uppercase text-lg py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
               >
@@ -2965,6 +3067,8 @@ export const BuyTickets = ({
       onAddSocks={addSocksFromReminder}
       onOwnSocks={continueWithOwnSocks}
     />
+    {/* GH-557 (D0273): replaces the red line when ROLLER stopped selling the chosen time after it began. */}
+    <SessionStartedDialog open={startedSessionTime !== null && step === 'CONTACT'} onChooseNewTime={chooseNewTime} />
     </FlowTransitionBoundary>
   );
 };

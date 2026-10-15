@@ -4650,6 +4650,16 @@ async function validateItemsAvailable(config, token, items) {
     const capacity = getSessionCapacityRemaining(session);
     const onlineSalesOpen = session?.onlineSalesOpen !== false;
 
+    // GH-557 (D0273): ROLLER keeps selling a session after its start until the product's online
+    // cut-off (10 minutes at Nacka). A started session that ROLLER has closed gets its own code, so
+    // the kiosk and phone offer a new time instead of calling it full. The message is unchanged.
+    if (session && !onlineSalesOpen && hasVenueSessionStarted(item.bookingDate, item.startTime)) {
+      return {
+        code: 'session_started',
+        message: `Product ${item.productId} is not available for ${item.bookingDate} ${item.startTime}.`,
+      };
+    }
+
     if (!session || !onlineSalesOpen || (capacity !== null && capacity < item.quantity)) {
       return {
         code: 'capacity_unavailable',
@@ -4659,6 +4669,30 @@ async function validateItemsAvailable(config, token, items) {
   }
 
   return null;
+}
+
+// GH-557: whether a session's start (venue date and HH:mm, Europe/Stockholm) has come.
+function hasVenueSessionStarted(bookingDate, startTime, now = currentVenueTime()) {
+  const match = /^(\d{2}):(\d{2})/.exec(String(startTime ?? ''));
+  if (!isIsoDate(bookingDate) || !match) return false;
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    month: '2-digit',
+    timeZone: VENUE_TIME_ZONE,
+    year: 'numeric',
+  }).formatToParts(now);
+  const part = (type) => parts.find((candidate) => candidate.type === type)?.value ?? '';
+  const today = `${part('year')}-${part('month')}-${part('day')}`;
+  if (bookingDate !== today) return bookingDate < today;
+  const nowMinutes = (Number(part('hour')) % 24) * 60 + Number(part('minute'));
+  return Number(match[1]) * 60 + Number(match[2]) <= nowMinutes;
+}
+
+function currentVenueTime() {
+  return new Date();
 }
 
 async function loadAvailabilityParentForProduct(config, token, item, parentProductId) {
