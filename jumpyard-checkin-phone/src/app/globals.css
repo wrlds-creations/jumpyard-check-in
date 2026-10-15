@@ -515,10 +515,42 @@ body:has(.addon-shop-total) [data-testid="flow-nav"] > [aria-hidden="true"] { di
 .safety-approval[data-visible="true"] { transition-delay: 180ms; }
 .safety-cover { transition: opacity 360ms ease-out; }
 .safety-cover[data-visible="false"] { opacity: 0; }
-/* #498: the poster title is a heading of up to 44 px (its size follows the film width in SafetyVideo). */
-.safety-film h1 { letter-spacing: -0.03em; }
+/* #551 (variant A, Love 2026-10-15; kiosk #224): a fixed heading at the top of the film, a thick bar at its
+   foot and the seconds left above the bar. Sizes are hundredths of the film width (--film-u), so phone and
+   kiosk match and everything docks with the film. The heading, bar and seconds sit above the poster, the
+   pause/error cover and the replay control, and never take a tap. */
+.safety-poster { padding-bottom: calc(var(--film-u) * 12); }
+.safety-film .safety-heading {
+  position: absolute; inset: 0 0 auto 0; z-index: 40; pointer-events: none;
+  display: flex; align-items: center; gap: calc(var(--film-u) * 2);
+  padding: calc(var(--film-u) * 4.2) calc(var(--film-u) * 5) calc(var(--film-u) * 10);
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.6), rgb(0 0 0 / 0.28) 55%, rgb(0 0 0 / 0));
+}
+.safety-film .safety-heading-text {
+  margin: 0; color: #fff; font-size: calc(var(--film-u) * 7.4); line-height: 0.9; letter-spacing: -0.03em; white-space: nowrap;
+  font-variation-settings: var(--jy-heading-axes); font-weight: 900; font-style: normal;
+  text-shadow: 0 calc(var(--film-u) * 0.3) calc(var(--film-u) * 2) rgb(0 0 0 / 0.35);
+}
+/* The mascot fills the middle of a padded square; the padding is transparent, so the image may overflow. */
+.safety-film .safety-flame { position: relative; flex: none; width: calc(var(--film-u) * 5.2); height: calc(var(--film-u) * 7.2); }
+.safety-film .safety-flame img {
+  position: absolute; max-width: none; width: calc(var(--film-u) * 17.6); height: calc(var(--film-u) * 17.6);
+  left: calc(var(--film-u) * -6.35); top: calc(var(--film-u) * -5.4);
+}
+.safety-film .safety-bar {
+  position: absolute; z-index: 40; left: calc(var(--film-u) * 5); right: calc(var(--film-u) * 5); bottom: calc(var(--film-u) * 5);
+  height: calc(var(--film-u) * 2.8); overflow: hidden; border-radius: 999px; background: #fff; pointer-events: none;
+  box-shadow: 0 0 calc(var(--film-u) * 3) rgb(0 0 0 / 0.3);
+}
+.safety-film .safety-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--primary); transition: width 260ms linear; }
+.safety-film .safety-time-left {
+  position: absolute; z-index: 40; right: calc(var(--film-u) * 5); bottom: calc(var(--film-u) * 9.8); pointer-events: none;
+  padding: calc(var(--film-u) * 1.2) calc(var(--film-u) * 2.8); border-radius: 999px; background: #fff; color: var(--primary);
+  font-size: calc(var(--film-u) * 3.8); line-height: 1; letter-spacing: 0.01em; white-space: nowrap;
+  font-variation-settings: var(--jy-small-button-axes); font-weight: 800; font-style: italic;
+}
 @media (prefers-reduced-motion: reduce) {
-  .safety-film, .safety-approval, .safety-cover { transition: none; }
+  .safety-film, .safety-approval, .safety-cover, .safety-film .safety-bar > span { transition: none; }
 }
 
 /* #492 (Love 2026-10-08): the start page's logo jumps once with a flip, in the kiosk's trampoline style

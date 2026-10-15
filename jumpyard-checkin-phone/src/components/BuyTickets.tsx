@@ -110,6 +110,8 @@ interface BuyTicketsProps {
     },
   ) => Promise<() => void | Promise<void>>;
   onRequestExit?: () => void;
+  /** #553 (D0270): the page's recovery card takes over an unresolved payment (automatic check, Börja om). */
+  onPaymentUnresolved?: () => void;
   onStepChange?: (step: BuyTicketsStep) => void;
 }
 
@@ -804,6 +806,7 @@ export const BuyTickets = ({
   onBack,
   onBookingReady,
   onRequestExit,
+  onPaymentUnresolved,
   onStepChange,
 }: BuyTicketsProps) => {
   const { lang, t } = useTranslation();
@@ -2838,7 +2841,10 @@ export const BuyTickets = ({
                       setStep('APPROVED');
                       void (draftSafetyAttestation ? confirmAttestedPurchase() : resolvePaidDraftBooking(undefined, true));
                     }}
-                    onFailed={(result) => setPaymentFailure(result.status === 'failed' ? 'failed' : 'unknown')}
+                    onFailed={(result) => {
+                      setPaymentFailure(result.status === 'failed' ? 'failed' : 'unknown');
+                      if (result.status !== 'failed') onPaymentUnresolved?.();
+                    }}
                   />
                 </div>
                 {paymentFailure === 'unknown' && (

@@ -200,6 +200,9 @@ const sv = {
     paymentFailedDesc: 'Betalningen kunde inte slutföras. Dina val finns kvar och du kan välja ett annat betalsätt.',
     paymentRecoveryTitle: 'Vi kan inte bekräfta betalningen ännu',
     paymentRecoveryDescription: 'Betala inte igen för samma köp. Kontrollera status igen om en stund. Om problemet kvarstår hjälper vi dig att kontrollera köpet på plats när du kommer till JumpYard.',
+    paymentRecoveryWaitDescription: 'Betala inte igen ännu. Vi kollar om betalningen gick igenom. Syns den inte inom några minuter kan du börja om.',
+    paymentRestartTitle: 'Vi hittar ingen betalning',
+    paymentRestartDescription: 'Köpet blev inte klart. Börja om och betala igen. Ser du ändå en dragning hjälper vi dig på plats.',
     paymentRetryMethod: 'Välj ett annat betalsätt',
     paymentCheckStatus: 'Kontrollera betalningen',
     paymentChecking: 'Vi kontrollerar betalningen',
@@ -300,7 +303,6 @@ const sv = {
   safetyVideo: {
     title: 'Säkerhetsgenomgång',
     description: 'Titta på videon tillsammans med alla som ska hoppa.',
-    buyTitle: 'Säkerhetsgenomgång',
     buyDescription: 'Titta på videon tillsammans med alla som ska hoppa.',
     play: 'Spela upp',
     playing: 'Videon spelas…',
@@ -313,7 +315,9 @@ const sv = {
     staffHelp: 'Be personalen på plats om hjälp med säkerhetsgenomgången om problemet kvarstår.',
     watchFull: 'Titta hela videon',
     replay: 'Se videon igen',
-    durationBadge: 'ca {seconds} sek',
+    // #551: the fixed heading at the top of the film, and the seconds left while it plays.
+    heading: 'Säkerhetsgenomgång',
+    timeLeft: '{seconds} sek kvar',
   },
   // #458: one approval under the film. Short rules; the button carries the approved attestation.
   safetyAttest: {
@@ -707,6 +711,9 @@ const en: typeof sv = {
     paymentFailedDesc: 'The payment could not be completed. Your choices are saved and you can choose another payment method.',
     paymentRecoveryTitle: 'We cannot confirm the payment yet',
     paymentRecoveryDescription: 'Do not pay again for the same purchase. Check the status again in a moment. If the problem continues, we will help you check the purchase when you arrive at JumpYard.',
+    paymentRecoveryWaitDescription: 'Do not pay again yet. We are checking whether the payment went through. If it does not show within a few minutes, you can start over.',
+    paymentRestartTitle: 'We cannot find a payment',
+    paymentRestartDescription: 'The purchase was not completed. Start over and pay again. If you still see a charge, we will help you on site.',
     paymentRetryMethod: 'Choose another payment method',
     paymentCheckStatus: 'Check payment status',
     paymentChecking: 'Checking your payment',
@@ -803,7 +810,6 @@ const en: typeof sv = {
   safetyVideo: {
     title: 'Safety video',
     description: 'Watch the video together with everyone who will jump.',
-    buyTitle: 'Safety walkthrough',
     buyDescription: 'Watch the video together with everyone who will jump.',
     play: 'Play',
     playing: 'Video playing…',
@@ -816,7 +822,8 @@ const en: typeof sv = {
     staffHelp: 'If the problem continues, ask staff at the park for help with the safety briefing.',
     watchFull: 'Watch the full video',
     replay: 'Watch again',
-    durationBadge: 'about {seconds} sec',
+    heading: 'Safety briefing',
+    timeLeft: '{seconds} sec left',
   },
   safetyAttest: {
     safetyRulesTitle: 'Safety rules',
