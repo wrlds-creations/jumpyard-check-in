@@ -211,10 +211,10 @@ test('socks on the quantity step become the same JumpSocks purchase line the add
   ];
   const { getSelectedAddonsForState, buildItemsForState } = compile(
     ['getAddonMaxQuantity', 'isPricedAddon', 'getAddonAvailabilityById', 'isKnownBuyAddonId', 'getSelectedAddonsForState', 'buildItemsForState'],
-    { SOCKS_UNLIMITED_MAX: Number.MAX_SAFE_INTEGER, BUY_ENTRY_ADDON_IDS: ['socks', 'water_bottle', 'skyrider', 'lock', 'coffee'], Map, Number },
+    { ADDON_MAX_QUANTITY: 99, SOCKS_UNLIMITED_MAX: Number.MAX_SAFE_INTEGER, BUY_ENTRY_ADDON_IDS: ['socks', 'water_bottle', 'skyrider', 'lock', 'coffee'], Map, Number },
     'getSelectedAddonsForState, buildItemsForState');
   const qty = { skyrider: 0, connected: 0, coffee: 0, extra_person: 0, lock: 0, socks: 3, water_bottle: 1 };
-  const selected = getSelectedAddonsForState(qty, null, addons, 2);
+  const selected = getSelectedAddonsForState(qty, null, addons);
   assert.deepEqual(selected.map(({ id, qty: count, rollerProductId }) => ({ id, count, rollerProductId })),
     [{ id: 'socks', count: 3, rollerProductId: 1765445 }, { id: 'water_bottle', count: 1, rollerProductId: 1040 }]);
   const items = buildItemsForState({ date: '2026-10-17', slots: [] }, product({ productId: '1002', startTime: '14:00' }), 2, selected);
@@ -224,7 +224,7 @@ test('socks on the quantity step become the same JumpSocks purchase line the add
     { bookingDate: '2026-10-17', productId: 1040, quantity: 1, requiresAvailability: false, startTime: '14:00' },
   ]);
   // More socks than jumpers are allowed (parents wear socks too).
-  assert.equal(getSelectedAddonsForState({ ...qty, socks: 9 }, null, addons, 2)[0].qty, 9);
+  assert.equal(getSelectedAddonsForState({ ...qty, socks: 9 }, null, addons)[0].qty, 9);
   // The quantity step binds the stepper to that same line and adds it to its total; the add-on step no longer offers socks.
   assert.match(buySource, /<SocksQuantity[\s\S]*?quantity=\{socksSellable \? addonQty\.socks : 0\}[\s\S]*?onQuantity=\{\(next\) => setOneAddon\('socks', next\)\}/);
   assert.match(buySource, /\{formatMoney\(entryTotal \+ socksTotal\)\}/);

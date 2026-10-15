@@ -34,7 +34,7 @@ import {
 } from '@/flow/contactDetails';
 import { PaymentCodeRejectedDialog } from '@/components/PaymentCodeRejectedDialog';
 import type { Addon, AddonId, Booking, CheckInSession } from '@/flow/types';
-import { ADDON_CATALOG_CONFIG, BUY_ENTRY_ADDON_IDS } from '@/flow/addonCatalog';
+import { ADDON_CATALOG_CONFIG, ADDON_MAX_QUANTITY, BUY_ENTRY_ADDON_IDS } from '@/flow/addonCatalog';
 import { getPaidConfirmationRetryDelay, resolvePaidConfirmation } from '@/flow/paidBookingConfirmation';
 import { buildSafetyAttestation } from '@/flow/safetyAttestation';
 import { scheduleRollerConfirmationNudges } from '@/flow/provisionalConfirmation';
@@ -413,13 +413,13 @@ function getJumperCount(product: NewBookingProduct | null, nextQuantity: number)
   return product ? nextQuantity * Math.max(1, product.jumpersPerUnit) : nextQuantity;
 }
 
+// #549 (D0272): no add-on maximum depends on the number of jumpers any more.
 function getAddonMaxQuantity(
   addon: BuyAddonEntry,
-  addonAvailability: NewBookingProduct | null,
-  jumperCount: number
+  addonAvailability: NewBookingProduct | null
 ) {
   if (addon.id === 'socks') return SOCKS_UNLIMITED_MAX;
-  const baseMax = Math.max(1, jumperCount * addon.maxPerGuest);
+  const baseMax = ADDON_MAX_QUANTITY;
   if (!addon.requiresAvailability) return baseMax;
   if (!addonAvailability?.available || !addonAvailability.productId) return 0;
   if (addonAvailability.capacityRemaining === null) return baseMax;
@@ -534,8 +534,7 @@ function getRecoveredQuantity(snapshot: BuyFlowRecoverySnapshot, product: NewBoo
 function clampRecoveredAddonQty(
   recovered: BuyFlowRecoveryAddonQty | undefined,
   slot: NewBookingAvailability['slots'][number] | null,
-  buyAddons: BuyAddonEntry[],
-  jumperCount: number
+  buyAddons: BuyAddonEntry[]
 ) {
   const addonAvailabilityById = getAddonAvailabilityById(slot);
   const next = createEmptyAddonQty();
@@ -543,7 +542,7 @@ function clampRecoveredAddonQty(
   for (const addon of buyAddons) {
     const rawQty = recovered?.[addon.id] ?? 0;
     const qty = Number.isInteger(rawQty) ? rawQty : 0;
-    const max = getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null, jumperCount);
+    const max = getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null);
     if (qty > 0 && max > 0 && isPricedAddon(addon)) {
       next[addon.id] = Math.min(qty, max);
     }
@@ -555,12 +554,11 @@ function clampRecoveredAddonQty(
 function getSelectedAddonsForState(
   addonQty: AddonQuantityMap,
   slot: NewBookingAvailability['slots'][number] | null,
-  buyAddons: BuyAddonEntry[],
-  jumperCount: number
+  buyAddons: BuyAddonEntry[]
 ) {
   const addonAvailabilityById = getAddonAvailabilityById(slot);
   return buyAddons.flatMap((addon): Addon[] => {
-    const max = getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null, jumperCount);
+    const max = getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null);
     const qty = Math.min(addonQty[addon.id], max);
     if (qty <= 0 || !isPricedAddon(addon)) return [];
 
@@ -943,8 +941,8 @@ export const BuyTickets = ({
     [selectedSlot, t.addons]
   );
   const addonAvailabilityById = useMemo(() => getAddonAvailabilityById(selectedSlot), [selectedSlot]);
-  const getBuyAddonMax = (addon: BuyAddonEntry, nextJumperCount = jumperCount) =>
-    getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null, nextJumperCount);
+  const getBuyAddonMax = (addon: BuyAddonEntry) =>
+    getAddonMaxQuantity(addon, addonAvailabilityById.get(addon.id) ?? null);
   const selectedAddons: Addon[] = buyAddons.flatMap((addon) => {
     if (addonQty[addon.id] <= 0 || getBuyAddonMax(addon) <= 0 || !isPricedAddon(addon)) return [];
 
@@ -1095,19 +1093,16 @@ export const BuyTickets = ({
             getRecoveredQuantity(recoverySnapshot, recoveredProduct)
           )
         );
-        const recoveredJumperCount = getJumperCount(recoveredProduct, recoveredQuantity);
         const recoveredBuyAddons = getBuyAddonEntriesForSlot(freshSlot, t.addons);
         const recoveredAddonQty = clampRecoveredAddonQty(
           recoverySnapshot.addonQty,
           freshSlot,
-          recoveredBuyAddons,
-          recoveredJumperCount
+          recoveredBuyAddons
         );
         const recoveredSelectedAddons = getSelectedAddonsForState(
           recoveredAddonQty,
           freshSlot,
-          recoveredBuyAddons,
-          recoveredJumperCount
+          recoveredBuyAddons
         );
         const recoveredSkyRiderSelected = recoveredSelectedAddons.some((addon) => addon.id === 'skyrider');
         const recoveredSkyRiderConsent = recoveredSkyRiderSelected && recoverySnapshot.skyriderConsentConfirmed === true;
@@ -1432,17 +1427,10 @@ export const BuyTickets = ({
     setStep('QUANTITY');
   };
 
+  // #549 (D0272): fewer jumpers no longer lowers the add-ons the guest chose.
   const updateQuantity = (nextQuantity: number) => {
     const clampedQuantity = Math.max(1, Math.min(maxQuantity || 1, nextQuantity));
-    const nextJumperCount = getJumperCount(selectedProduct, clampedQuantity);
     setQuantity(clampedQuantity);
-    setAddonQty((current) => {
-      const next = { ...current };
-      for (const addon of buyAddons) {
-        next[addon.id] = Math.min(next[addon.id], getBuyAddonMax(addon, nextJumperCount));
-      }
-      return next;
-    });
     invalidateQuote();
     setDraft(null);
     clearPaymentSyncState();

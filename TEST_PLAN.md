@@ -1,5 +1,28 @@
 # Test Plan
 
+## Up to 50 jumpers per group, add-ons not tied to them (#549, kiosk #223)
+
+Run `npm run validate:gh549-group-size` (part of `npm run validate`). It drives the real Redeem and Session Lambdas with a scripted Aurora and ROLLER:
+- 20 entry tickets go to `POST /redemptions` in two calls of 10 and 50 in five, each group completed with one receipt; 1, 4 and 10 tickets stay one call; 11 is 10 + 1.
+- Add-on tickets in the session (3 entries + 8 units, 20 + 120, 50 + 60) are never sent and never refused.
+- 51 entry tickets are `too_many_tickets` before any ROLLER call.
+- A retried or resumed key after the first 10 were redeemed sends only the other 10. A first attempt on a group partly redeemed elsewhere still sends the whole group and goes to staff. A failed second call completes nothing and releases the key, and the next attempt finishes the group. A `409` whose recheck shows the group redeemed completes it.
+- The automatic check-in admits a kiosk purchase of 50 entries and 30 add-on units with the shared staff key.
+- The staff session check takes 250 ids, the request takes 1000, and an explicit session selection takes 50.
+
+It also runs the phone's `groupSize.test.mjs`: 50 entries, 25 combos or 12 families within ROLLER's capacity; SkyRider, water, coffee and padlocks up to 99 whatever the number of jumpers, SkyRider within ROLLER's places; socks unchanged; and an existing booking's add-ons up to 99.
+
+Also run `validate:gh333-staff-redeem-recovery`, `validate:gh456-auto-checkin`, `validate:gh270-redeem-venue-session`, `validate:t0193-payload-limits` and `validate:gh345-staff-handout`, the phone suites (`test:workshop-flow` follows the new add-on maximum), lint, `tsc` and the build. In the kiosk repository run `npm run test:kiosk-group-size` (part of its `validate`).
+
+At 375 px in the development-only `/preview/addons?full=1&scenario=buy2|booking0`, check that Back to Entré reaches 50 jumpers ("Max 50"), that one jumper can take more than four of an add-on, and that a booking of two takes more than eight coffees. After release:
+- a phone purchase of more than 10 entries checks in by itself;
+- a kiosk purchase of more than 10 entries checks in by itself;
+- a ROLLER web booking of more than 10 entries checked in on the phone or kiosk does the same;
+- each shows under "Incheckade" with all its jumpers;
+- `checkin.redeem_succeeded` records one ROLLER call per 10 (`rollerCalls`).
+
+[Notes](docs/gh-549-group-size.md).
+
 ## Simpler sign-in: no admin code and any staff PIN (#542)
 
 Run `npm run validate:t0194-staff-identity-backend`, `validate:t0194-staff-identity-infra`, `validate:gh483-kiosk-staff-resolution` and `validate:gh488-kiosk-pairing` (all part of `npm run validate`). They check that:

@@ -221,7 +221,7 @@ Rules:
 | Existing booking payment link | `POST /bookings/{uniqueId}/payments/links` | Write | Confirmed but not primary for pilot add-products | Supported by Roller, but not selected as the primary pilot pattern because it sends the guest to a separate hosted payment link and return-to-PWA behavior is not reliable enough. |
 | Cancel payment link | `DELETE /bookings/{uniqueId}/payments/links/{paymentLinkId}` | Write | Confirmed but deferred | Cleanup path if hosted payment is used in a future same-booking update path. |
 | Linked add-on booking | `POST /bookings/draft/costs`, `POST /bookings/draft`, payment/publish path | Write | Selected pilot pattern | Create the add-ons as a separate Roller booking and link original booking + add-on booking inside JumpYard Cloud. |
-| Redeem tickets | `POST /redemptions` | Write | Confirmed endpoint | Ticket-level redemption. Max 10 unique ticket IDs per call per reference PDF. |
+| Redeem tickets | `POST /redemptions` | Write | Confirmed endpoint | Ticket-level redemption. Max 10 unique ticket IDs per call per reference PDF; Cloud sends a group of up to 50 entry tickets in calls of 10 (#549/D0272). |
 | Booking webhook | Webhooks API | Receive | Confirmed | Can carry booking-level detail equivalent to booking detail when configured correctly, including payments with `include.payments`. |
 | Redemption webhook | Webhooks API | Receive | Confirmed pattern | Use to maintain live checked-in counters for session-based products. Stock/add-on products are excluded. |
 
@@ -651,6 +651,7 @@ Redeem rules:
 - Re-fetch or verify booking state before write when the previous lookup is stale.
 - Do not redeem unpaid, wrong-date, already-invalid, or ambiguous partial groups in v1.
 - Route partial groups to staff unless a later ticket explicitly implements ticket selection.
+- #549 (D0272): a request or check-in session may carry up to 1000 ticket ids, since a purchase session lists add-on tickets beside the entries. Only redeemable entry tickets are sent, at most 50 per group (`409 too_many_tickets` above, before any Roller call; `redeemPlan.maxTicketsPerGroup`). They go to Roller 10 per call, one call after the other. On a retried or resumed key a ticket the final refresh shows redeemed is not sent again, so an attempt that stopped between the calls completes the group; a first attempt sends the whole group, so a group partly redeemed elsewhere still goes to staff. The idempotency hash and the receipt cover the whole group, and the first refused call is the result.
 - Call Roller `POST /redemptions` only from JumpYard Cloud.
 - Never put the T0021 dev redeem token in browser env, browser storage, app source, or public phone network calls.
 - Log every attempt and result.

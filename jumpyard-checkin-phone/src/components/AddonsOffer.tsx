@@ -18,6 +18,7 @@ import {
 import type { Addon, AddonId, Booking } from '@/flow/types';
 import {
     ADDON_CATALOG_CONFIG,
+    ADDON_MAX_QUANTITY,
     EXISTING_BOOKING_ADDON_IDS,
     HIDDEN_EXISTING_BOOKING_ADDONS,
 } from '@/flow/addonCatalog';
@@ -765,7 +766,7 @@ export const AddonsOffer = ({
                                     attention={socksAttention} />
                                 <AddonChoices
                                     entries={catalog.filter((entry) => entry.id !== 'socks').map((entry) => ({ ...entry, quantity: qty[entry.id],
-                                        included: minQty[entry.id], max: Math.max(minQty[entry.id], 1, guestCount * entry.maxPerGuest),
+                                        included: minQty[entry.id], max: Math.max(minQty[entry.id], ADDON_MAX_QUANTITY),
                                         available: isPricedCatalogEntry(entry) }))}
                                     onQuantity={setOne} />
                             </>
