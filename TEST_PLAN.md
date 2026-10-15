@@ -167,6 +167,7 @@ Run `npm run validate:gh473-contact-lookup`. It covers the Cloud lookup outcomes
 In the development-only `/preview/contact`, check both states in SV/EN at 390x844 and 375x667:
 - By default the form shows first name and email only.
 - After the synthetic `contact_details_required` answer, the notice, last name (focused) and phone appear. Email, basket and codes stay, and Continue needs both new fields.
+- #552: `love@wrlds.co,` shows "Kontrollera e-postadressen" in red on the email label row, keeps Continue off and reveals no other field; `love@wrlds.co` clears it and Continue goes on. `contactDetails.test.mjs` pins the same format table as Cloud's `invalid_email`.
 - The production export keeps `/preview/contact` a not-found page.
 
 Park acceptance follows the protected release and Love storing the key. Use owned aliases and synthetic values only:

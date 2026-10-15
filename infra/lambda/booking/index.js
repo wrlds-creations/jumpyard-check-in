@@ -3791,10 +3791,12 @@ function validateCustomer(customer) {
 }
 
 // GH-473: the first name is present by definition; Cloud resolves last name and phone later.
+// GH-552: a mistyped email (a comma, a space, no domain) is the guest's to correct: invalid_email
+// before the reservation, never the lookup's contact_details_required.
 function validateEmailFirstCustomer(customer) {
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email)) {
+  if (!contactLookup.isValidEmailFormat(customer.email)) {
     return {
-      code: 'customer_email_invalid',
+      code: contactLookup.INVALID_EMAIL,
       message: 'customer.email must be a valid email address.',
     };
   }

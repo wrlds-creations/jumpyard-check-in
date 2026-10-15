@@ -308,7 +308,22 @@ test('a disabled lookup or an unsupported email never reads the key or calls Kla
     const unsupported = await resolveWith(httpResponse(profilesBody([])), { customer: { ...typedCustomer, email } });
     assert.equal(unsupported.result.reason, 'email_unsupported', email);
     assert.equal(unsupported.calls.length + unsupported.reads, 0);
+    // GH-552: the draft validation answers these with invalid_email before the lookup is reached.
+    assert.equal(lookup.isValidEmailFormat(email), false, email);
   }
+});
+
+test('GH-552: the accepted email format is exactly what the lookup can ask about', () => {
+  for (const email of [EMAIL, ` ${EMAIL} `, LOOKUP_EMAIL.toUpperCase(), "o'brien+jy552@sub.example.invalid", 'a@b.co']) {
+    assert.equal(lookup.isValidEmailFormat(email), true, email);
+  }
+  for (const email of ['love@wrlds.co,', 'annie,x@example.invalid', 'annie @example.invalid', 'annie@example', 'annie@',
+    '@example.invalid', 'annie', 'annie@@example.invalid', 'annie@example..invalid', 'annie@example.invalid.',
+    'annie@-example.invalid', 'ännie@example.invalid', 'annie@exämple.invalid', '', '   ', null, undefined, 42,
+    `${'a'.repeat(240)}@example.invalid`]) {
+    assert.equal(lookup.isValidEmailFormat(email), false, String(email));
+  }
+  assert.equal(lookup.INVALID_EMAIL, 'invalid_email');
 });
 
 test('the module itself never logs and the only logged detail is the outcome class', () => {
@@ -481,6 +496,27 @@ test('handler, uncertain: 409 contact_details_required, failed reservation, no R
   }
 });
 
+test('handler, GH-552: a mistyped email is 400 invalid_email before the reservation, without the lookup or ROLLER', async () => {
+  for (const email of ['love@wrlds.co,', 'annie @example.invalid', 'annie@example', 'annie@', 'annie.example.invalid']) {
+    const { booking, events, state } = bookingHarness();
+    const response = await booking.handleDraft({}, draftBody({ firstName: 'Annie', email }), 'synthetic');
+    assert.equal(response.statusCode, 400, email);
+    assert.deepEqual(JSON.parse(response.body), {
+      correlationId: 'synthetic',
+      status: 'invalid_request',
+      error: { code: 'invalid_email', message: 'customer.email must be a valid email address.' },
+    }, email);
+    assert.deepEqual(events, [], `${email}: no reservation, Klaviyo or ROLLER work`);
+    assert.equal(state.secretReads + state.klaviyo.length + state.completions.length + state.statements.length, 0, email);
+    assert.equal(contactLookupLogs(booking.logs).length, 0, `${email}: the lookup never ran`);
+  }
+  // Whitespace around the address and letter case are no typos: D0234's lookup runs as before.
+  const { booking, events } = bookingHarness();
+  const response = await booking.handleDraft({}, draftBody({ firstName: 'Annie', email: ` ${EMAIL} ` }), 'synthetic');
+  assert.equal(response.statusCode, 201, response.body);
+  assert.deepEqual(events, ['reserve', 'klaviyo', 'roller_config', '/bookings/draft']);
+});
+
 test('handler, four fields: today\'s path exactly, without a key read or a Klaviyo call', async () => {
   const { booking, state } = bookingHarness();
   const customer = { firstName: 'Annie', lastName: 'Testsson', email: EMAIL, phone: '070-174 06 06' };
@@ -544,7 +580,13 @@ test('validation: email-first needs a valid email; partial four-field contacts k
   const { validateDraftRequest } = loadBooking();
   const base = { confirmDraft: true, idempotencyKey: 'synthetic', items: ITEMS, discounts: [], giftCards: [] };
   assert.equal(validateDraftRequest({ ...base, customer: { firstName: 'Annie', email: EMAIL } }), null);
-  assert.equal(validateDraftRequest({ ...base, customer: { firstName: 'Annie', email: 'not-an-email' } }).code, 'customer_email_invalid');
+  // GH-552: email-first answers every format the lookup cannot use with invalid_email.
+  for (const email of ['not-an-email', 'love@wrlds.co,', 'annie@example']) {
+    assert.equal(validateDraftRequest({ ...base, customer: { firstName: 'Annie', email } }).code, 'invalid_email', email);
+  }
+  // The four-field contract (#409, the fallback) keeps its own check and code.
+  const fourFields = { firstName: 'Annie', lastName: 'Testsson', phone: '0701740606' };
+  assert.equal(validateDraftRequest({ ...base, customer: { ...fourFields, email: 'not-an-email' } }).code, 'customer_email_invalid');
   const noPhone = validateDraftRequest({ ...base, customer: { firstName: 'Annie', lastName: 'Testsson', email: EMAIL } });
   assert.equal(noPhone.code, 'customer_required');
   assert.match(noPhone.message, /customer\.phone/);
