@@ -1806,11 +1806,9 @@ exports.handler = async (event) => {
       autoVerify: { email: true },
       deletionProtection: true,
       featurePlan: cognito.FeaturePlan.ESSENTIALS,
-      mfa: cognito.Mfa.REQUIRED,
-      mfaSecondFactor: {
-        otp: true,
-        sms: false,
-      },
+      // GH-542: administrators sign in with email and password only, without an authenticator code.
+      // MFA OFF with no enabled factor updates this retained pool in place.
+      mfa: cognito.Mfa.OFF,
       passwordPolicy: {
         minLength: 8,
         passwordHistorySize: 5,

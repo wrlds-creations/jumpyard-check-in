@@ -506,6 +506,15 @@ test('A valid PIN reaches the Booking Lambda as a staff id only and creates no s
   assert.ok(!(JSON.stringify(state.invokes) + state.params.join('')).includes(staffPin), 'the PIN never leaves the verification');
 });
 
+test('A simple PIN such as 123456 pairs a kiosk too (GH-542)', async () => {
+  const { call, state } = loadSession({ identity: { pin_verifier: pinVerifier('123456') } });
+  const response = await call(pairingBody({ staffPin: '123456' }));
+  assert.equal(response.statusCode, 200);
+  assert.equal(state.invokes.length, 1);
+  assert.equal(state.invokes[0].detail.staffIdentityId, staffAllowed);
+  assert.ok(!state.sql.some((statement) => /INSERT INTO jumpyard\.staff_pin_auth_limits/.test(statement)), 'no failed attempt is counted');
+});
+
 test('Wrong, limited or malformed PIN proofs never reach the Booking Lambda', async () => {
   let loaded = loadSession({ identity: { pin_verifier: pinVerifier('739164') } });
   let response = await loaded.call(pairingBody());
