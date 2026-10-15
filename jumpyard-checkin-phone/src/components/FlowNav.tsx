@@ -9,7 +9,8 @@ import { JumpyardIcon } from '@/components/JumpyardIcon';
 // reach on every step, long lists included. A soft fade keeps scrolling content from showing
 // through, and an in-flow spacer lets the last content scroll clear of them. They live above the
 // flow's stacking context (portal), so they step aside while a text field has focus (keyboard)
-// or a modal dialog is open.
+// or a modal dialog is open. #551 (Love 2026-10-15): they also step aside while the safety film
+// starts or plays, and come back for its approval, a pause or an error, so a guest is never stuck.
 
 interface FlowNavProps {
     onBack?: (() => void) | null;
@@ -41,6 +42,12 @@ function subscribeToDialogs(onChange: () => void) {
     return () => observer.disconnect();
 }
 
+function subscribeToSafetyFilm(onChange: () => void) {
+    const observer = new MutationObserver(onChange);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-safety-film-running'] });
+    return () => observer.disconnect();
+}
+
 function Chevron() {
     return (
         <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[22px] w-[22px] text-foreground">
@@ -54,10 +61,11 @@ export function FlowNav({ onBack, onExit, exitTestId = 'exit-flow-open', keepSpa
     const client = useSyncExternalStore(noSubscription, () => true, () => false);
     const typing = useSyncExternalStore(subscribeToFocus, () => isTextField(document.activeElement), () => false);
     const dialogOpen = useSyncExternalStore(subscribeToDialogs, () => Boolean(document.querySelector('[aria-modal="true"]')), () => false);
+    const filmRunning = useSyncExternalStore(subscribeToSafetyFilm, () => Boolean(document.querySelector('[data-safety-film-running="true"]')), () => false);
 
     const spacer = <div aria-hidden="true" className="h-24 w-full shrink-0" data-testid="flow-nav-spacer" />;
     if (!onBack && !onExit) return keepSpacer ? spacer : null;
-    const hidden = typing || dialogOpen;
+    const hidden = typing || dialogOpen || filmRunning;
     const hit = 'group pointer-events-auto -m-1 rounded-full p-1 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-primary';
     const disc = 'grid h-12 w-12 place-items-center rounded-full border border-border bg-white shadow-[0_6px_18px_rgba(28,28,30,0.14)] transition-transform group-active:scale-95';
 

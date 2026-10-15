@@ -1,9 +1,9 @@
 'use client';
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { FlowScreen } from '@/components/FlowTransition';
 import { AlertCircle, Loader2, Play, RotateCcw } from 'lucide-react';
 import { useTranslation } from '@/context/LanguageContext';
-import { createSafetyPlayback, type SafetyPlaybackState } from '@/flow/safetyPlayback';
+import { createSafetyPlayback, safetySecondsLeft, type SafetyPlaybackState } from '@/flow/safetyPlayback';
 import { SAFETY_COVER, SAFETY_MEDIA } from '@/flow/safetyMedia';
 import { SafetyApproval, type SafetyApprovalProps } from '@/components/SafetyApproval';
 
@@ -11,7 +11,7 @@ import { SafetyApproval, type SafetyApprovalProps } from '@/components/SafetyApp
 // approval on the same screen: the finished film docks to the top and the approval appears under it
 // (variant A, chosen by Love 2026-09-30). The layout is fixed from the first frame and only
 // transform and opacity animate. Before and after playback a blurred still covers the film's own
-// captions, with the title at the foot of the film like a poster (variant B, Love 2026-10-01).
+// captions (variant B, Love 2026-10-01).
 // #530 (Love 2026-10-13): the film starts by itself when the screen opens, always muted, since its
 // audio track is silent; where a browser refuses even that, the poster's play button starts it.
 interface SafetyVideoProps extends Omit<SafetyApprovalProps, 'headingRef' | 'onApprove'> {
@@ -64,11 +64,8 @@ function LocalizedSafetyVideo({
     // also while a replay is paused or failed; a running replay plays full size.
     const watchedBefore = Boolean(approvedAt);
     const approvable = done || (watchedBefore && (phase === 'idle' || phase === 'paused' || phase === 'error'));
-    const title = buyEntryFlow ? t.safetyVideo.buyTitle : t.safetyVideo.title;
     const description = buyEntryFlow ? t.safetyVideo.buyDescription : t.safetyVideo.description;
-    const durationLabel = t.safetyVideo.durationBadge.replace('{seconds}', String(SAFETY_MEDIA[lang].durationSeconds));
-    // The Swedish compound breaks after "Säkerhets" on a narrow film instead of being clipped.
-    const coverTitle = title.replace('Säkerhetsgenomgång', 'Säkerhets\u00ADgenomgång');
+    const timeLeft = t.safetyVideo.timeLeft.replace('{seconds}', String(safetySecondsLeft(progress, SAFETY_MEDIA[lang].durationSeconds)));
 
     useLayoutEffect(() => {
         const video = videoRef.current;
@@ -139,11 +136,14 @@ function LocalizedSafetyVideo({
     const coverVisible = phase === 'idle' || phase === 'loading' || approvable;
     // #530: while the film starts by itself the poster stays, with a spinner in the play button's place.
     const posterVisible = !watchedBefore && (phase === 'idle' || (phase === 'loading' && progress === 0));
-    // The poster title follows the film width so its longest line never clips on small phones. #498: in the
-    // condensed heading role "GENOMGÅNG" is about 4 em wide, so the title can be larger than the old 30 px cap.
-    const coverTitleSize = Math.max(16, Math.min(44, Math.floor(width * 0.13)));
     // Matching transform lists interpolate cleanly between playing and docked.
     const frameTransform = docked ? `translateY(0px) scale(${dockScale})` : `translateY(${playOffset}px) scale(1)`;
+    // #551: the heading and the progress are sized in hundredths of the film width, so phone and kiosk match.
+    const filmStyle = { width, height, transform: frameTransform, '--film-u': `${width / 100}px` } as CSSProperties;
+    const shownProgress = done ? 100 : progress;
+    const showTimeLeft = !approvable && !posterVisible;
+    // #551 (Love 2026-10-15): Back and Exit step aside while the film starts or plays; FlowNav reads this.
+    const filmRunning = phase === 'loading' || phase === 'playing';
 
     useEffect(() => {
         if (!approvable) return;
@@ -158,12 +158,13 @@ function LocalizedSafetyVideo({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             data-safety-phase={phase}
+            data-safety-film-running={String(filmRunning)}
             data-safety-approved-before={watchedBefore ? 'true' : undefined}
         >
             <div ref={stageRef} className="safety-stage relative w-full flex-1">
                 <div
                     className="safety-film absolute inset-x-0 top-0 z-10 mx-auto overflow-hidden rounded-2xl bg-black shadow-[0_16px_36px_-16px_rgba(0,0,0,0.6)]"
-                    style={{ width, height, transform: frameTransform }}
+                    style={filmStyle}
                     data-docked={String(docked)}
                 >
                     <video
@@ -185,18 +186,8 @@ function LocalizedSafetyVideo({
                         data-visible={String(coverVisible)}
                     />
 
-                    {/* Flame mark — top-left corner */}
-                    <img
-                        src="/jumpyard_logo_splash.png"
-                        alt=""
-                        className="absolute top-2 left-2 w-7 h-7 object-contain z-10 opacity-80"
-                    />
-
                     {posterVisible && (
-                        <div className="absolute inset-0 z-20 flex flex-col bg-gradient-to-t from-black/75 via-black/15 to-transparent px-5 pb-6 pt-3 text-left">
-                            <span className="self-end rounded-full bg-white px-2.5 py-1 text-[10px] font-black italic uppercase tracking-wider text-primary">
-                                {durationLabel}
-                            </span>
+                        <div className="safety-poster absolute inset-0 z-20 flex flex-col bg-gradient-to-t from-black/75 via-black/15 to-transparent px-5 text-left">
                             <div className="flex flex-1 items-center justify-center">
                                 {phase === 'idle' ? (
                                     <button
@@ -213,8 +204,7 @@ function LocalizedSafetyVideo({
                                     </span>
                                 )}
                             </div>
-                            <h1 className="font-black italic uppercase leading-[0.95] text-white" style={{ fontSize: coverTitleSize }}>{coverTitle}</h1>
-                            <p className="mt-2 max-w-[16rem] text-[13px] font-bold italic leading-snug text-white/90">{description}</p>
+                            <p className="max-w-[16rem] text-[13px] font-bold italic leading-snug text-white/90">{description}</p>
                         </div>
                     )}
 
@@ -238,11 +228,14 @@ function LocalizedSafetyVideo({
                         </div>
                     )}
 
-                    {/* Bottom progress bar */}
-                    <div
-                        className="absolute bottom-0 left-0 h-1 bg-primary z-20 transition-all"
-                        style={{ width: `${progress}%` }}
-                    />
+                    {/* #551 (variant A, Love 2026-10-15): the fixed heading at the top of the film in every phase, a
+                        thick bar at its foot and the seconds left above the bar while it plays. */}
+                    <div className="safety-heading">
+                        <span className="safety-flame" aria-hidden="true"><img src="/jumpyard_logo_splash.png" alt="" /></span>
+                        <h1 className="safety-heading-text font-black uppercase">{t.safetyVideo.heading}</h1>
+                    </div>
+                    {showTimeLeft && <span className="safety-time-left font-black uppercase">{timeLeft}</span>}
+                    <div className="safety-bar" aria-hidden="true"><span style={{ width: `${shownProgress}%` }} /></div>
 
                     {docked && (
                         <button

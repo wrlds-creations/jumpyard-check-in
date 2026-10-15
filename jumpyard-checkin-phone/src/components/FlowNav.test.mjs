@@ -43,8 +43,11 @@ test('the buttons float in the bottom corners and step aside for the keyboard an
   assert.match(nav, /document\.body,/);
   assert.match(nav, /fixed inset-x-0 bottom-0/);
   assert.match(nav, /env\(safe-area-inset-bottom\)/);
-  assert.match(nav, /const hidden = typing \|\| dialogOpen;/);
+  assert.match(nav, /const hidden = typing \|\| dialogOpen \|\| filmRunning;/);
   assert.match(nav, /inert=\{hidden\}/);
+  // #551 (Love 2026-10-15): they also step aside while the safety film starts or plays.
+  assert.match(nav, /document\.querySelector\('\[data-safety-film-running="true"\]'\)/);
+  assert.match(nav, /attributeFilter: \['data-safety-film-running'\]/);
   assert.match(nav, /document\.querySelector\('\[aria-modal="true"\]'\)/);
   assert.match(nav, /isTextField\(document\.activeElement\)/);
   assert.match(nav, /h-12 w-12/);
