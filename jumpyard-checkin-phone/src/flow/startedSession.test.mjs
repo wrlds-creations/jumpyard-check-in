@@ -7,8 +7,8 @@ import ts from 'typescript';
 import { ADDON_CATALOG_CONFIG, ADDON_MAX_QUANTITY, BUY_ENTRY_ADDON_IDS } from './addonCatalog.ts';
 import { findRecoveredBookingProduct, getMaxBookingProductQuantity } from './productVisibility.ts';
 import { isSessionStartedError } from './sessionStarted.ts';
-import { findAvailabilitySlot } from './slotCapacity.ts';
-import { JUST_STARTED_MINUTES, buildSlotTimes, formatStartsIn } from './slotClock.ts';
+import { findAvailabilitySlot, getSlotCapacity, isSlotSelectable, isStartedSlotShown } from './slotCapacity.ts';
+import { JUST_STARTED_MINUTES, buildSlotTimes, formatStartsIn, minutesUntil } from './slotClock.ts';
 
 // GH-557 (D0273): a session can be bought until 10 minutes after its start, as on JumpYard's website, and a
 // time ROLLER stopped selling after it began leads to "Tiden har redan börjat" and back to the contact step.
@@ -77,13 +77,56 @@ test('Cloud\'s session_started, or an older Cloud\'s refusal of a time that has 
   assert.equal(isSessionStartedError({ code: 'capacity_unavailable', message: message('14:00') }, '14:00', new Date(2026, 9, 15, 14, 11)), true);
 });
 
-test('the time step shows a started time only while Cloud says it sells it, and follows the clock', () => {
+test('the time step shows a started time while ROLLER lists it, full or not, and follows the clock', () => {
   assert.doesNotMatch(buySource, /function generateSlots/);
   assert.match(buySource, /const shownTimesKey = slotKey \|\| buildSlotTimes\(clock\)\.join\(','\);/);
   assert.match(buySource, /const slots = useMemo\(\(\) => \(shownTimesKey \? shownTimesKey\.split\(','\) : \[\]\), \[shownTimesKey\]\);/);
-  assert.match(buySource, /const visibleSlots = slots\.filter\(\(time\) => \{[\s\S]*?if \(minutes === null \|\| minutes >= 0\) return true;[\s\S]*?if \(closedStartTimes\.includes\(time\)\) return false;[\s\S]*?return capacity\.state === 'open' \|\| capacity\.state === 'few';/);
+  assert.match(buySource, /const visibleSlots = slots\.filter\(\(time\) => \{[\s\S]*?if \(minutes === null \|\| minutes >= 0\) return true;[\s\S]*?if \(closedStartTimes\.includes\(time\)\) return false;[\s\S]*?return isStartedSlotShown\(findAvailabilitySlot\(availability, time\)\);/);
   assert.match(buySource, /\{visibleSlots\.map\(\(time\) => \{/);
   assert.match(buySource, /if \(!visibleSlotsKey\.split\(','\)\.includes\(selectedTime\)\) setSelectedTime\(null\);/);
+});
+
+// GH-567 (Love 2026-10-17): a full started time stays as "Fullt" until 10 minutes after its start, like the other
+// full times; one ROLLER has closed with places left still disappears.
+const sixty = (overrides = {}) => product({ key: 'E60', durationMinutes: 60, productId: '1189808', ...overrides });
+const startedAt = (startTime, overrides) => ({ date: '2026-10-17', startTime, products: [sixty({ startTime, ...overrides })] });
+const sellable = { available: true, capacityRemaining: 34 };
+const full = { available: false, capacityRemaining: 0 };
+// After the online sales cut-off ROLLER keeps the session's places (read-only check, 2026-10-15).
+const closed = { available: false, capacityRemaining: 133, onlineSalesOpen: false };
+
+test('a started time stays while ROLLER sells it or it is full, and goes once ROLLER has closed it with places left', () => {
+  assert.equal(isStartedSlotShown(startedAt('14:00', sellable)), true, 'sellable');
+  assert.equal(isStartedSlotShown(startedAt('14:00', { capacityRemaining: 4 })), true, 'few places');
+  assert.equal(isStartedSlotShown(startedAt('14:00', full)), true, 'full while ROLLER still sells it: "Fullt"');
+  assert.equal(isStartedSlotShown(startedAt('14:00', { capacityRemaining: 0 })), true, 'no places left');
+  assert.equal(isStartedSlotShown(startedAt('14:00', closed)), false, 'ROLLER closed it with places left');
+  assert.equal(isStartedSlotShown(startedAt('14:00', { ...full, onlineSalesOpen: false })), true, 'full and closed: still "Fullt"');
+  assert.equal(isStartedSlotShown(startedAt('14:00', { ...closed, capacityRemaining: null })), false, 'closed without a number');
+  assert.equal(isStartedSlotShown(null), false, 'no answer yet');
+  assert.equal(isStartedSlotShown({ date: '2026-10-17', startTime: '14:00', products: [product()] }), false, 'no 60-minute entry');
+  // The full started time reads "Fullt" and cannot be chosen, like the other full times.
+  assert.deepEqual(getSlotCapacity(startedAt('14:00', full)), { state: 'full', remaining: 0 });
+  assert.equal(isSlotSelectable(getSlotCapacity(startedAt('14:00', full))), false);
+});
+
+test('the real time list at 14:04 keeps a full 14:00 as "Fullt", hides a closed one, and keeps the other full times', () => {
+  const availability = (started) => ({ date: '2026-10-17', slots: [
+    startedAt('14:00', started), startedAt('14:30', sellable), startedAt('15:00', full), startedAt('15:30', sellable),
+  ] });
+  const listAt = (clock, started, closedStartTimes = []) => plain(compile(['visibleSlots'], {
+    slots: ['14:00', '14:30', '15:00', '15:30'], clock, closedStartTimes, availability: availability(started),
+    minutesUntil, isStartedSlotShown, findAvailabilitySlot,
+  }).visibleSlots);
+  assert.deepEqual(listAt('14:04', sellable), ['14:00', '14:30', '15:00', '15:30'], 'sellable, as before');
+  assert.deepEqual(listAt('14:04', full), ['14:00', '14:30', '15:00', '15:30'], 'full: "Fullt", like 15:00');
+  assert.deepEqual(listAt('14:04', closed), ['14:30', '15:00', '15:30'], 'closed by ROLLER: gone');
+  assert.deepEqual(listAt('14:04', sellable, ['14:00']), ['14:30', '15:00', '15:30'], 'refused as started: gone');
+  const loading = plain(compile(['visibleSlots'], {
+    slots: ['14:00', '14:30', '15:00', '15:30'], clock: '14:04', closedStartTimes: [], availability: null,
+    minutesUntil, isStartedSlotShown, findAvailabilitySlot,
+  }).visibleSlots);
+  assert.deepEqual(loading, ['14:30', '15:00', '15:30'], 'no answer yet: only the coming times');
 });
 
 test('every refusal on the contact step opens "Tiden har redan börjat" instead of the red line', () => {
