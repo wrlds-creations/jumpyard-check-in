@@ -28,6 +28,22 @@ test('Only explicit purchased lines and the verified Combo create entitlements',
   assert.equal(buildManifest([item({ quantity: 0 }), item({ quantity: 1.5 }), item({ bookingItemId: null }), item({ bookingDate: '2000-01-01' })], day).length, 0);
   assert.equal(buildManifest([item({ summary: { type: 'giftcard' } })], day).length, 0);
 });
+test('GH-564: an admission line hands out one band per ROLLER ticket, so a family gets four', () => {
+  const entry = { productId: 'e90', productName: 'Biljetter (750 kr)', parentProductName: 'Entré 90 min - Familj',
+    summary: { productType: 'sessionpass', parentType: 'sessionpass' } };
+  const family = buildManifest([item({ ...entry, quantity: 1, ticketUnits: 4 })], day);
+  assert.deepEqual(family.map(({ kind, quantity }) => ({ kind, quantity })), [{ kind: 'admission', quantity: 4 }]);
+  assert.equal(buildManifest([item({ ...entry, quantity: 1, ticketUnits: 4, selectedUnits: 4 })], day)[0].sessionLimit, 4);
+  assert.equal(buildManifest([item({ ...entry, parentProductName: 'Entré 90 min', quantity: 2, ticketUnits: 2 })], day)[0].quantity, 2);
+  assert.equal(buildManifest([item({ ...entry, parentProductName: 'Entré 90 min', quantity: 2 })], day)[0].quantity, 2);
+  assert.equal(buildManifest([item({ quantity: 2, ticketUnits: 5 })], day)[0].quantity, 2, 'goods keep their quantity');
+  const combo = buildManifest([item({ productId: '1242136', parentProductId: '1242135', productName: 'Weekday Combo', quantity: 1, ticketUnits: 2 })], day);
+  assert.deepEqual(combo.map(({ kind, quantity }) => ({ kind, quantity })), [{ kind: 'admission', quantity: 2 }, { kind: 'pizza', quantity: 1 }]);
+  const { provisionalManifest } = require('../infra/lambda/shared/staff-handout');
+  const provisional = provisionalManifest([{ rollerUniqueId: 'd1', items: [{ productId: '1189838', productName: 'Biljetter (Drop-In - 750 kr)',
+    quantity: 1, bookingDate: day, productType: 'family', parentType: 'sessionpass', startTime: '10:30', endTime: '12:00' }] }], day);
+  assert.equal(provisional.find((line) => line.kind === 'admission').quantity, 4);
+});
 test('Item identity survives renaming and separates two purchases of the same product', () => {
   const first = buildManifest([item()], day)[0];
   assert.equal(first.id, buildManifest([item({ productName: 'Coffee, renamed' })], day)[0].id);

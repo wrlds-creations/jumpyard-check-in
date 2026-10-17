@@ -59,7 +59,11 @@ function buildManifest(items, visitDate) {
       ? item.parentProductName?.trim() || productName || 'Produkt'
       : productName;
     // GH-491 (workshop 2026-10-07): the water bottle is collected in the café, like coffee and pizza.
-    const parts = item.packageContents || [{ kind, quantity: item.quantity,
+    // GH-564 (Love 2026-10-17): a family ticket is one line with four ROLLER tickets, so an admission line
+    // without package contents hands out one band per ticket when ROLLER issued more tickets than its quantity.
+    const bands = kind === 'admission' && !item.packageContents && Number.isSafeInteger(raw.ticketUnits)
+      && raw.ticketUnits > item.quantity ? raw.ticketUnits : item.quantity;
+    const parts = item.packageContents || [{ kind, quantity: bands,
       collection: CAFE_KINDS.has(kind) ? 'later' : 'checkin' }];
     return parts.filter((part) => part.kind !== 'admission' || raw.selectedUnits !== 0).map((part) => ({
       id: `${item.rollerUniqueId}:${item.bookingItemId}:${visitDate}:${item.packageContents ? part.kind : 'purchased'}`,
@@ -95,6 +99,8 @@ function provisionalManifest(sources, visitDate) {
       productId: item?.productId ?? null, parentProductId: item?.parentProductId ?? null,
       productName: item?.productName ?? null, parentProductName: item?.parentProductName ?? null,
       quantity: Number(item?.quantity), bookingDate: item?.bookingDate ?? null,
+      // GH-564: before ROLLER issues its tickets, Cloud's own family type admits four jumpers per line.
+      ...(key(item?.productType) === 'family' ? { ticketUnits: Number(item?.quantity) * 4 } : {}),
       startTime: item?.startTime ?? null, endTime: item?.endTime ?? null,
       summary: { type: item?.type, productType: item?.productType, productSubType: item?.productSubType, parentType: item?.parentType },
       provisional: true,
@@ -126,6 +132,9 @@ function createHandoutStore({ executeStatement, mappedRows, stringParameter }) {
         WHERE ticket.roller_unique_id = :bookingId
           AND (ticket.booking_item_id = item.booking_item_id OR ticket.booking_item_key = item.booking_item_key)
           AND ticket.ticket_id IN (SELECT jsonb_array_elements_text(CAST(:selectedTickets AS jsonb))))::int AS selected_units,
+      (SELECT count(*) FROM jumpyard.roller_booking_tickets ticket
+        WHERE ticket.roller_unique_id = item.roller_unique_id
+          AND (ticket.booking_item_id = item.booking_item_id OR ticket.booking_item_key = item.booking_item_key))::int AS ticket_units,
       (COALESCE(catalog.summary, '{}'::jsonb) || item.item_summary)::text AS summary
       FROM source_bookings source
       JOIN jumpyard.roller_booking_items item ON item.roller_unique_id = source.roller_unique_id
@@ -143,6 +152,7 @@ function createHandoutStore({ executeStatement, mappedRows, stringParameter }) {
       quantity: Number(row.quantity), bookingDate: row.booking_date, summary: json(row.summary, {}),
       startTime: row.start_time, endTime: row.end_time,
       selectedUnits: Number(row.selected_units),
+      ticketUnits: Number(row.ticket_units),
     })), session.visitDate);
   }
   async function readState(session, venueId, knownManifest) {
