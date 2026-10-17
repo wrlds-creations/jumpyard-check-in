@@ -47,7 +47,8 @@ export const ConfirmationScreen = ({
     const handoffQrValue = buildHandoffPayload(checkinSession, handoffCode);
     const entryTicketLabel = getEntryTicketLabel(booking, t.confirm.entryTicketFallback);
 
-    const contentRows = getBookingContentRows(booking, entryTicketLabel, jumperCount, lang);
+    // GH-566 (Love, 2026-10-17): the bands to collect, one per ROLLER ticket, so a family's ticket is four bands.
+    const contentRows = getBookingContentRows(booking, entryTicketLabel, booking.bandCount ?? jumperCount, lang);
     const labels = { connectedBands: t.confirm.connectedBands, later: packageContentCopy[lang].later, other: t.confirm.otherAddons };
     // #491: socks at the sock station, bands (with SkyRider and padlocks) at the wristband desk,
     // coffee, water and pizza at the café.

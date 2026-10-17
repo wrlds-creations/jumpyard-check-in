@@ -113,6 +113,8 @@ export interface Booking {
   guestAccessToken?: string;
   guestAccessExpiresAt?: string | null;
   jumpers: number;
+  /** GH-566: the entry bands to collect, one per ROLLER ticket (a family has four); the last page counts these. */
+  bandCount?: number;
   time: string;
   endTime?: string;
   durationMinutes?: number;
