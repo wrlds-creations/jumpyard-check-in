@@ -83,6 +83,7 @@ import {
   getSlotCapacity,
   isAvailabilityFresh,
   isSlotSelectable,
+  isStartedSlotShown,
   type SlotCapacity,
 } from '@/flow/slotCapacity';
 import { buildSlotTimes, formatClock, formatStartsIn, minutesUntil, msUntilNextMinute } from '@/flow/slotClock';
@@ -930,14 +931,13 @@ export const BuyTickets = ({
     onStepChange?.('TIMESLOT');
   }, [onStepChange]);
 
-  // GH-557: a time that has begun is offered only while Cloud's answer says ROLLER still sells it; it is
-  // never shown as "Fullt" and disappears 10 minutes after the start.
+  // GH-557/GH-567: a time that has begun stays until 10 minutes after its start while Cloud's answer says ROLLER
+  // sells it, or as "Fullt" when it is full. A time ROLLER has closed with places left disappears.
   const visibleSlots = slots.filter((time) => {
     const minutes = minutesUntil(time, clock);
     if (minutes === null || minutes >= 0) return true;
     if (closedStartTimes.includes(time)) return false;
-    const capacity = getSlotCapacity(findAvailabilitySlot(availability, time));
-    return capacity.state === 'open' || capacity.state === 'few';
+    return isStartedSlotShown(findAvailabilitySlot(availability, time));
   });
   const visibleSlotsKey = visibleSlots.join(',');
   useEffect(() => {

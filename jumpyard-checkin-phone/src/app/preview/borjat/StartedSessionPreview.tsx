@@ -11,11 +11,14 @@ import styles from '../workshop/preview.module.css';
 
 // GH-557 localhost review: the real phone screens for a purchase up to 10 minutes after the start. Start times and
 // prices come from the local fixture; a local stand-in answers Cloud. At 14:11 it refuses the 14:00 session as
-// ROLLER does once it closes, 10 minutes after the start. Nothing reaches Park, Live or ROLLER.
-type FrameId = 'starttid' | 'starttid-vald' | 'tiden-har-borjat' | 'ny-tid' | 'tillbaka-kontakt';
+// ROLLER does once it closes, 10 minutes after the start. GH-567 adds a full 14:00, which stays as "Fullt", and one
+// ROLLER has closed with places left, which is gone. Nothing reaches Park, Live or ROLLER.
+type FrameId = 'starttid' | 'fullt' | 'stangd' | 'starttid-vald' | 'tiden-har-borjat' | 'ny-tid' | 'tillbaka-kontakt';
 
 const FRAMES: { id: FrameId; clock: string; sv: string; en: string }[] = [
     { id: 'starttid', clock: '14:04', sv: 'Klockan 14:04: 14:00 har precis börjat och kan köpas', en: '14:04: 14:00 has just started and can be bought' },
+    { id: 'fullt', clock: '14:04', sv: 'Klockan 14:04: 14:00 har precis börjat och är full', en: '14:04: 14:00 has just started and is full' },
+    { id: 'stangd', clock: '14:06', sv: 'Klockan 14:06: ROLLER har stängt 14:00 med platser kvar', en: '14:06: ROLLER has closed 14:00 with places left' },
     { id: 'starttid-vald', clock: '14:04', sv: 'Klockan 14:04: 14:00 vald', en: '14:04: 14:00 chosen' },
     { id: 'tiden-har-borjat', clock: '14:11', sv: 'Klockan 14:11 på kontaktsidan: ROLLER har stängt 14:00', en: '14:11 on the contact page: ROLLER has closed 14:00' },
     { id: 'ny-tid', clock: '14:11', sv: 'Välj ny tid: nya tider, köpet ligger kvar', en: 'Choose a new time: new times, the purchase is kept' },
@@ -27,6 +30,11 @@ const PREVIEW_CSS = 'nextjs-portal { display: none !important; }';
 const CLOSED_AT_1411 = '14:00';
 // Spots per start time in this preview.
 const SPOTS: Record<string, number> = { '14:00': 34, '14:30': 40, '15:00': 6, '15:30': 22 };
+// GH-567: how ROLLER lists the 14:00 session: full while it still sells it, or closed with its places kept.
+const STARTED_SESSION: Partial<Record<FrameId, { available: boolean; capacityRemaining: number; onlineSalesOpen: boolean }>> = {
+    fullt: { available: false, capacityRemaining: 0, onlineSalesOpen: true },
+    stangd: { available: false, capacityRemaining: SPOTS['14:00'], onlineSalesOpen: false },
+};
 // The 90-minute entry from the local fixture (id 1021, 230 kr).
 const ENTRY_90 = { key: 'entry-90', productId: '1021', label: '90 min', startTime: '14:00', durationMinutes: 90, type: 'entry' as const, unitPrice: 230 };
 
@@ -39,7 +47,7 @@ function snapshot(step: BuyFlowRecoverySnapshot['currentFlowStep'], extra: Parti
 }
 
 function frameSnapshot(frame: FrameId): BuyFlowRecoverySnapshot | null {
-    if (frame === 'starttid') return null;
+    if (frame === 'starttid' || frame === 'fullt' || frame === 'stangd') return null;
     if (frame === 'starttid-vald') return snapshot('TIMESLOT');
     // The guest chose 14:00 before it closed and reached the contact page with two jumpers, socks and water.
     return snapshot('CONTACT', {
@@ -50,7 +58,7 @@ function frameSnapshot(frame: FrameId): BuyFlowRecoverySnapshot | null {
 }
 
 /** Development fixture only: availability, quotes and the 14:00 refusal; no draft, payment or provider request. */
-function installStartedSessionTransport(clock: string) {
+function installStartedSessionTransport(frame: FrameId, clock: string) {
     if (process.env.NODE_ENV !== 'development' || !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) {
         throw new Error('Local preview requires a development server on localhost.');
     }
@@ -66,6 +74,7 @@ function installStartedSessionTransport(clock: string) {
                 ...slot,
                 products: slot.products.map((product) => product.type === 'addon' ? product : {
                     ...product, available: true, capacityRemaining: SPOTS[slot.startTime] ?? 30, onlineSalesOpen: true,
+                    ...(slot.startTime === CLOSED_AT_1411 ? STARTED_SESSION[frame] : undefined),
                 }),
             }));
             return Response.json({ status: 'available', availability });
@@ -102,7 +111,7 @@ function Preview() {
             setFrame({ id: null, ready: true });
             return;
         }
-        const restore = installStartedSessionTransport(found.clock);
+        const restore = installStartedSessionTransport(found.id, found.clock);
         clearBuyFlowRecovery();
         setFrame({ id: found.id, ready: true });
         return () => {
@@ -175,7 +184,7 @@ function Overview() {
     const sv = lang === 'sv';
     return <div className={styles.page}>
         <header className={styles.header}>
-            <p className={styles.kicker}>LOKAL FÖRHANDSVISNING · #557</p>
+            <p className={styles.kicker}>LOKAL FÖRHANDSVISNING · #557 · #567</p>
             <h1>{sv ? 'Köp upp till 10 min efter start.' : 'Buy up to 10 minutes after the start.'}</h1>
             <p>{sv
                 ? 'Riktiga skärmar med en lokal ersättare för Cloud. Klockan 14:11 nekar den 14:00, som ROLLER gör 10 minuter efter start. Inga anrop till Park, Live eller ROLLER.'

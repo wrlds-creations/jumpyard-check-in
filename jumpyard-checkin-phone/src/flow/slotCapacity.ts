@@ -40,6 +40,18 @@ export function isSlotSelectable(capacity: SlotCapacity) {
   return capacity.state !== 'full';
 }
 
+/**
+ * GH-567 (Love 2026-10-17): in its 10 minutes a start time that has begun stays listed while ROLLER sells it, and a
+ * full one reads "Fullt" like the other full times. ROLLER keeps a session's places when its online sales close, so
+ * a time closed with places left disappears (GH-557) while a full one stays "Fullt". No answer yet: hidden.
+ */
+export function isStartedSlotShown(slot: NewBookingAvailabilitySlot | null | undefined) {
+  const entry = findSixtyMinuteEntry(slot);
+  if (!entry) return false;
+  if (entry.onlineSalesOpen !== false) return true;
+  return typeof entry.capacityRemaining === 'number' && entry.capacityRemaining <= 0;
+}
+
 export function findAvailabilitySlot(availability: NewBookingAvailability | null | undefined, startTime: string | null) {
   if (!availability || !startTime) return null;
   return availability.slots.find((slot) => slot.startTime === startTime) ?? null;
