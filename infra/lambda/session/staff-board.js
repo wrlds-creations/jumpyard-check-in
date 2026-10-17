@@ -30,6 +30,8 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
           'productId', i.product_id, 'parentProductId', i.parent_product_id, 'productName', i.product_name,
           'parentProductName', i.parent_product_name, 'quantity', i.quantity, 'bookingDate', i.booking_date,
           'startTime', i.start_time::text, 'endTime', i.end_time::text,
+          'ticketUnits', (SELECT count(*) FROM jumpyard.roller_booking_tickets t WHERE t.roller_unique_id = i.roller_unique_id
+            AND (t.booking_item_id = i.booking_item_id OR t.booking_item_key = i.booking_item_key)),
           'selectedUnits', CASE WHEN cs.checkin_session_id IS NULL THEN NULL ELSE
             (SELECT count(*) FROM jumpyard.roller_booking_tickets t WHERE t.roller_unique_id = b.roller_unique_id
               AND (t.booking_item_id = i.booking_item_id OR t.booking_item_key = i.booking_item_key)
