@@ -6,17 +6,21 @@ import { FlowMotion } from '@/components/FlowTransition';
 import { ConfirmationScreen } from '@/components/ConfirmationScreen';
 import type { Addon, Booking, CheckInSession, GuestCafeItem } from '@/flow/types';
 import { stockholmToday } from '@/flow/phoneCompletion';
-import { PREVIEW_BAND_COLOURS as BAND } from '../completion/bandFixtures';
+import { PREVIEW_BAND_COLOURS as BAND, PREVIEW_PHONE_FAMILY } from '../completion/bandFixtures';
 import styles from '../workshop/preview.module.css';
 
 // #504 localhost review (Love, 2026-10-12, "A lättare"): the real last page, one frame per case, in
 // Swedish and English at 375 x 812. Bookings, numbers and café lines are local examples. Nothing reaches
 // Park, Live or ROLLER, and no booking, payment or session is created. #519 (Love, 2026-10-13): the hero
 // shows the jump time under the number. The first two frames are the "2 timmar för 1" deal, and the third
-// is the page the kiosk's "Lappen i mobilen" QR opens (the same last page, on site).
-type FrameId = 'deal' | 'deal-hemma' | 'kiosk-lank' | 'plats' | 'hemma' | 'bara-band' | 'blandat' | 'cafe-delvis' | 'cafe-klart' | 'combo' | 'slut';
+// is the page the kiosk's "Lappen i mobilen" QR opens (the same last page, on site). GH-566 (Love, 2026-10-17): a
+// family ticket is four bands, bought on the phone or booked.
+type FrameId = 'familj' | 'familj-bokning' | 'deal' | 'deal-hemma' | 'kiosk-lank' | 'plats' | 'hemma' | 'bara-band' | 'blandat'
+    | 'cafe-delvis' | 'cafe-klart' | 'combo' | 'slut';
 
 const FRAMES: { id: FrameId; sv: string; en: string }[] = [
+    { id: 'familj', sv: 'Familj 90 min köpt i mobilen på plats: 4 band och 4 par strumpor', en: 'Family 90 min bought on site: 4 bands and 4 pairs of socks' },
+    { id: 'familj-bokning', sv: 'Förbokad familj 90 min, öppnad hemma (mejllänken): 4 band', en: 'Booked family 90 min, opened at home (the email link): 4 bands' },
     { id: 'deal', sv: '2 timmar för 1, köpt på plats (skylten): hopptid 15:00–17:00', en: '2 hours for 1, bought on site (the sign): jump time 15:00–17:00' },
     { id: 'deal-hemma', sv: '2 timmar för 1, öppnad hemma (mejllänken)', en: '2 hours for 1, opened at home (the email link)' },
     { id: 'kiosk-lank', sv: 'Kioskens "Lappen i mobilen": 90 min, hopptid 15:00–16:30', en: 'The kiosk\'s "Lappen i mobilen": 90 min, jump time 15:00–16:30' },
@@ -64,7 +68,14 @@ function exampleCase(frame: FrameId, lang: Language): Case {
     ];
     const base = { onSite: true, receiptSent: true, channel: 'park-qr' as const };
     const socks: Addon[] = [{ id: 'socks', label: sv ? 'Strumpor' : 'Socks', qty: 2, price: 49 }];
+    // GH-566: the family booking as the phone maps Cloud's answer (packageContents.test.mjs): one line, four bands.
+    const family = { id: 'DEMO566', products: 1, paid: true, ...PREVIEW_PHONE_FAMILY };
     switch (frame) {
+        case 'familj':
+            return { ...base, booking: family, addons: [{ id: 'socks', label: sv ? 'Strumpor' : 'Socks', qty: 4, price: 49 }],
+                session: session({ checkedInAt: '11:12' }) };
+        case 'familj-bokning':
+            return { ...base, onSite: false, receiptSent: false, channel: 'sms', booking: family, addons: [], session: session({ checkedInAt: '09:40' }) };
         case 'deal':
             return { ...base, booking: deal(), addons: socks, session: session({ checkedInAt: '14:41' }) };
         case 'deal-hemma':

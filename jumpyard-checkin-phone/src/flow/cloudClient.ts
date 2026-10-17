@@ -1,5 +1,5 @@
 import type { Addon, AddonId, Booking, BookingPaymentState, CheckInSession, GuestCafeItem, LookupSource, PackageContent } from '@/flow/types';
-import { getPackageAdmissionQuantity } from './packageContents';
+import { getAdmissionQuantity, getPackageAdmissionQuantity } from './packageContents';
 import { groupBandColours, normalizeBandColour } from './bandColours';
 
 const DEFAULT_CLOUD_API_BASE_URL = 'https://m0uo5g4mde.execute-api.eu-north-1.amazonaws.com';
@@ -1139,13 +1139,13 @@ function toBooking(
   const sessionItem = primaryItems[0] ?? booking.items[0] ?? null;
   const existingAddons = getExistingAddons(booking.items);
   const guestName = getBookingGuestName(booking);
-  const admissionQuantity = (item: CloudBookingItem) =>
-    getPackageAdmissionQuantity(item.packageContents) ?? Math.max(0, item.quantity ?? item.tickets.length);
   // GH-459: Cloud computes each admission's band colour; the phone only groups it for display.
+  // GH-566: the bands count one per ROLLER ticket, so a family's line and its colour count four.
   const bandColours = groupBandColours(primaryItems.flatMap((item) => {
     const bandColour = normalizeBandColour(item.bandColour);
-    return bandColour ? [{ bandColour, quantity: admissionQuantity(item) }] : [];
+    return bandColour ? [{ bandColour, quantity: getAdmissionQuantity(item) }] : [];
   }));
+  const bandCount = primaryItems.reduce((total, item) => total + getAdmissionQuantity(item), 0);
 
   return {
     id: booking.bookingReference ?? booking.rollerUniqueId ?? '',
@@ -1153,6 +1153,7 @@ function toBooking(
     guestAccessToken: normalizeOptionalString(guestAccess?.token) ?? undefined,
     guestAccessExpiresAt: guestAccess?.expiresAt ?? null,
     jumpers: getJumperCount(primaryItems, booking.items),
+    ...(bandCount > 0 ? { bandCount } : {}),
     time: formatClockTime(sessionItem?.startTime) ?? '',
     endTime: formatClockTime(sessionItem?.endTime) ?? undefined,
     durationMinutes: getDurationMinutes(sessionItem?.startTime, sessionItem?.endTime),
@@ -1175,7 +1176,7 @@ function toBooking(
           const bandColour = normalizeBandColour(item.bandColour);
           return {
             label: getProductLabel(item),
-            quantity: admissionQuantity(item),
+            quantity: getAdmissionQuantity(item),
             durationMinutes: getDurationMinutes(item.startTime, item.endTime),
             packageContents: item.packageContents,
             ...(bandColour ? { bandColour } : {}),

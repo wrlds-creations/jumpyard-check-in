@@ -23,3 +23,11 @@ export const PREVIEW_PHONE_COMBO_PURCHASE = {
     ], bandColour: PREVIEW_BAND_COLOURS['13:00'] }],
     bandColours: [{ ...PREVIEW_BAND_COLOURS['13:00'], quantity: 2 }],
 } satisfies Partial<Booking>;
+
+/** GH-566: what the phone builds from Cloud's answer for one family ticket, 90 minutes at 11:30: one line with quantity 1,
+ * so four bands of its colour, whether it was paid on the phone (Cloud's `family` type before ROLLER issues the tickets)
+ * or booked (ROLLER's four tickets). packageContents.test.mjs checks it against the real phone mapping of both answers. */
+export const PREVIEW_PHONE_FAMILY = {
+    jumpers: 1, bandCount: 4, time: '11:30', endTime: '13:00', durationMinutes: 90, productLabel: 'Entré 90 min - Familj',
+    productType: 'entry', bandColours: [{ ...PREVIEW_BAND_COLOURS['13:00'], quantity: 4 }],
+} satisfies Partial<Booking>;

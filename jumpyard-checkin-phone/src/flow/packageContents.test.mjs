@@ -152,8 +152,11 @@ test('booking summary and purchase breakdown render each included item with pack
 
 // GH-459: Cloud's real guest projection (contents and band colour) through the phone mapping.
 const { withGuestItemDetails } = require('../../../infra/lambda/shared/package-contents.js');
+// GH-566: ROLLER issues one ticket per jumper, so an entry line has as many tickets as its quantity.
+const tickets = (count, prefix = 'T') => Array.from({ length: count }, (_, index) => ({ ticketId: `${prefix}${index + 1}` }));
 const entry = (overrides = {}) => withGuestItemDetails({ ...baseItem, productId: 'entry-90', parentProductId: '1189823',
-  productName: 'Biljetter', parentProductName: 'Entré 90 min', quantity: 2, startTime: '11:30', endTime: '13:00', ...overrides });
+  productName: 'Biljetter', parentProductName: 'Entré 90 min', quantity: 2, startTime: '11:30', endTime: '13:00',
+  tickets: tickets(overrides.quantity ?? 2), ...overrides });
 
 test('Cloud band colours reach the entry row through lookup and session-link resume', async () => {
   for (const resume of [false, true]) {
@@ -209,6 +212,86 @@ test('a Weekday Combo bought on the phone shows two coloured bands and the pizza
     assert.match(later, /class="chipCount">1<\/strong>/);
     assert.doesNotMatch(later, /data-band-colour/);
   }
+});
+
+// GH-566 (Love, 2026-10-17): a family is one booking line with quantity 1 and four ROLLER tickets.
+const familyBooked = (overrides = {}) => entry({ productId: '1189836', productName: 'Biljetter (750 kr)',
+  parentProductName: 'Entré 90 min - Familj', quantity: 1, tickets: tickets(4, 'F'), ...overrides });
+const readySession = { checkinSessionId: 'preview-only', status: 'ready_for_staff', handoffStatus: 'ready_for_staff', handoffCode: '0042' };
+const bandStep = (markup) => markup.slice(markup.indexOf('data-step="bands"'), markup.indexOf('data-step="jump"'));
+const { PREVIEW_PHONE_FAMILY } = load('app/preview/completion/bandFixtures.ts');
+
+test('GH-566: an admission line counts one band per ROLLER ticket; a family bought here counts four before ROLLER issues them', () => {
+  assert.equal(projection.getAdmissionQuantity({ quantity: 1, tickets: tickets(4) }), 4);
+  assert.equal(projection.getAdmissionQuantity({ quantity: 1, productType: 'family', tickets: [] }), 4);
+  assert.equal(projection.getAdmissionQuantity({ quantity: 2, productType: 'family', tickets: [] }), 8);
+  assert.equal(projection.getAdmissionQuantity({ quantity: 2, productType: 'sessionpass', tickets: tickets(2) }), 2);
+  assert.equal(projection.getAdmissionQuantity({ quantity: 3, productType: 'entry', tickets: [] }), 3, 'a purchase before ROLLER keeps its quantity');
+  assert.equal(projection.getAdmissionQuantity({ quantity: null, tickets: tickets(2) }), 2);
+  assert.equal(projection.getAdmissionQuantity({ quantity: 1, tickets: tickets(4), packageContents: item().packageContents }), 2,
+    'a Combo keeps its package bands');
+});
+
+test('GH-566: a booked family shows four bands on the last page, through lookup and the session link', async () => {
+  for (const resume of [false, true]) {
+    const booking = await fromCloud([familyBooked(), entry({ productId: 'socks', parentProductName: 'JumpSocks', productType: 'addon', quantity: 4 })], resume);
+    assert.equal(booking.bandCount, 4);
+    assert.equal(booking.jumpers, 1, 'the booking page and add-ons keep the line as booked');
+    assert.deepEqual(booking.bandColours.map(({ id, quantity }) => [id, quantity]), [['morkbla', 4]]);
+    for (const [key, value] of Object.entries(PREVIEW_PHONE_FAMILY)) assert.deepEqual(booking[key], value, `preview ${key}`);
+    for (const lang of ['sv', 'en']) {
+      const markup = render(ConfirmationScreen, { booking, checkinSession: readySession, jumperCount: booking.jumpers, selectedAddons: [] }, lang);
+      const bands = bandStep(markup);
+      assert.ok(bands.includes('data-band-colour="morkbla"') && bands.includes(lang === 'sv' ? '>Mörkblå<' : '>Dark blue<'));
+      assert.match(bands, /class="chipCount">4<\/strong>/);
+      assert.doesNotMatch(bands, /class="chipCount">1<\/strong>/);
+    }
+  }
+});
+
+test('GH-566: a family without a band colour is four plain bands', async () => {
+  const booking = await fromCloud([familyBooked({ startTime: '19:30', endTime: '21:00' })]);
+  assert.equal(booking.bandColours, undefined);
+  const markup = render(ConfirmationScreen, { booking, checkinSession: readySession, jumperCount: booking.jumpers, selectedAddons: [] });
+  assert.match(bandStep(markup), /class="chipCount">4<\/strong>/);
+});
+
+test('GH-566: a family bought on the phone shows four bands before ROLLER confirms it', async () => {
+  // As Cloud stores the paid draft's family line (Cloud's own `family` type, no tickets yet) for the provisional handoff.
+  const purchased = { bookingDate: '2026-10-17', durationMinutes: 90, endTime: '13:00', parentProductId: '1189823',
+    parentProductName: 'Entré 90 min - Familj', parentType: 'sessionpass', productId: '1189838',
+    productName: 'Biljetter (Drop-In - 750 kr)', productSubType: null, productType: 'family', quantity: 1, startTime: '11:30', tickets: [] };
+  const answer = { status: 'provisional_handoff', provisionalHandoff: {
+    booking: { amountOwing: 0, bookingReference: 'preview-draft', customer: { firstName: 'Alex', lastName: 'Gäst' },
+      items: [withGuestItemDetails(purchased)], paymentStatus: 'paid', rollerUniqueId: 'preview-draft',
+      status: 'payment_approved_booking_syncing' },
+    guestAccess: { token: 'preview-only', expiresAt: null },
+    session: { bookingSyncStatus: 'pending', checkinSessionId: 'preview-session', status: 'ready_for_staff',
+      handoffStatus: 'ready_for_staff', handoffCode: '0001' },
+  } };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify(answer) });
+  let purchase;
+  try { purchase = await cloud.finalizePhonePayment('jypd_000000000000000000', 'preview-draft'); }
+  finally { globalThis.fetch = originalFetch; }
+  const { booking, checkinSession } = purchase;
+  assert.equal(booking.bandCount, 4);
+  assert.deepEqual(booking.bandColours.map(({ id, quantity }) => [id, quantity]), [['morkbla', 4]]);
+  for (const [key, value] of Object.entries(PREVIEW_PHONE_FAMILY)) assert.deepEqual(booking[key], value, `preview ${key}`);
+  const markup = render(ConfirmationScreen, { booking, checkinSession, jumperCount: booking.jumpers, selectedAddons: [] });
+  assert.match(bandStep(markup), /class="chipCount">4<\/strong>/);
+  assert.doesNotMatch(bandStep(markup), /class="chipCount">1<\/strong>/);
+});
+
+test('GH-566: ordinary entries and the Combo count their bands as before', async () => {
+  const ordinary = await fromCloud([entry()]);
+  assert.equal(ordinary.bandCount, 2);
+  assert.equal(ordinary.jumpers, 2);
+  const combo = await fromCloud([item(1)]);
+  assert.equal(combo.bandCount, 2);
+  assert.equal(combo.jumpers, 2);
+  const summary = render(BookingSummary, { booking: await fromCloud([familyBooked()]), onContinue() {} });
+  assert.match(summary, />x1<\/span>/, 'the booking page still lists the family ticket as booked');
 });
 
 test('no or malformed Cloud colour leaves the rows without a colour', async () => {
