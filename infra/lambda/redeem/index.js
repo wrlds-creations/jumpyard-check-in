@@ -3212,6 +3212,7 @@ function normalizeBooking(booking, products) {
   return {
     amountOwing: numberOrNull(booking?.amountOwing ?? booking?.remainder ?? booking?.costs?.amountOwing),
     bookingReference: stringOrNull(booking?.bookingReference ?? booking?.reference),
+    customerId: stringOrNull(booking?.customerId),
     externalId: stringOrNull(booking?.externalId),
     items: items.map((item) => normalizeBookingItem(item, products.byId)),
     paymentStatus: stringOrNull(booking?.paymentStatus ?? booking?.status ?? booking?.bookingStatus),
@@ -3313,6 +3314,8 @@ async function upsertLiveBooking(booking, rollerEnv) {
     venueId: booking.venueId,
   });
 
+  // #572: the summary is merged, so a check-in keeps the booking owner (bookingCustomerId) the staff
+  // board finds the guest's name by. A value ROLLER leaves out never erases a stored one.
   await executeStatement(
     `INSERT INTO jumpyard.roller_bookings (
       roller_unique_id,
@@ -3373,7 +3376,7 @@ async function upsertLiveBooking(booking, rollerEnv) {
       freshness_status = 'fresh',
       is_tombstoned = EXCLUDED.is_tombstoned,
       payload_hash = EXCLUDED.payload_hash,
-      normalized_summary = EXCLUDED.normalized_summary,
+      normalized_summary = jumpyard.roller_bookings.normalized_summary || jsonb_strip_nulls(EXCLUDED.normalized_summary),
       updated_at = now()`,
     [
       stringParameter('rollerUniqueId', booking.rollerUniqueId),
@@ -3392,6 +3395,7 @@ async function upsertLiveBooking(booking, rollerEnv) {
       stringParameter(
         'normalizedSummary',
         JSON.stringify({
+          bookingCustomerId: booking.customerId,
           externalId: booking.externalId,
           itemCount: booking.items.length,
           source: 'roller_redeem_final_refresh',

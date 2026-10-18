@@ -186,4 +186,51 @@ test('Handout HTTP contract: authoritative database, ROLLER receipt recovery and
     assert.equal(provider.calls, before);
     assert.equal((await pool.query('SELECT count(*)::int AS n FROM jumpyard.staff_handout_operations WHERE checkin_session_id=$1', [fixture.sessionId])).rows[0].n, 0);
   });
+
+  await t.test('GH-572: a pre-booked group keeps its name on the staff board after the check-in refresh', async () => {
+    const { createStaffBoard } = require('../infra/lambda/session/staff-board');
+    const board = createStaffBoard({ mapSession: (row) => row, mappedRows: (rows) => rows,
+      stringParameter: (name, value) => ({ name, value }),
+      executeStatement: async (query, parameters) => {
+        const indexes = new Map(parameters.map((parameter, index) => [parameter.name, index + 1]));
+        const text = query.replace(/(?<!:):([a-zA-Z][a-zA-Z0-9_]*)\b/g, (match, name) => indexes.has(name) ? `$${indexes.get(name)}` : match);
+        const client = await pool.connect();
+        try {
+          await client.query('SET ROLE jumpyard_session_runtime');
+          return (await client.query(text, parameters.map((parameter) => parameter.value))).rows;
+        } finally { await client.query('RESET ROLE'); client.release(); }
+      } });
+    const summary = async (fixture) => (await pool.query('SELECT normalized_summary FROM jumpyard.roller_bookings WHERE roller_unique_id=$1',
+      [fixture.bookingId])).rows[0].normalized_summary;
+    const guestName = async (fixture) => (await board.list({ venueId: venue, day, search: null, cursor: null,
+      bookingId: fixture.bookingId })).sessions[0].guest_name;
+    const checkIn = async (fixture) => {
+      const selected = await selectBands(fixture);
+      const confirmed = await request(fixture, { area:'entrance', action:'confirm', revision:selected.body.handout.claims[0].revision });
+      assert.equal(confirmed.status, 200, JSON.stringify(confirmed.body));
+    };
+    const guest = async (customerId, firstName, lastName) => pool.query(`INSERT INTO jumpyard.guest_profiles
+      (guest_profile_id, roller_customer_id, latest_booking_context) VALUES ($1, $2, $3)`,
+      [`roller_customer:${customerId}`, customerId, JSON.stringify({ firstName, lastName })]);
+
+    // A web-shop booking as the webhook and the nightly sync leave it: the owner is on the booking, never on its tickets.
+    const kept = await seed('owner-kept');
+    await guest(`${prefix}_owner_kept`, 'Anna', 'Andersson');
+    await pool.query('UPDATE jumpyard.roller_bookings SET normalized_summary=$2 WHERE roller_unique_id=$1',
+      [kept.bookingId, JSON.stringify({ bookingCustomerId: `${prefix}_owner_kept`, itemCount: 2, source: 'roller_bookingitems_data_sync' })]);
+    assert.equal(await guestName(kept), 'Anna Andersson');
+    await checkIn(kept);
+    assert.equal((await summary(kept)).source, 'roller_redeem_final_refresh');
+    assert.equal((await summary(kept)).bookingCustomerId, `${prefix}_owner_kept`, 'a refresh without the owner keeps the stored one');
+    assert.equal(await guestName(kept), 'Anna Andersson');
+
+    // ROLLER's live owner is written when the row has none.
+    const set = await seed('owner-set');
+    await guest(`${prefix}_owner_set`, 'Bo', 'Berg');
+    assert.equal(await guestName(set), null);
+    provider.bookings.get(set.bookingId).customerId = `${prefix}_owner_set`;
+    await checkIn(set);
+    assert.equal((await summary(set)).bookingCustomerId, `${prefix}_owner_set`);
+    assert.equal(await guestName(set), 'Bo Berg');
+  });
 });

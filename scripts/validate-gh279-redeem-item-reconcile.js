@@ -11,6 +11,7 @@ async function main() {
     await testExistingProvisionalItemIsUpdatedInPlace();
     await testDifferentBookingCollisionFailsClosed();
     await testItemsWithoutRollerIdKeepKeyConflictPath();
+    await testFinalRefreshKeepsBookingOwner();
   } finally {
     __test.reset();
     process.env = originalEnv;
@@ -100,6 +101,37 @@ async function testItemsWithoutRollerIdKeepKeyConflictPath() {
   assert.equal(retainedKey, 'bookingitem:fallback');
   assert.match(sql, /ON CONFLICT \(booking_item_key\) DO UPDATE SET/);
   console.log('[pass] id-less redeem items retain the deterministic primary-key upsert path');
+}
+
+async function testFinalRefreshKeepsBookingOwner() {
+  __test.reset();
+  const calls = [];
+  __test.setHooks({
+    executeStatement: async (command) => {
+      calls.push(command.input);
+      return { records: [] };
+    },
+  });
+
+  const booking = __test.normalizeBooking({
+    bookingReference: 'booking-reference-d',
+    customerId: 48151623,
+    items: [],
+    uniqueId: 'roller-booking-d',
+    venueId: 'venue-a',
+  }, { byId: new Map() });
+  assert.equal(booking.customerId, '48151623');
+  assert.equal(__test.normalizeBooking({ uniqueId: 'roller-booking-e' }, { byId: new Map() }).customerId, null);
+  await __test.upsertLiveBooking(booking, 'live');
+
+  const bookingUpsert = calls.find((call) => /INSERT INTO jumpyard\.roller_bookings/.test(call.sql));
+  const summary = bookingUpsert.parameters.find((entry) => entry.name === 'normalizedSummary');
+  assert.equal(JSON.parse(summary.value.stringValue).bookingCustomerId, '48151623');
+  assert.match(
+    bookingUpsert.sql,
+    /normalized_summary = jumpyard\.roller_bookings\.normalized_summary \|\| jsonb_strip_nulls\(EXCLUDED\.normalized_summary\)/,
+  );
+  console.log('[pass] #572 final redeem refresh merges the booking summary and keeps the ROLLER booking owner');
 }
 
 main().catch((error) => {
