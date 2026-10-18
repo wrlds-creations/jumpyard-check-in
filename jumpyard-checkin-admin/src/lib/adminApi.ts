@@ -39,6 +39,13 @@ export interface StaffBandColourCount extends StaffBandColour {
   quantity: number;
 }
 
+/** GH-571: what ROLLER said when it refused Cloud's check-in (`reason` is Cloud's code for ROLLER's message). */
+export interface StaffRollerRefusal {
+  statusCode?: number | null;
+  reason?: string | null;
+  message?: string | null;
+}
+
 export interface StaffSessionSummary {
   booking: StaffBookingSummary;
   bookingReference: string | null;
@@ -53,7 +60,9 @@ export interface StaffSessionSummary {
   handoffDay?: string | null;
   checkedInBy?: { actorId?: string; displayName?: string; role?: string } | null;
   /** GH-456: set when Cloud's automatic check-in failed and staff must check the group in. */
-  autoCheckin?: { status?: "retrying" | "needs_staff"; reason?: string; attempts?: number } | null;
+  autoCheckin?: { status?: "retrying" | "needs_staff"; reason?: string; attempts?: number; roller?: StaffRollerRefusal | null } | null;
+  /** GH-571: a kalas (ROLLER party package), checked in at kassan; `package` is MINI, MIDI or MAXI when the name says so. */
+  kalas?: { package?: string | null } | null;
   claims?: HandoutClaim[];
   cafeQuantity?: number;
   cafeRemaining?: number;

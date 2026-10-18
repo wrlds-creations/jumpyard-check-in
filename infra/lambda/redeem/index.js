@@ -418,21 +418,25 @@ exports.handler = async (event) => {
       });
     }
 
+    let afterRefresh = null;
     if (rollerResult.status === 409) {
       // #333: a 409 may mean "already redeemed", but only Roller's ticket state decides.
       // Any other conflict stays rejected below.
       const recheck = await getBookingDetail(config, token, refreshedContext.booking.rollerUniqueId);
-      const recheckStates = recheck.ok
-        ? getRollerTicketRedeemStates(
-          normalizeBooking(recheck.body, refreshResult.products),
-          refreshedDecision.selectedTicketIds,
-        )
+      const recheckBooking = recheck.ok ? normalizeBooking(recheck.body, refreshResult.products) : null;
+      const recheckStates = recheckBooking
+        ? getRollerTicketRedeemStates(recheckBooking, refreshedDecision.selectedTicketIds)
         : { allRedeemed: false, states: {} };
       if (recheckStates.allRedeemed) {
         return finalizeRecoveredRedeem(finalizeInput, 'roller_ticket_status', rollerResult.status);
       }
+      // #571: what this recheck showed is kept with ROLLER's reason. ROLLER documents no redemption
+      // state on a booking's tickets, so the reason is ROLLER's own word on the refusal.
+      afterRefresh = { bookingStatus: recheckBooking?.status ?? null, read: recheck.ok, states: recheckStates.states };
     }
 
+    const refusal = describeRollerRefusal(rollerResult, refreshedDecision.selectedTicketIds, afterRefresh);
+    logRollerRefusal(refusal.summary, rollerResult.calls);
     await persistCheckinAttempt({
       booking: refreshedContext.booking,
       correlationId,
@@ -443,6 +447,13 @@ exports.handler = async (event) => {
       status: 'roller_rejected',
     });
     await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_http_${rollerResult.status}`);
+    await recordRollerRefusal({
+      actor: trustedStaffActor,
+      booking: refreshedContext.booking,
+      correlationId,
+      refusal,
+      rollerCalls: rollerResult.calls,
+    });
 
     return jsonResponse(rollerResult.status === 409 ? 409 : 502, correlationId, {
       status: rollerResult.status === 409 ? 'rejected' : 'roller_error',
@@ -453,6 +464,7 @@ exports.handler = async (event) => {
       roller: {
         statusCode: rollerResult.status,
         errors: sanitizeRollerErrors(rollerResult.body),
+        refusal: refusal.summary,
       },
     });
   } catch (error) {
@@ -554,9 +566,11 @@ async function handleAutoCheckin(detail) {
     return { status: 'blocked', reason };
   }
   const retryable = response.statusCode >= 500 || response.statusCode === 429;
-  const attempts = await recordAutoCheckinFailure(checkinSessionId, reason, retryable);
+  // #571: ROLLER's reason for a refusal stays on the session for the staff app and the monitor.
+  const refusal = body.roller?.refusal && typeof body.roller.refusal === 'object' ? body.roller.refusal : null;
+  const attempts = await recordAutoCheckinFailure(checkinSessionId, reason, retryable, refusal);
   await writeEventLog({ booking: session, correlationId, eventType: 'checkin.auto_checkin_failed',
-    payload: { attempts, checkinSessionId, reason, retryable, trigger },
+    payload: { attempts, checkinSessionId, reason, retryable, trigger, ...(refusal ? { rollerReason: refusal.reason } : {}) },
     summary: `Automatic check-in failed: ${reason}` });
   if (retryable && attempts < AUTO_CHECKIN_MAX_ATTEMPTS) throw autoCheckinRetry(reason);
   return { status: 'needs_staff', reason };
@@ -569,7 +583,8 @@ function autoCheckinRetry(reason) {
 }
 
 // Counts automatic attempts on the session; the last one hands the group to staff on the board.
-async function recordAutoCheckinFailure(checkinSessionId, reason, retryable) {
+// #571: `roller` keeps what ROLLER said about the redemption (reason code, its message, the recheck).
+async function recordAutoCheckinFailure(checkinSessionId, reason, retryable, refusal = null) {
   const result = await executeStatement(
     `WITH previous AS (
        SELECT COALESCE((session_summary -> 'autoCheckin' ->> 'attempts')::int, 0) + 1 AS attempts
@@ -582,7 +597,9 @@ async function recordAutoCheckinFailure(checkinSessionId, reason, retryable) {
            'reason', CAST(:reason AS text),
            'status', CASE WHEN CAST(:retryable AS boolean) AND (SELECT attempts FROM previous) < CAST(:maxAttempts AS int)
              THEN 'retrying' ELSE 'needs_staff' END,
-           'updatedAt', to_jsonb(now()))),
+           'updatedAt', to_jsonb(now()))
+           || CASE WHEN CAST(:roller AS jsonb) IS NULL THEN '{}'::jsonb
+             ELSE jsonb_build_object('roller', CAST(:roller AS jsonb)) END),
          updated_at = now()
      WHERE checkin_session_id = :checkinSessionId
        AND status = 'ready_for_staff'
@@ -592,6 +609,7 @@ async function recordAutoCheckinFailure(checkinSessionId, reason, retryable) {
       stringParameter('reason', String(reason).slice(0, 120)),
       stringParameter('retryable', retryable ? 'true' : 'false'),
       stringParameter('maxAttempts', String(AUTO_CHECKIN_MAX_ATTEMPTS)),
+      stringParameter('roller', refusal ? JSON.stringify(refusal) : null),
     ],
   );
   return Number(firstMappedRow(result)?.attempts ?? AUTO_CHECKIN_MAX_ATTEMPTS);
@@ -3624,6 +3642,111 @@ function sanitizeRollerErrors(body) {
     name: stringOrNull(error.name),
     ticketId: stringOrNull(error.ticketId),
   }));
+}
+
+// #571: the messages ROLLER documents for a refused POST /redemptions (409), as stable codes. A party
+// package is not a pass, so ROLLER answers "Product type not accepted" for a kalas. Logs carry only
+// these codes; the message itself stays with the booking (event log and check-in session).
+const ROLLER_REFUSAL_CODES = [
+  ['product type not accepted', 'product_type_not_accepted'],
+  ['ticket redemption usage exhausted', 'ticket_redemption_usage_exhausted'],
+  ['ticket usage exhausted', 'ticket_usage_exhausted'],
+  ['ticket does not exist', 'ticket_not_found'],
+  ['booking cancelled', 'booking_cancelled'],
+  ['ticket is not valid for this date', 'ticket_not_valid_for_date'],
+  ['ticket ids must be unique', 'duplicate_ticket_ids'],
+  ['membership invalid', 'membership_invalid'],
+  ['redemption device not found', 'redemption_device_not_found'],
+  ['duplicate custom ticket ids', 'duplicate_custom_ticket_ids'],
+  ['custom ticket id not found', 'custom_ticket_not_found'],
+  ['before the session start time', 'before_session_start'],
+  ['after the session end time', 'after_session_end'],
+];
+const MAX_STORED_ROLLER_ERRORS = 10;
+
+function rollerRefusalCode(message) {
+  const text = String(message ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!text) return 'unknown';
+  return ROLLER_REFUSAL_CODES.find(([phrase]) => text.includes(phrase))?.[1] ?? 'other';
+}
+
+/**
+ * #571: what ROLLER said when it refused a redemption and what the #333 recheck showed. `summary` goes
+ * to the check-in session, the log and the response; the event log also gets each ticket's error and
+ * state. It makes no ROLLER call of its own.
+ */
+function describeRollerRefusal(rollerResult, ticketIds, afterRefresh) {
+  const errors = sanitizeRollerErrors(rollerResult.body).slice(0, MAX_STORED_ROLLER_ERRORS).map((error) => ({
+    code: rollerRefusalCode(error.message),
+    message: error.message?.slice(0, 200) ?? null,
+    name: error.name?.slice(0, 80) ?? null,
+    ticketId: error.ticketId?.slice(0, 80) ?? null,
+  }));
+  const reasons = {};
+  for (const error of errors) reasons[error.code] = (reasons[error.code] ?? 0) + 1;
+  const states = afterRefresh ? Object.values(afterRefresh.states ?? {}) : [];
+  return {
+    errors,
+    ticketStates: afterRefresh ? afterRefresh.states ?? {} : null,
+    summary: {
+      statusCode: rollerResult.status,
+      reason: errors.find((error) => error.code !== 'unknown')?.code ?? `http_${rollerResult.status}`,
+      reasons,
+      message: errors.find((error) => error.message)?.message ?? null,
+      ticketCount: ticketIds.length,
+      afterRefresh: afterRefresh ? {
+        bookingStatus: stringOrNull(afterRefresh.bookingStatus)?.slice(0, 40) ?? null,
+        read: Boolean(afterRefresh.read),
+        redeemedTickets: states.filter(isUsedRedeemStatus).length,
+        ticketsWithoutState: states.filter((state) => !state).length,
+      } : null,
+    },
+  };
+}
+
+// #571: one line per refusal with codes and counts only (no identifiers or ROLLER text, as in #340).
+function logRollerRefusal(summary, rollerCalls) {
+  try {
+    console.warn(JSON.stringify({
+      eventType: 'checkin.redeem_rejected',
+      handler: 'redeem',
+      ...diagnostics.ids(),
+      providerStatusCode: summary.statusCode,
+      reason: summary.reason,
+      reasons: summary.reasons,
+      rollerCalls,
+      ticketCount: summary.ticketCount,
+      ...(summary.afterRefresh ? { afterRefresh: {
+        bookingStatus: productKey(summary.afterRefresh.bookingStatus) || null,
+        read: summary.afterRefresh.read,
+        redeemedTickets: summary.afterRefresh.redeemedTickets,
+        ticketsWithoutState: summary.afterRefresh.ticketsWithoutState,
+      } } : {}),
+    }));
+  } catch {
+    // Logging must never change a redemption's result.
+  }
+}
+
+// #571: the refusal stays with the booking whoever pressed; a failed write never changes the answer.
+async function recordRollerRefusal({ actor, booking, correlationId, refusal, rollerCalls }) {
+  try {
+    await writeEventLog({
+      booking,
+      correlationId,
+      eventType: 'checkin.redeem_rejected',
+      payload: {
+        ...(actor ? staffAuditPayload(actor) : {}),
+        ...refusal.summary,
+        errors: refusal.errors,
+        rollerCalls,
+        ticketStatesAfterRefresh: refusal.ticketStates,
+      },
+      summary: `Roller refused the redemption: ${refusal.summary.reason}`,
+    });
+  } catch (error) {
+    diagnostics.warn('checkin.redeem_rejected_bookkeeping_failed', error, correlationId);
+  }
 }
 
 function buildRollerUrl(baseUrl, endpointPath) {

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Check, ChevronDown, LoaderCircle, Minus, Plus, RefreshCcw, Search, X } from "lucide-react";
 import type { HandoutArea, HandoutItem, HandoutReceipt, HandoutRequest, StaffAuthSession, StaffSessionDetail, StaffSessionSummary } from "@/lib/adminApi";
-import { activeClaim, boardTab, checkedInLabel, checkedInTime, clock, itemIcon, jumpTime, nextPass, plannedBands, stageOf, stockholmDay, type BoardTab } from "./flow";
+import { activeClaim, boardTab, checkedInLabel, checkedInTime, clock, itemIcon, jumpTime, kalasLabel, nextPass, plannedBands, rollerRefusal, stageOf, stockholmDay, type BoardTab } from "./flow";
 import { BandChip, Icon, cls } from "./ui";
 
 // GH-541 (D0263): Cloud checks every finished group in itself, so the entrance keeps two lists.
@@ -51,6 +51,14 @@ function readArea(): HandoutArea {
   try { return window.sessionStorage.getItem(AREA_KEY) === "cafe" ? "cafe" : "entrance"; } catch { return "entrance"; }
 }
 
+// GH-571: a kalas is marked in every list, so staff see it from the morning.
+function KalasTag({ session, large = false }: { session: StaffSessionSummary; large?: boolean }) {
+  const label = kalasLabel(session);
+  if (!label) return null;
+  return <span className={`flex items-center gap-1 font-black italic uppercase text-primary ${large ? "text-xs @2xl:text-base" : "text-xs"}`}>
+    <Icon name="reward-gift" className="h-5 w-5" />{label}</span>;
+}
+
 function AdmissionCount({ count }: { count?: number }) {
   if (!Number.isSafeInteger(count) || !count || count < 0) return null;
   return <span className="flex items-center gap-1"><Icon name="visitor-wristband" className="h-5 w-5" />{count} {count === 1 ? "entré" : "entréer"}</span>;
@@ -64,6 +72,8 @@ function rowStatus(session: StaffSessionSummary, area: HandoutArea, actorId?: st
   const claim = activeClaim(session.claims, area);
   if (claim) return { text: claim.actorId === actorId ? "Du hjälper" : `${claim.actorName} hjälper`, tone: "text-primary" };
   if (area === "cafe") return session.cafeRemaining ? { text: `${session.cafeRemaining} kvar`, tone: "text-primary" } : { text: "Utlämnat", tone: "text-success" };
+  const refusal = rollerRefusal(session);
+  if (refusal) return { text: refusal.label, tone: "text-danger" };
   const stage = stageOf(session);
   if (stage === "completed") return { text: checkedInLabel(session), tone: "text-success" };
   if (session.isExpired) return { text: "Gått ut", tone: "" };
@@ -88,7 +98,8 @@ function Row({ session, area, props, onArea }: {
         <span className="min-w-16 text-4xl font-black tabular-nums leading-none @2xl:min-w-28 @2xl:text-6xl">{session.handoffCode || "—"}</span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-lg font-black italic uppercase leading-tight @2xl:text-3xl">{nameOf(session)}</span>
-          <span className="mt-1 flex items-center gap-1 text-xs font-bold @2xl:text-sm"><Icon name="time" className="h-5 w-5" />{clock(session.booking.startTime)}</span>
+          <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold @2xl:text-sm"><KalasTag session={session} large />
+            <span className="flex items-center gap-1"><Icon name="time" className="h-5 w-5" />{clock(session.booking.startTime)}</span></span>
         </span>
         {status && <span className={`shrink-0 text-base font-black italic uppercase @2xl:text-2xl ${status.tone}`}>{status.text}</span>}
         {chevron}
@@ -99,6 +110,7 @@ function Row({ session, area, props, onArea }: {
         </span>
         <span className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold">
+            <KalasTag session={session} />
             <AdmissionCount count={session.counts.admission} />
             {bands.map((band) => <BandChip key={band.id} colour={band} count={counted ? band.quantity : undefined} />)}
             <span className="flex items-center gap-1"><Icon name="time" className="h-5 w-5" />{jumpTime(session)}</span>
@@ -196,20 +208,26 @@ function EntrancePanel({ detail, summary, props, onArea }: {
   detail: StaffSessionDetail; summary?: StaffSessionSummary; props: Props; onArea?: (area: HandoutArea) => void;
 }) {
   const view = handoutView(detail, "entrance", props);
+  // GH-571: a kalas is never checked in here (ROLLER refuses party packages); it stays in Kommande and staff send it on.
+  const kalas = !view.complete && Boolean(kalasLabel(summary ?? detail));
+  const blocker = kalas && view.stage === "upcoming" ? null : view.blocker;
   // GH-541: before check-in the bands come from the row, the way a checked-in group shows them; read-only.
   const goods = view.complete || view.products.some((item) => item.kind === "admission") ? view.products
     : [...plannedBands(summary ?? detail), ...view.products];
   const cafe = (view.handout?.items || []).filter((item) => item.area === "cafe");
   const cafeLeft = cafe.filter((item) => left(item) > 0);
-  // GH-541 (D0263): checked-in groups get their goods with one tap.
-  const action = view.pending ? "resume" : view.complete && view.remaining.length ? "handout" : null;
+  // GH-541 (D0263): checked-in groups get their goods with one tap. GH-571: not a group ROLLER refused; kassan takes it.
+  const refusal = rollerRefusal(detail);
+  const action = view.pending ? "resume" : view.complete && view.remaining.length && !refusal ? "handout" : null;
   function run() {
     if (action === "resume") return void props.onHandout({ area: "entrance", action: "confirm", revision: view.claim?.revision || 0 });
     void props.onHandout({ area: "entrance", action: "select", revision: view.claim?.revision || 0,
       selection: view.remaining.map((item) => ({ id: item.id, quantity: left(item) })) }, { confirm: true });
   }
   return <div className="grid gap-2 p-3">
-    {view.blocker && <Note icon="info">{view.blocker}</Note>}
+    {refusal && <Note icon="info" tone="text-danger">{refusal.note}</Note>}
+    {kalas && <Note icon="reward-gift" tone="text-primary">Kalas checkas inte in här. Skicka vidare till kassan.</Note>}
+    {blocker && <Note icon="info">{blocker}</Note>}
     {goods.length > 0 ? <Goods>{goods.map((item) => <ProductRow key={item.id} item={item} />)}</Goods>
       : <p className="py-1 text-sm font-bold">{view.complete ? "Inget att lämna ut här." : "Produkterna visas när bokningen är klar."}</p>}
     {cafe.length > 0 && <Note icon="drink-cup">Caféet: {cafeLeft.length ? cafeLeft.map((item) => `${left(item)} ${item.name}`).join(" · ") : "utlämnat"}</Note>}

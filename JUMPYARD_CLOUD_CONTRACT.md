@@ -222,7 +222,7 @@ Rules:
 | Existing booking payment link | `POST /bookings/{uniqueId}/payments/links` | Write | Confirmed but not primary for pilot add-products | Supported by Roller, but not selected as the primary pilot pattern because it sends the guest to a separate hosted payment link and return-to-PWA behavior is not reliable enough. |
 | Cancel payment link | `DELETE /bookings/{uniqueId}/payments/links/{paymentLinkId}` | Write | Confirmed but deferred | Cleanup path if hosted payment is used in a future same-booking update path. |
 | Linked add-on booking | `POST /bookings/draft/costs`, `POST /bookings/draft`, payment/publish path | Write | Selected pilot pattern | Create the add-ons as a separate Roller booking and link original booking + add-on booking inside JumpYard Cloud. |
-| Redeem tickets | `POST /redemptions` | Write | Confirmed endpoint | Ticket-level redemption. Max 10 unique ticket IDs per call per reference PDF; Cloud sends a group of up to 50 entry tickets in calls of 10 (#549/D0272). |
+| Redeem tickets | `POST /redemptions` | Write | Confirmed endpoint | Ticket-level redemption. Max 10 unique ticket IDs per call per reference PDF; Cloud sends a group of up to 50 entry tickets in calls of 10 (#549/D0272). ROLLER's reference accepts only standard, session and recurring passes and memberships: a party package (kalas) is refused with `409` "Product type not accepted" (#571). A refusal is `409` with `errors: [{ name, message, ticketId }]`. |
 | Booking webhook | Webhooks API | Receive | Confirmed | Can carry booking-level detail equivalent to booking detail when configured correctly, including payments with `include.payments`. |
 | Redemption webhook | Webhooks API | Receive | Confirmed pattern | Use to maintain live checked-in counters for session-based products. Stock/add-on products are excluded. |
 
@@ -460,6 +460,17 @@ Lookup rules:
   The same rule guards `POST /v1/check-in/sessions` and the staff redeem, where an unsettled or
   unknown state without an explicit zero amount owing is `payment_required`.
 
+- #571 (D0281): a kalas is never checked in by Cloud. ROLLER's API redeems only passes and memberships, and a
+  party package is refused with "Product type not accepted". A booking with an item whose `productType` is
+  ROLLER's `partypackage` (for the "Antal" variant this is the catalog's parentType, which `productType` falls
+  back to on both lookup paths) returns `canCheckIn: false, reason: "party_package"`, after `wrong_date` and
+  before the payment rule. The phone and the kiosk then show a glad screen instead of a check-in: "Hej
+  kalasgäst!" and "Fråga personalen, så hjälper de dig vidare." Kassan checks the kalas in, as before.
+  `POST /v1/check-in/sessions` and the session link refuse a kalas with
+  `409 {status: "blocked", error: {code: "party_package"}}` (after `booking_not_active` and
+  `booking_not_fresh`), so no session, safety step or automatic check-in starts, and the pre-arrival email
+  skips it. Without the catalog's mark nothing is blocked, and ROLLER's refusal then shows in the staff app.
+
 - Try Aurora first by booking reference, Roller unique id, or known ticket id.
 - If Aurora has a fresh, usable record, return that normalized snapshot for display.
 - If Aurora is missing, stale, tombstoned, or payment state is unclear, call `GET /bookings/{identifier}`.
@@ -553,6 +564,8 @@ Rules:
 - Treat this as a pilot/dev auth slice, not final production SSO/Cognito.
 
 ### `GET /v1/staff/check-in/sessions`
+
+#571 (D0281): every board row carries `kalas: { package: "MINI" | "MIDI" | "MAXI" | null } | null`, read from the booking's items and ROLLER's catalog (`partypackage`), whether or not the kalas is paid. The staff app shows "Kalas · MIDI" in every list from the morning. A folded-out kalas says "Kalas checkas inte in här. Skicka vidare till kassan." and has no button, so a kalas stays in Kommande. A group whose `autoCheckin.roller.statusCode` is `409` stays under Incheckade with a red "Till kassan", the reason in one sentence and no "Lämna ut"; an outage keeps "Lämna ut", which retries the check-in.
 
 The #345 production staff board adds `view=board&day=YYYY-MM-DD&q=...&cursor=...` under current personal staff read/venue authorization. It returns all stages, including bookings without guest sessions, in bounded pages with `nextCursor`. Exact four-digit searches use allocation date; normal queue/name/reference searches use visit date. Responses include staff-visible guest display name, masked contact metadata, ownership, admission actor and café remaining state. Existing linked-payment reconciliation still applies. No claim is acquired by a read. The following legacy list behavior remains for requests without `view=board`.
 
@@ -655,6 +668,7 @@ Redeem rules:
 - Do not redeem unpaid, wrong-date, already-invalid, or ambiguous partial groups in v1.
 - Route partial groups to staff unless a later ticket explicitly implements ticket selection.
 - #549 (D0272): a request or check-in session may carry up to 1000 ticket ids, since a purchase session lists add-on tickets beside the entries. Only redeemable entry tickets are sent, at most 50 per group (`409 too_many_tickets` above, before any Roller call; `redeemPlan.maxTicketsPerGroup`). They go to Roller 10 per call, one call after the other. On a retried or resumed key a ticket the final refresh shows redeemed is not sent again, so an attempt that stopped between the calls completes the group; a first attempt sends the whole group, so a group partly redeemed elsewhere still goes to staff. The idempotency hash and the receipt cover the whole group, and the first refused call is the result.
+- #571 (D0281): Cloud keeps Roller's reason for a refused redemption. Roller's booking detail has no redemption state, so the refusal's message is the only record of why. Each message Roller documents becomes a code: `product_type_not_accepted` (a kalas), `ticket_usage_exhausted` (already redeemed, for example at kassan), `ticket_redemption_usage_exhausted`, `ticket_not_found`, `booking_cancelled`, `ticket_not_valid_for_date`, `duplicate_ticket_ids`, `membership_invalid`, `redemption_device_not_found`, `duplicate_custom_ticket_ids`, `custom_ticket_not_found`, `before_session_start`, `after_session_end`, else `other`, or `http_<status>` without a message. The response adds `roller.refusal { statusCode, reason, reasons, message, ticketCount, afterRefresh }`, where `afterRefresh { bookingStatus, read, redeemedTickets, ticketsWithoutState }` comes from the #333 recheck after a `409` (null otherwise). The event log gets `checkin.redeem_rejected` with each ticket's error (at most 10) and its state after the recheck, and one log line carries only codes and counts. No Roller call is added.
 - Call Roller `POST /redemptions` only from JumpYard Cloud.
 - Never put the T0021 dev redeem token in browser env, browser storage, app source, or public phone network calls.
 - Log every attempt and result.
@@ -1088,7 +1102,7 @@ Decided with JumpYard's product owner on 2026-10-06: a completed check-in counts
 - **Automatic admission.** After ready-for-staff (and after a safety-attested ready) the Session Lambda, and after the phone or kiosk booking confirmation the Booking Lambda, invoke the Redeem Lambda asynchronously with `{ source: "jumpyard.auto-checkin", detail: { checkinSessionId, correlationId, trigger } }` (environment `AUTO_CHECKIN_FUNCTION_NAME`). Whichever comes last admits.
   - The Redeem Lambda admits only a `ready_for_staff` session with completed safety, `bookingSyncStatus = confirmed` and no active staff claim, on the visit day, until the session end plus 30 minutes.
   - It uses the internal redeem route with key `staff-redeem:<checkinSessionId>` and actor `system:auto-checkin` (display name `automatiskt`), so staff and the system can never redeem twice, and the #333 receipts apply. The staff board shows "Incheckad HH:MM · automatiskt".
-  - A ROLLER outage (5xx or 429) throws so Lambda retries asynchronously, three attempts at most. A rejection or the last failure records `session_summary.autoCheckin { status: "needs_staff", reason, attempts }`. The staff app shows the group as "Incheckad" anyway (#547, D0265), and the monitor chat catches the failure.
+  - A ROLLER outage (5xx or 429) throws so Lambda retries asynchronously, three attempts at most. A rejection or the last failure records `session_summary.autoCheckin { status: "needs_staff", reason, attempts, roller }`, where `roller` is the refusal above (#571), and `checkin.auto_checkin_failed` carries `rollerReason`. The staff app shows the group as "Incheckad" anyway (#547, D0265), and the monitor chat catches the failure.
   - #547 (D0265): a confirmed kiosk add-on triggers it too (`kiosk_add_on_confirmed`), from the Booking Lambda's add-on confirmation or from the board's linked add-on refresh when ROLLER confirms it after the window.
   - #563 (D0279): when the webhook or a lookup confirms the add-on first, the paid-booking signal (`jumpyard.phone-email-marketing`) and the reconciliation worker's early stop update the linked session from the confirmed draft (`linkedAddOnSyncSource: confirmed_add_on_draft`) and trigger it, with no staff app open and no ROLLER call. The board refresh stays the safety net.
   - Redeem write gates and the emergency stop block it as they block staff. `AUTO_CHECKIN_REDEEM=off` turns it off.
@@ -1105,6 +1119,7 @@ Decided with JumpYard's product owner on 2026-10-06: a completed check-in counts
 | `wrong_date_or_time` | Booking does not match expected session. | Show staff handoff. |
 | `payment_required` | Booking is not settled: amount remains owing, or the exact payment state is `partially_paid`, `pending` or `unpaid` (see `eligibility.paymentState`). | Route to payment or staff depending flow; `partially_paid` is checked in at the register. |
 | `already_redeemed` | Tickets are already used or invalid. | Show staff handoff. |
+| `party_package` | A kalas (ROLLER party package), which ROLLER's API cannot redeem (#571, D0281). Lookup eligibility reason and `409` on check-in start. | Show the glad kalas screen ("Hej kalasgäst! Fråga personalen, så hjälper de dig vidare."); kassan checks the kalas in. |
 | `checkin_too_early` | A new check-in before the window; `checkinWindow.opensAt` says when it opens (#456). | Show "Du kan checka in från HH:MM". |
 | `checkin_too_late` | The booked session has ended (#456). | Send the guest to kassan. |
 | `partial_group_not_supported` | Guest selected a partial group in v1. | Show staff handoff. |

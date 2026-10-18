@@ -1,5 +1,16 @@
 # Test Plan
 
+## ROLLER refusals are kept, and a kalas is never checked in (#571, kiosk #244)
+
+Run `npm run validate:gh571-roller-refusal` (part of `npm run validate`). It drives the real Lambdas with a scripted Aurora and ROLLER and checks that:
+- a refusal keeps ROLLER's reason on the session (`autoCheckin.roller`), in the event log (each ticket's error and its state after the recheck) and as codes in one log line, with no ROLLER call beyond the #333 recheck;
+- every documented 409 message has its code, an unknown one is `other`, a refusal without a message is `http_409`, and an outage keeps retrying;
+- Lookup answers `party_package` for a kalas, including the "Antal" variant through the catalog's parentType, and the check-in start refuses it with `409 party_package`;
+- the staff board marks every kalas, paid or not, with its package size;
+- the phone shows the glad kalas screen at lookup and through a link, and Klar goes back.
+
+Also run the staff app's `staffExperience.test.mjs` ("Till kassan" for a ROLLER refusal, "Kalas · MIDI" and the send-on note), `validate:gh333-staff-redeem-recovery`, `validate:gh456-auto-checkin`, `validate:gh549-group-size` and `validate:gh547-ready-is-checked-in`. In the kiosk, run `npm run test:kiosk-kalas`.
+
 ## A kiosk add-on checks its group in without the staff app (#563)
 
 Run `npm run validate:gh563-addon-release` (part of `npm run validate`). It drives the real Lambdas with a scripted Aurora, Lambda and ROLLER and checks that:

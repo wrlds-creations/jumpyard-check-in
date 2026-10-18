@@ -19,6 +19,23 @@ export function stageOf(session: StaffSessionSummary): Stage {
 export function boardTab(session: StaffSessionSummary): BoardTab {
   return stageOf(session) === "completed" ? "completed" : "upcoming";
 }
+/** GH-571: kalas are told apart in every list, from the morning ("Kalas · MIDI"). */
+export function kalasLabel(session: Pick<StaffSessionSummary, "kalas">) {
+  if (!session.kalas) return null;
+  return session.kalas.package ? `Kalas · ${session.kalas.package}` : "Kalas";
+}
+/** GH-571: ROLLER said no (409) to Cloud's check-in, so the app cannot check the group in either. The group stays
+ * under Incheckade (D0265) with "Till kassan" and the reason. An outage is not a refusal: Lämna ut retries it. */
+export function rollerRefusal(session: Pick<StaffSessionSummary, "status" | "autoCheckin">) {
+  const auto = session.autoCheckin;
+  if (session.status === "redeemed" || auto?.status !== "needs_staff" || auto.roller?.statusCode !== 409) return null;
+  const reason = auto.roller.reason;
+  const note = reason === "product_type_not_accepted" ? "Kalas checkas in i kassan. ROLLER tar inte emot kalas härifrån."
+    : reason === "ticket_usage_exhausted" || reason === "ticket_redemption_usage_exhausted"
+      ? "ROLLER säger att biljetterna redan är inlösta, troligen i kassan."
+      : "ROLLER tog inte emot incheckningen. Kassan hjälper gruppen.";
+  return { label: "Till kassan", note };
+}
 /** GH-547: a group is checked in when the guest was done; Cloud's redeem time stands in only without it. */
 export function checkedInTime(session: Pick<StaffSessionSummary, "completedAt" | "readyForStaffAt">) {
   return session.readyForStaffAt || session.completedAt;
@@ -94,5 +111,6 @@ export function handoutMessage(code: string | null, fallback: string) {
     redeem_in_progress: "Incheckningen pågår redan. Vänta några sekunder.",
     session_already_completed: "Gruppen är redan incheckad.",
     session_expired: "Förberedelsen har gått ut – gästen öppnar bokningen igen.",
+    roller_redeem_rejected: "ROLLER tog inte emot incheckningen. Skicka gruppen till kassan.",
   } as Record<string, string>)[code || ""] || fallback;
 }

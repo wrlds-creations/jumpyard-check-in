@@ -18,6 +18,7 @@ export type IconName =
   | "padlock"
   | "payment-card"
   | "profile"
+  | "reward-gift"
   | "safety-check"
   | "success-check"
   | "time"

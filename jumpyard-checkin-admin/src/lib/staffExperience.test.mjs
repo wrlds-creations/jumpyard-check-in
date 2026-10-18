@@ -146,6 +146,71 @@ test('No red box and no Checka in: a group Cloud could not check in is Incheckad
   assert.doesNotMatch(read('../components/staff/flow.ts'), /needsStaff|Bokningen bekräftas fortfarande/);
 });
 
+test('GH-571: a group ROLLER refused stays under Incheckade with "Till kassan", its reason and no Lämna ut', () => {
+  const { rollerRefusal, handoutMessage } = load('../components/staff/flow.ts');
+  const refused = (reason, statusCode = 409) => session({ checkinSessionId: `refused-${reason}`, guest: { name: 'Saga Lind' },
+    booking: { startTime: '10:00', endTime: '11:40' }, readyForStaffAt: '2026-09-08T07:20:00Z', handoffCode: '0163',
+    autoCheckin: { status: 'needs_staff', reason: 'roller_redeem_rejected', attempts: 1,
+      roller: { statusCode, reason, message: 'from ROLLER' } },
+    handout: { items: [band, socks], claims: [], receipts: [] } });
+  const kalas = refused('product_type_not_accepted');
+  assert.equal(boardTab(kalas), 'completed', "the guest's last screen still counts (D0265)");
+  const listed = board(['entrance', 'all', 'completed']).default({ ...props(null), sessions: [kalas, admitted({ checkinSessionId: 'in' })] });
+  assert.match(text(listed), /Saga Lind.*Till kassan/);
+  assert.doesNotMatch(text(listed), /Saga Lind.*Incheckad 09:20/);
+  assert.doesNotMatch(text(listed), /Behöver personal/, 'no red box');
+  const row = Row({ session: kalas, area: 'entrance', props: props(null) });
+  assert.equal(nodes(row, (node) => node.type === 'span' && text(node) === 'Till kassan')[0].props.className.includes('text-danger'), true);
+  const panel = EntrancePanel({ detail: kalas, summary: kalas, props: props(kalas) });
+  assert.match(text(panel), /Kalas checkas in i kassan\. ROLLER tar inte emot kalas härifrån\./);
+  assert.deepEqual(groups(panel), ['Besöksband, 3 kvar', 'JumpSocks, 4 kvar'], 'the goods stay visible');
+  assert.equal(button(panel, 'Lämna ut'), undefined, 'ROLLER would refuse the band handout too');
+  assert.match(rollerRefusal(refused('ticket_usage_exhausted')).note, /redan är inlösta/);
+  assert.match(rollerRefusal(refused('ticket_redemption_usage_exhausted')).note, /redan är inlösta/);
+  assert.match(rollerRefusal(refused('other')).note, /ROLLER tog inte emot incheckningen/);
+  // An outage is not a refusal: the group is Incheckad and Lämna ut retries the check-in; nothing shows once redeemed.
+  const outage = refused('http_503', 503);
+  assert.equal(rollerRefusal(outage), null);
+  assert.match(text(Row({ session: outage, area: 'entrance', props: props(null) })), /Incheckad 09:20/);
+  assert.ok(button(EntrancePanel({ detail: outage, props: props(outage) }), 'Lämna ut'));
+  assert.equal(rollerRefusal({ ...kalas, status: 'redeemed' }), null);
+  assert.equal(rollerRefusal({ ...kalas, autoCheckin: { status: 'retrying', roller: { statusCode: 409 } } }), null);
+  // The café still serves the group, and a refused band handout says what to do.
+  assert.match(text(Row({ session: { ...kalas, cafeRemaining: 1 }, area: 'cafe', props: props(null) })), /1 kvar/);
+  assert.equal(handoutMessage('roller_redeem_rejected', 'x'), 'ROLLER tog inte emot incheckningen. Skicka gruppen till kassan.');
+});
+
+test('GH-571: a kalas is marked in every list and stays in Kommande, where staff send it on', () => {
+  const { kalasLabel } = load('../components/staff/flow.ts');
+  const kalas = (overrides = {}) => session({ checkinSessionId: 'booking:kalas', status: 'upcoming', safetyStatus: null,
+    handoffStatus: null, guest: { name: 'Hanna Ek' }, booking: { startTime: '10:00', endTime: '11:40' },
+    kalas: { package: 'MIDI' }, handout: { items: [band], claims: [], receipts: [] }, ...overrides });
+  assert.equal(kalasLabel(kalas()), 'Kalas · MIDI');
+  assert.equal(kalasLabel(kalas({ kalas: { package: null } })), 'Kalas');
+  assert.equal(kalasLabel(session()), null);
+  // Kommande: the tag with the present icon, in red, next to the other facts.
+  const listed = board(['entrance', 'all', 'upcoming']).default({ ...props(null), sessions: [kalas(), session({ checkinSessionId: 'other',
+    status: 'upcoming', guest: { name: 'Erik Lund' } })] });
+  assert.match(text(listed), /Hanna Ek.*Kalas · MIDI/);
+  assert.doesNotMatch(text(Row({ session: session({ status: 'upcoming', guest: { name: 'Erik Lund' } }), area: 'entrance', props: props(null) })), /Kalas/);
+  const row = Row({ session: kalas(), area: 'entrance', props: props(null) });
+  const tag = nodes(row, (node) => node.type === 'span' && /Kalas · MIDI/.test(text(node)) && String(node.props.className).includes('text-primary'))[0];
+  assert.ok(tag, 'a red Kalas tag');
+  assert.ok(nodes(tag, (node) => String(node.props?.src ?? '').includes('/reward-gift.png')).length, 'with the present icon');
+  // Folded out: staff send it on; nothing to press, and no "Check-in inte påbörjad".
+  const panel = EntrancePanel({ detail: kalas(), summary: kalas(), props: props(kalas()) });
+  assert.match(text(panel), /Kalas checkas inte in här\. Skicka vidare till kassan\./);
+  assert.doesNotMatch(text(panel), /Check-in inte påbörjad/);
+  assert.equal(button(panel, 'Lämna ut'), undefined);
+  // The board row carries the mark even when the detail does not.
+  const fromSummary = EntrancePanel({ detail: kalas({ kalas: null }), summary: kalas(), props: props(kalas({ kalas: null })) });
+  assert.match(text(fromSummary), /Skicka vidare till kassan/);
+  // The café sees it too.
+  assert.match(text(Row({ session: { ...kalas(), cafeRemaining: 2 }, area: 'cafe', props: props(null) })), /Kalas · MIDI/);
+  // An ordinary group that is not checked in keeps today's note.
+  assert.match(text(EntrancePanel({ detail: session({ status: 'upcoming' }), props: props(session({ status: 'upcoming' })) })), /Check-in inte påbörjad/);
+});
+
 test('An open row stays in the list it was opened from while the guest finishes, then moves when closed', () => {
   const done = session({ checkinSessionId: 'finishing', guest: { name: 'Lisa Holm' }, handout: { items: [band], claims: [], receipts: [] } });
   const open = board(['entrance', 'all', 'upcoming', false, { id: 'finishing', place: 'upcoming' }]).default({ ...props(done), sessions: [done] });
