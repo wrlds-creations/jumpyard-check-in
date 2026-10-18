@@ -55,6 +55,38 @@ function recordingFetch(answer) {
   return { calls, fetchImpl };
 }
 
+// GH-561: answers the Klaviyo exchanges in turn; an exchange without an answer is a test failure.
+function inTurn(...answers) {
+  let index = 0;
+  return (url, init) => {
+    const answer = answers[index];
+    index += 1;
+    if (answer === undefined) throw new Error(`unexpected Klaviyo exchange ${index}`);
+    return typeof answer === 'function' ? answer(url, init) : answer;
+  };
+}
+
+function waitForAbort(init) {
+  return new Promise((resolve, reject) => {
+    init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true });
+  });
+}
+
+const timesOut = (url, init) => waitForAbort(init);
+const bodyTimesOut = (url, init) => ({ ok: true, status: 200, json: () => waitForAbort(init) });
+const dropped = () => { throw new TypeError('fetch failed'); };
+
+// AbortSignal.timeout does not keep a process alive; in Lambda the open socket does. Here a
+// synthetic handle stands in for that socket.
+async function withOpenSocket(run) {
+  const keepAlive = setInterval(() => {}, 5);
+  try {
+    return await run();
+  } finally {
+    clearInterval(keepAlive);
+  }
+}
+
 function keyProvider(secretValue, counters = { reads: 0 }, now = Date.now) {
   return lookup.createApiKeyProvider({
     secretId: SECRET_ARN,
@@ -74,11 +106,13 @@ function awsError(name) {
   return error;
 }
 
-async function resolveWith(answer, { secret = KEY, enabled = true, timeoutMs = 1500, customer = typedCustomer } = {}) {
+async function resolveWith(answer, {
+  secret = KEY, enabled = true, timeoutMs = 1500, retryTimeoutMs = 1500, customer = typedCustomer,
+} = {}) {
   const fetch = recordingFetch(answer);
   const counters = { reads: 0 };
   const result = await lookup.resolveEmailFirstCustomer(customer, {
-    enabled, timeoutMs, apiKeys: keyProvider(secret, counters), fetchImpl: fetch.fetchImpl,
+    enabled, timeoutMs, retryTimeoutMs, apiKeys: keyProvider(secret, counters), fetchImpl: fetch.fetchImpl,
   });
   return { result: plain(result), calls: fetch.calls, reads: counters.reads };
 }
@@ -147,6 +181,7 @@ test('found (complete): Klaviyo name, national phone and only the mapped address
   assert.ok(calls[0].init.signal instanceof AbortSignal);
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'found');
+  assert.equal(result.attempts, 1, 'GH-561: an answer is never asked again');
   assert.equal(typeof result.latencyMs, 'number');
   assert.deepEqual(result.customer, {
     ...typedCustomer,
@@ -181,22 +216,26 @@ test('not found: typed first name, last name Gäst, placeholder phone and no add
   assert.equal(calls.length, 1);
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'not_found');
+  assert.equal(result.attempts, 1);
   assert.deepEqual(result.customer, { ...typedCustomer, lastName: 'Gäst', phone: '0700000000' });
 });
 
-test('several profiles are uncertain, including a further result page', async () => {
+test('several profiles are uncertain at once, including a further result page', async () => {
   for (const body of [profilesBody([FULL_PROFILE, FULL_PROFILE]), profilesBody([FULL_PROFILE], 'https://a.klaviyo.com/api/profiles?page[cursor]=x')]) {
-    const { result } = await resolveWith(httpResponse(body));
-    assert.deepEqual(result, { ok: false, outcome: 'uncertain', reason: 'multiple', latencyMs: result.latencyMs });
+    const { result, calls } = await resolveWith(httpResponse(body));
+    assert.deepEqual(result, { ok: false, outcome: 'uncertain', reason: 'multiple', latencyMs: result.latencyMs, attempts: 1 });
     assert.equal(result.customer, undefined);
+    assert.equal(calls.length, 1, 'GH-561: several profiles are never asked again');
   }
 });
 
-test('HTTP errors are uncertain and a rejected key is read again', async () => {
+test('HTTP errors are uncertain at once and a rejected key is read again', async () => {
   for (const status of [400, 401, 403, 404, 429, 500, 502, 503]) {
-    const { result } = await resolveWith(httpResponse({ errors: [{ detail: 'synthetic' }] }, status));
+    const { result, calls } = await resolveWith(httpResponse({ errors: [{ detail: 'synthetic' }] }, status));
     assert.equal(result.ok, false);
     assert.equal(result.reason, `http_${status}`);
+    assert.equal(result.attempts, 1, `http_${status}`);
+    assert.equal(calls.length, 1, `http_${status}`);
   }
   const counters = { reads: 0 };
   const apiKeys = keyProvider(KEY, counters);
@@ -206,27 +245,23 @@ test('HTTP errors are uncertain and a rejected key is read again', async () => {
   assert.equal(counters.reads, 2, 'a 401 drops the cached key so a replaced key applies at once');
 });
 
-test('a timeout while connecting or reading the body is uncertain', async () => {
-  // AbortSignal.timeout does not keep a process alive; in Lambda the open socket does. Here a
-  // synthetic handle stands in for that socket.
-  const keepAlive = setInterval(() => {}, 5);
-  try {
-    const waitForAbort = (init) => new Promise((resolve, reject) => {
-      init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true });
-    });
-    const connecting = await resolveWith((url, init) => waitForAbort(init), { timeoutMs: 25 });
-    assert.equal(connecting.result.reason, 'timeout');
-    assert.ok(connecting.result.latencyMs >= 15, String(connecting.result.latencyMs));
-    const reading = await resolveWith((url, init) => ({ ok: true, status: 200, json: () => waitForAbort(init) }), { timeoutMs: 25 });
-    assert.equal(reading.result.reason, 'timeout');
-  } finally {
-    clearInterval(keepAlive);
-  }
+test('a timeout while connecting or reading the body, twice, is uncertain', async () => {
+  await withOpenSocket(async () => {
+    for (const answer of [timesOut, bodyTimesOut]) {
+      const { result, calls } = await resolveWith(answer, { timeoutMs: 25, retryTimeoutMs: 25 });
+      assert.equal(result.reason, 'timeout');
+      assert.equal(result.attempts, 2);
+      assert.equal(calls.length, 2);
+      assert.ok(result.latencyMs >= 40, `latencyMs covers both exchanges: ${result.latencyMs}`);
+    }
+  });
 });
 
-test('network failures and malformed answers are uncertain', async () => {
-  const network = await resolveWith(() => { throw new TypeError('fetch failed'); });
+test('network failures (twice) and malformed answers are uncertain', async () => {
+  const network = await resolveWith(dropped);
   assert.equal(network.result.reason, 'network');
+  assert.equal(network.result.attempts, 2);
+  assert.equal(network.calls.length, 2);
   const malformed = [
     { ok: true, status: 200, json: async () => { throw new SyntaxError('Unexpected token'); } },
     httpResponse(null),
@@ -243,11 +278,13 @@ test('network failures and malformed answers are uncertain', async () => {
     httpResponse(profilesBody([{ location: { zip: 99999 } }])),
   ];
   for (const answer of malformed) {
-    const { result } = await resolveWith(answer);
+    const { result, calls } = await resolveWith(answer);
     assert.equal(result.reason, 'malformed', JSON.stringify(answer));
+    assert.equal(calls.length, 1, `GH-561: never asked again: ${JSON.stringify(answer)}`);
   }
   const mismatch = await resolveWith(httpResponse({ data: [{ type: 'profile', attributes: { email: 'other@example.invalid' } }] }));
   assert.equal(mismatch.result.reason, 'email_mismatch');
+  assert.equal(mismatch.calls.length, 1);
   const caseOnly = await resolveWith(httpResponse({ data: [{ type: 'profile', attributes: { email: EMAIL.toUpperCase(), ...FULL_PROFILE } }] }));
   assert.equal(caseOnly.result.outcome, 'found', 'Klaviyo email case does not matter');
 });
@@ -266,6 +303,7 @@ test('missing, empty, unreadable or invalid keys are uncertain without a Klaviyo
     const { result, calls } = await resolveWith(httpResponse(profilesBody([FULL_PROFILE])), { secret });
     assert.equal(result.reason, reason, String(secret));
     assert.equal(calls.length, 0);
+    assert.equal(result.attempts, 0, String(secret));
   }
   const unconfigured = lookup.createApiKeyProvider({ secretId: () => '', readSecretString: async () => KEY });
   const fetch = recordingFetch(httpResponse(profilesBody([])));
@@ -301,12 +339,13 @@ test('the key is read once per cache period; a missing key is retried after a mi
 
 test('a disabled lookup or an unsupported email never reads the key or calls Klaviyo', async () => {
   const disabled = await resolveWith(httpResponse(profilesBody([FULL_PROFILE])), { enabled: false });
-  assert.deepEqual(disabled.result, { ok: false, outcome: 'uncertain', reason: 'disabled', latencyMs: null });
+  assert.deepEqual(disabled.result, { ok: false, outcome: 'uncertain', reason: 'disabled', latencyMs: null, attempts: 0 });
   assert.equal(disabled.reads, 0);
   assert.equal(disabled.calls.length, 0);
   for (const email of ['a"b@example.invalid', 'annie(x)@example.invalid', 'annie,x@example.invalid', 'annie@example', 'annie @example.invalid']) {
     const unsupported = await resolveWith(httpResponse(profilesBody([])), { customer: { ...typedCustomer, email } });
     assert.equal(unsupported.result.reason, 'email_unsupported', email);
+    assert.equal(unsupported.result.attempts, 0, email);
     assert.equal(unsupported.calls.length + unsupported.reads, 0);
     // GH-552: the draft validation answers these with invalid_email before the lookup is reached.
     assert.equal(lookup.isValidEmailFormat(email), false, email);
@@ -324,6 +363,76 @@ test('GH-552: the accepted email format is exactly what the lookup can ask about
     assert.equal(lookup.isValidEmailFormat(email), false, String(email));
   }
   assert.equal(lookup.INVALID_EMAIL, 'invalid_email');
+});
+
+// GH-561: one more exchange after a timeout or a network error.
+
+test('GH-561: a first timeout or network error followed by an answer gives found or not_found', async () => {
+  const found = httpResponse(profilesBody([FULL_PROFILE]));
+  const unknown = httpResponse(profilesBody([]));
+  await withOpenSocket(async () => {
+    for (const [label, first, second, outcome] of [
+      ['timeout, then found', timesOut, found, 'found'],
+      ['body timeout, then not found', bodyTimesOut, unknown, 'not_found'],
+      ['network, then found', dropped, found, 'found'],
+      ['network, then not found', dropped, unknown, 'not_found'],
+    ]) {
+      const { result, calls } = await resolveWith(inTurn(first, second), { timeoutMs: 20, retryTimeoutMs: 20 });
+      assert.equal(result.ok, true, label);
+      assert.equal(result.outcome, outcome, label);
+      assert.equal(result.attempts, 2, label);
+      assert.deepEqual(result.customer, outcome === 'found'
+        ? { ...typedCustomer, firstName: 'Anna', lastName: 'Testsson', phone: '0701740605', address: { postcode: '999 99' } }
+        : { ...typedCustomer, lastName: 'Gäst', phone: '0700000000' }, label);
+      assert.equal(calls.length, 2, label);
+      assert.equal(calls[1].url, EXPECTED_URL, label);
+      assert.deepEqual(plain(calls[1].init.headers), plain(calls[0].init.headers), label);
+      assert.notEqual(calls[1].init.signal, calls[0].init.signal, `${label}: the second exchange has its own budget`);
+    }
+  });
+});
+
+test('GH-561: two timeouts or network errors fall back, and the second answer always stands', async () => {
+  await withOpenSocket(async () => {
+    for (const [label, first, second, reason] of [
+      ['two timeouts', timesOut, timesOut, 'timeout'],
+      ['two network errors', dropped, dropped, 'network'],
+      ['timeout, then network', timesOut, dropped, 'network'],
+      ['network, then body timeout', dropped, bodyTimesOut, 'timeout'],
+      ['timeout, then several profiles', timesOut, httpResponse(profilesBody([FULL_PROFILE, FULL_PROFILE])), 'multiple'],
+      ['network, then 503', dropped, httpResponse({}, 503), 'http_503'],
+    ]) {
+      const { result, calls } = await resolveWith(inTurn(first, second), { timeoutMs: 20, retryTimeoutMs: 20 });
+      assert.deepEqual(result, { ok: false, outcome: 'uncertain', reason, latencyMs: result.latencyMs, attempts: 2 }, label);
+      assert.equal(calls.length, 2, `${label}: never a third exchange`);
+    }
+  });
+  // A key Klaviyo rejects in the second exchange is still dropped from the cache.
+  const counters = { reads: 0 };
+  const apiKeys = keyProvider(KEY, counters);
+  const fetch = recordingFetch(inTurn(dropped, httpResponse({}, 401), dropped, httpResponse({}, 401)));
+  for (let round = 0; round < 2; round += 1) {
+    await lookup.resolveEmailFirstCustomer(typedCustomer, { enabled: true, apiKeys, fetchImpl: fetch.fetchImpl });
+  }
+  assert.equal(counters.reads, 2);
+});
+
+test('GH-561: the first exchange keeps the configured budget and the second has its own', async () => {
+  assert.equal(lookup.DEFAULT_TIMEOUT_MS, 1500);
+  assert.equal(lookup.RETRY_TIMEOUT_MS, 1500);
+  await withOpenSocket(async () => {
+    const waited = [];
+    const timedOut = (url, init) => {
+      const startedAt = performance.now();
+      return waitForAbort(init).finally(() => waited.push(performance.now() - startedAt));
+    };
+    // Lower bounds only, so a busy machine cannot fail them: each long budget shows in its own exchange.
+    await resolveWith(timedOut, { timeoutMs: 80, retryTimeoutMs: 20 });
+    await resolveWith(timedOut, { timeoutMs: 20, retryTimeoutMs: 80 });
+    assert.equal(waited.length, 4);
+    assert.ok(waited[0] >= 70, `the first exchange waits the configured 80 ms: ${waited[0]}`);
+    assert.ok(waited[3] >= 70, `the second exchange waits its own 80 ms: ${waited[3]}`);
+  });
 });
 
 test('the module itself never logs and the only logged detail is the outcome class', () => {
@@ -450,8 +559,9 @@ test('handler, found: exact ROLLER draft, resolved record, nothing private in th
   assertNoPrivateValues('event log', state.eventLogs);
   const lines = contactLookupLogs(booking.logs);
   assert.equal(lines.length, 1);
-  assert.deepEqual(Object.keys(lines[0]).sort(), ['event', 'latencyMs', 'outcome']);
+  assert.deepEqual(Object.keys(lines[0]).sort(), ['attempts', 'event', 'latencyMs', 'outcome']);
   assert.equal(lines[0].outcome, 'found');
+  assert.equal(lines[0].attempts, 1);
   assert.equal(typeof lines[0].latencyMs, 'number');
   assertNoPrivateValues('logs', booking.logs);
   assert.ok(!booking.logs.join('\n').includes('Annie'), 'logs do not carry the typed name either');
@@ -467,18 +577,35 @@ test('handler, not found: placeholders reach ROLLER, the record keeps no placeho
   assert.equal(contactLookupLogs(booking.logs)[0].outcome, 'not_found');
 });
 
+test('handler, GH-561: a dropped first exchange is asked once more before any ROLLER work', async () => {
+  const { booking, events, state } = bookingHarness({ klaviyo: inTurn(dropped, httpResponse(profilesBody([FULL_PROFILE]))) });
+  const response = await booking.handleDraft({}, draftBody({ firstName: 'Annie', email: EMAIL }), 'synthetic');
+  assert.equal(response.statusCode, 201, response.body);
+  assert.deepEqual(events, ['reserve', 'klaviyo', 'klaviyo', 'roller_config', '/bookings/draft']);
+  assert.deepEqual(state.rollerPosts[0].payload.customer, {
+    email: EMAIL, firstName: 'Anna', lastName: 'Testsson', phone: '0701740605', address: { postcode: '999 99' },
+  });
+  assert.equal(state.secretReads, 1, 'both exchanges use one key read');
+  assert.equal(state.eventLogs.find((entry) => entry.eventType === 'booking.draft_succeeded').payload.contactLookup, 'found');
+  const lines = contactLookupLogs(booking.logs);
+  assert.equal(lines.length, 1, 'one log line for the whole lookup');
+  assert.equal(lines[0].outcome, 'found');
+  assert.equal(lines[0].attempts, 2);
+  assertNoPrivateValues('logs', booking.logs);
+});
+
 test('handler, uncertain: 409 contact_details_required, failed reservation, no ROLLER call', async () => {
   const cases = [
-    [{ klaviyo: httpResponse({}, 503) }, 'uncertain:http_503'],
-    [{ klaviyo: httpResponse(profilesBody([FULL_PROFILE, FULL_PROFILE])) }, 'uncertain:multiple'],
-    [{ klaviyo: () => { throw new TypeError('fetch failed'); } }, 'uncertain:network'],
-    [{ klaviyo: httpResponse({ data: 'x' }) }, 'uncertain:malformed'],
-    [{ secret: awsError('ResourceNotFoundException') }, 'uncertain:key_missing'],
-    [{ secret: 'not-a-key' }, 'uncertain:key_invalid'],
-    [{ env: { ...LOOKUP_ENV, ENABLE_GH473_KLAVIYO_CONTACT_LOOKUP: 'false' } }, 'uncertain:disabled'],
-    [{ env: {} }, 'uncertain:disabled'],
+    [{ klaviyo: httpResponse({}, 503) }, 'uncertain:http_503', 1],
+    [{ klaviyo: httpResponse(profilesBody([FULL_PROFILE, FULL_PROFILE])) }, 'uncertain:multiple', 1],
+    [{ klaviyo: dropped }, 'uncertain:network', 2],
+    [{ klaviyo: httpResponse({ data: 'x' }) }, 'uncertain:malformed', 1],
+    [{ secret: awsError('ResourceNotFoundException') }, 'uncertain:key_missing', 0],
+    [{ secret: 'not-a-key' }, 'uncertain:key_invalid', 0],
+    [{ env: { ...LOOKUP_ENV, ENABLE_GH473_KLAVIYO_CONTACT_LOOKUP: 'false' } }, 'uncertain:disabled', 0],
+    [{ env: {} }, 'uncertain:disabled', 0],
   ];
-  for (const [options, outcome] of cases) {
+  for (const [options, outcome, attempts] of cases) {
     const { booking, events, state } = bookingHarness(options);
     const response = await booking.handleDraft({}, draftBody({ firstName: 'Annie', email: EMAIL }), 'synthetic');
     assert.equal(response.statusCode, 409, outcome);
@@ -491,6 +618,8 @@ test('handler, uncertain: 409 contact_details_required, failed reservation, no R
     assert.ok(!events.includes('roller_config') && state.rollerPosts.length === 0, `${outcome}: no ROLLER work`);
     assert.equal(state.statements.length + state.eventLogs.length, 0, `${outcome}: no draft record`);
     assert.equal(contactLookupLogs(booking.logs)[0].outcome, outcome);
+    assert.equal(contactLookupLogs(booking.logs)[0].attempts, attempts, outcome);
+    assert.equal(state.klaviyo.length, attempts, `${outcome}: one Klaviyo call per attempt`);
     assertNoPrivateValues(outcome, booking.logs);
     if (outcome === 'uncertain:disabled') assert.equal(state.secretReads + state.klaviyo.length, 0);
   }

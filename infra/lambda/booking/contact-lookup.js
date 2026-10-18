@@ -10,6 +10,8 @@
 // Klaviyo values only travel inside the ROLLER customer. They are never logged or returned to a client.
 // GH-552: an email the lookup cannot ask about is a typo, not an uncertain answer. The draft validation
 // rejects it with invalid_email first, so it never reaches the lookup or asks for last name and phone.
+// GH-561: a timeout or network error is asked once more before it counts as uncertain. Every other
+// answer, including several profiles, stands after the first exchange.
 
 const KLAVIYO_PROFILES_URL = 'https://a.klaviyo.com/api/profiles';
 const KLAVIYO_REVISION = '2026-07-15';
@@ -19,6 +21,10 @@ const INVALID_EMAIL = 'invalid_email';
 const PLACEHOLDER_LAST_NAME = 'Gäst';
 const PLACEHOLDER_PHONE = '0700000000';
 const DEFAULT_TIMEOUT_MS = 1500;
+// GH-561: the second exchange's own budget, whatever the configured first one is.
+const RETRY_TIMEOUT_MS = 1500;
+// GH-561: only a slow or dropped exchange (often the first after a cold night) is asked again.
+const RETRYABLE_REASONS = new Set(['timeout', 'network']);
 const API_KEY_CACHE_MS = 5 * 60 * 1000;
 const MISSING_API_KEY_CACHE_MS = 60 * 1000;
 // Lower-case RFC 5322 atext and a plain domain: nothing that can change the filter expression.
@@ -242,13 +248,14 @@ function unknownCustomer(typed) {
 }
 
 /**
- * Resolves an email-first customer. Returns { ok: true, outcome, customer, latencyMs } for a found or
- * unknown email, otherwise { ok: false, outcome: 'uncertain', reason, latencyMs }. Never throws.
+ * Resolves an email-first customer. Returns { ok: true, outcome, customer, latencyMs, attempts } for a
+ * found or unknown email, otherwise { ok: false, outcome: 'uncertain', reason, latencyMs, attempts }.
+ * attempts counts the Klaviyo exchanges (0, 1 or 2) and latencyMs covers all of them. Never throws.
  */
 async function resolveEmailFirstCustomer(customer, {
-  enabled, timeoutMs = DEFAULT_TIMEOUT_MS, apiKeys, fetchImpl, now = Date.now,
+  enabled, timeoutMs = DEFAULT_TIMEOUT_MS, retryTimeoutMs = RETRY_TIMEOUT_MS, apiKeys, fetchImpl, now = Date.now,
 }) {
-  const result = (reason, latencyMs = null) => ({ ok: false, outcome: 'uncertain', reason, latencyMs });
+  const result = (reason, latencyMs = null, attempts = 0) => ({ ok: false, outcome: 'uncertain', reason, latencyMs, attempts });
   if (!enabled) return result('disabled');
   const email = lookupEmail(customer?.email);
   if (!email) return result('email_unsupported');
@@ -260,22 +267,29 @@ async function resolveEmailFirstCustomer(customer, {
   }
   if (!apiKey?.ok) return result(apiKey?.reason || 'key_unavailable');
 
+  const ask = async (budgetMs) => {
+    try {
+      return await fetchProfiles(email, apiKey.key, { timeoutMs: budgetMs, fetchImpl });
+    } catch {
+      return uncertain('malformed');
+    }
+  };
   const startedAt = now();
-  let answer;
-  try {
-    answer = await fetchProfiles(email, apiKey.key, { timeoutMs, fetchImpl });
-  } catch {
-    answer = uncertain('malformed');
+  let attempts = 1;
+  let answer = await ask(timeoutMs);
+  if (answer.outcome === 'uncertain' && RETRYABLE_REASONS.has(answer.reason)) {
+    attempts = 2;
+    answer = await ask(retryTimeoutMs);
   }
   const latencyMs = Math.max(0, now() - startedAt);
   if (answer.reason === 'http_401' || answer.reason === 'http_403') apiKeys.reset();
   if (answer.outcome === 'found') {
-    return { ok: true, outcome: 'found', customer: knownCustomer(customer, answer.profile), latencyMs };
+    return { ok: true, outcome: 'found', customer: knownCustomer(customer, answer.profile), latencyMs, attempts };
   }
   if (answer.outcome === 'not_found') {
-    return { ok: true, outcome: 'not_found', customer: unknownCustomer(customer), latencyMs };
+    return { ok: true, outcome: 'not_found', customer: unknownCustomer(customer), latencyMs, attempts };
   }
-  return result(answer.reason, latencyMs);
+  return result(answer.reason, latencyMs, attempts);
 }
 
 /** The only lookup detail that may be logged: found, not_found or uncertain:<reason>. */
@@ -290,6 +304,7 @@ module.exports = {
   KLAVIYO_REVISION,
   PLACEHOLDER_LAST_NAME,
   PLACEHOLDER_PHONE,
+  RETRY_TIMEOUT_MS,
   buildProfileLookupUrl,
   classifyProfiles,
   createApiKeyProvider,
