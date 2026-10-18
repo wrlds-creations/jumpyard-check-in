@@ -98,6 +98,14 @@ const KIOSK_RECONCILIATION_OFFSETS_MS = [
   70_000,
   75_000,
 ];
+// GH-570 (D0278): a ROLLER draft that fails with a server error or a lost connection gets one more
+// try. On 2026-10-17 two kiosk drafts got HTTP 500 after 6.9 and 7.1 s, while a whole successful
+// draft request takes 1.4 s (p50) to 3.6 s (p99). The second try starts 1 s later, only while the
+// first answer came within 12 s, and Cloud stops waiting for ROLLER's draft 25 s after the request
+// began, so the kiosk and the phone get an answer before API Gateway's 30 s limit.
+const ROLLER_DRAFT_RETRY_PAUSE_MS = 1_000;
+const ROLLER_DRAFT_RETRY_LATEST_START_MS = 12_000;
+const ROLLER_DRAFT_DEADLINE_MS = 25_000;
 
 const PHONE_BOOKING_PRODUCTS = [
   // GH-514: ROLLER's "2 timmar för 1" deal, 120 minutes for one jumper at the 60-minute price,
@@ -604,6 +612,7 @@ async function handleQuote(event, body, correlationId) {
 }
 
 async function handleDraft(event, body, correlationId) {
+  const startedAt = Date.now();
   const request = normalizeDraftRequest(event, body);
   const validationError = validateDraftRequest(request);
   if (validationError) {
@@ -711,7 +720,16 @@ async function handleDraft(event, body, correlationId) {
   }
   const reservationError = await reserveKioskDraftBinding(terminalSelection, request);
   if (reservationError) return jsonResponse(409, correlationId, { status: 'blocked', error: reservationError });
-  const rollerResult = await postRollerJson(config, token, '/bookings/draft', payload);
+  return releaseKioskClaimsOnFailure(request, correlationId, () => createReservedDraft({
+    config, contact, correlationId, kioskQuoteResult, payload, request, startedAt, terminalSelection, token,
+  }));
+}
+
+// GH-570: the part of handleDraft that runs while the kiosk's claims are held.
+async function createReservedDraft({
+  config, contact, correlationId, kioskQuoteResult, payload, request, startedAt, terminalSelection, token,
+}) {
+  const rollerResult = await createRollerDraft(config, token, payload, { correlationId, startedAt });
 
   if (!rollerResult.ok) {
     await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_http_${rollerResult.status}`);
@@ -721,6 +739,7 @@ async function handleDraft(event, body, correlationId) {
       payload: {
         endpoint: 'POST /bookings/draft',
         itemCount: request.items.length,
+        rollerDraftAttempts: rollerResult.attempts,
         rollerStatus: rollerResult.status,
       },
       subjectRef: payload.externalId,
@@ -867,6 +886,7 @@ async function handleDraft(event, body, correlationId) {
       paymentJwtPresent: jwtSummary.present,
       paymentChannel: terminalSelection.enabled ? 'card_present' : 'ecommerce',
       prepaymentDraftId: prepaymentDraft.prepaymentDraftId,
+      rollerDraftAttempts: rollerResult.attempts,
       rollerEnvironment: config.env,
       rollerDraftUniqueId: draft.uniqueId,
       sendConfirmations: request.sendConfirmations === true,
@@ -2869,6 +2889,7 @@ async function handleAddProductQuote(event, body, correlationId) {
 }
 
 async function handleAddProductDraft(event, body, correlationId) {
+  const startedAt = Date.now();
   const bookingReference = getBookingReferenceFromPath(event);
   if (!bookingReference) {
     return jsonResponse(400, correlationId, {
@@ -3013,7 +3034,16 @@ async function handleAddProductDraft(event, body, correlationId) {
   }
   const reservationError = await reserveKioskDraftBinding(terminalSelection, request);
   if (reservationError) return jsonResponse(409, correlationId, { status: 'blocked', error: reservationError });
-  const rollerResult = await postRollerJson(config, token, '/bookings/draft', payload);
+  return releaseKioskClaimsOnFailure(request, correlationId, () => createReservedAddProductDraft({
+    addOnGroupId, config, correlationId, kioskQuoteResult, original, payload, request, startedAt, terminalSelection, token,
+  }));
+}
+
+// GH-570: the part of handleAddProductDraft that runs while the kiosk's claims are held.
+async function createReservedAddProductDraft({
+  addOnGroupId, config, correlationId, kioskQuoteResult, original, payload, request, startedAt, terminalSelection, token,
+}) {
+  const rollerResult = await createRollerDraft(config, token, payload, { correlationId, startedAt });
 
   if (!rollerResult.ok) {
     await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_http_${rollerResult.status}`);
@@ -3024,6 +3054,7 @@ async function handleAddProductDraft(event, body, correlationId) {
         endpoint: 'POST /bookings/draft',
         itemCount: request.items.length,
         originalBookingReference: original.bookingReference,
+        rollerDraftAttempts: rollerResult.attempts,
         rollerStatus: rollerResult.status,
       },
       subjectRef: original.bookingReference,
@@ -3100,6 +3131,7 @@ async function handleAddProductDraft(event, body, correlationId) {
       prepaymentDraftId: prepaymentDraft.prepaymentDraftId,
       originalBookingReference: original.bookingReference,
       originalRollerUniqueId: original.rollerUniqueId,
+      rollerDraftAttempts: rollerResult.attempts,
       rollerDraftUniqueId: draft.uniqueId,
       rollerEnvironment: config.env,
       sendConfirmations: request.sendConfirmations === true,
@@ -4191,7 +4223,8 @@ async function getRollerAccessToken(config) {
   return cachedToken;
 }
 
-async function postRollerJson(config, token, endpointPath, payload) {
+// GH-570: only the draft passes `timeoutMs`; every other write waits for ROLLER as before.
+async function postRollerJson(config, token, endpointPath, payload, { timeoutMs = null } = {}) {
   const response = await fetch(buildRollerUrl(config.baseUrl, endpointPath), {
     method: 'POST',
     headers: {
@@ -4200,6 +4233,7 @@ async function postRollerJson(config, token, endpointPath, payload) {
       'content-type': 'application/json',
     },
     body: JSON.stringify(payload),
+    ...(timeoutMs === null ? {} : { signal: AbortSignal.timeout(timeoutMs) }),
   });
   emitRollerApiMetric({
     method: 'POST',
@@ -4215,6 +4249,52 @@ async function postRollerJson(config, token, endpointPath, payload) {
     ok: response.ok,
     status: response.status,
   };
+}
+
+// GH-570 (D0278): ROLLER's draft call, tried once more after a server error or a lost connection.
+// ROLLER offers no read of an unpaid draft: booking search and detail do not list it, and the Data
+// API export leaves it out. The second try therefore resends the same payload with the same
+// externalId, the one id with which ROLLER can recognise a draft it created before answering 500.
+// A 4xx is ROLLER's answer about the purchase itself and is never retried.
+async function createRollerDraft(config, token, payload, { correlationId, startedAt }) {
+  const attempts = [];
+  for (;;) {
+    const attemptStartedAt = Date.now();
+    let result = null;
+    let failure = null;
+    try {
+      result = await postRollerJson(config, token, '/bookings/draft', payload, {
+        timeoutMs: Math.max(1, startedAt + ROLLER_DRAFT_DEADLINE_MS - attemptStartedAt),
+      });
+    } catch (error) {
+      failure = error;
+    }
+    attempts.push({
+      elapsedMs: Date.now() - attemptStartedAt,
+      failure: failure ? rollerDraftFailureName(failure) : null,
+      status: result ? result.status : null,
+    });
+    if (!failure && result.status < 500) return { ...result, attempts };
+
+    const retry = attempts.length === 1 &&
+      Date.now() + ROLLER_DRAFT_RETRY_PAUSE_MS - startedAt <= ROLLER_DRAFT_RETRY_LATEST_START_MS;
+    console.warn(JSON.stringify({
+      attempts,
+      correlationId,
+      event: 'roller_draft_attempt_failed',
+      externalId: payload.externalId,
+      next: retry ? 'retry' : 'stop',
+    }));
+    if (!retry) {
+      if (failure) throw failure;
+      return { ...result, attempts };
+    }
+    await wait(ROLLER_DRAFT_RETRY_PAUSE_MS);
+  }
+}
+
+function rollerDraftFailureName(error) {
+  return ['AbortError', 'TimeoutError', 'TypeError'].includes(error?.name) ? error.name : 'Error';
 }
 
 async function publishNoPaymentDraft(config, token, rollerDraftUniqueId) {
@@ -5564,6 +5644,51 @@ async function reserveKioskDraftBinding(selection, request) {
   }
   request.reservedPaymentAttemptId = paymentAttemptId;
   return null;
+}
+
+// GH-570 (D0278): nothing can pay through an attempt's claims until its prepayment row exists, so a
+// draft step that fails before then, by answer or by error, releases them. On 2026-10-17 two ROLLER
+// 500s left K1 and K3 refusing every purchase from 13:30 to 14:07.
+async function releaseKioskClaimsOnFailure(request, correlationId, createDraft) {
+  let response;
+  try {
+    response = await createDraft();
+  } catch (error) {
+    await releaseKioskDraftBinding(request, correlationId);
+    throw error;
+  }
+  if (response.statusCode >= 400) await releaseKioskDraftBinding(request, correlationId);
+  return response;
+}
+
+// The partial-claim release above, guarded: an attempt whose prepayment row exists keeps its claims
+// until a D0220 outcome. A failed release is logged and leaves the claims as they were.
+async function releaseKioskDraftBinding(request, correlationId) {
+  const paymentAttemptId = request.reservedPaymentAttemptId;
+  if (!paymentAttemptId) return;
+  try {
+    const result = await executeStatement(
+      `UPDATE jumpyard.idempotency_records AS claim
+       SET status = 'released', result_ref = NULL, expires_at = now(), updated_at = now()
+       WHERE claim.operation = 'kiosk_terminal_binding'
+         AND claim.status = 'started'
+         AND claim.result_ref = :attemptId
+         AND NOT EXISTS (
+           SELECT 1 FROM jumpyard.prepayment_booking_drafts AS draft
+           WHERE draft.payment_attempt_id = :attemptId
+         )
+       RETURNING claim.idempotency_key`,
+      [stringParameter('attemptId', paymentAttemptId)],
+    );
+    console.warn(JSON.stringify({
+      correlationId,
+      event: 'kiosk_claims_released',
+      paymentAttemptId,
+      releasedCount: mappedRows(result).length,
+    }));
+  } catch (error) {
+    diagnostics.warn('booking.kiosk_claims_release_failed', error, correlationId);
+  }
 }
 
 // GH-488 (D0243): the active pairing of a proven installation, or null. The capability is checked

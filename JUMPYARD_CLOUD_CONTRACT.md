@@ -818,6 +818,7 @@ Draft rules:
 - The optional `safetyAttestation` (#458) is validated and recorded as described in Safety Before Payment; it is not sent to ROLLER and does not change the request hash.
 - For the phone buy-entry path, `items[]` may contain the core entry product plus selected mapped add-ons so the guest pays once for the combined basket.
 - Draft creation holds capacity through Roller's draft timer.
+- GH-570 (D0278): after a ROLLER 5xx or a lost connection on `POST /bookings/draft`, Cloud waits 1 s and tries once more with the same payload and `externalId`. It does so only when the first answer came within 12 s of the request. Every try is aborted 25 s after the request began, and a 4xx is never retried. The draft events record the tries as `rollerDraftAttempts`. A kiosk draft step that fails before its prepayment row exists releases the attempt's own installation and terminal reservations. See [#570](docs/gh-570-draft-retry.md).
 - Return the draft unique id, normalized costs, payment config from `GET /venues/me`, and the raw `paymentJwt` only in the API response.
 - Do not log, print, or persist the raw `paymentJwt`.
 - T0033 persists safe draft metadata to `jumpyard.prepayment_booking_drafts`, including `payment_jwt_present` and `payment_config_available` flags, but no raw `paymentJwt` value.
@@ -1065,6 +1066,7 @@ Rules:
 - Raw `paymentJwt` values remain response-only and are not persisted in Aurora.
 - The existing-booking kiosk card-present path uses the same installation proof, fixed profile and persistent terminal reservation as new bookings. Cloud also checks the original booking venue, re-quotes without terminal data, and verifies exact amount plus SEK evidence before returning a terminal-bound JWT. Its temporary `primary` compatibility follows the same rollout boundary.
 - The kiosk response returns a safe fresh payment-attempt id and terminal payment API metadata, never the terminal reference. An explicit retry creates a new draft and attempt instead of reusing ambiguous payment authority.
+- The ROLLER draft call follows the GH-570 retry and reservation release of `POST /v1/bookings/draft` (D0278).
 - The kiosk sends the sanitized terminal outcome, plus the provider transaction id with an approval (#481), to `POST /v1/bookings/draft/finalize`. A confirmed add-product payment publishes its prepayment state, while the existing lookup/webhook reconciliation publishes the already stored linked-booking row. The kiosk then resumes the original booking flow; it must not create a second check-in or Handoff session for the add-on draft.
 - The phone path continues to omit kiosk terminal fields and use the Roller ecommerce payment package unchanged.
 - Keep the guest inside the JumpYard PWA/check-in flow as much as possible by using the new booking/payment path instead of same-booking hosted payment link.
@@ -1088,7 +1090,7 @@ Decided with JumpYard's product owner on 2026-10-06: a completed check-in counts
   - It uses the internal redeem route with key `staff-redeem:<checkinSessionId>` and actor `system:auto-checkin` (display name `automatiskt`), so staff and the system can never redeem twice, and the #333 receipts apply. The staff board shows "Incheckad HH:MM · automatiskt".
   - A ROLLER outage (5xx or 429) throws so Lambda retries asynchronously, three attempts at most. A rejection or the last failure records `session_summary.autoCheckin { status: "needs_staff", reason, attempts }`. The staff app shows the group as "Incheckad" anyway (#547, D0265), and the monitor chat catches the failure.
   - #547 (D0265): a confirmed kiosk add-on triggers it too (`kiosk_add_on_confirmed`), from the Booking Lambda's add-on confirmation or from the board's linked add-on refresh when ROLLER confirms it after the window.
-  - #563 (D0278): when the webhook or a lookup confirms the add-on first, the paid-booking signal (`jumpyard.phone-email-marketing`) and the reconciliation worker's early stop update the linked session from the confirmed draft (`linkedAddOnSyncSource: confirmed_add_on_draft`) and trigger it, with no staff app open and no ROLLER call. The board refresh stays the safety net.
+  - #563 (D0279): when the webhook or a lookup confirms the add-on first, the paid-booking signal (`jumpyard.phone-email-marketing`) and the reconciliation worker's early stop update the linked session from the confirmed draft (`linkedAddOnSyncSource: confirmed_add_on_draft`) and trigger it, with no staff app open and no ROLLER call. The board refresh stays the safety net.
   - Redeem write gates and the emergency stop block it as they block staff. `AUTO_CHECKIN_REDEEM=off` turns it off.
 - **Phone.** The phone shows the number, not the QR code. The `JY_HANDOFF:<code>:<sessionId>` payload stays valid for the staff app and the kiosk slip.
 - **Phone purchases** offer only sessions that start within the next two hours, so every phone purchase falls inside the window.

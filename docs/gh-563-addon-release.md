@@ -1,6 +1,6 @@
 # Issue #563: a kiosk add-on checks its group in without the staff app
 
-Issue [#563](https://github.com/wrlds-creations/jumpyard-check-in/issues/563), decision D0278.
+Issue [#563](https://github.com/wrlds-creations/jumpyard-check-in/issues/563), decision D0279.
 
 ## What happened
 
@@ -17,7 +17,7 @@ The first case, read-only from Park:
 - The webhook updates the draft and the link, but its database role has no grant on check-in sessions.
 - `refreshLinkedAddOnEffectiveSyncState` in the Session Lambda corrects the session, but only on staff reads: the sessions list, the ready list and the detail.
 
-## Change (D0278)
+## Change (D0279)
 
 The Booking Lambda gets `releaseConfirmedKioskAddOn(rollerUniqueId, correlationId, trigger)`. In one statement it:
 1. reads the add-on's draft only if it is a `card_present`, `add_product` draft with an add-on group, `approved` or `reconciled`, and `confirmed`;
