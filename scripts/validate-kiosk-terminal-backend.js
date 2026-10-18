@@ -206,7 +206,9 @@ assert.match(
   bookingSource,
   /postRollerJson\(config, token, '\/bookings\/draft\/costs', kioskQuotePayload\)/,
 );
-assert.match(bookingSource, /postRollerJson\(config, token, '\/bookings\/draft', payload\)/);
+// GH-570: both draft handlers send the terminal payload through the one draft call that may retry once.
+assert.match(bookingSource, /postRollerJson\(config, token, '\/bookings\/draft', payload, \{/);
+assert.equal(bookingSource.match(/await createRollerDraft\(config, token, payload, \{ correlationId, startedAt \}\)/g)?.length, 2);
 assert.match(bookingSource, /payment_attempt_status = 'reconciled'/);
 assert.match(bookingSource, /WHEN payment_attempt_status = 'approved' AND :outcome <> 'approved'/);
 assert.match(bookingSource, /booking\.kiosk_terminal_reconciled/);
