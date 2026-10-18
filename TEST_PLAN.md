@@ -1,5 +1,17 @@
 # Test Plan
 
+## A kiosk add-on checks its group in without the staff app (#563)
+
+Run `npm run validate:gh563-addon-release` (part of `npm run validate`). It drives the real Lambdas with a scripted Aurora, Lambda and ROLLER and checks that:
+- the paid-booking signal releases a kiosk add-on's group and starts its automatic check-in (`kiosk_add_on_confirmed`), with no ROLLER call;
+- an unchanged, failing or missing release starts nothing and never fails the signal;
+- a worker that finds its add-on confirmed by the webhook, at its first check or between two readbacks, releases the group with no readback or publish;
+- the release keeps the worker's guards and effective state, reads neither `booking_links` nor ROLLER, and the board refresh stays.
+
+With `GH563_DATABASE_TEST=true` (CI's "Staff handout database" job) it runs the webhook's draft reconciliation, the paid-booking signal and the Redeem Lambda's automatic check-in against PostgreSQL with each Lambda's own role. A webhook-confirmed add-on moves its `ready_for_staff` session to `confirmed` and `redeemed` with no staff read, and a replayed signal admits nobody twice. `needs_staff` and a pending sibling stay, and the worker's own confirmation behaves as before.
+
+Also run `validate:gh547-ready-is-checked-in`, `validate:gh456-auto-checkin`, `validate:gh289-handoff-linked-addons`, `validate:gh285-kiosk-addon-terminal`, `validate:kiosk-payment-reconciliation`, `validate:gh458-safety-before-payment`, `validate:gh346-webhook-retry` and `validate:t0195-least-privilege`. The Park plan may change only the Booking Lambda code. After release, follow [the notes](docs/gh-563-addon-release.md#after-release).
+
 ## Up to 50 jumpers per group, add-ons not tied to them (#549, kiosk #223)
 
 Run `npm run validate:gh549-group-size` (part of `npm run validate`). It drives the real Redeem and Session Lambdas with a scripted Aurora and ROLLER:

@@ -29,6 +29,7 @@ On 2026-10-15 Love decided that the guest's last screen on the phone or kiosk me
   - The handout write path is unchanged. Cloud still refuses a handout with `booking_sync_pending` until ROLLER confirms, so a provisional id is never confirmed.
 - **Kiosk add-on check-in.** `confirmKioskAddProductReconciliation` returns the sessions it updated and calls `requestAutoCheckin(…, 'kiosk_add_on_confirmed')`, as new kiosk and phone purchases do.
   - An add-on that ROLLER confirms after the window, through the webhook, is picked up by the board's `refreshLinkedAddOnEffectiveSyncState`. It now admits the sessions it moves to `confirmed`, with the same trigger.
+  - Since #563 (D0278), the Booking Lambda releases such a group from the paid-booking signal, without a staff read; the board refresh stays the safety net.
   - Evidence for the gap: Love's socks test at 13:04 on 2026-10-15. Session `jycs_mv9floeu_59c30243` stayed `ready_for_staff`.
 
 ## Calls

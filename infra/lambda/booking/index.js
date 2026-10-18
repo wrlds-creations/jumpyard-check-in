@@ -268,6 +268,8 @@ exports.handler = async (event) => {
       // GH-458: lookup and webhook send this paid-booking signal (named for #437) for every
       // settled booking; it also confirms a phone provisional handoff. Never throws.
       await confirmPhoneProvisionalHandoff(event.detail, correlationId);
+      // GH-563: it also releases the group of a kiosk add-on that lookup or the webhook confirmed.
+      await releaseConfirmedKioskAddOn(event.detail?.rollerUniqueId, correlationId, 'paid_booking_signal');
       return await handlePhoneEmailMarketing(event.detail, correlationId);
     }
 
@@ -1486,6 +1488,7 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
   }
   if (existing.booking_confirmation_status === 'confirmed' || existing.status === 'published') {
     if (existing.flow_type === 'add_product') {
+      await releaseConfirmedKioskAddOn(existing.roller_draft_unique_id, correlationId, 'reconciliation_worker');
       return { status: publicKioskPaymentStatus(existing).status };
     }
     if (isKioskHandoffAuthoritativelyAttached(existing)) return { status: 'confirmed' };
@@ -1538,6 +1541,8 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
     const current = await findKioskPrepaymentAttempt(request);
     if (current?.booking_confirmation_status === 'confirmed' || current?.status === 'published') {
       if (current.flow_type === 'add_product') {
+        // GH-563: the webhook confirmed it first, so the confirmation below never runs.
+        await releaseConfirmedKioskAddOn(current.roller_draft_unique_id, correlationId, 'reconciliation_worker');
         return { status: publicKioskPaymentStatus(current).status };
       }
       if (isKioskHandoffAuthoritativelyAttached(current)) return { status: 'confirmed' };
@@ -2105,6 +2110,71 @@ async function confirmKioskAddProductReconciliation(request, readback) {
       request.correlationId);
   }
   return confirmed;
+}
+
+// GH-563: when the webhook (or a lookup) confirms a kiosk add-on before the worker reads it back,
+// the worker stops without the confirmation above, and the group waited for a staff list's board
+// refresh. The paid-booking signal and the worker's early stop release it here from the confirmed
+// draft, with the same effective state, and admit the group. Only a changed session is admitted, so
+// the two never both start it. Reads only Cloud's own rows (no ROLLER call) and never throws.
+async function releaseConfirmedKioskAddOn(rollerUniqueId, correlationId, trigger) {
+  const uniqueId = stringOrNull(rollerUniqueId);
+  if (!uniqueId || uniqueId.length > 128) return { status: 'ignored' };
+  try {
+    const released = firstMappedRow(await executeStatement(
+      `WITH confirmed_draft AS (
+         SELECT
+           draft.prepayment_draft_id,
+           draft.flow_type,
+           draft.original_roller_unique_id,
+           draft.booking_date,
+           draft.payment_attempt_status,
+           draft.booking_confirmation_status
+         FROM jumpyard.prepayment_booking_drafts AS draft
+         WHERE draft.roller_draft_unique_id = :rollerUniqueId
+           AND draft.payment_channel = 'card_present'
+           AND draft.flow_type = 'add_product'
+           AND draft.add_on_group_id IS NOT NULL
+           AND draft.payment_attempt_status IN ('approved', 'reconciled')
+           AND draft.booking_confirmation_status = 'confirmed'
+       ), ${linkedAddOnEffectiveSyncCte('confirmed_draft')}, updated_session AS (
+         UPDATE jumpyard.checkin_sessions AS session
+         SET updated_at = now(),
+             session_summary = session.session_summary || jsonb_build_object(
+               'bookingSyncStatus', sync.booking_sync_status,
+               'linkedAddOnSyncSource', 'confirmed_add_on_draft'
+             )
+         FROM effective_sync AS sync
+         WHERE session.roller_unique_id = sync.original_roller_unique_id
+           AND session.visit_date IS NOT DISTINCT FROM sync.booking_date
+           AND session.status IN ('guest_in_progress', 'ready_for_staff', 'staff_in_progress')
+           AND COALESCE(session.session_summary ->> 'bookingSyncStatus', 'confirmed')
+             IS DISTINCT FROM sync.booking_sync_status
+         RETURNING session.checkin_session_id, sync.booking_sync_status
+       )
+       SELECT
+         (SELECT count(*) FROM updated_session)::int AS updated_session_count,
+         (SELECT jsonb_agg(checkin_session_id) FROM updated_session
+           WHERE booking_sync_status = 'confirmed')::text AS confirmed_session_ids`,
+      [stringParameter('rollerUniqueId', uniqueId)],
+    ));
+    const updatedCount = Number(released?.updated_session_count ?? 0);
+    if (updatedCount === 0) return { status: 'unchanged' };
+    const confirmedSessionIds = parseJsonArraySafe(released?.confirmed_session_ids);
+    await requestAutoCheckin(confirmedSessionIds, 'kiosk_add_on_confirmed', correlationId);
+    await writeBookingEventLog({
+      correlationId,
+      eventType: 'booking.kiosk_add_on_released',
+      payload: { confirmedSessionCount: confirmedSessionIds.length, sessionCount: updatedCount, trigger },
+      subjectRef: uniqueId,
+      summary: 'A kiosk add-on confirmed outside the reconciliation worker updated its check-in session.',
+    });
+    return { status: confirmedSessionIds.length > 0 ? 'released' : 'updated' };
+  } catch {
+    // The board refresh on the next staff list read stays the safety net.
+    console.error(JSON.stringify({ event: 'booking.kiosk_add_on_release_failed', correlationId, trigger }));
+    return { status: 'failed' };
+  }
 }
 
 async function persistKioskReconciliationBookingSnapshot(existing, readback) {
