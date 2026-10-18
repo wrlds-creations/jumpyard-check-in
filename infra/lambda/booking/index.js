@@ -4001,7 +4001,7 @@ function getContactLookupSettings() {
 }
 
 // GH-473/D0234: a four-field contact is used exactly as submitted. An email-first contact is resolved
-// through Klaviyo; only the outcome class and latency are logged, never a contact value.
+// through Klaviyo; only the outcome class, attempts (GH-561) and latency are logged, never a contact value.
 async function resolveDraftContact(request) {
   if (contactLookup.draftContactMode(request.customer) !== 'email_first') {
     return { ok: true, customer: request.customer, mode: 'full', outcome: null };
@@ -4017,6 +4017,7 @@ async function resolveDraftContact(request) {
   console.log(JSON.stringify({
     event: 'booking.contact_lookup',
     outcome: contactLookup.describeOutcome(result),
+    attempts: result.attempts,
     latencyMs: result.latencyMs,
     ...diagnostics.ids(),
   }));
