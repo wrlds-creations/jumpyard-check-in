@@ -13,6 +13,7 @@
 - Repository: wrlds-creations/jumpyard-check-in; shared JumpYard Next Project #5.
 - Phone/staff-admin and required Cloud/API scope. Kiosk and JumpyBoard remain separate except approved interface contracts.
 - Roller is authoritative; Aurora is the operational cache. Frontends use JumpYard Cloud, never direct Roller REST.
+- Cloud never checks in a kalas; ROLLER's API refuses party packages (D0281).
 - Technical park-test is Nacka pilot production. Preserve its venue/date gates and current full-flow window.
 - Main merges build an immutable artifact only. Promotion/rollback select the exact successful run/SHA, require reviewed plan and protected approval, and never rebuild.
 - Workflow cleanup authorizes no cloud, Roller, payment, messaging, secret, lifecycle or product mutation. Read Security And Operational Constraints for those tasks.
@@ -54,7 +55,6 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 
 ## Durable Architecture Facts
 
-- Frontend apps must not call Roller directly in the real production architecture.
 - [Releases](REPO_CURRENT_STATE.md); [contract](config/production-domains.json). Motorola-proven purchase/PIN/redemption preserve venue checks, staff state and item keys.
 - Roller remains the source of truth for bookings, products, payments, and ticket redemption.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, session status, idempotency, audit events, and guest messaging state.

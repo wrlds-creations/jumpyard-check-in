@@ -4,18 +4,21 @@ import { FlowScreen } from '@/components/FlowTransition';
 import { CloudLookupError, lookupBooking, type LookupIssue } from '@/flow/cloudClient';
 import { useTranslation } from '@/context/LanguageContext';
 import { JumpyardIcon } from '@/components/JumpyardIcon';
+import { KalasWelcome } from '@/components/KalasWelcome';
 import type { Booking } from '@/flow/types';
 
 interface BookingLookupProps {
     onSuccess: (booking: Booking) => void | Promise<void>;
     onBack: () => void;
+    /** GH-571: a kalas opened through a link arrives here already known. */
+    initialIssue?: LookupIssue | null;
 }
 
-export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
+export const BookingLookup = ({ onSuccess, onBack, initialIssue = null }: BookingLookupProps) => {
     const { t } = useTranslation();
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<LookupIssue | null>(null);
+    const [error, setError] = useState<LookupIssue | null>(initialIssue);
     const requestRef = useRef<symbol | null>(null);
 
     useEffect(() => () => { requestRef.current = null; }, []);
@@ -40,6 +43,9 @@ export const BookingLookup = ({ onSuccess }: BookingLookupProps) => {
             setLoading(false);
         }
     };
+
+    // GH-571 (D0281): a kalas is never checked in here; the guest gets the glad kalas screen and goes to the staff.
+    if (error === 'party_package') return <KalasWelcome onDone={onBack} />;
 
     return (
         <FlowScreen

@@ -2176,6 +2176,17 @@ function evaluateEligibility(booking, request) {
     };
   }
 
+  // #571 (D0281): ROLLER's API never redeems a party package, so a kalas is not checked in here at all. The
+  // phone and the kiosk show the kalas guest a glad "ask the staff" screen, and kassan checks the kalas in.
+  if (allItems.some(isPartyPackageItem)) {
+    return {
+      canCheckIn: false,
+      reason: 'party_package',
+      requiresStaff: true,
+      redeemableTicketCount,
+    };
+  }
+
   if (isUnsettledPaymentState(payment.state)) {
     return {
       canCheckIn: false,
@@ -2203,6 +2214,12 @@ function evaluateEligibility(booking, request) {
     redeemableTicketCount,
     paymentState: payment.state,
   };
+}
+
+// #571: ROLLER marks a kalas as a party package; its "Antal" variant carries the mark only as the catalog's
+// parentType, which the item's productType already falls back to (local and live lookup alike).
+function isPartyPackageItem(item) {
+  return String(item?.productType ?? '').toLowerCase().replace(/[^a-z0-9]/g, '') === 'partypackage';
 }
 
 function buildRollerUrl(baseUrl, endpointPath) {

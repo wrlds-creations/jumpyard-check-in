@@ -101,6 +101,10 @@ const sv = {
     serviceUnavailable: 'Vi kunde inte nå bokningssystemet.',
     serviceUnavailableDesc: 'Försök igen eller hämta personal.',
     lookupFailed: 'Något gick fel vid sökningen.',
+    // GH-571 (D0281): a kalas is checked in by staff, never on the phone (Love, 2026-10-18).
+    kalasTitle: 'Hej kalasgäst!',
+    kalasBody: 'Fråga personalen, så hjälper de dig vidare.',
+    kalasDone: 'Klar',
     scanning: 'Skannar…',
   },
   buy: {
@@ -622,6 +626,9 @@ const en: typeof sv = {
     serviceUnavailable: "We couldn't reach the booking system.",
     serviceUnavailableDesc: 'Try again or call staff.',
     lookupFailed: 'Something went wrong during lookup.',
+    kalasTitle: 'Hi, party guest!',
+    kalasBody: "Ask our staff and they'll help you from here.",
+    kalasDone: 'Done',
     scanning: 'Scanning…',
   },
   buy: {

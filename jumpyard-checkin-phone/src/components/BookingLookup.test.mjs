@@ -15,7 +15,9 @@ function find(tree, id) {
   for (const child of [tree.props?.children].flat(Infinity)) { const result = find(child, id); if (result) return result; }
   return null;
 }
-function harness(lookupBooking, onSuccess) {
+class FakeLookupError extends Error { constructor(reason) { super(reason); this.reason = reason; } }
+function KalasWelcome() { return null; }
+function harness(lookupBooking, onSuccess, options = {}) {
   const slots = []; let cursor = 0;
   const copy = new Proxy({}, { get: (_, key) => key });
   const react = { ...require('react'),
@@ -28,14 +30,15 @@ function harness(lookupBooking, onSuccess) {
     if (id === 'react') return react;
     if (id === '@/components/FlowTransition') return { FlowScreen: 'div' };
     if (id === '@/components/JumpyardIcon') return { JumpyardIcon: 'span' };
+    if (id === '@/components/KalasWelcome') return { KalasWelcome };
     if (id === '@/context/LanguageContext') return { useTranslation: () => ({ t: { lookup: copy, common: copy } }) };
-    if (id === '@/flow/cloudClient') return { lookupBooking, CloudLookupError: class extends Error {} };
+    if (id === '@/flow/cloudClient') return { lookupBooking, CloudLookupError: FakeLookupError };
     return require(id);
   }, exports);
-  const render = () => { cursor = 0; return exports.BookingLookup({ onSuccess, onBack() {} }); };
+  const render = () => { cursor = 0; return exports.BookingLookup({ onSuccess, onBack: options.onBack ?? (() => {}), initialIssue: options.initialIssue }); };
   const input = () => find(render(), 'booking-lookup-input');
   const button = () => find(render(), 'booking-lookup-submit');
-  return { input, button, enter(value) { input().props.onChange({ target: { value } }); }, unmount() { slots.forEach(slot => slot.cleanup?.()); } };
+  return { render, input, button, enter(value) { input().props.onChange({ target: { value } }); }, unmount() { slots.forEach(slot => slot.cleanup?.()); } };
 }
 
 test('lookup remains busy through async session routing and successful handoff without a second actionable Search frame', async () => {
@@ -81,4 +84,24 @@ test('leaving lookup before the read resolves cannot hand an old result to the p
   h.enter('DEMO'); const operation = h.button().props.onClick();
   h.unmount(); lookup.resolve({ id: 'DEMO' }); await operation;
   assert.equal(routed, 0);
+});
+
+test('GH-571: a kalas is never checked in; lookup shows the glad kalas screen, and Klar goes back', async () => {
+  let routed = 0, back = 0;
+  const h = harness(async () => { throw new FakeLookupError('party_package'); }, () => { routed++; }, { onBack() { back++; } });
+  h.enter('177249113'); await h.button().props.onClick();
+  const screen = h.render();
+  assert.equal(screen.type, KalasWelcome, 'the glad kalas screen replaces the lookup form');
+  assert.equal(routed, 0, 'no check-in starts');
+  screen.props.onDone();
+  assert.equal(back, 1);
+  h.unmount();
+  // A kalas link arrives with the issue already known (page.tsx passes it on).
+  const linked = harness(async () => ({ id: 'X' }), () => {}, { initialIssue: 'party_package' });
+  assert.equal(linked.render().type, KalasWelcome);
+  // Other lookup issues keep the small message under the form.
+  const other = harness(async () => { throw new FakeLookupError('wrong_date'); }, () => {});
+  other.enter('X'); await other.button().props.onClick();
+  assert.notEqual(other.render().type, KalasWelcome);
+  assert.equal(other.button().props.disabled, false);
 });

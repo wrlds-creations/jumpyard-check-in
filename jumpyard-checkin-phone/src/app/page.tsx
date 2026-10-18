@@ -1639,6 +1639,7 @@ function CheckInFlow() {
             .catch(error => {
                 if (!alive) return;
                 setSessionStartError(error instanceof CloudSessionError ? error.reason : 'session_failed');
+                // GH-571 (D0281): a kalas link shows the glad kalas screen (the lookup step renders it).
                 // GH-456 (D0230): a link opened outside the window shows its booking and when to come back.
                 if (error instanceof CloudSessionError && error.booking && isCheckInWindowIssue(error.reason)) {
                     const bookingAddons = error.booking.existingAddons ?? [];
@@ -1820,7 +1821,8 @@ function CheckInFlow() {
                         <BookingLookup
                             key="park-lookup"
                             onSuccess={handleExistingBookingFound}
-                            onBack={() => { setState('KIOSK_CHOICE'); }}
+                            onBack={() => { setSessionStartError(null); setState('KIOSK_CHOICE'); }}
+                            initialIssue={sessionStartError === 'party_package' ? 'party_package' : null}
                         />
                     )}
 

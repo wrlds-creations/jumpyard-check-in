@@ -189,6 +189,8 @@ function getSessionStartErrorText(error: SessionIssue, t: ReturnType<typeof useT
     if (error === 'payment_required') return t.booking.sessionPaymentRequired;
     if (error === 'wrong_date') return t.booking.sessionWrongDate;
     if (error === 'already_redeemed') return t.booking.sessionAlreadyRedeemed;
+    // GH-571 (D0281): Cloud found a kalas only at the start; staff check it in.
+    if (error === 'party_package') return `${t.lookup.kalasTitle} ${t.lookup.kalasBody}`;
     if (error === 'booking_not_fresh') return t.booking.sessionNotFresh;
     return t.booking.sessionStartFailed;
 }

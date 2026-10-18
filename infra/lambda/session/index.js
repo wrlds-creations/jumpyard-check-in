@@ -4073,6 +4073,12 @@ function evaluateStartContext(context, request) {
     return blocked('booking_not_fresh', 'The local booking snapshot is not fresh enough to start check-in.', selectedTicketIds, visitDate);
   }
 
+  // #571 (D0281): a kalas (ROLLER party package) is never checked in here, as ROLLER's API refuses to redeem it.
+  // Kassan checks it in; the phone and the kiosk show the kalas guest a glad "ask the staff" screen.
+  if (context.tickets.some(isPartyPackageTicket)) {
+    return blocked('party_package', 'A kalas is checked in at kassan, not on the phone or kiosk.', selectedTicketIds, visitDate);
+  }
+
   if (!isPaymentComplete(booking)) {
     return blocked('payment_required', 'The booking is not fully paid and cannot start check-in yet.', selectedTicketIds, visitDate);
   }
@@ -4164,6 +4170,13 @@ function getTicketRedeemEligibility(ticket) {
 function productKey(value) {
   const normalized = String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '').trim();
   return normalized || null;
+}
+
+// #571: the kalas mark, from the ticket's own types or the catalog (the "Antal" variant has it as parentType only).
+function isPartyPackageTicket(ticket) {
+  return [ticket.ticketProductType, ticket.ticketProductSubType, ticket.itemProductType, ticket.itemProductSubType,
+    ticket.itemParentType, ticket.productCatalogType, ticket.productCatalogSubType, ticket.productCatalogParentType]
+    .some((value) => productKey(value) === 'partypackage');
 }
 
 function isT0166LiveRedeemSmokeTicketAllowed(ticketId) {

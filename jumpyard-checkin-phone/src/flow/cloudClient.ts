@@ -11,6 +11,8 @@ export type LookupIssue =
   | 'payment_required'
   | 'wrong_date'
   | 'no_redeemable_tickets'
+  /** GH-571 (D0281): a kalas, which staff check in at kassan; the guest sees the glad kalas screen. */
+  | 'party_package'
   | 'lookup_failed'
   | 'network_error';
 
@@ -19,6 +21,7 @@ export type SessionIssue =
   | 'payment_required'
   | 'wrong_date'
   | 'no_redeemable_tickets'
+  | 'party_package'
   | 'already_redeemed'
   | 'booking_not_active'
   | 'booking_not_fresh'
@@ -73,7 +76,7 @@ interface CloudLookupResponse {
   booking?: CloudBooking;
   eligibility?: {
     canCheckIn: boolean;
-    reason: 'ready' | 'payment_required' | 'wrong_date' | 'no_redeemable_tickets';
+    reason: 'ready' | 'payment_required' | 'wrong_date' | 'no_redeemable_tickets' | 'party_package';
     amountOwing?: number;
     paymentState?: string;
   };
@@ -1117,6 +1120,7 @@ function isSessionIssue(value?: string): value is SessionIssue {
     value === 'payment_required' ||
     value === 'wrong_date' ||
     value === 'no_redeemable_tickets' ||
+    value === 'party_package' ||
     value === 'already_redeemed' ||
     value === 'booking_not_active' ||
     value === 'booking_not_fresh' ||

@@ -64,6 +64,15 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
           FROM jumpyard.staff_handout_operations op CROSS JOIN LATERAL jsonb_array_elements(op.items) item
           WHERE op.roller_unique_id = b.roller_unique_id AND op.visit_date = b.booking_date AND op.status = 'completed'
           GROUP BY item ->> 'id') totals), '{}'::jsonb)::text AS collected_items,
+        -- GH-571 (D0281): a kalas (ROLLER party package) is marked from the morning, paid or not. The "Antal"
+        -- variant carries the mark only as the catalog's parentType.
+        (SELECT string_agg(DISTINCT COALESCE(i.parent_product_name, i.product_name, ''), '|')
+          FROM jumpyard.roller_booking_items i
+          LEFT JOIN LATERAL (SELECT pc.summary FROM jumpyard.product_catalog_cache pc WHERE pc.roller_env = b.roller_env
+            AND pc.summary ->> 'id' = i.product_id ORDER BY pc.fetched_at DESC LIMIT 1) kalas_catalog ON true
+          WHERE i.roller_unique_id = b.roller_unique_id AND 'partypackage' IN (
+            lower(kalas_catalog.summary ->> 'productType'), lower(kalas_catalog.summary ->> 'parentType'),
+            lower(i.item_summary ->> 'productType'), lower(i.item_summary ->> 'parentType'))) AS kalas_products,
         (cs.session_summary -> 'staffActor')::text AS checked_in_by,
         (cs.session_summary -> 'autoCheckin')::text AS auto_checkin,
         (SELECT jsonb_build_object('checkinSessionId', done.checkin_session_id,
@@ -131,12 +140,20 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
         cafeRemaining: items.reduce((sum, item) => sum + Math.max(0, item.quantity - (collected[item.id] || 0)), 0),
         cafeSession: parse(row.cafe_session, null),
         autoCheckin: parse(row.auto_checkin, null),
+        kalas: kalasOf(row.kalas_products),
         checkedInBy: parse(row.checked_in_by, null), claims: parse(row.claims, []) };
     }),
       nextCursor: rows.length > 100 ? rows[99].board_cursor : null,
       operatingDay: day };
   }
   return { list };
+}
+
+// GH-571: "MIDI 1 timme och 40 minuter" -> { package: 'MIDI' }; a kalas without MINI/MIDI/MAXI in its name is still a kalas.
+function kalasOf(products) {
+  if (typeof products !== 'string') return null;
+  const size = products.match(/(?:^|\|)\s*(MINI|MIDI|MAXI)\b/i)?.[1];
+  return { package: size ? size.toUpperCase() : null };
 }
 function parse(value, fallback) {
   try { return JSON.parse(value) || fallback; } catch { return fallback; }
