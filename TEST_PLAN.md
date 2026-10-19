@@ -1,5 +1,17 @@
 # Test Plan
 
+## A kiosk group keeps its bands until its tickets are attached (#582)
+
+Run `npm run validate:gh345-staff-handout` (part of `npm run validate`). With `GH345_PSQL` (CI's "Staff handout database" job), `validate-gh345-handout-api.test.js` puts a kiosk group in group 0007's state on PostgreSQL: ROLLER's paid booking, items and tickets stored, the draft confirmed, and the session `pending` with no tickets. Using the real board SQL, the Session Lambda's detail and the Redeem Lambda's handout route, it checks that:
+- the board and the detail list the draft's bands and coffee once, also with the booking row unpaid, and Cloud refuses a handout with `booking_sync_pending`;
+- once the tickets are attached, ROLLER's lines show the same counts and band colour;
+- the press kept from that minute is confirmed on ROLLER's lines and counted, at the café and then at the entrance;
+- a later add-on that makes the group `pending` keeps ROLLER's lines and their counts.
+
+On origin/main `197b503` the subtest fails with 0 admissions. `staffExperience.test.mjs` (same script) confirms a press on the draft's lines on ROLLER's lines, using Cloud's own line builders.
+
+Also run `validate:gh547-ready-is-checked-in` and `validate:gh253-handoff-sync-products`. The Park plan may change only the Session Lambda code. After release, follow [the notes](docs/gh-582-bands-stay.md#after-release).
+
 ## ROLLER refusals are kept, and a kalas is never checked in (#571, kiosk #244)
 
 Run `npm run validate:gh571-roller-refusal` (part of `npm run validate`). It drives the real Lambdas with a scripted Aurora and ROLLER and checks that:

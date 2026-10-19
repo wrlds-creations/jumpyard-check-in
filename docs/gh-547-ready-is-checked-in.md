@@ -25,6 +25,7 @@ On 2026-10-15 Love decided that the guest's last screen on the phone or kiosk me
 
 - **Provisional lines.** `provisionalManifest` (`shared/staff-handout.js`, byte-identical in the session and redeem packages) turns a paid draft's `items_summary` into the same handout lines as `buildManifest`. The lines get synthetic ids (`<booking>:provisional:<n>:…`) and `provisional: true`. Cloud's own purchase types (`entry`, `family`, `deal`) count as admissions on these lines only.
   - **Board** (`staff-board.js`): when a session's `bookingSyncStatus` is not `confirmed`, two drafts add their lines. One is the paid new-booking draft of a booking that has no ROLLER items. The others are approved kiosk add-on drafts that are still `pending` or `needs_staff`. `counts.admission`, `bandColours`, `cafeQuantity` and `cafeRemaining` include them.
+    - Since #582 (D0282), the new-booking draft also stands in while the session has no ROLLER tickets yet, and that booking's own ROLLER lines wait meanwhile.
   - **Detail**: the same lines join `handout.items` (collected 0) until the booking is confirmed. A kiosk purchase past the 75 s window (`needs_staff`) lists its draft too.
   - The handout write path is unchanged. Cloud still refuses a handout with `booking_sync_pending` until ROLLER confirms, so a provisional id is never confirmed.
 - **Kiosk add-on check-in.** `confirmKioskAddProductReconciliation` returns the sessions it updated and calls `requestAutoCheckin(…, 'kiosk_add_on_confirmed')`, as new kiosk and phone purchases do.

@@ -45,11 +45,13 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
           LEFT JOIN LATERAL (SELECT pc.summary FROM jumpyard.product_catalog_cache pc WHERE pc.roller_env = purchased.roller_env
             AND pc.summary ->> 'id' = i.product_id ORDER BY pc.fetched_at DESC LIMIT 1) catalog ON true
           WHERE purchased.venue_id = :venueId AND ${paidBookingSql('purchased')}), '[]'::jsonb)::text AS handout_catalog,
-        -- GH-547 (D0265): until ROLLER confirms the purchase, the goods of its paid draft stand in.
+        -- GH-547 (D0265): until ROLLER confirms the purchase, the goods of its paid draft stand in. GH-582: also when
+        -- ROLLER's items arrive before the session gets the booking's tickets (a webhook retry, about a minute).
         CASE WHEN COALESCE(cs.session_summary ->> 'bookingSyncStatus', 'confirmed') <> 'confirmed' THEN jsonb_build_array(
           (SELECT jsonb_build_object('rollerUniqueId', d.roller_draft_unique_id, 'items', d.items_summary)
             FROM jumpyard.prepayment_booking_drafts d WHERE d.roller_draft_unique_id = b.roller_unique_id
-              AND NOT EXISTS (SELECT 1 FROM jumpyard.roller_booking_items i WHERE i.roller_unique_id = b.roller_unique_id))) ||
+              AND (cs.selected_ticket_ids = '[]'::jsonb
+                OR NOT EXISTS (SELECT 1 FROM jumpyard.roller_booking_items i WHERE i.roller_unique_id = b.roller_unique_id)))) ||
           COALESCE((SELECT jsonb_agg(jsonb_build_object('rollerUniqueId', d.roller_draft_unique_id, 'items', d.items_summary)
             ORDER BY d.created_at) FROM jumpyard.booking_links link
             JOIN jumpyard.prepayment_booking_drafts d ON d.roller_draft_unique_id = link.linked_roller_unique_id
@@ -126,8 +128,11 @@ function createStaffBoard({ executeStatement, mappedRows, stringParameter, mapSe
       p('venueId', venueId), p('bookingId', bookingId)]);
     const rows = mappedRows(result);
     return { sessions: rows.slice(0, 100).map((row) => {
-      const manifest = [...buildManifest(parse(row.handout_catalog, []), row.visit_date),
-        ...provisionalManifest(parse(row.provisional_catalog, []), row.visit_date)];
+      const drafts = parse(row.provisional_catalog, []);
+      // GH-582: a booking whose paid draft stands in lists the draft's goods only, never both.
+      const standIn = new Set(drafts.map((draft) => draft?.rollerUniqueId));
+      const manifest = [...buildManifest(parse(row.handout_catalog, []), row.visit_date)
+        .filter((item) => !standIn.has(item.sourceBookingId)), ...provisionalManifest(drafts, row.visit_date)];
       const items = manifest.filter((item) => item.area === 'cafe');
       const admission = manifest.filter((item) => item.kind === 'admission');
       const collected = parse(row.collected_items, {});

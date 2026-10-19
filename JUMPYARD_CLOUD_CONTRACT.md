@@ -590,6 +590,8 @@ Under current staff venue/read authorization, #345 also returns completed sessio
 
 #547 (D0265): until ROLLER confirms a paid purchase (`bookingSyncStatus` `pending` or `needs_staff`), the detail's `handout.items` and the board's counts, `bandColours` and café totals also include the paid draft's goods as lines with `provisional: true` and synthetic ids. They are never accepted in a handout selection: the handout route answers `booking_sync_pending` until the booking is confirmed. [Current handout contract](docs/gh-345-staff-handout.md#api-changes).
 
+#582 (D0282): the paid draft keeps standing in until the session has ROLLER's tickets, also when ROLLER's items have already reached Aurora. While it stands in, the board and the detail leave out that booking's own ROLLER lines, so nothing is counted twice.
+
 Returns detail for one ready-for-staff session.
 
 Implemented in T0026 for dev and protected by T0047 staff auth.
