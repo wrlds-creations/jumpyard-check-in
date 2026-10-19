@@ -31,7 +31,7 @@ What guests and staff saw after step 3:
 1. **Matching.** ROLLER matches the draft customer on email only. A new email with an existing guest's phone creates a new guest and leaves the existing one untouched.
 2. **Overwrite, not a new customer.** With the same email, ROLLER reuses the existing guest. It overwrites first name, last name and phone with whatever is sent, at draft creation, before and without payment. Email marketing consent is unchanged when the choice is omitted.
 3. **Klaviyo follows.** The ROLLER → SmartSegments → Klaviyo sync pushes the changed name and phone to the existing Klaviyo profile within minutes, and pushes them back after a later correction.
-4. **Required fields.** ROLLER requires all four fields to be non-empty. Omitted names (400) and an omitted phone (409, both on 2026-09-22 and 2026-09-29) are rejected, as is an empty phone (409, 2026-09-29).
+4. **Required fields.** ROLLER requires all four fields to be non-empty. Omitted names (400) and an omitted phone (409, both on 2026-09-22 and 2026-09-29) are rejected, as is an empty phone (409, 2026-09-29). A last name of one space counts as empty: a Live price check on 2026-10-19 (#579, D0282; `POST /bookings/draft/costs` with the synthetic quote customer) returned `400 {"customer.LastName":["The LastName field is required."]}` and created nothing.
 5. **No guest lookup in ROLLER.** ROLLER's public specification (`rollersoftware/public-api-documentation`, SEP release 2026-09-29) offers:
    - `GET`/`PUT /guests/{guestId}`, which needs the id;
    - a booking keyword search (fuzzy, at most the 100 most recent bookings, no exact email or guest-id filter);
