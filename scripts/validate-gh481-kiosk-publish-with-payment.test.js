@@ -140,7 +140,7 @@ test('Exhausted readback after a rejected publish ends in needs_staff without an
   const { calls, run } = workerFixture({ publish: { ok: false, status: 409, body: null } });
   assert.deepEqual(plain(await run()), { status: 'needs_staff' });
   assert.equal(calls.posts.length, 1);
-  assert.equal(calls.gets.length, 16);
+  assert.equal(calls.gets.length, 17, 'every 5 s to 75 s, then once at 100 s (GH-583)');
   assert.deepEqual(calls.needsStaff, ['confirmation_timeout']);
 });
 

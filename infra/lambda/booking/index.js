@@ -80,6 +80,12 @@ const KIOSK_AUTHORITATIVE_BOOKING_SOURCES = new Set([
 const KIOSK_PAIRING_SOURCE = 'jumpyard.kiosk-pairing';
 // GH-483: invoked only by the Session Lambda after it has verified a staff operator's PIN.
 const KIOSK_STAFF_RESOLUTION_SOURCE = 'jumpyard.kiosk-staff-resolution';
+// GH-531 (D0258) read ROLLER back every 5 s for 75 s. GH-583 (D0284): on 2026-10-17 and 18 ROLLER
+// confirmed kiosk purchases 51–96 s after the approval, and these readbacks ran out for 28 of 193
+// purchases, each confirmed by the webhook within seconds. The last step therefore comes at 100 s.
+// Like every step it first reads Cloud's own rows, so a purchase the webhook has confirmed ends there
+// without a ROLLER call, and only a purchase still unconfirmed is read back once more. The Booking
+// Lambda's 2-minute timeout leaves room for that readback.
 const KIOSK_RECONCILIATION_OFFSETS_MS = [
   0,
   5_000,
@@ -97,6 +103,7 @@ const KIOSK_RECONCILIATION_OFFSETS_MS = [
   65_000,
   70_000,
   75_000,
+  100_000,
 ];
 // GH-570 (D0278): a ROLLER draft that fails with a server error or a lost connection gets one more
 // try. On 2026-10-17 two kiosk drafts got HTTP 500 after 6.9 and 7.1 s, while a whole successful
@@ -1613,6 +1620,7 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
     // GH-531 (D0258): ROLLER answers 404 until it has created the paid booking, about a minute after
     // the approval, so a 404 while attempts remain is an expected miss, not a ROLLER error. The last
     // attempt's 404 still counts as one: a reconciliation that runs out of its window is an error.
+    // GH-583 (D0284): that attempt comes at 100 s, after the webhook could have confirmed the purchase.
     const lastAttempt = index === KIOSK_RECONCILIATION_OFFSETS_MS.length - 1;
     for (const identifier of readbackIdentifiers) {
       if (readback) break;
@@ -1993,6 +2001,16 @@ async function confirmKioskReconciliation(request, readback) {
            FROM jumpyard.checkin_tokens AS token
            WHERE token.token_hash = :guestAccessTokenHash
          ) = 1
+     ), previously_confirmed AS (
+       -- GH-583 (D0284): the session as it was before this statement. The worker and the webhook both
+       -- confirm a kiosk booking, often within a second of each other. Only the confirmation that
+       -- attaches the booking starts the automatic check-in, so a repeat no longer starts a second one.
+       SELECT session.checkin_session_id
+       FROM jumpyard.checkin_sessions AS session
+       WHERE session.source_lookup_ref = :prepaymentDraftId
+         AND session.session_summary ->> 'paymentAttemptId' = :paymentAttemptId
+         AND session.roller_unique_id = :rollerUniqueId
+         AND session.session_summary ->> 'bookingSyncStatus' = 'confirmed'
      ), confirmed AS (
        UPDATE jumpyard.prepayment_booking_drafts
        SET status = 'published',
@@ -2043,7 +2061,9 @@ async function confirmKioskReconciliation(request, readback) {
      SELECT
        reconciliation_attempt_count,
        (SELECT count(*) FROM attached_session) AS attached_session_count,
-       (SELECT jsonb_agg(checkin_session_id) FROM attached_session)::text AS attached_session_ids,
+       (SELECT jsonb_agg(attached.checkin_session_id) FROM attached_session AS attached
+         WHERE NOT EXISTS (SELECT 1 FROM previously_confirmed AS previous
+           WHERE previous.checkin_session_id = attached.checkin_session_id))::text AS newly_confirmed_session_ids,
        (SELECT count(*) FROM attached_guest_access) AS attached_token_count,
        (SELECT count(*) FROM attached_phone_links) AS attached_phone_link_count
      FROM confirmed`,
@@ -2064,7 +2084,7 @@ async function confirmKioskReconciliation(request, readback) {
   );
   const confirmed = firstMappedRow(result) ?? null;
   if (confirmed) {
-    await requestAutoCheckin(parseJsonArraySafe(confirmed.attached_session_ids), 'kiosk_booking_confirmed',
+    await requestAutoCheckin(parseJsonArraySafe(confirmed.newly_confirmed_session_ids), 'kiosk_booking_confirmed',
       request.correlationId);
   }
   return confirmed;

@@ -1,5 +1,15 @@
 # Test Plan
 
+## Alarms that are not errors (#583)
+
+Run `npm run validate:gh583-alarms-not-errors` (part of `npm run validate`). It drives the real Booking and Redeem Lambdas with a scripted Aurora, Lambda and ROLLER and checks that:
+- an automatic check-in that finds the redeem in progress ends without an error or a failure count and logs the hand-off, while a ROLLER outage still throws for Lambda's retry;
+- the worker's kiosk confirmation starts the automatic check-in and the webhook's repeat starts none, but still gets its confirmation;
+- the reconciliation reads ROLLER every 5 s to 75 s and has its last step at 100 s; a purchase the webhook confirms in between ends there with no ROLLER call and no error, and only a purchase unconfirmed at 100 s is read again, its 404 being the one error.
+
+With `GH583_DATABASE_TEST=true` (CI's "Staff handout database" job) the confirmation runs against PostgreSQL with the Booking Lambda's role: the worker's confirmation starts one check-in, the webhook's repeat none, and a purchase that ran out of readbacks is still admitted by a later confirmation.
+
+Also run `validate:gh531-kiosk-expected-miss`, `validate:gh481-kiosk-publish-with-payment`, `validate:kiosk-payment-reconciliation`, `validate:gh456-auto-checkin`, `validate:gh484-kiosk-phone-link`, `validate:gh571-roller-refusal`, `validate:gh563-addon-release`, `validate:gh333-staff-redeem-recovery` and `validate:gh549-group-size`. The Park plan may change only the Booking and Redeem Lambda code. After release, follow [the notes](docs/gh-583-alarms-not-errors.md#after-release).
 ## A kiosk group keeps its bands until its tickets are attached (#582)
 
 Run `npm run validate:gh345-staff-handout` (part of `npm run validate`). With `GH345_PSQL` (CI's "Staff handout database" job), `validate-gh345-handout-api.test.js` puts a kiosk group in group 0007's state on PostgreSQL: ROLLER's paid booking, items and tickets stored, the draft confirmed, and the session `pending` with no tickets. Using the real board SQL, the Session Lambda's detail and the Redeem Lambda's handout route, it checks that:
