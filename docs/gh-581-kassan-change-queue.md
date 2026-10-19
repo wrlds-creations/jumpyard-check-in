@@ -1,6 +1,6 @@
 # Issue #581: a kassan change to a kiosk booking no longer holds the webhook queue
 
-Issue [#581](https://github.com/wrlds-creations/jumpyard-check-in/issues/581), decision D0282.
+Issue [#581](https://github.com/wrlds-creations/jumpyard-check-in/issues/581), decision D0284.
 
 ## What happened
 
@@ -20,7 +20,7 @@ Park read back on 2026-10-19:
 
 The worker checked a kiosk Handoff on every webhook for a paid kiosk booking, even when the Booking Lambda had attached it long ago. The check compares ROLLER's booking with what the kiosk sold, so it can only pass before anyone changes the booking. After kassan's change it failed the same way on every retry.
 
-## Change (D0282)
+## Change (D0284)
 
 1. **An attached Handoff is not checked again.**
    - The worker's candidate query also reads the draft's `booking_confirmation_status` and `reconciliation_last_result`.

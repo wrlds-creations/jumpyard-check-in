@@ -37,7 +37,7 @@ const WEBHOOK_RETRY_DELAY_SECONDS = [60, 120, 240, 480];
 // Matches the source queue's maxReceiveCount: after the last delivery fails the message is released
 // at once, so SQS moves it to the DLQ without another wait.
 const WEBHOOK_QUEUE_MAX_RECEIVE_COUNT = 5;
-// GH-581 (D0282): a kiosk Handoff check that fails for one of these reasons fails the same way on
+// GH-581 (D0284): a kiosk Handoff check that fails for one of these reasons fails the same way on
 // every retry, because the paid booking itself no longer matches the kiosk sale (for example after
 // kassan removed an entry). The booking refresh stays, the reason is logged and kept on the event,
 // and the queue moves on instead of holding every later booking for about 15 minutes.
@@ -786,7 +786,7 @@ async function enrichWebhookEvent(intake, correlationId) {
       'roller_webhook_enrichment',
       correlationId,
     );
-    // GH-581 (D0282): a kiosk check that waiting cannot heal stays on the processed event.
+    // GH-581 (D0284): a kiosk check that waiting cannot heal stays on the processed event.
     const processedNote = kioskConfirmation?.status === 'not_retried'
       ? `kiosk_confirmation_not_retried: ${kioskConfirmation.reason}`
       : null;
@@ -2061,7 +2061,7 @@ async function requestKioskAuthoritativeConfirmation(booking, source, correlatio
   }
 
   const candidate = candidates[0];
-  // GH-581 (D0282): only the Booking Lambda's attachment stores the result `confirmed` (this worker
+  // GH-581 (D0284): only the Booking Lambda's attachment stores the result `confirmed` (this worker
   // stores `confirmed_by_webhook`), so the kiosk Handoff is already attached. A later ROLLER change,
   // such as kassan removing an entry, is then an ordinary booking refresh, not a new check against
   // the kiosk sale.

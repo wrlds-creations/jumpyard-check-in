@@ -14,7 +14,8 @@ assert.match(bookingSource, /loadProductDisplayMetadata/);
 assert.match(bookingSource, /enrichKioskReadbackItems/);
 assert.match(bookingSource, /parent_product_name = EXCLUDED\.parent_product_name/);
 
-assert.match(sessionSource, /authoritativeItems\.length > 0[\s\S]*findProvisionalStaffBookingItems/);
+// GH-582: the paid draft also stands in while ROLLER's items have arrived but the session has no tickets yet.
+assert.match(sessionSource, /authoritativeItems\.length === 0 \|\| session\.selectedTicketIds\.length === 0\)[\s\S]*findProvisionalStaffBookingItems/);
 assert.match(sessionSource, /session\.bookingSyncStatus === 'pending'/);
 assert.match(sessionSource, /product_catalog_cache AS pc/);
 assert.match(sessionSource, /booking\.venue_id = :staffVenueId/);

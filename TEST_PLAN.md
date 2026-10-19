@@ -12,6 +12,17 @@ Run `npm run validate:gh581-kassan-change` (part of `npm run validate`). It driv
 Against the code before #581, five of the six cases fail. Also run `validate:gh346-webhook-retry`, `validate:t0197-webhook-reconciliation`, `validate:gh282-kiosk-handoff-repair`, `validate:kiosk-payment-reconciliation` and `validate:gh563-addon-release`. The Park plan may change only the two webhook Lambdas' code (intake and processor share the file).
 
 After release, the monitor redrives the two DLQ messages from 2026-10-18 with Love's OK; each is stored as `processed` and `webhook-dlq-visible` returns to OK. A later kassan change to a confirmed kiosk booking leaves no `kiosk_confirmation_failed` in the processor log. [Notes](docs/gh-581-kassan-change-queue.md).
+## A kiosk group keeps its bands until its tickets are attached (#582)
+
+Run `npm run validate:gh345-staff-handout` (part of `npm run validate`). With `GH345_PSQL` (CI's "Staff handout database" job), `validate-gh345-handout-api.test.js` puts a kiosk group in group 0007's state on PostgreSQL: ROLLER's paid booking, items and tickets stored, the draft confirmed, and the session `pending` with no tickets. Using the real board SQL, the Session Lambda's detail and the Redeem Lambda's handout route, it checks that:
+- the board and the detail list the draft's bands and coffee once, also with the booking row unpaid, and Cloud refuses a handout with `booking_sync_pending`;
+- once the tickets are attached, ROLLER's lines show the same counts and band colour;
+- the press kept from that minute is confirmed on ROLLER's lines and counted, at the café and then at the entrance;
+- a later add-on that makes the group `pending` keeps ROLLER's lines and their counts.
+
+On origin/main `197b503` the subtest fails with 0 admissions. `staffExperience.test.mjs` (same script) confirms a press on the draft's lines on ROLLER's lines, using Cloud's own line builders.
+
+Also run `validate:gh547-ready-is-checked-in` and `validate:gh253-handoff-sync-products`. The Park plan may change only the Session Lambda code. After release, follow [the notes](docs/gh-582-bands-stay.md#after-release).
 
 ## ROLLER refusals are kept, and a kalas is never checked in (#571, kiosk #244)
 

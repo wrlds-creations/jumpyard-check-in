@@ -1,4 +1,4 @@
-// GH-581 (D0282): a kassan change to a kiosk booking that is already confirmed is an ordinary
+// GH-581 (D0284): a kassan change to a kiosk booking that is already confirmed is an ordinary
 // booking refresh, so it no longer holds the single FIFO group for about 15 minutes. A kiosk check
 // that waiting cannot heal is recorded once and the queue moves on; a transient reason still gets
 // the GH-346 retries. The cases replay Sunday 2026-10-18 at Nacka (kiosk group 0088).
