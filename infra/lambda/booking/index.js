@@ -79,6 +79,10 @@ const KIOSK_AUTHORITATIVE_BOOKING_SOURCES = new Set([
   'roller_redeem_final_refresh',
   'roller_webhook_enrichment',
 ]);
+// GH-589 (D0287): the same sources as an SQL list for the kiosk snapshot, which keeps such a row's source.
+const KIOSK_AUTHORITATIVE_BOOKING_SOURCES_SQL = [...KIOSK_AUTHORITATIVE_BOOKING_SOURCES]
+  .map((source) => `'${source}'`)
+  .join(', ');
 // GH-488 (D0243): the Session Lambda proves the staff PIN and invokes this Lambda for the pairing.
 const KIOSK_PAIRING_SOURCE = 'jumpyard.kiosk-pairing';
 // GH-483: invoked only by the Session Lambda after it has verified a staff operator's PIN.
@@ -2223,6 +2227,9 @@ async function releaseConfirmedKioskAddOn(rollerUniqueId, correlationId, trigger
 async function persistKioskReconciliationBookingSnapshot(existing, readback) {
   const enrichedItems = await enrichKioskReadbackItems(existing, readback.items);
 
+  // GH-589 (D0287): a row that a full live ROLLER read already wrote keeps its source, so the webhook's
+  // kiosk check that reads it next still finds an authoritative row. The paid status is still refreshed,
+  // and the update never touches total, currency, date, venue or externalId.
   await executeStatement(
     `INSERT INTO jumpyard.roller_bookings (
        roller_unique_id,
@@ -2263,7 +2270,11 @@ async function persistKioskReconciliationBookingSnapshot(existing, readback) {
        booking_status = EXCLUDED.booking_status,
        payment_status = EXCLUDED.payment_status,
        amount_owing_cents = EXCLUDED.amount_owing_cents,
-       source_last_updated_by = EXCLUDED.source_last_updated_by,
+       source_last_updated_by = CASE
+         WHEN jumpyard.roller_bookings.source_last_updated_by IN (${KIOSK_AUTHORITATIVE_BOOKING_SOURCES_SQL})
+           THEN jumpyard.roller_bookings.source_last_updated_by
+         ELSE EXCLUDED.source_last_updated_by
+       END,
        source_last_updated_at = now(),
        last_seen_from_roller_at = EXCLUDED.last_seen_from_roller_at,
        freshness_status = EXCLUDED.freshness_status,
@@ -2293,62 +2304,7 @@ async function persistKioskReconciliationBookingSnapshot(existing, readback) {
   );
 
   for (const item of enrichedItems) {
-    const bookingItemKey = `jybi_${hashString(`${readback.rollerUniqueId}:${item.bookingItemId || item.itemIndex}`).slice(0, 32)}`;
-    await executeStatement(
-      `INSERT INTO jumpyard.roller_booking_items (
-         booking_item_key,
-         roller_unique_id,
-         booking_item_id,
-         product_id,
-         parent_product_id,
-         product_name,
-         parent_product_name,
-         quantity,
-         booking_date,
-         start_time,
-         end_time,
-         item_summary
-       )
-       VALUES (
-         :bookingItemKey,
-         :rollerUniqueId,
-         :bookingItemId,
-         :productId,
-         :parentProductId,
-         :productName,
-         :parentProductName,
-         :quantity,
-         CAST(:bookingDate AS date),
-         CAST(:startTime AS time),
-         CAST(:endTime AS time),
-         CAST(:itemSummary AS jsonb)
-       )
-       ON CONFLICT (booking_item_key) DO UPDATE SET
-         product_id = EXCLUDED.product_id,
-         parent_product_id = EXCLUDED.parent_product_id,
-         product_name = EXCLUDED.product_name,
-         parent_product_name = EXCLUDED.parent_product_name,
-         quantity = EXCLUDED.quantity,
-         booking_date = EXCLUDED.booking_date,
-         start_time = EXCLUDED.start_time,
-         end_time = EXCLUDED.end_time,
-         item_summary = EXCLUDED.item_summary,
-         updated_at = now()`,
-      [
-        stringParameter('bookingItemKey', bookingItemKey),
-        stringParameter('rollerUniqueId', readback.rollerUniqueId),
-        stringParameter('bookingItemId', item.bookingItemId),
-        stringParameter('productId', item.productId),
-        stringParameter('parentProductId', item.parentProductId),
-        stringParameter('productName', item.productName),
-        stringParameter('parentProductName', item.parentProductName),
-        integerParameter('quantity', Math.max(1, Math.floor(Number(item.quantity ?? 1)))),
-        stringParameter('bookingDate', item.bookingDate || existing.booking_date),
-        stringParameter('startTime', item.startTime || existing.start_time),
-        stringParameter('endTime', item.endTime),
-        stringParameter('itemSummary', JSON.stringify(item)),
-      ],
-    );
+    const bookingItemKey = await upsertKioskReconciliationBookingItem(existing, readback.rollerUniqueId, item);
 
     for (const ticket of item.tickets) {
       await executeStatement(
@@ -2385,6 +2341,96 @@ async function persistKioskReconciliationBookingSnapshot(existing, readback) {
       );
     }
   }
+}
+
+// GH-589 (D0287): the webhook, the check-in's final refresh and the nightly sync store a ROLLER item
+// under their own `bookingitem:` key. When the webhook stored it first, this snapshot's `jybi_` insert
+// raised on the item id's unique index and left the booking half written, and the webhook's kiosk check
+// then waited a minute. An item with a ROLLER id is now matched on that id, as those writers match it,
+// and keeps the key it was stored under; the caller puts its tickets on the returned key. An item
+// without an id keeps the `jybi_` upsert. An id that belongs to another booking is never overwritten.
+async function upsertKioskReconciliationBookingItem(existing, rollerUniqueId, item) {
+  const bookingItemKey = `jybi_${hashString(`${rollerUniqueId}:${item.bookingItemId || item.itemIndex}`).slice(0, 32)}`;
+  const conflictClause = stringOrNull(item.bookingItemId)
+    ? `ON CONFLICT (booking_item_id) WHERE booking_item_id IS NOT NULL DO UPDATE SET
+         product_id = EXCLUDED.product_id,
+         parent_product_id = COALESCE(EXCLUDED.parent_product_id, jumpyard.roller_booking_items.parent_product_id),
+         product_name = COALESCE(EXCLUDED.product_name, jumpyard.roller_booking_items.product_name),
+         parent_product_name = COALESCE(EXCLUDED.parent_product_name, jumpyard.roller_booking_items.parent_product_name),
+         quantity = EXCLUDED.quantity,
+         booking_date = EXCLUDED.booking_date,
+         start_time = EXCLUDED.start_time,
+         end_time = EXCLUDED.end_time,
+         item_summary = COALESCE(jumpyard.roller_booking_items.item_summary, '{}'::jsonb)
+           || jsonb_strip_nulls(EXCLUDED.item_summary),
+         updated_at = now()
+       WHERE jumpyard.roller_booking_items.roller_unique_id = EXCLUDED.roller_unique_id`
+    : `ON CONFLICT (booking_item_key) DO UPDATE SET
+         product_id = EXCLUDED.product_id,
+         parent_product_id = EXCLUDED.parent_product_id,
+         product_name = EXCLUDED.product_name,
+         parent_product_name = EXCLUDED.parent_product_name,
+         quantity = EXCLUDED.quantity,
+         booking_date = EXCLUDED.booking_date,
+         start_time = EXCLUDED.start_time,
+         end_time = EXCLUDED.end_time,
+         item_summary = EXCLUDED.item_summary,
+         updated_at = now()`;
+
+  const result = await executeStatement(
+    `INSERT INTO jumpyard.roller_booking_items (
+       booking_item_key,
+       roller_unique_id,
+       booking_item_id,
+       product_id,
+       parent_product_id,
+       product_name,
+       parent_product_name,
+       quantity,
+       booking_date,
+       start_time,
+       end_time,
+       item_summary
+     )
+     VALUES (
+       :bookingItemKey,
+       :rollerUniqueId,
+       :bookingItemId,
+       :productId,
+       :parentProductId,
+       :productName,
+       :parentProductName,
+       :quantity,
+       CAST(:bookingDate AS date),
+       CAST(:startTime AS time),
+       CAST(:endTime AS time),
+       CAST(:itemSummary AS jsonb)
+     )
+     ${conflictClause}
+     RETURNING booking_item_key`,
+    [
+      stringParameter('bookingItemKey', bookingItemKey),
+      stringParameter('rollerUniqueId', rollerUniqueId),
+      stringParameter('bookingItemId', item.bookingItemId),
+      stringParameter('productId', item.productId),
+      stringParameter('parentProductId', item.parentProductId),
+      stringParameter('productName', item.productName),
+      stringParameter('parentProductName', item.parentProductName),
+      integerParameter('quantity', Math.max(1, Math.floor(Number(item.quantity ?? 1)))),
+      stringParameter('bookingDate', item.bookingDate || existing.booking_date),
+      stringParameter('startTime', item.startTime || existing.start_time),
+      stringParameter('endTime', item.endTime),
+      stringParameter('itemSummary', JSON.stringify(item)),
+    ],
+  );
+
+  const persistedBookingItemKey = stringOrNull(firstMappedRow(result)?.booking_item_key);
+  if (!persistedBookingItemKey) {
+    const error = new Error('Roller booking item id is already owned by another booking.');
+    error.code = 'kiosk_booking_item_identity_conflict';
+    throw error;
+  }
+  return persistedBookingItemKey;
 }
 
 async function markKioskReconciliationNeedsStaff(request, reason) {
