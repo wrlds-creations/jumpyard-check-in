@@ -124,7 +124,7 @@ assert.match(bookingSource, /const waitMs = startedAt \+ offsetMs - Date\.now\(\
 assert.doesNotMatch(bookingSource, /await wait\(offsetMs\)/);
 const offsetsSource = bookingSource.match(/KIOSK_RECONCILIATION_OFFSETS_MS = \[([\s\S]*?)\];/)?.[1] ?? '';
 const offsets = [...offsetsSource.matchAll(/\b\d[\d_]*\b/g)].map((match) => Number(match[0].replaceAll('_', '')));
-// GH-583 (D0284): every 5 s to 75 s, then a last step at 100 s.
+// GH-583 (D0285): every 5 s to 75 s, then a last step at 100 s.
 assert.deepEqual(offsets, [...Array.from({ length: 16 }, (_, index) => index * 5_000), 100_000]);
 assert.match(bookingSource, /InvocationType: 'Event'/);
 assert.match(bookingSource, /process\.env\.AWS_LAMBDA_FUNCTION_NAME/);

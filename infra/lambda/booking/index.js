@@ -80,7 +80,7 @@ const KIOSK_AUTHORITATIVE_BOOKING_SOURCES = new Set([
 const KIOSK_PAIRING_SOURCE = 'jumpyard.kiosk-pairing';
 // GH-483: invoked only by the Session Lambda after it has verified a staff operator's PIN.
 const KIOSK_STAFF_RESOLUTION_SOURCE = 'jumpyard.kiosk-staff-resolution';
-// GH-531 (D0258) read ROLLER back every 5 s for 75 s. GH-583 (D0284): on 2026-10-17 and 18 ROLLER
+// GH-531 (D0258) read ROLLER back every 5 s for 75 s. GH-583 (D0285): on 2026-10-17 and 18 ROLLER
 // confirmed kiosk purchases 51–96 s after the approval, and these readbacks ran out for 28 of 193
 // purchases, each confirmed by the webhook within seconds. The last step therefore comes at 100 s.
 // Like every step it first reads Cloud's own rows, so a purchase the webhook has confirmed ends there
@@ -1620,7 +1620,7 @@ async function handleKioskPaymentReconciliation(detail, correlationId) {
     // GH-531 (D0258): ROLLER answers 404 until it has created the paid booking, about a minute after
     // the approval, so a 404 while attempts remain is an expected miss, not a ROLLER error. The last
     // attempt's 404 still counts as one: a reconciliation that runs out of its window is an error.
-    // GH-583 (D0284): that attempt comes at 100 s, after the webhook could have confirmed the purchase.
+    // GH-583 (D0285): that attempt comes at 100 s, after the webhook could have confirmed the purchase.
     const lastAttempt = index === KIOSK_RECONCILIATION_OFFSETS_MS.length - 1;
     for (const identifier of readbackIdentifiers) {
       if (readback) break;
@@ -2002,7 +2002,7 @@ async function confirmKioskReconciliation(request, readback) {
            WHERE token.token_hash = :guestAccessTokenHash
          ) = 1
      ), previously_confirmed AS (
-       -- GH-583 (D0284): the session as it was before this statement. The worker and the webhook both
+       -- GH-583 (D0285): the session as it was before this statement. The worker and the webhook both
        -- confirm a kiosk booking, often within a second of each other. Only the confirmation that
        -- attaches the booking starts the automatic check-in, so a repeat no longer starts a second one.
        SELECT session.checkin_session_id

@@ -1,6 +1,6 @@
 'use strict';
 
-// GH-583 (D0284): two Park alarms fired on designed behaviour on 2026-10-18.
+// GH-583 (D0285): two Park alarms fired on designed behaviour on 2026-10-18.
 // 1. redeem-lambda-errors: the reconciliation worker and the webhook both confirmed the same kiosk
 //    booking, often within a second, and each started an automatic check-in. The second one found the
 //    first one's redeem in progress and threw for a Lambda retry, which Lambda counts as an error. Now

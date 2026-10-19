@@ -1,6 +1,6 @@
 # Issue #583: alarms that are not errors
 
-Issue [#583](https://github.com/wrlds-creations/jumpyard-check-in/issues/583), decision D0284.
+Issue [#583](https://github.com/wrlds-creations/jumpyard-check-in/issues/583), decision D0285.
 
 ## What happened
 
@@ -26,7 +26,7 @@ The double start was not new with the 09:54 release. On 2026-10-17 and 18 the we
 - The webhook confirmed each of them within seconds, at the latest 96 s after the approval. The exception was 15:18, during the webhook queue block: the confirmation came after 392 s.
 - At 12:05 the alarm was instead one 5 s timeout on `get_public_checkout_products`. That is a real ROLLER delay and stays an error.
 
-## Change (D0284)
+## Change (D0285)
 
 1. **One automatic check-in per kiosk confirmation.** `confirmKioskReconciliation` reads the session before it attaches the booking, in the same statement (`previously_confirmed`). It starts the automatic check-in only for a session that was not yet `confirmed` for that booking (`newly_confirmed_session_ids`). The repeat still attaches and answers `confirmed`, so the webhook's processing is unchanged.
 2. **`redeem_in_progress` is a hand-off, not an error.** An automatic check-in that finds the session's redeem in progress ends with `{ status: 'in_progress' }` and one log line `checkin.auto_checkin_in_progress` (handler and trigger only). The attempt that holds the key completes the check-in. If it fails, it retries or hands the group to staff itself. A ROLLER outage still throws for Lambda's retry.

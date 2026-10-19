@@ -558,7 +558,7 @@ async function handleAutoCheckin(detail) {
 
   const reason = stringOrNull(body?.error?.code) || stringOrNull(body.status) || `http_${response.statusCode}`;
   // Another trigger or a colleague is redeeming this session right now, and that attempt completes the
-  // check-in, retries or hands the group to staff itself. GH-583 (D0284): this one therefore ends without
+  // check-in, retries or hands the group to staff itself. GH-583 (D0285): this one therefore ends without
   // an error; its Lambda retry only confirmed the result and tripped redeem-lambda-errors.
   if (reason === 'redeem_in_progress') {
     console.info(JSON.stringify({ eventType: 'checkin.auto_checkin_in_progress', handler: 'redeem',

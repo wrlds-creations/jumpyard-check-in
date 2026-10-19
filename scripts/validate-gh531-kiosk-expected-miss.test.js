@@ -1,6 +1,6 @@
 // GH-531 (D0258): while the kiosk reconciliation waits for ROLLER to create a paid booking, its 404
 // readbacks are expected misses, not ROLLER errors. The last attempt's 404 and every real failure
-// still count as RollerApiErrorCount, and every other caller is unchanged. Since GH-583 (D0284) the last
+// still count as RollerApiErrorCount, and every other caller is unchanged. Since GH-583 (D0285) the last
 // attempt comes at 100 s, after the 16 readbacks to 75 s; validate:gh583-alarms-not-errors covers its timing.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
