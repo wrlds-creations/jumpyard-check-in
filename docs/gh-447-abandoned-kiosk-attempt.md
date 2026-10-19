@@ -1,6 +1,6 @@
 # GH-447: a kiosk attempt that never reached the terminal no longer locks the kiosk
 
-Issues #447 and #580, with kiosk #134. Decision D0282 (kiosk D0087).
+Issues #447 and #580, with kiosk #134. Decision D0286 (kiosk D0087).
 
 ## What happened
 

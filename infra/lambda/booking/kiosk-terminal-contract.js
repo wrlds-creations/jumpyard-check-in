@@ -25,7 +25,7 @@ const SUPPORTED_KIOSK_VENUE_ID = '50871';
 // GH-483 (D0239): "No payment" waits until the terminal has timed out (about 135 s) and ROLLER
 // has had time to turn a late payment notification into a booking (up to about 75 s).
 const KIOSK_STAFF_NO_PAYMENT_MIN_AGE_SECONDS = 5 * 60;
-// GH-447 (D0282): Cloud releases an attempt the kiosk never reported on by itself, on the same
+// GH-447 (D0286): Cloud releases an attempt the kiosk never reported on by itself, on the same
 // evidence, only from twice the staff wait.
 const KIOSK_ABANDONED_ATTEMPT_MIN_AGE_SECONDS = 10 * 60;
 const KIOSK_UNSTARTED_DRAFT_KEY_PATTERN = /^[\x21-\x7e]{1,200}$/;
@@ -624,7 +624,7 @@ function kioskStaffResolutionEligibility(row, evidence) {
   };
 }
 
-// GH-447 (D0282): the idempotency keys of the kiosk's own earlier draft requests whose payment never
+// GH-447 (D0286): the idempotency keys of the kiosk's own earlier draft requests whose payment never
 // started on the terminal (kiosk #134): an answer lost to a reload or a lost connection, or a draft
 // without a usable payment. The kiosk never held their payment token. Anything malformed is ignored.
 function normalizeKioskUnstartedDraftKeys(value) {
@@ -633,7 +633,7 @@ function normalizeKioskUnstartedDraftKeys(value) {
   return [...new Set(keys)].slice(0, KIOSK_UNSTARTED_DRAFT_KEYS_MAX);
 }
 
-// GH-447 (D0282): whether an attempt that holds a busy kiosk claim may get its one ROLLER check.
+// GH-447 (D0286): whether an attempt that holds a busy kiosk claim may get its one ROLLER check.
 // Only an attempt that never reported a terminal result qualifies: `unknown` and approved attempts
 // reached the terminal and stay with staff (D0239) and the reconciliation path. The attempt must be
 // 10 minutes old, unless its own kiosk reports that its payment never started. A release then

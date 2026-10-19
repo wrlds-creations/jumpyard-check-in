@@ -32,7 +32,7 @@ worker -> claim the single publish for this attempt
        -> POST /bookings/draft/publish { uniqueId, payment: { id, paymentType: "CreditCard", amount, MerchantId } }
        -> readback GET /bookings/{id} -> confirmed
        any other answer or transport ambiguity: no further provider writes; readback continues
-       until ROLLER's notification creates the booking, or needs_staff after 75 s
+       until ROLLER's notification creates the booking, or needs_staff after 100 s (#583)
 ```
 
 ## Guards

@@ -1,6 +1,6 @@
 'use strict';
 
-// GH-447 (D0282): a kiosk attempt that never reported a terminal result no longer locks its kiosk and
+// GH-447 (D0286): a kiosk attempt that never reported a terminal result no longer locks its kiosk and
 // terminal for good. When a new purchase finds the D0220 claims busy, an attempt that is still `created`,
 // at least 10 minutes old and unknown to the local cache gets one ROLLER read. ROLLER's 404 records it as
 // `cancelled` with its audit in one guarded statement, and the purchase takes the claims. On 2026-10-18

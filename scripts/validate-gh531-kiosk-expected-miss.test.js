@@ -1,6 +1,7 @@
 // GH-531 (D0258): while the kiosk reconciliation waits for ROLLER to create a paid booking, its 404
 // readbacks are expected misses, not ROLLER errors. The last attempt's 404 and every real failure
-// still count as RollerApiErrorCount, and every other caller is unchanged.
+// still count as RollerApiErrorCount, and every other caller is unchanged. Since GH-583 (D0285) the last
+// attempt comes at 100 s, after the 16 readbacks to 75 s; validate:gh583-alarms-not-errors covers its timing.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const crypto = require('node:crypto');
@@ -115,8 +116,8 @@ test('The reconciliation waits through 404s as expected misses, with no ROLLER e
 test('A reconciliation that runs out of its window still counts a ROLLER error', async () => {
   const { reconcile, gets, count } = loadBackend();
   assert.deepEqual(plain(await reconcile()), { status: 'needs_staff' });
-  assert.equal(attempts, 16);
-  assert.equal(gets.length, attempts, 'the same 16 readbacks as before');
+  assert.equal(attempts, 17);
+  assert.equal(gets.length, attempts, 'the 16 readbacks to 75 s and the one at 100 s (GH-583)');
   assert.equal(count('RollerApiCallCount'), attempts);
   assert.equal(count('RollerApiExpectedMissCount'), attempts - 1);
   assert.equal(count('RollerApiErrorCount'), 1, 'the last attempt\'s 404 is the timeout error');

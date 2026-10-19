@@ -789,7 +789,10 @@ async function handleStaffSessionDetail(event, correlationId) {
   const provisional = session.bookingSyncStatus === 'confirmed' ? [] : provisionalManifest(session.items
     .filter((item) => item.fulfillmentSource === 'provisional' || item.bookingItemKey?.startsWith('linked-provisional:'))
     .map((item) => ({ rollerUniqueId: item.bookingItemKey, items: [item.summary] })), session.visitDate);
-  const handout = { ...state, items: [...state.items, ...provisional.map((item) => ({ ...item, collected: 0, available: item.quantity }))] };
+  // GH-582: while the paid draft stands in, the booking's own ROLLER lines wait for the session's tickets.
+  const standIn = session.items.some((item) => item.fulfillmentSource === 'provisional');
+  const handout = { ...state, items: [...state.items.filter((item) => !standIn || item.sourceBookingId !== session.rollerUniqueId),
+    ...provisional.map((item) => ({ ...item, collected: 0, available: item.quantity }))] };
   return jsonResponse(200, correlationId, {
     status: 'found', session: { ...session, handout, counts: { ...session.counts,
       admission: handout.items.filter((item) => item.kind === 'admission').reduce((sum, item) => sum + (item.sessionLimit ?? item.quantity), 0) } },
@@ -3299,12 +3302,12 @@ async function findStaffSessionDetail(checkinSessionId, staffVenueId = null) {
       : [],
     findStaffBookingTickets(session.rollerUniqueId, session.selectedTicketIds, staffVenueId),
   ]);
-  // GH-547: a kiosk purchase past the reconciliation window (needs_staff) shows its draft too.
-  const baseItems = authoritativeItems.length > 0
-    ? authoritativeItems
-    : session.bookingSyncStatus === 'pending' || session.bookingSyncStatus === 'needs_staff'
-      ? await findProvisionalStaffBookingItems(session.rollerUniqueId, staffVenueId)
-      : [];
+  // GH-547: a kiosk purchase past the reconciliation window (needs_staff) shows its draft too. GH-582: so does
+  // one whose ROLLER items arrived before the session got the booking's tickets; the draft stands in for them.
+  const waiting = (session.bookingSyncStatus === 'pending' || session.bookingSyncStatus === 'needs_staff')
+    && (authoritativeItems.length === 0 || session.selectedTicketIds.length === 0);
+  const provisionalItems = waiting ? await findProvisionalStaffBookingItems(session.rollerUniqueId, staffVenueId) : [];
+  const baseItems = provisionalItems.length > 0 ? provisionalItems : authoritativeItems;
   const items = [...baseItems, ...provisionalLinkedAddOns];
 
   return {

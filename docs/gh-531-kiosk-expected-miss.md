@@ -42,3 +42,7 @@ The change is code only. The new embedded metric lives in `JumpYard/Cloud` under
   On the previous code, four of its five tests fail.
 - These validators still pass: `validate:gh481-kiosk-publish-with-payment`, `validate:kiosk-payment-reconciliation`, `validate:kiosk-terminal-backend`, `validate:gh483-kiosk-staff-resolution`, `validate:gh282-kiosk-handoff-repair`, `validate:gh285-kiosk-addon-terminal`, `validate:gh340-server-errors` and `validate:gh335-alarm-routing`.
 - **After release:** a kiosk card purchase on Park leaves `roller-api-errors` OK, and `RollerApiExpectedMissCount` shows its waiting readbacks.
+
+## Revised by #583 (D0285)
+
+ROLLER confirmed kiosk purchases up to 96 s after the approval on 2026-10-18, so the last attempt at 75 s often counted an error just before the webhook confirmed the purchase. The last attempt now comes at 100 s and reads ROLLER only when nothing has confirmed the purchase by then; the 404 at 75 s is an expected miss. See [the notes](gh-583-alarms-not-errors.md).

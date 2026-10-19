@@ -1,5 +1,39 @@
 # Test Plan
 
+## Alarms that are not errors (#583)
+
+Run `npm run validate:gh583-alarms-not-errors` (part of `npm run validate`). It drives the real Booking and Redeem Lambdas with a scripted Aurora, Lambda and ROLLER and checks that:
+- an automatic check-in that finds the redeem in progress ends without an error or a failure count and logs the hand-off, while a ROLLER outage still throws for Lambda's retry;
+- the worker's kiosk confirmation starts the automatic check-in and the webhook's repeat starts none, but still gets its confirmation;
+- the reconciliation reads ROLLER every 5 s to 75 s and has its last step at 100 s; a purchase the webhook confirms in between ends there with no ROLLER call and no error, and only a purchase unconfirmed at 100 s is read again, its 404 being the one error.
+
+With `GH583_DATABASE_TEST=true` (CI's "Staff handout database" job) the confirmation runs against PostgreSQL with the Booking Lambda's role: the worker's confirmation starts one check-in, the webhook's repeat none, and a purchase that ran out of readbacks is still admitted by a later confirmation.
+
+Also run `validate:gh531-kiosk-expected-miss`, `validate:gh481-kiosk-publish-with-payment`, `validate:kiosk-payment-reconciliation`, `validate:gh456-auto-checkin`, `validate:gh484-kiosk-phone-link`, `validate:gh571-roller-refusal`, `validate:gh563-addon-release`, `validate:gh333-staff-redeem-recovery` and `validate:gh549-group-size`. The Park plan may change only the Booking and Redeem Lambda code. After release, follow [the notes](docs/gh-583-alarms-not-errors.md#after-release).
+## A kassan change to a kiosk booking no longer holds the webhook queue (#581)
+
+Run `npm run validate:gh581-kassan-change` (part of `npm run validate`). It drives the real webhook worker through one queue delivery with a scripted Aurora, ROLLER and Booking Lambda, and checks that:
+- Sunday's 0088 `Updated` webhook (kiosk sale 480 kr, ROLLER now 240 kr, Handoff attached) is processed in one delivery: the booking is upserted at 24000, the Booking Lambda is not called, the message keeps no visibility delay and the event is `processed`;
+- a redriven DLQ message with status `failed` and 8 attempts processes the same way;
+- a final reason on a Handoff that is not attached yet is recorded once (`kiosk_confirmation_not_retried: <reason>`, log `status: not_retried`) and acknowledged;
+- `authoritative_source_invalid`, `function_error` and `unknown` still fail the delivery and come back after 60 s;
+- every reason the Booking Lambda can return is either final or transient, and only the result `confirmed` skips the check.
+
+Against the code before #581, five of the six cases fail. Also run `validate:gh346-webhook-retry`, `validate:t0197-webhook-reconciliation`, `validate:gh282-kiosk-handoff-repair`, `validate:kiosk-payment-reconciliation` and `validate:gh563-addon-release`. The Park plan may change only the two webhook Lambdas' code (intake and processor share the file).
+
+After release, the monitor redrives the two DLQ messages from 2026-10-18 with Love's OK; each is stored as `processed` and `webhook-dlq-visible` returns to OK. A later kassan change to a confirmed kiosk booking leaves no `kiosk_confirmation_failed` in the processor log. [Notes](docs/gh-581-kassan-change-queue.md).
+## A kiosk group keeps its bands until its tickets are attached (#582)
+
+Run `npm run validate:gh345-staff-handout` (part of `npm run validate`). With `GH345_PSQL` (CI's "Staff handout database" job), `validate-gh345-handout-api.test.js` puts a kiosk group in group 0007's state on PostgreSQL: ROLLER's paid booking, items and tickets stored, the draft confirmed, and the session `pending` with no tickets. Using the real board SQL, the Session Lambda's detail and the Redeem Lambda's handout route, it checks that:
+- the board and the detail list the draft's bands and coffee once, also with the booking row unpaid, and Cloud refuses a handout with `booking_sync_pending`;
+- once the tickets are attached, ROLLER's lines show the same counts and band colour;
+- the press kept from that minute is confirmed on ROLLER's lines and counted, at the café and then at the entrance;
+- a later add-on that makes the group `pending` keeps ROLLER's lines and their counts.
+
+On origin/main `197b503` the subtest fails with 0 admissions. `staffExperience.test.mjs` (same script) confirms a press on the draft's lines on ROLLER's lines, using Cloud's own line builders.
+
+Also run `validate:gh547-ready-is-checked-in` and `validate:gh253-handoff-sync-products`. The Park plan may change only the Session Lambda code. After release, follow [the notes](docs/gh-582-bands-stay.md#after-release).
+
 ## ROLLER refusals are kept, and a kalas is never checked in (#571, kiosk #244)
 
 Run `npm run validate:gh571-roller-refusal` (part of `npm run validate`). It drives the real Lambdas with a scripted Aurora and ROLLER and checks that:
