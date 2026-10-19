@@ -864,7 +864,7 @@ GH-488 (D0243), PIN staff identity mode only. Body: `kioskInstallationId`, `kios
 
 ### `POST /v1/bookings/draft/finalize`
 
-Records a sanitized ROLLER terminal result for one server-owned kiosk payment attempt. A definitively `approved` new-booking attempt immediately returns the one server-created provisional check-in session while ROLLER publication and readback continue in the background. `failed`, `cancelled`, and `unknown` update only monotonic safe attempt state.
+Records a sanitized ROLLER terminal result for one server-owned kiosk payment attempt. A definitively `approved` new-booking attempt immediately returns the one server-created provisional check-in session while ROLLER publication and readback continue in the background. The readback reads ROLLER every 5 s to 75 s and, unless the webhook has confirmed the purchase by then, once more at 100 s (#583, D0285). `failed`, `cancelled`, and `unknown` update only monotonic safe attempt state.
 
 Required fields are `prepaymentDraftId`, `paymentAttemptId`, `rollerDraftUniqueId`, `outcome`, and an idempotency key. All identifiers must match one `card_present` row with `flow_type='new_booking'` or `flow_type='add_product'`. The endpoint accepts no card data, receipt data, terminal id, or raw payment JWT. A late non-approved result cannot downgrade an approved or reconciled attempt.
 
@@ -1107,6 +1107,7 @@ Decided with JumpYard's product owner on 2026-10-06: a completed check-in counts
   - A ROLLER outage (5xx or 429) throws so Lambda retries asynchronously, three attempts at most. A rejection or the last failure records `session_summary.autoCheckin { status: "needs_staff", reason, attempts, roller }`, where `roller` is the refusal above (#571), and `checkin.auto_checkin_failed` carries `rollerReason`. The staff app shows the group as "Incheckad" anyway (#547, D0265), and the monitor chat catches the failure.
   - #547 (D0265): a confirmed kiosk add-on triggers it too (`kiosk_add_on_confirmed`), from the Booking Lambda's add-on confirmation or from the board's linked add-on refresh when ROLLER confirms it after the window.
   - #563 (D0279): when the webhook or a lookup confirms the add-on first, the paid-booking signal (`jumpyard.phone-email-marketing`) and the reconciliation worker's early stop update the linked session from the confirmed draft (`linkedAddOnSyncSource: confirmed_add_on_draft`) and trigger it, with no staff app open and no ROLLER call. The board refresh stays the safety net.
+  - #583 (D0285): the worker's and the webhook's confirmations of one kiosk booking start it once: `confirmKioskReconciliation` starts it only for a session it newly confirms. An automatic check-in that finds the session's redeem in progress (`redeem_in_progress`) ends with `in_progress` and no error; the attempt holding the key finishes the check-in.
   - Redeem write gates and the emergency stop block it as they block staff. `AUTO_CHECKIN_REDEEM=off` turns it off.
 - **Phone.** The phone shows the number, not the QR code. The `JY_HANDOFF:<code>:<sessionId>` payload stays valid for the staff app and the kiosk slip.
 - **Phone purchases** offer only sessions that start within the next two hours, so every phone purchase falls inside the window.

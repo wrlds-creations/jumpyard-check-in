@@ -424,7 +424,7 @@ function validateSourceContracts() {
   assert.match(slice(booking, 'async function confirmPhoneProvisionalHandoff(', 'async function requestAutoCheckin('),
     /requestAutoCheckin\(attached\.map\(\(row\) => row\.checkin_session_id\), 'phone_booking_confirmed'/);
   assert.match(slice(booking, 'async function confirmKioskReconciliation(', 'async function confirmKioskAddProductReconciliation('),
-    /requestAutoCheckin\(parseJsonArraySafe\(confirmed\.attached_session_ids\), 'kiosk_booking_confirmed'/);
+    /requestAutoCheckin\(parseJsonArraySafe\(confirmed\.newly_confirmed_session_ids\), 'kiosk_booking_confirmed'/);
   for (const handler of ['sessionHandler', 'bookingHandler']) {
     assert.match(stack, new RegExp(`${handler}\\.addEnvironment\\('AUTO_CHECKIN_FUNCTION_NAME', redeemHandler\\.functionName\\)`));
     assert.match(stack, new RegExp(`redeemHandler\\.grantInvoke\\(${handler}\\)`));
