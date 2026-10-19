@@ -637,6 +637,34 @@ test('A kept press is confirmed once Cloud accepts it, also after booking_sync_p
   assert.equal(next, null);
 });
 
+// GH-582: in the minute before ROLLER's tickets are attached, Cloud lists the paid draft's lines; the press made on
+// them is confirmed on ROLLER's lines afterwards, matched by product (Cloud's own line builders on both sides).
+test('A press on the draft\'s lines before the tickets are attached is confirmed on ROLLER\'s lines', async () => {
+  const { buildManifest, provisionalManifest } = require('../../../infra/lambda/shared/staff-handout.js');
+  const { confirmRemembered, rememberHandout } = remembered();
+  const day = '2026-09-08';
+  const draft = provisionalManifest([{ rollerUniqueId: 'R7', items: [
+    { productId: '1189812', productName: '60 min entré', productType: 'entry', quantity: 2, bookingDate: day, startTime: '10:00', endTime: '11:00' },
+    { productId: '970338', productName: 'JumpSocks', productType: 'addon', quantity: 2, bookingDate: day, startTime: '10:00' }] }], day);
+  const rollerLines = buildManifest([
+    { rollerUniqueId: 'R7', bookingItemId: '321023564', productId: '1189812', productName: '60 min entré', quantity: 2, bookingDate: day,
+      startTime: '10:00:00', endTime: '11:00:00', selectedUnits: 2, ticketUnits: 2, summary: { productType: 'sessionpass' } },
+    { rollerUniqueId: 'R7', bookingItemId: '321023565', productId: '970338', productName: 'JumpSocks', quantity: 2, bookingDate: day,
+      summary: { productType: 'addon' } }], day);
+  const goods = (items, bookingSyncStatus) => session({ checkinSessionId: 'kiosk', bookingSyncStatus,
+    handout: { claims: [], receipts: [], items: items.map((item) => ({ ...item, collected: 0, available: item.quantity })) } });
+  const [record] = rememberHandout([], goods(draft, 'pending'), { area: 'entrance', action: 'select', revision: 0,
+    selection: [{ id: draft[0].id, quantity: 2 }, { id: draft[1].id, quantity: 1 }] }, day);
+  const sent = [];
+  const tools = { actorId: 'sara', getDetail: async () => goods(rollerLines, 'confirmed'),
+    change: async (_id, request) => { sent.push(plain(request));
+      return request.action === 'select' ? { handout: { claims: [{ area: 'entrance', revision: 4 }] } } : { completed: true }; } };
+  assert.equal((await confirmRemembered(record, tools)).outcome, 'done');
+  assert.deepEqual(sent, [{ area: 'entrance', action: 'select', revision: 0,
+    selection: [{ id: 'R7:321023564:2026-09-08:purchased', quantity: 2 }, { id: 'R7:321023565:2026-09-08:purchased', quantity: 1 }] },
+  { area: 'entrance', action: 'confirm', revision: 4 }]);
+});
+
 test('A café press moves the row to Utlämnat on this device, and kept presses last the day in the tab (sessionStorage)', () => {
   const { rememberHandout, withRememberedCafe, readRemembered, storeRemembered, REMEMBERED_KEY } = (() => {
     const store = new Map();

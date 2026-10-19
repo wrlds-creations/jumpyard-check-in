@@ -182,7 +182,8 @@ test('The staff board counts a pending purchase\'s goods from its paid draft; a 
   assert.deepEqual([done.cafeQuantity, done.cafeRemaining], [0, 0]);
   const sql = statements[0];
   assert.match(sql, /CASE WHEN COALESCE\(cs\.session_summary ->> 'bookingSyncStatus', 'confirmed'\) <> 'confirmed' THEN jsonb_build_array\(/);
-  assert.match(sql, /WHERE d\.roller_draft_unique_id = b\.roller_unique_id\s+AND NOT EXISTS \(SELECT 1 FROM jumpyard\.roller_booking_items i WHERE i\.roller_unique_id = b\.roller_unique_id\)/);
+  // GH-582: the draft also stands in while ROLLER's items have arrived but the session has no tickets yet.
+  assert.match(sql, /WHERE d\.roller_draft_unique_id = b\.roller_unique_id\s+AND \(cs\.selected_ticket_ids = '\[\]'::jsonb\s+OR NOT EXISTS \(SELECT 1 FROM jumpyard\.roller_booking_items i WHERE i\.roller_unique_id = b\.roller_unique_id\)\)/);
   assert.match(sql, /d\.payment_attempt_status IN \('approved', 'reconciled'\) AND d\.booking_confirmation_status IN \('pending', 'needs_staff'\)/);
   assert.match(sql, /NOT EXISTS \(SELECT 1 FROM jumpyard\.roller_booking_items i WHERE i\.roller_unique_id = link\.linked_roller_unique_id\)/);
 });

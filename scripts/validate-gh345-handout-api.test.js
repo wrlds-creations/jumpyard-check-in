@@ -233,4 +233,123 @@ test('Handout HTTP contract: authoritative database, ROLLER receipt recovery and
     assert.equal((await summary(set)).bookingCustomerId, `${prefix}_owner_set`);
     assert.equal(await guestName(set), 'Bo Berg');
   });
+
+  await t.test('GH-582: a kiosk group keeps its goods until its tickets are attached, and a press from that minute counts after', async () => {
+    // Group 0007 on 2026-10-18: the webhook stored ROLLER's paid booking, items and tickets at 09:52:22 and confirmed
+    // the draft, but the session got the booking's tickets only on the webhook's retry at 09:53:26.
+    const asRole = (role) => async (query, parameters = []) => {
+      const indexes = new Map(parameters.map((parameter, index) => [parameter.name, index + 1]));
+      const text = query.replace(/(?<!:):([a-zA-Z][a-zA-Z0-9_]*)\b/g, (match, name) => indexes.has(name) ? `$${indexes.get(name)}` : match);
+      const values = parameters.map((parameter) => parameter.value?.isNull ? null : parameter.value && typeof parameter.value === 'object'
+        ? Object.values(parameter.value)[0] : parameter.value);
+      const client = await pool.connect();
+      try {
+        await client.query(`SET ROLE ${role}`);
+        return await client.query({ text, values, rowMode: 'array' });
+      } finally { await client.query('RESET ROLE'); client.release(); }
+    };
+    const session = asRole('jumpyard_session_runtime');
+    const { createStaffBoard } = require('../infra/lambda/session/staff-board');
+    const board = createStaffBoard({ mapSession: (row) => row, stringParameter: (name, value) => ({ name, value }),
+      mappedRows: (result) => result.rows.map((row) => Object.fromEntries(result.fields.map((column, index) => [column.name, row[index]]))),
+      executeStatement: session });
+    const sessionModule = { exports: {} };
+    const sessionDirectory = path.join(root, 'infra/lambda/session');
+    vm.runInContext(fs.readFileSync(path.join(sessionDirectory, 'index.js'), 'utf8') + `
+      executeStatement = async (query, parameters) => { const result = await __session(query, parameters);
+        return { records: result.rows.map((row) => row.map(__field)), columnMetadata: result.fields.map((column) => ({ name: column.name })) }; };
+      authorizeStaffRequest = async () => ({ ok:true, staff:__actor });
+      module.exports.detail = handleStaffSessionDetail;
+    `, vm.createContext({ module: sessionModule, exports: sessionModule.exports, Buffer, URL, URLSearchParams, Intl,
+      console: { error() {}, warn() {}, log() {}, info() {} }, process: { env: {} }, setTimeout, clearTimeout,
+      __session: session, __field: field, __actor: actor,
+      require: (name) => name.startsWith('@aws-sdk/') ? fakeAws : name.startsWith('./') ? require(path.join(sessionDirectory, name)) : require(name),
+    }), { filename: 'session-native-integration.js' });
+    const bookingId = `${prefix}_kiosk_gap`;
+    const sessionId = `${bookingId}_session`;
+    const draftId = `${prefix}_draft`;
+    const tickets = [0, 1, 2].map((n) => `${bookingId}_ticket${n}`);
+    const booking = { uniqueId: bookingId, bookingReference: `${bookingId}_ref`, status: 'Confirmed', paymentStatus: 'Paid',
+      amountOwing: 0, total: 1000, venueId: venue, items: [
+        { bookingItemId: `${bookingId}_bands`, productId: 900001, productName: 'Entry', productType: 'standardPass', quantity: 3,
+          bookingDate: day, startTime: '10:00', endTime: '11:00', tickets: tickets.map((ticketId) => ({ ticketId, redeemStatus: 'Unredeemed' })) },
+        { bookingItemId: `${bookingId}_coffee`, productId: 900002, productName: 'Kaffe', productType: 'food', quantity: 2, bookingDate: day, tickets: [] },
+      ] };
+    provider.bookings.set(bookingId, booking);
+    await module.exports.seedBooking(booking);
+    // The kiosk's paid draft, in Cloud's own product types, and the session the approval started: no tickets yet.
+    await pool.query(`INSERT INTO jumpyard.prepayment_booking_drafts (prepayment_draft_id, roller_draft_unique_id, external_id,
+      idempotency_key, status, roller_env, booking_date, start_time, total_cents, amount_owing_cents, currency, item_count, items_summary,
+      flow_type, payment_channel, payment_attempt_id, payment_attempt_status, booking_confirmation_status)
+      VALUES ($1, $2, $3, $4, 'published', 'playground', $5, '10:00', 100000, 0, 'SEK', 2, $6, 'new_booking', 'card_present', $7,
+        'reconciled', 'confirmed')`, [draftId, bookingId, `${prefix}_external`, `${prefix}_draft_key`, day, JSON.stringify([
+      { productId: '900001', productName: 'Entry', productType: 'entry', quantity: 3, bookingDate: day, startTime: '10:00', endTime: '11:00' },
+      { productId: '900002', productName: 'Kaffe', productType: 'addon', quantity: 2, bookingDate: day, startTime: '10:00' },
+    ]), `${prefix}_attempt`]);
+    await pool.query(`INSERT INTO jumpyard.checkin_sessions (checkin_session_id, roller_unique_id, booking_reference, visit_date,
+      expires_at, selected_ticket_ids, source_lookup_ref, session_summary) VALUES ($1, $2, $2, $3, now() + interval '2 hours', '[]', $4, $5)`,
+    [sessionId, bookingId, day, draftId, JSON.stringify({ bookingSyncStatus: 'pending', paymentAttemptId: `${prefix}_attempt`,
+      prepaymentDraftId: draftId, source: 'kiosk_terminal_approved' })]);
+    await pool.query(`SELECT * FROM jumpyard.ready_staff_session($1,'completed')`, [sessionId]);
+    const sync = (status, ticketIds = null) => pool.query(`UPDATE jumpyard.checkin_sessions SET session_summary = session_summary
+      || jsonb_build_object('bookingSyncStatus', $2::text), selected_ticket_ids = COALESCE($3::jsonb, selected_ticket_ids)
+      WHERE checkin_session_id = $1`, [sessionId, status, ticketIds && JSON.stringify(ticketIds)]);
+    const row = async () => (await board.list({ venueId: venue, day, search: null, cursor: null, bookingId })).sessions[0];
+    const detail = async () => JSON.parse((await sessionModule.exports.detail({ pathParameters: { checkinSessionId: sessionId },
+      rawPath: `/v1/staff/check-in/sessions/${sessionId}`, headers: {} }, 'jy_gh582')).body).session;
+    const lines = (found) => found.handout.items.map((item) => [item.kind, item.area, item.productId, item.quantity, item.collected,
+      item.provisional === true]);
+
+    // 1. The minute before the tickets are attached: the draft's goods stand in, once, on the board and in the detail.
+    const gap = await row();
+    assert.equal(gap.booking_sync_status, 'pending');
+    assert.equal(gap.counts.admission, 3, 'the bands stay');
+    assert.deepEqual([gap.cafeQuantity, gap.cafeRemaining], [2, 2], 'the coffee counts once');
+    const gapDetail = await detail();
+    assert.deepEqual(lines(gapDetail), [['admission', 'entrance', '900001', 3, 0, true], ['coffee', 'cafe', '900002', 2, 0, true]]);
+    assert.equal(gapDetail.counts.admission, 3);
+    // The issue's first reading of the minute, a booking row not yet paid, shows the same goods.
+    await pool.query("UPDATE jumpyard.roller_bookings SET payment_status='Unpaid', amount_owing_cents=100000 WHERE roller_unique_id=$1", [bookingId]);
+    assert.deepEqual([(await row()).counts.admission, (await row()).cafeQuantity], [3, 2]);
+    assert.deepEqual(lines(await detail()), lines(gapDetail));
+    await pool.query("UPDATE jumpyard.roller_bookings SET payment_status='Paid', amount_owing_cents=0 WHERE roller_unique_id=$1", [bookingId]);
+    assert.equal((await request({ sessionId }, { area: 'entrance', action: 'select', revision: 0,
+      selection: [{ id: gapDetail.handout.items[0].id, quantity: 3 }] })).body.error.code, 'booking_sync_pending',
+    'Cloud takes the press only after the switch; the device keeps it (D0265)');
+
+    // 2. The tickets are attached: ROLLER's lines replace the draft's, with the same counts and band colour.
+    await sync('confirmed', tickets);
+    const attached = await row();
+    assert.equal(attached.counts.admission, 3);
+    assert.deepEqual(attached.bandColours, gap.bandColours);
+    assert.deepEqual([attached.cafeQuantity, attached.cafeRemaining], [2, 2]);
+    assert.deepEqual(lines(await detail()), [['admission', 'entrance', '900001', 3, 0, false], ['coffee', 'cafe', '900002', 2, 0, false]]);
+
+    // 3. The press kept from the gap is confirmed like the staff app does it: bands whole, other goods by kind and product.
+    const press = (found, area) => found.handout.items.filter((item) => item.area === area).flatMap((item) => {
+      const kept = gapDetail.handout.items.find((line) => line.kind === item.kind && line.productId === item.productId);
+      return kept && item.available > 0 ? [{ id: item.id, quantity: item.kind === 'admission' ? item.available : Math.min(item.available, 1) }] : [];
+    });
+    const confirmPress = async (area) => {
+      const selected = await request({ sessionId }, { area, action: 'select', revision: 0, selection: press(await detail(), area) });
+      assert.equal(selected.status, 200, JSON.stringify(selected.body));
+      const confirmed = await request({ sessionId }, { area, action: 'confirm',
+        revision: selected.body.handout.claims.find((claim) => claim.area === area).revision });
+      assert.equal(confirmed.status, 200, JSON.stringify(confirmed.body));
+    };
+    await confirmPress('cafe');
+    assert.equal((await row()).cafeRemaining, 1);
+
+    // 4. A later kiosk add-on makes the group pending again with its tickets kept: the draft never stands in again.
+    await sync('pending');
+    assert.deepEqual([(await row()).counts.admission, (await row()).cafeRemaining], [3, 1]);
+    assert.deepEqual(lines(await detail()), [['admission', 'entrance', '900001', 3, 0, false], ['coffee', 'cafe', '900002', 2, 1, false]]);
+
+    // 5. Back to confirmed, the kept band press checks the group in and counts the bands.
+    await sync('confirmed');
+    await confirmPress('entrance');
+    const counted = await detail();
+    assert.deepEqual(lines(counted), [['admission', 'entrance', '900001', 3, 3, false], ['coffee', 'cafe', '900002', 2, 1, false]]);
+    assert.equal(counted.status, 'redeemed');
+  });
 });
