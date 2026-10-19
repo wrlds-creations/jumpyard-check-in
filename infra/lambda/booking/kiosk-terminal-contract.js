@@ -25,6 +25,11 @@ const SUPPORTED_KIOSK_VENUE_ID = '50871';
 // GH-483 (D0239): "No payment" waits until the terminal has timed out (about 135 s) and ROLLER
 // has had time to turn a late payment notification into a booking (up to about 75 s).
 const KIOSK_STAFF_NO_PAYMENT_MIN_AGE_SECONDS = 5 * 60;
+// GH-447 (D0286): Cloud releases an attempt the kiosk never reported on by itself, on the same
+// evidence, only from twice the staff wait.
+const KIOSK_ABANDONED_ATTEMPT_MIN_AGE_SECONDS = 10 * 60;
+const KIOSK_UNSTARTED_DRAFT_KEY_PATTERN = /^[\x21-\x7e]{1,200}$/;
+const KIOSK_UNSTARTED_DRAFT_KEYS_MAX = 3;
 const KIOSK_STAFF_RESOLUTION_ACTIONS = new Set(['inspect', 'no_payment', 'paid']);
 
 function normalizePaymentTerminalMap(value) {
@@ -619,6 +624,33 @@ function kioskStaffResolutionEligibility(row, evidence) {
   };
 }
 
+// GH-447 (D0286): the idempotency keys of the kiosk's own earlier draft requests whose payment never
+// started on the terminal (kiosk #134): an answer lost to a reload or a lost connection, or a draft
+// without a usable payment. The kiosk never held their payment token. Anything malformed is ignored.
+function normalizeKioskUnstartedDraftKeys(value) {
+  if (!Array.isArray(value)) return [];
+  const keys = value.filter((key) => typeof key === 'string' && KIOSK_UNSTARTED_DRAFT_KEY_PATTERN.test(key));
+  return [...new Set(keys)].slice(0, KIOSK_UNSTARTED_DRAFT_KEYS_MAX);
+}
+
+// GH-447 (D0286): whether an attempt that holds a busy kiosk claim may get its one ROLLER check.
+// Only an attempt that never reported a terminal result qualifies: `unknown` and approved attempts
+// reached the terminal and stay with staff (D0239) and the reconciliation path. The attempt must be
+// 10 minutes old, unless its own kiosk reports that its payment never started. A release then
+// still needs ROLLER's 404, as "no payment" does.
+function kioskAbandonedAttemptCheckable(row, { reportedUnstarted = false } = {}) {
+  const ageSeconds = Math.max(0, Math.floor(Number(row?.age_seconds) || 0));
+  return Boolean(
+    stringOrNull(row?.prepayment_draft_id) &&
+    stringOrNull(row?.roller_draft_unique_id) &&
+    row?.payment_attempt_status === 'created' &&
+    row?.status !== 'published' &&
+    !stringOrNull(row?.roller_booking_reference) &&
+    Number(row?.local_booking_count ?? 0) === 0 &&
+    (reportedUnstarted === true || ageSeconds >= KIOSK_ABANDONED_ATTEMPT_MIN_AGE_SECONDS),
+  );
+}
+
 // GH-483: the PII-free view of one attempt for the staff panel on the kiosk.
 function publicKioskStaffResolution(row, evidence, eligibility) {
   const totalCents = Number(row?.total_cents);
@@ -788,9 +820,12 @@ module.exports = {
   buildKioskStatus,
   isKioskPairingStaffAllowed,
   classifyKioskStaffRollerEvidence,
+  kioskAbandonedAttemptCheckable,
   kioskStaffResolutionEligibility,
+  KIOSK_ABANDONED_ATTEMPT_MIN_AGE_SECONDS,
   KIOSK_STAFF_NO_PAYMENT_MIN_AGE_SECONDS,
   normalizeKioskStaffResolutionAction,
+  normalizeKioskUnstartedDraftKeys,
   publicKioskStaffResolution,
   KIOSK_PAYMENT_CURRENCY,
   kioskNameDirectory,

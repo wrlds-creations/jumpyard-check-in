@@ -98,6 +98,11 @@ jobs:
           GH563_DATABASE_TEST: 'true'
           GH563_PGPORT: '55435'
         run: npm run validate:gh563-addon-release
+      - name: Test abandoned kiosk attempt release against PostgreSQL
+        env:
+          GH447_DATABASE_TEST: 'true'
+          GH447_PGPORT: '55435'
+        run: npm run validate:gh447-abandoned-kiosk-attempt
       - name: Test one automatic check-in per kiosk confirmation against PostgreSQL
         env:
           GH583_DATABASE_TEST: 'true'
