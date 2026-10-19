@@ -1,6 +1,6 @@
 # #582 A kiosk group keeps its bands until its tickets are attached
 
-Issue [#582](https://github.com/wrlds-creations/jumpyard-check-in/issues/582), decision [D0282](../DECISIONS.md). It revises when D0265's provisional lines ([#547](gh-547-ready-is-checked-in.md)) give way to ROLLER's.
+Issue [#582](https://github.com/wrlds-creations/jumpyard-check-in/issues/582), decision [D0283](../DECISIONS.md). It revises when D0265's provisional lines ([#547](gh-547-ready-is-checked-in.md)) give way to ROLLER's.
 
 ## What happened
 
@@ -25,7 +25,7 @@ From 09:52:22 to 09:53:26 the session was `pending` with no tickets, while ROLLE
 
 The race happened 9 times on 2026-10-17 and at least once on 2026-10-18.
 
-## Change (D0282)
+## Change (D0283)
 
 - **Board** (`staff-board.js`): the paid new-booking draft stands in while the session is not `confirmed` and either has no tickets yet or the booking has no ROLLER items. Before, only the second case counted. While the draft stands in, that booking's own ROLLER lines are left out, so nothing is counted twice. Add-on drafts are unchanged.
 - **Detail** (`findStaffSessionDetail`, `handleStaffSessionDetail`): the same rule. The draft's items replace ROLLER's items and handout lines for that booking until the session has its tickets.
