@@ -13,8 +13,10 @@ const {
   buildKioskStatus,
   classifyKioskStaffRollerEvidence,
   isKioskPairingStaffAllowed,
+  KIOSK_ABANDONED_ATTEMPT_MIN_AGE_SECONDS,
   KIOSK_PAYMENT_CURRENCY,
   KIOSK_STAFF_NO_PAYMENT_MIN_AGE_SECONDS,
+  kioskAbandonedAttemptCheckable,
   kioskNameDirectory,
   kioskStaffResolutionEligibility,
   kioskTerminalLockId,
@@ -29,6 +31,7 @@ const {
   normalizeKioskPairingStaffIdentityIds,
   normalizeKioskProfileMap,
   normalizeKioskStaffResolutionAction,
+  normalizeKioskUnstartedDraftKeys,
   normalizePaymentTerminalMap,
   normalizePaymentTerminalNameMap,
   normalizeTerminalMerchantId,
@@ -718,7 +721,7 @@ async function handleDraft(event, body, correlationId) {
       });
     }
   }
-  const reservationError = await reserveKioskDraftBinding(terminalSelection, request);
+  const reservationError = await reserveKioskDraftBinding(terminalSelection, request, { config, correlationId });
   if (reservationError) return jsonResponse(409, correlationId, { status: 'blocked', error: reservationError });
   return releaseKioskClaimsOnFailure(request, correlationId, () => createReservedDraft({
     config, contact, correlationId, kioskQuoteResult, payload, request, startedAt, terminalSelection, token,
@@ -2627,11 +2630,12 @@ async function findKioskStaffResolutionAttempt(request, installationId) {
   return firstMappedRow(result) ?? null;
 }
 
-async function readKioskStaffRollerEvidence(config, row) {
+// GH-447: the automatic release expects ROLLER's 404 and passes it as `expectedMissStatus` (GH-531).
+async function readKioskStaffRollerEvidence(config, row, { expectedMissStatus = null } = {}) {
   let result;
   try {
     const token = await getRollerAccessToken(config);
-    result = await getRollerJson(config, token, `/bookings/${encodeURIComponent(row.roller_draft_unique_id)}`);
+    result = await getRollerJson(config, token, `/bookings/${encodeURIComponent(row.roller_draft_unique_id)}`, { expectedMissStatus });
   } catch {
     result = { transportError: true };
   }
@@ -3032,7 +3036,7 @@ async function handleAddProductDraft(event, body, correlationId) {
       });
     }
   }
-  const reservationError = await reserveKioskDraftBinding(terminalSelection, request);
+  const reservationError = await reserveKioskDraftBinding(terminalSelection, request, { config, correlationId });
   if (reservationError) return jsonResponse(409, correlationId, { status: 'blocked', error: reservationError });
   return releaseKioskClaimsOnFailure(request, correlationId, () => createReservedAddProductDraft({
     addOnGroupId, config, correlationId, kioskQuoteResult, original, payload, request, startedAt, terminalSelection, token,
@@ -3218,6 +3222,7 @@ function normalizeDraftRequest(event, body) {
     paymentTerminalAlias: stringOrNull(body.paymentTerminalAlias),
     requireAvailability: body.requireAvailability === true,
     sendConfirmations: body.sendConfirmations === true,
+    unstartedDraftKeys: normalizeKioskUnstartedDraftKeys(body.unstartedDraftKeys),
     venueId: stringOrNull(body.venueId),
   };
 }
@@ -3256,6 +3261,7 @@ function normalizeAddProductDraftRequest(event, body, bookingReference) {
     paymentTerminalAlias: stringOrNull(body.paymentTerminalAlias),
     requireAvailability: body.requireAvailability === true,
     sendConfirmations: body.sendConfirmations === true,
+    unstartedDraftKeys: normalizeKioskUnstartedDraftKeys(body.unstartedDraftKeys),
     venueId: stringOrNull(body.venueId),
   };
 }
@@ -5600,8 +5606,27 @@ function centsFromAmount(amount) {
 // survive lost responses and provider ambiguity; wall-clock expiry never opens
 // a second payment. Reuse requires a definitive stored outcome. No provider
 // identifiers or credentials are persisted in these operational rows.
-async function reserveKioskDraftBinding(selection, request) {
+// GH-447 (D0282): a busy claim held by an attempt the kiosk abandoned before any
+// terminal result is released on ROLLER evidence, and the claim is tried once more.
+async function reserveKioskDraftBinding(selection, request, { config = null, correlationId = null } = {}) {
   if (!selection.reservationKeys?.length) return null;
+  let paymentAttemptId = await claimKioskDraftBinding(selection.reservationKeys);
+  if (!paymentAttemptId && config && await releaseAbandonedKioskAttempts(selection.reservationKeys, config, correlationId, {
+    installationId: stringOrNull(selection.installationId),
+    unstartedDraftKeys: request.unstartedDraftKeys ?? [],
+  })) {
+    paymentAttemptId = await claimKioskDraftBinding(selection.reservationKeys);
+  }
+  if (!paymentAttemptId) {
+    await completeIdempotencyKey(request.idempotencyKey, 'failed', 'kiosk_payment_busy');
+    return { code: 'kiosk_payment_busy', message: 'This kiosk or terminal has an unresolved payment. Ask staff for help.' };
+  }
+  request.reservedPaymentAttemptId = paymentAttemptId;
+  return null;
+}
+
+// The claim itself: the new attempt id when every key was claimed, otherwise null.
+async function claimKioskDraftBinding(reservationKeys) {
   const paymentAttemptId = `jytp_${crypto.randomUUID().replace(/-/g, '').slice(0, 18)}`;
   const result = await executeStatement(
     `INSERT INTO jumpyard.idempotency_records AS existing (
@@ -5626,24 +5651,163 @@ async function reserveKioskDraftBinding(selection, request) {
        ))
      RETURNING idempotency_key`,
     [
-      stringParameter('keys', JSON.stringify(selection.reservationKeys)),
+      stringParameter('keys', JSON.stringify(reservationKeys)),
       stringParameter('attemptId', paymentAttemptId),
     ],
   );
-  if (mappedRows(result).length !== selection.reservationKeys.length) {
-    // A competing request may own one of the two keys. Release only our own
-    // partial claim, which has never reached the provider.
-    await executeStatement(
-      `UPDATE jumpyard.idempotency_records
-       SET status = 'released', result_ref = NULL, expires_at = now(), updated_at = now()
-       WHERE operation = 'kiosk_terminal_binding' AND result_ref = :attemptId`,
-      [stringParameter('attemptId', paymentAttemptId)],
-    );
-    await completeIdempotencyKey(request.idempotencyKey, 'failed', 'kiosk_payment_busy');
-    return { code: 'kiosk_payment_busy', message: 'This kiosk or terminal has an unresolved payment. Ask staff for help.' };
-  }
-  request.reservedPaymentAttemptId = paymentAttemptId;
+  if (mappedRows(result).length === reservationKeys.length) return paymentAttemptId;
+  // A competing request may own one of the two keys. Release only our own
+  // partial claim, which has never reached the provider.
+  await executeStatement(
+    `UPDATE jumpyard.idempotency_records
+     SET status = 'released', result_ref = NULL, expires_at = now(), updated_at = now()
+     WHERE operation = 'kiosk_terminal_binding' AND result_ref = :attemptId`,
+    [stringParameter('attemptId', paymentAttemptId)],
+  );
   return null;
+}
+
+// GH-447 (D0282): on 2026-10-18 K5 lost a draft response when its page reloaded, and the attempt,
+// never reported, refused every purchase until K5 was switched off. An attempt that holds a busy
+// claim gets one ROLLER read, and only when it never reported a terminal result, has no booking
+// here and is at least 10 minutes old, or its own kiosk reports that its payment never started
+// (kiosk #134); ROLLER's 404 then releases it as D0239's "no payment" does. Anything else keeps the
+// kiosk busy. A failure here is logged and leaves every claim as it was.
+async function releaseAbandonedKioskAttempts(reservationKeys, config, correlationId, { installationId = null, unstartedDraftKeys = [] } = {}) {
+  const holders = [];
+  let releasedCount = 0;
+  try {
+    for (const holder of await readKioskClaimHolders(reservationKeys)) {
+      const reportedUnstarted = Boolean(
+        installationId &&
+        stringOrNull(holder.kiosk_installation_id) === installationId &&
+        unstartedDraftKeys.includes(stringOrNull(holder.idempotency_key)),
+      );
+      const summary = {
+        ageSeconds: Number.isFinite(Number(holder.age_seconds)) ? Number(holder.age_seconds) : null,
+        attemptStatus: stringOrNull(holder.payment_attempt_status),
+        paymentAttemptId: stringOrNull(holder.payment_attempt_id),
+        reportedUnstarted,
+        rollerBooking: null,
+      };
+      holders.push(summary);
+      if (!kioskAbandonedAttemptCheckable(holder, { reportedUnstarted })) continue;
+      const evidence = await readKioskStaffRollerEvidence(config, holder, { expectedMissStatus: 404 });
+      summary.rollerBooking = evidence.booking;
+      if (evidence.booking !== 'not_found') continue;
+      if (await releaseAbandonedKioskAttempt(holder, correlationId, {
+        ageSeconds: summary.ageSeconds,
+        attemptStatusBefore: summary.attemptStatus,
+        flowType: stringOrNull(holder.flow_type),
+        reportedUnstarted,
+        result: 'released',
+        roller: { booking: evidence.booking, httpStatus: evidence.httpStatus ?? null },
+      }, reportedUnstarted ? installationId : null)) {
+        summary.released = true;
+        releasedCount += 1;
+        emitKioskTerminalOutcomeMetric('abandoned');
+      }
+    }
+  } catch (error) {
+    diagnostics.warn('booking.kiosk_abandoned_release_failed', error, correlationId);
+  }
+  console.warn(JSON.stringify({ correlationId, event: 'kiosk_payment_busy', holders, releasedCount }));
+  return releasedCount;
+}
+
+// The attempts behind the started claims on these keys, with what the release needs to decide.
+async function readKioskClaimHolders(reservationKeys) {
+  const result = await executeStatement(
+    `SELECT DISTINCT
+       claim.result_ref AS payment_attempt_id,
+       draft.prepayment_draft_id,
+       draft.roller_draft_unique_id,
+       draft.idempotency_key,
+       draft.kiosk_installation_id,
+       draft.payment_attempt_status,
+       draft.status,
+       draft.flow_type,
+       draft.roller_booking_reference,
+       draft.total_cents,
+       draft.amount_owing_cents,
+       floor(extract(epoch FROM now() - draft.created_at))::int AS age_seconds,
+       (
+         SELECT count(*)
+         FROM jumpyard.roller_bookings AS booking
+         WHERE booking.roller_env = draft.roller_env
+           AND (
+             booking.roller_unique_id = draft.roller_draft_unique_id
+             OR (draft.external_id IS NOT NULL AND booking.normalized_summary ->> 'externalId' = draft.external_id)
+           )
+       )::int AS local_booking_count
+     FROM jumpyard.idempotency_records AS claim
+     LEFT JOIN jumpyard.prepayment_booking_drafts AS draft
+       ON draft.payment_attempt_id = claim.result_ref AND draft.payment_channel = 'card_present'
+     WHERE claim.operation = 'kiosk_terminal_binding'
+       AND claim.status = 'started'
+       AND claim.idempotency_key IN (SELECT jsonb_array_elements_text(CAST(:keys AS jsonb)))`,
+    [stringParameter('keys', JSON.stringify(reservationKeys))],
+  );
+  return mappedRows(result);
+}
+
+// The release, its guards and its audit are one statement, as for D0239: a late result, booking or
+// publish turns it into a no-op. `cancelled` is a definitive outcome, so the next draft takes over
+// both claims; no claim row is touched here. Without the age, only the kiosk that made the draft
+// request may release it, by that request's key.
+async function releaseAbandonedKioskAttempt(holder, correlationId, auditPayload, reportingInstallationId = null) {
+  const result = await executeStatement(
+    `WITH updated_draft AS (
+       UPDATE jumpyard.prepayment_booking_drafts AS draft
+       SET payment_attempt_status = 'cancelled',
+           status = 'cancelled',
+           booking_confirmation_status = 'failed',
+           reconciliation_last_result = 'abandoned_no_payment',
+           updated_at = now()
+       WHERE draft.prepayment_draft_id = :prepaymentDraftId
+         AND draft.payment_attempt_id = :paymentAttemptId
+         AND draft.roller_draft_unique_id = :rollerDraftUniqueId
+         AND draft.payment_channel = 'card_present'
+         AND draft.payment_attempt_status = 'created'
+         AND draft.status <> 'published'
+         AND draft.roller_booking_reference IS NULL
+         AND (
+           draft.created_at <= now() - (CAST(:minimumAgeSeconds AS integer) * interval '1 second')
+           OR (draft.idempotency_key = :unstartedDraftKey AND draft.kiosk_installation_id = :reportingInstallationId)
+         )
+         AND NOT EXISTS (
+           SELECT 1
+           FROM jumpyard.roller_bookings AS booking
+           WHERE booking.roller_env = draft.roller_env
+             AND (
+               booking.roller_unique_id = draft.roller_draft_unique_id
+               OR (draft.external_id IS NOT NULL AND booking.normalized_summary ->> 'externalId' = draft.external_id)
+             )
+         )
+       RETURNING draft.prepayment_draft_id
+     ), audit AS (
+       -- No RETURNING: the booking role may insert into event_log but not read it (D0239).
+       INSERT INTO jumpyard.event_log (event_id, correlation_id, event_type, subject_ref, summary, event_payload)
+       SELECT :eventId, :correlationId, 'booking.kiosk_abandoned_attempt_released', updated_draft.prepayment_draft_id,
+              'Cloud released a kiosk attempt that never reported a terminal result after ROLLER showed no booking.',
+              CAST(:eventPayload AS jsonb)
+       FROM updated_draft
+     )
+     SELECT updated_draft.prepayment_draft_id
+     FROM updated_draft`,
+    [
+      stringParameter('prepaymentDraftId', holder.prepayment_draft_id),
+      stringParameter('paymentAttemptId', holder.payment_attempt_id),
+      stringParameter('rollerDraftUniqueId', holder.roller_draft_unique_id),
+      integerParameter('minimumAgeSeconds', KIOSK_ABANDONED_ATTEMPT_MIN_AGE_SECONDS),
+      stringParameter('unstartedDraftKey', reportingInstallationId ? stringOrNull(holder.idempotency_key) : null),
+      stringParameter('reportingInstallationId', reportingInstallationId),
+      stringParameter('eventId', `evt_${hashString(`kiosk_abandoned_release:${holder.payment_attempt_id}:${correlationId}:${Date.now()}`)}`),
+      stringParameter('correlationId', correlationId ?? 'unknown'),
+      stringParameter('eventPayload', JSON.stringify(auditPayload)),
+    ],
+  );
+  return Boolean(firstMappedRow(result));
 }
 
 // GH-570 (D0278): nothing can pay through an attempt's claims until its prepayment row exists, so a

@@ -144,10 +144,11 @@ test('Every other caller keeps counting a 404 as a ROLLER error', async () => {
   assert.equal(count('RollerApiErrorCount'), 3);
   assert.equal(count('RollerApiExpectedMissCount'), 0);
   assert.deepEqual(metrics.map((record) => record.StatusCode), [404, 500, 404]);
-  // Only the kiosk reconciliation names an expected miss.
-  assert.equal(source.match(/expectedMissStatus:/g).length, 1);
+  // Only the kiosk reconciliation and the GH-447 check of an abandoned kiosk attempt name an expected miss.
+  assert.equal(source.match(/expectedMissStatus:/g).length, 2);
   assert.match(source, /const lastAttempt = index === KIOSK_RECONCILIATION_OFFSETS_MS\.length - 1;/);
   assert.match(source, /expectedMissStatus: lastAttempt \? null : 404,/);
+  assert.match(source, /readKioskStaffRollerEvidence\(config, holder, \{ expectedMissStatus: 404 \}\)/);
 });
 
 test('The ROLLER alarms still read only RollerApiErrorCount', () => {
