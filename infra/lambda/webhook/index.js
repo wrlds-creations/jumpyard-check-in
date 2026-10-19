@@ -37,6 +37,23 @@ const WEBHOOK_RETRY_DELAY_SECONDS = [60, 120, 240, 480];
 // Matches the source queue's maxReceiveCount: after the last delivery fails the message is released
 // at once, so SQS moves it to the DLQ without another wait.
 const WEBHOOK_QUEUE_MAX_RECEIVE_COUNT = 5;
+// GH-581 (D0282): a kiosk Handoff check that fails for one of these reasons fails the same way on
+// every retry, because the paid booking itself no longer matches the kiosk sale (for example after
+// kassan removed an entry). The booking refresh stays, the reason is logged and kept on the event,
+// and the queue moves on instead of holding every later booking for about 15 minutes.
+const KIOSK_CONFIRMATION_FINAL_REASONS = new Set([
+  'authoritative_booking_ambiguous',
+  'authoritative_booking_date_mismatch',
+  'authoritative_booking_id_mismatch',
+  'authoritative_booking_reference_mismatch',
+  'authoritative_currency_mismatch',
+  'authoritative_environment_mismatch',
+  'authoritative_external_id_mismatch',
+  'authoritative_total_mismatch',
+  'authoritative_venue_configuration_missing',
+  'authoritative_venue_mismatch',
+  'invalid_authoritative_confirmation_request',
+]);
 const SOURCE_WEBHOOK_GUEST_PROFILE = 'roller_webhook_booking_detail';
 const SOURCE_WEBHOOK_GUEST_DETAIL = 'roller_webhook_guest_detail';
 const PROVIDER_CONFIG_CACHE_MS = 5 * 60 * 1000;
@@ -764,8 +781,16 @@ async function enrichWebhookEvent(intake, correlationId) {
     const bookingItemKeys = await upsertWebhookBooking(booking, config.env, scope.venueId);
     await deleteMissingWebhookChildren(booking, bookingItemKeys);
     const guestProfile = await upsertWebhookGuestProfile(booking);
-    await reconcilePrepaymentDraftFromPaidBooking(booking, 'roller_webhook_enrichment', correlationId);
-    await updateWebhookEventStatus(intake.eventId, 'processed', null, true);
+    const { kioskConfirmation } = await reconcilePrepaymentDraftFromPaidBooking(
+      booking,
+      'roller_webhook_enrichment',
+      correlationId,
+    );
+    // GH-581 (D0282): a kiosk check that waiting cannot heal stays on the processed event.
+    const processedNote = kioskConfirmation?.status === 'not_retried'
+      ? `kiosk_confirmation_not_retried: ${kioskConfirmation.reason}`
+      : null;
+    await updateWebhookEventStatus(intake.eventId, 'processed', processedNote, true);
     await persistEnrichmentEventLog(intake, correlationId, booking, products.status, guestProfile);
 
     return {
@@ -1939,7 +1964,9 @@ async function upsertWebhookGuestProfile(booking) {
 }
 
 async function reconcilePrepaymentDraftFromPaidBooking(booking, source, correlationId) {
-  if (!booking?.rollerUniqueId || !booking.bookingReference || !isPaymentSettled(booking)) return [];
+  if (!booking?.rollerUniqueId || !booking.bookingReference || !isPaymentSettled(booking)) {
+    return { kioskConfirmation: null, updatedDrafts: [] };
+  }
 
   const result = await executeStatement(
     `UPDATE jumpyard.prepayment_booking_drafts
@@ -1985,7 +2012,7 @@ async function reconcilePrepaymentDraftFromPaidBooking(booking, source, correlat
     await recordPrepaymentDraftPublishedEvent(booking, draft, source);
   }
 
-  await requestKioskAuthoritativeConfirmation(booking, source, correlationId);
+  const kioskConfirmation = await requestKioskAuthoritativeConfirmation(booking, source, correlationId);
 
   await requestPhoneEmailMarketing(booking, correlationId);
 
@@ -1994,7 +2021,7 @@ async function reconcilePrepaymentDraftFromPaidBooking(booking, source, correlat
     await recordBookingLinkPublishedEvent(booking, link, source);
   }
 
-  return updatedDrafts;
+  return { kioskConfirmation, updatedDrafts };
 }
 
 async function requestPhoneEmailMarketing(booking, correlationId) {
@@ -2014,7 +2041,7 @@ async function requestKioskAuthoritativeConfirmation(booking, source, correlatio
   if (!externalId) return null;
 
   const result = await executeStatement(
-    `SELECT prepayment_draft_id, payment_attempt_id
+    `SELECT prepayment_draft_id, payment_attempt_id, booking_confirmation_status, reconciliation_last_result
      FROM jumpyard.prepayment_booking_drafts
      WHERE external_id = :externalId
        AND payment_channel = 'card_present'
@@ -2033,13 +2060,21 @@ async function requestKioskAuthoritativeConfirmation(booking, source, correlatio
     throw error;
   }
 
+  const candidate = candidates[0];
+  // GH-581 (D0282): only the Booking Lambda's attachment stores the result `confirmed` (this worker
+  // stores `confirmed_by_webhook`), so the kiosk Handoff is already attached. A later ROLLER change,
+  // such as kassan removing an entry, is then an ordinary booking refresh, not a new check against
+  // the kiosk sale.
+  if (candidate.booking_confirmation_status === 'confirmed' && candidate.reconciliation_last_result === 'confirmed') {
+    return { status: 'already_confirmed' };
+  }
+
   const functionName = stringOrNull(process.env.KIOSK_AUTHORITATIVE_CONFIRMATION_FUNCTION_NAME);
   if (!functionName) {
     const error = new Error('The internal kiosk confirmation function is not configured.');
     error.code = 'kiosk_confirmation_configuration_error';
     throw error;
   }
-  const candidate = candidates[0];
   const response = await hooks.invokeLambda(new InvokeCommand({
     FunctionName: functionName,
     InvocationType: 'RequestResponse',
@@ -2062,6 +2097,10 @@ async function requestKioskAuthoritativeConfirmation(booking, source, correlatio
   if (response.FunctionError || payload?.status !== 'confirmed') {
     // GH-346: the Booking Lambda's reason code is logged and kept on the event, never booking data.
     const reason = response.FunctionError ? 'function_error' : safeReasonCode(payload?.reason ?? payload?.status);
+    if (KIOSK_CONFIRMATION_FINAL_REASONS.has(reason)) {
+      console.error(JSON.stringify({ code: 'kiosk_confirmation_failed', reason, status: 'not_retried' }));
+      return { status: 'not_retried', reason };
+    }
     const error = new Error(`The authoritative kiosk Handoff attachment did not complete (${reason}).`);
     error.code = 'kiosk_confirmation_failed';
     error.reason = reason;
@@ -2544,6 +2583,7 @@ exports.__test = {
   handleWebhookQueue,
   handleWebhookRecovery,
   isWebhookEventAutomaticallyRetryable,
+  KIOSK_CONFIRMATION_FINAL_REASONS,
   parseRetryAfterMs,
   parseWebhookQueueMessage,
   processWebhookEventById,

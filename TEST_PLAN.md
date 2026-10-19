@@ -1,5 +1,18 @@
 # Test Plan
 
+## A kassan change to a kiosk booking no longer holds the webhook queue (#581)
+
+Run `npm run validate:gh581-kassan-change` (part of `npm run validate`). It drives the real webhook worker through one queue delivery with a scripted Aurora, ROLLER and Booking Lambda, and checks that:
+- Sunday's 0088 `Updated` webhook (kiosk sale 480 kr, ROLLER now 240 kr, Handoff attached) is processed in one delivery: the booking is upserted at 24000, the Booking Lambda is not called, the message keeps no visibility delay and the event is `processed`;
+- a redriven DLQ message with status `failed` and 8 attempts processes the same way;
+- a final reason on a Handoff that is not attached yet is recorded once (`kiosk_confirmation_not_retried: <reason>`, log `status: not_retried`) and acknowledged;
+- `authoritative_source_invalid`, `function_error` and `unknown` still fail the delivery and come back after 60 s;
+- every reason the Booking Lambda can return is either final or transient, and only the result `confirmed` skips the check.
+
+Against the code before #581, five of the six cases fail. Also run `validate:gh346-webhook-retry`, `validate:t0197-webhook-reconciliation`, `validate:gh282-kiosk-handoff-repair`, `validate:kiosk-payment-reconciliation` and `validate:gh563-addon-release`. The Park plan may change only the two webhook Lambdas' code (intake and processor share the file).
+
+After release, the monitor redrives the two DLQ messages from 2026-10-18 with Love's OK; each is stored as `processed` and `webhook-dlq-visible` returns to OK. A later kassan change to a confirmed kiosk booking leaves no `kiosk_confirmation_failed` in the processor log. [Notes](docs/gh-581-kassan-change-queue.md).
+
 ## ROLLER refusals are kept, and a kalas is never checked in (#571, kiosk #244)
 
 Run `npm run validate:gh571-roller-refusal` (part of `npm run validate`). It drives the real Lambdas with a scripted Aurora and ROLLER and checks that:
