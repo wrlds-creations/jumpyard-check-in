@@ -15,7 +15,7 @@ These facts were read from Park's Aurora rows (no names), Lambda logs and the we
 | 09:52:22.5 | The webhook confirms the draft and asks the Booking Lambda to attach the session. It refuses with `authoritative_source_invalid`, because the worker's partial snapshot (`kiosk_payment_reconciliation`) wrote the row last. The webhook retries after 60 s (D0262). |
 | 09:53:25.9 | The retry attaches the session with its two tickets. Automatic check-in redeems it at 09:53:27.9. |
 
-The log records only the worker's error class. The timing and the code point to its item insert. It writes a `jybi_…` key with `ON CONFLICT (booking_item_key)`, but the webhook had just stored the same `booking_item_id` under a `bookingitem:…` key, which the unique index on `booking_item_id` refuses.
+The log records only the worker's error class. The timing and the code point to its item insert. It writes a `jybi_…` key with `ON CONFLICT (booking_item_key)`, but the webhook had just stored the same `booking_item_id` under a `bookingitem:…` key, which the unique index on `booking_item_id` refuses. #589 (D0287) fixed that collision, so the worker now attaches the session in the same run; this change stays as the safety net.
 
 ## Why the bands disappeared
 

@@ -108,6 +108,11 @@ jobs:
           GH583_DATABASE_TEST: 'true'
           GH583_PGPORT: '55435'
         run: npm run validate:gh583-alarms-not-errors
+      - name: Test kiosk purchases whose items the webhook stored first against PostgreSQL
+        env:
+          GH589_DATABASE_TEST: 'true'
+          GH589_PGPORT: '55435'
+        run: npm run validate:gh589-kiosk-item-key
 
   repository:
     name: Repository

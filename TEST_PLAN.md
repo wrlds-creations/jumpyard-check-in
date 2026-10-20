@@ -1,5 +1,16 @@
 # Test Plan
 
+## A kiosk purchase whose items the webhook stored first (#589)
+
+Run `npm run validate:gh589-kiosk-item-key` (part of `npm run validate`). It drives the real Booking and Lookup Lambdas with a scripted Aurora and checks that:
+- the kiosk snapshot upserts an item with a ROLLER id on that id, puts its tickets on the key the row already has, and refuses another booking's id with `kiosk_booking_item_identity_conflict`; an item without an id keeps its `jybi_` upsert;
+- a booking row that a full live ROLLER read wrote keeps its source, while the snapshot still refreshes the paid status and never updates total, currency, date, venue or externalId;
+- a lookup keeps the kiosk's `jybi_` key for the item and its tickets, and refuses another booking's id with `lookup_booking_item_identity_conflict`.
+
+With `GH589_DATABASE_TEST=true` (CI's "Staff handout database" job) the webhook, Booking and Lookup Lambdas run against PostgreSQL with every migration applied, each under its own role: webhook first (the worker attaches the Handoff in the same run, starts one check-in and keeps the keys, and the webhook's check is skipped), reconciliation first (unchanged), the kiosk check right after a snapshot (`confirmed`), a kiosk add-on, a lookup of a booking with `jybi_` rows (200), an item without an id and an id owned by another booking, and the staff "Betalningen gick igenom". Each case asserts the exact ROLLER calls. On the code before the change every case but "reconciliation first" fails with the 23505 or its 500.
+
+Also run `validate:kiosk-payment-reconciliation`, `validate:t0197-webhook-reconciliation`, `validate:gh282-kiosk-handoff-repair`, `validate:gh257-webhook-item-reconcile`, `validate:gh481-kiosk-publish-with-payment`, `validate:gh531-kiosk-expected-miss`, `validate:gh563-addon-release`, `validate:gh570-draft-retry`, `validate:gh581-kassan-change`, `validate:gh583-alarms-not-errors`, `validate:gh340-server-errors` and `validate:t0195-least-privilege`. The Park plan may change only the Booking and Lookup Lambda code. After release, follow [the notes](docs/gh-589-kiosk-item-key.md#after-release).
+
 ## Alarms that are not errors (#583)
 
 Run `npm run validate:gh583-alarms-not-errors` (part of `npm run validate`). It drives the real Booking and Redeem Lambdas with a scripted Aurora, Lambda and ROLLER and checks that:

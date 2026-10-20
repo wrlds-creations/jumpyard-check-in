@@ -1766,10 +1766,40 @@ async function upsertLiveBooking(booking, rollerEnv, venueId) {
   }
 }
 
+// GH-589 (D0287): an item with a ROLLER id is matched on that id, as the webhook and the check-in's final
+// refresh match it, and keeps the key it was stored under, such as the kiosk snapshot's `jybi_`; the
+// caller puts its tickets on the returned key. A `bookingitem:` insert raised on the item id's unique index.
 async function upsertLiveBookingItem(rollerUniqueId, item) {
   const bookingItemKey = localBookingItemKey(rollerUniqueId, item);
+  const conflictClause = stringOrNull(item.bookingItemId)
+    ? `ON CONFLICT (booking_item_id) WHERE booking_item_id IS NOT NULL DO UPDATE SET
+      product_id = EXCLUDED.product_id,
+      parent_product_id = COALESCE(EXCLUDED.parent_product_id, jumpyard.roller_booking_items.parent_product_id),
+      product_name = COALESCE(EXCLUDED.product_name, jumpyard.roller_booking_items.product_name),
+      parent_product_name = COALESCE(EXCLUDED.parent_product_name, jumpyard.roller_booking_items.parent_product_name),
+      quantity = EXCLUDED.quantity,
+      booking_date = EXCLUDED.booking_date,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      item_summary = COALESCE(jumpyard.roller_booking_items.item_summary, '{}'::jsonb)
+        || jsonb_strip_nulls(EXCLUDED.item_summary),
+      updated_at = now()
+    WHERE jumpyard.roller_booking_items.roller_unique_id = EXCLUDED.roller_unique_id`
+    : `ON CONFLICT (booking_item_key) DO UPDATE SET
+      roller_unique_id = EXCLUDED.roller_unique_id,
+      booking_item_id = EXCLUDED.booking_item_id,
+      product_id = EXCLUDED.product_id,
+      parent_product_id = EXCLUDED.parent_product_id,
+      product_name = COALESCE(EXCLUDED.product_name, jumpyard.roller_booking_items.product_name),
+      parent_product_name = COALESCE(EXCLUDED.parent_product_name, jumpyard.roller_booking_items.parent_product_name),
+      quantity = EXCLUDED.quantity,
+      booking_date = EXCLUDED.booking_date,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      item_summary = EXCLUDED.item_summary,
+      updated_at = now()`;
 
-  await executeStatement(
+  const result = await executeStatement(
     `INSERT INTO jumpyard.roller_booking_items (
       booking_item_key,
       roller_unique_id,
@@ -1798,19 +1828,8 @@ async function upsertLiveBookingItem(rollerUniqueId, item) {
       CAST(:endTime AS time),
       CAST(:itemSummary AS jsonb)
     )
-    ON CONFLICT (booking_item_key) DO UPDATE SET
-      roller_unique_id = EXCLUDED.roller_unique_id,
-      booking_item_id = EXCLUDED.booking_item_id,
-      product_id = EXCLUDED.product_id,
-      parent_product_id = EXCLUDED.parent_product_id,
-      product_name = COALESCE(EXCLUDED.product_name, jumpyard.roller_booking_items.product_name),
-      parent_product_name = COALESCE(EXCLUDED.parent_product_name, jumpyard.roller_booking_items.parent_product_name),
-      quantity = EXCLUDED.quantity,
-      booking_date = EXCLUDED.booking_date,
-      start_time = EXCLUDED.start_time,
-      end_time = EXCLUDED.end_time,
-      item_summary = EXCLUDED.item_summary,
-      updated_at = now()`,
+    ${conflictClause}
+    RETURNING booking_item_key`,
     [
       stringParameter('bookingItemKey', bookingItemKey),
       stringParameter('rollerUniqueId', rollerUniqueId),
@@ -1833,7 +1852,13 @@ async function upsertLiveBookingItem(rollerUniqueId, item) {
     ],
   );
 
-  return bookingItemKey;
+  const persistedBookingItemKey = stringOrNull(firstMappedRow(result)?.booking_item_key);
+  if (!persistedBookingItemKey) {
+    const error = new Error('Roller booking item id is already owned by another booking.');
+    error.code = 'lookup_booking_item_identity_conflict';
+    throw error;
+  }
+  return persistedBookingItemKey;
 }
 
 async function upsertLiveTicket(rollerUniqueId, bookingItemKey, item, ticket) {

@@ -59,7 +59,7 @@ Each one fell in the same second as a `cloud.server_error` (`DatabaseErrorExcept
 3. The webhook's check read that row at 10:14:14.122 and answered `authoritative_source_invalid`.
 4. The webhook's retry attached the Handoff at 10:15:17.
 
-So the retry is what confirmed these groups, and it stays. The kiosk reconciliation error is most likely the booking-item key collision already seen in the lookup: the kiosk snapshot writes `jybi_…` keys with `ON CONFLICT (booking_item_key)`, the webhook had written `bookingitem:…` for the same `booking_item_id`, and the unique index raises 23505. The log carries no SQLSTATE. It is a Booking Lambda fix outside this issue.
+So the retry is what confirmed these groups, and it stays. The kiosk reconciliation error is most likely the booking-item key collision already seen in the lookup: the kiosk snapshot writes `jybi_…` keys with `ON CONFLICT (booking_item_key)`, the webhook had written `bookingitem:…` for the same `booking_item_id`, and the unique index raises 23505. The log carries no SQLSTATE. It is a Booking Lambda fix outside this issue: #589 (D0287) confirmed the 23505 in Aurora's error log and fixed it.
 
 ## Rejected options
 
