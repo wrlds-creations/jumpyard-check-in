@@ -4,11 +4,14 @@ import test from 'node:test';
 import backendLookup from '../../../infra/lambda/booking/contact-lookup.js';
 import {
   CONTACT_DETAILS_REQUIRED_CODE,
+  INVALID_EMAIL_CODE,
   hasSavedContactDetails,
   isContactDetailsRequiredError,
   isContactReady,
+  isEmailRefusedError,
   isValidEmail,
   isValidPhone,
+  normalizeEmailForRefusal,
   shouldShowEmailFormatMessage,
   toNewBookingCustomer,
 } from './contactDetails.ts';
@@ -90,9 +93,63 @@ test('GH-552: the message shows at once for a character no address holds, otherw
   }
 });
 
+// GH-596: ROLLER's POST /bookings/draft/costs on 2026-10-26 took the first list and answered the second
+// with 409 "A valid booking owner email is required" (synthetic example.com addresses).
+const ROLLER_ACCEPTED_EMAILS = ['jy596.ok@example.com', 'jy596-@example.com', "o'jy596@example.com", 'jy596_x@example.com',
+  'jumpyard.quote@example.invalid', 'anna.svensson@gmail.com', 'anna@gmail.se'];
+const ROLLER_REFUSED_EMAILS = ['jy596.@example.com', 'jy596..x@example.com', '.jy596@example.com', 'jy596@example.c',
+  'jy596@example.c0m', 'anna...@gmail.com'];
+
+test('GH-596: the phone and Cloud accept exactly what ROLLER accepts', () => {
+  for (const email of ROLLER_ACCEPTED_EMAILS) {
+    assert.equal(isValidEmail(email), true, email);
+    assert.equal(backendLookup.isValidEmailFormat(email), true, email);
+  }
+  for (const email of ROLLER_REFUSED_EMAILS) {
+    assert.equal(isValidEmail(email), false, email);
+    assert.equal(backendLookup.isValidEmailFormat(email), false, email);
+    assert.equal(isContactReady(contact({ email }), false), false, `${email}: Continue stays off`);
+  }
+});
+
+test('GH-596: dots that no address can have show the message while the guest types', () => {
+  // A dot first, two in a row, a dot next to the @ and a hyphen right after it are wrong whatever comes next.
+  for (const email of ['.anna', 'anna..', 'anna.@', 'anna...@gmail.com', 'anna@.', 'anna@-']) {
+    for (const editing of [true, false]) assert.equal(shouldShowEmailFormatMessage(email, editing), true, email);
+  }
+  // A domain ending is only wrong once the guest has left the field: "gmail.c" may still become "gmail.com".
+  for (const email of ['anna@gmail.c', 'anna.', 'anna.s']) {
+    assert.equal(shouldShowEmailFormatMessage(email, true), false, email);
+  }
+  assert.equal(shouldShowEmailFormatMessage('anna@gmail.c', false), true);
+});
+
+test('GH-596: an address Cloud refused keeps the message until the guest changes it', () => {
+  assert.equal(INVALID_EMAIL_CODE, backendLookup.INVALID_EMAIL);
+  assert.equal(isEmailRefusedError({ code: 'invalid_email', httpStatus: 409 }), true);
+  assert.equal(isEmailRefusedError({ code: 'invalid_email', httpStatus: 400 }), true);
+  for (const error of [null, undefined, 'invalid_email', { code: 'roller_draft_failed' }, { code: 'customer_email_invalid' }]) {
+    assert.equal(isEmailRefusedError(error), false);
+  }
+  const refused = normalizeEmailForRefusal(' Guest@Example.Invalid ');
+  assert.equal(refused, 'guest@example.invalid');
+  for (const editing of [true, false]) {
+    assert.equal(shouldShowEmailFormatMessage('guest@example.invalid', editing, refused), true);
+    assert.equal(shouldShowEmailFormatMessage('GUEST@example.invalid ', editing, refused), true);
+    assert.equal(shouldShowEmailFormatMessage('guest2@example.invalid', editing, refused), false);
+  }
+  const component = fs.readFileSync(new URL('../components/BuyTickets.tsx', import.meta.url), 'utf8');
+  assert.match(component, /const emailRefused = refusedEmail !== null && normalizeEmailForRefusal\(email\) === refusedEmail;/);
+  assert.match(component, /const customerValid = isContactReady\(\{ firstName, lastName, email, phone \}, contactDetailsRequired\) && !emailRefused;/);
+  assert.match(component, /if \(isEmailRefusedError\(error\)\) \{\s*setRefusedEmail\(normalizeEmailForRefusal\(email\)\);\s*setSubmitError\(t\.buy\.emailRefused\);\s*return;/);
+  const copy = fs.readFileSync(new URL('../context/LanguageContext.tsx', import.meta.url), 'utf8');
+  assert.match(copy, /emailRefused: 'Vi kunde inte använda e-postadressen\. Rätta den och försök igen\.',/);
+  assert.match(copy, /emailRefused: "We couldn't use that email address\. Correct it and try again\.",/);
+});
+
 test('GH-552: the message sits on the email label row; Cloud\'s fallback is unchanged', () => {
   const component = fs.readFileSync(new URL('../components/BuyTickets.tsx', import.meta.url), 'utf8');
-  assert.match(component, /const emailFormatMessageShown = shouldShowEmailFormatMessage\(email, emailFocused\);/);
+  assert.match(component, /const emailFormatMessageShown = shouldShowEmailFormatMessage\(email, emailFocused, refusedEmail\);/);
   assert.match(component, /\{t\.buy\.emailLabel\}\s*\{\/\*[^*]*\*\/\}\s*\{emailFormatMessageShown && \(\s*<span role="alert" data-testid="buy-email-invalid"[^>]*>\s*<JumpyardIcon name="warning-transparent"[^>]*\/> \{t\.buy\.emailInvalid\}\s*<\/span>\s*\)\}\s*<\/span>\s*<input\s+ref=\{emailInputRef\}/);
   assert.match(component, /aria-invalid=\{emailFormatMessageShown\}/);
   // D0234: only Cloud's uncertain lookup asks for last name and phone.

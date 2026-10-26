@@ -3,7 +3,13 @@ import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
-import { hasSavedContactDetails, isContactReady, toNewBookingCustomer } from './contactDetails.ts';
+import {
+  hasSavedContactDetails,
+  isContactReady,
+  isEmailRefusedError,
+  normalizeEmailForRefusal,
+  toNewBookingCustomer,
+} from './contactDetails.ts';
 
 function load(relative, names, globals = {}) {
   const source = fs.readFileSync(new URL(relative, import.meta.url), 'utf8');
@@ -41,10 +47,17 @@ test('email-first checkout needs first name and email; the fallback needs last n
     ['', 'Test', 'guest@example.invalid', '0701740605', true, false],
     ['Guest', 'Test', 'invalid', '0701740605', true, false],
   ]) {
-    const h = load('../components/BuyTickets.tsx', ['customerValid', 'buildCustomer'], {
+    const h = load('../components/BuyTickets.tsx', ['emailRefused', 'customerValid', 'buildCustomer'], {
       firstName, lastName, email, phone, contactDetailsRequired: detailsRequired, isContactReady, toNewBookingCustomer,
+      refusedEmail: null, normalizeEmailForRefusal,
     });
     assert.equal(h.customerValid, valid, JSON.stringify([firstName, lastName, email, phone, detailsRequired]));
+    // GH-596: the same contact with the address Cloud refused at Pay waits for a changed address.
+    const refused = load('../components/BuyTickets.tsx', ['emailRefused', 'customerValid'], {
+      firstName, lastName, email, phone, contactDetailsRequired: detailsRequired, isContactReady,
+      refusedEmail: normalizeEmailForRefusal(email), normalizeEmailForRefusal,
+    });
+    assert.equal(refused.customerValid, false, `${email}: refused at Pay`);
     const customer = JSON.parse(JSON.stringify(h.buildCustomer()));
     assert.deepEqual(customer, detailsRequired
       ? { firstName: firstName.trim(), email: email.trim(), lastName: lastName.trim(), phone: phone.trim() }
@@ -141,6 +154,10 @@ function draftHarness(answers) {
     draftSafetyAttestation: undefined,
     quoteRequestVersionRef: { current: 0 }, appliedQuoteRef: { current: null }, quoteOperationInFlightRef: { current: false },
     contactDetailsFocusPendingRef: { current: false },
+    // GH-596: the refused address is remembered from the email the guest typed.
+    get email() { return state.contact.email; },
+    refusedEmail: null, isEmailRefusedError, normalizeEmailForRefusal,
+    setRefusedEmail: value => { state.refusedEmail = value; },
     draft: null, submitting: false, step: 'CONTACT', error: null, quote: null, codeRejectedDialogOpen: false,
     selectedProduct: { productId: '1189805', startTime: '17:00' },
     get customerValid() { return isContactReady(state.contact, state.contactDetailsRequired); },
@@ -149,7 +166,7 @@ function draftHarness(answers) {
     shouldPrecheckBasketAvailability: true,
     buildCustomer: () => toNewBookingCustomer(state.contact, state.contactDetailsRequired),
     buildItems: () => [{ productId: 1189805, quantity: 2 }],
-    productLabels: new Map(), t: { buy: { draftFailed: 'draft-failed' } },
+    productLabels: new Map(), t: { buy: { draftFailed: 'draft-failed', emailRefused: 'email-refused' } },
     formatBuyFlowError: error => `formatted:${error.code}`,
     // #557: no refusal here is a session that has already begun.
     clockNow: undefined, isSessionStartedError: () => false, showStartedSession: () => {},
@@ -216,6 +233,22 @@ test('GH-473: other draft failures keep today\'s error text and the email-first 
   assert.equal(state.contactDetailsRequired, false);
   assert.equal(state.contactDetailsAsked, false);
   assert.equal(state.contactDetailsFocusPendingRef.current, false);
+});
+
+test('GH-596: a refused email gets its own message, stays on the form and is not sent again', async () => {
+  for (const contactDetailsRequired of [false, true]) {
+    const { state, calls } = draftHarness([Object.assign(cloudError('invalid_email'), { httpStatus: 409 })]);
+    state.contactDetailsRequired = contactDetailsRequired;
+    state.contact = { firstName: 'Guest', lastName: 'Test', email: ' Guest.Name@Example.Invalid ', phone: '070-174 06 05' };
+    await state.createDraft();
+    assert.equal(state.error, 'email-refused');
+    assert.equal(state.refusedEmail, 'guest.name@example.invalid');
+    assert.equal(state.contactDetailsRequired, contactDetailsRequired, 'the form keeps its fields');
+    assert.equal(state.contactDetailsAsked, false);
+    assert.equal(state.step, 'CONTACT');
+    assert.equal(state.draft, null);
+    assert.equal(calls.filter(([kind]) => kind === 'draft').length, 1);
+  }
 });
 
 test('GH-473: a Cloud without #473 (customer_required) also gets the four-field form, once', async () => {

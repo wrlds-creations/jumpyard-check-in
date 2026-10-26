@@ -1,8 +1,9 @@
 import { makeAvailability } from '../flow/localTransport';
 
 /** GH-473 development fixture. Answers availability, quotes and the email-first draft locally;
- * every other API request is refused. Nothing reaches Cloud, Klaviyo, ROLLER or a payment provider. */
-export function installContactTransport() {
+ * every other API request is refused. Nothing reaches Cloud, Klaviyo, ROLLER or a payment provider.
+ * GH-596: with `refuseEmail` the email-first draft gets Cloud's answer when ROLLER refuses the address. */
+export function installContactTransport(options: { refuseEmail?: boolean } = {}) {
     if (process.env.NODE_ENV !== 'development' || !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) {
         throw new Error('Local preview requires a development server on localhost.');
     }
@@ -19,6 +20,10 @@ export function installContactTransport() {
             const total = body.items.reduce((sum: number, item: { productId: number; quantity: number }) =>
                 sum + (prices.get(Number(item.productId)) ?? 0) * Math.max(0, Number(item.quantity) || 0), 0);
             return Response.json({ status: 'quoted', quote: { externalId: 'local-preview-quote', costs: { total, amountOwing: total }, itemCount: body.items.length, expiresAt: null } });
+        }
+        if (url.pathname === '/v1/bookings/draft' && !body.customer?.lastName && !body.customer?.phone && options.refuseEmail) {
+            // The synthetic Cloud answer when ROLLER refuses the address at Pay (GH-596): nothing is created.
+            return Response.json({ status: 'rejected', error: { code: 'invalid_email', message: 'customer.email must be a valid email address.' } }, { status: 409 });
         }
         if (url.pathname === '/v1/bookings/draft' && !body.customer?.lastName && !body.customer?.phone) {
             // The synthetic Cloud answer when the Klaviyo lookup is uncertain.

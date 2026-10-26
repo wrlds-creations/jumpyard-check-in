@@ -12,6 +12,7 @@
 // rejects it with invalid_email first, so it never reaches the lookup or asks for last name and phone.
 // GH-561: a timeout or network error is asked once more before it counts as uncertain. Every other
 // answer, including several profiles, stands after the first exchange.
+// GH-596: the format is ROLLER's, so an address the lookup accepts is one ROLLER accepts too.
 
 const KLAVIYO_PROFILES_URL = 'https://a.klaviyo.com/api/profiles';
 const KLAVIYO_REVISION = '2026-07-15';
@@ -28,7 +29,11 @@ const RETRYABLE_REASONS = new Set(['timeout', 'network']);
 const API_KEY_CACHE_MS = 5 * 60 * 1000;
 const MISSING_API_KEY_CACHE_MS = 60 * 1000;
 // Lower-case RFC 5322 atext and a plain domain: nothing that can change the filter expression.
-const LOOKUP_EMAIL = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+// GH-596: also ROLLER's own rule, read off POST /bookings/draft/costs on 2026-10-26 ("A valid booking
+// owner email is required"): no dot first, last or twice in a row before the @, and a last domain part
+// of at least two letters. ROLLER refused name.@, name..x@, .name@, @example.c and @example.c0m and took
+// name-@, name_x@, o'name@ and @example.invalid.
+const LOOKUP_EMAIL = /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
 // Klaviyo private keys start with pk_ and may contain further underscores.
 const API_KEY = /^pk_[A-Za-z0-9_-]{8,250}$/;
 // D0234: only the postcode is copied. Klaviyo can derive city/country from IP, so they are never read.
@@ -63,7 +68,8 @@ function lookupEmail(value) {
 /**
  * GH-552: the email format an email-first draft accepts is exactly what the lookup can ask about:
  * trimmed, any letter case, plain characters, one @ and a domain with a dot. The phone and the kiosk
- * check the same format before they send.
+ * check the same format before they send. GH-596: it is also what ROLLER accepts, so a typo such as
+ * "name.@gmail.com" is the guest's to correct before Pay instead of a ROLLER 409 at Pay.
  */
 function isValidEmailFormat(value) {
   return lookupEmail(value) !== null;

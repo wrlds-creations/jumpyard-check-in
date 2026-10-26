@@ -723,11 +723,31 @@ async function handleDraft(event, body, correlationId) {
     kioskQuoteResult = await postRollerJson(config, token, '/bookings/draft/costs', kioskQuotePayload);
     if (!kioskQuoteResult.ok) {
       await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_quote_http_${kioskQuoteResult.status}`);
+      // GH-596: ROLLER's reason is kept, and a refused email goes back to the guest to correct.
+      const refusal = summarizeRollerRefusal(kioskQuoteResult.body, request);
+      logRollerBookingRefusal('booking.kiosk_quote_failed', kioskQuoteResult.status, refusal);
+      await writeBookingEventLog({
+        correlationId,
+        eventType: 'booking.kiosk_quote_failed',
+        payload: {
+          endpoint: 'POST /bookings/draft/costs',
+          itemCount: request.items.length,
+          rollerErrors: refusal.errors,
+          rollerReason: refusal.reason,
+          rollerStatus: kioskQuoteResult.status,
+        },
+        subjectRef: payload.externalId,
+        summary: `ROLLER kiosk quote failed with HTTP ${kioskQuoteResult.status}: ${refusal.reason}.`,
+      });
       return jsonResponse(kioskQuoteResult.status === 409 ? 409 : 502, correlationId, {
         status: kioskQuoteResult.status === 409 ? 'rejected' : 'roller_error',
-        error: {
+        error: isRollerEmailRefusal(kioskQuoteResult.status, refusal) ? ROLLER_EMAIL_REFUSED_ERROR : {
           code: 'roller_kiosk_quote_failed',
           message: `ROLLER kiosk quote failed with HTTP ${kioskQuoteResult.status}.`,
+        },
+        roller: {
+          statusCode: kioskQuoteResult.status,
+          error: refusal,
         },
       });
     }
@@ -747,6 +767,9 @@ async function createReservedDraft({
 
   if (!rollerResult.ok) {
     await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_http_${rollerResult.status}`);
+    // GH-596: the phone's draft is ROLLER's first look at the customer, so its refusal is kept the same way.
+    const refusal = summarizeRollerRefusal(rollerResult.body, request);
+    logRollerBookingRefusal('booking.draft_failed', rollerResult.status, refusal);
     await writeBookingEventLog({
       correlationId,
       eventType: 'booking.draft_failed',
@@ -754,6 +777,8 @@ async function createReservedDraft({
         endpoint: 'POST /bookings/draft',
         itemCount: request.items.length,
         rollerDraftAttempts: rollerResult.attempts,
+        rollerErrors: refusal.errors,
+        rollerReason: refusal.reason,
         rollerStatus: rollerResult.status,
       },
       subjectRef: payload.externalId,
@@ -762,13 +787,13 @@ async function createReservedDraft({
 
     return jsonResponse(rollerResult.status === 409 ? 409 : 502, correlationId, {
       status: rollerResult.status === 409 ? 'rejected' : 'roller_error',
-      error: {
+      error: isRollerEmailRefusal(rollerResult.status, refusal) ? ROLLER_EMAIL_REFUSED_ERROR : {
         code: 'roller_draft_failed',
         message: `Roller draft creation failed with HTTP ${rollerResult.status}.`,
       },
       roller: {
         statusCode: rollerResult.status,
-        error: summarizeDraftRollerError(rollerResult.body, request, contact),
+        error: refusal,
       },
     });
   }
@@ -838,7 +863,7 @@ async function createReservedDraft({
         },
         roller: {
           statusCode: noPaymentPublish.status,
-          error: summarizeDraftRollerError(noPaymentPublish.body, request, contact),
+          error: summarizeRollerRefusal(noPaymentPublish.body, request),
         },
       });
     }
@@ -3093,11 +3118,33 @@ async function handleAddProductDraft(event, body, correlationId) {
     kioskQuoteResult = await postRollerJson(config, token, '/bookings/draft/costs', kioskQuotePayload);
     if (!kioskQuoteResult.ok) {
       await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_quote_http_${kioskQuoteResult.status}`);
+      // GH-596: ROLLER's reason is kept. The customer is the booking's ROLLER guest (D0260), so the guest
+      // at the kiosk has nothing to correct and the answer keeps its code.
+      const refusal = summarizeRollerRefusal(kioskQuoteResult.body, request);
+      logRollerBookingRefusal('booking.kiosk_add_product_quote_failed', kioskQuoteResult.status, refusal);
+      await writeBookingEventLog({
+        correlationId,
+        eventType: 'booking.kiosk_add_product_quote_failed',
+        payload: {
+          endpoint: 'POST /bookings/draft/costs',
+          itemCount: request.items.length,
+          originalBookingReference: original.bookingReference,
+          rollerErrors: refusal.errors,
+          rollerReason: refusal.reason,
+          rollerStatus: kioskQuoteResult.status,
+        },
+        subjectRef: original.bookingReference,
+        summary: `ROLLER kiosk add-product quote failed with HTTP ${kioskQuoteResult.status}: ${refusal.reason}.`,
+      });
       return jsonResponse(kioskQuoteResult.status === 409 ? 409 : 502, correlationId, {
         status: kioskQuoteResult.status === 409 ? 'rejected' : 'roller_error',
         error: {
           code: 'roller_kiosk_add_product_quote_failed',
           message: `ROLLER kiosk add-product quote failed with HTTP ${kioskQuoteResult.status}.`,
+        },
+        roller: {
+          statusCode: kioskQuoteResult.status,
+          error: refusal,
         },
       });
     }
@@ -3117,6 +3164,8 @@ async function createReservedAddProductDraft({
 
   if (!rollerResult.ok) {
     await completeIdempotencyKey(request.idempotencyKey, 'failed', `roller_http_${rollerResult.status}`);
+    const refusal = summarizeRollerRefusal(rollerResult.body, request);
+    logRollerBookingRefusal('booking.add_product_draft_failed', rollerResult.status, refusal);
     await writeBookingEventLog({
       correlationId,
       eventType: 'booking.add_product_draft_failed',
@@ -3125,6 +3174,8 @@ async function createReservedAddProductDraft({
         itemCount: request.items.length,
         originalBookingReference: original.bookingReference,
         rollerDraftAttempts: rollerResult.attempts,
+        rollerErrors: refusal.errors,
+        rollerReason: refusal.reason,
         rollerStatus: rollerResult.status,
       },
       subjectRef: original.bookingReference,
@@ -3139,7 +3190,7 @@ async function createReservedAddProductDraft({
       },
       roller: {
         statusCode: rollerResult.status,
-        error: summarizeRollerError(rollerResult.body, request),
+        error: refusal,
       },
     });
   }
@@ -6864,15 +6915,96 @@ function summarizeRollerError(body, requestOrGiftCards = []) {
   };
 }
 
-// GH-473: a provider message could echo a resolved contact value, so email-first drafts return codes only.
-function summarizeDraftRollerError(body, request, contact) {
+// GH-596: the messages ROLLER gives when it refuses a booking's costs or draft (409), as stable codes. On
+// 2026-10-26 it refused an email-first kiosk purchase seven times at Pay with the first one. The log line
+// carries only these codes; ROLLER's own text, without guest values, goes to the event log and the answer.
+const ROLLER_BOOKING_REFUSAL_CODES = [
+  ['valid booking owner email', 'booking_owner_email_invalid'],
+  ['phone field is required', 'booking_owner_phone_required'],
+  ['capacity will be exceeded', 'capacity_exceeded'],
+];
+const MAX_ROLLER_REFUSAL_ERRORS = 10;
+// GH-596: ROLLER's refusal of the typed email is the guest's to correct, like Cloud's own check (D0271).
+const ROLLER_EMAIL_REFUSED_ERROR = {
+  code: contactLookup.INVALID_EMAIL,
+  message: 'customer.email must be a valid email address.',
+};
+
+function rollerBookingRefusalCode(message) {
+  const text = String(message ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!text) return 'unknown';
+  return ROLLER_BOOKING_REFUSAL_CODES.find(([phrase]) => text.includes(phrase))?.[1] ?? 'other';
+}
+
+// The digits of a Swedish or international number without its country prefix or leading zero.
+function nationalDigits(value) {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits.replace(/^(?:00)?46/, '').replace(/^0/, '') || null;
+}
+
+// GH-596: every guest value ROLLER's text repeats becomes [guest]: any address-like word, the customer's
+// names, and a number with the customer's phone or postcode digits in any spacing or prefix.
+function redactGuestValues(value, customer) {
+  let text = stringOrNull(value);
+  if (!text) return null;
+  text = text.replace(/[^\s@,;:"'<>()[\]]+@[^\s@,;:"'<>()[\]]+/g, '[guest]');
+  for (const word of [customer?.firstName, customer?.lastName]) {
+    const guestWord = stringOrNull(word);
+    if (!guestWord) continue;
+    const escaped = guestWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    text = text.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'giu'), '[guest]');
+  }
+  const guestNumbers = [nationalDigits(customer?.phone), nationalDigits(customer?.address?.postcode)].filter(Boolean);
+  if (guestNumbers.length > 0) {
+    text = text.replace(/\+?\d[\d\s().-]{3,}\d/g, (number) => (guestNumbers.includes(nationalDigits(number)) ? '[guest]' : number));
+  }
+  return text;
+}
+
+/**
+ * GH-596: ROLLER's refusal of a booking's costs or draft without any guest value: each error's name and
+ * message, the message's code, and one reason for the whole refusal. It replaces GH-473's codes-only
+ * answer for email-first drafts, which kept ROLLER's only clue (the message) from the log and the guest.
+ */
+function summarizeRollerRefusal(body, request) {
   const summary = summarizeRollerError(body, request);
-  if (contact?.mode !== 'email_first') return summary;
+  const customer = request?.customer ?? null;
+  const errors = (summary.errors ?? []).slice(0, MAX_ROLLER_REFUSAL_ERRORS).map((error) => ({
+    code: error.code,
+    message: redactGuestValues(error.message, customer)?.slice(0, 200) ?? null,
+    name: error.name?.slice(0, 80) ?? null,
+    reason: rollerBookingRefusalCode(error.message),
+  }));
+  const reasons = [...errors.map((error) => error.reason), rollerBookingRefusalCode(summary.message)];
   return {
     code: summary.code,
-    message: null,
-    errors: (summary.errors ?? []).map((error) => ({ code: error.code, message: null, name: error.name })),
+    message: redactGuestValues(summary.message, customer)?.slice(0, 200) ?? null,
+    errors,
+    reason: reasons.find((reason) => reason !== 'unknown' && reason !== 'other')
+      ?? (reasons.includes('other') ? 'other' : 'unknown'),
   };
+}
+
+// GH-596: one line per refusal with codes and counts only (no identifiers or ROLLER text, as #571).
+function logRollerBookingRefusal(eventType, statusCode, refusal) {
+  try {
+    const reasons = {};
+    for (const error of refusal.errors) reasons[error.reason] = (reasons[error.reason] ?? 0) + 1;
+    console.warn(JSON.stringify({
+      eventType,
+      handler: 'booking',
+      ...diagnostics.ids(),
+      providerStatusCode: statusCode,
+      reason: refusal.reason,
+      reasons,
+    }));
+  } catch {
+    // Logging must never change the answer.
+  }
+}
+
+function isRollerEmailRefusal(statusCode, refusal) {
+  return statusCode === 409 && refusal.reason === 'booking_owner_email_invalid';
 }
 
 function summarizeJwt(jwt) {

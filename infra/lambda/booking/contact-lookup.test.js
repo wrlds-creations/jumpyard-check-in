@@ -365,6 +365,26 @@ test('GH-552: the accepted email format is exactly what the lookup can ask about
   assert.equal(lookup.INVALID_EMAIL, 'invalid_email');
 });
 
+// GH-596: what ROLLER's POST /bookings/draft/costs answered on 2026-10-26 (Park, complete placeholder
+// customer, synthetic example.com addresses): 200 for the first list, 409 "A valid booking owner email is
+// required" for the second. The phone and the kiosk keep the same table.
+const ROLLER_ACCEPTED_EMAILS = ['jy596.ok@example.com', 'jy596-@example.com', "o'jy596@example.com", 'jy596_x@example.com',
+  'jumpyard.quote@example.invalid'];
+const ROLLER_REFUSED_EMAILS = ['jy596.@example.com', 'jy596..x@example.com', '.jy596@example.com', 'jy596@example.c',
+  'jy596@example.c0m'];
+
+test('GH-596: the accepted email format is ROLLER\'s: no stray dot before the @ and a lettered domain ending', () => {
+  for (const email of ROLLER_ACCEPTED_EMAILS) assert.equal(lookup.isValidEmailFormat(email), true, email);
+  for (const email of ROLLER_REFUSED_EMAILS) assert.equal(lookup.isValidEmailFormat(email), false, email);
+  // The Nacka typo on 2026-10-26 and its kind: a dot just before the @ and dots in a row.
+  for (const email of ['anna...@gmail.com', 'anna.@hotmail.com', 'anna..svensson@gmail.com', 'anna@gmail.c', 'anna@gmail.co1']) {
+    assert.equal(lookup.isValidEmailFormat(email), false, email);
+  }
+  for (const email of ['anna.svensson@gmail.com', 'anna@gmail.se', 'anna@mail.example.co.uk', 'anna-b@hotmail.com', 'a.b.c@d.ef']) {
+    assert.equal(lookup.isValidEmailFormat(email), true, email);
+  }
+});
+
 // GH-561: one more exchange after a timeout or a network error.
 
 test('GH-561: a first timeout or network error followed by an answer gives found or not_found', async () => {
@@ -456,7 +476,7 @@ function loadBooking(overrides = {}, env = {}) {
   const sandbox = {
     module, exports: module.exports, Buffer, URL, URLSearchParams, TextEncoder, TextDecoder, AbortSignal,
     setTimeout, clearTimeout, overrides,
-    console: { log: (line) => logs.push(String(line)), error: (line) => logs.push(String(line)) },
+    console: { log: (line) => logs.push(String(line)), warn: (line) => logs.push(String(line)), error: (line) => logs.push(String(line)) },
     process: { env: { ENABLE_ROLLER_BOOKING_DRAFT_WRITES: 'true', JUMPYARD_EMERGENCY_STOP: 'false', ...env } },
     fetch: async () => { throw new Error('Unexpected network operation'); },
     require(name) {
@@ -682,10 +702,10 @@ test('handler: the email choice still travels with an email-first draft; SMS is 
   assert.equal(state.rollerPosts[0].payload.customer.acceptMarketingSms, undefined);
 });
 
-test('handler: a ROLLER rejection of an email-first draft returns codes only', async () => {
+test('handler, GH-596: a ROLLER rejection keeps ROLLER\'s text with every guest value replaced', async () => {
   const draftAnswer = { ok: false, status: 409, body: {
-    message: 'Customer Testsson 0701740605 rejected',
-    errors: [{ code: 'synthetic_code', name: 'Customer.Phone', message: 'Phone 0701740605 invalid' }],
+    message: 'Customer Testsson +46 70-174 06 05 (annie.testsson+jy473@example.invalid, 999 99) rejected',
+    errors: [{ code: 'synthetic_code', name: 'Customer.Phone', message: 'Phone 0701740605 invalid for Anna' }],
   } };
   const { booking, state } = bookingHarness({ draftAnswer });
   const response = await booking.handleDraft({}, draftBody({ firstName: 'Annie', email: EMAIL }), 'synthetic');
@@ -693,16 +713,57 @@ test('handler: a ROLLER rejection of an email-first draft returns codes only', a
   const body = JSON.parse(response.body);
   assert.equal(body.error.code, 'roller_draft_failed');
   assert.deepEqual(body.roller.error, {
-    code: null, message: null, errors: [{ code: 'synthetic_code', message: null, name: 'Customer.Phone' }],
+    code: null,
+    message: 'Customer [guest] [guest] ([guest], [guest]) rejected',
+    errors: [{ code: 'synthetic_code', message: 'Phone [guest] invalid for [guest]', name: 'Customer.Phone', reason: 'other' }],
+    reason: 'other',
   });
   assertNoPrivateValues('rejection', response.body);
+  const failed = state.eventLogs.find((entry) => entry.eventType === 'booking.draft_failed');
+  assert.equal(failed.payload.rollerReason, 'other');
+  assert.deepEqual(failed.payload.rollerErrors, body.roller.error.errors);
+  assertNoPrivateValues('event log', state.eventLogs);
+  const [line] = booking.logs.filter((entry) => entry.includes('"booking.draft_failed"')).map((entry) => JSON.parse(entry));
+  assert.deepEqual(line, { eventType: 'booking.draft_failed', handler: 'booking', providerStatusCode: 409, reason: 'other', reasons: { other: 1 } });
+  assertNoPrivateValues('logs', booking.logs);
   assert.deepEqual(state.completions, [['failed', 'roller_http_409']]);
 
+  // The four-field path gets the same summary: the typed values are replaced, other numbers stay.
   const legacy = bookingHarness({ draftAnswer });
   const customer = { firstName: 'Annie', lastName: 'Testsson', email: EMAIL, phone: '0701740606' };
   const legacyResponse = await legacy.booking.handleDraft({}, draftBody(customer), 'synthetic');
-  assert.equal(JSON.parse(legacyResponse.body).roller.error.message, 'Customer Testsson 0701740605 rejected',
-    'the four-field path keeps its existing provider summary');
+  assert.equal(JSON.parse(legacyResponse.body).roller.error.errors[0].message, 'Phone 0701740605 invalid for Anna');
+  assert.equal(JSON.parse(legacyResponse.body).roller.error.message, 'Customer [guest] +46 70-174 06 05 ([guest], 999 99) rejected');
+});
+
+test('handler, GH-596: ROLLER\'s refusal of the email is the guest\'s invalid_email, with ROLLER\'s reason kept', async () => {
+  const draftAnswer = { ok: false, status: 409, body: { errors: [{ message: 'A valid booking owner email is required' }] } };
+  for (const customer of [
+    { firstName: 'Annie', email: EMAIL },
+    { firstName: 'Annie', lastName: 'Testsson', email: EMAIL, phone: '0701740606' },
+  ]) {
+    const { booking, state } = bookingHarness({ draftAnswer });
+    const response = await booking.handleDraft({}, draftBody(customer), 'synthetic');
+    assert.equal(response.statusCode, 409);
+    const body = JSON.parse(response.body);
+    assert.equal(body.status, 'rejected');
+    assert.deepEqual(body.error, { code: 'invalid_email', message: 'customer.email must be a valid email address.' });
+    assert.deepEqual(body.roller, { statusCode: 409, error: {
+      code: null, message: null, reason: 'booking_owner_email_invalid',
+      errors: [{ code: null, message: 'A valid booking owner email is required', name: null, reason: 'booking_owner_email_invalid' }],
+    } });
+    assert.equal(state.eventLogs.find((entry) => entry.eventType === 'booking.draft_failed').payload.rollerReason, 'booking_owner_email_invalid');
+    assert.deepEqual(state.completions, [['failed', 'roller_http_409']]);
+  }
+  // Only a 409 that names the email is the guest's: a 500 or another refusal keeps roller_draft_failed.
+  for (const answer of [
+    { ok: false, status: 500, body: { errors: [{ message: 'A valid booking owner email is required' }] } },
+    { ok: false, status: 409, body: { errors: [{ name: 'VenueCapacity', message: 'Venue capacity will be exceeded' }] } },
+  ]) {
+    const { booking } = bookingHarness({ draftAnswer: answer });
+    const body = JSON.parse((await booking.handleDraft({}, draftBody({ firstName: 'Annie', email: EMAIL }), 'synthetic')).body);
+    assert.equal(body.error.code, 'roller_draft_failed', JSON.stringify(answer));
+  }
 });
 
 test('validation: email-first needs a valid email; partial four-field contacts keep customer_required', () => {
