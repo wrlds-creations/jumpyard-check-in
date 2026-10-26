@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { getPaymentOptionInputState } from './paymentOptionFeedback.ts';
 import { pendingEmailMarketingConsent } from './emailMarketingConsent.ts';
 import { detectPaymentCodeKind, isCompletePaymentCode } from './paymentCodeShape.ts';
+import { isEmailRefusedError, normalizeEmailForRefusal } from './contactDetails.ts';
 
 // vm objects come from another realm; compare their plain JSON.
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -84,6 +85,9 @@ function harness({ provider = async () => quote(), draftAmount = 0 } = {}) {
     formatBuyFlowError: () => 'request-failed',
     // #557: no refusal here is a session that has already begun.
     clockNow: undefined, isSessionStartedError: () => false, showStartedSession: () => {},
+    // GH-596: nor an address Cloud or ROLLER refused.
+    isEmailRefusedError, normalizeEmailForRefusal, email: 'test@example.invalid',
+    setRefusedEmail: value => { state.refusedEmail = value; },
     setQuote: value => { state.quote = value; events.push(['quote', value]); },
     setDraft: value => { state.draft = value; events.push(['draft', value]); },
     setSubmitting: value => { state.submitting = value; },

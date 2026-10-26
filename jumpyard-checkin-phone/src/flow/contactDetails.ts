@@ -15,24 +15,41 @@ export interface ContactFields {
 }
 
 // GH-552: the format Cloud accepts for an email-first purchase (infra/lambda/booking/contact-lookup.js):
-// plain characters, one @ and a domain with a dot, compared in lower case after trimming.
-const EMAIL_FORMAT = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
-// A character no address can hold (a comma, a space, å), or a second @.
-const NEVER_IN_EMAIL = /[^a-z0-9.!#$%&'*+/=?^_`{|}~@-]|@[^@]*@/i;
+// plain characters, one @ and a domain with a dot, compared in lower case after trimming. GH-596: it is
+// ROLLER's rule too: no dot first, last or twice in a row before the @, and a lettered domain ending.
+const EMAIL_FORMAT = /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
+// Wrong whatever comes next: a character no address can hold (a comma, a space, å), a second @ and
+// (GH-596) a dot first, two dots in a row, a dot next to the @ or a hyphen right after it.
+const NEVER_IN_EMAIL = /[^a-z0-9.!#$%&'*+/=?^_`{|}~@-]|@[^@]*@|^\.|\.\.|\.@|@[.-]/i;
+// GH-596: Cloud's answer for an address it cannot use, from its own check or from ROLLER's.
+export const INVALID_EMAIL_CODE = 'invalid_email';
 
 export function isValidEmail(value: string) {
   const email = value.trim().toLowerCase();
   return email.length <= 254 && EMAIL_FORMAT.test(email);
 }
 
+/** GH-596: the address as Cloud saw it, to recognise the one it refused. */
+export function normalizeEmailForRefusal(value: string) {
+  return value.trim().toLowerCase();
+}
+
 /**
  * GH-552: "Kontrollera e-postadressen" for an address Cloud would refuse. A character no address can
- * hold shows it at once; a half-typed address only once the guest has left the field.
+ * hold shows it at once; a half-typed address only once the guest has left the field. GH-596: the
+ * address Cloud refused at Pay shows it until the guest changes it.
  */
-export function shouldShowEmailFormatMessage(value: string, editing: boolean) {
+export function shouldShowEmailFormatMessage(value: string, editing: boolean, refusedEmail: string | null = null) {
   const email = value.trim();
-  if (!email || isValidEmail(email)) return false;
+  if (!email) return false;
+  if (refusedEmail !== null && normalizeEmailForRefusal(email) === refusedEmail) return true;
+  if (isValidEmail(email)) return false;
   return !editing || NEVER_IN_EMAIL.test(email);
+}
+
+export function isEmailRefusedError(error: unknown) {
+  return typeof error === 'object' && error !== null
+    && (error as { code?: unknown }).code === INVALID_EMAIL_CODE;
 }
 
 export function isValidPhone(value: string) {

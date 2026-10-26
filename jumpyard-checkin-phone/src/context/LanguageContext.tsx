@@ -165,6 +165,8 @@ const sv = {
     emailLabel: 'E-post',
     emailPlaceholder: 'gäst@exempel.se',
     emailInvalid: 'Kontrollera e-postadressen',
+    // GH-596: Cloud or ROLLER refused the address at Pay.
+    emailRefused: 'Vi kunde inte använda e-postadressen. Rätta den och försök igen.',
     emailMarketingLabel: 'Ja tack! Mejla mig erbjudanden & nyheter från JumpYard',
     emailMarketingHelp: 'Avsluta när du vill.',
     emailMarketingPrivacy: 'Integritet',
@@ -685,6 +687,7 @@ const en: typeof sv = {
     emailLabel: 'Email',
     emailPlaceholder: 'guest@example.com',
     emailInvalid: 'Check the email address',
+    emailRefused: "We couldn't use that email address. Correct it and try again.",
     emailMarketingLabel: 'Yes please! Email me offers & news from JumpYard',
     emailMarketingHelp: 'Unsubscribe anytime.',
     emailMarketingPrivacy: 'Privacy',

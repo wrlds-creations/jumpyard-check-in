@@ -84,10 +84,13 @@ for (const [label, changes] of [
     ['completed handoff', { handoffStatus: 'completed' }],
     ['completed', { status: 'completed' }],
 ]) test(`${label} today: keeps the number and says checked in`, () => {
-    const admitted = { ...session, ...changes, completedAt: `${TODAY}T11:45:00.000Z` };
+    const completedAt = `${TODAY}T11:45:00.000Z`;
+    // Nacka's clock for that instant: 13:45 in summer time, 12:45 since winter time began on 2026-10-25.
+    const clock = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' }).format(new Date(completedAt));
+    const admitted = { ...session, ...changes, completedAt };
     assert.equal(isPhoneCompletionReady(admitted, 'park-qr', true), true);
     const html = render({ checkinSession: admitted, alreadyCheckedIn: true });
-    for (const value of ['data-presence="arrived"', 'Du är incheckad', '>0001</strong>', 'Sedan 13:45']) assert.ok(html.includes(value), value);
+    for (const value of ['data-presence="arrived"', 'Du är incheckad', '>0001</strong>', `Sedan ${clock}`]) assert.ok(html.includes(value), value);
     assert.doesNotMatch(html, /Redan incheckad/);
 });
 

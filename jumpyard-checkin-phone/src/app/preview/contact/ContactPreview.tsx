@@ -14,10 +14,12 @@ import { BUY_FLOW_RECOVERY_MAX_AGE_MS, clearBuyFlowRecovery, type BuyFlowRecover
 import { installContactTransport } from './contactTransport';
 import styles from './preview.module.css';
 
-type StateKey = 'email-first' | 'details';
+type StateKey = 'email-first' | 'details' | 'refused';
 const STATES: { key: StateKey; title: string; note: string }[] = [
     { key: 'email-first', title: 'Förnamn + e-post', note: 'Standard. Känd kund fylls i från Klaviyo, ny kund får platshållare. Gästen ser inget av det.' },
     { key: 'details', title: 'Cloud är osäker', note: 'Flera profiler, fel, timeout eller saknad nyckel: gästen fyller i efternamn och telefon.' },
+    // GH-596: the safety net for an address rule ROLLER has that Cloud does not know yet.
+    { key: 'refused', title: 'ROLLER nekar e-posten', note: 'Fortsätt en gång: Cloud svarar invalid_email. Fältet blir rött och Fortsätt väntar på en ändrad adress.' },
 ];
 const SCREENS = [
     { key: '844', width: 390, height: 844, label: '390 × 844' },
@@ -76,9 +78,11 @@ function Frame({ state, lang }: { state: StateKey; lang: Language }) {
     const [exitOpen, setExitOpen] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
     const autoSubmitted = useRef(false);
+    // GH-596: the refused frame lets exactly its one automatic Continue through to the synthetic Cloud.
+    const refusalPress = useRef(false);
 
     useEffect(() => {
-        const restore = installContactTransport();
+        const restore = installContactTransport({ refuseEmail: state === 'refused' });
         clearBuyFlowRecovery();
         setLang(lang);
         // Mount guest components only after the development transport is installed.
@@ -89,16 +93,17 @@ function Frame({ state, lang }: { state: StateKey; lang: Language }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // The uncertain state is reached the real way: Continue once, and the synthetic Cloud
-    // answers contact_details_required.
+    // The uncertain and refused states are reached the real way: Continue once, and the synthetic
+    // Cloud answers contact_details_required or invalid_email.
     useEffect(() => {
-        if (state !== 'details' || !ready) return;
+        if (state === 'email-first' || !ready) return;
         autoSubmitted.current = false;
         const timer = window.setInterval(() => {
             const button = document.querySelector<HTMLButtonElement>('[data-testid=buy-contact-continue]');
             if (autoSubmitted.current || !button || button.disabled || !document.querySelector('[data-contact-mode=email-first]')) return;
             autoSubmitted.current = true;
             window.clearInterval(timer);
+            refusalPress.current = state === 'refused';
             button.click();
         }, 250);
         return () => window.clearInterval(timer);
@@ -122,6 +127,10 @@ function Frame({ state, lang }: { state: StateKey; lang: Language }) {
         if (!button?.matches('[data-testid=buy-contact-continue]') || button.disabled) return;
         const contactMode = document.querySelector('[data-contact-mode]')?.getAttribute('data-contact-mode');
         if (state === 'details' && contactMode === 'email-first') return;
+        if (refusalPress.current) {
+            refusalPress.current = false;
+            return;
+        }
         event.preventDefault();
         event.stopPropagation();
         setNotice(contactMode === 'details'
@@ -165,7 +174,7 @@ function Harness() {
         const header = bar.current;
         if (!container || !header) return;
         const compute = () => {
-            const byWidth = (container.clientWidth - 48 - 28) / (2 * size.width);
+            const byWidth = (container.clientWidth - 48 - 28 * (STATES.length - 1)) / (STATES.length * size.width);
             const byHeight = (window.innerHeight - header.offsetHeight - 90) / size.height;
             setScale(Math.max(0.4, Math.min(1, byWidth, byHeight)));
         };

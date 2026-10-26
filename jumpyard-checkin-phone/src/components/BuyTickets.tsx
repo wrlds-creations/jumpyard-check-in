@@ -29,7 +29,9 @@ import { decidePastedCodeCheck, toPastedPaymentCode, type PendingPastedCode } fr
 import {
   hasSavedContactDetails,
   isContactReady,
+  isEmailRefusedError,
   isValidEmail,
+  normalizeEmailForRefusal,
   shouldShowEmailFormatMessage,
   toNewBookingCustomer,
 } from '@/flow/contactDetails';
@@ -875,6 +877,8 @@ export const BuyTickets = ({
   const [draft, setDraft] = useState<NewBookingDraftResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // GH-596 (D0288): the address Cloud or ROLLER refused at Pay. It is not sent again until the guest changes it.
+  const [refusedEmail, setRefusedEmail] = useState<string | null>(null);
   // GH-557 (D0273): the start time ROLLER stopped selling after it began ("Tiden har redan börjat").
   const [startedSessionTime, setStartedSessionTime] = useState<string | null>(null);
   // A time refused that way stays hidden, even while an older answer still lists it as open.
@@ -1338,9 +1342,10 @@ export const BuyTickets = ({
       icon: buyAddons.find((entry) => entry.id === addon.id)?.icon ?? ('addons-bag' as JumpyardIconName),
     })),
   ];
-  const customerValid = isContactReady({ firstName, lastName, email, phone }, contactDetailsRequired);
+  const emailRefused = refusedEmail !== null && normalizeEmailForRefusal(email) === refusedEmail;
+  const customerValid = isContactReady({ firstName, lastName, email, phone }, contactDetailsRequired) && !emailRefused;
   // #552: a mistyped email is the guest's to correct, on the field; it never reaches Cloud's lookup.
-  const emailFormatMessageShown = shouldShowEmailFormatMessage(email, emailFocused);
+  const emailFormatMessageShown = shouldShowEmailFormatMessage(email, emailFocused, refusedEmail);
   // #505 (D0250): a pasted number waits for the contact and is then checked once (the effect below).
   // #510 (D0251): so does a typed complete gift card or membership number.
   const pastedCodeCheck = decidePastedCodeCheck(pendingPastedCode, {
@@ -1826,6 +1831,12 @@ export const BuyTickets = ({
       // GH-557 (D0273): the time began and ROLLER stopped selling it before the purchase reached payment.
       if (isSessionStartedError(error, selectedProduct.startTime, clockNow ?? new Date())) {
         showStartedSession(selectedProduct.startTime);
+        return;
+      }
+      // GH-596 (D0288): Cloud or ROLLER cannot use the address. The guest corrects it on the field.
+      if (isEmailRefusedError(error)) {
+        setRefusedEmail(normalizeEmailForRefusal(email));
+        setSubmitError(t.buy.emailRefused);
         return;
       }
       setSubmitError(formatBuyFlowError(error, t.buy, productLabels, t.buy.draftFailed));

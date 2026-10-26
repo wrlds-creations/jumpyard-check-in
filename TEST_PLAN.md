@@ -1,5 +1,15 @@
 # Test Plan
 
+## An email ROLLER refuses at Pay (#596)
+
+Run `npm run validate:gh596-roller-email-refusal` and `npm run validate:gh473-contact-lookup` (both part of `npm run validate`). They drive the real Booking Lambda with a scripted ROLLER and check that:
+- the addresses ROLLER refused on 2026-10-26 (a dot just before the `@`, two dots in a row, a dot first, a one-letter ending, a digit in the ending) are `400 invalid_email` before the reservation, Klaviyo or ROLLER, and the ones it took still pass; Cloud and the phone share the table;
+- a ROLLER 409 "A valid booking owner email is required" at the kiosk cost check or the draft answers `409 invalid_email` with ROLLER's reason under `roller.error`, keeps the idempotency reference (`roller_quote_http_409`, `roller_http_409`), writes the reason to the event and logs one codes-only line, and the kiosk reserves no claim;
+- a ROLLER message that repeats the email, a name, the phone or the postcode keeps its words but none of the values, for email-first and four-field drafts;
+- other refusals and outages keep their codes, and a kiosk add-on keeps `roller_kiosk_add_product_quote_failed` while logging the reason.
+
+The phone's `test:contact-details` pins "Kontrollera e-postadressen" while typing two dots, a dot next to the `@` or a hyphen after it, and that Cloud's `invalid_email` at Pay shows "Vi kunde inte använda e-postadressen. Rätta den och försök igen." and keeps Continue off until the address changes. The development preview `/preview/contact?full=1&state=refused` shows that answer at 390x844. Also run `validate:gh570-draft-retry`, `validate:gh532-addon-roller-guest`, `validate:gh447-abandoned-kiosk-attempt`, `validate:gh409-phone-policy` and `validate:kiosk-terminal-backend`. The Park plan may change only the Booking Lambda code. After release, follow [the notes](docs/gh-596-roller-email-refusal.md#after-release).
+
 ## A kiosk purchase whose items the webhook stored first (#589)
 
 Run `npm run validate:gh589-kiosk-item-key` (part of `npm run validate`). It drives the real Booking and Lookup Lambdas with a scripted Aurora and checks that:
