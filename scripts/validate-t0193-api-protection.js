@@ -174,8 +174,8 @@ function validateRouteSettings(template, routesByKey) {
 function validateApprovedProtectionResources(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    218,
-    'The T0193 boundary must remain intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the GH-224 terminal route, the #335 alarm topic, subscription and sustained Roller alarm, the GH-473 Klaviyo key secret, the GH-488 kiosk status and pairing routes, and the GH-483 kiosk staff resolution route.',
+    228,
+    'The T0193 boundary must remain intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the GH-224 terminal route, the #335 alarm topic, subscription and sustained Roller alarm, the GH-473 Klaviyo key secret, the GH-488 kiosk status and pairing routes, the GH-483 kiosk staff resolution route, and the GH-598 nightly data-lifecycle job (function, role, policy, log group, invoke config, rule, invoke permission and its behind, errors and dashboard-only throttle alarms).',
   );
   assert.equal(
     resourcesOfType(template, 'AWS::SecretsManager::Secret').filter(

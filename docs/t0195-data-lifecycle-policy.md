@@ -86,6 +86,8 @@ Apply takes an advisory lock, recounts candidates inside one transaction, fails 
 
 No scheduler is added in this repository-only phase. Scheduling and first live dry-run/apply require the external-write checkpoint.
 
+GH-598 (D0289) adds that scheduler: a nightly Lambda runs this unchanged policy (`t0195-v1`) through the same bounded transaction, and migration `0028` adds the row-lock grants every apply was missing. Its modes, ceilings and external-write checkpoints are in [the GH-598 record](gh-598-lifecycle-nightly.md). The operator CLI below is unchanged.
+
 The local synthetic proof makes no AWS call:
 
 ```powershell

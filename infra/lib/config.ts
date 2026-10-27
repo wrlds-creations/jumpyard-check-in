@@ -126,6 +126,17 @@ export interface JumpYardCloudConfig {
     readonly scheduleEnabled: boolean;
     readonly venueId: string;
   };
+  // GH-598: the approved nightly run of the T0195 lifecycle policy on Park. Absent means no job.
+  // `plan` only counts; `apply` deletes and anonymizes within the approved ceiling.
+  readonly dataLifecycle?: {
+    readonly approvedPolicyDefinitionDigest: string;
+    readonly catchUp?: {
+      readonly maxEligibleTotal: number;
+      readonly until: string;
+    };
+    readonly maxEligibleTotal: number;
+    readonly mode: 'off' | 'plan' | 'apply';
+  };
   readonly guestEmail: {
     readonly checkinBaseUrl: string;
     readonly configurationSetName: string;
@@ -230,6 +241,15 @@ interface RawConfig {
     readonly scheduleEnabled?: unknown;
     readonly venueId?: unknown;
   };
+  readonly dataLifecycle?: {
+    readonly approvedPolicyDefinitionDigest?: unknown;
+    readonly catchUp?: {
+      readonly maxEligibleTotal?: unknown;
+      readonly until?: unknown;
+    };
+    readonly maxEligibleTotal?: unknown;
+    readonly mode?: unknown;
+  };
   readonly guestEmail?: {
     readonly checkinBaseUrl?: unknown;
     readonly configurationSetName?: unknown;
@@ -323,6 +343,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
   const rollerBaseUrl = normalizeBaseUrl(readString(raw.roller?.baseUrl, 'roller.baseUrl'), 'roller.baseUrl');
   const safetyGates = readSafetyGatesConfig(raw.safetyGates);
   const dataSync = readDataSyncConfig(raw.dataSync, deploymentEnvironment, resourcePrefix);
+  const dataLifecycle = readDataLifecycleConfig(raw.dataLifecycle, deploymentEnvironment);
   const staffIdentity = readStaffIdentityConfig(raw.staffIdentity, deploymentEnvironment);
   const webhookProcessing = readWebhookProcessingConfig(
     raw.webhookProcessing,
@@ -385,6 +406,7 @@ export function loadJumpYardCloudConfig(app: App): JumpYardCloudConfig {
     autoCheckin,
     bookingTimeSms,
     contactLookup,
+    dataLifecycle,
     dataSync,
     guestEmail,
     resourcePrefix,
@@ -1097,6 +1119,55 @@ function readDataSyncConfig(
   }
 
   return config;
+}
+
+function readDataLifecycleConfig(
+  raw: RawConfig['dataLifecycle'],
+  deploymentEnvironment: DeploymentEnvironment,
+): JumpYardCloudConfig['dataLifecycle'] {
+  if (raw === undefined) return undefined;
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Config field dataLifecycle must be an object when supplied.');
+  }
+  if (deploymentEnvironment !== 'park-test') {
+    throw new Error('dataLifecycle is approved for park-test only (GH-598).');
+  }
+  const mode = raw.mode;
+  if (mode !== 'off' && mode !== 'plan' && mode !== 'apply') {
+    throw new Error('dataLifecycle.mode must be off, plan or apply.');
+  }
+  const approvedPolicyDefinitionDigest = readString(
+    raw.approvedPolicyDefinitionDigest,
+    'dataLifecycle.approvedPolicyDefinitionDigest',
+  );
+  if (!/^[a-f0-9]{64}$/.test(approvedPolicyDefinitionDigest)) {
+    throw new Error('dataLifecycle.approvedPolicyDefinitionDigest must be a lowercase SHA-256 digest.');
+  }
+  const maxEligibleTotal = readOptionalInteger(
+    raw.maxEligibleTotal,
+    25_000,
+    1,
+    1_000_000,
+    'dataLifecycle.maxEligibleTotal',
+  );
+  let catchUp: { readonly maxEligibleTotal: number; readonly until: string } | undefined;
+  if (raw.catchUp !== undefined) {
+    if (mode !== 'apply') throw new Error('dataLifecycle.catchUp needs mode apply.');
+    const until = readString(raw.catchUp?.until, 'dataLifecycle.catchUp.until');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(until) || Number.isNaN(Date.parse(`${until}T00:00:00Z`))) {
+      throw new Error('dataLifecycle.catchUp.until must be a YYYY-MM-DD date.');
+    }
+    catchUp = {
+      maxEligibleTotal: readInteger(
+        raw.catchUp?.maxEligibleTotal,
+        maxEligibleTotal + 1,
+        1_000_000,
+        'dataLifecycle.catchUp.maxEligibleTotal',
+      ),
+      until,
+    };
+  }
+  return { approvedPolicyDefinitionDigest, catchUp, maxEligibleTotal, mode };
 }
 
 function readWebhookProcessingConfig(

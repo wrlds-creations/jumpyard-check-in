@@ -105,6 +105,7 @@ interface ObservabilityResources {
   readonly api: apigatewayv2.CfnApi;
   readonly apiAccessLogGroup: logs.LogGroup;
   readonly bookingHandler: lambda.Function;
+  readonly dataLifecycleHandler?: lambda.Function;
   readonly dataSyncHandler: lambda.Function;
   readonly deadLetterQueue: sqs.Queue;
   readonly lookupHandler: lambda.Function;
@@ -1134,6 +1135,19 @@ exports.handler = async (event) => {
       ],
     });
 
+    if (config.dataLifecycle && !databaseLifecycleSecret) {
+      throw new Error('dataLifecycle requires the restricted lifecycle database identity.');
+    }
+    const dataLifecycleHandler = config.dataLifecycle && databaseLifecycleSecret
+      ? this.createDataLifecycleJob(
+          config,
+          config.dataLifecycle,
+          databaseClusterArn,
+          databaseLifecycleSecret,
+          databaseRuntimeRoleProvisioner,
+        )
+      : undefined;
+
     new events.Rule(this, 'WebhookRecoveryRule', {
       ruleName: `${config.resourcePrefix}-webhook-recovery`,
       description: 'Reconciles durably received webhook events that were not completed by the queue worker.',
@@ -1208,6 +1222,7 @@ exports.handler = async (event) => {
       api,
       apiAccessLogGroup,
       bookingHandler,
+      dataLifecycleHandler,
       dataSyncHandler,
       deadLetterQueue,
       lookupHandler,
@@ -1257,6 +1272,86 @@ exports.handler = async (event) => {
     }
   }
 
+  // GH-598: the approved nightly run of the T0195 lifecycle policy. The job reads only the dedicated
+  // lifecycle secret, changes only Aurora and has no ROLLER, Klaviyo or other provider access.
+  private createDataLifecycleJob(
+    config: JumpYardCloudConfig,
+    lifecycle: NonNullable<JumpYardCloudConfig['dataLifecycle']>,
+    databaseClusterArn: string,
+    lifecycleSecret: secretsmanager.Secret,
+    roleProvisioner: CustomResource | undefined,
+  ): lambda.Function {
+    const functionName = `${this.stackName}-data-lifecycle`;
+    const logGroup = new logs.LogGroup(this, 'DataLifecycleHandlerLogGroup', {
+      logGroupName: `/aws/lambda/${functionName}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+    const fn = new lambda.Function(this, 'DataLifecycleHandler', {
+      functionName,
+      architecture: lambda.Architecture.ARM_64,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'data-lifecycle'), {
+        exclude: ['*.d.ts'],
+      }),
+      memorySize: 256,
+      reservedConcurrentExecutions: 1,
+      timeout: Duration.minutes(14),
+      environment: {
+        DATABASE_CLUSTER_ARN: databaseClusterArn,
+        DATABASE_SECRET_ARN: lifecycleSecret.secretArn,
+        DATA_LIFECYCLE_APPROVED_POLICY_DIGEST: lifecycle.approvedPolicyDefinitionDigest,
+        // T0195 run guards: at most 500 rows per action and 5,000 per pass; 20 passes a night.
+        DATA_LIFECYCLE_BATCH_SIZE: '500',
+        DATA_LIFECYCLE_BUDGET_SECONDS: '720',
+        DATA_LIFECYCLE_CATCH_UP_MAX_ELIGIBLE_TOTAL: lifecycle.catchUp ? String(lifecycle.catchUp.maxEligibleTotal) : '',
+        DATA_LIFECYCLE_CATCH_UP_UNTIL: lifecycle.catchUp?.until ?? '',
+        DATA_LIFECYCLE_ENVIRONMENT: config.tags['WRLDS:Environment'],
+        DATA_LIFECYCLE_MAX_ELIGIBLE_TOTAL: String(lifecycle.maxEligibleTotal),
+        DATA_LIFECYCLE_MAX_MUTATIONS: '5000',
+        DATA_LIFECYCLE_MAX_RUNS: '20',
+        DATA_LIFECYCLE_MODE: lifecycle.mode,
+        DATA_LIFECYCLE_PAUSE_SECONDS: '15',
+        RESOURCE_PREFIX: config.resourcePrefix,
+      },
+    });
+    fn.node.addDependency(logGroup);
+    if (roleProvisioner) fn.node.addDependency(roleProvisioner);
+    lifecycleSecret.grantRead(fn);
+    fn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'rds-data:BeginTransaction',
+          'rds-data:CommitTransaction',
+          'rds-data:ExecuteStatement',
+          'rds-data:RollbackTransaction',
+        ],
+        resources: [databaseClusterArn],
+      }),
+    );
+    // A failed night is reported, not repeated: the loop already retries a busy database itself.
+    fn.configureAsyncInvoke({ retryAttempts: 0 });
+
+    new events.Rule(this, 'DataLifecycleNightlyRule', {
+      ruleName: `${config.resourcePrefix}-data-lifecycle-nightly`,
+      description:
+        'Runs the approved T0195 lifecycle policy on Aurora after midnight in Stockholm. No provider calls are made.',
+      enabled: lifecycle.mode !== 'off',
+      // 23:30 UTC is 00:30 in Stockholm in winter and 01:30 in summer, before the 02:00 UTC sync.
+      schedule: events.Schedule.cron({ minute: '30', hour: '23' }),
+      targets: [
+        new targets.LambdaFunction(fn, {
+          event: events.RuleTargetInput.fromObject({
+            source: 'jumpyard.data-lifecycle-nightly',
+          }),
+          retryAttempts: 0,
+        }),
+      ],
+    });
+    return fn;
+  }
+
   private addOperationalObservability(config: JumpYardCloudConfig, resources: ObservabilityResources): void {
     const period = Duration.minutes(5);
     // #335: alarms that signal a real operational problem notify the configured recipients.
@@ -1282,6 +1377,10 @@ exports.handler = async (event) => {
       { id: 'Webhook', name: 'webhook', fn: resources.webhookHandler },
       { id: 'WebhookProcessor', name: 'webhook-processor', fn: resources.webhookProcessorHandler, expectedThrottles: true },
       { id: 'DataSync', name: 'data-sync', fn: resources.dataSyncHandler, expectedThrottles: true },
+      // GH-598: reserved concurrency one; a manual run during the nightly run is refused, not lost.
+      ...(resources.dataLifecycleHandler
+        ? [{ id: 'DataLifecycle', name: 'data-lifecycle', fn: resources.dataLifecycleHandler, expectedThrottles: true }]
+        : []),
     ];
 
     const apiMetric = (metricName: string, statistic: string) =>
@@ -1689,6 +1788,33 @@ exports.handler = async (event) => {
           datapointsToAlarm: 5,
           comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
           treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+        }),
+      );
+    }
+
+    // GH-598: a stopped night reaches the recipients through the Lambda errors alarm below, and a
+    // night that left rows past their clock outside the approved catch-up through this one. A
+    // missing-data alarm would fire at its first evaluation after deploy, so none is used.
+    if (resources.dataLifecycleHandler && config.dataLifecycle && config.dataLifecycle.mode !== 'off') {
+      routeAlarm(
+        new cloudwatch.Alarm(this, 'DataLifecycleBehindAlarm', {
+          alarmName: `${config.resourcePrefix}-data-lifecycle-behind`,
+          alarmDescription: 'A nightly lifecycle run ended with rows still past their retention clock.',
+          metric: new cloudwatch.Metric({
+            namespace: 'JumpYard/Cloud',
+            metricName: 'DataLifecycleBehind',
+            dimensionsMap: {
+              Environment: config.resourcePrefix,
+              Handler: 'data-lifecycle',
+            },
+            statistic: 'Sum',
+            period: Duration.hours(6),
+          }),
+          threshold: 1,
+          evaluationPeriods: 1,
+          datapointsToAlarm: 1,
+          comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
         }),
       );
     }

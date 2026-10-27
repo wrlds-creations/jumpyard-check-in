@@ -31,6 +31,7 @@ interface TestConfig {
     windowMinutes: number;
   };
   contactLookup?: unknown;
+  dataLifecycle?: Record<string, unknown>;
   dataSync?: {
     bookingRetentionDays: number;
     liveApproval: string;
@@ -943,5 +944,76 @@ expectFail('GH-473 lookup flag must be a boolean', parkTestContactLookupStringFl
 expectFail('GH-473 lookup timeout has a floor', parkTestContactLookupFastTimeout, /contactLookup.timeoutMs must be an integer between 500 and 3000/);
 expectFail('GH-473 lookup timeout has a ceiling', parkTestContactLookupSlowTimeout, /contactLookup.timeoutMs must be an integer between 500 and 3000/);
 expectFail('GH-473 contactLookup must be an object', parkTestContactLookupNotObject, /contactLookup must be an object/);
+
+// GH-598: the nightly lifecycle job is park-test only and fails closed on every unclear setting.
+const lifecycleDigest = 'fd84eadd4c3731e6f87881ad996b08a84c587f3cd719c45fbbc4b6fad5063c01';
+const withLifecycle = (base: TestConfig, dataLifecycle: Record<string, unknown>): TestConfig => {
+  const config = cloneConfig(base);
+  config.dataLifecycle = dataLifecycle;
+  return config;
+};
+const deployedLifecycle = loadConfig(readConfig('config/park-test-full-flow-rehearsal.json')).dataLifecycle;
+if (deployedLifecycle?.mode !== 'plan' || deployedLifecycle.approvedPolicyDefinitionDigest !== lifecycleDigest
+  || deployedLifecycle.maxEligibleTotal !== 25_000 || deployedLifecycle.catchUp !== undefined) {
+  throw new Error('GH-598: the deployed Park profile must start the nightly lifecycle in plan mode.');
+}
+console.log('[pass] GH-598 deployed Park profile starts the nightly lifecycle in plan mode');
+if (loadConfig(parkTestConfig).dataLifecycle !== undefined) {
+  throw new Error('GH-598: the closed park-test profile must not define a lifecycle job.');
+}
+console.log('[pass] GH-598 closed park-test profile has no lifecycle job');
+expectPass(
+  'GH-598 an approved catch-up needs apply mode and a higher ceiling',
+  withLifecycle(parkTestConfig, {
+    mode: 'apply',
+    approvedPolicyDefinitionDigest: lifecycleDigest,
+    maxEligibleTotal: 25_000,
+    catchUp: { maxEligibleTotal: 200_000, until: '2026-11-10' },
+  }),
+  'park-test',
+);
+expectFail(
+  'GH-598 dev never runs the lifecycle job',
+  withLifecycle(devConfig, { mode: 'plan', approvedPolicyDefinitionDigest: lifecycleDigest }),
+  /dataLifecycle is approved for park-test only/,
+);
+expectFail(
+  'GH-598 lifecycle mode is explicit',
+  withLifecycle(parkTestConfig, { mode: 'on', approvedPolicyDefinitionDigest: lifecycleDigest }),
+  /dataLifecycle.mode must be off, plan or apply/,
+);
+expectFail(
+  'GH-598 lifecycle needs the approved policy digest',
+  withLifecycle(parkTestConfig, { mode: 'plan', approvedPolicyDefinitionDigest: 'fd84eadd' }),
+  /approvedPolicyDefinitionDigest must be a lowercase SHA-256 digest/,
+);
+expectFail(
+  'GH-598 a catch-up is refused in plan mode',
+  withLifecycle(parkTestConfig, {
+    mode: 'plan',
+    approvedPolicyDefinitionDigest: lifecycleDigest,
+    catchUp: { maxEligibleTotal: 200_000, until: '2026-11-10' },
+  }),
+  /dataLifecycle.catchUp needs mode apply/,
+);
+expectFail(
+  'GH-598 a catch-up ceiling must exceed the normal ceiling',
+  withLifecycle(parkTestConfig, {
+    mode: 'apply',
+    approvedPolicyDefinitionDigest: lifecycleDigest,
+    maxEligibleTotal: 25_000,
+    catchUp: { maxEligibleTotal: 20_000, until: '2026-11-10' },
+  }),
+  /dataLifecycle.catchUp.maxEligibleTotal must be an integer between 25001 and 1000000/,
+);
+expectFail(
+  'GH-598 a catch-up has a last day',
+  withLifecycle(parkTestConfig, {
+    mode: 'apply',
+    approvedPolicyDefinitionDigest: lifecycleDigest,
+    catchUp: { maxEligibleTotal: 200_000, until: 'next week' },
+  }),
+  /dataLifecycle.catchUp.until must be a YYYY-MM-DD date/,
+);
 
 console.log('Config guard validation passed.');

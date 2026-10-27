@@ -81,8 +81,8 @@ function iamPoliciesReference(template, logicalId) {
 function validateParkTest(template) {
   assert.equal(
     Object.keys(template.Resources).length,
-    218,
-    'T0194 remains intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the #335 alarm topic, subscription and sustained Roller alarm, the GH-473 Klaviyo key secret, the GH-488 kiosk status and pairing routes, and the GH-483 kiosk staff resolution route.',
+    228,
+    'T0194 remains intact inside T0197/T0200, issue #212, the exact #216 scheduler boundary, the #335 alarm topic, subscription and sustained Roller alarm, the GH-473 Klaviyo key secret, the GH-488 kiosk status and pairing routes, the GH-483 kiosk staff resolution route, and the ten GH-598 nightly lifecycle resources (Lambda, role, policy, log group, invoke config, rule, rule permission and three alarms).',
   );
   assert.equal(entriesOfType(template, 'AWS::SES::ConfigurationSet').length, 1);
   assert.equal(entriesOfType(template, 'AWS::SES::ConfigurationSetEventDestination').length, 1);
