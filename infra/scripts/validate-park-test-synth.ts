@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import { loadJumpYardCloudConfig } from '../lib/config';
 import { JumpYardCloudStack } from '../lib/jumpyard-cloud-stack';
+import { policyDefinitionDigest } from '../lambda/data-lifecycle/policy';
 
 const DEV_PREFIX = 'jumpyard-check-in-dev';
 const PARK_TEST_PREFIX = 'jumpyard-check-in-park-test';
@@ -1191,6 +1192,112 @@ function validateParkTestFullFlowRehearsalTemplate(parkTest: SynthResult): void 
   console.log('[pass] GH-463 full-flow synth opens Nacka dates from 2026-06-29 on Booking, Lookup and Redeem only');
 }
 
+// GH-598: the nightly lifecycle job exists only where the reviewed config approves it. It reads only
+// the dedicated lifecycle secret, changes only Aurora and makes no provider call.
+function expectNoDataLifecycleJob(template: CloudFormationTemplate, context: string): void {
+  const strings = collectStrings(template);
+  expectNotContains(strings, 'data-lifecycle', context);
+}
+
+function expectDataLifecycleJob(template: CloudFormationTemplate, prefix: string, expectedMode: 'plan' | 'apply'): void {
+  const functionName = `${prefix}-stack-data-lifecycle`;
+  const resources = getResources(template);
+  const fnEntry = Object.entries(resources).find(([, resource]) =>
+    resource.Type === 'AWS::Lambda::Function' && resource.Properties?.FunctionName === functionName,
+  );
+  expect(Boolean(fnEntry), `Expected the GH-598 lifecycle Lambda ${functionName}.`);
+  const fn = fnEntry![1];
+  expect(fn.Properties?.ReservedConcurrentExecutions === 1, 'The lifecycle Lambda must run one night at a time.');
+  expect(fn.Properties?.Timeout === 840, 'The lifecycle Lambda must stop within 14 minutes.');
+
+  const secretEntry = Object.entries(resources).find(([, resource]) =>
+    resource.Type === 'AWS::SecretsManager::Secret' && resource.Properties?.Name === `/${prefix}/aurora/lifecycle`,
+  );
+  expect(Boolean(secretEntry), 'Expected the retained lifecycle database secret.');
+  const lifecycleSecretId = secretEntry![0];
+  const variables = getLambdaEnvironment(template, functionName);
+  expect(
+    JSON.stringify(variables.DATABASE_SECRET_ARN) === JSON.stringify({ Ref: lifecycleSecretId }),
+    'The lifecycle Lambda must use the dedicated lifecycle secret only.',
+  );
+  expect(
+    variables.DATA_LIFECYCLE_APPROVED_POLICY_DIGEST === policyDefinitionDigest(),
+    'The approved lifecycle digest must equal the reviewed T0195 policy definition.',
+  );
+  expectLambdaEnvironment(template, functionName, {
+    DATA_LIFECYCLE_BATCH_SIZE: '500',
+    DATA_LIFECYCLE_BUDGET_SECONDS: '720',
+    DATA_LIFECYCLE_ENVIRONMENT: 'park-test',
+    DATA_LIFECYCLE_MAX_ELIGIBLE_TOTAL: '25000',
+    DATA_LIFECYCLE_MAX_MUTATIONS: '5000',
+    DATA_LIFECYCLE_MAX_RUNS: '20',
+    DATA_LIFECYCLE_MODE: expectedMode,
+    DATA_LIFECYCLE_PAUSE_SECONDS: '15',
+    RESOURCE_PREFIX: prefix,
+  });
+  expect(
+    Object.keys(variables).every((name) => !/ROLLER|KLAVIYO|WEBHOOK|REDEEM|STAFF|ADMIN/.test(name)),
+    'The lifecycle Lambda must not receive provider, webhook, staff or administrator settings.',
+  );
+
+  const roleId = (fn.Properties?.Role as { 'Fn::GetAtt'?: unknown[] } | undefined)?.['Fn::GetAtt']?.[0];
+  expect(typeof roleId === 'string', 'The lifecycle Lambda role must be synthesized.');
+  const statements = Object.values(resources)
+    .filter((resource) => resource.Type === 'AWS::IAM::Policy'
+      && JSON.stringify(resource.Properties?.Roles).includes(`"${roleId as string}"`))
+    .flatMap((resource) => {
+      const statement = (resource.Properties?.PolicyDocument as { Statement?: unknown } | undefined)?.Statement;
+      return (Array.isArray(statement) ? statement : [statement]) as Array<Record<string, unknown>>;
+    });
+  const actionsOf = (statement: Record<string, unknown>): string[] =>
+    (Array.isArray(statement.Action) ? statement.Action : [statement.Action]).map(String);
+  const actions = [...new Set(statements.flatMap(actionsOf))].sort();
+  expect(
+    JSON.stringify(actions) === JSON.stringify([
+      'rds-data:BeginTransaction',
+      'rds-data:CommitTransaction',
+      'rds-data:ExecuteStatement',
+      'rds-data:RollbackTransaction',
+      'secretsmanager:DescribeSecret',
+      'secretsmanager:GetSecretValue',
+    ]),
+    `The lifecycle Lambda has unexpected permissions: ${actions.join(', ')}.`,
+  );
+  for (const statement of statements.filter((candidate) => actionsOf(candidate).some((action) => action.startsWith('secretsmanager:')))) {
+    expect(
+      JSON.stringify(statement.Resource) === JSON.stringify({ Ref: lifecycleSecretId }),
+      'The lifecycle Lambda may read the lifecycle secret only.',
+    );
+  }
+
+  const ruleName = `${prefix}-data-lifecycle-nightly`;
+  expectEventRuleState(template, ruleName, 'ENABLED');
+  const rule = findResourceByTypeAndProperty(template, 'AWS::Events::Rule', 'Name', ruleName);
+  expect(rule?.Properties?.ScheduleExpression === 'cron(30 23 * * ? *)', 'The lifecycle job must start at 23:30 UTC.');
+  const ruleTargets = rule?.Properties?.Targets as Array<Record<string, unknown>> | undefined;
+  expect(Array.isArray(ruleTargets) && ruleTargets.length === 1, 'The lifecycle rule must have one target.');
+  expect(
+    JSON.stringify(ruleTargets?.[0]?.RetryPolicy) === JSON.stringify({ MaximumRetryAttempts: 0 }),
+    'EventBridge must not repeat a lifecycle night.',
+  );
+  const invokeConfigs = Object.values(resources).filter((resource) => resource.Type === 'AWS::Lambda::EventInvokeConfig'
+    && JSON.stringify(resource.Properties?.FunctionName).includes(fnEntry![0]));
+  expect(
+    invokeConfigs.length === 1 && invokeConfigs[0].Properties?.MaximumRetryAttempts === 0,
+    'Lambda must not retry a failed lifecycle night asynchronously.',
+  );
+  for (const alarmName of [`${prefix}-data-lifecycle-lambda-errors`, `${prefix}-data-lifecycle-behind`]) {
+    const alarm = findResourceByTypeAndProperty(template, 'AWS::CloudWatch::Alarm', 'AlarmName', alarmName);
+    expect(Boolean(alarm), `Expected alarm ${alarmName}.`);
+    expect(
+      Array.isArray(alarm?.Properties?.AlarmActions) && (alarm?.Properties?.AlarmActions as unknown[]).length === 1,
+      `${alarmName} must reach the alarm recipients.`,
+    );
+    // A missing-data breach would alarm right after deploy and fail Park's zero-alarm verify step.
+    expect(alarm?.Properties?.TreatMissingData === 'notBreaching', `${alarmName} must not alarm on missing data.`);
+  }
+}
+
 const dev = synthConfig('config/dev.json');
 const parkTest = synthConfig('config/park-test.json');
 const parkTestAddOnSmoke = synthConfig('config/park-test-live-addon-smoke.json');
@@ -1230,5 +1337,22 @@ for (const [name, synthResult, enabled] of [
   expectKlaviyoContactLookup(synthResult.template, enabled, name);
 }
 console.log('[pass] GH-473 park-test keeps one empty retained Klaviyo key; only the full-flow Booking role may read it');
+
+for (const [name, synthResult] of [
+  ['dev', dev],
+  ['park-test', parkTest],
+  ['park-test add-on smoke', parkTestAddOnSmoke],
+  ['park-test add-on settlement smoke', parkTestAddOnSettlementSmoke],
+  ['park-test assisted lookup', parkTestAssistedLookup],
+  ['park-test lookup smoke', parkTestLookupSmoke],
+  ['park-test payment smoke', parkTestPaymentSmoke],
+  ['park-test payment sync smoke', parkTestPaymentSyncSmoke],
+  ['park-test redeem smoke', parkTestRedeemSmoke],
+  ['park-test frontend redeem rehearsal', parkTestFrontendRedeemRehearsal],
+] as const) {
+  expectNoDataLifecycleJob(synthResult.template, name);
+}
+expectDataLifecycleJob(parkTestFullFlowRehearsal.template, PARK_TEST_PREFIX, 'plan');
+console.log('[pass] GH-598 only the deployed Park profile runs the nightly lifecycle, in plan mode, with the lifecycle secret only');
 
 console.log('Park-test synth validation passed.');

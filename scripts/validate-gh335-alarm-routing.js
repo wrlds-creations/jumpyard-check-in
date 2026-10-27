@@ -57,6 +57,11 @@ const DASHBOARD_ONLY_ALARMS = [
   'webhook-processor-lambda-throttles',
 ];
 
+// GH-598: only the profile that runs the nightly lifecycle has its alarms. A stopped night and a
+// night that left rows past their clock notify; one-at-a-time throttles are expected.
+const LIFECYCLE_ROUTED_ALARMS = ['data-lifecycle-behind', 'data-lifecycle-lambda-errors'];
+const LIFECYCLE_DASHBOARD_ONLY_ALARMS = ['data-lifecycle-lambda-throttles'];
+
 function synthTemplate(configFile, stackPrefix) {
   const outputDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'jumpyard-gh335-synth-'));
   const cdkCli = path.join(INFRA, 'node_modules', 'aws-cdk', 'bin', 'cdk');
@@ -98,9 +103,13 @@ function alarmsByShortName(template, prefix) {
   return alarms;
 }
 
-function validateParkTest(template, configFile, { bookingIndexAlarm }) {
+function validateParkTest(template, configFile, { bookingIndexAlarm, lifecycleJob }) {
   // The booking-index freshness alarm only exists while the nightly seed schedule is enabled.
-  const routedAlarms = bookingIndexAlarm ? ROUTED_ALARMS : ROUTED_ALARMS.filter((name) => name !== 'booking-index-stale');
+  const routedAlarms = [
+    ...(bookingIndexAlarm ? ROUTED_ALARMS : ROUTED_ALARMS.filter((name) => name !== 'booking-index-stale')),
+    ...(lifecycleJob ? LIFECYCLE_ROUTED_ALARMS : []),
+  ];
+  const dashboardOnlyAlarms = [...DASHBOARD_ONLY_ALARMS, ...(lifecycleJob ? LIFECYCLE_DASHBOARD_ONLY_ALARMS : [])];
   const topics = resourcesOfType(template, 'AWS::SNS::Topic');
   assert.equal(topics.length, 1, `${configFile}: exactly one alarm notification topic is expected.`);
   const [topicLogicalId, topic] = topics[0];
@@ -116,10 +125,10 @@ function validateParkTest(template, configFile, { bookingIndexAlarm }) {
   assert.deepEqual(subscription.Properties.TopicArn, { Ref: topicLogicalId }, `${configFile}: the subscription must attach to the alarm topic.`);
 
   const alarms = alarmsByShortName(template, PARK_TEST_PREFIX);
-  assert.equal(alarms.size, routedAlarms.length + DASHBOARD_ONLY_ALARMS.length, `${configFile}: unexpected alarm count ${alarms.size}.`);
+  assert.equal(alarms.size, routedAlarms.length + dashboardOnlyAlarms.length, `${configFile}: unexpected alarm count ${alarms.size}.`);
   assert.deepEqual(
     [...alarms.keys()].sort(),
-    [...routedAlarms, ...DASHBOARD_ONLY_ALARMS].sort(),
+    [...routedAlarms, ...dashboardOnlyAlarms].sort(),
     `${configFile}: the alarm inventory changed; update the GH-335 routing decision explicitly.`,
   );
 
@@ -140,7 +149,7 @@ function validateParkTest(template, configFile, { bookingIndexAlarm }) {
     assert.notEqual(properties.ActionsEnabled, false, `${configFile}: ${name} must keep actions enabled.`);
   }
 
-  for (const name of DASHBOARD_ONLY_ALARMS) {
+  for (const name of dashboardOnlyAlarms) {
     const properties = alarms.get(name);
     assert.equal(properties.AlarmActions, undefined, `${configFile}: ${name} fires during normal operation and must stay dashboard-only.`);
     assert.equal(properties.OKActions, undefined, `${configFile}: ${name} must stay dashboard-only.`);
@@ -177,7 +186,7 @@ function validateParkTest(template, configFile, { bookingIndexAlarm }) {
   const outputs = template.Outputs || {};
   assert.ok(outputs.AlarmNotificationsTopicArn, `${configFile}: the topic ARN output is expected for readback.`);
 
-  console.log(`[pass] ${configFile}: ${routedAlarms.length} routed alarms, ${DASHBOARD_ONLY_ALARMS.length} dashboard-only, one email subscription to ${RECIPIENT}`);
+  console.log(`[pass] ${configFile}: ${routedAlarms.length} routed alarms, ${dashboardOnlyAlarms.length} dashboard-only, one email subscription to ${RECIPIENT}`);
 }
 
 function validateUnroutedProfile(template, configFile, prefix) {
@@ -219,8 +228,9 @@ function validateConfigContract() {
 validateConfigContract();
 validateParkTest(synthTemplate('park-test-full-flow-rehearsal.json', PARK_TEST_PREFIX), 'park-test-full-flow-rehearsal.json', {
   bookingIndexAlarm: true,
+  lifecycleJob: true,
 });
-validateParkTest(synthTemplate('park-test.json', PARK_TEST_PREFIX), 'park-test.json', { bookingIndexAlarm: false });
+validateParkTest(synthTemplate('park-test.json', PARK_TEST_PREFIX), 'park-test.json', { bookingIndexAlarm: false, lifecycleJob: false });
 validateUnroutedProfile(synthTemplate('dev.json', DEV_PREFIX), 'dev.json', DEV_PREFIX);
 validateUnroutedProfile(
   synthTemplate('park-test-live-lookup-smoke.json', PARK_TEST_PREFIX),

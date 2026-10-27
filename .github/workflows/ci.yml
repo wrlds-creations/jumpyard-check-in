@@ -113,6 +113,22 @@ jobs:
           GH589_DATABASE_TEST: 'true'
           GH589_PGPORT: '55435'
         run: npm run validate:gh589-kiosk-item-key
+      # GH-598: the lifecycle deletes across whole tables, so it gets its own fresh database.
+      - name: Test the nightly data lifecycle as the lifecycle role against PostgreSQL
+        shell: bash
+        env:
+          GH598_DATABASE_TEST: 'true'
+          GH598_PGPORT: '55435'
+          GH598_PGDATABASE: gh598_lifecycle
+        run: |
+          set -euo pipefail
+          psql -h 127.0.0.1 -p 55435 -U gh345_test -d jumpyard_cloud -v ON_ERROR_STOP=1 -c 'CREATE DATABASE gh598_lifecycle'
+          psql -h 127.0.0.1 -p 55435 -U gh345_test -d gh598_lifecycle -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA jumpyard'
+          for migration in infra/migrations/*.sql; do
+            sed 's/jumpyard_cloud/gh598_lifecycle/g' "$migration" \
+              | psql -h 127.0.0.1 -p 55435 -U gh345_test -d gh598_lifecycle -v ON_ERROR_STOP=1 -f -
+          done
+          npm run validate:gh598-lifecycle-nightly
 
   repository:
     name: Repository

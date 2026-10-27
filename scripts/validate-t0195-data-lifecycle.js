@@ -6,12 +6,17 @@ const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const migrationPath = path.join(root, 'infra', 'migrations', '0010_data_lifecycle.sql');
 const runnerPath = path.join(root, 'infra', 'scripts', 'data-lifecycle.ts');
+// GH-598: the reviewed policy and apply transaction are shared with the nightly Lambda.
+const policyPath = path.join(root, 'infra', 'lambda', 'data-lifecycle', 'policy.js');
+const enginePath = path.join(root, 'infra', 'lambda', 'data-lifecycle', 'engine.js');
 
 assert.equal(existsSync(migrationPath), true, 'Missing forward-only lifecycle migration.');
-assert.equal(existsSync(runnerPath), true, 'Missing lifecycle runner.');
+for (const sourcePath of [runnerPath, policyPath, enginePath]) {
+  assert.equal(existsSync(sourcePath), true, `Missing lifecycle source ${path.relative(root, sourcePath)}.`);
+}
 
 const migration = readFileSync(migrationPath, 'utf8');
-const runner = readFileSync(runnerPath, 'utf8');
+const runner = [runnerPath, policyPath, enginePath].map((sourcePath) => readFileSync(sourcePath, 'utf8')).join('\n');
 
 assert.doesNotMatch(migration, /\bDELETE\s+FROM\b/i, 'Migration must not purge rows when applied.');
 assert.doesNotMatch(migration, /\bDROP\s+TABLE\b/i, 'Migration must be forward-only.');
@@ -122,7 +127,7 @@ assert.match(runner, /clusterArn,/);
 assert.match(runner, /policyDefinitionDigest/);
 assert.match(runner, /plan_digest, policy_definition_digest, eligible_counts/);
 assert.match(runner, /name: "policyDefinitionDigest", value: \{ stringValue: plan\.policyDefinitionDigest \}/);
-assert.match(runner, /actionSpecs: readonly ActionSpec\[\] = ACTION_SPECS/);
+assert.match(runner, /function policyDefinitionDigest\(actionSpecs = ACTION_SPECS\)/);
 assert.match(runner, /actionSpecs\.map\(\(\{ candidateSql, mutateSql, name \}\)/);
 assert.match(runner, /plannedTotal > plan\.maxMutations/);
 assert.match(runner, /sqlParameters\(plan\.referenceAt, source\.planned\)/);

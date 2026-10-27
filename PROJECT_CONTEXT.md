@@ -93,7 +93,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Guest messaging remains gated. #216 proved one automatic Nacka T-30 email, then disarmed its control. The scheduler exists but the general gate is false. Broader delivery needs an approved time window; #220 changes neither message links nor send authority. Peak remains 3,000/day and 5/minute.
 - Staff/admin PII is staff-only and must not be exposed in public guest UI or unauthenticated APIs.
 - Phone-local contact recovery uses a 12-hour device-clock expiry, active monotonic cleanup, minute checkpoints, and fail-closed detected rollback before reuse; a fully closed/offline browser cannot execute deletion or prove unobserved real time. Park-test Lambda/API logs and the private raw-payload bucket retain data for 30 days, while Aurora automated backup/PITR remains seven days.
-- Aurora lifecycle apply, migration apply, secret mutation, deploy, snapshot, and isolated restore are separate external-write checkpoints. A restored database must reapply lifecycle policy and prove database-backed aggregate evidence before any application attachment or traffic.
+- Lifecycle mode/ceiling changes (#598), migration apply, secret mutation, deploy, snapshot and isolated restore are separate external-write checkpoints. A restore must reapply lifecycle policy and prove database-backed aggregate evidence before any app attachment or traffic.
 
 ## Language Policy
 

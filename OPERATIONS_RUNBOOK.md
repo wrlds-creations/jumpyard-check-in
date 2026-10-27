@@ -284,6 +284,38 @@ Escalate to Roller/Josh/Joao/Pabel when:
 - Roller `POST /redemptions` rejects tickets that should be redeemable.
 - Roller booking detail conflicts with Venue Manager display.
 
+### 6. Nightly Data Lifecycle (#598)
+
+The Lambda `jumpyard-check-in-park-test-stack-data-lifecycle` runs the T0195 policy at 23:30 UTC. Its mode (`off`, `plan`, `apply`), ceiling and catch-up come only from the reviewed Park config. It changes only Aurora and calls no provider. See [the GH-598 record](docs/gh-598-lifecycle-nightly.md).
+
+Symptoms:
+
+- `jumpyard-check-in-park-test-data-lifecycle-lambda-errors`: a night stopped. The log says why: a ceiling stop, a failure class with its SQLSTATE, or an unapproved policy digest.
+- A morning readback without a new `data_lifecycle_runs` row in apply mode, or without a `plan` log line in plan mode: the night never started. Check that the rule is enabled and the Lambda has no errors.
+- `jumpyard-check-in-park-test-data-lifecycle-behind`: rows were still past their clock after a night outside the catch-up.
+
+AWS checks:
+
+```powershell
+aws logs tail /aws/lambda/jumpyard-check-in-park-test-stack-data-lifecycle --profile wrlds-dev --region eu-north-1 --since 24h
+```
+
+Aurora checks (aggregate only):
+
+```sql
+select run_id, reference_at, finished_at, batch_size, affected_total
+from jumpyard.data_lifecycle_runs
+order by finished_at desc
+limit 20;
+```
+
+Safe first action:
+
+- A ceiling stop changed nothing. Compare the logged eligible total with the expected nightly inflow before any config change, and never raise a ceiling without Love's approval.
+- A busy database is retried within the night. Repeated lock or serialization failures mean a writer was active at 23:30 UTC; read the webhook queue and the data-sync log.
+- To stop the job, deploy the Park config with `"mode": "off"`. In an emergency, disable the rule `jumpyard-check-in-park-test-data-lifecycle-nightly` and codify it in the next deploy, because Park's drift check reports the manual change.
+- A committed pass cannot be undone by the job. Recovery is the guarded isolated restore path, with the lifecycle reapplied before any traffic.
+
 ## Severity Guide
 
 | Severity | Example | Action |

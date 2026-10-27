@@ -5,6 +5,7 @@ import { App } from 'aws-cdk-lib';
 
 import { loadJumpYardCloudConfig } from '../lib/config';
 import { JumpYardCloudStack } from '../lib/jumpyard-cloud-stack';
+import { ACTION_SPECS } from '../lambda/data-lifecycle/policy';
 
 const PREFIX = 'jumpyard-check-in-park-test';
 const HANDLERS = ['booking', 'data-sync', 'lookup', 'redeem', 'session', 'webhook'] as const;
@@ -31,7 +32,8 @@ interface Template {
   readonly Resources?: Record<string, TemplateResource>;
 }
 
-type Permission = 'DELETE' | 'INSERT' | 'SELECT' | 'UPDATE' | 'EXECUTE';
+// ROW_LOCK: SELECT ... FOR UPDATE needs UPDATE on at least one column of the locked table (GH-598).
+type Permission = 'DELETE' | 'INSERT' | 'SELECT' | 'UPDATE' | 'EXECUTE' | 'ROW_LOCK';
 
 function synthParkTest(): Template {
   const configPath = path.resolve(__dirname, '..', 'config', 'park-test.json');
@@ -139,9 +141,16 @@ function parseGrants(sql: string): Map<string, Map<string, Set<Permission>>> {
   // `REVOKE ... FROM PUBLIC` would. Grants and revokes apply in migration order.
   const revokePattern =
     /^REVOKE\s+([A-Z,\s]+?)\s+ON\s+((?:jumpyard\.[a-z_]+\s*,\s*)*jumpyard\.[a-z_]+)\s+FROM\s+(jumpyard_[a-z_]+);/gim;
+  // GH-598: a column UPDATE grant allows row locks only, never a table-wide UPDATE.
+  const columnUpdatePattern =
+    /^GRANT\s+UPDATE\s*\([a-z_,\s]+\)\s+ON\s+(jumpyard\.[a-z_]+)\s+TO\s+(jumpyard_[a-z_]+);/gim;
   const statements = [
     ...[...sql.matchAll(grantPattern)].map((match) => ({ match, revoke: false })),
     ...[...sql.matchAll(revokePattern)].map((match) => ({ match, revoke: true })),
+    ...[...sql.matchAll(columnUpdatePattern)].map((match) => ({
+      match: Object.assign(['', 'ROW_LOCK', match[1], match[2]], { index: match.index }),
+      revoke: false,
+    })),
   ].sort((left, right) => (left.match.index ?? 0) - (right.match.index ?? 0));
   for (const { match, revoke } of statements) {
     const role = match[3];
@@ -150,7 +159,8 @@ function parseGrants(sql: string): Map<string, Map<string, Set<Permission>>> {
     const permissions = match[1]
       .split(',')
       .map((value) => value.trim().toUpperCase())
-      .filter((value): value is Permission => ['DELETE', 'INSERT', 'SELECT', 'UPDATE', 'EXECUTE'].includes(value));
+      .filter((value): value is Permission => ['DELETE', 'INSERT', 'SELECT', 'UPDATE', 'EXECUTE', 'ROW_LOCK'].includes(value))
+      .flatMap((value): Permission[] => (value === 'UPDATE' && !revoke ? ['UPDATE', 'ROW_LOCK'] : [value]));
     const roleGrants = result.get(role) ?? new Map<string, Set<Permission>>();
     for (const table of tables) {
       const tableGrants = roleGrants.get(table) ?? new Set<Permission>();
@@ -420,6 +430,27 @@ function main(): void {
       `Lifecycle role lacks DELETE on jumpyard.${table}.`,
     );
   }
+  // GH-598: every table a lifecycle statement row-locks needs UPDATE on at least one column,
+  // derived from the reviewed policy itself so a new action cannot reintroduce the denied apply.
+  let rowLockedActions = 0;
+  for (const spec of ACTION_SPECS) {
+    const lock = /FOR UPDATE(?: OF ([a-z_, ]+))? SKIP LOCKED/.exec(spec.mutateSql);
+    if (!lock) continue;
+    rowLockedActions += 1;
+    const candidates = spec.mutateSql.slice(spec.mutateSql.indexOf('WITH candidates AS ('), lock.index);
+    const topLevel = candidates.slice(0, candidates.search(/\bWHERE\b/));
+    const tableByAlias = new Map(
+      [...topLevel.matchAll(/\b(?:FROM|JOIN)\s+jumpyard\.([a-z_]+)\s+AS\s+([a-z_]+)/g)].map((match) => [match[2], match[1]]),
+    );
+    assert.ok(tableByAlias.size > 0, `${spec.name}: could not find the row-locked candidate table.`);
+    const lockedAliases = lock[1] ? lock[1].split(',').map((alias) => alias.trim()) : [...tableByAlias.keys()];
+    for (const alias of lockedAliases) {
+      const table = tableByAlias.get(alias);
+      assert.ok(table, `${spec.name}: unknown row-locked alias ${alias}.`);
+      assertPermission(grants, 'jumpyard_lifecycle_runtime', table!, 'ROW_LOCK', `${spec.name} FOR UPDATE`);
+    }
+  }
+  assert.equal(rowLockedActions, ACTION_SPECS.length, 'Every lifecycle action is expected to row-lock its candidates.');
 
   const sourceByHandler = Object.fromEntries(
     HANDLERS.map((handler) => [
