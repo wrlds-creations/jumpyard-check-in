@@ -1,5 +1,15 @@
 # Test Plan
 
+## Expected ROLLER 404s in lookups and the staff payment check (#600)
+
+Run `npm run validate:gh600-expected-roller-misses` (part of `npm run validate`). It drives the real Lookup handler as Park runs it and the real kiosk staff resolution, with the real metric code and a scripted ROLLER, and checks that:
+- an unknown booking number or QR code answers `404 booking_not_found` as before and counts `RollerApiExpectedMissCount`, not `RollerApiErrorCount`;
+- the staff checks on an unpaid attempt count ROLLER's 404 the same way and decide as before;
+- 400, 401, 403, 409, 429 and 5xx on both reads, a search hit's 404 and the T0201 refresh's 404 still count as errors, and timeouts are unchanged;
+- the alarms still read only `RollerApiErrorCount`.
+
+Also run `validate:gh340-server-errors`, `validate:gh531-kiosk-expected-miss`, `validate:gh483-kiosk-staff-resolution`, `validate:gh447-abandoned-kiosk-attempt`, `validate:gh583-alarms-not-errors`, `validate:gh335-alarm-routing`, `validate:assisted-lookup-venue`, `validate:t0193-api-protection` and `validate:t0194-staff-identity-infra`. The Park plan may change only the Lookup and Booking Lambda code. After release, follow [the notes](docs/gh-600-expected-roller-misses.md#after-release).
+
 ## An email ROLLER refuses at Pay (#596)
 
 Run `npm run validate:gh596-roller-email-refusal` and `npm run validate:gh473-contact-lookup` (both part of `npm run validate`). They drive the real Booking Lambda with a scripted ROLLER and check that:

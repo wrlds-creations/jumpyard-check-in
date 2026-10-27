@@ -369,12 +369,12 @@ Each email names the alarm, the metric value that crossed the threshold and the 
 | `api-throttled-requests` | API Gateway started refusing requests. | Identify the source of the burst; do not raise limits during the incident. |
 | `*-lambda-errors` | One handler crashed. | Tail that handler's log group for the latest `ERROR` or timeout. |
 | `lookup/booking/redeem/session/webhook-lambda-throttles` | Real concurrency shortage. | Check traffic and reserved concurrency before anything else. |
-| `roller-api-errors-sustained` | At least one Roller error in each of three five-minute periods. This is not an error-rate or outage measurement. | Inspect statuses and affected operations; repeated guest input errors can also contribute. Escalate confirmed provider failures to Roller. |
+| `roller-api-errors-sustained` | At least one Roller error in each of three five-minute periods. This is not an error-rate or outage measurement. | Inspect statuses and affected operations; other rejected guest input can also contribute. An unknown booking code, a staff payment check without a booking and the kiosk readback's waits count as `RollerApiExpectedMissCount` instead (D0258, D0290). Escalate confirmed provider failures to Roller. |
 | `webhook-queue-stale`, `webhook-processing-failures`, `webhook-retry-exhausted`, `webhook-dlq-visible`, `roller-ops-dlq-visible` | Roller events or background jobs are not being reconciled. | Follow the webhook runbook; do not replay before understanding the failure. |
 | `booking-index-stale` | No successful nightly seed for five six-hour periods. | Check the data-sync run rows and the latest data-sync log before rerunning. |
 | `email-*` | Guest email bounced, was rejected or damaged the account reputation. | Guest sends are disabled; treat any firing as unexpected and stop sends. |
 
-Dashboard-only, never emailed: `webhook-processor-lambda-throttles` and `data-sync-lambda-throttles` (both workers deliberately run one at a time, so throttling is normal queueing) and the single-period `roller-api-errors` alarm (one rejected Roller request, such as an unknown booking code, is routine).
+Dashboard-only, never emailed: `webhook-processor-lambda-throttles` and `data-sync-lambda-throttles` (both workers deliberately run one at a time, so throttling is normal queueing) and the single-period `roller-api-errors` alarm (one rejected Roller request is routine; an unknown booking code no longer counts, D0290).
 
 On 2026-09-04, the Outlook folder `Inkorg/Jumpyard Check-in Alarms` and an active rule were verified: sender `no-reply@sns.amazonaws.com` AND body contains `jumpyard-check-in-park-test` moves the message to that folder and requests a desktop notification. Four existing messages were moved there; no new message was sent for this mailbox organization.
 
