@@ -171,7 +171,9 @@ exports.handler = async (event) => {
       lookupPath = searchResult.lookupPath;
       searchMatchCount = searchResult.matchCount;
     } else {
-      const detailResult = await getBookingDetail(config, token, request.identifier);
+      // GH-600 (D0290): ROLLER's 404 for an identifier it does not know is the guest's "not found"
+      // below, so it is an expected miss, not a ROLLER error.
+      const detailResult = await getBookingDetail(config, token, request.identifier, { expectedMissStatus: 404 });
 
       if (detailResult.status === 404) {
         return jsonResponse(404, correlationId, {
@@ -868,7 +870,9 @@ async function getRollerAccessToken(config) {
   return cachedToken;
 }
 
-async function getBookingDetail(config, token, identifier) {
+// GH-600: `expectedMissStatus` names the one status the caller answers as a normal result, as in the
+// Booking Lambda's getRollerJson (GH-531). It changes the metric only.
+async function getBookingDetail(config, token, identifier, { expectedMissStatus = null } = {}) {
   const response = await fetch(buildRollerUrl(config.baseUrl, `/bookings/${encodeURIComponent(identifier)}`), {
     method: 'GET',
     headers: {
@@ -876,7 +880,13 @@ async function getBookingDetail(config, token, identifier) {
       authorization: `${token.tokenType || 'Bearer'} ${token.accessToken}`,
     },
   });
-  emitRollerApiMetric({ method: 'GET', operation: 'get_booking_detail', status: response.status, ok: response.ok });
+  emitRollerApiMetric({
+    method: 'GET',
+    operation: 'get_booking_detail',
+    status: response.status,
+    ok: response.ok,
+    expectedMiss: expectedMissStatus !== null && response.status === expectedMissStatus,
+  });
 
   if (response.status === 404) {
     return { ok: false, status: 404, body: null };
@@ -2253,7 +2263,7 @@ function buildRollerUrl(baseUrl, endpointPath) {
   return new URL(`${basePath}${endpointPath}`, parsedBaseUrl.origin);
 }
 
-function emitRollerApiMetric({ method, operation, status, ok }) {
+function emitRollerApiMetric({ method, operation, status, ok, expectedMiss = false }) {
   diagnostics.provider({ operation, status, ok });
   const statusCode = Number.isInteger(status) ? status : 0;
   const metricValues = {
@@ -2261,7 +2271,12 @@ function emitRollerApiMetric({ method, operation, status, ok }) {
   };
   const metrics = [{ Name: 'RollerApiCallCount', Unit: 'Count' }];
 
-  if (!ok) {
+  // GH-600 (D0290), as GH-531 (D0258) in the Booking Lambda: an answer the caller expects is counted
+  // apart, so the roller-api-errors alarms see only real ROLLER failures.
+  if (!ok && expectedMiss) {
+    metricValues.RollerApiExpectedMissCount = 1;
+    metrics.push({ Name: 'RollerApiExpectedMissCount', Unit: 'Count' });
+  } else if (!ok) {
     metricValues.RollerApiErrorCount = 1;
     metrics.push({ Name: 'RollerApiErrorCount', Unit: 'Count' });
   }

@@ -2577,7 +2577,8 @@ async function handleKioskStaffResolution(detail, correlationId) {
     });
   }
 
-  const evidence = await readKioskStaffRollerEvidence(config, row);
+  // GH-600 (D0290): ROLLER's 404 is the "no booking" evidence above, so it is an expected miss.
+  const evidence = await readKioskStaffRollerEvidence(config, row, { expectedMissStatus: 404 });
   const eligibility = kioskStaffResolutionEligibility(row, evidence);
   const audit = (result, extra = {}) => ({
     action: request.action,
@@ -2721,7 +2722,8 @@ async function findKioskStaffResolutionAttempt(request, installationId) {
   return firstMappedRow(result) ?? null;
 }
 
-// GH-447: the automatic release expects ROLLER's 404 and passes it as `expectedMissStatus` (GH-531).
+// GH-447 and GH-600: the automatic release and the staff resolution expect ROLLER's 404 for a draft
+// without a booking and pass it as `expectedMissStatus` (GH-531).
 async function readKioskStaffRollerEvidence(config, row, { expectedMissStatus = null } = {}) {
   let result;
   try {

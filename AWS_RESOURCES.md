@@ -26,6 +26,8 @@ The migration is pending until a protected Park run with `apply_migrations=true`
 
 The Booking Lambda's kiosk reconciliation counts its waiting `get_booking_detail` 404s, before its last attempt, as the new embedded metric `RollerApiExpectedMissCount` instead of `RollerApiErrorCount` (D0258). The metric sits in namespace `JumpYard/Cloud` under the existing three dimension sets: environment; handler; operation and method. That adds at most three small custom metric series. No alarm, threshold, dashboard, IAM, queue, secret or other resource changes; `roller-api-errors` and `roller-api-errors-sustained` still read `RollerApiErrorCount`. The release ships through the protected Park workflow, and its run IDs are recorded on issue #531. [Notes](docs/gh-531-kiosk-expected-miss.md).
 
+Since #600 (D0290) the Lookup Lambda's direct identifier lookup and the Booking Lambda's kiosk staff resolution count ROLLER's `get_booking_detail` 404 the same way, as the #447 release already did (D0286). The Lookup handler adds at most two series under the same dimension sets. There is still no alarm, threshold, dashboard, IAM or other resource change, and the Park template keeps 228 resources. [Notes](docs/gh-600-expected-roller-misses.md).
+
 ### Issue #488 Kiosk Pairing (Secret Applied 2026-10-07; Code Not Deployed)
 
 The park-test release profile gains the GH-488 kiosk pairing (D0243). The code is not deployed yet.

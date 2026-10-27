@@ -154,12 +154,13 @@ for (const phase of ['fetch', 'body', 'json']) {
   });
 }
 
-test('lookup: missing booking stays 404; existing provider metric is unchanged', async () => {
+test('lookup: missing booking stays 404; its ROLLER 404 is an expected miss (GH-600)', async () => {
   const app = load('lookup', { fetch: async () => response(404) });
   assert.equal((await app.handler(event({ identifier: '12345' }), CONTEXT)).statusCode, 404);
   assert.equal(app.logs.filter((entry) => entry.eventType === 'cloud.server_error').length, 0);
-  assert.equal(app.logs.find((entry) => entry.RollerApiCallCount).RollerApiErrorCount, 1,
-    'changing the old 404 metric is separate Project scope');
+  const metric = app.logs.find((entry) => entry.RollerApiCallCount);
+  assert.equal(metric.RollerApiExpectedMissCount, 1);
+  assert.equal(metric.RollerApiErrorCount, undefined, 'validate:gh600-expected-roller-misses covers the other statuses');
 });
 
 test('lookup: missing database configuration is identified without logging environment values', async () => {
