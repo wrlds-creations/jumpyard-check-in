@@ -1,5 +1,14 @@
 # Test Plan
 
+## A wrongly shaped booking number on the phone (#603)
+
+Run `npm run validate:gh603-lookup-shape` (part of `npm run validate`). It runs the real phone client, search page and copy against Cloud's Park answers, and checks that:
+- Cloud's 403 `live_lookup_not_allowed` for `12345`, a 10-digit number, another park or another date shows "Vi hittade ingen bokning idag." with one request and Cloud's code kept, as ROLLER's 404 does;
+- a booking for today is still found, and ROLLER's 502, Cloud's 5xx, emergency stop, disabled lookup, rate limit, a lost connection and the phone-number refusal keep their answers;
+- the `/preview/flow` fixture answers like Park through the real client.
+
+Also run `npm --prefix jumpyard-checkin-phone run test:payment-recovery`: a refusal never offers "Börja om", and ROLLER's 404 still does (D0270). Then `test:kalas`, `test:contact-details`, phone `tsc`, `lint` and `next build`. After release, follow [the notes](docs/gh-603-phone-lookup-shape.md#after-release).
+
 ## The nightly lifecycle catch-up (#598)
 
 Run `npm run infra:check`. Its `validate:config-guards` requires the deployed Park profile's `dataLifecycle` block to be exactly the reviewed apply catch-up (200,000 through 2026-11-06, D0291). Its `validate:park-test-synth` requires the lifecycle Lambda to receive `DATA_LIFECYCLE_MODE=apply` and both catch-up variables, with every other setting unchanged. Its `validate:t0193-api-protection` and `validate:t0194-staff-identity-infra` keep Park at 228 resources. Also run `npm run validate:gh598-lifecycle-nightly` and `npm run validate:t0195-data-lifecycle`. The Park plan may change only the lifecycle Lambda's environment.

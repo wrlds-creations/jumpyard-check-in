@@ -35,12 +35,15 @@ export type SessionIssue =
 export class CloudLookupError extends Error {
   readonly reason: LookupIssue;
   readonly httpStatus?: number;
+  /** #603: Cloud's own error code, so a refusal (`live_lookup_not_allowed`) stays apart from ROLLER's not found. */
+  readonly code?: string;
 
-  constructor(reason: LookupIssue, message: string, httpStatus?: number) {
+  constructor(reason: LookupIssue, message: string, httpStatus?: number, code?: string) {
     super(message);
     this.name = 'CloudLookupError';
     this.reason = reason;
     this.httpStatus = httpStatus;
+    this.code = code;
   }
 }
 
@@ -1070,15 +1073,20 @@ async function parseBookingResponse<T>(response: Response): Promise<T | null> {
 }
 
 function createLookupError(body: CloudLookupResponse | null, httpStatus?: number) {
-  if (body?.status === 'not_found' || body?.error?.code === 'booking_not_found') {
-    return new CloudLookupError('not_found', 'Booking was not found.', httpStatus);
+  const code = body?.error?.code;
+  // #603 (D0292): Cloud refuses an identifier it does not look up, such as 12345 or any 10-digit number, with
+  // 403 `live_lookup_not_allowed` before calling ROLLER, and a booking outside today or the park gets the same
+  // answer. For the guest that is no booking today, as on the kiosk (#249). The phone never repeats Cloud's
+  // shape rule, and the code stays on the error for callers that must tell a refusal from ROLLER's not found.
+  if (body?.status === 'not_found' || code === 'booking_not_found' || code === 'live_lookup_not_allowed') {
+    return new CloudLookupError('not_found', 'Booking was not found.', httpStatus, code);
   }
 
-  if (body?.error?.code === 'phone_lookup_disabled') {
-    return new CloudLookupError('phone_lookup_disabled', 'Use a booking reference or email address.', httpStatus);
+  if (code === 'phone_lookup_disabled') {
+    return new CloudLookupError('phone_lookup_disabled', 'Use a booking reference or email address.', httpStatus, code);
   }
 
-  return new CloudLookupError('lookup_failed', body?.error?.message ?? 'JumpYard Cloud lookup failed.', httpStatus);
+  return new CloudLookupError('lookup_failed', body?.error?.message ?? 'JumpYard Cloud lookup failed.', httpStatus, code);
 }
 
 // GH-453: an admitted visit of today comes back as `session_completed` with its number.
