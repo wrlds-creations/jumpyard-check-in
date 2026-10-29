@@ -1,6 +1,6 @@
 # Issue #598: the nightly 30-day lifecycle on Park
 
-Issue [#598](https://github.com/wrlds-creations/jumpyard-check-in/issues/598), decision D0289. It follows T0195 (#194), whose policy is unchanged: [policy](t0195-data-lifecycle-policy.md), [recovery](t0195-aurora-recovery-rehearsal.md).
+Issue [#598](https://github.com/wrlds-creations/jumpyard-check-in/issues/598), decisions D0289 and D0291 (the catch-up). It follows T0195 (#194), whose policy is unchanged: [policy](t0195-data-lifecycle-policy.md), [recovery](t0195-aurora-recovery-rehearsal.md).
 
 ## What happened
 
@@ -71,22 +71,47 @@ Only Park's own Aurora database changes. ROLLER keeps every booking and customer
      - `…-data-lifecycle-behind`: rows still past their clock after a night outside the catch-up.
 
      Neither alarms on missing data. A missing-data alarm would fire at its first evaluation after the deploy and fail Park's zero-alarm verification, so a night that never starts shows up instead in the morning readback and in `data_lifecycle_runs`. Throttles are expected with one-at-a-time concurrency and stay dashboard-only.
-4. **Config.** `dataLifecycle` in `infra/config/park-test-full-flow-rehearsal.json` (the deployed Park profile) starts in `plan` with the approved digest and a 25,000 ceiling. Only `park-test` may define it. A `catchUp` block (`maxEligibleTotal`, `until`) needs `apply` and a ceiling above the normal one.
+4. **Config.** `dataLifecycle` in `infra/config/park-test-full-flow-rehearsal.json` (the deployed Park profile) holds the mode, the approved digest and the 25,000 ceiling. It started in `plan`; checkpoint 3 sets `apply` with a one-time catch-up (below). Only `park-test` may define it. A `catchUp` block (`maxEligibleTotal`, `until`) needs `apply` and a ceiling above the normal one.
 
 This revises the dry-run-first rule of D0162: for the nightly job, the approved standing policy and its guards replace a human review of every plan digest. The operator CLI keeps that rule.
+
+## The catch-up (checkpoint 3, D0291)
+
+Love approved checkpoint 3 on 2026-10-28 and its last day, 2026-11-06, on 2026-10-29. The deployed Park profile now reads:
+
+```json
+"dataLifecycle": {
+  "mode": "apply",
+  "approvedPolicyDefinitionDigest": "fd84eadd4c3731e6f87881ad996b08a84c587f3cd719c45fbbc4b6fad5063c01",
+  "maxEligibleTotal": 25000,
+  "catchUp": { "maxEligibleTotal": 200000, "until": "2026-11-06" }
+}
+```
+
+- **Only the environment changes.** The protected deploy changes three variables of the lifecycle Lambda: `DATA_LIFECYCLE_MODE` from `plan` to `apply`, `DATA_LIFECYCLE_CATCH_UP_MAX_ELIGIBLE_TOTAL` to `200000` and `DATA_LIFECYCLE_CATCH_UP_UNTIL` to `2026-11-06`, both empty before. The code, the policy SQL and its digest, the rule, the permissions and the alarms stay as they are, and Park keeps 228 resources.
+- **The nights.** The deploy runs on 2026-10-29 after closing, so the first apply night starts at 00:30 CET on 2026-10-30. `until` is inclusive in Stockholm time, so the 200,000 ceiling covers the eight nights from 2026-10-30 to 2026-11-06. From the night of 2026-11-07 the ceiling is 25,000 again, without a deploy.
+- **The size.** The first plan night (2026-10-28) counted 146,893 eligible rows. An item becomes eligible only once its tickets are gone, and a booking once its items are gone. The catch-up is therefore about 193,000 row changes, plus the daily inflow. The first apply count is about 150,000, under the 200,000 ceiling.
+- **The pace.** A pass changes at most 5,000 rows and at most 500 per action, so the roughly 50,000 tickets alone take about 100 passes.
+  - At 20 passes a night, the backlog should be gone during the sixth night (2026-11-04).
+  - If the 12-minute budget fits fewer passes, it takes a night or two longer. Even at 13 passes a night, what is left on 2026-11-07 stays well under 25,000, so the normal nights finish it.
+  - This is an estimate: the night loop run with the first night's counts and the 60-day average inflow.
+- **During the catch-up** a night may end with rows left (`max_runs` or `budget`). That is expected, and the `-behind` alarm stays quiet. The `-lambda-errors` alarm still reports a stopped night.
+- **Afterwards.** If more than 25,000 rows are still eligible on 2026-11-07, that night stops before any change and alarms. A longer catch-up then needs Love's ok, a config change and a deploy. The spent `catchUp` block may stay in the config; removing it is a later cleanup.
+- **Restore points.** The checkpoint-2 snapshot `jy-park-test-prechange-20261028t191348z-ihjx86` and the seven-day automated backups (PITR), which also cover the day between the snapshot and the first apply night.
+- **Readback.** Every catch-up morning, as listed in [TEST_PLAN.md](../TEST_PLAN.md#the-nightly-lifecycle-catch-up-598).
 
 ## External-write checkpoints
 
 Each step needs Love's explicit ok in chat, and each readback must pass before the next step.
 
-1. **Plan mode.** Release, then a protected Park deploy with `apply_migrations=true` for `0028`.
+1. **Plan mode.** Release, then a protected Park deploy with `apply_migrations=true` for `0028`. Done on 2026-10-27: release 40483249815, Park run 40484298434.
    - Readback: migration `0028` is applied, the rule is enabled, and the Lambda has only the lifecycle secret.
-   - The first night's plan log matches the counts above plus one day's inflow, and no row has changed.
+   - The first night's plan log matches the counts above plus one day's inflow, and no row has changed. On 2026-10-28 it counted 146,893 eligible rows and changed none.
    - Alarms and queues are normal.
-2. **Pre-change snapshot.** Taken with the existing recovery tool (`T0195_AURORA_SNAPSHOT_APPROVAL`) right before step 3.
-3. **Catch-up.** A config change to `apply` with a one-time `catchUp` (for example 200,000 until a set date), then a protected deploy.
+2. **Pre-change snapshot.** Taken with the existing recovery tool (`T0195_AURORA_SNAPSHOT_APPROVAL`) right before step 3. Done on 2026-10-28: `jy-park-test-prechange-20261028t191348z-ihjx86`, available at 20:18 CET.
+3. **Catch-up.** A config change to `apply` with a one-time `catchUp` (200,000 through 2026-11-06, see above), then a protected deploy.
    - Expect about six nights at 20 passes a night.
-   - Each morning, read back the completed runs, the remaining counts, alarms and the webhook queue, and check a staff board, a phone lookup and a kiosk lookup.
+   - Each morning, read back the completed runs, the remaining counts, alarms and the webhook queue, and check a staff board, a phone lookup and a kiosk lookup ([TEST_PLAN.md](../TEST_PLAN.md#the-nightly-lifecycle-catch-up-598)).
 4. **Steady state.** The ceiling falls back to 25,000 after the catch-up's last day without a deploy. Read back one week of nights.
 5. **Recovery proof.** The isolated restore rehearsal from the step-2 snapshot: restore, verify, reapply the lifecycle on the restore with a receipt, then clean up. Each tool action takes its own approval phrase.
 6. **Snapshot decision.** Keep or delete `jy-park-test-prechange-20260714t154842z-ghunbv` and the step-2 snapshot. Each deletion takes its own approval phrase.
@@ -96,7 +121,7 @@ Each step needs Love's explicit ok in chat, and each readback must pass before t
 - **Stop.** Deploy the Park config with `"mode": "off"`, which disables the rule; the next night does nothing. In an emergency, disable the rule `jumpyard-check-in-park-test-data-lifecycle-nightly` (a manual AWS write that Park's drift check then reports) and codify it with the next deploy.
 - **Read a night.** The Lambda log group `/aws/lambda/jumpyard-check-in-park-test-stack-data-lifecycle` (30 days) has one JSON line per pass and a `night_done` or `night_failed` summary. `jumpyard.data_lifecycle_runs` keeps each completed pass for 90 days.
 - **Recover.** A committed pass cannot be undone by the job. Deleted rows stay in the seven-day automated backups (PITR) and in any manual snapshot until it is deleted. Restore only into the isolated rehearsal path, and reapply the lifecycle there before any traffic (D0165).
-- **Reports.** After the catch-up, visits older than 30 days can no longer be re-queried. Gustav's weekend page (#591) keeps every number already added.
+- **Reports.** After the catch-up, visits older than 30 days can no longer be re-queried. Gustav's weekend page (#591) keeps every number already added. An export that needs older days must run before the first apply night (2026-10-30), or add new days to an earlier export instead of rebuilding it.
 
 ## Validation
 
@@ -120,4 +145,5 @@ Each step needs Love's explicit ok in chat, and each readback must pass before t
   - Against migrations without `0028` the test fails with Park's `permission denied for table product_catalog_cache`.
 - `npm --prefix infra run validate:t0195-least-privilege` derives every row-locked table from the policy itself and requires UPDATE on at least one of its columns. Without `0028` it fails on `product_catalog_cache`.
 - `npm run validate:t0195-data-lifecycle`, `npm --prefix infra run validate:park-test-synth` and `npm --prefix infra run validate:config-guards`.
-  - The synth check has the job only in the deployed Park profile, in plan mode. Its permissions are exactly the four Data API calls on the cluster plus reading the lifecycle secret, the rule runs at `cron(30 23 * * ? *)` without retries, and both alarms reach the recipients without alarming on missing data.
+  - The synth check has the job only in the deployed Park profile, in apply mode with the reviewed catch-up (200,000 through 2026-11-06). Its permissions are exactly the four Data API calls on the cluster plus reading the lifecycle secret, the rule runs at `cron(30 23 * * ? *)` without retries, and both alarms reach the recipients without alarming on missing data.
+  - The config guards require the deployed profile's `dataLifecycle` block to be exactly the reviewed one above, and still refuse a lifecycle outside `park-test`, an unclear mode, a malformed digest, a catch-up in plan mode, a catch-up ceiling at or below the normal one and a catch-up without a valid last day.

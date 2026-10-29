@@ -952,12 +952,21 @@ const withLifecycle = (base: TestConfig, dataLifecycle: Record<string, unknown>)
   config.dataLifecycle = dataLifecycle;
   return config;
 };
-const deployedLifecycle = loadConfig(readConfig('config/park-test-full-flow-rehearsal.json')).dataLifecycle;
-if (deployedLifecycle?.mode !== 'plan' || deployedLifecycle.approvedPolicyDefinitionDigest !== lifecycleDigest
-  || deployedLifecycle.maxEligibleTotal !== 25_000 || deployedLifecycle.catchUp !== undefined) {
-  throw new Error('GH-598: the deployed Park profile must start the nightly lifecycle in plan mode.');
+// Checkpoint 3 (D0291): the deployed Park profile is exactly the reviewed apply catch-up, and nothing more.
+const reviewedParkLifecycle = {
+  mode: 'apply',
+  approvedPolicyDefinitionDigest: lifecycleDigest,
+  maxEligibleTotal: 25_000,
+  catchUp: { maxEligibleTotal: 200_000, until: '2026-11-06' },
+};
+const deployedParkConfig = readConfig('config/park-test-full-flow-rehearsal.json');
+const deployedLifecycle = loadConfig(deployedParkConfig).dataLifecycle;
+if (JSON.stringify(deployedParkConfig.dataLifecycle) !== JSON.stringify(reviewedParkLifecycle)
+  || deployedLifecycle?.mode !== 'apply'
+  || JSON.stringify(deployedLifecycle.catchUp) !== JSON.stringify(reviewedParkLifecycle.catchUp)) {
+  throw new Error('GH-598: the deployed Park profile must run exactly the reviewed apply catch-up.');
 }
-console.log('[pass] GH-598 deployed Park profile starts the nightly lifecycle in plan mode');
+console.log('[pass] GH-598 deployed Park profile runs exactly the reviewed apply catch-up');
 if (loadConfig(parkTestConfig).dataLifecycle !== undefined) {
   throw new Error('GH-598: the closed park-test profile must not define a lifecycle job.');
 }
