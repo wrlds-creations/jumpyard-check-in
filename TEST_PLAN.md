@@ -1,5 +1,23 @@
 # Test Plan
 
+## The nightly lifecycle catch-up (#598)
+
+Run `npm run infra:check`. Its `validate:config-guards` requires the deployed Park profile's `dataLifecycle` block to be exactly the reviewed apply catch-up (200,000 through 2026-11-06, D0291). Its `validate:park-test-synth` requires the lifecycle Lambda to receive `DATA_LIFECYCLE_MODE=apply` and both catch-up variables, with every other setting unchanged. Its `validate:t0193-api-protection` and `validate:t0194-staff-identity-infra` keep Park at 228 resources. Also run `npm run validate:gh598-lifecycle-nightly` and `npm run validate:t0195-data-lifecycle`. The Park plan may change only the lifecycle Lambda's environment.
+
+After the protected deploy, read back every catch-up morning from 2026-10-30 to 2026-11-06, counts only:
+- **The night,** from `/aws/lambda/jumpyard-check-in-park-test-stack-data-lifecycle`:
+  - one `night_done` line with `mode=apply` and `catchUp=true`, and its completed passes (`runs`), `rowsChanged`, `eligibleRemaining`, `retries` and `stoppedBy`;
+  - one `run` line per pass, at most 5,000 rows and at most 500 per action;
+  - `max_runs` or `budget` with rows left is expected during the catch-up, and `done` means the backlog is gone; `no_progress` with rows left needs a look;
+  - a `retry` line gives its class and SQLSTATE; a `night_failed`, `failed` or `ceiling_exceeded` line means the night stopped, and its open pass was rolled back.
+- **Metrics and alarms:**
+  - `DataLifecycleNightCompleted` is 1, `DataLifecycleBehind` is 0, and `DataLifecycleRowsChanged` and `DataLifecycleEligibleRemaining` match the log;
+  - the `-data-lifecycle-lambda-errors` and `-data-lifecycle-behind` alarms are OK, and no Park alarm is in ALARM.
+- **The webhook queue** and its DLQ are empty.
+- **The apps:** a staff board shows today's bookings, and a phone lookup and a kiosk lookup each find a booking for today.
+
+The first night after the catch-up, 2026-11-07, must log `catchUp=false` with a ceiling of 25,000. Checkpoint 4 reads back that week.
+
 ## Expected ROLLER 404s in lookups and the staff payment check (#600)
 
 Run `npm run validate:gh600-expected-roller-misses` (part of `npm run validate`). It drives the real Lookup handler as Park runs it and the real kiosk staff resolution, with the real metric code and a scripted ROLLER, and checks that:

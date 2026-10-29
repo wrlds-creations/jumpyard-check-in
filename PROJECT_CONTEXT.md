@@ -58,7 +58,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - [Releases](REPO_CURRENT_STATE.md); [contract](config/production-domains.json). Motorola-proven purchase/PIN/redemption preserve venue checks, staff state and item keys.
 - Roller remains the source of truth for bookings, products, payments, and ticket redemption.
 - JumpYard Cloud/server API owns pilot operational state such as safety status, handoff code, session status, idempotency, audit events, and guest messaging state.
-- The production booking index uses an approved initial backfill, scheduled morning seed, idempotent webhook updates/reconciliation, and live REST confirmation. Roller remains authoritative; Aurora is the operational cache.
+- The production booking index uses an approved initial backfill, scheduled morning seed, idempotent webhook updates/reconciliation, and live REST confirmation.
 - D0227/#392: one transactional email with a booking link two hours before start, only on 2026-09-28 at Nacka and only for bookings with supported products; new sessions last four hours. General sends stay closed. SMS is deferred beyond Sprint 3; contact: the current Cloud contact policy (2026-09-23).
 - Check-in is modeled as ticket-level redemption through Roller `POST /redemptions`, not a booking-level flag.
 - JumpYard Cloud keeps normalized operational state and Roller ids, not broad raw Roller-owned data.
@@ -93,7 +93,7 @@ The API/data contract is in [JUMPYARD_CLOUD_CONTRACT.md](JUMPYARD_CLOUD_CONTRACT
 - Guest messaging remains gated. #216 proved one automatic Nacka T-30 email, then disarmed its control. The scheduler exists but the general gate is false. Broader delivery needs an approved time window; #220 changes neither message links nor send authority. Peak remains 3,000/day and 5/minute.
 - Staff/admin PII is staff-only and must not be exposed in public guest UI or unauthenticated APIs.
 - Phone-local contact recovery uses a 12-hour device-clock expiry, active monotonic cleanup, minute checkpoints, and fail-closed detected rollback before reuse; a fully closed/offline browser cannot execute deletion or prove unobserved real time. Park-test Lambda/API logs and the private raw-payload bucket retain data for 30 days, while Aurora automated backup/PITR remains seven days.
-- Lifecycle mode/ceiling changes (#598), migration apply, secret mutation, deploy, snapshot and isolated restore are separate external-write checkpoints. A restore must reapply lifecycle policy and prove database-backed aggregate evidence before any app attachment or traffic.
+- Park applies the lifecycle nightly (#598; catch-up to 2026-11-06, D0291). Mode/ceiling changes, migration apply, secret mutation, deploy, snapshot and isolated restore are separate external-write checkpoints. A restore must reapply lifecycle policy and prove database-backed aggregate evidence before any app attachment or traffic.
 
 ## Language Policy
 
@@ -102,7 +102,7 @@ Repository source-of-truth docs are written in English by default. Preserve exac
 ## Current Readiness Gates
 
 - The GitHub Project owns readiness. T0195-T0197 are deployed; gated actions remain. [AWS_RESOURCES.md](AWS_RESOURCES.md) holds evidence. #264 approves the pilot role; each promotion still needs protected plan/approval.
-- Remaining blockers include lifecycle recovery/apply, integrated rehearsal, messaging-window approval, #264 Park/public rollout evidence, and natural webhook observation.
+- Remaining blockers include lifecycle recovery, integrated rehearsal, messaging-window approval, #264 Park/public rollout evidence, and natural webhook observation.
 - #335 alarm delivery is proven. Love is the sole responder with no other monitoring, confirmed 2026-09-04.
 - Roller ECOM owns payment eligibility. #353/D0216 excludes Klarna from fresh phone sessions.
 

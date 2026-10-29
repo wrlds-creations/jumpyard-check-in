@@ -1199,7 +1199,12 @@ function expectNoDataLifecycleJob(template: CloudFormationTemplate, context: str
   expectNotContains(strings, 'data-lifecycle', context);
 }
 
-function expectDataLifecycleJob(template: CloudFormationTemplate, prefix: string, expectedMode: 'plan' | 'apply'): void {
+function expectDataLifecycleJob(
+  template: CloudFormationTemplate,
+  prefix: string,
+  expectedMode: 'plan' | 'apply',
+  expectedCatchUp: { maxEligibleTotal: number; until: string } | undefined,
+): void {
   const functionName = `${prefix}-stack-data-lifecycle`;
   const resources = getResources(template);
   const fnEntry = Object.entries(resources).find(([, resource]) =>
@@ -1227,6 +1232,8 @@ function expectDataLifecycleJob(template: CloudFormationTemplate, prefix: string
   expectLambdaEnvironment(template, functionName, {
     DATA_LIFECYCLE_BATCH_SIZE: '500',
     DATA_LIFECYCLE_BUDGET_SECONDS: '720',
+    DATA_LIFECYCLE_CATCH_UP_MAX_ELIGIBLE_TOTAL: expectedCatchUp ? String(expectedCatchUp.maxEligibleTotal) : '',
+    DATA_LIFECYCLE_CATCH_UP_UNTIL: expectedCatchUp?.until ?? '',
     DATA_LIFECYCLE_ENVIRONMENT: 'park-test',
     DATA_LIFECYCLE_MAX_ELIGIBLE_TOTAL: '25000',
     DATA_LIFECYCLE_MAX_MUTATIONS: '5000',
@@ -1352,7 +1359,11 @@ for (const [name, synthResult] of [
 ] as const) {
   expectNoDataLifecycleJob(synthResult.template, name);
 }
-expectDataLifecycleJob(parkTestFullFlowRehearsal.template, PARK_TEST_PREFIX, 'plan');
-console.log('[pass] GH-598 only the deployed Park profile runs the nightly lifecycle, in plan mode, with the lifecycle secret only');
+// Checkpoint 3 (D0291): apply with the one-time catch-up ceiling through its last Stockholm day.
+expectDataLifecycleJob(parkTestFullFlowRehearsal.template, PARK_TEST_PREFIX, 'apply', {
+  maxEligibleTotal: 200_000,
+  until: '2026-11-06',
+});
+console.log('[pass] GH-598 only the deployed Park profile runs the nightly lifecycle, in apply mode with the reviewed catch-up, with the lifecycle secret only');
 
 console.log('Park-test synth validation passed.');

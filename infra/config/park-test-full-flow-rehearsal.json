@@ -49,9 +49,13 @@
     "bookingRetentionDays": 30
   },
   "dataLifecycle": {
-    "mode": "plan",
+    "mode": "apply",
     "approvedPolicyDefinitionDigest": "fd84eadd4c3731e6f87881ad996b08a84c587f3cd719c45fbbc4b6fad5063c01",
-    "maxEligibleTotal": 25000
+    "maxEligibleTotal": 25000,
+    "catchUp": {
+      "maxEligibleTotal": 200000,
+      "until": "2026-11-06"
+    }
   },
   "webhookProcessing": {
     "liveApproval": "T0197_LIVE_WEBHOOK_PROCESSING_APPROVED",
