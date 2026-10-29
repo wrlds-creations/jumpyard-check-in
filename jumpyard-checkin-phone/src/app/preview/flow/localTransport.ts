@@ -16,6 +16,14 @@ export function installLocalTransport(options: { delay: () => number; fail: () =
         if (url.pathname === '/v1/bookings/availability') {
             return Response.json({ status: 'available', availability: makeAvailability(body.startTimes || ['17:00'], body.date) });
         }
+        // #603: answers like Park. DEMO is found, 987654321 answers as ROLLER's 404, and anything else as Cloud's
+        // 403 `live_lookup_not_allowed`, its answer to a number it does not look up (12345, a gift card number).
+        if (url.pathname === '/v1/check-in/lookup' && String(body.identifier ?? '').trim() === '987654321') {
+            return Response.json({ status: 'not_found', error: { code: 'booking_not_found', message: 'No Roller booking was found for the supplied identifier.' } }, { status: 404 });
+        }
+        if (url.pathname === '/v1/check-in/lookup' && String(body.identifier ?? '').trim().toUpperCase() !== 'DEMO') {
+            return Response.json({ status: 'blocked', error: { code: 'live_lookup_not_allowed', message: 'Only booking references, QR codes, or email are approved for assisted park-test lookup.' } }, { status: 403 });
+        }
         if (url.pathname === '/v1/check-in/lookup') {
             return Response.json({ status: 'found', eligibility: { canCheckIn: true, reason: 'ready' }, guestAccess: { token: 'local-fixture-only', expiresAt: null }, booking: {
                 bookingReference: 'DEMO', rollerUniqueId: null, customer: { firstName: 'Alex', lastName: 'Test' },

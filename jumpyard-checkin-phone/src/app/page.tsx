@@ -1042,8 +1042,10 @@ function CheckInFlow() {
         } catch (error) {
             if (run !== recoveryRunRef.current) return 'unconfirmed';
             setBuyRecoveryStatus('payment-unknown');
-            // #553 (D0270): Cloud answered that ROLLER has no booking for the original purchase.
-            return (error as { reason?: unknown } | null)?.reason === 'not_found' ? 'not_found' : 'unconfirmed';
+            // #553 (D0270): Cloud answered that ROLLER has no booking for the original purchase. #603 (D0292): a
+            // lookup Cloud refused shows the guest not found too, but it never gives a payment up.
+            const lookupError = error as { reason?: unknown; code?: unknown } | null;
+            return lookupError?.reason === 'not_found' && lookupError.code !== 'live_lookup_not_allowed' ? 'not_found' : 'unconfirmed';
         } finally {
             recoveryCheckingRef.current = false;
         }

@@ -1035,3 +1035,39 @@ test('#553: Start over continues to the number when the check finds the paid boo
   assert.ok(!offline.events.some(event => event[0] === 'abandon-unresolved'));
   assert.equal(offline.state.buyRecoveryStatus, 'payment-unknown');
 });
+
+// #603 (D0292): the real client turns Cloud's answers into the errors the page sees. Cloud's 403
+// `live_lookup_not_allowed` shows the guest not found, but it is a refusal, not ROLLER saying there is no booking.
+let cloudAnswer = null;
+const cloudClient = loadFlowModule('./cloudClient.ts', {
+  require: () => ({}),
+  process: { env: { NEXT_PUBLIC_JUMPYARD_CLOUD_API_BASE_URL: 'https://cloud.invalid' } },
+  fetch: async () => new Response(JSON.stringify(cloudAnswer.body), { status: cloudAnswer.status }),
+});
+const cloudLookup = (status, body) => () => {
+  cloudAnswer = { status, body };
+  return cloudClient.lookupBooking('booking-original');
+};
+
+test('#603: Cloud refusing the original purchase never offers Start over; ROLLER\'s 404 still does', async () => {
+  const refused = harness({ outcome: 'unknown', lookup: cloudLookup(403, { status: 'blocked',
+    error: { code: 'live_lookup_not_allowed', message: 'This booking is outside the approved park-test venue.' } }) });
+  const old = { ...refused.readRecord(), submission: { phase: 'submitted', protected: true, submittedAt: 1 } };
+  refused.setRecord(old);
+  refused.state.recoveryReturnRecord = old;
+  await refused.checkUnresolvedPayment();
+  assert.ok(!refused.events.some(event => event[0] === 'setRecoveryRestartOffer'), 'A refusal never offers Start over');
+  refused.state.recoveryRestartOffer = 'attempt-original:1';
+  await refused.restartUnresolvedPayment();
+  assert.ok(!refused.events.some(event => event[0] === 'abandon-unresolved'), 'A refusal never gives the payment up');
+  assert.equal(refused.state.buyRecoveryStatus, 'payment-unknown');
+  assert.equal(refused.readSaved().currentFlowStep, 'PAYMENT');
+
+  const missing = harness({ outcome: 'unknown', lookup: cloudLookup(404, { status: 'not_found',
+    error: { code: 'booking_not_found', message: 'No Roller booking was found for the supplied identifier.' } }) });
+  const stale = { ...missing.readRecord(), submission: { phase: 'submitted', protected: true, submittedAt: 1 } };
+  missing.setRecord(stale);
+  missing.state.recoveryReturnRecord = stale;
+  await missing.checkUnresolvedPayment();
+  assert.ok(missing.events.some(event => event[0] === 'setRecoveryRestartOffer' && event[1] === 'attempt-original:1'));
+});
