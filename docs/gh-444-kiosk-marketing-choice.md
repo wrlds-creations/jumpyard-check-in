@@ -19,4 +19,4 @@
 
 ## Rollout
 
-Deploy through the immutable release and protected Park run before publishing kiosk #129; until then Cloud rejects the kiosk field. Known upstream gap (see #437): a returning guest who first bought without consent and opts in later stays Never subscribed in Klaviyo.
+Deploy through the immutable release and protected Park run before publishing kiosk #129; until then Cloud rejects the kiosk field. A guest who first bought without consent and opts in later becomes Subscribed, unless the yes reaches Klaviyo before the suppression lands ([suppression window](gh-437-phone-email-marketing.md#suppression-window-d0293), D0293).
