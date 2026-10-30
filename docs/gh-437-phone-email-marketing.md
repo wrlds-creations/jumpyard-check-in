@@ -6,6 +6,63 @@
 
 This implements the optional email choice, not a new marketing system. No kiosk/admin UX, direct Klaviyo API/key/list, SMS grant, campaign, bulk profile update, new AWS resource or additional paid transaction is included. The earlier gift-card payment authorization was fulfilled and is not a new allowance.
 
+## Suppression window (D0293)
+
+State on 2026-10-30. This section replaces the earlier finding below that returning guests stay Never subscribed. That finding came from tests run within minutes of each other.
+
+**The rule.** SmartSegments runs the ROLLER-to-Klaviyo integration for JumpYard. It explained the rule on 2026-10-24 and reproduced both orders with SmartSegments' test profiles:
+
+- When ROLLER reports a new customer without the marketing box, and the person is not yet in Klaviyo, SmartSegments suppresses the profile. Klaviyo applies that in the background.
+- Booking events and updates to an existing customer, including `PUT /guests/{id}`, never suppress.
+- An opt-in that arrives after the suppression lands lifts it. One that arrives before it loses: the profile can show Subscribed but cannot receive email marketing.
+
+**Owned-address test, 2026-10-30.** Love made two real 0 kr phone bookings on a new owned address and read Klaviyo:
+
+| Stockholm time | Booking | Klaviyo |
+|---|---|---|
+| 09:53:39 | Without the choice | |
+| 09:59 | | `Manually Suppressed from Email Marketing`, status Suppressed |
+| 10:37:58 | With the choice (`sent_with_draft`) | |
+| 10:37 | | Added to the SmartSegments Active Subscribers List, then `Manually Unsuppressed from Email Marketing` and `Subscribed to Email Marketing`, status Subscribed |
+
+A late choice therefore takes effect within the same minute. The suppression took about 5.5 minutes here, not the 2 minutes SmartSegments gave, so treat the window as 10 minutes. We have only SmartSegments' evidence for the case where the choice arrives first.
+
+**Our flows.** Phone and kiosk send the choice in the draft that creates the ROLLER customer, so a new guest who ticks it is not suppressed. The after-payment `PUT /guests/{id}` worker behind the September results has been closed since 2026-09-24. A guest reaches the window only with a new address, a first draft without the choice and a second draft with it within minutes. That takes Back from payment and the switch (D0256), a kiosk retry through the contact step, or a second purchase.
+
+**Real cases.** Counted per address through 2026-10-30, without owned test addresses:
+
+- Most addresses gave the choice in their first purchase.
+- One reached the window: a kiosk purchase on 2026-10-26, 97 s after a paid purchase without the choice.
+- Two gave it later, but neither looks like an ordinary guest, so the owned-address test is the only evidence for the late path.
+
+**Decision.** Love chose on 2026-10-30 to keep this design and count the cases (D0293). Cloud does not hold, repeat or resend a quick choice. A guest in the window gets a new chance at their next purchase with the choice.
+
+**Monthly count.** The monitor runs this read-only with the Booking runtime secret through the RDS Data API. It returns aggregates only. It looks back 28 days because the #598 lifecycle anonymizes a draft 30 days after its lifecycle date and deletes the `sent_with_draft` row about 31 days after it was written. An older purchase outside the 28 days can make a returning guest count, and owned test addresses count too, so a non-zero result is an upper bound.
+
+```sql
+WITH yes AS (
+  SELECT result_ref::jsonb->>'externalId' AS external_id
+  FROM jumpyard.idempotency_records
+  WHERE operation = 'phone_email_marketing' AND status = 'sent_with_draft'
+), d AS (
+  SELECT p.created_at, p.customer_email_hash AS address, y.external_id IS NOT NULL AS is_yes
+  FROM jumpyard.prepayment_booking_drafts p
+  LEFT JOIN yes y ON y.external_id = p.external_id
+  WHERE p.flow_type = 'new_booking' AND p.roller_env = 'live'
+    AND p.customer_email_hash IS NOT NULL
+    AND p.created_at >= now() - interval '28 days'
+), first_draft AS (
+  SELECT DISTINCT ON (address) address, created_at, is_yes
+  FROM d ORDER BY address, created_at
+)
+SELECT count(DISTINCT d.address) FILTER (WHERE d.is_yes) AS addresses_with_yes,
+       count(DISTINCT d.address) FILTER (WHERE d.is_yes AND NOT f.is_yes
+         AND d.created_at < f.created_at + interval '10 minutes') AS yes_before_suppression
+FROM d JOIN first_draft f USING (address)
+```
+
+**Not verified.** The kiosk cost check (`POST /bookings/draft/costs`) carries the real customer without marketing flags about one second before the draft. ROLLER documents that it creates no draft, but does not say that it creates no guest. If it did, a new kiosk guest's yes would arrive before the suppression. A kiosk guest who gave the choice in their first purchase and has no `Manually Suppressed` event in Klaviyo rules this out.
+
 ## Confirmed provider evidence
 
 The separately authorized owned-address test on September 23 showed Klaviyo email subscription at 09:56:15 Europe/Stockholm, closely following an unpaid ROLLER draft at 09:56:14. The separate booking was published paid at approximately 10:06:43. User screenshots show Active Subscribers List membership at 09:56 and Nacka Forum Segment membership at 10:05, with SubscribedVenues containing Nacka Forum and General. These observations strongly indicate draft-time activation; they do not prove isolated-list behavior or preservation of existing opt-outs/suppressions.
@@ -76,8 +133,8 @@ Readback after the public run: the public phone root references exactly the Park
 Owned-address checks on the Park origin (Love's own addresses and real purchases; no guest data):
 
 - Under option A on 2026-09-24, a new guest with the choice became Subscribed in Klaviyo within seconds, a new guest without it stayed Never subscribed, and a subscribed guest booking again without it stayed Subscribed.
-- Known gap: a guest first created without consent who books again with the choice is updated in ROLLER (`acceptMarketing:true`, read back), but Klaviyo stays Never subscribed. Love reproduced the same gap through JumpYard's own ROLLER online checkout on 2026-09-24: an existing test guest who ticked the newsletter box there, and a fresh test address first booked without it and then with it, all stayed Never subscribed. The gap is therefore in the ROLLER-to-Klaviyo sync, not specific to the check-in app. On 2026-09-24 Love asked SmartSegments (Jeroen Sijl) how consent changes on existing guests are synced; #437 stays open as Blocked until they answer.
-- Correction: without the choice, a new profile stays Never subscribed rather than suppressed. The 2026-09-23 `User Suppressed` profiles all followed our after-payment `PUT /guests/{id}` updates, so those updates, not the first sync, coincide with the suppression.
+- Gap at the time, since explained by the [suppression window](#suppression-window-d0293): a guest first created without consent who books again with the choice is updated in ROLLER (`acceptMarketing:true`, read back), but Klaviyo stays Never subscribed. Love reproduced the same gap through JumpYard's own ROLLER online checkout on 2026-09-24: an existing test guest who ticked the newsletter box there, and a fresh test address first booked without it and then with it, all stayed Never subscribed. The gap is therefore in the ROLLER-to-Klaviyo sync, not specific to the check-in app. On 2026-09-24 Love asked SmartSegments how consent changes on existing guests are synced, and SmartSegments answered on 2026-10-24.
+- Correction at the time, superseded by the [test of 2026-10-30](#suppression-window-d0293), where a new profile without the choice was suppressed about 5.5 minutes later: without the choice, a new profile stays Never subscribed rather than suppressed. The 2026-09-23 `User Suppressed` profiles all followed our after-payment `PUT /guests/{id}` updates, so those updates, not the first sync, coincide with the suppression.
 - The ROLLER API key `WRLDS park test Nacka Forum` still has `Update guest detail (PUT)`, which option A does not use; Love may remove it.
 
 ## Rollout gates and next step
@@ -117,9 +174,9 @@ Conclusion at the time: a later guest update did not make the profile Subscribed
 ### Remaining gates
 
 1. The separately authorized unpaid preservation probe passed in ROLLER for the owned subscribed guest; Love's subsequent screenshot confirms unchanged basic Klaviyo channel status (details above). No repeat draft is needed for that check.
-2. Answered on September 23–24: after-payment guest updates ended as `User Suppressed`, and a later draft consent on an existing guest stays Never subscribed. Option A (D0225) works for new guests; returning guests await SmartSegments. Do not reset/delete/unsuppress an existing protected profile to make a test pass.
+2. Answered on 2026-10-30 (D0293): a later choice lifts the suppression; see the [suppression window](#suppression-window-d0293). Do not reset/delete/unsuppress an existing protected profile to make a test pass.
 3. Confirm the connector's treatment of manual, bounce/complaint and returning opt-out suppressions, plus optional/concurrent guest fields. The local code alone cannot inspect or guarantee Klaviyo suppression protection. Obtain the missing provider contract or revise the design with explicit authority.
 4. Confirm sender/audience scope (the current connection includes General), copy and evidence ownership. The owned-address results decide public promotion.
 5. Review and merge the issue PR, select its successful immutable release run/full SHA, review the protected Park plan, and promote that same artifact to public phone origins. Do not rebuild or use a local break-glass deployment. Record actual runs, readback and rollback candidate.
 
-Issue #437 stays open with Project status Blocked until SmartSegments answers the returning-guest question. The implementation is live on the Park and public phone origins (see Rollout evidence). No follow-up draft exists yet. Actual runs and readback belong in the rollout evidence.
+Issue #437 stays open for the privacy sign-off carried over from #238. Since the #598 lifecycle, Cloud's `sent_with_draft` row lives about 31 days and the `marketing.email_choice_captured` event is pseudonymized at 30 days, so how long consent evidence must be kept belongs to the same sign-off. The implementation is live on the Park and public phone origins (see Rollout evidence). No follow-up draft exists yet. Actual runs and readback belong in the rollout evidence.

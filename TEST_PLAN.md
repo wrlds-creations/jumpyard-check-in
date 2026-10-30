@@ -329,6 +329,8 @@ Kiosk new purchases follow the same rule (#444): `npm run validate:gh437-email-m
 
 Local tests do not prove ROLLER omission semantics, paid-only guest-update propagation, suppression protection or concurrent profile preservation. A separately approved September 23 unpaid draft preserved all returned fields for the owned subscribed ROLLER guest when both marketing flags were omitted; immediate and delayed preference readbacks passed. Love's subsequent screenshot confirms unchanged basic Klaviyo channel status; the other provider gates remain outstanding. Use separately approved owned test data for further writes and obtain the connector contract before rollout. Under D0225 a checked choice travels with the draft and no profile approves the after-payment worker (locked by `scripts/validate-gh437-delivery-gate.test.js`). Before public promotion, verify with fresh owned addresses on the Park phone origin that checked becomes Subscribed and unchecked stays unsubscribed. [Detailed evidence and release gates](docs/gh-437-phone-email-marketing.md).
 
+CI does not cover Klaviyo's suppression (D0293). After a ROLLER or SmartSegments change, repeat the owned-address test with a new address: book without the choice, wait for Klaviyo `Suppressed` (about 6 minutes), book with the choice, and expect `Manually Unsuppressed` and `Subscribed` in the same minute. The monitor's monthly count is in the [notes](docs/gh-437-phone-email-marketing.md#suppression-window-d0293).
+
 ## Automatic check-in and one number all day (#453, #456)
 
 Run `npm run validate:gh456-auto-checkin` and `npm --prefix jumpyard-checkin-phone run test:completion`, plus `infra:synth`, the full phone suite, the gh333, gh345 and gh392 validators, and admin `tsc`.
